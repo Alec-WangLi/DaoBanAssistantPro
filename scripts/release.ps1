@@ -206,7 +206,10 @@ if ($remote -match 'github\.com[:/]([^/]+)/([^/]+?)(\.git)?$') {
 }
 $prereleaseArgs = @()
 if ($isPrerelease) { $prereleaseArgs = @('--prerelease') }
-& $gh release create $tag "$apk#$assetName" --title $title --notes-file $notes --target (git rev-parse --abbrev-ref HEAD) @prereleaseArgs
+# 用 ASCII 文件名副本上传：GitHub 会剥离资产名中的非 ASCII，而 gh 的「路径#新名」在部分版本不可靠。
+$uploadApk = Join-Path (Split-Path $apk) $assetName
+Copy-Item $apk $uploadApk -Force
+& $gh release create $tag $uploadApk --title $title --notes-file $notes --target (git rev-parse --abbrev-ref HEAD) @prereleaseArgs
 if ($LASTEXITCODE -ne 0) {
     throw "gh release create 失败（exit $LASTEXITCODE）。若 tag 已存在，可先手动删除或改用新版本号。"
 }
