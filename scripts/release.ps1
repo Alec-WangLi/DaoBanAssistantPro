@@ -8,8 +8,9 @@
       2. 定位 APK（优先 dist/倒班助手Pro-v<版本>.apk，缺失则回退到 Flutter 构建输出并复制到 dist/）
       3. 一致性校验（工作区必须干净；任何源码文件不得晚于 APK 构建时间；本地 main 与 origin/main 比对提示）
       4. 生成发布说明（默认模板含 SHA256；可用 -NotesFile 指定）
-      5. 人工确认后创建 GitHub Release 并上传 APK
+      5. 人工确认后创建 GitHub Release 并上传 APK（资产名自动为 ASCII：<仓库名>-v<版本>.apk）
       6. 通过 GitHub API 验证并打印下载地址
+      7. 更新仓库根目录 latest.json 发布清单（App「检查更新」限流兜底）并提交推送
 
 .PARAMETER Version
     手动指定版本号（如 0.3.0）。缺省时从 pubspec.yaml 读取。
@@ -192,18 +193,26 @@ if (-not $SkipConfirm) {
 }
 
 # ---------- 6. 创建 Release 并上传 ----------
-Write-Host "[6/6] 创建 $relType Release 并上传 APK..."
+Write-Host "[6/8] 创建 $relType Release 并上传 APK..."
+$remote = git remote get-url origin
+if ($remote -match 'github\.com[:/]([^/]+)/([^/]+?)(\.git)?$') {
+    $repo = "$($Matches[1])/$($Matches[2])"
+    # 资产名用 ASCII：GitHub Release 资产名不支持非 ASCII，中文会被静默剥离。
+    $assetName = "$($Matches[2])-v$Version.apk"
+} else {
+    $repo = $null
+    $assetName = "DaoBanAssistantPro-v$Version.apk"
+    Write-Warning "无法从 remote 解析仓库地址，资产名回退为 $assetName"
+}
 $prereleaseArgs = @()
 if ($isPrerelease) { $prereleaseArgs = @('--prerelease') }
-& $gh release create $tag $apk --title $title --notes-file $notes --target (git rev-parse --abbrev-ref HEAD) @prereleaseArgs
+& $gh release create $tag "$apk#$assetName" --title $title --notes-file $notes --target (git rev-parse --abbrev-ref HEAD) @prereleaseArgs
 if ($LASTEXITCODE -ne 0) {
     throw "gh release create 失败（exit $LASTEXITCODE）。若 tag 已存在，可先手动删除或改用新版本号。"
 }
 
 # ---------- 7. 验证 ----------
-$remote = git remote get-url origin
-if ($remote -match 'github\.com[:/]([^/]+)/([^/]+?)(\.git)?$') {
-    $repo = "$($Matches[1])/$($Matches[2])"
+if ($repo) {
     $rel = & $gh api "repos/$repo/releases/tags/$tag" 2>&1 | ConvertFrom-Json
     Write-Host ""
     Write-Host "✅ 发布成功！"
@@ -214,4 +223,39 @@ if ($remote -match 'github\.com[:/]([^/]+)/([^/]+?)(\.git)?$') {
     }
 } else {
     Write-Host "✅ Release $tag 已创建（无法从 remote 解析仓库地址，请手动确认）。"
+}
+
+# ---------- 8. 更新发布清单 latest.json（App「检查更新」限流时的兜底通道） ----------
+if ($repo) {
+    $manifestPath = Join-Path $root 'latest.json'
+    $downloadUrl = "https://github.com/$repo/releases/download/$tag/$assetName"
+    $update = [pscustomobject]@{
+        version    = $Version
+        url        = $downloadUrl
+        prerelease = [bool]$isPrerelease
+        asset      = $assetName
+    }
+    $manifest = $null
+    if (Test-Path $manifestPath) {
+        $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+    }
+    if (-not $manifest) { $manifest = [pscustomobject]@{} }
+    if ($isPrerelease) {
+        $manifest | Add-Member -Force -MemberType NoteProperty -Name 'prerelease' -Value $update
+    } else {
+        $manifest | Add-Member -Force -MemberType NoteProperty -Name 'stable' -Value $update
+    }
+    $manifest | Add-Member -Force -MemberType NoteProperty -Name 'updatedAt' -Value ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))
+    [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 4), [System.Text.UTF8Encoding]::new($false))
+    Write-Host "[8/8] latest.json 已更新（stable=$($manifest.stable.version) / prerelease=$($manifest.prerelease.version)）"
+
+    $dirty = @(git status --porcelain -- latest.json)
+    if ($dirty.Count -gt 0) {
+        git add latest.json | Out-Null
+        git commit -m "chore(release): 更新发布清单至 v$Version" | Out-Null
+        git push origin HEAD
+        Write-Host "      ✅ latest.json 已提交并推送"
+    } else {
+        Write-Host "      latest.json 无变化，跳过提交"
+    }
 }

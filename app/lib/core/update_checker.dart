@@ -35,17 +35,25 @@ class UpdateCheckResult {
 
 /// 检查 GitHub 上的最新正式版（0.X.0）与最新测试版（预发布）。
 ///
-/// 仓库为公开，无需鉴权即可拉取 `/releases` 全列表（未认证限 60 次/小时/IP，
-/// 冷启动每日一次静默检查足够）。按语义版本号自己算出两个「最新」，
-/// 不依赖 latest 标志（避免缓存/滞后）。
+/// 仓库为公开，无需鉴权。优先拉取 `/releases` 全列表（未认证限 60 次/小时/IP）；
+/// 若 API 失败（共享 IP 命中限流 403 / 网络异常），回退到仓库内 `latest.json`
+/// 发布清单（`raw.githubusercontent.com` 静态直读，不受 API 限额）。
+/// 按语义版本号自己算出两个「最新」，不依赖 latest 标志（避免缓存/滞后）。
 class UpdateChecker {
   UpdateChecker._();
 
   static const _owner = 'Alec-WangLi';
   static const _repo = 'DaoBanAssistantPro';
 
-  /// 拉取所有 Release，算出最新正式版（非预发布）与最新测试版（预发布）。
+  /// 检查最新版本：优先 GitHub API，失败（限流/网络异常）时回退到发布清单。
   static Future<UpdateCheckResult> checkUpdates() async {
+    final viaApi = await _checkViaApi();
+    if (!viaApi.error) return viaApi;
+    return _checkViaManifest();
+  }
+
+  /// 主通道：拉取所有 Release，算出最新正式版（非预发布）与最新测试版（预发布）。
+  static Future<UpdateCheckResult> _checkViaApi() async {
     final uri = Uri.parse(
         'https://api.github.com/repos/$_owner/$_repo/releases?per_page=100');
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
@@ -96,6 +104,65 @@ class UpdateChecker {
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// 兜底通道：读取仓库根目录 `latest.json` 发布清单
+  ///（`raw.githubusercontent.com` 静态直读，不占 GitHub API 限额）。
+  static Future<UpdateCheckResult> _checkViaManifest() async {
+    final uri = Uri.parse(
+        'https://raw.githubusercontent.com/$_owner/$_repo/main/latest.json');
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    try {
+      final req = await client.getUrl(uri);
+      req.headers.set(HttpHeaders.userAgentHeader, 'DaoBanAssistantPro');
+      final res = await req.close();
+      final body = await res.transform(utf8.decoder).join();
+      if (res.statusCode != 200) return const UpdateCheckResult(error: true);
+      final m = jsonDecode(body) as Map<String, dynamic>;
+
+      UpdateInfo? stable;
+      final s = m['stable'];
+      if (s is Map<String, dynamic>) {
+        final v = (s['version'] as String?) ?? '';
+        if (v.isNotEmpty) {
+          stable = UpdateInfo(
+            version: v,
+            url: (s['url'] as String?) ?? '',
+            isPrerelease: false,
+            assetName: _manifestAsset(s),
+          );
+        }
+      }
+
+      UpdateInfo? prerelease;
+      final p = m['prerelease'];
+      if (p is Map<String, dynamic>) {
+        final v = (p['version'] as String?) ?? '';
+        if (v.isNotEmpty) {
+          prerelease = UpdateInfo(
+            version: v,
+            url: (p['url'] as String?) ?? '',
+            isPrerelease: true,
+            assetName: _manifestAsset(p),
+          );
+        }
+      }
+
+      return UpdateCheckResult(
+        latestStable: stable,
+        latestPrerelease: prerelease,
+      );
+    } catch (_) {
+      return const UpdateCheckResult(error: true);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// 从清单节点取 APK 资产名（非空字符串才返回）。
+  static String? _manifestAsset(Map<String, dynamic> node) {
+    final a = node['asset'];
+    return a is String && a.isNotEmpty ? a : null;
   }
 
   /// 直接下载 APK 的 `browser_download_url`（公开仓库无需鉴权）到临时目录，

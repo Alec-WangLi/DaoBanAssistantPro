@@ -42,7 +42,7 @@ void showAppInfoDialog(
 
 const String _changelogZh = 'v0.5.0\n'
     '· 正式稳定版（归纳 0.4.1~0.5.0 全部更新）\n'
-    '· 开源：仓库公开（MIT 许可）；检查更新改为公开无鉴权接口，应用内直接下载安装\n'
+    '· 开源：仓库公开（MIT 许可）；检查更新改为公开无鉴权接口，限流时自动回退发布清单；应用内直接下载安装\n'
     '· 视觉统一：悬浮玻璃胶囊导航、极简黑白背景 + 5 色主色、统一线性图标、弹簧 Q 弹动效\n'
     '· 外观：新增「高级材质」开关；低端机（内存 <4GB）自动关闭真实模糊\n'
     '· 响铃界面液态玻璃化：流动光晕 + 玻璃标签 + 跟手滑块关闭\n'
@@ -79,7 +79,7 @@ const String _changelogZh = 'v0.5.0\n'
 
 const String _changelogEn = 'v0.5.0\n'
     '· Stable release (consolidating v0.4.1–v0.5.0)\n'
-    '· Open source: repository made public (MIT); update check now uses the public unauthenticated API, direct in-app download\n'
+    '· Open source: repository made public (MIT); update check uses the public unauthenticated API with an automatic release-manifest fallback on rate limits; direct in-app download\n'
     '· Visual unification: floating glass capsule nav, monochrome background + 5 accent colors, outlined icons, spring motion\n'
     '· Appearance: "Advanced material" toggle; low-end devices (<4GB RAM) auto-disable real blur\n'
     '· Ringing screen in liquid glass: flowing glow + glass label + finger-tracking slider\n'
