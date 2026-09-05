@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 更新 APK 下载到应用缓存目录（path_provider getTemporaryDirectory），安装时经 FileProvider 暴露 -->
+    <cache-path name="cache" path="." />
+    <external-cache-path name="external_cache" path="." />
+</paths>

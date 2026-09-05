@@ -1,0 +1,39 @@
+# 倒班助手Pro 根目录 .gitignore
+# 原则：只入库「自研源码 + 产品文档」；一切可再生 / 第三方 / 二进制一律排除。
+# 注意：git 不支持行内注释，# 必须位于行首，所以注释一律单独成行。
+
+# ---- 大目录：工具链 / 构建产物 / 分析工作区（全可再生，不入库）----
+/toolchain/
+/dist/
+/tools/
+/work/
+
+# ---- 二进制产物：APK / AAB 走 GitHub Releases，不进 git 历史 ----
+*.apk
+*.aab
+
+# ---- 个人分析笔记与内部文档（不入库）----
+/源码结构说明书.md
+/二次开发修改说明.md
+/domain-logic-extract.md
+/SKILLS_PLAYBOOK.md
+/cross-platform-harmonyos-research.md
+/liquid-glass-open-source-research.md
+/docs/superpowers/
+
+# ---- 密钥：Android 正式签名（release keystore + 口令，不入库，务必本地备份）----
+/app/android/key.properties
+/app/android/keystore/
+
+# ---- 头脑风暴可视化陪跑（可再生草稿，不入库）----
+/.superpowers/
+
+# ---- 系统 / 编辑器 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# ---- Python 构建缓存 ----
+__pycache__/
+*.pyc
