@@ -816,10 +816,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 style: TextStyle(fontSize: 13, color: muted),
               ),
             if (schedule != null && schedule.teamCount > 1) ...[
-              const SizedBox(height: 8),
-              Text(
-                _otherTeamsText(schedule, _selected),
-                style: TextStyle(fontSize: 12, color: muted),
+              const SizedBox(height: 10),
+              Text(L10n.otherCrews,
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: _otherCrewChips(schedule, _selected),
               ),
             ],
           ],
@@ -841,34 +845,56 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     ),
     );
   }
+
+  /// 其他班组当天班次：色点 + 组名 + 简称，横向换行，6 个班组也放得下。
+  List<Widget> _otherCrewChips(ShiftSchedule schedule, DateTime date) {
+    final chips = <Widget>[];
+    for (var i = 0; i < schedule.teamCount; i++) {
+      if (i == schedule.ourTeamIndex) continue;
+      final t = schedule.teamShift(i, date);
+      if (t == null) continue;
+      final name = i < schedule.teamNames.length
+          ? schedule.teamNames[i]
+          : (L10n.isEn ? 'Team ${i + 1}' : '${i + 1}班');
+      chips.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Color(t.color).withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(AppTokens.radiusS),
+          border: Border.all(color: Color(t.color).withValues(alpha: 0.45)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration:
+                  BoxDecoration(color: Color(t.color), shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 5),
+            Text('$name ${t.shortLabel}',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(t.color))),
+          ],
+        ),
+      ));
+    }
+    return chips;
+  }
 }
 
 String _timeRange(ShiftClass t) {
-  final s = formatClock(t.startMinute!);
   var e = t.endMinute!;
   final nextDay = e > 1440 || e < t.startMinute!;
   if (e > 1440) e -= 1440;
-  return '$s – ${nextDay ? '次日' : ''}${formatClock(e)}';
+  return L10n.timeRange(formatClock(t.startMinute!), formatClock(e), nextDay);
 }
 
 String _alarmText(ShiftClass t) {
   if (t.isRest) return L10n.restNoAlarm;
   if (!t.alarmEnabled || t.alarmMinute == null) return L10n.alarmOff;
   return L10n.alarmAt(formatClock(t.alarmMinute!));
-}
-
-String _otherTeamsText(ShiftSchedule schedule, DateTime date) {
-  final parts = <String>[];
-  for (var i = 0; i < schedule.teamCount; i++) {
-    if (i == schedule.ourTeamIndex) continue;
-    final t = schedule.teamShift(i, date);
-    if (t == null) continue;
-    final name = i < schedule.teamNames.length
-        ? schedule.teamNames[i]
-        : (L10n.isEn ? 'Team ${i + 1}' : '${i + 1}班');
-    parts.add('$name·${t.name}');
-  }
-  return parts.isEmpty
-      ? ''
-      : '${L10n.otherTeamsPrefix}${parts.join(L10n.isEn ? '  ' : '　')}';
 }

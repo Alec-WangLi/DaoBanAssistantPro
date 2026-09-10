@@ -236,7 +236,7 @@ class L10n {
   static String get restNoAlarm => t('休息日 · 不响闹钟', 'Rest day · no alarm');
   static String get alarmOff => t('闹钟：未开启', 'Alarm: off');
   static String alarmAt(String time) => isEn ? 'Alarm $time' : '闹钟 $time';
-  static String get otherTeamsPrefix => t('其他班组：', 'Other teams: ');
+  static String get otherCrews => t('其他班组', 'Other crews');
   static String get savedAndRescheduled => t('已保存并重排闹钟', 'Saved & alarms rescheduled');
   static String switchedTo(String name) => isEn ? 'Switched to $name' : '已切换到 $name';
   static List<String> get weekdays => isEn
