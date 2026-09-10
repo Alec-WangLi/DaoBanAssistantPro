@@ -7,6 +7,8 @@
 // 核心公式：
 //   某班组某天的班次 = classes[ cycle[ (目标日 − 基准日 + 班组偏移) mod 周期 ] ]
 
+import 'package:characters/characters.dart';
+
 /// 小时+分钟 → 分钟自午夜（0..1439）。
 int toMinutes(int hour, int minute) => hour * 60 + minute;
 
@@ -83,13 +85,16 @@ class ShiftClass {
   }
 
   /// 日历格子显示的简称：优先用 [abbr]，为空时按名称推断。
+  ///
+  /// 用 `characters.first`（整字素簇）而不是 `substring(0, 1)`：
+  /// 后者会把 emoji 等增补平面字符切成半个代理对，旧代码用的就是前者。
   String get shortLabel {
     final a = abbr?.trim();
     if (a != null && a.isNotEmpty) return a;
     if (isRest) return '休';
     if (name.contains('白') || name.contains('早')) return '白';
     if (name.contains('夜')) return '夜';
-    return name.isEmpty ? '·' : name.substring(0, 1);
+    return name.isEmpty ? '·' : name.characters.first;
   }
 
   ShiftClass copyWith({

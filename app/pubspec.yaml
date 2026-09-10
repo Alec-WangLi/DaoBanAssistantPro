@@ -27,6 +27,7 @@ dependencies:
   timezone: ^0.9.4
 
   # 工具
+  characters: ^1.4.0
   intl: ^0.20.3
   lunar_plus: ^1.7.1
   shared_preferences: ^2.3.3

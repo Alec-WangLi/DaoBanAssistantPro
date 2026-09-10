@@ -87,6 +87,10 @@ void main() {
     expect(const ShiftClass(name: '大夜').shortLabel, '夜');
     expect(const ShiftClass(name: '休班', isRest: true).shortLabel, '休');
     expect(const ShiftClass(name: '').shortLabel, '·');
+    // emoji 开头：应取到完整字素簇，不能切成半个代理对
+    expect(const ShiftClass(name: '🔥白班').shortLabel, '白'); // 含「白」走推断
+    expect(const ShiftClass(name: '🔥').shortLabel, '🔥');
+    expect(const ShiftClass(name: '👨‍👩‍👧').shortLabel, '👨‍👩‍👧');
   });
 
   test('24 小时值班跨午夜', () {
