@@ -16,7 +16,8 @@ class ShiftScheduleRows extends Table {
       text().withDefault(const Constant('一班,二班,三班,四班'))();
   IntColumn get ourTeamIndex => integer().withDefault(const Constant(0))();
 
-  // 每个班组在锚点日的班次下标（逗号分隔，如 "0,1,2,3"）
+  // 每个班组相对基准日的**天数偏移**（逗号分隔，如 "0,1,2,3"）。
+  // 第 i 组在某天的周期下标 = (目标日 − 基准日 + offsets[i]) mod 周期长度。
   TextColumn get teamOffsets => text().withDefault(const Constant(''))();
 }
 
@@ -98,7 +99,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'shiftassistantpro'));
 
   /// 测试专用：接外部注入的 QueryExecutor（内存库 / 迁移 fixture）。
-  AppDatabase.forTesting(QueryExecutor executor) : super(executor);
+  AppDatabase.forTesting(super.e);
 
   @override
   int get schemaVersion => 6;

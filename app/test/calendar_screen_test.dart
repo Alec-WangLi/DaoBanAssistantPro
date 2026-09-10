@@ -35,10 +35,9 @@ List<String> _chipTexts(WidgetTester tester) => tester
 
 /// 造一套真库（内存）+ 一套当前排班，再渲染日历页。
 ///
-/// 落库方式照抄 `schedule_management_screen.dart` 的 `_addSchedule`：
-/// 模板只提供 classes/cycle/班组数/偏移，班组名沿用默认的四班名 ——
-/// 多出来的班组由 `ActiveSchedule.toDomain()` 补位（否则消费方按 teamCount
-/// 索引会越界，正是这次要适配的场景）。
+/// 落库方式照抄 `createScheduleFromTemplatePicker`：模板提供
+/// classes/cycle/班组数/偏移，班组名由创建路径按 teamCount 给满
+/// （`L10n.defaultTeamNames`）—— 库出口的补位只是防御性兜底。
 ///
 /// [width] 是逻辑宽度。默认 420（窄屏手机），色块换行的场景用它；
 /// 时间串的场景要给宽一点：测试字体每个字符都占满一个字身，英文的
@@ -64,7 +63,7 @@ Future<AppDatabase> _pumpCalendar(WidgetTester tester, String templateId,
     cycle: template.cycle,
     makeCurrent: true,
     teamCount: template.teamCount,
-    teamNames: defaultSchedule().teamNames,
+    teamNames: L10n.defaultTeamNames(template.teamCount),
     ourTeamIndex: 0,
     teamOffsets: template.teamOffsets,
   );
@@ -118,7 +117,7 @@ void main() {
     final chips = _chipTexts(tester);
     expect(chips, hasLength(5), reason: '6 个班组应当出 5 个色块');
     expect(chips.toSet(), hasLength(5), reason: '每个班组一个色块');
-    // 一班是「我」，不该出现；五班/六班的名字来自 toDomain 的补位
+    // 一班是「我」，不该出现；五班/六班的名字由创建路径给满
     expect(chips.map((c) => c.split(' ').first).toSet(),
         {'二班', '三班', '四班', '五班', '六班'});
 

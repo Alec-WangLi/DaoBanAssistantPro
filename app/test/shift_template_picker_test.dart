@@ -12,11 +12,14 @@ import 'package:shiftassistantpro/features/calendar/schedule_management_screen.d
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
-/// 记录是否有人调过 saveSchedule —— 用来验证「放弃选择」不会落库。
+/// 记录是否有人调过 saveSchedule —— 用来验证「放弃选择」不会落库，
+/// 并记下创建路径传下来的班组名。
 class _RecordingRepository extends AppRepository {
   _RecordingRepository(super.db);
 
   int saveCalls = 0;
+  int lastTeamCount = 0;
+  List<String> lastTeamNames = const [];
 
   @override
   Future<int> saveSchedule({
@@ -32,6 +35,8 @@ class _RecordingRepository extends AppRepository {
     List<int> teamOffsets = const [],
   }) async {
     saveCalls++;
+    lastTeamCount = teamCount;
+    lastTeamNames = List.of(teamNames);
     return 1;
   }
 }
@@ -182,5 +187,51 @@ void main() {
 
     expect(find.text(L10n.pickShiftPattern), findsNothing);
     expect(repo.saveCalls, 0, reason: '按返回键放弃后不应调用 saveSchedule');
+  });
+
+  testWidgets('多班组模板：创建路径给出完整长度、走 L10n 的班组名', (tester) async {
+    // 模板只带 4 个默认班组名，而五班三倒 / 六班三倒 是 5~6 个班组。
+    // 补位若落到数据库出口（app_repository 的兜底分支），英文界面下
+    // 用户就会看到「五班」「六班」。
+    final prev = L10n.locale;
+    L10n.locale = 'en';
+    addTearDown(() => L10n.locale = prev);
+
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final repo = _RecordingRepository(db);
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appRepositoryProvider.overrideWithValue(repo)],
+      child: MaterialApp(
+        home: Consumer(
+          builder: (context, ref, _) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => createScheduleFromTemplatePicker(context, ref,
+                    makeCurrent: false),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), '六班三倒');
+    await tester.pumpAndSettle();
+    final six = findTemplate('six_crew_three_shift')!;
+    await tester.tap(find.text(six.title));
+    await tester.pumpAndSettle();
+
+    expect(repo.saveCalls, 1);
+    expect(repo.lastTeamCount, 6);
+    expect(repo.lastTeamNames, hasLength(6),
+        reason: '班组名必须给满 teamCount 个，不能只给 4 个再靠兜底补位');
+    expect(repo.lastTeamNames.any((n) => n.contains('班')), isFalse,
+        reason: '英文界面下不该出现中文班组名');
   });
 }

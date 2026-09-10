@@ -54,11 +54,12 @@ class ActiveSchedule {
       classes: domainClasses,
       cycle: domainCycle,
       teamCount: n,
-      // 统一补位到 teamCount：模板生成的 6 班组方案只带了默认的 4 个班组名，
-      // 不补位的话消费方按 teamCount 索引会越界。
+      // 防御性补位到 teamCount：正常创建路径（`L10n.defaultTeamNames`）给的就是
+      // 完整长度，只有库里的列表短于 teamCount（历史数据 / 外部构造）才会走到
+      // 兜底分支 —— 所以这里用语言中性的值，不能再硬编码中文。
       teamNames: List.generate(
         n,
-        (i) => i < names.length ? names[i] : (i < 8 ? '${_cnNum(i)}班' : '${i + 1}班'),
+        (i) => i < names.length ? names[i] : 'Team ${i + 1}',
       ),
       ourTeamIndex: schedule.ourTeamIndex,
       teamOffsets: List.generate(
@@ -68,9 +69,6 @@ class ActiveSchedule {
     );
   }
 }
-
-const _cnNums = ['一', '二', '三', '四', '五', '六', '七', '八'];
-String _cnNum(int i) => i < _cnNums.length ? _cnNums[i] : '${i + 1}';
 
 extension ShiftClassRowX on ShiftClassRow {
   ShiftClass toDomain() => ShiftClass(

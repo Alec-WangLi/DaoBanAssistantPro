@@ -249,14 +249,17 @@ Future<int?> createScheduleFromTemplatePicker(
 
   final d = defaultSchedule();
   final picked = choice.template;
+  final teamCount = picked?.teamCount ?? d.teamCount;
   return ref.read(appRepositoryProvider).saveSchedule(
         name: picked?.subtitle ?? L10n.newSchedule,
         anchorDate: dateOnly(DateTime.now()),
         classes: picked?.classes ?? d.classes,
         cycle: picked?.cycle ?? d.cycle,
         makeCurrent: makeCurrent,
-        teamCount: picked?.teamCount ?? d.teamCount,
-        teamNames: d.teamNames,
+        teamCount: teamCount,
+        // 必须给满 teamCount 个名字：模板只带 4 个默认名，多班组模板
+        // （五班三倒 5 组、六班三倒 6 组…）靠数据库出口补位就会漏出中文。
+        teamNames: L10n.defaultTeamNames(teamCount),
         ourTeamIndex: 0,
         teamOffsets: picked?.teamOffsets ?? d.teamOffsets,
       );
