@@ -214,7 +214,10 @@ class AppRepository {
               ShiftScheduleRowsCompanion.insert(
                 name: name,
                 anchorDate: anchorDate,
-                isCurrent: const Value(true),
+                // 必须跟着入参走：写死 true 时 makeCurrent:false 会跳过下面
+                // 「清掉其他当前行」的分支，于是新旧两行同时 isCurrent，
+                // watchActiveSchedule() 的 watchSingleOrNull() 直接往流里推错。
+                isCurrent: Value(makeCurrent),
                 teamCount: Value(teamCount),
                 teamNames: Value(joinTeamNames(teamNames)),
                 ourTeamIndex: Value(ourTeamIndex),
