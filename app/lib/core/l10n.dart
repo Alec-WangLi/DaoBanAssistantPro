@@ -157,7 +157,7 @@ class L10n {
   static String get today => t('今天', 'Today');
   static String get myTeam => t('我的班', 'My team');
   static String get setAsMine => t('设为我', 'Set as mine');
-  static String get teamHint => t('「今天」= 锚点日的班：为每个班组选好锚点日各自的班；「设为我」选中你所在的班。', '"Today" = the shift on the anchor date; "Set as mine" marks your team.');
+  static String get teamHint => t('为每个班组选一个「周期起始日」——那天它从周期第 1 天开始；「设为我」选中你所在的班。', 'Give each team a "cycle start date" — on that day it begins at cycle day 1; "Set as mine" marks your team.');
   static String get restShift => t('休班', 'Rest');
   static String get rest => t('休息', 'Rest');
   static String get work => t('工作', 'Work');
@@ -250,8 +250,8 @@ class L10n {
       'View daily shifts (date/shift/lunar/weekday); statutory holidays marked red, makeup workdays tagged "班"; switch schedules and jump year/month from the toolbar; tap a day for details.');
   static String get guideSchedTitle => t('排班设置', 'Schedule');
   static String get guideSchedDesc => t(
-      '「我的 → 排班管理」可建/切多套排班；编辑时先选锚点日，给每个班指定「今天」的班，再「设为我」选中你所在的班；可选「法定班次」跟随节假日。',
-      'Me → Schedule management: create/switch multiple schedules; pick an anchor date, assign each team its "today" shift, then "Set as mine"; optional "Legal-holiday schedule".');
+      '「我的 → 排班管理」可建/切多套排班；新建时先选一个内置倒班方式模板，再改班次时间、周期表与各班组周期起始日；可选「法定班次」跟随节假日。',
+      'Me → Schedule management: create/switch multiple schedules; start from a built-in shift-pattern template, then tweak shift times, the cycle table and each team\'s cycle start date; optional "Legal-holiday schedule".');
   static String get guideAlarmTitle => t('闹钟', 'Alarms');
   static String get guideAlarmDesc => t(
       '白班/上夜班自动响铃（时间在排班编辑里改）；闹钟页显示未来 30 天、每天可单独开关；也可加自定义闹钟（一次性/每天/每周）。',

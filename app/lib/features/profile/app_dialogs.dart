@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.5.0\n'
+const String _changelogZh = 'v0.6.0\n'
+    '· 排班编辑器重写为两层轮换模型：班次定义（配一次，时间 / 颜色 / 联动闹钟都挂在上面）+ 周期表（长度即周期，1–60 天）\n'
+    '· 内置 19 种常见倒班方式模板：新建排班时选一个最像的即可起步\n'
+    '· 班组用「周期起始日」表达，各班组错位一目了然；编辑器未来 14 天实时预览\n'
+    '· 日历格子简称改由班次自带；查看其他班组改为色块列表\n'
+    '· 24 小时值班正确显示「08:00 – 次日 08:00」；旧数据自动升级（v5 → v6），重复班次自动合并\n\n'
+    'v0.5.0\n'
     '· 正式稳定版（归纳 0.4.1~0.5.0 全部更新）\n'
     '· 开源：仓库公开（MIT 许可）；检查更新改为公开无鉴权接口，限流时自动回退发布清单；应用内直接下载安装\n'
     '· 视觉统一：悬浮玻璃胶囊导航、极简黑白背景 + 5 色主色、统一线性图标、弹簧 Q 弹动效\n'
@@ -77,7 +83,13 @@ const String _changelogZh = 'v0.5.0\n'
     '· 玻璃模糊降级：低端机（内存 <4GB）自动关真实模糊；闹钟/待办/我的/排班列表行不再逐行模糊\n'
     '· 安全：release 改用独立正式签名（脱离 debug 证书，需卸载重装一次）；关闭 allowBackup；删除未使用的悬浮窗权限；下载文件名消毒\n\n';
 
-const String _changelogEn = 'v0.5.0\n'
+const String _changelogEn = 'v0.6.0\n'
+    '· Schedule editor rewritten around a two-layer rotation model: shift definitions (configure once — time / color / linked alarm live on them) + a cycle table (its length is the cycle, 1–60 days)\n'
+    '· 19 built-in shift-pattern templates: pick the closest one when creating a schedule\n'
+    '· Teams are phased by a "cycle start date"; live 14-day preview inside the editor\n'
+    '· Calendar cell labels now come from each shift; other teams shown as a color-block list\n'
+    '· 24-hour duty shifts show "08:00 – next day 08:00"; old data auto-upgrades (v5 → v6) with duplicate shifts merged\n\n'
+    'v0.5.0\n'
     '· Stable release (consolidating v0.4.1–v0.5.0)\n'
     '· Open source: repository made public (MIT); update check uses the public unauthenticated API with an automatic release-manifest fallback on rate limits; direct in-app download\n'
     '· Visual unification: floating glass capsule nav, monochrome background + 5 accent colors, outlined icons, spring motion\n'
