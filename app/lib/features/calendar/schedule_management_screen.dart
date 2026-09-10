@@ -8,7 +8,6 @@ import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
-import '../../domain/shift_rotation.dart';
 import 'schedule_editor_screen.dart';
 import 'shift_template_picker_screen.dart';
 
@@ -80,29 +79,11 @@ class ScheduleManagementScreen extends ConsumerWidget {
   }
 
   Future<void> _addSchedule(BuildContext context, WidgetRef ref) async {
-    final choice = await Navigator.of(context).push<ShiftTemplateChoice>(
-      MaterialPageRoute(builder: (_) => const ShiftTemplatePickerScreen()),
-    );
-    // 按返回键放弃：既不建方案，也不进编辑器。
-    if (choice == null || !context.mounted) return;
-
-    final d = defaultSchedule();
-    final picked = choice.template;
-    final classes = picked?.classes ?? d.classes;
-    final cycle = picked?.cycle ?? d.cycle;
-
-    final id = await ref.read(appRepositoryProvider).saveSchedule(
-          name: picked?.subtitle ?? L10n.newSchedule,
-          anchorDate: dateOnly(DateTime.now()),
-          classes: classes,
-          cycle: cycle,
-          makeCurrent: false,
-          teamCount: picked?.teamCount ?? d.teamCount,
-          teamNames: d.teamNames,
-          ourTeamIndex: 0,
-          teamOffsets: picked?.teamOffsets ?? d.teamOffsets,
-        );
-    if (context.mounted) await _openEditor(context, ref, id);
+    // 先选倒班方式；按返回键放弃则 id 为 null，既不建方案也不进编辑器。
+    final id = await createScheduleFromTemplatePicker(context, ref,
+        makeCurrent: false);
+    if (id == null || !context.mounted) return;
+    await _openEditor(context, ref, id);
   }
 
   Future<void> _deleteSchedule(

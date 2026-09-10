@@ -14,6 +14,7 @@ import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import 'schedule_editor_screen.dart';
+import 'shift_template_picker_screen.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -385,29 +386,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             leading: const Icon(Icons.add_outlined),
                             title: Text(L10n.addSchedule),
                             onTap: () async {
-                              final d = defaultSchedule();
-                              await ref
-                                  .read(appRepositoryProvider)
-                                  .saveSchedule(
-                                    name: L10n.newSchedule,
-                                    anchorDate: dateOnly(DateTime.now()),
-                                    classes: d.classes,
-                                    cycle: d.cycle,
-                                    makeCurrent: true,
-                                  );
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                                final saved = await Navigator.of(context).push<bool>(
-                                    MaterialPageRoute(
-                                        builder: (_) =>
-                                            const ScheduleEditorScreen()));
-                                if (saved == true && context.mounted) {
-                                  showGlassSnack(
-                                    context,
-                                    L10n.savedAndRescheduled,
-                                    icon: Icons.check_circle_outlined,
-                                  );
-                                }
+                              // 与「我的 → 排班管理 → 新增排班」共用同一条
+                              // 选择倒班方式的入口，日历进来的用户也能看到模板库。
+                              final id = await createScheduleFromTemplatePicker(
+                                  context, ref,
+                                  makeCurrent: true);
+                              if (id == null || !mounted) return;
+                              final nav = Navigator.of(this.context);
+                              nav.pop(); // 关弹窗，退回日历
+                              final saved = await nav.push<bool>(
+                                  MaterialPageRoute(
+                                      builder: (_) => ScheduleEditorScreen(
+                                          scheduleId: id)));
+                              if (saved == true && mounted) {
+                                showGlassSnack(
+                                  this.context,
+                                  L10n.savedAndRescheduled,
+                                  icon: Icons.check_circle_outlined,
+                                );
                               }
                             },
                           ),

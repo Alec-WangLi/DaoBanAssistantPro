@@ -77,11 +77,7 @@ const String _changelogZh = 'v0.6.0\n'
     'v0.4.2\n'
     '· 修复：恢复「后台弹出界面」权限（v0.4.1 误删，导致 App 从系统列表消失、锁屏全屏闹钟可能弹不出）\n'
     '· 使用帮助按最新版重写（日历/排班/闹钟/待办/权限/更新 6 条）\n'
-    '· 响铃界面液态玻璃化：深空蓝紫流动光晕 + 玻璃胶囊标签 + 玻璃按钮 + Q弹入场\n\n'
-    'v0.4.1\n'
-    '· 发布切 arm64 单 ABI：安装包 60.8MB → 约 21MB（−65%），仅 64 位设备\n'
-    '· 玻璃模糊降级：低端机（内存 <4GB）自动关真实模糊；闹钟/待办/我的/排班列表行不再逐行模糊\n'
-    '· 安全：release 改用独立正式签名（脱离 debug 证书，需卸载重装一次）；关闭 allowBackup；删除未使用的悬浮窗权限；下载文件名消毒\n\n';
+    '· 响铃界面液态玻璃化：深空蓝紫流动光晕 + 玻璃胶囊标签 + 玻璃按钮 + Q弹入场\n\n';
 
 const String _changelogEn = 'v0.6.0\n'
     '· Schedule editor rewritten around a two-layer rotation model: shift definitions (configure once — time / color / linked alarm live on them) + a cycle table (its length is the cycle, 1–60 days)\n'
@@ -120,11 +116,7 @@ const String _changelogEn = 'v0.6.0\n'
     'v0.4.2\n'
     '· Fixed: restored "Display over other apps" permission (removed by mistake in v0.4.1, hiding the app from the system list and possibly blocking the lock-screen alarm)\n'
     '· Usage guide rewritten for the latest version (calendar/schedule/alarm/todo/permissions/update)\n'
-    '· Ringing screen in liquid glass: flowing deep-space gradient, glass label capsule, glass button, springy entrance\n\n'
-    'v0.4.1\n'
-    '· Release builds target arm64 only: APK 60.8MB → ~21MB (−65%), 64-bit devices only\n'
-    '· Glass blur fallback: low-end devices (<4GB RAM) auto-disable real blur; alarm/todo/profile/schedule list rows no longer blur per-row\n'
-    '· Security: independent release signing (no more debug key; one-time reinstall required), allowBackup off, unused overlay permission removed, download filename sanitized\n\n';
+    '· Ringing screen in liquid glass: flowing deep-space gradient, glass label capsule, glass button, springy entrance\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

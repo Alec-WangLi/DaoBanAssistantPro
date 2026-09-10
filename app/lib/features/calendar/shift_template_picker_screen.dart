@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pressable.dart';
+import '../../data/app_repository.dart';
+import '../../domain/shift_rotation.dart';
 import '../../domain/shift_templates.dart';
 
 /// 选择页的返回值。
@@ -226,4 +229,35 @@ class _ShiftTemplatePickerScreenState
       ),
     );
   }
+}
+
+/// 弹出「选择你的倒班方式」，按选择建出一套方案并返回新方案 id。
+/// 用户按返回键放弃时返回 null（不建方案）。
+///
+/// 这是全应用**新增排班**的唯一入口逻辑 —— 我的 → 排班管理与
+/// 日历 → 切换排班 → 新增排班 都调它，两条路径共用同一段逻辑。
+Future<int?> createScheduleFromTemplatePicker(
+  BuildContext context,
+  WidgetRef ref, {
+  required bool makeCurrent,
+}) async {
+  final choice = await Navigator.of(context).push<ShiftTemplateChoice>(
+    MaterialPageRoute(builder: (_) => const ShiftTemplatePickerScreen()),
+  );
+  // 按返回键放弃：不建方案
+  if (choice == null || !context.mounted) return null;
+
+  final d = defaultSchedule();
+  final picked = choice.template;
+  return ref.read(appRepositoryProvider).saveSchedule(
+        name: picked?.subtitle ?? L10n.newSchedule,
+        anchorDate: dateOnly(DateTime.now()),
+        classes: picked?.classes ?? d.classes,
+        cycle: picked?.cycle ?? d.cycle,
+        makeCurrent: makeCurrent,
+        teamCount: picked?.teamCount ?? d.teamCount,
+        teamNames: d.teamNames,
+        ourTeamIndex: 0,
+        teamOffsets: picked?.teamOffsets ?? d.teamOffsets,
+      );
 }

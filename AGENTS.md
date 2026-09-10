@@ -73,6 +73,7 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 - 发布收尾：commit + `git tag vX.Y.Z` + `git push`（分支 + tag）之后，再跑 `scripts\release.ps1 -SkipConfirm` 把 APK 挂到 GitHub Release；发布说明先写到 `tools\gh\release-notes-vX.Y.Z.md`（脚本会自动复用），末位非 0 自动标为「预发布测试版」。
 
 ## 最近改动
+- **v0.6.0**（正式稳定版 · 周期排班编辑器）：排班模型重写为**两层轮换模型**——班次定义（配一次，时间/颜色/联动闹钟挂其上）+ 周期序列（长度即周期，1–60 天）；内置 **19 种常见倒班方式模板**，新增排班统一先走「选择你的倒班方式」（`shift_template_picker_screen.dart` 的顶层 `createScheduleFromTemplatePicker`，「我的 → 排班管理 → 新增排班」与「日历 → 切换排班 → 新增排班」两条入口共用）；班组用「周期起始日」表达，编辑器未来 14 天实时预览；持久层拆成 `shift_class_rows` + `shift_cycle_rows`，`schemaVersion 5 → 6` 迁移（旧数据自动升级、重复班次合并）；日历其他班组改色块列表、跨午夜时间文案本地化。
 - **v0.5.0**（正式稳定版 · 开源）：仓库公开（MIT）；更新检查去令牌，改用无鉴权公开 API，直接经 `browser_download_url` 下载安装。
 - **v0.4.4~v0.4.9**：视觉迭代——极简黑白背景 + 悬浮玻璃胶囊导航 + 5 色主色统一直线图标与弹簧动效；应用图标重绘；日历今日卡避让胶囊；胶囊通透度、浅色可见性与主色对比度逐版微调。
 - **v0.4.3**：排班编辑「班次名称」与标题行间距修复；响铃界面时间改粗体 + 「上滑关闭」改为跟随手指的滑块（阈值触发 / 未到位回弹）；新增「高级材质」开关（`appSettings.advancedMaterial`，默认开，关=全 App 去真实模糊，`glassBlurDisabled` 升级为 `ValueNotifier` + `lowEndDevice`/`advancedMaterialDisabled` 双来源，`GlassBlur` 统一胶囊/按钮/提示条模糊点）。

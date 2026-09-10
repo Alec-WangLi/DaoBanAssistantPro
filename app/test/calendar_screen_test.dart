@@ -18,6 +18,7 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 ShiftTemplate _template(String id) =>
@@ -43,7 +44,7 @@ List<String> _chipTexts(WidgetTester tester) => tester
 /// 时间串的场景要给宽一点：测试字体每个字符都占满一个字身，英文的
 /// `08:00 – 08:00 (next day)` 在测试里比真机宽得多，窄屏会被那个等宽字体
 /// 挤出假溢出。
-Future<void> _pumpCalendar(WidgetTester tester, String templateId,
+Future<AppDatabase> _pumpCalendar(WidgetTester tester, String templateId,
     {double width = 420}) async {
   final template = _template(templateId);
 
@@ -75,7 +76,12 @@ Future<void> _pumpCalendar(WidgetTester tester, String templateId,
     child: const MaterialApp(home: CalendarScreen()),
   ));
   await tester.pumpAndSettle();
+  return db;
 }
+
+/// 库里现有几套排班方案。
+Future<int> _scheduleCount(AppDatabase db) async =>
+    (await db.select(db.shiftScheduleRows).get()).length;
 
 /// 收尾：主动拆掉界面，并推一下时钟让 drift 取消查询流时排的那个零时长
 /// 定时器真的跑掉。
@@ -157,6 +163,67 @@ void main() {
 
     expect(find.text(L10n.otherCrews), findsNothing);
     expect(_chipTexts(tester), isEmpty);
+
+    await _disposeCalendar(tester);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 日历 → 切换排班 → 新增排班：必须和「我的 → 排班管理」一样走模板选择页。
+  // 修前这条路径直接 saveSchedule(defaultSchedule()) 并开一个没有 scheduleId 的
+  // 编辑器 —— 从日历进来的用户永远看不到 19 种模板。
+  // ---------------------------------------------------------------------------
+
+  testWidgets('日历「新增排班」弹「选择你的倒班方式」；按返回键放弃不建方案',
+      (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+    expect(await _scheduleCount(db), 1, reason: '进入前只有种子方案');
+
+    // 日历右上角「切换排班」→ 弹层里的「新增排班」
+    await tester.tap(find.byTooltip(L10n.switchSchedule));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.addSchedule));
+    await tester.pumpAndSettle();
+
+    // 关键：日历这条路径现在也弹模板选择页，而不是直接把默认方案落库
+    expect(find.text(L10n.pickShiftPattern), findsOneWidget);
+
+    // 按返回键放弃 → 不建方案
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.pickShiftPattern), findsNothing);
+    expect(await _scheduleCount(db), 1,
+        reason: '按返回键放弃后不该凭空多出一套方案');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('日历「新增排班」选中的模板真的落库，并进入带 id 的编辑器',
+      (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    await tester.tap(find.byTooltip(L10n.switchSchedule));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.addSchedule));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.pickShiftPattern), findsOneWidget);
+
+    // 选「四班三倒」：周期 8 天，与默认的四班两倒（4 天）不同，能证明用的是模板。
+    final target = findTemplate('four_crew_three_shift')!;
+    await tester.enterText(find.byType(TextField), '四班三倒');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(target.title));
+    await tester.pumpAndSettle();
+
+    // 新方案按模板落库：名字 = 模板副标题，周期长度 = 模板周期。
+    expect(await _scheduleCount(db), 2);
+    final rows = await db.select(db.shiftScheduleRows).get();
+    final created = rows.firstWhere((r) => r.name == target.subtitle);
+    final domain = await AppRepository(db).getScheduleDomain(created.id);
+    expect(domain, isNotNull);
+    expect(domain!.cycleLength, target.cycle.length);
+
+    // 弹层关闭，改用带 scheduleId 的编辑器（不再靠 makeCurrent 的隐式约定）。
+    expect(find.byType(ScheduleEditorScreen), findsOneWidget);
 
     await _disposeCalendar(tester);
   });
