@@ -1,9 +1,40 @@
 // app/test/shift_template_picker_test.dart
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
+
+/// 记录是否有人调过 saveSchedule —— 用来验证「放弃选择」不会落库。
+class _RecordingRepository extends AppRepository {
+  _RecordingRepository(super.db);
+
+  int saveCalls = 0;
+
+  @override
+  Future<int> saveSchedule({
+    int? scheduleId,
+    required String name,
+    required DateTime anchorDate,
+    required List<ShiftClass> classes,
+    required List<int> cycle,
+    bool makeCurrent = true,
+    int teamCount = 4,
+    List<String> teamNames = const ['一班', '二班', '三班', '四班'],
+    int ourTeamIndex = 0,
+    List<int> teamOffsets = const [],
+  }) async {
+    saveCalls++;
+    return 1;
+  }
+}
 
 /// 从一个宿主页 push 选择页，并把 pop 的返回值收进 [results]。
 Future<void> _openPicker(WidgetTester tester, List<Object?> results) async {
@@ -13,7 +44,7 @@ Future<void> _openPicker(WidgetTester tester, List<Object?> results) async {
         body: Center(
           child: ElevatedButton(
             onPressed: () async {
-              results.add(await Navigator.of(context).push<ShiftTemplate>(
+              results.add(await Navigator.of(context).push<ShiftTemplateChoice>(
                 MaterialPageRoute(
                     builder: (_) => const ShiftTemplatePickerScreen()),
               ));
@@ -29,6 +60,11 @@ Future<void> _openPicker(WidgetTester tester, List<Object?> results) async {
 }
 
 void main() {
+  // 管理页用 L10n.monthDay（intl DateFormat 'zh'）渲染日期，测试里要自己初始化。
+  setUpAll(() async {
+    await initializeDateFormatting('zh');
+  });
+
   test('每个模板的 group 都在分组列表里，不会静默消失', () {
     // 选择页按 shiftTemplateGroups 分组渲染：group 字符串写错会让该模板
     // 从「选择你的倒班方式」页上无声消失。
@@ -70,15 +106,18 @@ void main() {
     expect(find.text(L10n.customPattern), findsOneWidget);
   });
 
-  testWidgets('点模板卡片返回该模板', (tester) async {
+  testWidgets('点模板卡片返回携带该模板的 ShiftTemplateChoice', (tester) async {
     final results = <Object?>[];
     await _openPicker(tester, results);
     await tester.tap(find.text(shiftTemplates.first.title));
     await tester.pumpAndSettle();
-    expect(results.single, same(shiftTemplates.first));
+
+    final choice = results.single as ShiftTemplateChoice;
+    expect(choice.template, same(shiftTemplates.first));
+    expect(choice.custom, isFalse);
   });
 
-  testWidgets('点「我自己排」返回 null', (tester) async {
+  testWidgets('点「我自己排」返回 custom 选择', (tester) async {
     final results = <Object?>[];
     await _openPicker(tester, results);
     // 先过滤，把「我自己排」卡片带进首屏。
@@ -86,6 +125,62 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.customPattern));
     await tester.pumpAndSettle();
-    expect(results.single, isNull);
+
+    final choice = results.single as ShiftTemplateChoice;
+    expect(choice.custom, isTrue);
+    expect(choice.template, isNull);
+  });
+
+  testWidgets('「我自己排」与「按返回键放弃」不再无法区分', (tester) async {
+    // 修复核心：过去两者都 pop(null)，调用方只能靠 null 判断，
+    // 于是用户一按返回就会凭空多出一套排班。
+    final custom = <Object?>[];
+    await _openPicker(tester, custom);
+    await tester.enterText(find.byType(TextField), 'zzzzzz');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.customPattern));
+    await tester.pumpAndSettle();
+
+    final dismissed = <Object?>[];
+    await _openPicker(tester, dismissed);
+    await tester.pageBack(); // 系统返回键 / AppBar 返回。
+    await tester.pumpAndSettle();
+
+    expect(custom.single, isNotNull);
+    expect(dismissed.single, isNull);
+    expect(custom.single, isNot(dismissed.single));
+  });
+
+  testWidgets('按返回键放弃不会凭空多建一套排班', (tester) async {
+    // 直接驱动 ScheduleManagementScreen._addSchedule，验证被放弃的选择
+    // 既不落库、也不进编辑器。
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final repo = _RecordingRepository(db);
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        appRepositoryProvider.overrideWithValue(repo),
+        // 绕过真实数据流，让首帧直接有值（否则会卡在 loading 转圈）。
+        schedulesProvider
+            .overrideWith((ref) => Stream.value(const <ShiftScheduleRow>[])),
+        activeScheduleProvider
+            .overrideWith((ref) => Stream<ActiveSchedule?>.value(null)),
+      ],
+      child: const MaterialApp(home: ScheduleManagementScreen()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.addSchedule), findsOneWidget);
+
+    await tester.tap(find.text(L10n.addSchedule));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.pickShiftPattern), findsOneWidget);
+
+    await tester.pageBack(); // 系统返回键 / AppBar 返回。
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.pickShiftPattern), findsNothing);
+    expect(repo.saveCalls, 0, reason: '按返回键放弃后不应调用 saveSchedule');
   });
 }

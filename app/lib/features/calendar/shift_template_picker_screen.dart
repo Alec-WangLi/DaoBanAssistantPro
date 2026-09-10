@@ -5,9 +5,26 @@ import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../domain/shift_templates.dart';
 
+/// 选择页的返回值。
+///
+/// 不能只用 `ShiftTemplate?`：那样「我自己排」（null）与「按返回键放弃」
+/// （push 也返回 null）无法区分，用户一按返回就会凭空多出一套排班。
+class ShiftTemplateChoice {
+  const ShiftTemplateChoice.template(ShiftTemplate this.template) : custom = false;
+  const ShiftTemplateChoice.custom()
+      : template = null,
+        custom = true;
+
+  /// 选中的模板；[custom] 为 true 时为 null。
+  final ShiftTemplate? template;
+
+  /// 用户选了「我自己排」。
+  final bool custom;
+}
+
 /// 「选择你的倒班方式」：卡片网格 + 搜索，选中后返回该模板。
 ///
-/// 返回 null 表示用户选了「我自己排」。
+/// 返回 null 表示用户按返回键放弃，调用方应直接 return。
 class ShiftTemplatePickerScreen extends StatefulWidget {
   const ShiftTemplatePickerScreen({super.key});
 
@@ -128,7 +145,8 @@ class _ShiftTemplatePickerScreenState
       padding: EdgeInsets.zero,
       child: GlassPressable(
         child: InkWell(
-          onTap: () => Navigator.of(context).pop(t),
+          onTap: () =>
+              Navigator.of(context).pop(ShiftTemplateChoice.template(t)),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -173,7 +191,7 @@ class _ShiftTemplatePickerScreenState
       padding: EdgeInsets.zero,
       child: GlassPressable(
         child: InkWell(
-          onTap: () => Navigator.of(context).pop(null),
+          onTap: () => Navigator.of(context).pop(const ShiftTemplateChoice.custom()),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(

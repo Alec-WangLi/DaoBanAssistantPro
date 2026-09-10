@@ -9,7 +9,6 @@ import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
-import '../../domain/shift_templates.dart';
 import 'schedule_editor_screen.dart';
 import 'shift_template_picker_screen.dart';
 
@@ -81,12 +80,14 @@ class ScheduleManagementScreen extends ConsumerWidget {
   }
 
   Future<void> _addSchedule(BuildContext context, WidgetRef ref) async {
-    final picked = await Navigator.of(context).push<ShiftTemplate>(
+    final choice = await Navigator.of(context).push<ShiftTemplateChoice>(
       MaterialPageRoute(builder: (_) => const ShiftTemplatePickerScreen()),
     );
-    if (!context.mounted) return;
+    // 按返回键放弃：既不建方案，也不进编辑器。
+    if (choice == null || !context.mounted) return;
 
     final d = defaultSchedule();
+    final picked = choice.template;
     final classes = picked?.classes ?? d.classes;
     final cycle = picked?.cycle ?? d.cycle;
 
