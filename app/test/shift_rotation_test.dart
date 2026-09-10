@@ -99,4 +99,35 @@ void main() {
     const mid = ShiftClass(name: '中班', startMinute: 16 * 60, endMinute: 24 * 60);
     expect(mid.crossesMidnight, isFalse); // 16:00–24:00 不算跨午夜
   });
+
+  test('endClockMinute / endsNextDay：把「结束落在次日」变成一个概念', () {
+    // 值班 24 小时：08:00 → 次日 08:00
+    const duty = ShiftClass(name: '值班', startMinute: 8 * 60, endMinute: 32 * 60);
+    expect(duty.endClockMinute, 8 * 60);
+    expect(duty.endsNextDay, isTrue);
+    expect(duty.crossesMidnight, isTrue);
+
+    // 中班 16:00 → 24:00：24:00 与「次日 00:00」是同一时刻，两种判定都算跨日
+    const mid = ShiftClass(name: '中班', startMinute: 16 * 60, endMinute: 24 * 60);
+    expect(mid.endClockMinute, 0);
+    expect(mid.endsNextDay, isTrue);
+    expect(mid.crossesMidnight, isFalse); // 显示上按当日 24:00 处理
+
+    // 上夜班 20:30 → 次日 08:30：靠 e < s 判定
+    const night =
+        ShiftClass(name: '上夜班', startMinute: 20 * 60 + 30, endMinute: 8 * 60 + 30);
+    expect(night.endClockMinute, 8 * 60 + 30);
+    expect(night.endsNextDay, isTrue);
+
+    // 白班 08:30 → 20:30：当天结束
+    const day =
+        ShiftClass(name: '白班', startMinute: 8 * 60 + 30, endMinute: 20 * 60 + 30);
+    expect(day.endClockMinute, 20 * 60 + 30);
+    expect(day.endsNextDay, isFalse);
+
+    // 时间为空（休班）
+    const rest = ShiftClass(name: '休班', isRest: true);
+    expect(rest.endClockMinute, isNull);
+    expect(rest.endsNextDay, isFalse);
+  });
 }

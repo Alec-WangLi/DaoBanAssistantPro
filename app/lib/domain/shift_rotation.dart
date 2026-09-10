@@ -84,6 +84,16 @@ class ShiftClass {
     return e < s || e > 1440;
   }
 
+  /// 结束时间的钟面值（0..1439）；跨到次日时已减掉 1440。
+  int? get endClockMinute => endMinute == null ? null : endMinute! % 1440;
+
+  /// 结束时间是否落在次日（含 24:00 与 24 小时班）。
+  bool get endsNextDay {
+    final s = startMinute, e = endMinute;
+    if (s == null || e == null) return false;
+    return e >= 1440 || e < s;
+  }
+
   /// 日历格子显示的简称：优先用 [abbr]，为空时按名称推断。
   ///
   /// 用 `characters.first`（整字素簇）而不是 `substring(0, 1)`：

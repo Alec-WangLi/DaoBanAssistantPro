@@ -7,6 +7,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPicker;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -43,13 +44,21 @@ class _Saved {
 }
 
 class _FakeRepository extends AppRepository {
-  _FakeRepository(super.db, this.domain);
+  _FakeRepository(super.db, this.domain, {this.active});
 
   final ShiftSchedule domain;
+
+  /// 库里的「当前方案」。与 [domain]（正在编辑的那套）不同时，用来验证
+  /// 保存后重排闹钟用的是当前方案，而不是编辑器手里这套。
+  final ShiftSchedule? active;
+
   _Saved? saved;
 
   @override
   Future<ShiftSchedule?> getScheduleDomain(int id) async => domain;
+
+  @override
+  Future<ShiftSchedule?> getActiveSchedule() async => active ?? domain;
 
   @override
   Future<int> saveSchedule({
@@ -117,9 +126,34 @@ ShiftSchedule _domain({
   );
 }
 
+/// 只有一个非休息班次 + 一个休班的方案：页面上只有一条「结束」时间行。
+ShiftSchedule _oneShift(ShiftClass c) => _domain(
+      classes: [c, const ShiftClass(name: '休息', abbr: '休', isRest: true)],
+      cycle: const [0, 1],
+    );
+
+/// 24 小时值班：08:00 → 次日 08:00（Task 1 把分钟域扩到 2880 的起因）。
+const _duty24 = ShiftClass(
+    name: '值班',
+    abbr: '值',
+    startMinute: 8 * 60,
+    endMinute: 32 * 60,
+    color: 0xFFFF375F);
+
+/// 中班：16:00 → 24:00（endMinute 恰好 1440）。
+const _mid24 = ShiftClass(
+    name: '中班',
+    abbr: '中',
+    startMinute: 16 * 60,
+    endMinute: 24 * 60,
+    color: 0xFFFF9F0A);
+
 /// 从一个宿主页 push 编辑器（这样保存后的 pop 有地方可回）。
 Future<_FakeRepository> _pumpEditor(
-    WidgetTester tester, ShiftSchedule domain) async {
+  WidgetTester tester,
+  ShiftSchedule domain, {
+  ShiftSchedule? active,
+}) async {
   // 编辑器是一整页长列表：给足高度，让周期里的每一行都真的被构建出来，
   // 否则 ListView 只会懒构建视口内的那几行，find 就找不到。
   tester.view.physicalSize = const Size(900, 4600);
@@ -130,7 +164,7 @@ Future<_FakeRepository> _pumpEditor(
   final raw = sqlite3.sqlite3.openInMemory();
   final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
   addTearDown(db.close);
-  final repo = _FakeRepository(db, domain);
+  final repo = _FakeRepository(db, domain, active: active);
 
   await tester.pumpWidget(ProviderScope(
     overrides: [appRepositoryProvider.overrideWithValue(repo)],
@@ -646,5 +680,187 @@ void main() {
     expect(en, '20:30 – 08:30 (next day)');
     expect(en.contains('次日'), isFalse);
     expect(L10n.timeRange('08:30', '20:30', false), '08:30 – 20:30');
+  });
+
+  // ---------------------------------------------------------------------------
+  // C1：编辑器必须能表达 endMinute >= 1440（24 小时值班 / 中班 24:00）
+  //
+  // 分钟域在 Task 1 扩到了 2880，但编辑器的时间行一度仍假设 0..1439：
+  // 显示上 1920 被 formatClock 静默回绕成 08:00，选择器上 hour=32 越出
+  // 00..23 的滚轮 → 用户一确认，24 小时值班就被静默降级成当天结束。
+  // ---------------------------------------------------------------------------
+
+  testWidgets('值班（08:00–次日08:00）：结束时间选择器停在 08:00，确认后仍是 1920',
+      (tester) async {
+    final repo = await _pumpEditor(tester, _oneShift(_duty24));
+
+    await tester.tap(find.widgetWithText(ListTile, L10n.end));
+    await tester.pumpAndSettle();
+
+    // 小时滚轮必须停在钟面值 08，而不是越界的 32（越界时轮子会被夹到 23，
+    // 用户一确认就把 24 小时值班改成了 23:00）
+    final wheels = tester
+        .widgetList<CupertinoPicker>(find.byType(CupertinoPicker))
+        .toList();
+    expect(wheels, hasLength(2), reason: '时、分两个滚轮');
+    expect(
+      (wheels[0].scrollController as FixedExtentScrollController).initialItem,
+      8,
+      reason: '结束时间是 1920 → 钟面 08:00，滚轮初始位置必须是 8',
+    );
+
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.classes.first.endMinute, 1920,
+        reason: '原样确认不该改动 24 小时值班的结束时间');
+  });
+
+  testWidgets('值班的结束时间在班次设置里显示「次日08:00」，而不是被回绕成 08:00',
+      (tester) async {
+    await _pumpEditor(tester, _oneShift(_duty24));
+
+    expect(_subtitleOf(tester, L10n.end), '${L10n.nextDay}08:00');
+    expect(_subtitleOf(tester, L10n.end), '次日08:00');
+    // 同一屏的周期行也得说同一件事：08:00 – 次日08:00
+    expect(find.text('08:00 – 次日08:00'), findsOneWidget);
+    expect(_subtitleOf(tester, L10n.start), '08:00');
+  });
+
+  testWidgets('中班（16:00–24:00）：显示 24:00，滚轮停在 00 且确认后仍是 1440',
+      (tester) async {
+    final repo = await _pumpEditor(tester, _oneShift(_mid24));
+
+    // 1440 与「次日 00:00」是同一时刻；这里与周期行、日历一致地写成 24:00
+    expect(_subtitleOf(tester, L10n.end), '24:00');
+    expect(find.text('16:00 – 24:00'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ListTile, L10n.end));
+    await tester.pumpAndSettle();
+    final wheels = tester
+        .widgetList<CupertinoPicker>(find.byType(CupertinoPicker))
+        .toList();
+    expect(
+      (wheels[0].scrollController as FixedExtentScrollController).initialItem,
+      0,
+    );
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.classes.first.endMinute, 1440,
+        reason: '中班的 24:00 不能被降级成 00:00');
+  });
+
+  testWidgets('上夜班（20:30–次日08:30）：靠 e < s 跨午夜，确认后不被抬高到 1440 以上',
+      (tester) async {
+    const night = ShiftClass(
+        name: '上夜班',
+        abbr: '夜',
+        startMinute: 20 * 60 + 30,
+        endMinute: 8 * 60 + 30);
+    final repo = await _pumpEditor(tester, _oneShift(night));
+
+    expect(_subtitleOf(tester, L10n.end), '次日08:30');
+
+    await tester.tap(find.widgetWithText(ListTile, L10n.end));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.classes.first.endMinute, 8 * 60 + 30);
+  });
+
+  // ---------------------------------------------------------------------------
+  // I1：保存后重排必须用「当前方案」，不能用刚编辑的这套
+  // ---------------------------------------------------------------------------
+
+  testWidgets('保存一套非当前方案后，重排闹钟用的是当前方案', (tester) async {
+    // 两个通道都要接住：settings 是我们自己的原生通道，local_notifications
+    // 是 flutter_local_notifications 的 —— 后者没接住的话 cancelAll 在测试
+    // 环境里永远不会完成，后面的排定循环根本不会跑。
+    const settings = MethodChannel('com.daoban.shiftassistantpro/settings');
+    const notifications =
+        MethodChannel('dexterous.com/flutter/local_notifications');
+    final labels = <String>[];
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(settings, (call) async {
+      if (call.method == 'scheduleNativeAlarm') {
+        labels.add(((call.arguments as Map)['label']) as String);
+      }
+      return null;
+    });
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(notifications, (call) async => null);
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(settings, null);
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(notifications, null);
+    });
+
+    // 闹钟时间取 23:59，保证未来 60 天里至少排得进一条。
+    const at2359 = 23 * 60 + 59;
+    ShiftSchedule withName(String name) => _domain(
+          classes: [
+            ShiftClass(
+                name: name,
+                abbr: '·',
+                startMinute: 8 * 60,
+                endMinute: 20 * 60,
+                alarmEnabled: true,
+                alarmMinute: at2359),
+            const ShiftClass(name: '休班', abbr: '休', isRest: true),
+          ],
+          cycle: const [0, 1],
+        );
+
+    await _pumpEditor(tester, withName('编辑中'), active: withName('当前班表'));
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(labels, isNotEmpty, reason: '重排应当真的排了班次闹钟');
+    expect(labels.every((l) => l.startsWith('当前班表')), isTrue,
+        reason: '重排必须按当前方案，按编辑中那套排会把闹钟排到错的班表上');
+  });
+
+  // ---------------------------------------------------------------------------
+  // M7：删除中间的班次定义时，周期里更大的下标必须前移
+  // ---------------------------------------------------------------------------
+
+  testWidgets('删掉中间的班次定义后，周期里比它大的下标整体前移一位',
+      (tester) async {
+    final repo = await _pumpEditor(
+      tester,
+      _domain(
+        classes: const [
+          ShiftClass(name: 'A班', abbr: 'A'),
+          ShiftClass(name: 'B班', abbr: 'B'),
+          ShiftClass(name: 'C班', abbr: 'C'),
+        ],
+        cycle: const [0, 2],
+      ),
+    );
+    expect(find.byType(GlassDeleteButton), findsNWidgets(3));
+
+    // 删中间的 B（下标 1，周期没引用它）
+    await tester.tap(find.byType(GlassDeleteButton).at(1));
+    await tester.pumpAndSettle();
+    expect(find.byType(GlassDeleteButton), findsNWidgets(2));
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.classes.map((c) => c.name), ['A班', 'C班']);
+    expect(repo.saved!.cycle, [0, 1],
+        reason: 'C 的下标要从 2 前移到 1，否则周期会指向不存在的班次定义');
   });
 }

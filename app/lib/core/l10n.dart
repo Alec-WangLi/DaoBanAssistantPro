@@ -150,15 +150,12 @@ class L10n {
   static String get scheduleNotFound => t('该排班不存在，可能已被删除', 'Schedule not found, may have been deleted');
   static String get saveAndReschedule => t('保存并重排闹钟', 'Save & reschedule alarms');
   static String get scheduleName => t('方案名称', 'Schedule name');
-  static String get anchorDate => t('锚点日（参考日期）', 'Anchor date (reference)');
-  static String get anchorHint => t('提示：先选一个参考日期，再在下方为每个班组指定「今天」的班。', 'Tip: pick a reference date, then assign each team its "today" shift below.');
   static String get teamSettings => t('班组设置', 'Teams');
   static String get teamName => t('班组名', 'Team name');
   static String get today => t('今天', 'Today');
   static String get myTeam => t('我的班', 'My team');
   static String get setAsMine => t('设为我', 'Set as mine');
   static String get teamHint => t('为每个班组选一个「周期起始日」——那天它从周期第 1 天开始；「设为我」选中你所在的班。', 'Give each team a "cycle start date" — on that day it begins at cycle day 1; "Set as mine" marks your team.');
-  static String get restShift => t('休班', 'Rest');
   static String get rest => t('休息', 'Rest');
   static String get work => t('工作', 'Work');
   static String get workday => t('上班', 'Workday');
@@ -168,13 +165,29 @@ class L10n {
   static String get shiftName => t('班次名称', 'Shift name');
   static String get start => t('开始', 'Start');
   static String get end => t('结束', 'End');
-  static String get crossesMidnight => t('（结束早于开始 = 跨午夜）', '(end before start = crosses midnight)');
+  static String get crossesMidnight => t('（结束早于开始，或晚于 24:00 = 跨午夜）', '(ends before start, or past 24:00 = crosses midnight)');
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
   static String get alarmTime => t('响铃时间', 'Alarm time');
   static String get notSet => t('未设置', 'Not set');
   static String get schedule => t('排班', 'Schedule');
   static String dayN(int n) => isEn ? 'Day $n' : '第 $n 天';
-  static String teamN(int n) => isEn ? '$n teams' : '$n 个班';
+
+  /// 第 [i] 个班组的默认名（[i] 从 0 起）。
+  ///
+  /// 唯一来源：编辑器的班组步进器与「新建排班」的创建路径都调它，
+  /// 免得两处各写一份、英文界面下漏出中文。
+  static String defaultTeamName(int i) {
+    if (isEn) return 'Team ${i + 1}';
+    const names = ['一', '二', '三', '四', '五', '六', '七', '八'];
+    return i < names.length ? '${names[i]}班' : '${i + 1}班';
+  }
+
+  /// [n] 个班组的完整默认名列表。
+  ///
+  /// 创建方案时必须传完整长度：多班组模板（五班三倒、六班三倒…）只带 4 个
+  /// 默认名，靠数据库出口补位的话就得到了一份绕过本地化的名字。
+  static List<String> defaultTeamNames(int n) =>
+      List.generate(n, defaultTeamName);
 
   // 编辑器
   static String get shiftClasses => t('班次设置', 'Shift types');
@@ -190,8 +203,11 @@ class L10n {
   static String get abbrLabel => t('简称', 'Short');
   static String get crewSettingsOptional =>
       t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
-  static String get shiftInUseHint =>
-      t('周期里引用它的天数会一并改成休班', 'Days using it will become rest days');
+
+  /// 「结束时间落在次日」的前缀（中文直接接钟点，英文要留空格）。
+  ///
+  /// 只作前缀用；成串的「开始 – 结束」走 [timeRange]，那里中英语序不同。
+  static String get nextDay => t('次日', 'next day ');
 
   /// 「开始 – 结束」；跨午夜时中文插「次日」、英文在括号里注明。
   ///

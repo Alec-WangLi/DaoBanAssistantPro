@@ -497,10 +497,10 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _timeTile(
+                  child: _endTimeTile(
                     context,
                     label: L10n.end,
-                    minutes: c.endMinute,
+                    shift: c,
                     onPick: (m) => setState(() => _classes[index] =
                         _editClass(_classes[index], endMinute: m)),
                   ),
@@ -565,6 +565,55 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         },
       ),
     );
+  }
+
+  /// 结束时间行 —— 与开始时间的唯一区别是「结束可能落在次日」。
+  ///
+  /// `endMinute` 的域到 2880（24 小时值班 = 480 → 1920），所以：
+  /// - 打开选择器必须用**钟面值**（[ShiftClass.endClockMinute]），
+  ///   直接用 `endMinute ~/ 60` 会得到 32 点、越出小时滚轮的 0..23；
+  /// - 确认时必须把「跨到次日」的那 1440 分钟加回去，否则值班会被静默
+  ///   降级成当天结束，日历与闹钟跟着一起错。
+  Widget _endTimeTile(
+    BuildContext context, {
+    required String label,
+    required ShiftClass shift,
+    required ValueChanged<int> onPick,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(label),
+        subtitle: Text(_endTimeText(shift)),
+        trailing: const Icon(Icons.access_time_outlined),
+        onTap: () async {
+          final clock = shift.endClockMinute ?? toMinutes(20, 0);
+          final picked = await showGlassTimePicker(
+            context,
+            initialTime: TimeOfDay(hour: clock ~/ 60, minute: clock % 60),
+          );
+          if (picked == null) return;
+          final base = picked.hour * 60 + picked.minute; // 0..1439
+          final wasNextDay = shift.endMinute != null && shift.endMinute! >= 1440;
+          onPick(base + (wasNextDay ? 1440 : 0));
+        },
+      ),
+    );
+  }
+
+  /// 结束时间的副标题：落在次日时补「次日」前缀。
+  ///
+  /// 1440（即当日 24:00）也满足 [ShiftClass.endsNextDay]，但周期行与日历都
+  /// 把它写成 `24:00`（同一时刻的两种写法），这里保持一致 —— 否则同一个
+  /// 班次会在班次设置里说「次日00:00」、在周期行里说「24:00」。
+  String _endTimeText(ShiftClass c) {
+    final e = c.endMinute;
+    if (e == null) return L10n.notSet;
+    if (e == 1440) return formatClock(1440);
+    return c.endsNextDay
+        ? '${L10n.nextDay}${formatClock(c.endClockMinute!)}'
+        : formatClock(e);
   }
 
   /// 4) 周期设置：几天一循环，以及每天引用哪个班次。
@@ -860,7 +909,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     setState(() {
       _teamCount = n;
       while (_teamNames.length < n) {
-        _teamNames.add(_defaultTeamName(_teamNames.length));
+        _teamNames.add(L10n.defaultTeamName(_teamNames.length));
       }
       if (_teamNames.length > n) {
         _teamNames.removeRange(n, _teamNames.length);
@@ -874,12 +923,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       }
       _syncTeamNameCtrls();
     });
-  }
-
-  String _defaultTeamName(int i) {
-    if (L10n.isEn) return 'Team ${i + 1}';
-    const names = ['一', '二', '三', '四', '五', '六', '七', '八'];
-    return i < names.length ? '${names[i]}班' : '${i + 1}班';
   }
 
   /// 6) 跟随法定节假日：打开即变成空白表（无班次、无周期）。
@@ -1061,20 +1104,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             teamOffsets: _teamOffsets,
           );
       final repo = ref.read(appRepositoryProvider);
-      await AlarmService.reschedule(
-        ShiftSchedule(
-          name: name,
-          anchorDate: anchor,
-          classes: _classes,
-          cycle: _cycle,
-          teamCount: _teamCount,
-          teamNames: _teamNames,
-          ourTeamIndex: _ourTeamIndex,
-          teamOffsets: _teamOffsets,
-        ),
-        await repo.listCustomAlarms(),
-        overrides: await repo.listShiftAlarmOverrides(),
-      );
+      // 重排必须用**当前**方案，不能用刚编辑的这套：用户可能编辑的是一套
+      // 非当前方案，按它重排会把闹钟排到错的班表上，直到冷启动才自愈。
+      final active = await repo.getActiveSchedule();
+      if (active != null) {
+        await AlarmService.reschedule(
+          active,
+          await repo.listCustomAlarms(),
+          overrides: await repo.listShiftAlarmOverrides(),
+        );
+      }
       // 返回 true 告知上层「已保存」，由上层弹提示（避免 SnackBar 随页面一起销毁）
       if (mounted) Navigator.of(context).pop(true);
     } finally {
