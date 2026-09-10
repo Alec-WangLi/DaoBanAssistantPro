@@ -21,19 +21,30 @@ Future<void> seedIfEmpty(AppDatabase db) async {
         ),
       );
 
-  for (var i = 0; i < sched.cycle.length; i++) {
-    final t = sched.classes[sched.cycle[i]];
-    await db.into(db.shiftTypeRows).insert(
-          ShiftTypeRowsCompanion.insert(
+  final classIds = <int>[];
+  for (var i = 0; i < sched.classes.length; i++) {
+    final c = sched.classes[i];
+    classIds.add(await db.into(db.shiftClassRows).insert(
+          ShiftClassRowsCompanion.insert(
             scheduleId: id,
             order: i,
-            name: t.name,
-            startMinute: Value(t.startMinute),
-            endMinute: Value(t.endMinute),
-            isRest: Value(t.isRest),
-            color: Value(t.color),
-            alarmEnabled: Value(t.alarmEnabled),
-            alarmMinute: Value(t.alarmMinute),
+            name: c.name,
+            abbr: Value(c.abbr),
+            startMinute: Value(c.startMinute),
+            endMinute: Value(c.endMinute),
+            isRest: Value(c.isRest),
+            color: Value(c.color),
+            alarmEnabled: Value(c.alarmEnabled),
+            alarmMinute: Value(c.alarmMinute),
+          ),
+        ));
+  }
+  for (var i = 0; i < sched.cycle.length; i++) {
+    await db.into(db.shiftCycleRows).insert(
+          ShiftCycleRowsCompanion.insert(
+            scheduleId: id,
+            order: i,
+            classId: classIds[sched.cycle[i]],
           ),
         );
   }

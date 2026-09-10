@@ -40,6 +40,8 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   drift_dev: ^2.20.0
   build_runner: ^2.4.13
+  # 迁移测试直接用裸 sqlite3 建 v5 形态的 fixture 库。
+  sqlite3: ^2.9.4
 
 flutter:
   uses-material-design: true

@@ -23,29 +23,59 @@ List<int> parseTeamOffsets(String s) {
 
 String joinTeamOffsets(List<int> offsets) => offsets.join(',');
 
-/// 活跃排班方案（当前方案行 + 有序班次行）。
+/// 活跃排班方案（当前方案行 + 班次定义 + 周期序列）。
 class ActiveSchedule {
-  const ActiveSchedule({required this.schedule, required this.shiftTypes});
+  const ActiveSchedule({
+    required this.schedule,
+    required this.classes,
+    required this.cycle,
+  });
 
   final ShiftScheduleRow schedule;
-  final List<ShiftTypeRow> shiftTypes;
+  final List<ShiftClassRow> classes;
+  final List<ShiftCycleRow> cycle;
 
-  ShiftSchedule toDomain() => ShiftSchedule(
-        name: schedule.name,
-        anchorDate: schedule.anchorDate,
-        classes: shiftTypes.map((t) => t.toDomain()).toList(),
-        // 临时适配：老表就是「每天一行」，直接按行序当周期。
-        cycle: List.generate(shiftTypes.length, (i) => i),
-        teamCount: schedule.teamCount,
-        teamNames: parseTeamNames(schedule.teamNames),
-        ourTeamIndex: schedule.ourTeamIndex,
-        teamOffsets: parseTeamOffsets(schedule.teamOffsets),
-      );
+  ShiftSchedule toDomain() {
+    final domainClasses = classes.map((c) => c.toDomain()).toList();
+    // 库里存的是 classId，领域层要的是 classes 的下标。
+    final indexById = {
+      for (var i = 0; i < classes.length; i++) classes[i].id: i,
+    };
+    final domainCycle = cycle
+        .map((r) => indexById[r.classId] ?? -1)
+        .where((i) => i >= 0)
+        .toList();
+    final n = schedule.teamCount;
+    final names = parseTeamNames(schedule.teamNames);
+    final offsets = parseTeamOffsets(schedule.teamOffsets);
+    return ShiftSchedule(
+      name: schedule.name,
+      anchorDate: schedule.anchorDate,
+      classes: domainClasses,
+      cycle: domainCycle,
+      teamCount: n,
+      // 统一补位到 teamCount：模板生成的 6 班组方案只带了默认的 4 个班组名，
+      // 不补位的话消费方按 teamCount 索引会越界。
+      teamNames: List.generate(
+        n,
+        (i) => i < names.length ? names[i] : (i < 8 ? '${_cnNum(i)}班' : '${i + 1}班'),
+      ),
+      ourTeamIndex: schedule.ourTeamIndex,
+      teamOffsets: List.generate(
+        n,
+        (i) => i < offsets.length ? offsets[i] : (i - schedule.ourTeamIndex),
+      ),
+    );
+  }
 }
 
-extension ShiftTypeRowX on ShiftTypeRow {
+const _cnNums = ['一', '二', '三', '四', '五', '六', '七', '八'];
+String _cnNum(int i) => i < _cnNums.length ? _cnNums[i] : '${i + 1}';
+
+extension ShiftClassRowX on ShiftClassRow {
   ShiftClass toDomain() => ShiftClass(
         name: name,
+        abbr: abbr,
         startMinute: startMinute,
         endMinute: endMinute,
         isRest: isRest,
@@ -62,12 +92,20 @@ extension AppDatabaseQueries on AppDatabase {
       ..where((s) => s.isCurrent.equals(true));
     return schedQuery.watchSingleOrNull().asyncMap((sched) async {
       if (sched == null) return null;
-      final types = await (select(shiftTypeRows)
-            ..where((t) => t.scheduleId.equals(sched.id))
-            ..orderBy([(t) => OrderingTerm.asc(t.order)]))
-          .get();
-      return ActiveSchedule(schedule: sched, shiftTypes: types);
+      return _loadChildren(sched);
     });
+  }
+
+  Future<ActiveSchedule> _loadChildren(ShiftScheduleRow sched) async {
+    final classes = await (select(shiftClassRows)
+          ..where((t) => t.scheduleId.equals(sched.id))
+          ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+        .get();
+    final cycle = await (select(shiftCycleRows)
+          ..where((t) => t.scheduleId.equals(sched.id))
+          ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+        .get();
+    return ActiveSchedule(schedule: sched, classes: classes, cycle: cycle);
   }
 
   /// 监听全部日程（按日期+时间升序）。
@@ -94,7 +132,9 @@ class AppRepository {
     await db.transaction(() async {
       await db.delete(db.scheduleEvents).go();
       await db.delete(db.shiftAlarmOverrides).go();
-      await db.delete(db.shiftTypeRows).go();
+      // 先删子表（周期）再删父表（班次定义）。
+      await db.delete(db.shiftCycleRows).go();
+      await db.delete(db.shiftClassRows).go();
       await db.delete(db.shiftScheduleRows).go();
     });
     await seedIfEmpty(db);
@@ -118,17 +158,13 @@ class AppRepository {
     });
   }
 
-  /// 取一套排班方案的完整领域模型（含班次）。
+  /// 取一套排班方案的完整领域模型（含班次定义与周期）。
   Future<ShiftSchedule?> getScheduleDomain(int id) async {
     final row = await (db.select(db.shiftScheduleRows)
           ..where((s) => s.id.equals(id)))
         .getSingleOrNull();
     if (row == null) return null;
-    final types = await (db.select(db.shiftTypeRows)
-          ..where((t) => t.scheduleId.equals(id))
-          ..orderBy([(t) => OrderingTerm.asc(t.order)]))
-        .get();
-    return ActiveSchedule(schedule: row, shiftTypes: types).toDomain();
+    return (await db._loadChildren(row)).toDomain();
   }
 
   /// 立即读取当前方案领域模型（重排闹钟用，避免读 Riverpod 流拿到旧值）。
@@ -137,17 +173,16 @@ class AppRepository {
           ..where((s) => s.isCurrent.equals(true)))
         .getSingleOrNull();
     if (row == null) return null;
-    final types = await (db.select(db.shiftTypeRows)
-          ..where((t) => t.scheduleId.equals(row.id))
-          ..orderBy([(t) => OrderingTerm.asc(t.order)]))
-        .get();
-    return ActiveSchedule(schedule: row, shiftTypes: types).toDomain();
+    return (await db._loadChildren(row)).toDomain();
   }
 
-  /// 删除一套排班方案（连带其班次），并保证始终有一套当前方案。
+  /// 删除一套排班方案（连带其班次定义与周期），并保证始终有一套当前方案。
   Future<void> deleteSchedule(int id) async {
     await db.transaction(() async {
-      await (db.delete(db.shiftTypeRows)
+      await (db.delete(db.shiftCycleRows)
+            ..where((t) => t.scheduleId.equals(id)))
+          .go();
+      await (db.delete(db.shiftClassRows)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
       await (db.delete(db.shiftScheduleRows)..where((s) => s.id.equals(id)))
@@ -211,25 +246,41 @@ class AppRepository {
             .write(const ShiftScheduleRowsCompanion(isCurrent: Value(true)));
       }
 
-      // 临时适配：把「定义 + 周期」展平回老表的每天一行。
-      await (db.delete(db.shiftTypeRows)
+      // 重建班次定义与周期序列
+      await (db.delete(db.shiftCycleRows)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
-      for (var i = 0; i < cycle.length; i++) {
-        final ci = cycle[i];
-        if (ci < 0 || ci >= classes.length) continue;
-        final t = classes[ci];
-        await db.into(db.shiftTypeRows).insert(
-              ShiftTypeRowsCompanion.insert(
+      await (db.delete(db.shiftClassRows)
+            ..where((t) => t.scheduleId.equals(id)))
+          .go();
+
+      final classIds = <int>[];
+      for (var i = 0; i < classes.length; i++) {
+        final c = classes[i];
+        classIds.add(await db.into(db.shiftClassRows).insert(
+              ShiftClassRowsCompanion.insert(
                 scheduleId: id,
                 order: i,
-                name: t.name,
-                startMinute: Value(t.startMinute),
-                endMinute: Value(t.endMinute),
-                isRest: Value(t.isRest),
-                color: Value(t.color),
-                alarmEnabled: Value(t.alarmEnabled),
-                alarmMinute: Value(t.alarmMinute),
+                name: c.name,
+                abbr: Value(c.abbr),
+                startMinute: Value(c.startMinute),
+                endMinute: Value(c.endMinute),
+                isRest: Value(c.isRest),
+                color: Value(c.color),
+                alarmEnabled: Value(c.alarmEnabled),
+                alarmMinute: Value(c.alarmMinute),
+              ),
+            ));
+      }
+
+      for (var i = 0; i < cycle.length; i++) {
+        final ci = cycle[i];
+        if (ci < 0 || ci >= classIds.length) continue;
+        await db.into(db.shiftCycleRows).insert(
+              ShiftCycleRowsCompanion.insert(
+                scheduleId: id,
+                order: i,
+                classId: classIds[ci],
               ),
             );
       }

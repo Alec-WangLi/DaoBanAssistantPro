@@ -429,12 +429,12 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
   }
 }
 
-class $ShiftTypeRowsTable extends ShiftTypeRows
-    with TableInfo<$ShiftTypeRowsTable, ShiftTypeRow> {
+class $ShiftClassRowsTable extends ShiftClassRows
+    with TableInfo<$ShiftClassRowsTable, ShiftClassRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $ShiftTypeRowsTable(this.attachedDatabase, [this._alias]);
+  $ShiftClassRowsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
@@ -460,6 +460,11 @@ class $ShiftTypeRowsTable extends ShiftTypeRows
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
       'name', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _abbrMeta = const VerificationMeta('abbr');
+  @override
+  late final GeneratedColumn<String> abbr = GeneratedColumn<String>(
+      'abbr', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _startMinuteMeta =
       const VerificationMeta('startMinute');
   @override
@@ -510,6 +515,7 @@ class $ShiftTypeRowsTable extends ShiftTypeRows
         scheduleId,
         order,
         name,
+        abbr,
         startMinute,
         endMinute,
         isRest,
@@ -521,9 +527,9 @@ class $ShiftTypeRowsTable extends ShiftTypeRows
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'shift_type_rows';
+  static const String $name = 'shift_class_rows';
   @override
-  VerificationContext validateIntegrity(Insertable<ShiftTypeRow> instance,
+  VerificationContext validateIntegrity(Insertable<ShiftClassRow> instance,
       {bool isInserting = false}) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
@@ -549,6 +555,10 @@ class $ShiftTypeRowsTable extends ShiftTypeRows
           _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('abbr')) {
+      context.handle(
+          _abbrMeta, abbr.isAcceptableOrUnknown(data['abbr']!, _abbrMeta));
     }
     if (data.containsKey('start_minute')) {
       context.handle(
@@ -586,9 +596,9 @@ class $ShiftTypeRowsTable extends ShiftTypeRows
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  ShiftTypeRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+  ShiftClassRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return ShiftTypeRow(
+    return ShiftClassRow(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
       scheduleId: attachedDatabase.typeMapping
@@ -597,6 +607,8 @@ class $ShiftTypeRowsTable extends ShiftTypeRows
           .read(DriftSqlType.int, data['${effectivePrefix}order'])!,
       name: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      abbr: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}abbr']),
       startMinute: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}start_minute']),
       endMinute: attachedDatabase.typeMapping
@@ -613,27 +625,31 @@ class $ShiftTypeRowsTable extends ShiftTypeRows
   }
 
   @override
-  $ShiftTypeRowsTable createAlias(String alias) {
-    return $ShiftTypeRowsTable(attachedDatabase, alias);
+  $ShiftClassRowsTable createAlias(String alias) {
+    return $ShiftClassRowsTable(attachedDatabase, alias);
   }
 }
 
-class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
+class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
   final int id;
   final int scheduleId;
   final int order;
   final String name;
+
+  /// 日历格子里的 1~2 字简称；为空时按名称推断。
+  final String? abbr;
   final int? startMinute;
   final int? endMinute;
   final bool isRest;
   final int color;
   final bool alarmEnabled;
   final int? alarmMinute;
-  const ShiftTypeRow(
+  const ShiftClassRow(
       {required this.id,
       required this.scheduleId,
       required this.order,
       required this.name,
+      this.abbr,
       this.startMinute,
       this.endMinute,
       required this.isRest,
@@ -647,6 +663,9 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
     map['schedule_id'] = Variable<int>(scheduleId);
     map['order'] = Variable<int>(order);
     map['name'] = Variable<String>(name);
+    if (!nullToAbsent || abbr != null) {
+      map['abbr'] = Variable<String>(abbr);
+    }
     if (!nullToAbsent || startMinute != null) {
       map['start_minute'] = Variable<int>(startMinute);
     }
@@ -662,12 +681,13 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
     return map;
   }
 
-  ShiftTypeRowsCompanion toCompanion(bool nullToAbsent) {
-    return ShiftTypeRowsCompanion(
+  ShiftClassRowsCompanion toCompanion(bool nullToAbsent) {
+    return ShiftClassRowsCompanion(
       id: Value(id),
       scheduleId: Value(scheduleId),
       order: Value(order),
       name: Value(name),
+      abbr: abbr == null && nullToAbsent ? const Value.absent() : Value(abbr),
       startMinute: startMinute == null && nullToAbsent
           ? const Value.absent()
           : Value(startMinute),
@@ -683,14 +703,15 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
     );
   }
 
-  factory ShiftTypeRow.fromJson(Map<String, dynamic> json,
+  factory ShiftClassRow.fromJson(Map<String, dynamic> json,
       {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return ShiftTypeRow(
+    return ShiftClassRow(
       id: serializer.fromJson<int>(json['id']),
       scheduleId: serializer.fromJson<int>(json['scheduleId']),
       order: serializer.fromJson<int>(json['order']),
       name: serializer.fromJson<String>(json['name']),
+      abbr: serializer.fromJson<String?>(json['abbr']),
       startMinute: serializer.fromJson<int?>(json['startMinute']),
       endMinute: serializer.fromJson<int?>(json['endMinute']),
       isRest: serializer.fromJson<bool>(json['isRest']),
@@ -707,6 +728,7 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
       'scheduleId': serializer.toJson<int>(scheduleId),
       'order': serializer.toJson<int>(order),
       'name': serializer.toJson<String>(name),
+      'abbr': serializer.toJson<String?>(abbr),
       'startMinute': serializer.toJson<int?>(startMinute),
       'endMinute': serializer.toJson<int?>(endMinute),
       'isRest': serializer.toJson<bool>(isRest),
@@ -716,22 +738,24 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
     };
   }
 
-  ShiftTypeRow copyWith(
+  ShiftClassRow copyWith(
           {int? id,
           int? scheduleId,
           int? order,
           String? name,
+          Value<String?> abbr = const Value.absent(),
           Value<int?> startMinute = const Value.absent(),
           Value<int?> endMinute = const Value.absent(),
           bool? isRest,
           int? color,
           bool? alarmEnabled,
           Value<int?> alarmMinute = const Value.absent()}) =>
-      ShiftTypeRow(
+      ShiftClassRow(
         id: id ?? this.id,
         scheduleId: scheduleId ?? this.scheduleId,
         order: order ?? this.order,
         name: name ?? this.name,
+        abbr: abbr.present ? abbr.value : this.abbr,
         startMinute: startMinute.present ? startMinute.value : this.startMinute,
         endMinute: endMinute.present ? endMinute.value : this.endMinute,
         isRest: isRest ?? this.isRest,
@@ -739,13 +763,14 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
         alarmEnabled: alarmEnabled ?? this.alarmEnabled,
         alarmMinute: alarmMinute.present ? alarmMinute.value : this.alarmMinute,
       );
-  ShiftTypeRow copyWithCompanion(ShiftTypeRowsCompanion data) {
-    return ShiftTypeRow(
+  ShiftClassRow copyWithCompanion(ShiftClassRowsCompanion data) {
+    return ShiftClassRow(
       id: data.id.present ? data.id.value : this.id,
       scheduleId:
           data.scheduleId.present ? data.scheduleId.value : this.scheduleId,
       order: data.order.present ? data.order.value : this.order,
       name: data.name.present ? data.name.value : this.name,
+      abbr: data.abbr.present ? data.abbr.value : this.abbr,
       startMinute:
           data.startMinute.present ? data.startMinute.value : this.startMinute,
       endMinute: data.endMinute.present ? data.endMinute.value : this.endMinute,
@@ -761,11 +786,12 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
 
   @override
   String toString() {
-    return (StringBuffer('ShiftTypeRow(')
+    return (StringBuffer('ShiftClassRow(')
           ..write('id: $id, ')
           ..write('scheduleId: $scheduleId, ')
           ..write('order: $order, ')
           ..write('name: $name, ')
+          ..write('abbr: $abbr, ')
           ..write('startMinute: $startMinute, ')
           ..write('endMinute: $endMinute, ')
           ..write('isRest: $isRest, ')
@@ -777,16 +803,17 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
   }
 
   @override
-  int get hashCode => Object.hash(id, scheduleId, order, name, startMinute,
-      endMinute, isRest, color, alarmEnabled, alarmMinute);
+  int get hashCode => Object.hash(id, scheduleId, order, name, abbr,
+      startMinute, endMinute, isRest, color, alarmEnabled, alarmMinute);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is ShiftTypeRow &&
+      (other is ShiftClassRow &&
           other.id == this.id &&
           other.scheduleId == this.scheduleId &&
           other.order == this.order &&
           other.name == this.name &&
+          other.abbr == this.abbr &&
           other.startMinute == this.startMinute &&
           other.endMinute == this.endMinute &&
           other.isRest == this.isRest &&
@@ -795,22 +822,24 @@ class ShiftTypeRow extends DataClass implements Insertable<ShiftTypeRow> {
           other.alarmMinute == this.alarmMinute);
 }
 
-class ShiftTypeRowsCompanion extends UpdateCompanion<ShiftTypeRow> {
+class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
   final Value<int> id;
   final Value<int> scheduleId;
   final Value<int> order;
   final Value<String> name;
+  final Value<String?> abbr;
   final Value<int?> startMinute;
   final Value<int?> endMinute;
   final Value<bool> isRest;
   final Value<int> color;
   final Value<bool> alarmEnabled;
   final Value<int?> alarmMinute;
-  const ShiftTypeRowsCompanion({
+  const ShiftClassRowsCompanion({
     this.id = const Value.absent(),
     this.scheduleId = const Value.absent(),
     this.order = const Value.absent(),
     this.name = const Value.absent(),
+    this.abbr = const Value.absent(),
     this.startMinute = const Value.absent(),
     this.endMinute = const Value.absent(),
     this.isRest = const Value.absent(),
@@ -818,11 +847,12 @@ class ShiftTypeRowsCompanion extends UpdateCompanion<ShiftTypeRow> {
     this.alarmEnabled = const Value.absent(),
     this.alarmMinute = const Value.absent(),
   });
-  ShiftTypeRowsCompanion.insert({
+  ShiftClassRowsCompanion.insert({
     this.id = const Value.absent(),
     required int scheduleId,
     required int order,
     required String name,
+    this.abbr = const Value.absent(),
     this.startMinute = const Value.absent(),
     this.endMinute = const Value.absent(),
     this.isRest = const Value.absent(),
@@ -832,11 +862,12 @@ class ShiftTypeRowsCompanion extends UpdateCompanion<ShiftTypeRow> {
   })  : scheduleId = Value(scheduleId),
         order = Value(order),
         name = Value(name);
-  static Insertable<ShiftTypeRow> custom({
+  static Insertable<ShiftClassRow> custom({
     Expression<int>? id,
     Expression<int>? scheduleId,
     Expression<int>? order,
     Expression<String>? name,
+    Expression<String>? abbr,
     Expression<int>? startMinute,
     Expression<int>? endMinute,
     Expression<bool>? isRest,
@@ -849,6 +880,7 @@ class ShiftTypeRowsCompanion extends UpdateCompanion<ShiftTypeRow> {
       if (scheduleId != null) 'schedule_id': scheduleId,
       if (order != null) 'order': order,
       if (name != null) 'name': name,
+      if (abbr != null) 'abbr': abbr,
       if (startMinute != null) 'start_minute': startMinute,
       if (endMinute != null) 'end_minute': endMinute,
       if (isRest != null) 'is_rest': isRest,
@@ -858,22 +890,24 @@ class ShiftTypeRowsCompanion extends UpdateCompanion<ShiftTypeRow> {
     });
   }
 
-  ShiftTypeRowsCompanion copyWith(
+  ShiftClassRowsCompanion copyWith(
       {Value<int>? id,
       Value<int>? scheduleId,
       Value<int>? order,
       Value<String>? name,
+      Value<String?>? abbr,
       Value<int?>? startMinute,
       Value<int?>? endMinute,
       Value<bool>? isRest,
       Value<int>? color,
       Value<bool>? alarmEnabled,
       Value<int?>? alarmMinute}) {
-    return ShiftTypeRowsCompanion(
+    return ShiftClassRowsCompanion(
       id: id ?? this.id,
       scheduleId: scheduleId ?? this.scheduleId,
       order: order ?? this.order,
       name: name ?? this.name,
+      abbr: abbr ?? this.abbr,
       startMinute: startMinute ?? this.startMinute,
       endMinute: endMinute ?? this.endMinute,
       isRest: isRest ?? this.isRest,
@@ -898,6 +932,9 @@ class ShiftTypeRowsCompanion extends UpdateCompanion<ShiftTypeRow> {
     if (name.present) {
       map['name'] = Variable<String>(name.value);
     }
+    if (abbr.present) {
+      map['abbr'] = Variable<String>(abbr.value);
+    }
     if (startMinute.present) {
       map['start_minute'] = Variable<int>(startMinute.value);
     }
@@ -921,17 +958,278 @@ class ShiftTypeRowsCompanion extends UpdateCompanion<ShiftTypeRow> {
 
   @override
   String toString() {
-    return (StringBuffer('ShiftTypeRowsCompanion(')
+    return (StringBuffer('ShiftClassRowsCompanion(')
           ..write('id: $id, ')
           ..write('scheduleId: $scheduleId, ')
           ..write('order: $order, ')
           ..write('name: $name, ')
+          ..write('abbr: $abbr, ')
           ..write('startMinute: $startMinute, ')
           ..write('endMinute: $endMinute, ')
           ..write('isRest: $isRest, ')
           ..write('color: $color, ')
           ..write('alarmEnabled: $alarmEnabled, ')
           ..write('alarmMinute: $alarmMinute')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ShiftCycleRowsTable extends ShiftCycleRows
+    with TableInfo<$ShiftCycleRowsTable, ShiftCycleRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ShiftCycleRowsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _scheduleIdMeta =
+      const VerificationMeta('scheduleId');
+  @override
+  late final GeneratedColumn<int> scheduleId = GeneratedColumn<int>(
+      'schedule_id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _orderMeta = const VerificationMeta('order');
+  @override
+  late final GeneratedColumn<int> order = GeneratedColumn<int>(
+      'order', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _classIdMeta =
+      const VerificationMeta('classId');
+  @override
+  late final GeneratedColumn<int> classId = GeneratedColumn<int>(
+      'class_id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [id, scheduleId, order, classId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shift_cycle_rows';
+  @override
+  VerificationContext validateIntegrity(Insertable<ShiftCycleRow> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('schedule_id')) {
+      context.handle(
+          _scheduleIdMeta,
+          scheduleId.isAcceptableOrUnknown(
+              data['schedule_id']!, _scheduleIdMeta));
+    } else if (isInserting) {
+      context.missing(_scheduleIdMeta);
+    }
+    if (data.containsKey('order')) {
+      context.handle(
+          _orderMeta, order.isAcceptableOrUnknown(data['order']!, _orderMeta));
+    } else if (isInserting) {
+      context.missing(_orderMeta);
+    }
+    if (data.containsKey('class_id')) {
+      context.handle(_classIdMeta,
+          classId.isAcceptableOrUnknown(data['class_id']!, _classIdMeta));
+    } else if (isInserting) {
+      context.missing(_classIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ShiftCycleRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ShiftCycleRow(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      scheduleId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}schedule_id'])!,
+      order: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}order'])!,
+      classId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}class_id'])!,
+    );
+  }
+
+  @override
+  $ShiftCycleRowsTable createAlias(String alias) {
+    return $ShiftCycleRowsTable(attachedDatabase, alias);
+  }
+}
+
+class ShiftCycleRow extends DataClass implements Insertable<ShiftCycleRow> {
+  final int id;
+  final int scheduleId;
+  final int order;
+  final int classId;
+  const ShiftCycleRow(
+      {required this.id,
+      required this.scheduleId,
+      required this.order,
+      required this.classId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['schedule_id'] = Variable<int>(scheduleId);
+    map['order'] = Variable<int>(order);
+    map['class_id'] = Variable<int>(classId);
+    return map;
+  }
+
+  ShiftCycleRowsCompanion toCompanion(bool nullToAbsent) {
+    return ShiftCycleRowsCompanion(
+      id: Value(id),
+      scheduleId: Value(scheduleId),
+      order: Value(order),
+      classId: Value(classId),
+    );
+  }
+
+  factory ShiftCycleRow.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ShiftCycleRow(
+      id: serializer.fromJson<int>(json['id']),
+      scheduleId: serializer.fromJson<int>(json['scheduleId']),
+      order: serializer.fromJson<int>(json['order']),
+      classId: serializer.fromJson<int>(json['classId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'scheduleId': serializer.toJson<int>(scheduleId),
+      'order': serializer.toJson<int>(order),
+      'classId': serializer.toJson<int>(classId),
+    };
+  }
+
+  ShiftCycleRow copyWith(
+          {int? id, int? scheduleId, int? order, int? classId}) =>
+      ShiftCycleRow(
+        id: id ?? this.id,
+        scheduleId: scheduleId ?? this.scheduleId,
+        order: order ?? this.order,
+        classId: classId ?? this.classId,
+      );
+  ShiftCycleRow copyWithCompanion(ShiftCycleRowsCompanion data) {
+    return ShiftCycleRow(
+      id: data.id.present ? data.id.value : this.id,
+      scheduleId:
+          data.scheduleId.present ? data.scheduleId.value : this.scheduleId,
+      order: data.order.present ? data.order.value : this.order,
+      classId: data.classId.present ? data.classId.value : this.classId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftCycleRow(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('order: $order, ')
+          ..write('classId: $classId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, scheduleId, order, classId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ShiftCycleRow &&
+          other.id == this.id &&
+          other.scheduleId == this.scheduleId &&
+          other.order == this.order &&
+          other.classId == this.classId);
+}
+
+class ShiftCycleRowsCompanion extends UpdateCompanion<ShiftCycleRow> {
+  final Value<int> id;
+  final Value<int> scheduleId;
+  final Value<int> order;
+  final Value<int> classId;
+  const ShiftCycleRowsCompanion({
+    this.id = const Value.absent(),
+    this.scheduleId = const Value.absent(),
+    this.order = const Value.absent(),
+    this.classId = const Value.absent(),
+  });
+  ShiftCycleRowsCompanion.insert({
+    this.id = const Value.absent(),
+    required int scheduleId,
+    required int order,
+    required int classId,
+  })  : scheduleId = Value(scheduleId),
+        order = Value(order),
+        classId = Value(classId);
+  static Insertable<ShiftCycleRow> custom({
+    Expression<int>? id,
+    Expression<int>? scheduleId,
+    Expression<int>? order,
+    Expression<int>? classId,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (scheduleId != null) 'schedule_id': scheduleId,
+      if (order != null) 'order': order,
+      if (classId != null) 'class_id': classId,
+    });
+  }
+
+  ShiftCycleRowsCompanion copyWith(
+      {Value<int>? id,
+      Value<int>? scheduleId,
+      Value<int>? order,
+      Value<int>? classId}) {
+    return ShiftCycleRowsCompanion(
+      id: id ?? this.id,
+      scheduleId: scheduleId ?? this.scheduleId,
+      order: order ?? this.order,
+      classId: classId ?? this.classId,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (scheduleId.present) {
+      map['schedule_id'] = Variable<int>(scheduleId.value);
+    }
+    if (order.present) {
+      map['order'] = Variable<int>(order.value);
+    }
+    if (classId.present) {
+      map['class_id'] = Variable<int>(classId.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftCycleRowsCompanion(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('order: $order, ')
+          ..write('classId: $classId')
           ..write(')'))
         .toString();
   }
@@ -1900,7 +2198,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ShiftScheduleRowsTable shiftScheduleRows =
       $ShiftScheduleRowsTable(this);
-  late final $ShiftTypeRowsTable shiftTypeRows = $ShiftTypeRowsTable(this);
+  late final $ShiftClassRowsTable shiftClassRows = $ShiftClassRowsTable(this);
+  late final $ShiftCycleRowsTable shiftCycleRows = $ShiftCycleRowsTable(this);
   late final $ScheduleEventsTable scheduleEvents = $ScheduleEventsTable(this);
   late final $CustomAlarmsTable customAlarms = $CustomAlarmsTable(this);
   late final $ShiftAlarmOverridesTable shiftAlarmOverrides =
@@ -1911,7 +2210,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
         shiftScheduleRows,
-        shiftTypeRows,
+        shiftClassRows,
+        shiftCycleRows,
         scheduleEvents,
         customAlarms,
         shiftAlarmOverrides
@@ -2133,12 +2433,13 @@ typedef $$ShiftScheduleRowsTableProcessedTableManager = ProcessedTableManager<
     ),
     ShiftScheduleRow,
     PrefetchHooks Function()>;
-typedef $$ShiftTypeRowsTableCreateCompanionBuilder = ShiftTypeRowsCompanion
+typedef $$ShiftClassRowsTableCreateCompanionBuilder = ShiftClassRowsCompanion
     Function({
   Value<int> id,
   required int scheduleId,
   required int order,
   required String name,
+  Value<String?> abbr,
   Value<int?> startMinute,
   Value<int?> endMinute,
   Value<bool> isRest,
@@ -2146,12 +2447,13 @@ typedef $$ShiftTypeRowsTableCreateCompanionBuilder = ShiftTypeRowsCompanion
   Value<bool> alarmEnabled,
   Value<int?> alarmMinute,
 });
-typedef $$ShiftTypeRowsTableUpdateCompanionBuilder = ShiftTypeRowsCompanion
+typedef $$ShiftClassRowsTableUpdateCompanionBuilder = ShiftClassRowsCompanion
     Function({
   Value<int> id,
   Value<int> scheduleId,
   Value<int> order,
   Value<String> name,
+  Value<String?> abbr,
   Value<int?> startMinute,
   Value<int?> endMinute,
   Value<bool> isRest,
@@ -2160,9 +2462,9 @@ typedef $$ShiftTypeRowsTableUpdateCompanionBuilder = ShiftTypeRowsCompanion
   Value<int?> alarmMinute,
 });
 
-class $$ShiftTypeRowsTableFilterComposer
-    extends Composer<_$AppDatabase, $ShiftTypeRowsTable> {
-  $$ShiftTypeRowsTableFilterComposer({
+class $$ShiftClassRowsTableFilterComposer
+    extends Composer<_$AppDatabase, $ShiftClassRowsTable> {
+  $$ShiftClassRowsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -2180,6 +2482,9 @@ class $$ShiftTypeRowsTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
       column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get abbr => $composableBuilder(
+      column: $table.abbr, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get startMinute => $composableBuilder(
       column: $table.startMinute, builder: (column) => ColumnFilters(column));
@@ -2200,9 +2505,9 @@ class $$ShiftTypeRowsTableFilterComposer
       column: $table.alarmMinute, builder: (column) => ColumnFilters(column));
 }
 
-class $$ShiftTypeRowsTableOrderingComposer
-    extends Composer<_$AppDatabase, $ShiftTypeRowsTable> {
-  $$ShiftTypeRowsTableOrderingComposer({
+class $$ShiftClassRowsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShiftClassRowsTable> {
+  $$ShiftClassRowsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -2220,6 +2525,9 @@ class $$ShiftTypeRowsTableOrderingComposer
 
   ColumnOrderings<String> get name => $composableBuilder(
       column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get abbr => $composableBuilder(
+      column: $table.abbr, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<int> get startMinute => $composableBuilder(
       column: $table.startMinute, builder: (column) => ColumnOrderings(column));
@@ -2241,9 +2549,9 @@ class $$ShiftTypeRowsTableOrderingComposer
       column: $table.alarmMinute, builder: (column) => ColumnOrderings(column));
 }
 
-class $$ShiftTypeRowsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ShiftTypeRowsTable> {
-  $$ShiftTypeRowsTableAnnotationComposer({
+class $$ShiftClassRowsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShiftClassRowsTable> {
+  $$ShiftClassRowsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -2261,6 +2569,9 @@ class $$ShiftTypeRowsTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get abbr =>
+      $composableBuilder(column: $table.abbr, builder: (column) => column);
 
   GeneratedColumn<int> get startMinute => $composableBuilder(
       column: $table.startMinute, builder: (column) => column);
@@ -2281,36 +2592,38 @@ class $$ShiftTypeRowsTableAnnotationComposer
       column: $table.alarmMinute, builder: (column) => column);
 }
 
-class $$ShiftTypeRowsTableTableManager extends RootTableManager<
+class $$ShiftClassRowsTableTableManager extends RootTableManager<
     _$AppDatabase,
-    $ShiftTypeRowsTable,
-    ShiftTypeRow,
-    $$ShiftTypeRowsTableFilterComposer,
-    $$ShiftTypeRowsTableOrderingComposer,
-    $$ShiftTypeRowsTableAnnotationComposer,
-    $$ShiftTypeRowsTableCreateCompanionBuilder,
-    $$ShiftTypeRowsTableUpdateCompanionBuilder,
+    $ShiftClassRowsTable,
+    ShiftClassRow,
+    $$ShiftClassRowsTableFilterComposer,
+    $$ShiftClassRowsTableOrderingComposer,
+    $$ShiftClassRowsTableAnnotationComposer,
+    $$ShiftClassRowsTableCreateCompanionBuilder,
+    $$ShiftClassRowsTableUpdateCompanionBuilder,
     (
-      ShiftTypeRow,
-      BaseReferences<_$AppDatabase, $ShiftTypeRowsTable, ShiftTypeRow>
+      ShiftClassRow,
+      BaseReferences<_$AppDatabase, $ShiftClassRowsTable, ShiftClassRow>
     ),
-    ShiftTypeRow,
+    ShiftClassRow,
     PrefetchHooks Function()> {
-  $$ShiftTypeRowsTableTableManager(_$AppDatabase db, $ShiftTypeRowsTable table)
+  $$ShiftClassRowsTableTableManager(
+      _$AppDatabase db, $ShiftClassRowsTable table)
       : super(TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$ShiftTypeRowsTableFilterComposer($db: db, $table: table),
+              $$ShiftClassRowsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$ShiftTypeRowsTableOrderingComposer($db: db, $table: table),
+              $$ShiftClassRowsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$ShiftTypeRowsTableAnnotationComposer($db: db, $table: table),
+              $$ShiftClassRowsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
             Value<int> scheduleId = const Value.absent(),
             Value<int> order = const Value.absent(),
             Value<String> name = const Value.absent(),
+            Value<String?> abbr = const Value.absent(),
             Value<int?> startMinute = const Value.absent(),
             Value<int?> endMinute = const Value.absent(),
             Value<bool> isRest = const Value.absent(),
@@ -2318,11 +2631,12 @@ class $$ShiftTypeRowsTableTableManager extends RootTableManager<
             Value<bool> alarmEnabled = const Value.absent(),
             Value<int?> alarmMinute = const Value.absent(),
           }) =>
-              ShiftTypeRowsCompanion(
+              ShiftClassRowsCompanion(
             id: id,
             scheduleId: scheduleId,
             order: order,
             name: name,
+            abbr: abbr,
             startMinute: startMinute,
             endMinute: endMinute,
             isRest: isRest,
@@ -2335,6 +2649,7 @@ class $$ShiftTypeRowsTableTableManager extends RootTableManager<
             required int scheduleId,
             required int order,
             required String name,
+            Value<String?> abbr = const Value.absent(),
             Value<int?> startMinute = const Value.absent(),
             Value<int?> endMinute = const Value.absent(),
             Value<bool> isRest = const Value.absent(),
@@ -2342,11 +2657,12 @@ class $$ShiftTypeRowsTableTableManager extends RootTableManager<
             Value<bool> alarmEnabled = const Value.absent(),
             Value<int?> alarmMinute = const Value.absent(),
           }) =>
-              ShiftTypeRowsCompanion.insert(
+              ShiftClassRowsCompanion.insert(
             id: id,
             scheduleId: scheduleId,
             order: order,
             name: name,
+            abbr: abbr,
             startMinute: startMinute,
             endMinute: endMinute,
             isRest: isRest,
@@ -2361,20 +2677,173 @@ class $$ShiftTypeRowsTableTableManager extends RootTableManager<
         ));
 }
 
-typedef $$ShiftTypeRowsTableProcessedTableManager = ProcessedTableManager<
+typedef $$ShiftClassRowsTableProcessedTableManager = ProcessedTableManager<
     _$AppDatabase,
-    $ShiftTypeRowsTable,
-    ShiftTypeRow,
-    $$ShiftTypeRowsTableFilterComposer,
-    $$ShiftTypeRowsTableOrderingComposer,
-    $$ShiftTypeRowsTableAnnotationComposer,
-    $$ShiftTypeRowsTableCreateCompanionBuilder,
-    $$ShiftTypeRowsTableUpdateCompanionBuilder,
+    $ShiftClassRowsTable,
+    ShiftClassRow,
+    $$ShiftClassRowsTableFilterComposer,
+    $$ShiftClassRowsTableOrderingComposer,
+    $$ShiftClassRowsTableAnnotationComposer,
+    $$ShiftClassRowsTableCreateCompanionBuilder,
+    $$ShiftClassRowsTableUpdateCompanionBuilder,
     (
-      ShiftTypeRow,
-      BaseReferences<_$AppDatabase, $ShiftTypeRowsTable, ShiftTypeRow>
+      ShiftClassRow,
+      BaseReferences<_$AppDatabase, $ShiftClassRowsTable, ShiftClassRow>
     ),
-    ShiftTypeRow,
+    ShiftClassRow,
+    PrefetchHooks Function()>;
+typedef $$ShiftCycleRowsTableCreateCompanionBuilder = ShiftCycleRowsCompanion
+    Function({
+  Value<int> id,
+  required int scheduleId,
+  required int order,
+  required int classId,
+});
+typedef $$ShiftCycleRowsTableUpdateCompanionBuilder = ShiftCycleRowsCompanion
+    Function({
+  Value<int> id,
+  Value<int> scheduleId,
+  Value<int> order,
+  Value<int> classId,
+});
+
+class $$ShiftCycleRowsTableFilterComposer
+    extends Composer<_$AppDatabase, $ShiftCycleRowsTable> {
+  $$ShiftCycleRowsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get order => $composableBuilder(
+      column: $table.order, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get classId => $composableBuilder(
+      column: $table.classId, builder: (column) => ColumnFilters(column));
+}
+
+class $$ShiftCycleRowsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShiftCycleRowsTable> {
+  $$ShiftCycleRowsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get order => $composableBuilder(
+      column: $table.order, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get classId => $composableBuilder(
+      column: $table.classId, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ShiftCycleRowsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShiftCycleRowsTable> {
+  $$ShiftCycleRowsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => column);
+
+  GeneratedColumn<int> get order =>
+      $composableBuilder(column: $table.order, builder: (column) => column);
+
+  GeneratedColumn<int> get classId =>
+      $composableBuilder(column: $table.classId, builder: (column) => column);
+}
+
+class $$ShiftCycleRowsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ShiftCycleRowsTable,
+    ShiftCycleRow,
+    $$ShiftCycleRowsTableFilterComposer,
+    $$ShiftCycleRowsTableOrderingComposer,
+    $$ShiftCycleRowsTableAnnotationComposer,
+    $$ShiftCycleRowsTableCreateCompanionBuilder,
+    $$ShiftCycleRowsTableUpdateCompanionBuilder,
+    (
+      ShiftCycleRow,
+      BaseReferences<_$AppDatabase, $ShiftCycleRowsTable, ShiftCycleRow>
+    ),
+    ShiftCycleRow,
+    PrefetchHooks Function()> {
+  $$ShiftCycleRowsTableTableManager(
+      _$AppDatabase db, $ShiftCycleRowsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ShiftCycleRowsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ShiftCycleRowsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ShiftCycleRowsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int> scheduleId = const Value.absent(),
+            Value<int> order = const Value.absent(),
+            Value<int> classId = const Value.absent(),
+          }) =>
+              ShiftCycleRowsCompanion(
+            id: id,
+            scheduleId: scheduleId,
+            order: order,
+            classId: classId,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required int scheduleId,
+            required int order,
+            required int classId,
+          }) =>
+              ShiftCycleRowsCompanion.insert(
+            id: id,
+            scheduleId: scheduleId,
+            order: order,
+            classId: classId,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ShiftCycleRowsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ShiftCycleRowsTable,
+    ShiftCycleRow,
+    $$ShiftCycleRowsTableFilterComposer,
+    $$ShiftCycleRowsTableOrderingComposer,
+    $$ShiftCycleRowsTableAnnotationComposer,
+    $$ShiftCycleRowsTableCreateCompanionBuilder,
+    $$ShiftCycleRowsTableUpdateCompanionBuilder,
+    (
+      ShiftCycleRow,
+      BaseReferences<_$AppDatabase, $ShiftCycleRowsTable, ShiftCycleRow>
+    ),
+    ShiftCycleRow,
     PrefetchHooks Function()>;
 typedef $$ScheduleEventsTableCreateCompanionBuilder = ScheduleEventsCompanion
     Function({
@@ -2906,8 +3375,10 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$ShiftScheduleRowsTableTableManager get shiftScheduleRows =>
       $$ShiftScheduleRowsTableTableManager(_db, _db.shiftScheduleRows);
-  $$ShiftTypeRowsTableTableManager get shiftTypeRows =>
-      $$ShiftTypeRowsTableTableManager(_db, _db.shiftTypeRows);
+  $$ShiftClassRowsTableTableManager get shiftClassRows =>
+      $$ShiftClassRowsTableTableManager(_db, _db.shiftClassRows);
+  $$ShiftCycleRowsTableTableManager get shiftCycleRows =>
+      $$ShiftCycleRowsTableTableManager(_db, _db.shiftCycleRows);
   $$ScheduleEventsTableTableManager get scheduleEvents =>
       $$ScheduleEventsTableTableManager(_db, _db.scheduleEvents);
   $$CustomAlarmsTableTableManager get customAlarms =>
