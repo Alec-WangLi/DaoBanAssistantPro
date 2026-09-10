@@ -163,10 +163,21 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   /// 用户把某班组的起始日改成 [date] 后，回填 teamOffsets。
+  ///
+  /// 改的是「我这一组」时必须走 [_setMyCycleStart] 的重锚定语义而不是只改
+  /// 单个偏移 —— 只改一个偏移会让我这组与其他班组的**相对错位**跟着变，
+  /// 等于把整个班表结构弄坏了。
   void _setCrewStartDate(int i, DateTime date) {
+    if (i == _ourTeamIndex) {
+      _setMyCycleStart(date);
+      return;
+    }
     final off = daysBetween(dateOnly(date), dateOnly(_anchor));
     setState(() => _teamOffsets[i] = off);
   }
+
+  /// 我的班组的周期起始日（顶部卡片的显示值）。
+  DateTime get _myCrewStart => _crewStartDate(_ourTeamIndex);
 
   /// 把「我的班组」的起始日设为 [date]。
   ///
@@ -265,12 +276,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           L10n.myCycleStart,
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text(L10n.yearMonthDay(_anchor)),
+        subtitle: Text(L10n.yearMonthDay(_myCrewStart)),
         trailing: const Icon(Icons.edit_outlined),
         onTap: () async {
           final picked = await showGlassDatePicker(
             context,
-            initialDate: _anchor,
+            initialDate: _myCrewStart,
             firstDate: DateTime(2000),
             lastDate: DateTime(2100),
           );
@@ -602,7 +613,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     var e = c.endMinute!;
     final nextDay = e > 1440 || e < c.startMinute!;
     if (e > 1440) e -= 1440;
-    return '${formatClock(c.startMinute!)} – ${nextDay ? '次日' : ''}${formatClock(e)}';
+    return L10n.timeRange(
+        formatClock(c.startMinute!), formatClock(e), nextDay);
   }
 
   /// 5) 班组设置（可选）—— 默认折叠。

@@ -192,6 +192,15 @@ class L10n {
       t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
   static String get shiftInUseHint =>
       t('周期里引用它的天数会一并改成休班', 'Days using it will become rest days');
+
+  /// 「开始 – 结束」；跨午夜时中文插「次日」、英文在括号里注明。
+  ///
+  /// 中英两种语序不同，所以整串交给 [t] 而不是拼接前缀 ——
+  /// 直接拼 `'次日'` 会在英文界面下露出中文。
+  static String timeRange(String start, String end, bool crossesMidnight) =>
+      crossesMidnight
+          ? t('$start – 次日$end', '$start – $end (next day)')
+          : '$start – $end';
   static String get newShiftName => t('新班次', 'New shift');
   static String get shiftColor => t('班次颜色', 'Shift color');
 

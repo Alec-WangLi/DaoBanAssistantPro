@@ -439,4 +439,105 @@ void main() {
     expect(find.text(L10n.dayN(7)), findsOneWidget);
     expect(find.byIcon(Icons.event_outlined), findsNWidgets(5));
   });
+
+  testWidgets('点「设为我」选中其他班组后，顶部显示日期与该班组行一致',
+      (tester) async {
+    await _pumpEditor(
+      tester,
+      _domain(anchor: DateTime.utc(2025, 6, 1), teamOffsets: const [0, 1, 2, 3]),
+    );
+    // 初始我这一组 = 0，顶部显示基准日
+    expect(_subtitleOf(tester, L10n.myCycleStart),
+        L10n.yearMonthDay(DateTime.utc(2025, 6, 1)));
+
+    // 展开班组设置，把第 3 组（下标 2）设为「我」
+    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.setAsMine), findsNWidgets(3));
+    await tester.tap(find.text(L10n.setAsMine).at(1));
+    await tester.pumpAndSettle();
+
+    // 我这一组的起始日 = 基准日 − offsets[2] = 06-01 − 2 天 = 05-30
+    final expected = L10n.yearMonthDay(DateTime.utc(2025, 5, 30));
+    expect(_subtitleOf(tester, L10n.myCycleStart), expected,
+        reason: '顶部必须读我这一组的起始日，而不是基准日');
+    // 班组区里该组的「周期起始日」显示同一日期 → 两处一致（修前这里是 0 处）
+    expect(find.text(expected), findsNWidgets(2));
+    // 顶部不再显示基准日，只剩第 1 组那行「周期起始日」还显示它
+    expect(find.text(L10n.yearMonthDay(DateTime.utc(2025, 6, 1))),
+        findsOneWidget);
+  });
+
+  testWidgets('改顶部起始日后，新日期的班次是周期第 1 天，且各组相对错位不变',
+      (tester) async {
+    final repo = await _pumpEditor(
+      tester,
+      _domain(anchor: DateTime.utc(2025, 6, 1), teamOffsets: const [0, 1, 2, 3]),
+    );
+
+    // 先把第 3 组（下标 2）设为「我」——这步只改 _ourTeamIndex、不动偏移，
+    // 于是我的基线偏移 = offsets[2] = 2，重锚定时必须扣掉它。
+    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.setAsMine).at(1));
+    await tester.pumpAndSettle();
+
+    const before = [0, 1, 2, 3];
+
+    // 顶部选择器现在打开在我这一组的起始日（05-30），点 10 号 → 2025-05-10
+    await tester.tap(find.widgetWithText(ListTile, L10n.myCycleStart));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.text('10'),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    final saved = repo.saved!;
+    final newDate = DateTime.utc(2025, 5, 10);
+    expect(saved.anchorDate, newDate);
+
+    // 我的基线偏移归零，其余偏移整体减去它 → [-2,-1,0,1]
+    expect(saved.teamOffsets, [-2, -1, 0, 1]);
+
+    // 各班组两两错位与改之前完全相同
+    for (var i = 0; i < before.length; i++) {
+      for (var j = 0; j < before.length; j++) {
+        expect(saved.teamOffsets[i] - saved.teamOffsets[j],
+            before[i] - before[j],
+            reason: '第 $i 组与第 $j 组的相对错位不该变');
+      }
+    }
+
+    // 我的班组在新起始日恰好处于周期第 0 项
+    final sched = ShiftSchedule(
+      name: saved.name,
+      anchorDate: saved.anchorDate,
+      classes: saved.classes,
+      cycle: saved.cycle,
+      teamCount: saved.teamCount,
+      teamNames: saved.teamNames,
+      ourTeamIndex: saved.ourTeamIndex,
+      teamOffsets: saved.teamOffsets,
+    );
+    expect(sched.shiftOn(newDate), saved.classes[saved.cycle[0]]);
+  });
+
+  test('L10n.timeRange：英文界面下不露出「次日」', () {
+    final prev = L10n.locale;
+    addTearDown(() => L10n.locale = prev);
+
+    L10n.locale = 'zh';
+    expect(L10n.timeRange('20:30', '08:30', true), '20:30 – 次日08:30');
+    expect(L10n.timeRange('08:30', '20:30', false), '08:30 – 20:30');
+
+    L10n.locale = 'en';
+    final en = L10n.timeRange('20:30', '08:30', true);
+    expect(en, '20:30 – 08:30 (next day)');
+    expect(en.contains('次日'), isFalse);
+    expect(L10n.timeRange('08:30', '20:30', false), '08:30 – 20:30');
+  });
 }
