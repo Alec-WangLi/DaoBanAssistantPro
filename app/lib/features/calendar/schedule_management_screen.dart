@@ -83,7 +83,8 @@ class ScheduleManagementScreen extends ConsumerWidget {
     final id = await ref.read(appRepositoryProvider).saveSchedule(
           name: L10n.newSchedule,
           anchorDate: dateOnly(DateTime.now()),
-          types: d.shiftTypes,
+          classes: d.classes,
+          cycle: d.cycle,
           makeCurrent: false,
         );
     if (context.mounted) await _openEditor(context, ref, id);

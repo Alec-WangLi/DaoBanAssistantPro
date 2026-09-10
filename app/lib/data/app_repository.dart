@@ -33,7 +33,9 @@ class ActiveSchedule {
   ShiftSchedule toDomain() => ShiftSchedule(
         name: schedule.name,
         anchorDate: schedule.anchorDate,
-        shiftTypes: shiftTypes.map((t) => t.toDomain()).toList(),
+        classes: shiftTypes.map((t) => t.toDomain()).toList(),
+        // 临时适配：老表就是「每天一行」，直接按行序当周期。
+        cycle: List.generate(shiftTypes.length, (i) => i),
         teamCount: schedule.teamCount,
         teamNames: parseTeamNames(schedule.teamNames),
         ourTeamIndex: schedule.ourTeamIndex,
@@ -42,8 +44,7 @@ class ActiveSchedule {
 }
 
 extension ShiftTypeRowX on ShiftTypeRow {
-  ShiftType toDomain() => ShiftType(
-        order: order,
+  ShiftClass toDomain() => ShiftClass(
         name: name,
         startMinute: startMinute,
         endMinute: endMinute,
@@ -165,7 +166,8 @@ class AppRepository {
     int? scheduleId,
     required String name,
     required DateTime anchorDate,
-    required List<ShiftType> types,
+    required List<ShiftClass> classes,
+    required List<int> cycle,
     bool makeCurrent = true,
     int teamCount = 4,
     List<String> teamNames = const ['一班', '二班', '三班', '四班'],
@@ -209,15 +211,18 @@ class AppRepository {
             .write(const ShiftScheduleRowsCompanion(isCurrent: Value(true)));
       }
 
-      // 重建班次
+      // 临时适配：把「定义 + 周期」展平回老表的每天一行。
       await (db.delete(db.shiftTypeRows)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
-      for (final t in types) {
+      for (var i = 0; i < cycle.length; i++) {
+        final ci = cycle[i];
+        if (ci < 0 || ci >= classes.length) continue;
+        final t = classes[ci];
         await db.into(db.shiftTypeRows).insert(
               ShiftTypeRowsCompanion.insert(
                 scheduleId: id,
-                order: t.order,
+                order: i,
                 name: t.name,
                 startMinute: Value(t.startMinute),
                 endMinute: Value(t.endMinute),

@@ -21,11 +21,12 @@ Future<void> seedIfEmpty(AppDatabase db) async {
         ),
       );
 
-  for (final t in sched.shiftTypes) {
+  for (var i = 0; i < sched.cycle.length; i++) {
+    final t = sched.classes[sched.cycle[i]];
     await db.into(db.shiftTypeRows).insert(
           ShiftTypeRowsCompanion.insert(
             scheduleId: id,
-            order: t.order,
+            order: i,
             name: t.name,
             startMinute: Value(t.startMinute),
             endMinute: Value(t.endMinute),

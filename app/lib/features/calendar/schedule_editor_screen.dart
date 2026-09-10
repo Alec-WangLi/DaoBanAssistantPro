@@ -34,7 +34,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   bool _saving = false;
   String _name = '';
   DateTime _anchor = DateTime.now();
-  List<ShiftType> _types = [];
+  List<ShiftClass> _types = [];
   int _teamCount = 4;
   List<String> _teamNames = ['一班', '二班', '三班', '四班'];
   int _ourTeamIndex = 0;
@@ -67,7 +67,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         _loaded = true;
         _name = dd.name;
         _anchor = dd.anchorDate;
-        _types = List.of(dd.shiftTypes);
+        _types = List.of(dd.classes);
         _teamCount = dd.teamCount;
         _teamNames = List.of(dd.teamNames);
         _ourTeamIndex = dd.ourTeamIndex;
@@ -79,7 +79,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     ((i - dd.ourTeamIndex) % dd.teamCount + dd.teamCount) %
                     dd.teamCount,
               );
-        _followHoliday = dd.shiftTypes.isEmpty;
+        _followHoliday = dd.isBlank;
       });
     }
   }
@@ -212,7 +212,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   } else if (_types.isEmpty) {
                     // 从空白表切回普通表：恢复默认四班两倒
                     final d = defaultSchedule();
-                    _types = List.of(d.shiftTypes);
+                    _types = List.of(d.classes);
                     _teamCount = d.teamCount;
                     _teamNames = List.of(d.teamNames);
                     _ourTeamIndex = d.ourTeamIndex;
@@ -382,8 +382,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       }
       // 天数与班组数联动：增删班次类型
       while (_types.length < n) {
-        _types.add(ShiftType(
-          order: _types.length,
+        _types.add(ShiftClass(
           name: L10n.restShift,
           isRest: true,
           color: 0xFF9AA0B4,
@@ -401,7 +400,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     return i < names.length ? '${names[i]}班' : '${i + 1}班';
   }
 
-  Widget _shiftCard(BuildContext context, int index, ShiftType t) {
+  Widget _shiftCard(BuildContext context, int index, ShiftClass t) {
     return GlassTile(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(16),
@@ -562,7 +561,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             scheduleId: widget.scheduleId ?? current?.schedule.id,
             name: name,
             anchorDate: dateOnly(_anchor),
-            types: _types,
+            classes: _types,
+            cycle: List.generate(_types.length, (i) => i),
             makeCurrent: widget.scheduleId == null,
             teamCount: _teamCount,
             teamNames: _teamNames,
@@ -576,7 +576,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         ShiftSchedule(
           name: name,
           anchorDate: dateOnly(_anchor),
-          shiftTypes: _types,
+          classes: _types,
+          cycle: List.generate(_types.length, (i) => i),
           teamCount: _teamCount,
           teamNames: _teamNames,
           ourTeamIndex: _ourTeamIndex,

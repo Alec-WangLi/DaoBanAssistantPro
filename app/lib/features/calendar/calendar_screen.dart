@@ -391,7 +391,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                   .saveSchedule(
                                     name: L10n.newSchedule,
                                     anchorDate: dateOnly(DateTime.now()),
-                                    types: d.shiftTypes,
+                                    classes: d.classes,
+                                    cycle: d.cycle,
                                     makeCurrent: true,
                                   );
                               if (context.mounted) {
@@ -567,7 +568,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   /// 磨砂卡片日期格。
-  Widget _dayCell(BuildContext context, DateTime date, ShiftType? shift,
+  Widget _dayCell(BuildContext context, DateTime date, ShiftClass? shift,
       LunarInfo lunar, double cellW, double cellH, bool isToday) {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
@@ -596,7 +597,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   const SizedBox(height: 2),
                   if (shift != null)
                     Text(
-                      _shortLabel(shift),
+                      shift.shortLabel,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -842,30 +843,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 }
 
-String _shortLabel(ShiftType t) {
-  if (t.isRest) return '休';
-  if (t.name.contains('白') || t.name.contains('早')) return '白';
-  if (t.name.contains('夜')) return '夜';
-  return t.name.characters.first;
+String _timeRange(ShiftClass t) {
+  final s = formatClock(t.startMinute!);
+  var e = t.endMinute!;
+  final nextDay = e > 1440 || e < t.startMinute!;
+  if (e > 1440) e -= 1440;
+  return '$s – ${nextDay ? '次日' : ''}${formatClock(e)}';
 }
 
-String _fmt(int minutes) {
-  final h = (minutes ~/ 60).toString().padLeft(2, '0');
-  final m = (minutes % 60).toString().padLeft(2, '0');
-  return '$h:$m';
-}
-
-String _timeRange(ShiftType t) {
-  final s = _fmt(t.startMinute!);
-  final e = _fmt(t.endMinute!);
-  if (t.crossesMidnight) return '$s – 次日$e';
-  return '$s – $e';
-}
-
-String _alarmText(ShiftType t) {
+String _alarmText(ShiftClass t) {
   if (t.isRest) return L10n.restNoAlarm;
   if (!t.alarmEnabled || t.alarmMinute == null) return L10n.alarmOff;
-  return L10n.alarmAt(_fmt(t.alarmMinute!));
+  return L10n.alarmAt(formatClock(t.alarmMinute!));
 }
 
 String _otherTeamsText(ShiftSchedule schedule, DateTime date) {
