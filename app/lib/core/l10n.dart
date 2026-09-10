@@ -176,6 +176,25 @@ class L10n {
   static String dayN(int n) => isEn ? 'Day $n' : '第 $n 天';
   static String teamN(int n) => isEn ? '$n teams' : '$n 个班';
 
+  // 编辑器
+  static String get shiftClasses => t('班次设置', 'Shift types');
+  static String get shiftClassesHint =>
+      t('先把你的班次各定义一次，下面周期里直接引用', 'Define each shift once, then reuse it in the cycle');
+  static String get addShiftClass => t('添加班次', 'Add shift');
+  static String get deleteShiftClassInUse =>
+      t('周期里还有 {n} 天在用这个班次，先把它们改成别的', 'Still used by {n} day(s) in the cycle');
+  static String get cycleSection => t('周期设置', 'Cycle');
+  static String get cycleLengthUnit => t('天', 'days');
+  static String get myCycleStart => t('我这组从这个周期开始', 'My crew starts this cycle on');
+  static String get crewCycleStart => t('周期起始日', 'Cycle start date');
+  static String get abbrLabel => t('简称', 'Short');
+  static String get crewSettingsOptional =>
+      t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
+  static String get shiftInUseHint =>
+      t('周期里引用它的天数会一并改成休班', 'Days using it will become rest days');
+  static String get newShiftName => t('新班次', 'New shift');
+  static String get shiftColor => t('班次颜色', 'Shift color');
+
   // 排班管理
   static String get current => t('当前', 'current');
   static String get addSchedule => t('新增排班', 'New schedule');
