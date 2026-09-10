@@ -9,7 +9,9 @@ import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
+import '../../domain/shift_templates.dart';
 import 'schedule_editor_screen.dart';
+import 'shift_template_picker_screen.dart';
 
 /// 排班管理：列出所有排班表，可单独编辑、新增、删除。
 class ScheduleManagementScreen extends ConsumerWidget {
@@ -79,13 +81,25 @@ class ScheduleManagementScreen extends ConsumerWidget {
   }
 
   Future<void> _addSchedule(BuildContext context, WidgetRef ref) async {
+    final picked = await Navigator.of(context).push<ShiftTemplate>(
+      MaterialPageRoute(builder: (_) => const ShiftTemplatePickerScreen()),
+    );
+    if (!context.mounted) return;
+
     final d = defaultSchedule();
+    final classes = picked?.classes ?? d.classes;
+    final cycle = picked?.cycle ?? d.cycle;
+
     final id = await ref.read(appRepositoryProvider).saveSchedule(
-          name: L10n.newSchedule,
+          name: picked?.subtitle ?? L10n.newSchedule,
           anchorDate: dateOnly(DateTime.now()),
-          classes: d.classes,
-          cycle: d.cycle,
+          classes: classes,
+          cycle: cycle,
           makeCurrent: false,
+          teamCount: picked?.teamCount ?? d.teamCount,
+          teamNames: d.teamNames,
+          ourTeamIndex: 0,
+          teamOffsets: picked?.teamOffsets ?? d.teamOffsets,
         );
     if (context.mounted) await _openEditor(context, ref, id);
   }

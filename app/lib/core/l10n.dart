@@ -186,6 +186,17 @@ class L10n {
   static String get newSchedule => t('新排班', 'New schedule');
   static String teamCountN(int n) => isEn ? '$n teams' : '$n 个班组';
 
+  // 选择倒班方式
+  static String get pickShiftPattern => t('选择你的倒班方式', 'Pick your shift pattern');
+  static String get pickShiftPatternHint =>
+      t('选一个和你班表最像的，建好之后还能随时改', 'Pick the closest one — you can tweak it anytime');
+  static String get searchPattern => t('搜索，如「四班三倒」「上24休48」', 'Search, e.g. "4-crew 3-shift"');
+  static String get customPattern => t('我自己排', 'Start from scratch');
+  static String get customPatternHint => t('从默认四班两倒开始，边看边改', 'Start from the default and edit as you go');
+  static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');
+  static String get crewsOnDuty => t('每天在岗', 'on duty');
+  static String get crewUnit => t('个班组', 'crews');
+
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');
   static String get nextMonth => t('下个月', 'Next month');
