@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.5.0\n'
+const String _changelogZh = 'v0.6.0\n'
+    '· 排班编辑器重写为两层轮换模型：班次定义（配一次，时间 / 颜色 / 联动闹钟都挂在上面）+ 周期表（长度即周期，1–60 天）\n'
+    '· 内置 19 种常见倒班方式模板：新建排班时选一个最像的即可起步\n'
+    '· 班组用「周期起始日」表达，各班组错位一目了然；编辑器未来 14 天实时预览\n'
+    '· 日历格子简称改由班次自带；查看其他班组改为色块列表\n'
+    '· 24 小时值班正确显示「08:00 – 次日 08:00」；旧数据自动升级（v5 → v6），重复班次自动合并\n\n'
+    'v0.5.0\n'
     '· 正式稳定版（归纳 0.4.1~0.5.0 全部更新）\n'
     '· 开源：仓库公开（MIT 许可）；检查更新改为公开无鉴权接口，限流时自动回退发布清单；应用内直接下载安装\n'
     '· 视觉统一：悬浮玻璃胶囊导航、极简黑白背景 + 5 色主色、统一线性图标、弹簧 Q 弹动效\n'
@@ -71,13 +77,15 @@ const String _changelogZh = 'v0.5.0\n'
     'v0.4.2\n'
     '· 修复：恢复「后台弹出界面」权限（v0.4.1 误删，导致 App 从系统列表消失、锁屏全屏闹钟可能弹不出）\n'
     '· 使用帮助按最新版重写（日历/排班/闹钟/待办/权限/更新 6 条）\n'
-    '· 响铃界面液态玻璃化：深空蓝紫流动光晕 + 玻璃胶囊标签 + 玻璃按钮 + Q弹入场\n\n'
-    'v0.4.1\n'
-    '· 发布切 arm64 单 ABI：安装包 60.8MB → 约 21MB（−65%），仅 64 位设备\n'
-    '· 玻璃模糊降级：低端机（内存 <4GB）自动关真实模糊；闹钟/待办/我的/排班列表行不再逐行模糊\n'
-    '· 安全：release 改用独立正式签名（脱离 debug 证书，需卸载重装一次）；关闭 allowBackup；删除未使用的悬浮窗权限；下载文件名消毒\n\n';
+    '· 响铃界面液态玻璃化：深空蓝紫流动光晕 + 玻璃胶囊标签 + 玻璃按钮 + Q弹入场\n\n';
 
-const String _changelogEn = 'v0.5.0\n'
+const String _changelogEn = 'v0.6.0\n'
+    '· Schedule editor rewritten around a two-layer rotation model: shift definitions (configure once — time / color / linked alarm live on them) + a cycle table (its length is the cycle, 1–60 days)\n'
+    '· 19 built-in shift-pattern templates: pick the closest one when creating a schedule\n'
+    '· Teams are phased by a "cycle start date"; live 14-day preview inside the editor\n'
+    '· Calendar cell labels now come from each shift; other teams shown as a color-block list\n'
+    '· 24-hour duty shifts show "08:00 – next day 08:00"; old data auto-upgrades (v5 → v6) with duplicate shifts merged\n\n'
+    'v0.5.0\n'
     '· Stable release (consolidating v0.4.1–v0.5.0)\n'
     '· Open source: repository made public (MIT); update check uses the public unauthenticated API with an automatic release-manifest fallback on rate limits; direct in-app download\n'
     '· Visual unification: floating glass capsule nav, monochrome background + 5 accent colors, outlined icons, spring motion\n'
@@ -108,11 +116,7 @@ const String _changelogEn = 'v0.5.0\n'
     'v0.4.2\n'
     '· Fixed: restored "Display over other apps" permission (removed by mistake in v0.4.1, hiding the app from the system list and possibly blocking the lock-screen alarm)\n'
     '· Usage guide rewritten for the latest version (calendar/schedule/alarm/todo/permissions/update)\n'
-    '· Ringing screen in liquid glass: flowing deep-space gradient, glass label capsule, glass button, springy entrance\n\n'
-    'v0.4.1\n'
-    '· Release builds target arm64 only: APK 60.8MB → ~21MB (−65%), 64-bit devices only\n'
-    '· Glass blur fallback: low-end devices (<4GB RAM) auto-disable real blur; alarm/todo/profile/schedule list rows no longer blur per-row\n'
-    '· Security: independent release signing (no more debug key; one-time reinstall required), allowBackup off, unused overlay permission removed, download filename sanitized\n\n';
+    '· Ringing screen in liquid glass: flowing deep-space gradient, glass label capsule, glass button, springy entrance\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

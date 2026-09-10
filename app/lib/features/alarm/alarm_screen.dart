@@ -511,7 +511,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
 class _ShiftAlarmEntry {
   const _ShiftAlarmEntry(this.date, this.shift, this.enabled);
   final DateTime date;
-  final ShiftType shift;
+  final ShiftClass shift;
   final bool enabled;
 }
 

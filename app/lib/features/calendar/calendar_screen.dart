@@ -14,6 +14,7 @@ import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import 'schedule_editor_screen.dart';
+import 'shift_template_picker_screen.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -385,28 +386,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             leading: const Icon(Icons.add_outlined),
                             title: Text(L10n.addSchedule),
                             onTap: () async {
-                              final d = defaultSchedule();
-                              await ref
-                                  .read(appRepositoryProvider)
-                                  .saveSchedule(
-                                    name: L10n.newSchedule,
-                                    anchorDate: dateOnly(DateTime.now()),
-                                    types: d.shiftTypes,
-                                    makeCurrent: true,
-                                  );
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                                final saved = await Navigator.of(context).push<bool>(
-                                    MaterialPageRoute(
-                                        builder: (_) =>
-                                            const ScheduleEditorScreen()));
-                                if (saved == true && context.mounted) {
-                                  showGlassSnack(
-                                    context,
-                                    L10n.savedAndRescheduled,
-                                    icon: Icons.check_circle_outlined,
-                                  );
-                                }
+                              // 与「我的 → 排班管理 → 新增排班」共用同一条
+                              // 选择倒班方式的入口，日历进来的用户也能看到模板库。
+                              final id = await createScheduleFromTemplatePicker(
+                                  context, ref,
+                                  makeCurrent: true);
+                              if (id == null || !mounted) return;
+                              final nav = Navigator.of(this.context);
+                              nav.pop(); // 关弹窗，退回日历
+                              final saved = await nav.push<bool>(
+                                  MaterialPageRoute(
+                                      builder: (_) => ScheduleEditorScreen(
+                                          scheduleId: id)));
+                              if (saved == true && mounted) {
+                                showGlassSnack(
+                                  this.context,
+                                  L10n.savedAndRescheduled,
+                                  icon: Icons.check_circle_outlined,
+                                );
                               }
                             },
                           ),
@@ -567,7 +564,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   /// 磨砂卡片日期格。
-  Widget _dayCell(BuildContext context, DateTime date, ShiftType? shift,
+  Widget _dayCell(BuildContext context, DateTime date, ShiftClass? shift,
       LunarInfo lunar, double cellW, double cellH, bool isToday) {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
@@ -596,7 +593,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   const SizedBox(height: 2),
                   if (shift != null)
                     Text(
-                      _shortLabel(shift),
+                      shift.shortLabel,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -815,10 +812,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 style: TextStyle(fontSize: 13, color: muted),
               ),
             if (schedule != null && schedule.teamCount > 1) ...[
-              const SizedBox(height: 8),
-              Text(
-                _otherTeamsText(schedule, _selected),
-                style: TextStyle(fontSize: 12, color: muted),
+              const SizedBox(height: 10),
+              Text(L10n.otherCrews,
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: _otherCrewChips(schedule, _selected),
               ),
             ],
           ],
@@ -840,46 +841,56 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     ),
     );
   }
+
+  /// 其他班组当天班次：色点 + 组名 + 简称，横向换行，6 个班组也放得下。
+  List<Widget> _otherCrewChips(ShiftSchedule schedule, DateTime date) {
+    final chips = <Widget>[];
+    for (var i = 0; i < schedule.teamCount; i++) {
+      if (i == schedule.ourTeamIndex) continue;
+      final t = schedule.teamShift(i, date);
+      if (t == null) continue;
+      final name = i < schedule.teamNames.length
+          ? schedule.teamNames[i]
+          : (L10n.isEn ? 'Team ${i + 1}' : '${i + 1}班');
+      chips.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Color(t.color).withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(AppTokens.radiusS),
+          border: Border.all(color: Color(t.color).withValues(alpha: 0.45)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration:
+                  BoxDecoration(color: Color(t.color), shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 5),
+            Text('$name ${t.shortLabel}',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(t.color))),
+          ],
+        ),
+      ));
+    }
+    return chips;
+  }
 }
 
-String _shortLabel(ShiftType t) {
-  if (t.isRest) return '休';
-  if (t.name.contains('白') || t.name.contains('早')) return '白';
-  if (t.name.contains('夜')) return '夜';
-  return t.name.characters.first;
+String _timeRange(ShiftClass t) {
+  var e = t.endMinute!;
+  final nextDay = e > 1440 || e < t.startMinute!;
+  if (e > 1440) e -= 1440;
+  return L10n.timeRange(formatClock(t.startMinute!), formatClock(e), nextDay);
 }
 
-String _fmt(int minutes) {
-  final h = (minutes ~/ 60).toString().padLeft(2, '0');
-  final m = (minutes % 60).toString().padLeft(2, '0');
-  return '$h:$m';
-}
-
-String _timeRange(ShiftType t) {
-  final s = _fmt(t.startMinute!);
-  final e = _fmt(t.endMinute!);
-  if (t.crossesMidnight) return '$s – 次日$e';
-  return '$s – $e';
-}
-
-String _alarmText(ShiftType t) {
+String _alarmText(ShiftClass t) {
   if (t.isRest) return L10n.restNoAlarm;
   if (!t.alarmEnabled || t.alarmMinute == null) return L10n.alarmOff;
-  return L10n.alarmAt(_fmt(t.alarmMinute!));
-}
-
-String _otherTeamsText(ShiftSchedule schedule, DateTime date) {
-  final parts = <String>[];
-  for (var i = 0; i < schedule.teamCount; i++) {
-    if (i == schedule.ourTeamIndex) continue;
-    final t = schedule.teamShift(i, date);
-    if (t == null) continue;
-    final name = i < schedule.teamNames.length
-        ? schedule.teamNames[i]
-        : (L10n.isEn ? 'Team ${i + 1}' : '${i + 1}班');
-    parts.add('$name·${t.name}');
-  }
-  return parts.isEmpty
-      ? ''
-      : '${L10n.otherTeamsPrefix}${parts.join(L10n.isEn ? '  ' : '　')}';
+  return L10n.alarmAt(formatClock(t.alarmMinute!));
 }

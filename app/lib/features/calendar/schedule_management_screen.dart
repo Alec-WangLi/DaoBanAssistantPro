@@ -8,8 +8,8 @@ import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
-import '../../domain/shift_rotation.dart';
 import 'schedule_editor_screen.dart';
+import 'shift_template_picker_screen.dart';
 
 /// 排班管理：列出所有排班表，可单独编辑、新增、删除。
 class ScheduleManagementScreen extends ConsumerWidget {
@@ -79,14 +79,11 @@ class ScheduleManagementScreen extends ConsumerWidget {
   }
 
   Future<void> _addSchedule(BuildContext context, WidgetRef ref) async {
-    final d = defaultSchedule();
-    final id = await ref.read(appRepositoryProvider).saveSchedule(
-          name: L10n.newSchedule,
-          anchorDate: dateOnly(DateTime.now()),
-          types: d.shiftTypes,
-          makeCurrent: false,
-        );
-    if (context.mounted) await _openEditor(context, ref, id);
+    // 先选倒班方式；按返回键放弃则 id 为 null，既不建方案也不进编辑器。
+    final id = await createScheduleFromTemplatePicker(context, ref,
+        makeCurrent: false);
+    if (id == null || !context.mounted) return;
+    await _openEditor(context, ref, id);
   }
 
   Future<void> _deleteSchedule(

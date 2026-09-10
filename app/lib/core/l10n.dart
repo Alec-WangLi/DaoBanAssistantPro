@@ -150,15 +150,12 @@ class L10n {
   static String get scheduleNotFound => t('该排班不存在，可能已被删除', 'Schedule not found, may have been deleted');
   static String get saveAndReschedule => t('保存并重排闹钟', 'Save & reschedule alarms');
   static String get scheduleName => t('方案名称', 'Schedule name');
-  static String get anchorDate => t('锚点日（参考日期）', 'Anchor date (reference)');
-  static String get anchorHint => t('提示：先选一个参考日期，再在下方为每个班组指定「今天」的班。', 'Tip: pick a reference date, then assign each team its "today" shift below.');
   static String get teamSettings => t('班组设置', 'Teams');
   static String get teamName => t('班组名', 'Team name');
   static String get today => t('今天', 'Today');
   static String get myTeam => t('我的班', 'My team');
   static String get setAsMine => t('设为我', 'Set as mine');
-  static String get teamHint => t('「今天」= 锚点日的班：为每个班组选好锚点日各自的班；「设为我」选中你所在的班。', '"Today" = the shift on the anchor date; "Set as mine" marks your team.');
-  static String get restShift => t('休班', 'Rest');
+  static String get teamHint => t('为每个班组选一个「周期起始日」——那天它从周期第 1 天开始；「设为我」选中你所在的班。', 'Give each team a "cycle start date" — on that day it begins at cycle day 1; "Set as mine" marks your team.');
   static String get rest => t('休息', 'Rest');
   static String get work => t('工作', 'Work');
   static String get workday => t('上班', 'Workday');
@@ -168,13 +165,61 @@ class L10n {
   static String get shiftName => t('班次名称', 'Shift name');
   static String get start => t('开始', 'Start');
   static String get end => t('结束', 'End');
-  static String get crossesMidnight => t('（结束早于开始 = 跨午夜）', '(end before start = crosses midnight)');
+  static String get crossesMidnight => t('（结束早于开始，或晚于 24:00 = 跨午夜）', '(ends before start, or past 24:00 = crosses midnight)');
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
   static String get alarmTime => t('响铃时间', 'Alarm time');
   static String get notSet => t('未设置', 'Not set');
   static String get schedule => t('排班', 'Schedule');
   static String dayN(int n) => isEn ? 'Day $n' : '第 $n 天';
-  static String teamN(int n) => isEn ? '$n teams' : '$n 个班';
+
+  /// 第 [i] 个班组的默认名（[i] 从 0 起）。
+  ///
+  /// 唯一来源：编辑器的班组步进器与「新建排班」的创建路径都调它，
+  /// 免得两处各写一份、英文界面下漏出中文。
+  static String defaultTeamName(int i) {
+    if (isEn) return 'Team ${i + 1}';
+    const names = ['一', '二', '三', '四', '五', '六', '七', '八'];
+    return i < names.length ? '${names[i]}班' : '${i + 1}班';
+  }
+
+  /// [n] 个班组的完整默认名列表。
+  ///
+  /// 创建方案时必须传完整长度：多班组模板（五班三倒、六班三倒…）只带 4 个
+  /// 默认名，靠数据库出口补位的话就得到了一份绕过本地化的名字。
+  static List<String> defaultTeamNames(int n) =>
+      List.generate(n, defaultTeamName);
+
+  // 编辑器
+  static String get shiftClasses => t('班次设置', 'Shift types');
+  static String get shiftClassesHint =>
+      t('先把你的班次各定义一次，下面周期里直接引用', 'Define each shift once, then reuse it in the cycle');
+  static String get addShiftClass => t('添加班次', 'Add shift');
+  static String get deleteShiftClassInUse =>
+      t('周期里还有 {n} 天在用这个班次，先把它们改成别的', 'Still used by {n} day(s) in the cycle');
+  static String get cycleSection => t('周期设置', 'Cycle');
+  static String get cycleLengthUnit => t('天', 'days');
+  static String get myCycleStart => t('我这组从这个周期开始', 'My crew starts this cycle on');
+  static String get crewCycleStart => t('周期起始日', 'Cycle start date');
+  static String get abbrLabel => t('简称', 'Short');
+  static String get crewSettingsOptional =>
+      t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
+
+  /// 「结束时间落在次日」的前缀（中文直接接钟点，英文要留空格）。
+  ///
+  /// 只作前缀用；成串的「开始 – 结束」走 [timeRange]，那里中英语序不同。
+  static String get nextDay => t('次日', 'next day ');
+
+  /// 「开始 – 结束」；跨午夜时中文插「次日」、英文在括号里注明。
+  ///
+  /// 中英两种语序不同，所以整串交给 [t] 而不是拼接前缀 ——
+  /// 直接拼 `'次日'` 会在英文界面下露出中文。
+  static String timeRange(String start, String end, bool crossesMidnight) =>
+      crossesMidnight
+          ? t('$start – 次日$end', '$start – $end (next day)')
+          : '$start – $end';
+  static String get newShiftName => t('新班次', 'New shift');
+  static String get shiftColor => t('班次颜色', 'Shift color');
+  static String get previewNext14 => t('未来 14 天', 'Next 14 days');
 
   // 排班管理
   static String get current => t('当前', 'current');
@@ -186,6 +231,17 @@ class L10n {
   static String get newSchedule => t('新排班', 'New schedule');
   static String teamCountN(int n) => isEn ? '$n teams' : '$n 个班组';
 
+  // 选择倒班方式
+  static String get pickShiftPattern => t('选择你的倒班方式', 'Pick your shift pattern');
+  static String get pickShiftPatternHint =>
+      t('选一个和你班表最像的，建好之后还能随时改', 'Pick the closest one — you can tweak it anytime');
+  static String get searchPattern => t('搜索，如「四班三倒」「上24休48」', 'Search, e.g. "4-crew 3-shift"');
+  static String get customPattern => t('我自己排', 'Start from scratch');
+  static String get customPatternHint => t('从默认四班两倒开始，边看边改', 'Start from the default and edit as you go');
+  static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');
+  static String get crewsOnDuty => t('每天在岗', 'on duty');
+  static String get crewUnit => t('个班组', 'crews');
+
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');
   static String get nextMonth => t('下个月', 'Next month');
@@ -196,7 +252,7 @@ class L10n {
   static String get restNoAlarm => t('休息日 · 不响闹钟', 'Rest day · no alarm');
   static String get alarmOff => t('闹钟：未开启', 'Alarm: off');
   static String alarmAt(String time) => isEn ? 'Alarm $time' : '闹钟 $time';
-  static String get otherTeamsPrefix => t('其他班组：', 'Other teams: ');
+  static String get otherCrews => t('其他班组', 'Other crews');
   static String get savedAndRescheduled => t('已保存并重排闹钟', 'Saved & alarms rescheduled');
   static String switchedTo(String name) => isEn ? 'Switched to $name' : '已切换到 $name';
   static List<String> get weekdays => isEn
@@ -210,8 +266,8 @@ class L10n {
       'View daily shifts (date/shift/lunar/weekday); statutory holidays marked red, makeup workdays tagged "班"; switch schedules and jump year/month from the toolbar; tap a day for details.');
   static String get guideSchedTitle => t('排班设置', 'Schedule');
   static String get guideSchedDesc => t(
-      '「我的 → 排班管理」可建/切多套排班；编辑时先选锚点日，给每个班指定「今天」的班，再「设为我」选中你所在的班；可选「法定班次」跟随节假日。',
-      'Me → Schedule management: create/switch multiple schedules; pick an anchor date, assign each team its "today" shift, then "Set as mine"; optional "Legal-holiday schedule".');
+      '「我的 → 排班管理」可建/切多套排班；新建时先选一个内置倒班方式模板，再改班次时间、周期表与各班组周期起始日；可选「法定班次」跟随节假日。',
+      'Me → Schedule management: create/switch multiple schedules; start from a built-in shift-pattern template, then tweak shift times, the cycle table and each team\'s cycle start date; optional "Legal-holiday schedule".');
   static String get guideAlarmTitle => t('闹钟', 'Alarms');
   static String get guideAlarmDesc => t(
       '白班/上夜班自动响铃（时间在排班编辑里改）；闹钟页显示未来 30 天、每天可单独开关；也可加自定义闹钟（一次性/每天/每周）。',

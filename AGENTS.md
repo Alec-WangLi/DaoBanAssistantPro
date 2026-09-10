@@ -16,7 +16,7 @@
 - 每轮改动收尾：`app/pubspec.yaml` 的 `version` 与 `app/lib/core/app_info.dart` 的 `appVersion` 同步。
 - 更新日志在 `app/lib/features/profile/app_dialogs.dart` 的 `_changelogZh` / `_changelogEn`：prepend 新版本、删最旧一条、保持 10 条。**正式版（末位 `Z=0`）发布时，其条目必须重写为「归纳总结版」——合并自上一个正式版以来所有测试版的更新内容；测试版条目一律原样保留，只写自己这版改了什么。**（例：v0.4.0 条目归纳 0.3.1~0.4.0 全部更新；v0.3.0 条目归纳 0.2.1~0.3.0，0.2.4 条目保留至今。）
 - 打完版本本地 `git tag vX.Y.Z`。
-- 最近历史：0.1.45(+46) → **0.2.0(+47)**（第二大版）→ 0.2.1(+48)~0.2.4(+51) 测试版 → **0.3.0(+52)**（正式稳定版）→ 0.3.1(+53) 测试版 → 0.3.2(+54) 测试版 → 0.3.3(+55) 测试版 → 0.3.4(+56) 测试版 → 0.3.5(+57)~0.3.7(+59) 测试版 → **0.4.0(+60)**（正式稳定版）→ 0.4.1(+61) 测试版 → 0.4.2(+62) 测试版 → 0.4.4(+64)~0.4.9(+69) 测试版 → **0.5.0(+70)**（正式稳定版 · 开源）（当前）。更早见 `git log` 或应用内更新日志。
+- 最近历史：0.1.45(+46) → **0.2.0(+47)**（第二大版）→ 0.2.1(+48)~0.2.4(+51) 测试版 → **0.3.0(+52)**（正式稳定版）→ 0.3.1(+53) 测试版 → 0.3.2(+54) 测试版 → 0.3.3(+55) 测试版 → 0.3.4(+56) 测试版 → 0.3.5(+57)~0.3.7(+59) 测试版 → **0.4.0(+60)**（正式稳定版）→ 0.4.1(+61) 测试版 → 0.4.2(+62) 测试版 → 0.4.4(+64)~0.4.9(+69) 测试版 → **0.5.0(+70)**（正式稳定版 · 开源）→ **0.6.0(+71)**（正式稳定版）（当前）。更早见 `git log` 或应用内更新日志。
 
 ## 目录架构地图（app/lib）
 ```
@@ -46,7 +46,7 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 
 ## 关键决策与坑
 - 状态 Riverpod；数据 Drift（SQLite，纯本地离线，无后端）；农历 lunar_plus；通知 flutter_local_notifications。
-- Drift 表：`ShiftScheduleRows` / `ShiftTypeRows` / `ScheduleEvents` / `CustomAlarms` / `ShiftAlarmOverrides`（按天覆盖班次闹钟，主键 `day` = 自 epoch 天数，`dayNumber()` 计算）。**当前 schemaVersion = 5**。
+- Drift 表：`ShiftScheduleRows` / `ShiftClassRows`（班次定义）/ `ShiftCycleRows`（周期序列）/ `ScheduleEvents` / `CustomAlarms` / `ShiftAlarmOverrides`（按天覆盖班次闹钟，主键 `day` = 自 epoch 天数，`dayNumber()` 计算）。**当前 schemaVersion = 6**。
 - **改 Drift 表后必须重生成**：`dart run build_runner build --delete-conflicting-outputs`。
 - 闹钟链路：`setAlarmClock` → `AlarmReceiver` → `AlarmRingService`（前台服务 MediaPlayer + Vibrator + WakeLock + fullScreenIntent）；`MainActivity` 在 `super.onCreate` 前 `setShowWhenLocked`/`setTurnScreenOn`。
 - `AlarmService.reschedule` 排**未来 60 天**班次闹钟 + 自定义闹钟（一次性/每天/每周，重复型由原生侧同一 id 续排）；按天覆盖值为 false 的日期跳过。
@@ -58,7 +58,7 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
 - 改表后：`dart run build_runner build --delete-conflicting-outputs`。
-- 验收标准：`flutter analyze` 0 error / 0 warning（约 7 条 info 提示可容忍）；`flutter test` 6/6。
+- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 65/65。
 - 构建：`flutter build apk --release --target-platform android-arm64` → `app/build/app/outputs/flutter-apk/app-release.apk`（**切 arm64 单 ABI**，APK 从 ~60MB 降到 ~21MB；仅 64 位设备）。
 - 分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，用 `aapt2 dump badging` 校验 versionName/versionCode 与包名。
 - 一键发布（GitHub Releases）：`scripts/release.ps1`。
@@ -73,6 +73,7 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 - 发布收尾：commit + `git tag vX.Y.Z` + `git push`（分支 + tag）之后，再跑 `scripts\release.ps1 -SkipConfirm` 把 APK 挂到 GitHub Release；发布说明先写到 `tools\gh\release-notes-vX.Y.Z.md`（脚本会自动复用），末位非 0 自动标为「预发布测试版」。
 
 ## 最近改动
+- **v0.6.0**（正式稳定版 · 周期排班编辑器）：排班模型重写为**两层轮换模型**——班次定义（配一次，时间/颜色/联动闹钟挂其上）+ 周期序列（长度即周期，1–60 天）；内置 **19 种常见倒班方式模板**，新增排班统一先走「选择你的倒班方式」（`shift_template_picker_screen.dart` 的顶层 `createScheduleFromTemplatePicker`，「我的 → 排班管理 → 新增排班」与「日历 → 切换排班 → 新增排班」两条入口共用）；班组用「周期起始日」表达，编辑器未来 14 天实时预览；持久层拆成 `shift_class_rows` + `shift_cycle_rows`，`schemaVersion 5 → 6` 迁移（旧数据自动升级、重复班次合并）；日历其他班组改色块列表、跨午夜时间文案本地化。
 - **v0.5.0**（正式稳定版 · 开源）：仓库公开（MIT）；更新检查去令牌，改用无鉴权公开 API，直接经 `browser_download_url` 下载安装。
 - **v0.4.4~v0.4.9**：视觉迭代——极简黑白背景 + 悬浮玻璃胶囊导航 + 5 色主色统一直线图标与弹簧动效；应用图标重绘；日历今日卡避让胶囊；胶囊通透度、浅色可见性与主色对比度逐版微调。
 - **v0.4.3**：排班编辑「班次名称」与标题行间距修复；响铃界面时间改粗体 + 「上滑关闭」改为跟随手指的滑块（阈值触发 / 未到位回弹）；新增「高级材质」开关（`appSettings.advancedMaterial`，默认开，关=全 App 去真实模糊，`glassBlurDisabled` 升级为 `ValueNotifier` + `lowEndDevice`/`advancedMaterialDisabled` 双来源，`GlassBlur` 统一胶囊/按钮/提示条模糊点）。

@@ -5,7 +5,7 @@
 | 文件 | 大小 | 说明 |
 |---|---|---|
 | `app/build/app/outputs/flutter-apk/app-debug.apk` | 153.7 MB | 调试版（全 ABI + 调试符号） |
-| `app/build/app/outputs/flutter-apk/app-release.apk` | 57.6 MB | 发布版（AOT + tree-shake，**推荐分发用**） |
+| `app/build/app/outputs/flutter-apk/app-release.apk` | 21.7 MB | 发布版（arm64-v8a 单 ABI + AOT + tree-shake，**推荐分发用**） |
 
 ## 技术栈
 
@@ -34,8 +34,9 @@ flutter build apk --release                                  # 或 --debug
 
 ## 首次运行注意
 
-App 默认内置「四班两倒」配置（白班 → 上夜班 → 下夜班 → 大休，白班 8:30–20:30、上夜班 20:30–次日 8:30、闹钟白班 7:00 / 上夜班 19:30），**锚点日是占位值**。
-请进入「日历 → 右上角 ⚙ 编辑排班」，把锚点日设成你实际「白班」的那一天，保存后自动重排未来 90 天闹钟。
+App 内置 19 种常见倒班方式模板，**新建排班时选一个最接近你的倒班方式即可**（如「白夜休休」「白白夜夜休休」「四班三倒」「上 24 休 24」……）。
+
+请进入「我的 → 排班管理 → 新增排班」，先选择你的倒班方式，再按需要微调班次时间、周期表与你的班组起始日；保存后自动重排未来 60 天闹钟。
 
 ## 权限（已在 AndroidManifest 配置）
 
