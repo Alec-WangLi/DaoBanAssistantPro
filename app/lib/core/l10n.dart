@@ -203,6 +203,7 @@ class L10n {
           : '$start – $end';
   static String get newShiftName => t('新班次', 'New shift');
   static String get shiftColor => t('班次颜色', 'Shift color');
+  static String get previewNext14 => t('未来 14 天', 'Next 14 days');
 
   // 排班管理
   static String get current => t('当前', 'current');

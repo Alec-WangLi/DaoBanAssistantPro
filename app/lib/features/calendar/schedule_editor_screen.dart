@@ -225,6 +225,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               : ListView(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                   children: [
+                    _previewStrip(context),
                     _scheduleHeader(context),
                     const SizedBox(height: 12),
                     if (!_followHoliday) ...[
@@ -249,6 +250,83 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             label: Text(L10n.saveAndReschedule),
           ),
         ),
+      ),
+    );
+  }
+
+  /// 0) 未来 14 天预览：改任何设置都能立刻看出对不对。
+  ///
+  /// 用 [_anchor] 而不是 [_myCrewStart]：`anchorDate` 才是真正持久化的字段，
+  /// 这里要预览的就是保存后日历会显示的东西。
+  Widget _previewStrip(BuildContext context) {
+    final schedule = ShiftSchedule(
+      name: _name,
+      anchorDate: dateOnly(_anchor),
+      classes: _classes,
+      cycle: _cycle,
+      teamCount: _teamCount,
+      teamNames: _teamNames,
+      ourTeamIndex: _ourTeamIndex,
+      teamOffsets: _teamOffsets,
+    );
+    final today = dateOnly(DateTime.now());
+    final muted =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+
+    return GlassTile(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(L10n.previewNext14,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 52,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: 14,
+              itemBuilder: (context, i) {
+                final date = today.add(Duration(days: i));
+                final s = schedule.shiftOn(date);
+                final color =
+                    s == null ? muted : Color(s.color);
+                return Container(
+                  width: 40,
+                  margin: const EdgeInsets.only(right: 6),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 单行：格宽只有 40，`12/25` 这种 5 字符日期一旦换行就会
+                      // 把 52 高的格子撑破（大字号系统字体下同理）。
+                      Text('${date.month}/${date.day}',
+                          maxLines: 1,
+                          style: TextStyle(fontSize: 10, color: muted)),
+                      const SizedBox(height: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                          border: Border.all(color: color.withValues(alpha: 0.5)),
+                        ),
+                        child: Text(
+                          s?.shortLabel ?? '—',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: color),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

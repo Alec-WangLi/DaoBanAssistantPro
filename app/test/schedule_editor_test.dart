@@ -169,6 +169,40 @@ String _subtitleOf(WidgetTester tester, String title) {
   return texts.last.data!;
 }
 
+// -----------------------------------------------------------------------------
+// 顶部预览条（未来 14 天）
+// -----------------------------------------------------------------------------
+
+/// 预览条那个 GlassTile。
+Finder _strip() => find.widgetWithText(GlassTile, L10n.previewNext14);
+
+List<String> _stripTexts(WidgetTester tester) => tester
+    .widgetList<Text>(
+        find.descendant(of: _strip(), matching: find.byType(Text)))
+    .map((t) => t.data ?? '')
+    .toList();
+
+/// 预览条 14 格的班次简称。第 0 项是标题，之后每格两项（日期 + 简称）。
+List<String> _cellLabels(WidgetTester tester) {
+  final texts = _stripTexts(tester);
+  return [for (var i = 0; i < 14; i++) texts[2 + 2 * i]];
+}
+
+/// 预览条 14 格的日期文本（`M/D`），按格子顺序。
+List<String> _cellDates(WidgetTester tester) => _stripTexts(tester)
+    .where((s) => RegExp(r'^\d{1,2}/\d{1,2}$').hasMatch(s))
+    .toList();
+
+/// 用真引擎算出的「未来 14 天简称」，作为预览条断言的参照（而不是在测试里
+/// 重算一遍 mod 周期）。
+List<String> _expectedLabels(ShiftSchedule d) {
+  final today = dateOnly(DateTime.now());
+  return [
+    for (var i = 0; i < 14; i++)
+      d.shiftOn(today.add(Duration(days: i)))?.shortLabel ?? '—',
+  ];
+}
+
 void main() {
   // L10n.yearMonthDay / yearMonth 用 intl DateFormat('zh')，测试里要自己初始化。
   setUpAll(() async {
@@ -524,6 +558,79 @@ void main() {
       teamOffsets: saved.teamOffsets,
     );
     expect(sched.shiftOn(newDate), saved.classes[saved.cycle[0]]);
+  });
+
+  testWidgets('预览条：从今天起渲染 14 格，简称与引擎算出来的一致', (tester) async {
+    final domain = _domain(cycle: const [0, 1, 2, 2]);
+    await _pumpEditor(tester, domain);
+
+    expect(find.text(L10n.previewNext14), findsOneWidget);
+
+    final today = dateOnly(DateTime.now());
+    final expectedDates = List.generate(14, (i) {
+      final d = today.add(Duration(days: i));
+      return '${d.month}/${d.day}';
+    });
+    expect(_cellDates(tester), expectedDates,
+        reason: '14 格应当从今天起逐日排列');
+    expect(_cellLabels(tester), _expectedLabels(domain));
+  });
+
+  testWidgets('改周期里某天引用的班次，预览条对应格子跟着变', (tester) async {
+    final domain = _domain(cycle: const [0, 1, 2, 2]);
+    await _pumpEditor(tester, domain);
+    final before = _cellLabels(tester);
+    expect(before, _expectedLabels(domain));
+
+    // 第 1 天从「白班」改成「夜班」
+    await tester.tap(find.byType(DropdownButton<int>).at(0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('夜班').last);
+    await tester.pumpAndSettle();
+
+    final after = _cellLabels(tester);
+    expect(after, _expectedLabels(_domain(cycle: const [1, 1, 2, 2])));
+    expect(after, isNot(equals(before)), reason: '换了班次，预览必须真的变');
+  });
+
+  testWidgets('改「我的班组起始日」→ 整条预览往前移一格', (tester) async {
+    await _pumpEditor(
+      tester,
+      _domain(anchor: DateTime.utc(2025, 6, 1), cycle: const [0, 1, 2, 2]),
+    );
+    final before = _cellLabels(tester);
+    expect(before.toSet().length, greaterThan(1), reason: '一片相同的班次测不出移位');
+
+    // 起始日 06-01 → 06-02（基准日 +1 天）
+    await tester.tap(find.widgetWithText(ListTile, L10n.myCycleStart));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.text('2'),
+    ));
+    await tester.pumpAndSettle();
+    expect(_subtitleOf(tester, L10n.myCycleStart),
+        L10n.yearMonthDay(DateTime.utc(2025, 6, 2)));
+
+    final after = _cellLabels(tester);
+    // 基准日 +1 → 每格的周期下标 −1，于是第 i 格显示原来的第 i−1 格
+    expect(after.sublist(1), before.sublist(0, 13));
+    expect(after, isNot(equals(before)));
+  });
+
+  testWidgets('空白表（跟随法定节假日）预览条 14 格全显示 —', (tester) async {
+    await _pumpEditor(tester, _domain(cycle: const [0, 1, 2, 2]));
+    expect(_cellLabels(tester).contains('—'), isFalse);
+
+    final sw = find.descendant(
+      of: find.widgetWithText(GlassTile, L10n.followHoliday),
+      matching: find.byType(GlassSwitch),
+    );
+    await tester.tap(sw);
+    await tester.pumpAndSettle();
+
+    expect(_cellDates(tester), hasLength(14), reason: '空白表也要有 14 格');
+    expect(_cellLabels(tester), List.filled(14, '—'));
   });
 
   test('L10n.timeRange：英文界面下不露出「次日」', () {
