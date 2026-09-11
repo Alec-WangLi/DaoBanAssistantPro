@@ -1,7 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 
 void main() {
+  setUp(() {
+    // 本文件断言的是 defaultSchedule() 的**中文**取值（它按当前语言生成），
+    // 所以语言必须显式钉死 —— 别再让它隐式依赖 L10n.locale 的初值。
+    L10n.locale = 'zh';
+  });
+
   test('daysBetween 整日差', () {
     expect(daysBetween(DateTime(2025, 1, 1), DateTime(2025, 1, 6)), 5);
     expect(daysBetween(DateTime(2025, 1, 6), DateTime(2025, 1, 1)), -5);

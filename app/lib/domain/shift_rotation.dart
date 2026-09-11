@@ -9,6 +9,10 @@
 
 import 'package:characters/characters.dart';
 
+// `defaultSchedule()` 的文案要按当前语言生成。`l10n.dart` 只依赖 intl
+// （纯 Dart），所以本文件「无 Flutter 依赖、可直接 dart test」的性质不变。
+import '../core/l10n.dart';
+
 /// 小时+分钟 → 分钟自午夜（0..1439）。
 int toMinutes(int hour, int minute) => hour * 60 + minute;
 
@@ -210,20 +214,24 @@ class ShiftSchedule {
 }
 
 /// 默认「四班两倒」配置：白班 → 上夜班 → 下夜班 → 大休（4 天周期），4 个班组错开。
+///
+/// 名称与班次名按**当前语言**生成：返回值有三条落库/入界面路径 ——
+/// `seedIfEmpty` 首启播种、「我自己排」进编辑器、编辑器从空白表切回普通表。
+/// 英文界面下这三条路都不该产出中文，所以文案不能硬编码。
 ShiftSchedule defaultSchedule() {
   final anchor = DateTime.utc(2025, 1, 6); // 占位基准日（我们班组的第 1 天）
   return ShiftSchedule(
-    name: '四班两倒',
+    name: L10n.t('四班两倒', '4-crew 2-shift'),
     anchorDate: anchor,
     teamCount: 4,
-    teamNames: const ['一班', '二班', '三班', '四班'],
+    teamNames: L10n.defaultTeamNames(4),
     ourTeamIndex: 0,
     teamOffsets: const [0, 1, 2, 3],
     cycle: const [0, 1, 2, 3],
-    classes: const [
+    classes: [
       ShiftClass(
-        name: '白班',
-        abbr: '白',
+        name: L10n.t('白班', 'Day shift'),
+        abbr: L10n.t('白', 'D'),
         startMinute: 8 * 60 + 30,
         endMinute: 20 * 60 + 30,
         color: 0xFF4C8DFF,
@@ -231,16 +239,26 @@ ShiftSchedule defaultSchedule() {
         alarmMinute: 7 * 60,
       ),
       ShiftClass(
-        name: '上夜班',
-        abbr: '夜',
+        name: L10n.t('上夜班', 'Night shift'),
+        abbr: L10n.t('夜', 'N'),
         startMinute: 20 * 60 + 30,
         endMinute: 8 * 60 + 30,
         color: 0xFF7A5CFF,
         alarmEnabled: true,
         alarmMinute: 19 * 60 + 30,
       ),
-      ShiftClass(name: '下夜班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
-      ShiftClass(name: '大休', abbr: '休', isRest: true, color: 0xFF5A5F73),
+      ShiftClass(
+        name: L10n.t('下夜班', 'Off after nights'),
+        abbr: L10n.t('休', 'O'),
+        isRest: true,
+        color: 0xFF9AA0B4,
+      ),
+      ShiftClass(
+        name: L10n.t('大休', 'Long rest'),
+        abbr: L10n.t('休', 'R'),
+        isRest: true,
+        color: 0xFF5A5F73,
+      ),
     ],
   );
 }
