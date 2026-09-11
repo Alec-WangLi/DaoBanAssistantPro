@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.0\n'
+const String _changelogZh = 'v0.6.1\n'
+    '· 日历：日期格按屏幕高度自适应长高，不再在网格与底部信息卡之间留一条空带\n'
+    '· 日历：格子里的班次简称按底色自动调整明度，浅色班次（橙、灰）不再糊在白格子上\n'
+    '· 对比度：「今天」按钮与信息卡「今天」徽章改为实心主色 + 白字，实测对比度由 2.7:1 提升到 5.3:1\n'
+    '· 我的：主色调选中项加白色描边——此前选中色块与选中药丸同色，等于看不出选了哪个\n'
+    '· 英文界面修正：月份标题（此前显示为「2026 9」）、起始日日期格式、被裁切的班次简称标签、未跟随语言的倒班方式分组标题\n\n'
+    'v0.6.0\n'
     '· 排班编辑器重写为两层轮换模型：班次定义（配一次，时间 / 颜色 / 联动闹钟都挂在上面）+ 周期表（长度即周期，1–60 天）\n'
     '· 内置 19 种常见倒班方式模板：新建排班时选一个最像的即可起步\n'
     '· 班组用「周期起始日」表达，各班组错位一目了然；编辑器未来 14 天实时预览\n'
@@ -79,7 +85,13 @@ const String _changelogZh = 'v0.6.0\n'
     '· 使用帮助按最新版重写（日历/排班/闹钟/待办/权限/更新 6 条）\n'
     '· 响铃界面液态玻璃化：深空蓝紫流动光晕 + 玻璃胶囊标签 + 玻璃按钮 + Q弹入场\n\n';
 
-const String _changelogEn = 'v0.6.0\n'
+const String _changelogEn = 'v0.6.1\n'
+    '· Calendar: day cells now grow to fill the screen height — the empty band between the grid and the info card is gone\n'
+    '· Calendar: shift labels are lightness-adjusted against their backdrop, so pale shifts (amber, grey) no longer wash out on white cells\n'
+    '· Contrast: the "Today" button and the info-card "Today" badge are now solid accent with white text (measured 2.7:1 -> 5.3:1)\n'
+    '· Me: the selected accent swatch gets a white ring — previously it shared its colour with its own selection pill and was invisible\n'
+    '· English UI fixes: month header (showed "2026 9"), start-date format, the clipped shift-abbr label, and pattern group headings that stayed Chinese\n\n'
+    'v0.6.0\n'
     '· Schedule editor rewritten around a two-layer rotation model: shift definitions (configure once — time / color / linked alarm live on them) + a cycle table (its length is the cycle, 1–60 days)\n'
     '· 19 built-in shift-pattern templates: pick the closest one when creating a schedule\n'
     '· Teams are phased by a "cycle start date"; live 14-day preview inside the editor\n'
