@@ -4,6 +4,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
+import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
@@ -807,69 +808,65 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   Widget _cycleRow(BuildContext context, int index) {
-    final primary = Theme.of(context).colorScheme.primary;
     final muted =
         Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+    final timeText = _rangeText(_classes[_cycle[index]]);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 56,
-            child: Text(L10n.dayN(index + 1),
-                style: const TextStyle(
-                    fontSize: AppTokens.fontSupport,
-                    fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(width: AppTokens.spaceSm),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppTokens.spaceMd),
-              decoration: BoxDecoration(
-                color: primary.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(AppTokens.radiusM),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showTime = cycleRowFitsTime(
+            rowWidth: constraints.maxWidth,
+            classNames: [for (final c in _classes) c.name],
+            timeText: timeText,
+          );
+          return Row(
+            children: [
+              SizedBox(
+                width: _dayLabelWidth,
+                child: Text(L10n.dayN(index + 1),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: AppTokens.fontSupport,
+                        fontWeight: FontWeight.w600)),
               ),
-              child: DropdownButton<int>(
-                value: _cycle[index],
-                isExpanded: true,
-                isDense: true,
-                underline: const SizedBox(),
-                borderRadius: BorderRadius.circular(AppTokens.radiusM),
-                dropdownColor: Theme.of(context).colorScheme.surface,
-                items: _classes.asMap().entries.map((e) => DropdownMenuItem(
-                      value: e.key,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                                color: Color(e.value.color),
-                                shape: BoxShape.circle),
+              const SizedBox(width: AppTokens.spaceSm),
+              Expanded(
+                // 班次多（五六班倒）或屏窄时横向滚动：右侧露出半个 chip
+                // 就是「还能滑」的提示。滚动而不是换行 —— 换行会把每一行撑高，
+                // 60 天的周期会立刻变得没法看。
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < _classes.length; i++)
+                        Padding(
+                          padding: EdgeInsets.only(
+                              right: i == _classes.length - 1
+                                  ? 0
+                                  : AppTokens.spaceSm),
+                          child: GlassChoiceChip(
+                            key: cycleChipKey(index, i),
+                            label: _classes[i].name,
+                            color: Color(_classes[i].color),
+                            selected: i == _cycle[index],
+                            onTap: () => setState(() => _cycle[index] = i),
                           ),
-                          const SizedBox(width: AppTokens.spaceSm),
-                          Flexible(
-                            child: Text(e.value.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: AppTokens.fontSupport)),
-                          ),
-                        ],
-                      ),
-                    )).toList(),
-                onChanged: (v) {
-                  if (v != null) setState(() => _cycle[index] = v);
-                },
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: AppTokens.spaceMd),
-          Text(
-            _rangeText(_classes[_cycle[index]]),
-            style: TextStyle(fontSize: AppTokens.fontSupport, color: muted),
-          ),
-        ],
+              if (showTime) ...[
+                const SizedBox(width: AppTokens.spaceMd),
+                Text(timeText,
+                    style: TextStyle(
+                        fontSize: AppTokens.fontSupport, color: muted)),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -1329,3 +1326,53 @@ ShiftClass _editClass(
     alarmMinute: clearAlarmMinute ? null : (alarmMinute ?? c.alarmMinute),
   );
 }
+
+/// 周期行里某个 chip 的 Key —— 让测试能精确点到「第几天选哪个班次」。
+Key cycleChipKey(int dayIndex, int classIndex) =>
+    ValueKey('cycle-chip-$dayIndex-$classIndex');
+
+/// 量一段文字在给定样式下的宽度（不依赖 BuildContext，便于单测）。
+double _textWidth(String text, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  return painter.width;
+}
+
+/// 周期行里某个 chip 的宽度（含内边距与色点）。
+///
+/// 色点只在未选中时画，但这里**始终**把它算进去：宁可估宽一点（于是更早
+/// 隐藏时间）也不要估窄 —— 估窄会让 chip 被挤成半个。
+double _chipWidth(String label) =>
+    AppTokens.spaceMd * 2 +
+    8 +
+    AppTokens.spaceSm +
+    _textWidth(label, const TextStyle(fontSize: AppTokens.fontSupport));
+
+/// 这一行放不放得下右侧的只读时间。
+///
+/// 时间的宽度是变的：「08:00 – 18:00」与「20:30 – 次日08:00」差近一倍，
+/// 而 chip 才是这一行的主要控件。放不下时**隐藏时间**，而不是把 chip 挤成
+/// 半个 —— 那看起来像坏了而不是像能滑。时间属于班次定义，上面那张
+/// 「班次设置」卡里逐条列着，隐藏不会丢信息。
+bool cycleRowFitsTime({
+  required double rowWidth,
+  required List<String> classNames,
+  required String timeText,
+}) {
+  final chips = classNames.fold<double>(
+        0,
+        (sum, name) => sum + _chipWidth(name),
+      ) +
+      AppTokens.spaceSm * (classNames.length - 1).clamp(0, 1 << 30);
+  final needed = _dayLabelWidth +
+      AppTokens.spaceSm +
+      chips +
+      AppTokens.spaceMd +
+      _textWidth(timeText, const TextStyle(fontSize: AppTokens.fontSupport));
+  return needed <= rowWidth;
+}
+
+/// 「第 N 天」标签的固定宽度。
+const double _dayLabelWidth = 56;

@@ -177,4 +177,20 @@ class AppTokens {
     }
     return Color.lerp(color, toward, 0.72)!;
   }
+
+  /// 实心色块上的可读文字色：白或黑，取对比度更高的一侧。
+  ///
+  /// 恒有 max(白, 黑) ≥ 4.58:1 —— 两条曲线在亮度 0.179 处交叉，交叉点上
+  /// 各是 4.58。所以这个二选一对**任何**底色都能过 WCAG AA，不需要像
+  /// [inkFor] 那样逐档逼近。
+  ///
+  /// 不能拿 [inkFor] 代劳：那个是「把一个前景色调到在给定背景上可读」，
+  /// 朝黑还是朝白由**背景**明暗决定；这里是「底色已定，白黑二选一」，
+  /// 方向必须由底色与黑白两色的对比度决定。拿 `inkFor(白, 橙)` 会得到
+  /// 白色本身（它朝白逼近），而橙底白字只有 2.23:1。
+  static Color onSolid(Color background) =>
+      contrastRatio(Colors.white, background) >=
+              contrastRatio(Colors.black, background)
+          ? Colors.white
+          : Colors.black;
 }

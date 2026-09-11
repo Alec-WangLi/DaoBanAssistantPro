@@ -14,6 +14,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_choice_chip.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
@@ -321,16 +322,15 @@ void main() {
     expect(tester.widget<IconButton>(_plus()).onPressed, isNotNull);
   });
 
-  testWidgets('周期某天下拉换班次后，该行右侧时间文本跟着变', (tester) async {
+  testWidgets('周期某天换成别的班次后，该行右侧时间文本跟着变', (tester) async {
     // 第 1 天引用白班，另外两天都是休班 —— 这样「夜班」的时间文本只会出现一次
     await _pumpEditor(tester, _domain(cycle: const [0, 2, 2]));
 
     // 第 1 天引用白班（08:30–20:30）
     expect(find.text('08:30 – 20:30'), findsOneWidget);
 
-    await tester.tap(find.byType(DropdownButton<int>).at(0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('夜班').last);
+    // 第 1 天的 chip 换成「夜班」（下标 1）
+    await tester.tap(find.byKey(cycleChipKey(0, 1)));
     await tester.pumpAndSettle();
 
     expect(find.text('08:30 – 20:30'), findsNothing);
@@ -664,10 +664,8 @@ void main() {
     final before = _cellLabels(tester);
     expect(before, _expectedLabels(domain));
 
-    // 第 1 天从「白班」改成「夜班」
-    await tester.tap(find.byType(DropdownButton<int>).at(0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('夜班').last);
+    // 第 1 天从「白班」改成「夜班」（下标 1）
+    await tester.tap(find.byKey(cycleChipKey(0, 1)));
     await tester.pumpAndSettle();
 
     final after = _cellLabels(tester);
@@ -979,5 +977,74 @@ void main() {
     // 预览条是唯一被压到最低一档的地方（7 列网格，再大就换行破版）
     final previewTitle = tester.widget<Text>(find.text(L10n.previewNext14));
     expect(previewTitle.style!.fontSize, AppTokens.fontCaption);
+  });
+
+  testWidgets('周期行把可选班次铺成 chip，点一下就切换', (tester) async {
+    await _pumpEditor(tester, _domain(cycle: const [0, 1, 1]));
+
+    // 3 天 × 3 个班次定义 = 9 个 chip
+    expect(find.byType(GlassChoiceChip), findsNWidgets(9));
+    expect(
+        tester.widget<GlassChoiceChip>(find.byKey(cycleChipKey(0, 0))).selected,
+        isTrue);
+    expect(
+        tester.widget<GlassChoiceChip>(find.byKey(cycleChipKey(0, 1))).selected,
+        isFalse);
+
+    // 第 1 天从「班次 0」改成「班次 2」
+    await tester.tap(find.byKey(cycleChipKey(0, 2)));
+    await tester.pumpAndSettle();
+
+    expect(
+        tester.widget<GlassChoiceChip>(find.byKey(cycleChipKey(0, 0))).selected,
+        isFalse);
+    expect(
+        tester.widget<GlassChoiceChip>(find.byKey(cycleChipKey(0, 2))).selected,
+        isTrue);
+  });
+
+  testWidgets('周期行不再有下拉控件', (tester) async {
+    // 二级弹层是这次要消掉的东西：Material 的方角下拉与全 App 的玻璃
+    // 弹层完全不同源。用「找不到 DropdownButton」把这件事钉住。
+    await _pumpEditor(tester, _domain());
+    expect(find.byType(DropdownButton<int>), findsNothing);
+  });
+
+  testWidgets('chip 带上班次色与名称', (tester) async {
+    await _pumpEditor(
+      tester,
+      _oneShift(const ShiftClass(name: '白班', abbr: '白', color: 0xFF4C8DFF)),
+    );
+
+    final chip = tester.widget<GlassChoiceChip>(find.byKey(cycleChipKey(0, 0)));
+    expect(chip.selected, isTrue);
+    expect(chip.label, '白班');
+    expect(chip.color, const Color(0xFF4C8DFF));
+  });
+
+  test('周期行放不下时隐藏只读时间', () {
+    // 三张 chip 与「20:30 – 次日08:00」在手机宽度下互斥：并存会把 chip
+    // 挤成半个，看起来像坏了而不是像能滑。时间在上一张「班次设置」卡里
+    // 逐条列着，隐藏不丢信息。
+    const names = ['白班', '中班', '夜班'];
+
+    expect(
+      cycleRowFitsTime(
+          rowWidth: 356, classNames: names, timeText: '20:30 – 次日08:00'),
+      isFalse,
+      reason: '手机宽度（420 视口下卡片内约 356）放不下三张 chip 加长时间串',
+    );
+    expect(
+      cycleRowFitsTime(
+          rowWidth: 900, classNames: names, timeText: '20:30 – 次日08:00'),
+      isTrue,
+      reason: '宽屏应当放得下',
+    );
+    expect(
+      cycleRowFitsTime(
+          rowWidth: 356, classNames: const ['白班'], timeText: '08:00 – 18:00'),
+      isTrue,
+      reason: '只有一个班次定义时，窄屏也该放得下',
+    );
   });
 }
