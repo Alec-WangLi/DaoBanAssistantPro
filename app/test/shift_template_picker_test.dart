@@ -335,4 +335,82 @@ void main() {
       expect(hasCjk(c.abbr!), isFalse, reason: '简称落库时含中文：${c.abbr}');
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // 周期色条：超过 14 格要给出省略标记，不能静默截断
+  // ---------------------------------------------------------------------------
+
+  test('色条：周期不超过 14 天全画，无省略标记', () {
+    final t = findTemplate('four_crew_three_shift')!; // 周期 8 天
+    final plan = cycleStripPlan(t);
+    expect(plan.truncated, isFalse);
+    expect(plan.colors, hasLength(8));
+  });
+
+  test('色条：周期超过 14 天画 13 格 + 省略标记', () {
+    // DuPont 是 28 天周期，原来只画前 14 个色块、剩下的静默消失。
+    final t = findTemplate('dupont')!;
+    final plan = cycleStripPlan(t);
+    expect(plan.truncated, isTrue);
+    expect(plan.colors, hasLength(13),
+        reason: '留最后一格给省略标记，7×2 的网格节奏不能破');
+  });
+
+  test('色条：14 天整不截断', () {
+    // 边界值 —— 恰好两行画满，不该出现省略标记。
+    final t = findTemplate('two_shift_weekly')!; // 周期 14 天
+    expect(t.cycleLength, 14);
+    final plan = cycleStripPlan(t);
+    expect(plan.truncated, isFalse);
+    expect(plan.colors, hasLength(14));
+  });
+
+  testWidgets('色条截断时显示省略标记', (tester) async {
+    await _openPicker(tester, <Object?>[]);
+    await tester.enterText(find.byType(TextField), 'dupont');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cycle-strip-more')), findsOneWidget);
+  });
+
+  testWidgets('未截断的模板不显示省略标记', (tester) async {
+    await _openPicker(tester, <Object?>[]);
+    await tester.enterText(find.byType(TextField), '四班三倒');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cycle-strip-more')), findsNothing);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 搜索：中英关键词都要能命中
+  // ---------------------------------------------------------------------------
+
+  testWidgets('英文界面：能按英文关键词搜到模板', (tester) async {
+    final previous = L10n.locale;
+    addTearDown(() => L10n.locale = previous);
+    L10n.locale = 'en';
+
+    await _openPicker(tester, <Object?>[]);
+    await tester.enterText(find.byType(TextField), '4-crew 3-shift');
+    await tester.pumpAndSettle();
+
+    expect(find.text(findTemplate('four_crew_three_shift')!.title),
+        findsOneWidget);
+    expect(find.text(findTemplate('dupont')!.title), findsNothing);
+  });
+
+  testWidgets('中文界面：仍能按中文关键词搜到模板', (tester) async {
+    await _openPicker(tester, <Object?>[]);
+    await tester.enterText(find.byType(TextField), '四班三倒');
+    await tester.pumpAndSettle();
+    expect(find.text(findTemplate('four_crew_three_shift')!.title),
+        findsOneWidget);
+  });
+
+  testWidgets('中文界面：按分组名「常白」仍能搜到该组模板', (tester) async {
+    // 分组值改成语言无关键('office')后，搜索必须走本地化显示名 ——
+    // 否则「常白」这两个字会突然搜不到任何东西。
+    await _openPicker(tester, <Object?>[]);
+    await tester.enterText(find.byType(TextField), '常白');
+    await tester.pumpAndSettle();
+    expect(find.text(findTemplate('standard_week')!.title), findsOneWidget);
+  });
 }

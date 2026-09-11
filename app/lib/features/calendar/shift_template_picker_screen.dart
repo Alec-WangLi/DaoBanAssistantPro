@@ -40,14 +40,20 @@ class _ShiftTemplatePickerScreenState
     extends State<ShiftTemplatePickerScreen> {
   String _query = '';
 
+  /// 搜索：当前语言的标题/副标题/分组名 + id + 别名（中英混收）。
+  ///
+  /// 别名表里中英关键词都有，所以中文用户搜「四班三倒」、英文用户搜
+  /// `4-crew` 都能中，不需要按语言分支。id 也参与匹配 —— 英文用户看到
+  /// `dupont` 这类 id 时能直接搜到。
   bool _matches(ShiftTemplate t) {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return true;
     return t.title.toLowerCase().contains(q) ||
         t.subtitle.toLowerCase().contains(q) ||
         // 分组名走本地化显示名，不用原始键 —— 键是 `h12` 这种，对用户没有
-        // 意义；中文化后「常白」仍然搜得到，与改动前一致。
+        // 意义；换成本地化显示名后「常白」仍然搜得到，与改动前一致。
         L10n.templateGroup(t.groupKey).toLowerCase().contains(q) ||
+        t.id.toLowerCase().contains(q) ||
         t.aliases.any((a) => a.toLowerCase().contains(q));
   }
 
@@ -118,29 +124,6 @@ class _ShiftTemplatePickerScreenState
     return out;
   }
 
-  /// 一排小色块，就是把周期表画出来；最多画前 14 天，够认出是哪一种。
-  Widget _cycleStrip(ShiftTemplate t) {
-    const dot = 14.0;
-    return SizedBox(
-      width: dot * 7 + 12,
-      child: Wrap(
-        spacing: 2,
-        runSpacing: 2,
-        children: [
-          for (final i in t.cycle.take(14))
-            Container(
-              width: dot,
-              height: dot,
-              decoration: BoxDecoration(
-                color: Color(t.classes[i].color),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _templateCard(BuildContext context, ShiftTemplate t) {
     final muted =
         Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
@@ -157,7 +140,7 @@ class _ShiftTemplatePickerScreenState
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _cycleStrip(t),
+                _cycleStrip(context, t),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -232,6 +215,71 @@ class _ShiftTemplatePickerScreenState
     );
   }
 }
+
+/// 色条要画的东西：前 N 个班次的颜色，以及是否被截断。
+///
+/// 抽成顶层纯函数是为了能直接断言「28 天的模板画出 13 格 + 1 个省略标记」，
+/// 而不必去数 widget 树里的色块。
+///
+/// 为什么留最后一格做省略标记、而不是把整条周期画完：周期上限 60 天，
+/// 卡片高度会随模板剧烈起伏，且 60 个色块在手机宽度下每个不到 5px，
+/// 认不出任何东西。7×2 是「够认出是哪一种」的尺寸。
+({List<int> colors, bool truncated}) cycleStripPlan(ShiftTemplate t) {
+  const maxSlots = 14; // 7 列 × 2 行
+  final truncated = t.cycleLength > maxSlots;
+  final visible = truncated ? maxSlots - 1 : t.cycleLength;
+  final classes = t.classes; // 只解析一次：它是现算的列表，别在循环里反复取
+  return (
+    colors: [for (var i = 0; i < visible; i++) classes[t.cycle[i]].color],
+    truncated: truncated,
+  );
+}
+
+/// 一排小色块，就是把周期表画出来；最多画 14 格，够认出是哪一种。
+///
+/// 超过 14 天时最后一格画成省略标记 —— 28 天的 DuPont 原来会静默只剩半截，
+/// 看不出「后面还有」。副标题里写着周期天数，有了这个标记它就从
+/// 「唯一线索」退回「补充说明」，这是它该有的位置。
+Widget _cycleStrip(BuildContext context, ShiftTemplate t) {
+  const dot = 14.0;
+  const spacing = 2.0;
+  const perRow = 7;
+  final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+  final plan = cycleStripPlan(t);
+  return SizedBox(
+    // 按实际间距算，别写死 —— 改间距时宽度才不会对不上。
+    width: dot * perRow + spacing * (perRow - 1),
+    child: Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      children: [
+        for (final color in plan.colors)
+          Container(
+            width: dot,
+            height: dot,
+            decoration: BoxDecoration(
+              color: Color(color),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        if (plan.truncated)
+          Container(
+            key: const Key('cycle-strip-more'),
+            width: dot,
+            height: dot,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: muted.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text('…',
+                style: TextStyle(fontSize: 10, height: 1, color: muted)),
+          ),
+      ],
+    ),
+  );
+}
+
 
 /// 弹出「选择你的倒班方式」，按选择建出一套方案并返回新方案 id。
 /// 用户按返回键放弃时返回 null（不建方案）。
