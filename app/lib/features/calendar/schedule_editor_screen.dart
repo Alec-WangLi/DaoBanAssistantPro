@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
+import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -1214,9 +1216,10 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     });
   }
 
-  void _deleteClass(int index) {
+  Future<void> _deleteClass(int index) async {
     final used = _cycle.where((c) => c == index).length;
     if (used > 0) {
+      // 仍被周期引用：直接拦下，不弹确认 —— 这条路本来就删不掉。
       showGlassSnack(
         context,
         L10n.deleteShiftClassInUse.replaceAll('{n}', '$used'),
@@ -1224,6 +1227,32 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       );
       return;
     }
+
+    // 删除会把周期里比它大的下标整体前移，而时间 / 颜色 / 闹钟配置都不在
+    // 周期里，重加一个班次也复原不回来 —— 所以先确认一次。
+    final name = _classes[index].name;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black26,
+      builder: (dialogContext) => GlassDialog(
+        title: L10n.deleteShiftClassTitle,
+        content: Text(L10n.deleteShiftClassContent(name)),
+        actions: [
+          GlassActionButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            label: L10n.cancel,
+          ),
+          const SizedBox(width: AppTokens.spaceSm),
+          GlassActionButton(
+            variant: GlassActionVariant.danger,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            label: L10n.delete,
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() {
       _classes.removeAt(index);
       _nameCtrls.removeAt(index).dispose();

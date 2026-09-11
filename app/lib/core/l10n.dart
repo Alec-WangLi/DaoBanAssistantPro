@@ -212,6 +212,11 @@ class L10n {
   static String get addShiftClass => t('添加班次', 'Add shift');
   static String get deleteShiftClassInUse =>
       t('周期里还有 {n} 天在用这个班次，先把它们改成别的', 'Still used by {n} day(s) in the cycle');
+  static String get deleteShiftClassTitle =>
+      t('删除这个班次？', 'Delete this shift?');
+  static String deleteShiftClassContent(String name) => isEn
+      ? 'Delete "$name"? This cannot be undone.'
+      : '将删除「$name」，此操作不可撤销。';
   static String get cycleSection => t('周期设置', 'Cycle');
   static String get cycleLengthUnit => t('天', 'days');
   static String get myCycleStart => t('我这组从这个周期开始', 'My crew starts this cycle on');

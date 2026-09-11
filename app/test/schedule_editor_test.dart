@@ -15,6 +15,7 @@ import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
+import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
@@ -193,6 +194,21 @@ Future<_FakeRepository> _pumpEditor(
 
 Finder _minus() => find.widgetWithIcon(
     IconButton, Icons.remove_circle_outline_outlined);
+
+/// 点删除并在确认框里确认。
+///
+/// 未被周期引用的班次会走这条路；被引用的那条由 [_deleteClass] 直接拦下，
+/// 根本不弹确认框，所以这里不覆盖。
+Future<void> _tapDeleteAndConfirm(
+    WidgetTester tester, Finder deleteButton) async {
+  await tester.tap(deleteButton);
+  await tester.pumpAndSettle();
+  await tester.tap(find.descendant(
+    of: find.byType(GlassDialog),
+    matching: find.text(L10n.delete),
+  ));
+  await tester.pumpAndSettle();
+}
 Finder _plus() =>
     find.widgetWithIcon(IconButton, Icons.add_circle_outline_outlined);
 
@@ -382,9 +398,9 @@ void main() {
     // 周期没有被静默改掉
     expect(find.text(L10n.dayN(3)), findsOneWidget);
 
-    // 删没被引用的「休班」→ 成功
-    await tester.tap(find.byType(GlassDeleteButton).at(2));
-    await tester.pumpAndSettle();
+    // 删没被引用的「休班」→ 确认后成功
+    await _tapDeleteAndConfirm(
+        tester, find.byType(GlassDeleteButton).at(2));
     expect(find.byType(GlassDeleteButton), findsNWidgets(2));
     expect(find.text(L10n.dayN(3)), findsOneWidget);
   });
@@ -465,9 +481,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(GlassDeleteButton), findsNWidgets(4));
 
-    // 周期没引用新班次 → 删除成功
-    await tester.tap(find.byType(GlassDeleteButton).at(3));
-    await tester.pumpAndSettle();
+    // 周期没引用新班次 → 确认后删除成功
+    await _tapDeleteAndConfirm(
+        tester, find.byType(GlassDeleteButton).at(3));
     expect(find.byType(GlassDeleteButton), findsNWidgets(3));
   });
 
@@ -867,8 +883,7 @@ void main() {
   // M7：删除中间的班次定义时，周期里更大的下标必须前移
   // ---------------------------------------------------------------------------
 
-  testWidgets('删掉中间的班次定义后，周期里比它大的下标整体前移一位',
-      (tester) async {
+  testWidgets('删未被引用的班次：先确认，取消则不删', (tester) async {
     final repo = await _pumpEditor(
       tester,
       _domain(
@@ -885,6 +900,35 @@ void main() {
     // 删中间的 B（下标 1，周期没引用它）
     await tester.tap(find.byType(GlassDeleteButton).at(1));
     await tester.pumpAndSettle();
+    expect(find.text(L10n.deleteShiftClassTitle), findsOneWidget,
+        reason: '删除要先确认 —— 删错了没法靠重加复原');
+
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+    expect(find.byType(GlassDeleteButton), findsNWidgets(3),
+        reason: '取消后班次必须还在');
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+    expect(repo.saved!.classes.map((c) => c.name), ['A班', 'B班', 'C班']);
+  });
+
+  testWidgets('删未被引用的班次：确认后删除，周期下标整体前移一位',
+      (tester) async {
+    final repo = await _pumpEditor(
+      tester,
+      _domain(
+        classes: const [
+          ShiftClass(name: 'A班', abbr: 'A'),
+          ShiftClass(name: 'B班', abbr: 'B'),
+          ShiftClass(name: 'C班', abbr: 'C'),
+        ],
+        cycle: const [0, 2],
+      ),
+    );
+
+    await _tapDeleteAndConfirm(
+        tester, find.byType(GlassDeleteButton).at(1));
     expect(find.byType(GlassDeleteButton), findsNWidgets(2));
 
     await tester.tap(find.text(L10n.saveAndReschedule));
@@ -893,6 +937,19 @@ void main() {
     expect(repo.saved!.classes.map((c) => c.name), ['A班', 'C班']);
     expect(repo.saved!.cycle, [0, 1],
         reason: 'C 的下标要从 2 前移到 1，否则周期会指向不存在的班次定义');
+  });
+
+  testWidgets('删仍被周期引用的班次：拦下并提示，不弹确认框', (tester) async {
+    await _pumpEditor(tester, _domain(cycle: const [0, 0, 2]));
+    // 下标 0 被周期用了 2 天
+    await tester.tap(find.byType(GlassDeleteButton).first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GlassDialog), findsNothing,
+        reason: '这条路径本来就删不掉，再问一次是多余的');
+    expect(find.text(L10n.deleteShiftClassInUse.replaceAll('{n}', '2')),
+        findsOneWidget);
+    expect(find.byType(GlassDeleteButton), findsNWidgets(3));
   });
 
   testWidgets('输入框字号与主题默认一致，不再被显式压小', (tester) async {
