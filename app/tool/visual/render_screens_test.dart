@@ -54,6 +54,7 @@ void main() {
           overrides: <Override>[databaseProvider.overrideWithValue(db)],
           brightness: variant.brightness,
           language: variant.language,
+          size: variant.size,
           extraPrefs: screen.needsOnboardingPrefs ? onboardingPrefs : const {},
         );
       });

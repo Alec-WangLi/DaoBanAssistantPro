@@ -41,7 +41,10 @@ void main() {
   setUp(setUpVisualPrefs);
 
   for (final screen in visualScreens) {
-    for (final variant in visualVariants) {
+    // 对比度与画布尺寸无关：只跑竖屏那三张，横屏/小窗两张跳过，
+    // 免得白烧一倍的时间。
+    for (final variant
+        in visualVariants.where((v) => v.size == kVisualSize)) {
       testWidgets('${screen.title} · ${variant.label}', (tester) async {
         final db = await makeVisualDatabase();
         addTearDown(db.close);

@@ -78,21 +78,54 @@ final List<VisualScreen> visualScreens = [
   ),
 ];
 
-/// 每个界面要出的变体。英文那张不是凑数：文案漏翻、英文顶到边、日期格式
-/// 在英文下串成「2026 9」这类问题，只有在英文界面上才看得见。
-final List<({String suffix, String label, Brightness brightness, String language})>
-    visualVariants = [
+/// 每个界面要出的变体。
+///
+/// 英文那张不是凑数：文案漏翻、英文顶到边、日期格式在英文下串成
+/// 「2026 9」这类问题，只有在英文界面上才看得见。
+///
+/// 横屏与小窗两张同样不是凑数：它们的尺寸正是用户反馈「几乎无法使用」的
+/// 那两种形态 —— 工装过去只拍 420×900，所以那些缺陷一张图都拍不到。
+final List<
+    ({
+      String suffix,
+      String label,
+      Brightness brightness,
+      String language,
+      Size size,
+    })> visualVariants = [
   (
     suffix: 'light',
     label: '浅色',
     brightness: Brightness.light,
-    language: 'zh'
+    language: 'zh',
+    size: kVisualSize,
   ),
   (
     suffix: 'dark',
     label: '深色',
     brightness: Brightness.dark,
-    language: 'zh'
+    language: 'zh',
+    size: kVisualSize,
   ),
-  (suffix: 'en', label: '英文', brightness: Brightness.light, language: 'en'),
+  (
+    suffix: 'en',
+    label: '英文',
+    brightness: Brightness.light,
+    language: 'en',
+    size: kVisualSize,
+  ),
+  (
+    suffix: 'landscape',
+    label: '横屏 900×420',
+    brightness: Brightness.light,
+    language: 'zh',
+    size: const Size(900, 420),
+  ),
+  (
+    suffix: 'small',
+    label: '小窗 360×360',
+    brightness: Brightness.light,
+    language: 'zh',
+    size: const Size(360, 360),
+  ),
 ];

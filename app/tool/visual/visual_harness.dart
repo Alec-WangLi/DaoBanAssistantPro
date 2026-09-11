@@ -355,6 +355,7 @@ Future<GlobalKey> pumpScreen(
   Brightness brightness = Brightness.light,
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
+  Size size = kVisualSize,
   Future<void> Function(WidgetTester tester)? beforeCapture,
 }) async {
   // 字体得在 setUpAll 里装好（见 ensureVisualFonts 的说明）。这里只做体检：
@@ -372,8 +373,8 @@ Future<GlobalKey> pumpScreen(
   stubPluginChannels();
 
   tester.view.physicalSize = Size(
-    kVisualSize.width * kVisualDpr,
-    kVisualSize.height * kVisualDpr,
+    size.width * kVisualDpr,
+    size.height * kVisualDpr,
   );
   tester.view.devicePixelRatio = kVisualDpr;
   addTearDown(tester.view.resetPhysicalSize);
@@ -432,6 +433,7 @@ Future<void> renderScreen(
   Brightness brightness = Brightness.light,
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
+  Size size = kVisualSize,
   Future<void> Function(WidgetTester tester)? beforeCapture,
 }) async {
   final boundaryKey = await pumpScreen(
@@ -441,6 +443,7 @@ Future<void> renderScreen(
     brightness: brightness,
     language: language,
     extraPrefs: extraPrefs,
+    size: size,
     beforeCapture: beforeCapture,
   );
 
@@ -464,7 +467,7 @@ Future<void> renderScreen(
 
   // 出图同时报一下逻辑尺寸，方便判断「图里挤」是不是因为画布比真机窄。
   stdout.writeln(
-      '[visual] ${file.path}  ${kVisualSize.width.toInt()}x${kVisualSize.height.toInt()} @${kVisualDpr}x');
+      '[visual] ${file.path}  ${size.width.toInt()}x${size.height.toInt()} @${kVisualDpr}x');
 
   await teardownVisual(tester);
 }
@@ -476,14 +479,24 @@ Future<void> renderScreen(
 /// 必须在 pump 之前调用（拿 tester 的 FlutterError 钩子）。
 void failOnOverflow(WidgetTester tester) {
   final previous = FlutterError.onError;
+  final overflows = <String>[];
   FlutterError.onError = (details) {
     final text = details.exceptionAsString();
     if (text.contains('overflowed')) {
-      fail('布局溢出：\n$text');
+      overflows.add(text.split('\n').first);
     }
     previous?.call(details);
   };
-  addTearDown(() => FlutterError.onError = previous);
+  // 收尾时统一报，**不要**在错误回调里当场 fail()：那会把异常抛进帧管线，
+  // flutter_test 处理不了，症状是一条用例卡到超时、后面全部连锁失败 ——
+  // 于是每一轮只看得到第一条溢出，修一条要重跑一次。收集后统一报，
+  // 一轮就能看到全部。
+  addTearDown(() {
+    FlutterError.onError = previous;
+    if (overflows.isNotEmpty) {
+      fail('布局溢出（${overflows.length} 处）：\n${overflows.join('\n')}');
+    }
+  });
 }
 
 /// 当前生效方案的 id，给「打开编辑器」一类需要显式 id 的屏用。
