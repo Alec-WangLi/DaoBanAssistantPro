@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
@@ -892,5 +893,34 @@ void main() {
     expect(repo.saved!.classes.map((c) => c.name), ['A班', 'C班']);
     expect(repo.saved!.cycle, [0, 1],
         reason: 'C 的下标要从 2 前移到 1，否则周期会指向不存在的班次定义');
+  });
+
+  testWidgets('输入框字号与主题默认一致，不再被显式压小', (tester) async {
+    // 「字体比其他界面小一圈」的直接成因：班次名称/简称输入框上写了
+    // fontSize: fontBody(14)，把 M3 默认的 16 盖掉了 —— 而同一张卡片里的
+    // 方案名称输入框没有显式字号、就是 16，于是同屏两个输入框不一样大。
+    await _pumpEditor(tester, _domain());
+
+    final editables = tester.widgetList<EditableText>(find.byType(EditableText));
+    expect(editables, isNotEmpty);
+    for (final e in editables) {
+      expect(e.style.fontSize, AppTokens.fontLead,
+          reason: '输入框字号应为 ${AppTokens.fontLead}，实际 ${e.style.fontSize}');
+    }
+  });
+
+  testWidgets('卡片标题与行内标签落在统一档位', (tester) async {
+    await _pumpEditor(tester, _domain());
+
+    double sizeOf(String text) =>
+        tester.widget<Text>(find.text(text)).style!.fontSize!;
+
+    expect(sizeOf(L10n.shiftClasses), AppTokens.fontLead); // 卡片标题
+    expect(sizeOf(L10n.cycleSection), AppTokens.fontLead); // 卡片标题
+    expect(sizeOf(L10n.dayN(1)), AppTokens.fontSupport); // 行内次要标签
+
+    // 预览条是唯一被压到最低一档的地方（7 列网格，再大就换行破版）
+    final previewTitle = tester.widget<Text>(find.text(L10n.previewNext14));
+    expect(previewTitle.style!.fontSize, AppTokens.fontCaption);
   });
 }

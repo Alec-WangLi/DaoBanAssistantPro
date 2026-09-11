@@ -51,13 +51,18 @@ class AppTokens {
   static const double pillGrow = 1.06;
 
   // ── 排版（system 字体） ──
+  //
+  // 全 App 实际只用到这四档：16 输入框与卡片标题 / 14 行内主文字 /
+  // 13 次要标签 / 12 微字。令牌里**只留这四档** —— 多留一档就迟早有人
+  // 顺手用上，档位又散了。
   static const double fontDisplayXl = 84;
   static const double fontDisplay = 28;
   static const double fontTitle = 20;
   static const double fontHeading = 18;
+  static const double fontLead = 16;
   static const double fontBody = 14;
+  static const double fontSupport = 13;
   static const double fontCaption = 12;
-  static const double fontMicro = 11;
 
   /// 强调色渐变（按钮/导航选中/填充条用）：顶 0.85 → 底 0.50。
   static LinearGradient accentGradient(Color accent) => LinearGradient(

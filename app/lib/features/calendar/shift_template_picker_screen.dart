@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/glass/glass.dart';
+import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -70,7 +71,7 @@ class _ShiftTemplatePickerScreenState
           Text(
             L10n.pickShiftPatternHint,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: AppTokens.fontSupport,
               color: Theme.of(context)
                   .colorScheme
                   .onSurface
@@ -97,7 +98,7 @@ class _ShiftTemplatePickerScreenState
       out.add(Padding(
         padding: const EdgeInsets.only(bottom: 8, top: 4),
         child: Text(L10n.templateGroup(group),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            style: const TextStyle(fontSize: AppTokens.fontSupport, fontWeight: FontWeight.w700)),
       ));
       for (final t in inGroup) {
         out.add(_templateCard(context, t));
@@ -148,15 +149,15 @@ class _ShiftTemplatePickerScreenState
                     children: [
                       Text(t.title,
                           style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600)),
+                              fontSize: AppTokens.fontLead, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       Text(t.subtitle,
-                          style: TextStyle(fontSize: 12, color: muted)),
+                          style: TextStyle(fontSize: AppTokens.fontSupport, color: muted)),
                       if (t.teamCount > 1) ...[
                         const SizedBox(height: 4),
                         Text(
                           L10n.crewsOnDutyCount(t.workingTeamsPerDay),
-                          style: TextStyle(fontSize: 11, color: muted),
+                          style: TextStyle(fontSize: AppTokens.fontCaption, color: muted),
                         ),
                       ],
                     ],
@@ -191,12 +192,12 @@ class _ShiftTemplatePickerScreenState
                     children: [
                       Text(L10n.customPattern,
                           style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600)),
+                              fontSize: AppTokens.fontLead, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       Text(
                         L10n.customPatternHint,
                         style: TextStyle(
-                            fontSize: 12,
+                            fontSize: AppTokens.fontSupport,
                             color: Theme.of(context)
                                 .colorScheme
                                 .onSurface
@@ -272,6 +273,7 @@ Widget _cycleStrip(BuildContext context, ShiftTemplate t) {
               borderRadius: BorderRadius.circular(3),
             ),
             child: Text('…',
+                // 画在 14×14 色块里的省略号字形，不是正文排版 —— 提到 12 会顶出格子。
                 style: TextStyle(fontSize: 10, height: 1, color: muted)),
           ),
       ],

@@ -39,10 +39,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 简称输入框宽度：放得下 2 个汉字（`maxLength: 2`）再加边框内边距。
   ///
-  /// 原来写死 46 —— 两个汉字在 14 号字下要 28，加上 `OutlineInputBorder`
-  /// 的内边距就装不下，第二个字会被裁掉；而只断言文本内容的 widget 测试
-  /// 看不出这种截断，只有真机截图才发现。
-  static const double _abbrFieldWidth = 60;
+  /// 60 是按 **14 号字**算出来的（两个汉字 28，加 `OutlineInputBorder` 的
+  /// 内边距）；字号统一到 16 后两个汉字要 32，60 又会把第二个字裁掉 ——
+  /// 而只断言文本内容的 widget 测试看不出这种截断，只有真机截图才发现。
+  /// 所以字号与这个宽度必须一起改。
+  static const double _abbrFieldWidth = 68;
 
   bool _loaded = false;
   bool _notFound = false;
@@ -322,7 +323,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         // （大字号系统字体下同理）。
         Text('${date.month}/${date.day}',
             maxLines: 1,
-            style: TextStyle(fontSize: AppTokens.fontMicro, color: muted)),
+            style: TextStyle(fontSize: AppTokens.fontCaption, color: muted)),
         const SizedBox(height: AppTokens.spaceXs),
         Container(
           padding: const EdgeInsets.symmetric(
@@ -337,7 +338,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                fontSize: AppTokens.fontMicro,
+                fontSize: AppTokens.fontCaption,
                 fontWeight: FontWeight.w700,
                 // 底色是班次色 16% 的淡染，字得按它算可读版本，不能直接用班次色
                 // （橙 `#FF9F0A` 这类浅色压上去几乎看不见）。
@@ -396,12 +397,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                         Text(L10n.myCycleStart,
                             style: const TextStyle(
                                 fontWeight: FontWeight.w700,
-                                fontSize: AppTokens.fontBody)),
+                                fontSize: AppTokens.fontLead)),
                         const SizedBox(height: AppTokens.spaceXs),
                         Text(
                           L10n.yearMonthDay(_myCrewStart),
                           style: TextStyle(
-                              fontSize: AppTokens.fontCaption, color: muted),
+                              fontSize: AppTokens.fontSupport, color: muted),
                         ),
                       ],
                     ),
@@ -428,12 +429,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           Text(
             L10n.shiftClasses,
             style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: AppTokens.fontBody),
+                fontWeight: FontWeight.w700, fontSize: AppTokens.fontLead),
           ),
           const SizedBox(height: AppTokens.spaceXs),
           Text(
             L10n.shiftClassesHint,
-            style: TextStyle(fontSize: AppTokens.fontCaption, color: muted),
+            style: TextStyle(fontSize: AppTokens.fontSupport, color: muted),
           ),
           const SizedBox(height: AppTokens.spaceMd),
           ..._classes.asMap().entries.map((e) => _classRow(context, e.key)),
@@ -479,7 +480,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       _classes[index] = _editClass(_classes[index], name: v)),
                   decoration: glassInputDecoration(context, L10n.shiftName,
                       isDense: true),
-                  style: const TextStyle(fontSize: AppTokens.fontBody),
                 ),
               ),
               const SizedBox(width: AppTokens.spaceSm),
@@ -494,7 +494,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   decoration: glassInputDecoration(context, L10n.abbrLabel,
                           isDense: true)
                       .copyWith(counterText: ''),
-                  style: const TextStyle(fontSize: AppTokens.fontBody),
                 ),
               ),
               const SizedBox(width: AppTokens.spaceXs),
@@ -516,7 +515,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               child: Text(
                 i == 0 ? L10n.work : L10n.rest,
                 style: TextStyle(
-                  fontSize: AppTokens.fontCaption,
+                  fontSize: AppTokens.fontSupport,
                   fontWeight: FontWeight.w700,
                   color: selected
                       ? Theme.of(context).colorScheme.onSurface
@@ -555,7 +554,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 padding: const EdgeInsets.only(top: AppTokens.spaceXs),
                 child: Text(L10n.crossesMidnight,
                     style: TextStyle(
-                        fontSize: AppTokens.fontMicro, color: muted)),
+                        fontSize: AppTokens.fontCaption, color: muted)),
               ),
             const SizedBox(height: AppTokens.spaceXs),
             Row(
@@ -718,7 +717,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: AppTokens.fontMicro, color: muted)),
+                              fontSize: AppTokens.fontSupport, color: muted)),
                       const SizedBox(height: AppTokens.spaceXs),
                       Text(value,
                           maxLines: 1,
@@ -772,7 +771,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       children: [
         Text(L10n.cycleSection,
             style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: AppTokens.fontBody)),
+                fontWeight: FontWeight.w700, fontSize: AppTokens.fontLead)),
         const Spacer(),
         IconButton(
           icon: const Icon(Icons.remove_circle_outline_outlined),
@@ -817,7 +816,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             width: 56,
             child: Text(L10n.dayN(index + 1),
                 style: const TextStyle(
-                    fontSize: AppTokens.fontCaption,
+                    fontSize: AppTokens.fontSupport,
                     fontWeight: FontWeight.w600)),
           ),
           const SizedBox(width: AppTokens.spaceSm),
@@ -852,7 +851,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    fontSize: AppTokens.fontCaption)),
+                                    fontSize: AppTokens.fontSupport)),
                           ),
                         ],
                       ),
@@ -866,7 +865,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           const SizedBox(width: AppTokens.spaceMd),
           Text(
             _rangeText(_classes[_cycle[index]]),
-            style: TextStyle(fontSize: AppTokens.fontMicro, color: muted),
+            style: TextStyle(fontSize: AppTokens.fontSupport, color: muted),
           ),
         ],
       ),
@@ -906,7 +905,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       L10n.crewSettingsOptional,
                       style: const TextStyle(
                           fontWeight: FontWeight.w700,
-                          fontSize: AppTokens.fontCaption),
+                          fontSize: AppTokens.fontLead),
                     ),
                   ),
                   Icon(_crewExpanded
@@ -943,7 +942,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             ...List.generate(_teamCount, (i) => _crewRow(context, i)),
             Text(L10n.teamHint,
                 style: TextStyle(
-                    fontSize: AppTokens.fontCaption, color: muted)),
+                    fontSize: AppTokens.fontSupport, color: muted)),
           ],
         ],
       ),
@@ -1004,7 +1003,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   child: Text(
                     isOurs ? L10n.myTeam : L10n.setAsMine,
                     style: TextStyle(
-                      fontSize: AppTokens.fontCaption,
+                      fontSize: AppTokens.fontSupport,
                       fontWeight: FontWeight.w700,
                       color: isOurs
                           ? Theme.of(context).colorScheme.onPrimary
@@ -1027,12 +1026,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   const SizedBox(width: AppTokens.spaceSm),
                   Text(L10n.crewCycleStart,
                       style: TextStyle(
-                          fontSize: AppTokens.fontCaption, color: muted)),
+                          fontSize: AppTokens.fontSupport, color: muted)),
                   const SizedBox(width: AppTokens.spaceSm),
                   Text(
                     L10n.yearMonthDay(_crewStartDate(i)),
                     style: const TextStyle(
-                        fontSize: AppTokens.fontCaption,
+                        fontSize: AppTokens.fontSupport,
                         fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -1090,7 +1089,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   L10n.followHoliday,
                   style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: AppTokens.fontBody),
+                      fontSize: AppTokens.fontLead),
                 ),
               ),
               GlassSwitch(
@@ -1131,7 +1130,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           const SizedBox(height: AppTokens.spaceSm),
           Text(
             L10n.followHolidayHint,
-            style: TextStyle(fontSize: AppTokens.fontCaption, color: muted),
+            style: TextStyle(fontSize: AppTokens.fontSupport, color: muted),
           ),
         ],
       ),
@@ -1162,7 +1161,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 Text(
                   L10n.shiftColor,
                   style: const TextStyle(
-                      fontSize: AppTokens.fontHeading,
+                      fontSize: AppTokens.fontLead,
                       fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: AppTokens.spaceLg),
