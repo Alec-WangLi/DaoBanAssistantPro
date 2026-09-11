@@ -594,6 +594,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   if (shift != null)
                     Text(
                       shift.shortLabel,
+                      // 简称上限是 1–2 字，但格宽固定，多一个字就会撑破竖向
+                      // 节奏；单行 + 省略号让任何长度都不破版。
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,

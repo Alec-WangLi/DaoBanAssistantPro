@@ -6,6 +6,8 @@ import '../../core/l10n.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
+import '../../core/widgets/glass_pressable.dart';
+import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
@@ -34,6 +36,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     0xFF4C8DFF, 0xFF7A5CFF, 0xFF9AA0B4, 0xFF5A5F73,
     0xFF34C759, 0xFFFF9F0A, 0xFFFF375F, 0xFF00C7BE,
   ];
+
+  /// 简称输入框宽度：放得下 2 个汉字（`maxLength: 2`）再加边框内边距。
+  ///
+  /// 原来写死 46 —— 两个汉字在 14 号字下要 28，加上 `OutlineInputBorder`
+  /// 的内边距就装不下，第二个字会被裁掉；而只断言文本内容的 widget 测试
+  /// 看不出这种截断，只有真机截图才发现。
+  static const double _abbrFieldWidth = 60;
 
   bool _loaded = false;
   bool _notFound = false;
@@ -223,20 +232,19 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           : !_loaded
               ? const Center(child: CircularProgressIndicator())
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                  padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
+                      AppTokens.spaceSm, AppTokens.spaceLg, 100),
                   children: [
                     _previewStrip(context),
-                    _scheduleHeader(context),
-                    const SizedBox(height: 12),
+                    _headerCard(context),
+                    const SizedBox(height: AppTokens.spaceMd),
                     if (!_followHoliday) ...[
-                      _myCycleStartCard(context),
-                      const SizedBox(height: 12),
                       _classesCard(context),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppTokens.spaceMd),
                       _cycleCard(context),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppTokens.spaceMd),
                       _crewCard(context),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppTokens.spaceMd),
                     ],
                     _followHolidayCard(context),
                   ],
@@ -271,59 +279,130 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     );
     final today = dateOnly(DateTime.now());
     final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
 
     return GlassTile(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
+      padding: const EdgeInsets.all(AppTokens.spaceMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(L10n.previewNext14,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 52,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: 14,
-              itemBuilder: (context, i) {
-                final date = today.add(Duration(days: i));
-                final s = schedule.shiftOn(date);
-                final color =
-                    s == null ? muted : Color(s.color);
-                return Container(
-                  width: 40,
-                  margin: const EdgeInsets.only(right: 6),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // 单行：格宽只有 40，`12/25` 这种 5 字符日期一旦换行就会
-                      // 把 52 高的格子撑破（大字号系统字体下同理）。
-                      Text('${date.month}/${date.day}',
-                          maxLines: 1,
-                          style: TextStyle(fontSize: 10, color: muted)),
-                      const SizedBox(height: 3),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                          border: Border.all(color: color.withValues(alpha: 0.5)),
-                        ),
-                        child: Text(
-                          s?.shortLabel ?? '—',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: color),
-                        ),
-                      ),
-                    ],
+              style: const TextStyle(
+                  fontSize: AppTokens.fontCaption, fontWeight: FontWeight.w700)),
+          const SizedBox(height: AppTokens.spaceSm),
+          // 7 列 × 2 行，与日历的 7 列节奏一致 —— 横向滚动会让最后一格
+          // 永远吊在半路，这里两行排满就没有裁切，也不需要滑动提示。
+          for (var row = 0; row < 2; row++) ...[
+            if (row > 0) const SizedBox(height: AppTokens.spaceSm),
+            Row(
+              children: [
+                for (var col = 0; col < 7; col++)
+                  Expanded(
+                    child: _previewCell(
+                      schedule,
+                      today.add(Duration(days: row * 7 + col)),
+                      muted,
+                    ),
                   ),
-                );
-              },
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _previewCell(ShiftSchedule schedule, DateTime date, Color muted) {
+    final s = schedule.shiftOn(date);
+    final color = s == null ? muted : Color(s.color);
+    return Column(
+      children: [
+        // 单行：窄格子里 `12/25` 这种 5 字符日期换行会把两行的高度撑破
+        // （大字号系统字体下同理）。
+        Text('${date.month}/${date.day}',
+            maxLines: 1,
+            style: TextStyle(fontSize: AppTokens.fontMicro, color: muted)),
+        const SizedBox(height: AppTokens.spaceXs),
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.spaceSm, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(AppTokens.radiusS),
+            border: Border.all(color: color.withValues(alpha: 0.5)),
+          ),
+          child: Text(
+            s?.shortLabel ?? '—',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: AppTokens.fontMicro,
+                fontWeight: FontWeight.w700,
+                color: color),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 1) 方案名称 + 我的班组起始日。
+  ///
+  /// 两者合成一张卡：名称原本单独占一张几乎空着的卡，而「我这组从哪天开始」
+  /// 是整页第二重要的字段，放在一起信息密度更合理。
+  Widget _headerCard(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurface
+        .withValues(alpha: 0.55);
+    return GlassTile(
+      padding: const EdgeInsets.all(AppTokens.spaceLg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _scheduleNameCtrl,
+            onChanged: (v) => _name = v,
+            decoration: glassInputDecoration(context, L10n.scheduleName),
+          ),
+          const SizedBox(height: AppTokens.spaceSm),
+          InkWell(
+            borderRadius: BorderRadius.circular(AppTokens.radiusM),
+            onTap: () async {
+              final picked = await showGlassDatePicker(
+                context,
+                initialDate: _myCrewStart,
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) _setMyCycleStart(picked);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceMd),
+              child: Row(
+                children: [
+                  Icon(Icons.today_outlined,
+                      size: 20, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: AppTokens.spaceMd),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(L10n.myCycleStart,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: AppTokens.fontBody)),
+                        const SizedBox(height: AppTokens.spaceXs),
+                        Text(
+                          L10n.yearMonthDay(_myCrewStart),
+                          style: TextStyle(
+                              fontSize: AppTokens.fontCaption, color: muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.edit_outlined, size: 20, color: muted),
+                ],
+              ),
             ),
           ),
         ],
@@ -331,67 +410,27 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     );
   }
 
-  /// 1) 排班名称。
-  Widget _scheduleHeader(BuildContext context) {
-    return GlassTile(
-      padding: const EdgeInsets.all(16),
-      child: TextField(
-        controller: _scheduleNameCtrl,
-        onChanged: (v) => _name = v,
-        decoration: glassInputDecoration(context, L10n.scheduleName),
-      ),
-    );
-  }
-
-  /// 2) 我的班组起始日 —— 整页最重要的一项，紧贴名称下方。
-  Widget _myCycleStartCard(BuildContext context) {
-    return GlassTile(
-      padding: const EdgeInsets.all(16),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: const Icon(Icons.today_outlined),
-        title: Text(
-          L10n.myCycleStart,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(L10n.yearMonthDay(_myCrewStart)),
-        trailing: const Icon(Icons.edit_outlined),
-        onTap: () async {
-          final picked = await showGlassDatePicker(
-            context,
-            initialDate: _myCrewStart,
-            firstDate: DateTime(2000),
-            lastDate: DateTime(2100),
-          );
-          if (picked != null) _setMyCycleStart(picked);
-        },
-      ),
-    );
-  }
-
   /// 3) 班次设置：每个班次定义一次，周期里直接引用。
   Widget _classesCard(BuildContext context) {
-    final muted = Theme.of(context)
-        .colorScheme
-        .onSurface
+    final muted = Theme.of(context).colorScheme.onSurface
         .withValues(alpha: 0.55);
     return GlassTile(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             L10n.shiftClasses,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: const TextStyle(
+                fontWeight: FontWeight.w700, fontSize: AppTokens.fontBody),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppTokens.spaceXs),
           Text(
             L10n.shiftClassesHint,
-            style: TextStyle(fontSize: 12, color: muted),
+            style: TextStyle(fontSize: AppTokens.fontCaption, color: muted),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppTokens.spaceMd),
           ..._classes.asMap().entries.map((e) => _classRow(context, e.key)),
-          const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton.icon(
@@ -409,48 +448,37 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final c = _classes[index];
     final primary = Theme.of(context).colorScheme.primary;
     final outline = Theme.of(context).colorScheme.outlineVariant;
-    final muted = Theme.of(context)
-        .colorScheme
-        .onSurface
-        .withValues(alpha: 0.5);
+    final muted =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+      margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
+      padding: const EdgeInsets.all(AppTokens.spaceMd),
       decoration: BoxDecoration(
         color: primary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(AppTokens.radiusM),
+        borderRadius: BorderRadius.circular(AppTokens.radiusL),
         border: Border.all(color: outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 身份行：色点（点一下改色）· 名称 · 简称 · 删除
           Row(
             children: [
-              GestureDetector(
-                onTap: () => _pickColor(index),
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: Color(c.color),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
+              _colorDot(context, index, c),
+              const SizedBox(width: AppTokens.spaceSm),
               Expanded(
                 child: TextField(
                   controller: _nameCtrls[index],
                   onChanged: (v) => setState(() =>
                       _classes[index] = _editClass(_classes[index], name: v)),
-                  decoration:
-                      glassInputDecoration(context, L10n.shiftName, isDense: true),
-                  style: const TextStyle(fontSize: 14),
+                  decoration: glassInputDecoration(context, L10n.shiftName,
+                      isDense: true),
+                  style: const TextStyle(fontSize: AppTokens.fontBody),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: AppTokens.spaceSm),
               SizedBox(
-                width: 46,
+                width: _abbrFieldWidth,
                 child: TextField(
                   controller: _abbrCtrls[index],
                   maxLength: 2,
@@ -460,34 +488,43 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   decoration: glassInputDecoration(context, L10n.abbrLabel,
                           isDense: true)
                       .copyWith(counterText: ''),
-                  style: const TextStyle(fontSize: 14),
+                  style: const TextStyle(fontSize: AppTokens.fontBody),
                 ),
               ),
-              const SizedBox(width: 4),
-              GlassSwitch(
-                value: c.isRest,
-                onChanged: (v) => setState(() {
-                  final cur = _classes[index];
-                  _classes[index] = v
-                      ? _editClass(cur,
-                          isRest: true,
-                          clearTimes: true,
-                          alarmEnabled: false,
-                          clearAlarmMinute: true)
-                      : _editClass(cur,
-                          isRest: false,
-                          startMinute: cur.startMinute ?? toMinutes(8, 0),
-                          endMinute: cur.endMinute ?? toMinutes(20, 0));
-                }),
+              const SizedBox(width: AppTokens.spaceXs),
+              GlassDeleteButton(
+                compact: true,
+                onPressed: () => _deleteClass(index),
               ),
-              GlassDeleteButton(onPressed: () => _deleteClass(index)),
             ],
           ),
+          const SizedBox(height: AppTokens.spaceMd),
+          // 工作 / 休息用分段器：两个标签都在，不会像裸开关那样让人猜
+          // 「拨过去是休息还是启用」。与闹钟页、我的页的选择器同款手感。
+          GlassSegment(
+            count: 2,
+            height: 38,
+            selectedIndex: c.isRest ? 1 : 0,
+            onSelected: (i) => _setRest(index, i == 1),
+            itemBuilder: (i, selected) => Center(
+              child: Text(
+                i == 0 ? L10n.work : L10n.rest,
+                style: TextStyle(
+                  fontSize: AppTokens.fontCaption,
+                  fontWeight: FontWeight.w700,
+                  color: selected
+                      ? Theme.of(context).colorScheme.onSurface
+                      : muted,
+                ),
+              ),
+            ),
+          ),
           if (!c.isRest) ...[
+            const SizedBox(height: AppTokens.spaceMd),
             Row(
               children: [
                 Expanded(
-                  child: _timeTile(
+                  child: _timeChip(
                     context,
                     label: L10n.start,
                     minutes: c.startMinute,
@@ -495,9 +532,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                         _editClass(_classes[index], startMinute: m)),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppTokens.spaceSm),
                 Expanded(
-                  child: _endTimeTile(
+                  child: _endTimeChip(
                     context,
                     label: L10n.end,
                     shift: c,
@@ -509,13 +546,18 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             ),
             if (c.crossesMidnight)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: AppTokens.spaceXs),
                 child: Text(L10n.crossesMidnight,
-                    style: TextStyle(fontSize: 11, color: muted)),
+                    style: TextStyle(
+                        fontSize: AppTokens.fontMicro, color: muted)),
               ),
+            const SizedBox(height: AppTokens.spaceXs),
             Row(
               children: [
-                Expanded(child: Text(L10n.linkedAlarm)),
+                Expanded(
+                  child: Text(L10n.linkedAlarm,
+                      style: const TextStyle(fontSize: AppTokens.fontBody)),
+                ),
                 GlassSwitch(
                   value: c.alarmEnabled,
                   onChanged: (v) => setState(() => _classes[index] =
@@ -523,81 +565,169 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 ),
               ],
             ),
-            if (c.alarmEnabled)
-              _timeTile(
+            if (c.alarmEnabled) ...[
+              const SizedBox(height: AppTokens.spaceSm),
+              _timeChip(
                 context,
                 label: L10n.alarmTime,
                 minutes: c.alarmMinute,
                 onPick: (m) => setState(() => _classes[index] =
                     _editClass(_classes[index], alarmMinute: m)),
               ),
+            ],
           ],
         ],
       ),
     );
   }
 
-  /// 开始/结束/闹钟时间都用这个条目。
+  /// 可点的颜色圆点：外面加一圈描边，让它看起来是能点的。
+  Widget _colorDot(BuildContext context, int index, ShiftClass c) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () => _pickColor(index),
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: Color(c.color),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppTokens.glassBorder(isDark)
+                .withValues(alpha: isDark ? 0.30 : 0.85),
+            width: 2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 切换工作/休息。
   ///
-  /// 外面垫一层透明 [Material]：班次行本身是带底色的 `Container`，
-  /// 而 `ListTile` 的水波纹要画在最近的 `Material` 上，否则会被底色盖住
-  /// （framework 会直接断言失败）。
-  Widget _timeTile(
+  /// 切成休息必须把时间和闹钟一起清掉（走 [_editClass] 的 clear* 通道，
+  /// `copyWith` 没有「清成 null」的通道）；切回工作时补一组默认时间，
+  /// 否则时间块会以「未设置」出现。
+  void _setRest(int index, bool rest) {
+    setState(() {
+      final cur = _classes[index];
+      _classes[index] = rest
+          ? _editClass(cur,
+              isRest: true,
+              clearTimes: true,
+              alarmEnabled: false,
+              clearAlarmMinute: true)
+          : _editClass(cur,
+              isRest: false,
+              startMinute: cur.startMinute ?? toMinutes(8, 0),
+              endMinute: cur.endMinute ?? toMinutes(20, 0));
+    });
+  }
+
+  /// 开始/结束/闹钟时间都用这个块。
+  Widget _timeChip(
     BuildContext context, {
     required String label,
     required int? minutes,
     required ValueChanged<int?> onPick,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(label),
-        subtitle: Text(minutes == null ? L10n.notSet : formatClock(minutes)),
-        trailing: const Icon(Icons.access_time_outlined),
-        onTap: () async {
-          final now = minutes ?? toMinutes(8, 0);
-          final picked = await showGlassTimePicker(
-            context,
-            initialTime: TimeOfDay(hour: now ~/ 60, minute: now % 60),
-          );
-          if (picked != null) onPick(picked.hour * 60 + picked.minute);
-        },
-      ),
+    return _chipBody(
+      context,
+      label: label,
+      value: minutes == null ? L10n.notSet : formatClock(minutes),
+      onTap: () async {
+        final now = minutes ?? toMinutes(8, 0);
+        final picked = await showGlassTimePicker(
+          context,
+          initialTime: TimeOfDay(hour: now ~/ 60, minute: now % 60),
+        );
+        if (picked != null) onPick(picked.hour * 60 + picked.minute);
+      },
     );
   }
 
-  /// 结束时间行 —— 与开始时间的唯一区别是「结束可能落在次日」。
+  /// 结束时间块 —— 与开始时间的唯一区别是「结束可能落在次日」。
   ///
   /// `endMinute` 的域到 2880（24 小时值班 = 480 → 1920），所以：
   /// - 打开选择器必须用**钟面值**（[ShiftClass.endClockMinute]），
   ///   直接用 `endMinute ~/ 60` 会得到 32 点、越出小时滚轮的 0..23；
   /// - 确认时必须把「跨到次日」的那 1440 分钟加回去，否则值班会被静默
   ///   降级成当天结束，日历与闹钟跟着一起错。
-  Widget _endTimeTile(
+  Widget _endTimeChip(
     BuildContext context, {
     required String label,
     required ShiftClass shift,
     required ValueChanged<int> onPick,
   }) {
+    return _chipBody(
+      context,
+      label: label,
+      value: _endTimeText(shift),
+      onTap: () async {
+        final clock = shift.endClockMinute ?? toMinutes(20, 0);
+        final picked = await showGlassTimePicker(
+          context,
+          initialTime: TimeOfDay(hour: clock ~/ 60, minute: clock % 60),
+        );
+        if (picked == null) return;
+        final base = picked.hour * 60 + picked.minute; // 0..1439
+        final wasNextDay = shift.endMinute != null && shift.endMinute! >= 1440;
+        onPick(base + (wasNextDay ? 1440 : 0));
+      },
+    );
+  }
+
+  /// 时间块的统一外观：可点的圆角玻璃块，标签小字在上、值在下方。
+  ///
+  /// 外面垫一层透明 [Material]：班次行本身是带底色的 `Container`，
+  /// 而水波纹要画在最近的 `Material` 上，否则会被底色盖住。
+  Widget _chipBody(
+    BuildContext context, {
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final muted =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
     return Material(
       color: Colors.transparent,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(label),
-        subtitle: Text(_endTimeText(shift)),
-        trailing: const Icon(Icons.access_time_outlined),
-        onTap: () async {
-          final clock = shift.endClockMinute ?? toMinutes(20, 0);
-          final picked = await showGlassTimePicker(
-            context,
-            initialTime: TimeOfDay(hour: clock ~/ 60, minute: clock % 60),
-          );
-          if (picked == null) return;
-          final base = picked.hour * 60 + picked.minute; // 0..1439
-          final wasNextDay = shift.endMinute != null && shift.endMinute! >= 1440;
-          onPick(base + (wasNextDay ? 1440 : 0));
-        },
+      child: GlassPressable(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppTokens.radiusM),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceSm),
+            decoration: BoxDecoration(
+              color: primary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(AppTokens.radiusM),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: AppTokens.fontMicro, color: muted)),
+                      const SizedBox(height: AppTokens.spaceXs),
+                      Text(value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: AppTokens.fontBody,
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.access_time_outlined, size: 18, color: muted),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -619,12 +749,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 4) 周期设置：几天一循环，以及每天引用哪个班次。
   Widget _cycleCard(BuildContext context) {
     return GlassTile(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _cycleStepper(context),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppTokens.spaceSm),
           ...List.generate(_cycle.length, (i) => _cycleRow(context, i)),
         ],
       ),
@@ -635,14 +765,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     return Row(
       children: [
         Text(L10n.cycleSection,
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+            style: const TextStyle(
+                fontWeight: FontWeight.w700, fontSize: AppTokens.fontBody)),
         const Spacer(),
         IconButton(
           icon: const Icon(Icons.remove_circle_outline_outlined),
           onPressed:
               _cycle.length > 1 ? () => _setCycleLength(_cycle.length - 1) : null,
         ),
-        Text('${_cycle.length}${L10n.cycleLengthUnit}'),
+        Text('${_cycle.length}${L10n.cycleLengthUnit}',
+            style: const TextStyle(fontWeight: FontWeight.w600)),
         IconButton(
           icon: const Icon(Icons.add_circle_outline_outlined),
           onPressed:
@@ -669,29 +801,33 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   Widget _cycleRow(BuildContext context, int index) {
     final primary = Theme.of(context).colorScheme.primary;
+    final muted =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
       child: Row(
         children: [
           SizedBox(
             width: 56,
             child: Text(L10n.dayN(index + 1),
-                style: const TextStyle(fontSize: 13)),
+                style: const TextStyle(
+                    fontSize: AppTokens.fontCaption,
+                    fontWeight: FontWeight.w600)),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppTokens.spaceSm),
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.symmetric(horizontal: AppTokens.spaceMd),
               decoration: BoxDecoration(
                 color: primary.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                borderRadius: BorderRadius.circular(AppTokens.radiusM),
               ),
               child: DropdownButton<int>(
                 value: _cycle[index],
                 isExpanded: true,
                 isDense: true,
                 underline: const SizedBox(),
-                borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                borderRadius: BorderRadius.circular(AppTokens.radiusM),
                 dropdownColor: Theme.of(context).colorScheme.surface,
                 items: _classes.asMap().entries.map((e) => DropdownMenuItem(
                       value: e.key,
@@ -704,9 +840,14 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                                 color: Color(e.value.color),
                                 shape: BoxShape.circle),
                           ),
-                          const SizedBox(width: 8),
-                          Text(e.value.name,
-                              style: const TextStyle(fontSize: 13)),
+                          const SizedBox(width: AppTokens.spaceSm),
+                          Flexible(
+                            child: Text(e.value.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: AppTokens.fontCaption)),
+                          ),
                         ],
                       ),
                     )).toList(),
@@ -716,16 +857,10 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppTokens.spaceMd),
           Text(
             _rangeText(_classes[_cycle[index]]),
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.65),
-            ),
+            style: TextStyle(fontSize: AppTokens.fontMicro, color: muted),
           ),
         ],
       ),
@@ -746,12 +881,10 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 5) 班组设置（可选）—— 默认折叠。
   Widget _crewCard(BuildContext context) {
-    final muted = Theme.of(context)
-        .colorScheme
-        .onSurface
+    final muted = Theme.of(context).colorScheme.onSurface
         .withValues(alpha: 0.55);
     return GlassTile(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -759,14 +892,15 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             borderRadius: BorderRadius.circular(AppTokens.radiusS),
             onTap: () => setState(() => _crewExpanded = !_crewExpanded),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       L10n.crewSettingsOptional,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 13),
+                          fontWeight: FontWeight.w700,
+                          fontSize: AppTokens.fontCaption),
                     ),
                   ),
                   Icon(_crewExpanded
@@ -777,11 +911,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             ),
           ),
           if (_crewExpanded) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: AppTokens.spaceSm),
             Row(
               children: [
                 Text(L10n.teamCountN(_teamCount),
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: AppTokens.fontBody)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.remove_circle_outline_outlined),
@@ -797,9 +933,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppTokens.spaceXs),
             ...List.generate(_teamCount, (i) => _crewRow(context, i)),
-            Text(L10n.teamHint, style: TextStyle(fontSize: 12, color: muted)),
+            Text(L10n.teamHint,
+                style: TextStyle(
+                    fontSize: AppTokens.fontCaption, color: muted)),
           ],
         ],
       ),
@@ -815,8 +953,10 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         .withValues(alpha: 0.55);
     final isOurs = i == _ourTeamIndex;
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
+      margin: const EdgeInsets.only(bottom: AppTokens.spaceSm),
+      padding: const EdgeInsets.fromLTRB(
+          AppTokens.spaceMd, AppTokens.spaceXs, AppTokens.spaceSm,
+          AppTokens.spaceXs),
       decoration: BoxDecoration(
         color: isOurs ? primary.withValues(alpha: 0.10) : Colors.transparent,
         borderRadius: BorderRadius.circular(AppTokens.radiusM),
@@ -843,13 +983,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       fontWeight: isOurs ? FontWeight.w700 : FontWeight.w500),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppTokens.spaceSm),
               InkWell(
                 borderRadius: BorderRadius.circular(AppTokens.radiusS),
                 onTap: () => setState(() => _ourTeamIndex = i),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceXs),
                   decoration: BoxDecoration(
                     color:
                         isOurs ? primary : primary.withValues(alpha: 0.10),
@@ -858,7 +998,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   child: Text(
                     isOurs ? L10n.myTeam : L10n.setAsMine,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: AppTokens.fontCaption,
                       fontWeight: FontWeight.w700,
                       color: isOurs
                           ? Theme.of(context).colorScheme.onPrimary
@@ -873,18 +1013,21 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             borderRadius: BorderRadius.circular(AppTokens.radiusS),
             onTap: () => _pickCrewStartDate(i),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 2, vertical: AppTokens.spaceXs),
               child: Row(
                 children: [
                   Icon(Icons.event_outlined, size: 16, color: muted),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: AppTokens.spaceSm),
                   Text(L10n.crewCycleStart,
-                      style: TextStyle(fontSize: 12, color: muted)),
-                  const SizedBox(width: 8),
+                      style: TextStyle(
+                          fontSize: AppTokens.fontCaption, color: muted)),
+                  const SizedBox(width: AppTokens.spaceSm),
                   Text(
                     L10n.yearMonthDay(_crewStartDate(i)),
                     style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
+                        fontSize: AppTokens.fontCaption,
+                        fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -927,12 +1070,10 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 6) 跟随法定节假日：打开即变成空白表（无班次、无周期）。
   Widget _followHolidayCard(BuildContext context) {
-    final muted = Theme.of(context)
-        .colorScheme
-        .onSurface
+    final muted = Theme.of(context).colorScheme.onSurface
         .withValues(alpha: 0.55);
     return GlassTile(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -941,7 +1082,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               Expanded(
                 child: Text(
                   L10n.followHoliday,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: AppTokens.fontBody),
                 ),
               ),
               GlassSwitch(
@@ -979,10 +1122,10 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppTokens.spaceSm),
           Text(
             L10n.followHolidayHint,
-            style: TextStyle(fontSize: 12, color: muted),
+            style: TextStyle(fontSize: AppTokens.fontCaption, color: muted),
           ),
         ],
       ),
@@ -1000,24 +1143,26 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       barrierColor: Colors.black26,
       builder: (context) => GlassPanel(
         solid: true,
-        margin: const EdgeInsets.all(12),
+        margin: const EdgeInsets.all(AppTokens.spaceMd),
         borderRadius:
             const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+            padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
+                AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceXl),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   L10n.shiftColor,
                   style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700),
+                      fontSize: AppTokens.fontHeading,
+                      fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppTokens.spaceLg),
                 Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
+                  spacing: AppTokens.spaceLg,
+                  runSpacing: AppTokens.spaceLg,
                   children: _palette.map((c) {
                     final selected = _classes[index].color == c;
                     return GestureDetector(

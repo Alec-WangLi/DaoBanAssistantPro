@@ -50,6 +50,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
                             '${L10n.monthDay(s.anchorDate)}'
                             '${isCurrent ? ' · ${L10n.current}' : ''}'),
                         trailing: GlassDeleteButton(
+                          compact: true,
                           onPressed: () => _deleteSchedule(context, ref, s),
                         ),
                         onTap: () => _openEditor(context, ref, s.id),

@@ -14,6 +14,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
+import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -194,13 +195,34 @@ Finder _minus() => find.widgetWithIcon(
 Finder _plus() =>
     find.widgetWithIcon(IconButton, Icons.add_circle_outline_outlined);
 
-/// 某个 ListTile（按标题文字找）的副标题文本。
-String _subtitleOf(WidgetTester tester, String title) {
+/// 某个时间块（按标签文字找）当前显示的值文本。
+///
+/// 时间块的结构是 `GlassPressable ▸ 标签 Text + 值 Text`，所以取该块内
+/// 最后一个 Text；标签文案在整页里唯一，不会找错块。
+String _chipValueOf(WidgetTester tester, String label) {
   final texts = tester.widgetList<Text>(find.descendant(
-    of: find.widgetWithText(ListTile, title),
+    of: find.ancestor(
+        of: find.text(label), matching: find.byType(GlassPressable)),
     matching: find.byType(Text),
   ));
   return texts.last.data!;
+}
+
+/// 顶部「我这组从这个周期开始」那一行里显示的日期。
+String _myCrewStartText(WidgetTester tester) {
+  final texts = tester.widgetList<Text>(find.descendant(
+    of: find.ancestor(
+        of: find.text(L10n.myCycleStart), matching: find.byType(InkWell)),
+    matching: find.byType(Text),
+  ));
+  return texts.last.data!;
+}
+
+/// 点开顶部「我这组从这个周期开始」的日期选择器。
+Future<void> _tapMyCrewStart(WidgetTester tester) async {
+  await tester.tap(find.ancestor(
+      of: find.text(L10n.myCycleStart), matching: find.byType(InkWell)));
+  await tester.pumpAndSettle();
 }
 
 // -----------------------------------------------------------------------------
@@ -317,7 +339,7 @@ void main() {
     );
     expect(find.text('08:30 – 20:30'), findsNWidgets(2));
 
-    final before = _subtitleOf(tester, L10n.start);
+    final before = _chipValueOf(tester, L10n.start);
     expect(before, '08:30');
 
     // 点开班次定义里的「开始」，把小时轮往下拨
@@ -328,7 +350,7 @@ void main() {
     await tester.tap(find.text(L10n.confirm));
     await tester.pumpAndSettle();
 
-    final after = _subtitleOf(tester, L10n.start);
+    final after = _chipValueOf(tester, L10n.start);
     expect(after, isNot(before), reason: '时间选择器应当真的改了开始时间');
 
     // 两行引用白班的周期行同时更新，且旧时间消失
@@ -416,8 +438,7 @@ void main() {
     expect(find.text(L10n.yearMonthDay(DateTime.utc(2025, 6, 1))),
         findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ListTile, L10n.myCycleStart));
-    await tester.pumpAndSettle();
+    await _tapMyCrewStart(tester);
     await tester.tap(find.descendant(
       of: find.byType(BottomSheet),
       matching: find.text('10'),
@@ -468,21 +489,32 @@ void main() {
     );
 
     expect(find.text('08:30 – 20:30'), findsOneWidget);
-    expect(find.text(L10n.start), findsOneWidget);
-    expect(find.text(L10n.rest), findsOneWidget); // 第 2 天的休班
+    expect(
+        find.descendant(
+            of: find.widgetWithText(GlassTile, L10n.shiftClasses),
+            matching: find.text(L10n.start)),
+        findsOneWidget);
 
-    final classSwitches = find.descendant(
+    final classSegments = find.descendant(
       of: find.widgetWithText(GlassTile, L10n.shiftClasses),
-      matching: find.byType(GlassSwitch),
+      matching: find.text(L10n.rest),
     );
-    await tester.tap(classSwitches.first);
+    await tester.tap(classSegments.first);
     await tester.pumpAndSettle();
 
-    // 时间条目整段消失 —— copyWith 清不掉可空字段，这里是直接构造的新班次
-    expect(find.text(L10n.start), findsNothing);
+    // 时间块整段消失 —— copyWith 清不掉可空字段，这里是直接构造的新班次
+    expect(
+        find.descendant(
+            of: find.widgetWithText(GlassTile, L10n.shiftClasses),
+            matching: find.text(L10n.start)),
+        findsNothing);
     expect(find.text('08:30 – 20:30'), findsNothing);
     // 周期里引用它的两行都变成「休息」
-    expect(find.text(L10n.rest), findsNWidgets(2));
+    expect(
+        find.descendant(
+            of: find.widgetWithText(GlassTile, L10n.cycleSection),
+            matching: find.text(L10n.rest)),
+        findsNWidgets(2));
   });
 
   testWidgets('周期长度与班组数是两个彼此独立的步进器', (tester) async {
@@ -515,7 +547,7 @@ void main() {
       _domain(anchor: DateTime.utc(2025, 6, 1), teamOffsets: const [0, 1, 2, 3]),
     );
     // 初始我这一组 = 0，顶部显示基准日
-    expect(_subtitleOf(tester, L10n.myCycleStart),
+    expect(_myCrewStartText(tester),
         L10n.yearMonthDay(DateTime.utc(2025, 6, 1)));
 
     // 展开班组设置，把第 3 组（下标 2）设为「我」
@@ -527,7 +559,7 @@ void main() {
 
     // 我这一组的起始日 = 基准日 − offsets[2] = 06-01 − 2 天 = 05-30
     final expected = L10n.yearMonthDay(DateTime.utc(2025, 5, 30));
-    expect(_subtitleOf(tester, L10n.myCycleStart), expected,
+    expect(_myCrewStartText(tester), expected,
         reason: '顶部必须读我这一组的起始日，而不是基准日');
     // 班组区里该组的「周期起始日」显示同一日期 → 两处一致（修前这里是 0 处）
     expect(find.text(expected), findsNWidgets(2));
@@ -553,8 +585,7 @@ void main() {
     const before = [0, 1, 2, 3];
 
     // 顶部选择器现在打开在我这一组的起始日（05-30），点 10 号 → 2025-05-10
-    await tester.tap(find.widgetWithText(ListTile, L10n.myCycleStart));
-    await tester.pumpAndSettle();
+    await _tapMyCrewStart(tester);
     await tester.tap(find.descendant(
       of: find.byType(BottomSheet),
       matching: find.text('10'),
@@ -636,14 +667,13 @@ void main() {
     expect(before.toSet().length, greaterThan(1), reason: '一片相同的班次测不出移位');
 
     // 起始日 06-01 → 06-02（基准日 +1 天）
-    await tester.tap(find.widgetWithText(ListTile, L10n.myCycleStart));
-    await tester.pumpAndSettle();
+    await _tapMyCrewStart(tester);
     await tester.tap(find.descendant(
       of: find.byType(BottomSheet),
       matching: find.text('2'),
     ));
     await tester.pumpAndSettle();
-    expect(_subtitleOf(tester, L10n.myCycleStart),
+    expect(_myCrewStartText(tester),
         L10n.yearMonthDay(DateTime.utc(2025, 6, 2)));
 
     final after = _cellLabels(tester);
@@ -694,7 +724,7 @@ void main() {
       (tester) async {
     final repo = await _pumpEditor(tester, _oneShift(_duty24));
 
-    await tester.tap(find.widgetWithText(ListTile, L10n.end));
+    await tester.tap(find.text(L10n.end));
     await tester.pumpAndSettle();
 
     // 小时滚轮必须停在钟面值 08，而不是越界的 32（越界时轮子会被夹到 23，
@@ -723,11 +753,11 @@ void main() {
       (tester) async {
     await _pumpEditor(tester, _oneShift(_duty24));
 
-    expect(_subtitleOf(tester, L10n.end), '${L10n.nextDay}08:00');
-    expect(_subtitleOf(tester, L10n.end), '次日08:00');
+    expect(_chipValueOf(tester, L10n.end), '${L10n.nextDay}08:00');
+    expect(_chipValueOf(tester, L10n.end), '次日08:00');
     // 同一屏的周期行也得说同一件事：08:00 – 次日08:00
     expect(find.text('08:00 – 次日08:00'), findsOneWidget);
-    expect(_subtitleOf(tester, L10n.start), '08:00');
+    expect(_chipValueOf(tester, L10n.start), '08:00');
   });
 
   testWidgets('中班（16:00–24:00）：显示 24:00，滚轮停在 00 且确认后仍是 1440',
@@ -735,10 +765,10 @@ void main() {
     final repo = await _pumpEditor(tester, _oneShift(_mid24));
 
     // 1440 与「次日 00:00」是同一时刻；这里与周期行、日历一致地写成 24:00
-    expect(_subtitleOf(tester, L10n.end), '24:00');
+    expect(_chipValueOf(tester, L10n.end), '24:00');
     expect(find.text('16:00 – 24:00'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ListTile, L10n.end));
+    await tester.tap(find.text(L10n.end));
     await tester.pumpAndSettle();
     final wheels = tester
         .widgetList<CupertinoPicker>(find.byType(CupertinoPicker))
@@ -766,9 +796,9 @@ void main() {
         endMinute: 8 * 60 + 30);
     final repo = await _pumpEditor(tester, _oneShift(night));
 
-    expect(_subtitleOf(tester, L10n.end), '次日08:30');
+    expect(_chipValueOf(tester, L10n.end), '次日08:30');
 
-    await tester.tap(find.widgetWithText(ListTile, L10n.end));
+    await tester.tap(find.text(L10n.end));
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.confirm));
     await tester.pumpAndSettle();
