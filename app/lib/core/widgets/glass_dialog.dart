@@ -72,7 +72,16 @@ class GlassDialog extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            content,
+            // 内容过高时滚动而不是溢出。上限取弹窗自己的预算减去标题行
+            // 与按钮行 —— `Dialog` 的 insetPadding 已被 LayoutBuilder 扣掉。
+            // 弹窗本来矮时不会因此被撑高（外层 Column 是 min）。
+            LayoutBuilder(
+              builder: (context, constraints) => ConstrainedBox(
+                constraints:
+                    BoxConstraints(maxHeight: constraints.maxHeight - 100),
+                child: SingleChildScrollView(child: content),
+              ),
+            ),
             if (actions.isNotEmpty) ...[
               const SizedBox(height: 16),
               Row(

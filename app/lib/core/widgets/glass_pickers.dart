@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
 import '../glass/glass.dart';
+import '../layout.dart';
 import '../l10n.dart';
 import 'glass_action_button.dart';
 
@@ -14,6 +15,9 @@ Future<TimeOfDay?> showGlassTimePicker(
   return showModalBottomSheet<TimeOfDay>(
     context: context,
     backgroundColor: Colors.transparent,
+    // 不开这个开关，`showModalBottomSheet` 会把弹层高度压到屏幕的 9/16 ——
+    // 横屏 420 高的屏上只有 236px，而下面的内容要 340px，必然溢出。
+    isScrollControlled: true,
     barrierColor: Colors.black26,
     builder: (context) => _GlassTimePickerSheet(initialTime: initialTime),
   );
@@ -66,57 +70,65 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
       margin: const EdgeInsets.all(12),
       borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                L10n.selectTime,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 180,
-                child: Row(
+        // 用弹层**自己的**预算：外层的 margin 与 SafeArea 已经被
+        // LayoutBuilder 扣掉了，再照 MediaQuery 自己算一遍容易漏项。
+        child: LayoutBuilder(
+          builder: (context, constraints) => Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  L10n.selectTime,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  // 106 = 内边距 28 + 标题 22 + 间距 12 + 按钮行 44；
+                  // 余下的都给滚轮，但不超过今天的 180，也不低于能滚的 96。
+                  // 高屏上必然取到 180，所以竖屏与既有测试结果不变。
+                  height: (constraints.maxHeight - 106).clamp(96.0, 180.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _wheel(
+                          itemCount: 24,
+                          initialItem: _hour,
+                          onChanged: (i) => _hour = i,
+                        ),
+                      ),
+                      const Text(':',
+                          style: TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.w700)),
+                      Expanded(
+                        child: _wheel(
+                          itemCount: 60,
+                          initialItem: _minute,
+                          onChanged: (i) => _minute = i,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: _wheel(
-                        itemCount: 24,
-                        initialItem: _hour,
-                        onChanged: (i) => _hour = i,
-                      ),
+                    GlassActionButton(
+                      onPressed: () => Navigator.pop(context),
+                      label: L10n.cancel,
                     ),
-                    const Text(':',
-                        style:
-                            TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                    Expanded(
-                      child: _wheel(
-                        itemCount: 60,
-                        initialItem: _minute,
-                        onChanged: (i) => _minute = i,
-                      ),
+                    GlassActionButton(
+                      variant: GlassActionVariant.primary,
+                      onPressed: () => Navigator.pop(
+                          context, TimeOfDay(hour: _hour, minute: _minute)),
+                      label: L10n.confirm,
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GlassActionButton(
-                    onPressed: () => Navigator.pop(context),
-                    label: L10n.cancel,
-                  ),
-                  GlassActionButton(
-                    variant: GlassActionVariant.primary,
-                    onPressed: () => Navigator.pop(
-                        context, TimeOfDay(hour: _hour, minute: _minute)),
-                    label: L10n.confirm,
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -171,6 +183,9 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    // 日期格按可用高度收缩；高屏上取到上限 40，与今天一致。
+    final rowH =
+        (AppLayout.of(context).availableHeight * 0.10).clamp(32.0, 40.0);
     final leading = DateTime(_month.year, _month.month, 1).weekday - 1;
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final selected = widget.initialDate;
@@ -191,7 +206,7 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
         child: GestureDetector(
           onTap: enabled ? () => Navigator.pop(context, date) : null,
           child: Container(
-            height: 40,
+            height: rowH,
             margin: const EdgeInsets.all(2),
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -276,7 +291,11 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
                 }),
               ),
               const SizedBox(height: 4),
-              ...rows,
+              // 日期格里没有滚轮，不存在手势争抢 —— 收缩到下限仍放不下时，
+              // 滚动比把最后一行裁掉好。表头与星期行留在滚动区外，始终可见。
+              Flexible(
+                child: SingleChildScrollView(child: Column(children: rows)),
+              ),
             ],
           ),
         ),
@@ -293,6 +312,8 @@ Future<DateTime?> showGlassMonthPicker(
   return showModalBottomSheet<DateTime>(
     context: context,
     backgroundColor: Colors.transparent,
+    // 与时间选择器同理：不开这个开关，弹层会被压到屏幕的 9/16。
+    isScrollControlled: true,
     barrierColor: Colors.black26,
     builder: (context) => _GlassMonthPickerSheet(initialMonth: initialMonth),
   );
@@ -323,90 +344,116 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
       margin: const EdgeInsets.all(12),
       borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                L10n.jumpToMonth,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              // 年份滚轮
-              SizedBox(
-                height: 120,
-                child: CupertinoPicker(
-                  scrollController: FixedExtentScrollController(
-                      initialItem: _year - _minYear),
-                  itemExtent: 40,
-                  onSelectedItemChanged: (i) =>
-                      setState(() => _year = _minYear + i),
-                  selectionOverlay: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(AppTokens.radiusM),
-                      border: Border.all(color: accent.withValues(alpha: 0.25)),
-                    ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // 年份滚轮与月份格按弹层预算收缩。高屏上必然取到上限，
+            // 因此竖屏结果与今天完全一致。
+            final yearH = (constraints.maxHeight * 0.28).clamp(72.0, 120.0);
+            final rowH = (constraints.maxHeight * 0.10).clamp(32.0, 40.0);
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    L10n.jumpToMonth,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700),
                   ),
-                  children: List.generate(_maxYear - _minYear + 1, (i) {
-                    return Center(
-                      child: Text(
-                        '${_minYear + i}',
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w600),
+                  const SizedBox(height: 8),
+                  // 年份滚轮
+                  SizedBox(
+                    height: yearH,
+                    child: CupertinoPicker(
+                      scrollController: FixedExtentScrollController(
+                          initialItem: _year - _minYear),
+                      itemExtent: 40,
+                      onSelectedItemChanged: (i) =>
+                          setState(() => _year = _minYear + i),
+                      selectionOverlay: Container(
+                        decoration: BoxDecoration(
+                          borderRadius:
+                              BorderRadius.circular(AppTokens.radiusM),
+                          border:
+                              Border.all(color: accent.withValues(alpha: 0.25)),
+                        ),
                       ),
-                    );
-                  }),
-                ),
-              ),
-              const SizedBox(height: 12),
-              // 4×3 月份网格
-              Column(
-                children: List.generate(4, (r) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: List.generate(3, (c) {
-                        final month = r * 3 + c + 1;
-                        final isCurrent = month == currentMonth;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () =>
-                                Navigator.pop(context, DateTime(_year, month, 1)),
-                            child: Container(
-                              height: 40,
-                              margin: const EdgeInsets.symmetric(horizontal: 3),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: isCurrent ? accent : Colors.transparent,
-                                borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                                border: isCurrent
-                                    ? null
-                                    : Border.all(
-                                        color: Colors.white.withValues(
-                                            alpha: isDark ? 0.12 : 0.6),
-                                      ),
-                              ),
-                              child: Text(
-                                L10n.monthShort(month),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: isCurrent
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: isCurrent ? Colors.white : onSurface,
-                                ),
-                              ),
-                            ),
+                      children: List.generate(_maxYear - _minYear + 1, (i) {
+                        return Center(
+                          child: Text(
+                            '${_minYear + i}',
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w600),
                           ),
                         );
                       }),
                     ),
-                  );
-                }),
+                  ),
+                  const SizedBox(height: 12),
+                  // 4×3 月份网格。
+                  //
+                  // 套一层 Flexible + 滚动是**结构上的兜底**：靠系数估算高度
+                  // 容易被标题行高这类固定项顶破（实测差 17px），而网格里
+                  // 没有滚轮、不抢手势，滚动是安全的。预算再紧也只是滚动。
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: List.generate(4, (r) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: List.generate(3, (c) {
+                                final month = r * 3 + c + 1;
+                                final isCurrent = month == currentMonth;
+                                return Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => Navigator.pop(
+                                        context, DateTime(_year, month, 1)),
+                                    child: Container(
+                                      height: rowH,
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 3),
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: isCurrent
+                                            ? accent
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(
+                                            AppTokens.radiusS),
+                                        border: isCurrent
+                                            ? null
+                                            : Border.all(
+                                                color: Colors.white.withValues(
+                                                    alpha:
+                                                        isDark ? 0.12 : 0.6),
+                                              ),
+                                      ),
+                                      child: Text(
+                                        L10n.monthShort(month),
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: isCurrent
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: isCurrent
+                                              ? Colors.white
+                                              : onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
