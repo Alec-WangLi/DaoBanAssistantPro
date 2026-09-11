@@ -586,6 +586,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     '${date.day}',
                     style: TextStyle(
                       fontSize: 18,
+                      // 显式压紧行盒：M3 默认行高 1.5，三行文字的行盒加起来
+                      // 比格子可用高度多出几个像素，真机上每个格子都会
+                      // BOTTOM OVERFLOWED（content 被裁）。
+                      height: 1.15,
                       fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
@@ -600,6 +604,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
+                        height: 1.15,
                         fontWeight: FontWeight.w700,
                         color: Color(shift.color),
                       ),
@@ -624,7 +629,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: lunarColor),
+                      style:
+                          TextStyle(fontSize: 11, height: 1.15, color: lunarColor),
                     ),
                   ),
                 ],
