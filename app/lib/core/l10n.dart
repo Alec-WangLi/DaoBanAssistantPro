@@ -274,8 +274,12 @@ class L10n {
       };
   static String get customPatternHint => t('从默认四班两倒开始，边看边改', 'Start from the default and edit as you go');
   static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');
-  static String get crewsOnDuty => t('每天在岗', 'on duty');
-  static String get crewUnit => t('个班组', 'crews');
+  /// 模板卡片底部那行「每天在岗 N 个班组」。
+  ///
+  /// 中英语序不同（中文把数量放中间、英文放句首），整串交给 [t] ——
+  /// 拿「每天在岗」+ 数字 + 「个班组」拼出来的英文是「on duty 2 crews」。
+  static String crewsOnDutyCount(int n) =>
+      isEn ? '$n crews on duty' : '每天在岗 $n 个班组';
 
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');

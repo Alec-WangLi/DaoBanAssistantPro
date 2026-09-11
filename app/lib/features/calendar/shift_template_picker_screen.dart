@@ -155,8 +155,7 @@ class _ShiftTemplatePickerScreenState
                       if (t.teamCount > 1) ...[
                         const SizedBox(height: 4),
                         Text(
-                          '${L10n.crewsOnDuty} ${t.workingTeamsPerDay} '
-                          '${L10n.crewUnit}',
+                          L10n.crewsOnDutyCount(t.workingTeamsPerDay),
                           style: TextStyle(fontSize: 11, color: muted),
                         ),
                       ],

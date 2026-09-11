@@ -413,4 +413,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(findTemplate('standard_week')!.title), findsOneWidget);
   });
+
+  test('模板卡片的在岗组数文案随语序本地化', () {
+    // 拼接式写法会得到英文语序错误的「on duty 2 crews」。
+    final previous = L10n.locale;
+    addTearDown(() => L10n.locale = previous);
+
+    L10n.locale = 'en';
+    expect(L10n.crewsOnDutyCount(2), '2 crews on duty');
+    expect(hasCjk(L10n.crewsOnDutyCount(2)), isFalse);
+
+    L10n.locale = 'zh';
+    expect(L10n.crewsOnDutyCount(2), '每天在岗 2 个班组');
+  });
 }
