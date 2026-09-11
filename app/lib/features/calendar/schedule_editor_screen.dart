@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
+import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_choice_chip.dart';
@@ -236,8 +237,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           : !_loaded
               ? const Center(child: CircularProgressIndicator())
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
-                      AppTokens.spaceSm, AppTokens.spaceLg, 100),
+                  padding: EdgeInsets.fromLTRB(
+                      AppTokens.spaceLg,
+                      AppTokens.spaceSm,
+                      AppTokens.spaceLg,
+                      // 底部要给悬浮胶囊让位；短屏胶囊更矮，留白同步收。
+                      AppLayout.of(context).isShort ? 56 : 100),
                   children: [
                     _previewStrip(context),
                     _headerCard(context),

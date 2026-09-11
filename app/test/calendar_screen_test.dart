@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -48,10 +49,10 @@ List<String> _chipTexts(WidgetTester tester) => tester
 /// `08:00 – 08:00 (next day)` 在测试里比真机宽得多，窄屏会被那个等宽字体
 /// 挤出假溢出。
 Future<AppDatabase> _pumpCalendar(WidgetTester tester, String templateId,
-    {double width = 420}) async {
+    {double width = 420, double height = 1600}) async {
   final template = _template(templateId);
 
-  tester.view.physicalSize = Size(width, 1600);
+  tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -179,7 +180,7 @@ void main() {
     );
     expect(landscape, lessThan(cellW / 0.78),
         reason: '横屏必须进入压缩分支，不能仍取按宽度算出来的 160');
-    expect(landscape, greaterThanOrEqualTo(56),
+    expect(landscape, greaterThanOrEqualTo(80),
         reason: '压缩不得低于可读下限，否则要裁字');
   });
 
@@ -195,6 +196,54 @@ void main() {
       weekdayH: 26,
     );
     expect(portrait, closeTo(cellW / 0.62, 0.01));
+  });
+
+  // 用信息卡自己的日期文本定位。不要用 L10n.today —— 「今天」在顶栏按钮和
+  // 信息卡的「今天」徽章各出现一次，find.text 会一次命中两个。
+  Finder cardDate() =>
+      find.text(L10n.monthDayWeekday(dateOnly(DateTime.now())));
+
+  testWidgets('宽屏：日历改左右分栏，信息卡在右不在下', (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift', width: 1280);
+    expect(tester.getTopLeft(cardDate()).dx, greaterThan(640),
+        reason: '宽屏下信息卡应当被排在右栏，而不是底栏');
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('竖屏：仍是单栏，信息卡在下方', (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+    expect(tester.getTopLeft(cardDate()).dx, lessThan(420));
+    expect(tester.getTopLeft(cardDate()).dy, greaterThan(600),
+        reason: '竖屏下信息卡在底部区域');
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('短屏：信息卡压成紧凑版，把高度让给网格', (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+    final portraitH = tester.getSize(find.byType(GlassTile).last).height;
+    await _disposeCalendar(tester);
+
+    await _pumpCalendar(tester, 'four_crew_three_shift',
+        width: 420, height: 420);
+    final shortH = tester.getSize(find.byType(GlassTile).last).height;
+    await _disposeCalendar(tester);
+
+    expect(shortH, lessThan(portraitH),
+        reason: '短屏下信息卡应当比竖屏矮，把高度让给网格');
+  });
+
+  testWidgets('窄屏：顶栏「今天」收成纯图标钮', (tester) async {
+    // 「今天」这两个字在顶栏按钮与信息卡的「今天」徽章里各有一处，
+    // 所以数总数：宽屏 2 处，窄屏只剩徽章那 1 处。
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+    expect(find.text(L10n.today), findsNWidgets(2));
+    await _disposeCalendar(tester);
+
+    await _pumpCalendar(tester, 'four_crew_three_shift', width: 320);
+    expect(find.text(L10n.today), findsOneWidget,
+        reason: '320 宽下顶栏那两个该收起来，只留下信息卡的徽章');
+    expect(find.byIcon(Icons.today_outlined), findsWidgets);
+    await _disposeCalendar(tester);
   });
 
   testWidgets('单班组排班：不渲染「其他班组」那一段', (tester) async {

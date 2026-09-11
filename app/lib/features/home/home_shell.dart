@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
+import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/motion.dart';
 import '../../core/update_checker.dart';
@@ -171,6 +172,11 @@ class _GlassNavBarState extends State<_GlassNavBar> {
   static const _innerPad = 6.0;
   static const _capsuleHeight = 64.0;
 
+  /// 短屏（可用高 < 480）用的紧凑尺寸：横屏下 64 高的胶囊约占可用高度的
+  /// 六分之一，而它悬浮在内容之上，太占地方。
+  static const _capsuleHeightShort = 52.0;
+  static const _outerPadShort = 16.0;
+
   bool _pressed = false;
   bool _dragging = false; // 是否处于拖动中（区别于点按，取消时据此决定是否回退）
   int _committedIndex = 0; // 已提交（正在显示）的功能区
@@ -268,6 +274,9 @@ class _GlassNavBarState extends State<_GlassNavBar> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isShort = AppLayout.of(context).isShort;
+    final capsuleH = isShort ? _capsuleHeightShort : _capsuleHeight;
+    final outerPad = isShort ? _outerPadShort : _outerPad;
     final activeColor = Theme.of(context).colorScheme.primary;
     final inactiveColor = Theme.of(context)
         .colorScheme
@@ -285,15 +294,15 @@ class _GlassNavBarState extends State<_GlassNavBar> {
         left: false,
         right: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _outerPad),
+          padding: EdgeInsets.symmetric(horizontal: outerPad),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(_capsuleHeight / 2),
+          borderRadius: BorderRadius.circular(capsuleH / 2),
           child: GlassBlur(
             sigma: AppTokens.blurPanel,
             child: Container(
-              height: _capsuleHeight,
+              height: capsuleH,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(_capsuleHeight / 2),
+                borderRadius: BorderRadius.circular(capsuleH / 2),
                 border: Border.all(color: AppTokens.navBorder(isDark)),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -367,7 +376,7 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                                 children: [
                                   Icon(
                                     items[i].$1,
-                                    size: 22,
+                                    size: isShort ? 20 : 22,
                                     color: selected ? fg : inactiveColor,
                                   ),
                                   const SizedBox(height: 2),

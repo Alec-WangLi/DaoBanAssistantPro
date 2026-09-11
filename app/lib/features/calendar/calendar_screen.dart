@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
+import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -116,24 +117,49 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: [
-            _header(context),
-            Expanded(
-              // 网格区高度要先量出来，才能决定格子长多高（见 _buildGrid）。
-              child: LayoutBuilder(
-                builder: (context, c) => scheduleAsync.isLoading && schedule == null
-                    ? const Center(child: CircularProgressIndicator())
-                    // 网格可滚动：格子保持全尺寸，小屏 6 行放不下时滚动而非被裁切，
-                    // 避免底部行与信息卡重叠。
-                    : SingleChildScrollView(
-                        child: _buildGrid(context, schedule, c.maxHeight),
-                      ),
-              ),
+        child: Builder(builder: (context) {
+          final layout = AppLayout.of(context);
+          final gridArea = Expanded(
+            // 网格区高度要先量出来，才能决定格子长多高（见 _buildGrid）。
+            child: LayoutBuilder(
+              builder: (context, c) => scheduleAsync.isLoading && schedule == null
+                  ? const Center(child: CircularProgressIndicator())
+                  // 网格可滚动：格子保持全尺寸，小屏 6 行放不下时滚动而非被裁切，
+                  // 避免底部行与信息卡重叠。
+                  : SingleChildScrollView(
+                      child: _buildGrid(context, schedule, c.maxHeight),
+                    ),
             ),
-            _infoCard(context, schedule),
-          ],
-        ),
+          );
+
+          return Column(
+            children: [
+              _header(context),
+              // 宽屏左右分栏：网格与信息卡并排，网格拿到的可用高度从
+              // 「减去底部信息卡」变成「整屏高度」，格子不用再被压扁。
+              if (layout.isWide)
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      gridArea,
+                      const SizedBox(width: AppTokens.spaceMd),
+                      SizedBox(
+                        width: 300,
+                        child: SingleChildScrollView(
+                          child: _infoCard(context, schedule, inSidePane: true),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else ...[
+                gridArea,
+                _infoCard(context, schedule, compact: layout.isShort),
+              ],
+            ],
+          );
+        }),
       ),
     );
   }
@@ -180,15 +206,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   size: 18,
                   color: Colors.white,
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  L10n.today,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withValues(alpha: 0.98),
+                // 320 宽下「今天」两个字会挤掉年月的显示宽度，窄屏只留图标。
+                if (!AppLayout.of(context).isNarrow) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    L10n.today,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.98),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -442,6 +471,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           availHeight: availHeight,
           weekRows: _weekRows,
           weekdayH: _weekdayH,
+          // 窄屏 / 短屏上格子可以更「瘦高」一些：格子本来就窄，再按 0.62
+          // 卡住高度就装不下三行字了。竖屏不传这个参数，用的还是 0.62。
+          aspectMin: (AppLayout.of(context).isNarrow ||
+                  AppLayout.of(context).isShort)
+              ? 0.46
+              : _cellAspectMin,
         );
         final selectedRect = _selectedRect(cellW, cellH);
         final showBlock = _dragActive || selectedRect != null;
@@ -732,7 +767,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   /// 底部玻璃信息卡（完整分行）。
-  Widget _infoCard(BuildContext context, ShiftSchedule? schedule) {
+  Widget _infoCard(BuildContext context, ShiftSchedule? schedule,
+      {bool inSidePane = false, bool compact = false}) {
     final lunar = lunarOf(_selected);
     final shift = schedule?.shiftOn(_selected);
     final isToday = _selected == dateOnly(DateTime.now());
@@ -745,11 +781,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         : Theme.of(context).colorScheme.primary;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+      // 底栏时要给悬浮胶囊让出高度（竖屏 120，短屏 76）；右栏时胶囊在
+      // 屏幕底部、与这一栏无关，只需要常规留白。
+      padding: inSidePane
+          ? const EdgeInsets.fromLTRB(0, 8, 16, 16)
+          : EdgeInsets.fromLTRB(16, 8, 16, compact ? 76 : 120),
       child: Stack(
         children: [
           GlassTile(
-            padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
+            padding: EdgeInsets.fromLTRB(
+                22, compact ? 10 : 18, 18, compact ? 10 : 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -783,10 +824,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ],
               ],
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: compact ? 2 : 6),
             if (lunar.isLegalHoliday) ...[
               _holidayBadge(context, lunar.legalHolidayName),
-              const SizedBox(height: 6),
+              SizedBox(height: compact ? 2 : 6),
             ],
             Text(
               lunar.fullDescription,
@@ -795,7 +836,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: compact ? 6 : 12),
             if (shift != null)
               Row(
                 children: [
@@ -806,21 +847,31 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         color: Color(shift.color), shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    shift.name,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppTokens.inkFor(Color(shift.color),
-                          Theme.of(context).colorScheme.surface),
+                  Flexible(
+                    child: Text(
+                      shift.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppTokens.inkFor(Color(shift.color),
+                            Theme.of(context).colorScheme.surface),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
+                  // 可收缩 + 省略号：宽屏下这张卡被放进 300 宽的侧栏，
+                  // 「20:30 – 次日08:30」这类长串会把整行撑破。
                   if (shift.startMinute != null && shift.endMinute != null)
-                    Text(
-                      _timeRange(shift),
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w500),
+                    Flexible(
+                      child: Text(
+                        _timeRange(shift),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
                     ),
                 ],
               )
@@ -836,7 +887,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             else
               Text(L10n.noSchedule,
                   style: TextStyle(fontSize: 13, color: muted)),
-            const SizedBox(height: 8),
+            SizedBox(height: compact ? 4 : 8),
             if (shift != null)
               Text(
                 _alarmText(shift),
@@ -936,8 +987,12 @@ const double _cellAspect = 0.78;
 const double _cellAspectMin = 0.62;
 
 /// 格子高的下限：日期 18×1.15 + 班次 12×1.15 + 农历 11×1.15 + 两处间距
-/// + 格子内缩 ≈ 56。再压就要裁字了。
-const double _minCellH = 56;
+/// + 格子内缩。按字形估算只有 56，但实测（小窗 420×420，测试字体每字占满
+/// 一个字身）内容要 75px 才不溢出，所以留到 80。
+///
+/// 它只在**空间不足**时生效：竖屏空间富余、走的是上面「拉高」那条分支，
+/// 不经过这里 —— 所以抬高它不会动到竖屏的观感。
+const double _minCellH = 80;
 
 /// 日历格子高度：**宽高共同决定**。
 ///
@@ -956,10 +1011,11 @@ double calendarCellHeight({
   required double availHeight,
   required int weekRows,
   required double weekdayH,
+  double aspectMin = _cellAspectMin,
 }) {
   final naturalCellH = cellW / _cellAspect;
   final fillCellH = (availHeight - weekdayH) / weekRows;
   return fillCellH >= naturalCellH
-      ? math.min(fillCellH, cellW / _cellAspectMin)
+      ? math.min(fillCellH, cellW / aspectMin)
       : math.max(fillCellH, _minCellH);
 }
