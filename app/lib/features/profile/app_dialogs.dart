@@ -40,7 +40,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.3\n'
+const String _changelogZh = 'v0.6.4\n'
+    '· 适配手机横屏与小窗：时间 / 日期 / 月份三个选择弹层此前在横屏下会溢出，现在按可用高度自适应\n'
+    '· 日历在横屏与宽屏下改为左右分栏：左边日期网格、右边当天信息，格子不再被压成一屏只看得到一行\n'
+    '· 小窗下信息卡压成一行（哪天 · 什么班 · 几点到几点），把高度让给日期网格\n'
+    '· 悬浮导航胶囊在矮屏下自动收紧，各页底部留白同步收窄\n'
+    '· 平板与车机等宽屏设备：内容限宽居中，不再横向拉满整屏\n'
+    '· 窄屏下编辑器卡片内边距收紧，字号不缩\n\n'
+    'v0.6.3\n'
     '· 排班编辑界面的字号与全 App 统一：此前班次名称与简称输入框被单独压小了一号，同一张卡片里的方案名称输入框却是一号大\n'
     '· 周期设置改成**行内直接点选班次**：每个可选班次平铺成一个彩色小块，点一下就换，不再弹出下拉菜单\n'
     '· 选中的班次块用班次色实心填充，文字颜色按底色自动取白或黑，浅色班次上的字不再糊得读不出来\n'
@@ -80,13 +87,16 @@ const String _changelogZh = 'v0.6.3\n'
     'v0.4.7\n'
     '· 底部胶囊更通透、内容无遮挡穿过：去掉浮层四周的空背景「蒙版」\n\n'
     'v0.4.6\n'
-    '· 底部导航胶囊改回半透明磨砂玻璃：内容滑过若隐若现，去掉投影和左上角高光\n\n'
-    'v0.4.5\n'
-    '· 底部导航改为悬浮胶囊：去掉磨砂蒙版，内容滑动时清晰分离、从胶囊下方穿过\n'
-    '· 移除随手机倾斜流动的动态光线（实测观感不佳），玻璃恢复静态高光\n'
-    '· 应用图标重绘：中性底色 + 主色渐变玻璃符号，统一设计语言\n\n';
+    '· 底部导航胶囊改回半透明磨砂玻璃：内容滑过若隐若现，去掉投影和左上角高光\n\n';
 
-const String _changelogEn = 'v0.6.3\n'
+const String _changelogEn = 'v0.6.4\n'
+    '· Phone landscape and small windows are now usable: the time, date and month pickers adapt to the available height instead of overflowing\n'
+    '· On landscape and wide screens the calendar becomes two panes — month grid on the left, day details on the right — so day cells are no longer squashed\n'
+    '· In a small window the day card collapses to a single line (date · shift · hours), giving the height back to the grid\n'
+    '· The floating nav capsule shrinks on short screens, and pages reserve less space beneath it\n'
+    '· On tablets and car head units the content is centred with a maximum width instead of stretching across the screen\n'
+    '· Narrow screens get tighter editor paddings (text sizes unchanged)\n\n'
+    'v0.6.3\n'
     '· Schedule editor typography now matches the rest of the app (input fields were a size smaller — two fields on the same card did not even match each other)\n'
     '· The cycle section now lets you pick a shift inline: every option is a coloured chip you tap, with no dropdown to open\n'
     '· A selected chip is filled with its shift colour, and its text is picked as white or black for readability — pale shifts are no longer washed out\n'
@@ -126,11 +136,7 @@ const String _changelogEn = 'v0.6.3\n'
     'v0.4.7\n'
     '· More translucent bottom capsule, content flows underneath unobstructed — removed the empty “mask” band around it\n\n'
     'v0.4.6\n'
-    '· Bottom nav capsule back to translucent frosted glass (content shows through while scrolling), removed its shadow and the top-left highlight\n\n'
-    'v0.4.5\n'
-    '· Floating bottom nav capsule: frosted-mask look gone, content cleanly passes under it while scrolling\n'
-    '· Removed the tilt-reactive dynamic light (felt off in practice); glass highlight back to static\n'
-    '· Redesigned the app icon: neutral background with an accent-gradient glass mark, matching the design language\n\n';
+    '· Bottom nav capsule back to translucent frosted glass (content shows through while scrolling), removed its shadow and the top-left highlight\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
