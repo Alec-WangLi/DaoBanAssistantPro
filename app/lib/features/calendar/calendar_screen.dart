@@ -27,10 +27,6 @@ class CalendarScreen extends ConsumerStatefulWidget {
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   static const _hPad = 12.0; // 网格左右留白
   static const _weekdayH = 26.0; // 周标题行高
-  static const _aspect = 0.78; // 越小格子越高（0.78：格子加高，小屏 6 行放不下时网格自动滚动）
-  // 格子长高的上限（对应 _aspect 的下限）。空间富余时让格子吃到富余高度，但
-  // 不无限拉长——再瘦下去格子就不像日期格、像竖条了。
-  static const _aspectMin = 0.62;
   static const _cellInset = 2.0; // 格子/玻璃块统一内缩
 
   late DateTime _month; // 显示月的 1 号
@@ -441,14 +437,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cellW = (constraints.maxWidth - _hPad * 2) / 7;
-        final naturalCellH = cellW / _aspect;
-        // 空间富余时让格子纵向长高，把高度吃掉；富余多少取决于当月几行、屏幕
-        // 多高，所以只能在这里算，不能写死。放不下（6 行小屏）时低于自然高度，
-        // 这时保持原比例、交给外层滚动。
-        final fillCellH = (availHeight - _weekdayH) / _weekRows;
-        final cellH = fillCellH > naturalCellH
-            ? math.min(fillCellH, cellW / _aspectMin)
-            : naturalCellH;
+        final cellH = calendarCellHeight(
+          cellW: cellW,
+          availHeight: availHeight,
+          weekRows: _weekRows,
+          weekdayH: _weekdayH,
+        );
         final selectedRect = _selectedRect(cellW, cellH);
         final showBlock = _dragActive || selectedRect != null;
         final blockLeft = _dragActive
@@ -935,4 +929,37 @@ String _alarmText(ShiftClass t) {
   if (t.isRest) return L10n.restNoAlarm;
   if (!t.alarmEnabled || t.alarmMinute == null) return L10n.alarmOff;
   return L10n.alarmAt(formatClock(t.alarmMinute!));
+}
+
+// 格子高宽比：0.78 = 自然比例，0.62 = 「不许再瘦」的下限比例（越小格子越高）。
+const double _cellAspect = 0.78;
+const double _cellAspectMin = 0.62;
+
+/// 格子高的下限：日期 18×1.15 + 班次 12×1.15 + 农历 11×1.15 + 两处间距
+/// + 格子内缩 ≈ 56。再压就要裁字了。
+const double _minCellH = 56;
+
+/// 日历格子高度：**宽高共同决定**。
+///
+/// 抽成顶层纯函数是为了能直接断言「横屏进入压缩分支」——
+/// `SingleChildScrollView` 的尺寸是它的视口（等于可用高度），不是内容高度，
+/// 拿它测不出压缩。
+///
+/// 空间富余时拉高，但不超过 [_cellAspectMin] 那道「不许再瘦」的比例；
+/// 空间不足时**压缩到够用**，但不低于可读下限。
+///
+/// 原来空间不足时直接取 `cellW / _cellAspect`（只按宽度算）：横屏下 cellW 大
+/// → 格子高 160 → 一个月六行要 960px，一屏只看得到一行多。那道「不许再瘦」
+/// 的下限只在富余时生效、不足时反而没有任何压缩通道，逻辑正好反了。
+double calendarCellHeight({
+  required double cellW,
+  required double availHeight,
+  required int weekRows,
+  required double weekdayH,
+}) {
+  final naturalCellH = cellW / _cellAspect;
+  final fillCellH = (availHeight - weekdayH) / weekRows;
+  return fillCellH >= naturalCellH
+      ? math.min(fillCellH, cellW / _cellAspectMin)
+      : math.max(fillCellH, _minCellH);
 }

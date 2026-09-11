@@ -167,6 +167,36 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  test('横屏：格子高度不再只按宽度算', () {
+    // 起因：`cellH = cellW / 0.78` 只按宽度算。横屏 cellW ≈ 125 → cellH ≈ 160，
+    // 一个月六行要 960px，一屏只看得到一行多。
+    const cellW = 125.0; // (900 − 24) / 7
+    final landscape = calendarCellHeight(
+      cellW: cellW,
+      availHeight: 244, // 横屏扣掉顶栏与信息卡之后
+      weekRows: 6,
+      weekdayH: 26,
+    );
+    expect(landscape, lessThan(cellW / 0.78),
+        reason: '横屏必须进入压缩分支，不能仍取按宽度算出来的 160');
+    expect(landscape, greaterThanOrEqualTo(56),
+        reason: '压缩不得低于可读下限，否则要裁字');
+  });
+
+  test('竖屏：格子高度与旧公式完全等价', () {
+    // 竖屏空间富余，走的还是原来那条「拉高」分支 —— 逐像素不变。
+    // fillCellH = (600−26)/5 = 114.8，超过 naturalCellH(72.6)，于是取
+    // min(fillCellH, cellW/0.62) = 91.3 —— 与旧代码同一分支、同一算式。
+    const cellW = 56.6; // (420 − 24) / 7
+    final portrait = calendarCellHeight(
+      cellW: cellW,
+      availHeight: 600,
+      weekRows: 5,
+      weekdayH: 26,
+    );
+    expect(portrait, closeTo(cellW / 0.62, 0.01));
+  });
+
   testWidgets('单班组排班：不渲染「其他班组」那一段', (tester) async {
     await _pumpCalendar(tester, 'standard_week');
 
