@@ -39,6 +39,10 @@ List<String> _chipTexts(WidgetTester tester) => tester
 /// classes/cycle/班组数/偏移，班组名由创建路径按 teamCount 给满
 /// （`L10n.defaultTeamNames`）—— 库出口的补位只是防御性兜底。
 ///
+/// **注意**：`template.classes` 的班次名按 `L10n.locale` 生成，而这里是先
+/// 落库再渲染。所以任何改动语言的用例都必须自己还原，否则漏出去的语言会
+/// 让下一个用例存下另一种语言的班次名（英文名更长，可能把卡片挤溢出）。
+///
 /// [width] 是逻辑宽度。默认 420（窄屏手机），色块换行的场景用它；
 /// 时间串的场景要给宽一点：测试字体每个字符都占满一个字身，英文的
 /// `08:00 – 08:00 (next day)` 在测试里比真机宽得多，窄屏会被那个等宽字体
@@ -142,6 +146,12 @@ void main() {
 
   testWidgets('上 24 休 48 英文界面：时间用 (next day) 且不露出中文',
       (tester) async {
+    // 本用例靠「App 自己从设置里读出 en」来切语言，因此必须自己还原 ——
+    // L10n.locale 是全局静态量，泄漏到下个用例会让那边的 saveSchedule
+    // 存下英文班次名（模板的班次名按当前语言生成），进而把信息卡挤溢出。
+    final prevLocale = L10n.locale;
+    addTearDown(() => L10n.locale = prevLocale);
+
     SharedPreferences.setMockInitialValues({'language': 'en'});
     await _pumpCalendar(tester, 'duty_24_48', width: 640);
 

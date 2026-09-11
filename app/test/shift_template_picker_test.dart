@@ -12,6 +12,8 @@ import 'package:shiftassistantpro/features/calendar/schedule_management_screen.d
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+import 'support/cjk.dart';
+
 /// 记录是否有人调过 saveSchedule —— 用来验证「放弃选择」不会落库，
 /// 并记下创建路径传下来的班组名。
 class _RecordingRepository extends AppRepository {
@@ -20,6 +22,8 @@ class _RecordingRepository extends AppRepository {
   int saveCalls = 0;
   int lastTeamCount = 0;
   List<String> lastTeamNames = const [];
+  String lastScheduleName = '';
+  List<ShiftClass> lastClasses = const [];
 
   @override
   Future<int> saveSchedule({
@@ -37,6 +41,8 @@ class _RecordingRepository extends AppRepository {
     saveCalls++;
     lastTeamCount = teamCount;
     lastTeamNames = List.of(teamNames);
+    lastScheduleName = name;
+    lastClasses = List.of(classes);
     return 1;
   }
 }
@@ -99,7 +105,7 @@ void main() {
     expect(find.text(target.title), findsOneWidget);
     // 不相关的卡片被过滤掉。
     expect(find.text(shiftTemplates.first.title), findsNothing);
-    expect(find.text('DuPont · 28 天周期'), findsNothing);
+    expect(find.text(findTemplate('dupont')!.subtitle), findsNothing);
     // 「我自己排」始终在。
     expect(find.text(L10n.customPattern), findsOneWidget);
   });
@@ -279,6 +285,54 @@ void main() {
         expect(L10n.templateGroup(key).trim(), isNotEmpty,
             reason: '分组键「$key」在 $locale 下显示名为空');
       }
+    }
+  });
+
+  testWidgets('英文界面：从模板新建的方案名与班次名都不落中文进库', (tester) async {
+    // 本规格最初那个用户可见症状：英文用户从模板建完方案，
+    // 「排班管理」里躺着一条中文名，日历格子整月是汉字。
+    final prev = L10n.locale;
+    addTearDown(() => L10n.locale = prev);
+    L10n.locale = 'en';
+
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final repo = _RecordingRepository(db);
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appRepositoryProvider.overrideWithValue(repo)],
+      child: MaterialApp(
+        home: Consumer(
+          builder: (context, ref, _) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => createScheduleFromTemplatePicker(context, ref,
+                    makeCurrent: false),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final dupont = findTemplate('dupont')!;
+    await tester.enterText(find.byType(TextField), 'dupont');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(dupont.title));
+    await tester.pumpAndSettle();
+
+    expect(repo.saveCalls, 1);
+    expect(repo.lastScheduleName, dupont.subtitle);
+    expect(hasCjk(repo.lastScheduleName), isFalse,
+        reason: '方案名落库时含中文：${repo.lastScheduleName}');
+    expect(repo.lastClasses, isNotEmpty);
+    for (final c in repo.lastClasses) {
+      expect(hasCjk(c.name), isFalse, reason: '班次名落库时含中文：${c.name}');
+      expect(hasCjk(c.abbr!), isFalse, reason: '简称落库时含中文：${c.abbr}');
     }
   });
 }

@@ -1,5 +1,58 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
+
+import 'support/cjk.dart';
+
+/// 中文文案基线：重构前的实际取值，逐条抄自源码。
+///
+/// 模板双层化会重排数据，但用户看到的中文一个字都不该变；这张表是
+/// 唯一能证明这件事的东西 —— 结构字段由「每个模板结构自洽」那条守着。
+const _zhBaseline = <String, (String, String)>{
+  'day_night_rest_rest': ('上一天白班、一天夜班，然后休两天', '白夜休休 · 四班两倒'),
+  'white_white_night_night_rest_rest': ('白班两天、夜班两天，然后休两天', '白白夜夜休休 · 三班两倒'),
+  'white_white_rest_rest_night_night_rest_rest':
+      ('上两天白班休两天，再上两天夜班休两天', '白白休休夜夜休休'),
+  'two_shift_weekly': ('白班、夜班各上一整周，每周倒一次', '上 12 休 12 · 两班倒'),
+  'dupont': ('四夜三休、三白一休、三夜三休、四白，再连休七天', 'DuPont · 28 天周期'),
+  'four_crew_three_shift': ('早班两天、中班两天、夜班两天，然后休两天', '四班三倒 · 四班三运转'),
+  'five_crew_three_shift': ('早班、中班、夜班各一天，然后休两天', '五班三倒'),
+  'six_crew_three_shift': ('上一天班休两天，早中夜轮着来', '六班三倒'),
+  'five_crew_four_shift': ('早中晚夜各一天，然后休一天', '五班四倒'),
+  'six_crew_four_shift': ('早中晚夜各一天，然后休两天', '六班四倒'),
+  'duty_24_24': ('上 24 小时，休 24 小时', '上 24 休 24'),
+  'duty_24_48': ('上 24 小时，休 48 小时', '上 24 休 48'),
+  'duty_24_72': ('上 24 小时，休 72 小时', '上 24 休 72'),
+  'standard_week': ('周一到周五上班，周末休息', '长白班 · 双休'),
+  'big_small_week': ('这周休一天，下周休两天', '大小周'),
+  'work_1_rest_1': ('上一天休一天', '做一休一'),
+  'work_2_rest_2': ('上两天休两天', '做二休二'),
+  'work_4_rest_2': ('上四天休两天', '做四休二'),
+  'work_6_rest_1': ('上六天休一天', '做六休一'),
+};
+
+/// 中文班次名与简称基线：按模板 id → 「角色名/简称」序列（与 classes 同序）。
+const _zhClassBaseline = <String, List<String>>{
+  'day_night_rest_rest': ['白班/白', '夜班/夜', '休班/休'],
+  'white_white_night_night_rest_rest': ['白班/白', '夜班/夜', '休班/休'],
+  'white_white_rest_rest_night_night_rest_rest': ['白班/白', '夜班/夜', '休班/休'],
+  'two_shift_weekly': ['白班/白', '夜班/夜'],
+  'dupont': ['白班/白', '夜班/夜', '休班/休'],
+  'four_crew_three_shift': ['早班/早', '中班/中', '夜班/夜', '休班/休'],
+  'five_crew_three_shift': ['早班/早', '中班/中', '夜班/夜', '休班/休'],
+  'six_crew_three_shift': ['早班/早', '中班/中', '夜班/夜', '休班/休'],
+  'five_crew_four_shift': ['早班/早', '中班/中', '晚班/晚', '夜班/夜', '休班/休'],
+  'six_crew_four_shift': ['早班/早', '中班/中', '晚班/晚', '夜班/夜', '休班/休'],
+  'duty_24_24': ['值班/值', '休息/休'],
+  'duty_24_48': ['值班/值', '休息/休'],
+  'duty_24_72': ['值班/值', '休息/休'],
+  'standard_week': ['白班/白', '休息/休'],
+  'big_small_week': ['白班/白', '休息/休'],
+  'work_1_rest_1': ['白班/白', '休班/休'],
+  'work_2_rest_2': ['白班/白', '休班/休'],
+  'work_4_rest_2': ['白班/白', '休班/休'],
+  'work_6_rest_1': ['白班/白', '休息/休'],
+};
 
 void main() {
   test('模板库非空且 id 唯一', () {
@@ -61,5 +114,65 @@ void main() {
   test('findTemplate 能按 id 取到', () {
     expect(findTemplate('dupont')?.cycle.length, 28);
     expect(findTemplate('不存在'), isNull);
+  });
+
+  test('中文文案与班次名零回归（基线）', () {
+    final previous = L10n.locale;
+    addTearDown(() => L10n.locale = previous);
+    L10n.locale = 'zh';
+
+    expect(_zhBaseline.length, shiftTemplates.length,
+        reason: '模板数量变了就该同步这张基线表');
+    expect(_zhClassBaseline.length, shiftTemplates.length);
+
+    for (final t in shiftTemplates) {
+      final want = _zhBaseline[t.id]!;
+      expect(t.title, want.$1, reason: '模板 ${t.id} 的中文主标题变了');
+      expect(t.subtitle, want.$2, reason: '模板 ${t.id} 的中文副标题变了');
+      expect(
+        t.classes.map((c) => '${c.name}/${c.abbr}').toList(),
+        _zhClassBaseline[t.id],
+        reason: '模板 ${t.id} 的中文班次名或简称变了',
+      );
+    }
+  });
+
+  test('英文文案与班次名不含中文', () {
+    final previous = L10n.locale;
+    addTearDown(() => L10n.locale = previous);
+    L10n.locale = 'en';
+
+    for (final t in shiftTemplates) {
+      final why = '模板 ${t.id}';
+      expect(hasCjk(t.title), isFalse, reason: '$why 英文主标题含中文：${t.title}');
+      expect(hasCjk(t.subtitle), isFalse,
+          reason: '$why 英文副标题含中文：${t.subtitle}');
+      for (final c in t.classes) {
+        expect(hasCjk(c.name), isFalse, reason: '$why 英文班次名含中文：${c.name}');
+        expect(hasCjk(c.abbr!), isFalse, reason: '$why 英文简称含中文：${c.abbr}');
+      }
+    }
+  });
+
+  test('中英文案都非空，别名中英都有', () {
+    for (final t in shiftTemplates) {
+      expect(t.spec.title.zh.trim(), isNotEmpty, reason: '模板 ${t.id} 中文主标题为空');
+      expect(t.spec.title.en.trim(), isNotEmpty, reason: '模板 ${t.id} 英文主标题为空');
+      expect(t.spec.subtitle.zh.trim(), isNotEmpty, reason: '模板 ${t.id} 中文副标题为空');
+      expect(t.spec.subtitle.en.trim(), isNotEmpty, reason: '模板 ${t.id} 英文副标题为空');
+      expect(t.aliases, isNotEmpty, reason: '模板 ${t.id} 没有搜索别名');
+    }
+  });
+
+  test('英文副标题里没有残留的中文别名', () {
+    final previous = L10n.locale;
+    addTearDown(() => L10n.locale = previous);
+    L10n.locale = 'en';
+    // 别名是中英混收的，不参与本地化；这里只确认「别名表里确实有英文词」，
+    // 否则英文用户搜什么都搜不到（模板 1~19 的英文关键词由 picker 测试守）。
+    for (final t in shiftTemplates) {
+      expect(t.aliases.any((a) => !hasCjk(a)), isTrue,
+          reason: '模板 ${t.id} 的别名全是中文，英文用户搜不到它');
+    }
   });
 }

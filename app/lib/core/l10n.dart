@@ -1,5 +1,21 @@
 import 'package:intl/intl.dart';
 
+/// 一段双语文案的持有者。
+///
+/// 用在**数据层需要持有文案**的地方（倒班方式模板）：模板是编译期常量，
+/// 定义时不能调 `L10n.t`，只能先把两种语言都存下来、读取时再按当前语言取。
+///
+/// 英文缺省时**不回退中文** —— 悄悄回退会让漏翻在英文界面上伪装成正常
+/// 内容，而缺失本该被测试抓出来。
+class L10nText {
+  const L10nText(this.zh, this.en);
+
+  final String zh;
+  final String en;
+
+  String get value => L10n.isEn ? en : zh;
+}
+
 /// 极简多语言：全局 [locale]（'zh' / 'en'），静态 getter 返回对应文案。
 class L10n {
   L10n._();
