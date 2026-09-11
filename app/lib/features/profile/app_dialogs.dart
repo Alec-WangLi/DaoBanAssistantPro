@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.2\n'
+const String _changelogZh = 'v0.6.3\n'
+    '· 排班编辑界面的字号与全 App 统一：此前班次名称与简称输入框被单独压小了一号，同一张卡片里的方案名称输入框却是一号大\n'
+    '· 周期设置改成**行内直接点选班次**：每个可选班次平铺成一个彩色小块，点一下就换，不再弹出下拉菜单\n'
+    '· 选中的班次块用班次色实心填充，文字颜色按底色自动取白或黑，浅色班次上的字不再糊得读不出来\n'
+    '· 班次简称输入框加宽，两个汉字（如「大夜」）不会被裁掉\n'
+    '· 删除班次改为低调图标（不再每行一个红点），按下时变红，并在真正删除前先确认一次\n\n'
+    'v0.6.2\n'
     '· 英文界面：倒班方式模板的标题与副标题改为模板自带双语，不再漏出中文\n'
     '· 英文界面：从模板新建的排班，方案名与班次名（白班 / 夜班 / 休班 等）按你的语言生成，日历格子里的简称随之变成 D / N / O\n'
     '· 英文界面：默认排班与首次启动自动生成的班表同样按语言生成；模板可用英文关键词搜索（如 4-crew、dupont）\n'
@@ -78,11 +84,15 @@ const String _changelogZh = 'v0.6.2\n'
     'v0.4.5\n'
     '· 底部导航改为悬浮胶囊：去掉磨砂蒙版，内容滑动时清晰分离、从胶囊下方穿过\n'
     '· 移除随手机倾斜流动的动态光线（实测观感不佳），玻璃恢复静态高光\n'
-    '· 应用图标重绘：中性底色 + 主色渐变玻璃符号，统一设计语言\n\n'
-    'v0.4.4\n'
-    '· 视觉大一统——极简黑白背景(自动深浅)+ 5 色主色只染强调点，液态玻璃统一配方并新增随手机倾斜流动的动态光线，图标统一线性，动效全面换弹簧 Q 弹。\n\n';
+    '· 应用图标重绘：中性底色 + 主色渐变玻璃符号，统一设计语言\n\n';
 
-const String _changelogEn = 'v0.6.2\n'
+const String _changelogEn = 'v0.6.3\n'
+    '· Schedule editor typography now matches the rest of the app (input fields were a size smaller — two fields on the same card did not even match each other)\n'
+    '· The cycle section now lets you pick a shift inline: every option is a coloured chip you tap, with no dropdown to open\n'
+    '· A selected chip is filled with its shift colour, and its text is picked as white or black for readability — pale shifts are no longer washed out\n'
+    '· The shift-abbreviation field is wider, so two characters are no longer clipped\n'
+    '· Deleting a shift uses a quieter icon (no red dot on every row) that turns red while pressed, and asks for confirmation first\n\n'
+    'v0.6.2\n'
     '· English UI: shift-pattern templates now carry their own bilingual titles and subtitles — no more Chinese leaking through\n'
     '· English UI: a schedule created from a template gets its name and shift names (Day shift / Night shift / …) in your language, and calendar cells use D / N / O\n'
     '· English UI: the default schedule and the one seeded on first launch are generated in your language; templates can be searched with English keywords (4-crew, dupont)\n'
@@ -120,9 +130,7 @@ const String _changelogEn = 'v0.6.2\n'
     'v0.4.5\n'
     '· Floating bottom nav capsule: frosted-mask look gone, content cleanly passes under it while scrolling\n'
     '· Removed the tilt-reactive dynamic light (felt off in practice); glass highlight back to static\n'
-    '· Redesigned the app icon: neutral background with an accent-gradient glass mark, matching the design language\n\n'
-    'v0.4.4\n'
-    '· Unified visual language — monochrome light/dark background, accent color confined to interactive highlights, unified glass recipe with tilt-reactive dynamic light, outlined icons, spring-based motion throughout.\n\n';
+    '· Redesigned the app icon: neutral background with an accent-gradient glass mark, matching the design language\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
