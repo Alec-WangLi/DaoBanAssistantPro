@@ -71,15 +71,15 @@ void main() {
     await initializeDateFormatting('en');
   });
 
-  test('每个模板的 group 都在分组列表里，不会静默消失', () {
-    // 选择页按 shiftTemplateGroups 分组渲染：group 字符串写错会让该模板
+  test('每个模板的 groupKey 都在分组列表里，不会静默消失', () {
+    // 选择页按 shiftTemplateGroups 分组渲染：键写错会让该模板
     // 从「选择你的倒班方式」页上无声消失。
     for (final t in shiftTemplates) {
-      expect(shiftTemplateGroups, contains(t.group),
-          reason: '模板 ${t.id} 的 group「${t.group}」不在分组列表里，会被静默丢弃');
+      expect(shiftTemplateGroups, contains(t.groupKey),
+          reason: '模板 ${t.id} 的 groupKey「${t.groupKey}」不在分组列表里，会被静默丢弃');
     }
     for (final g in shiftTemplateGroups) {
-      expect(shiftTemplates.any((t) => t.group == g), isTrue,
+      expect(shiftTemplates.any((t) => t.groupKey == g), isTrue,
           reason: '分组「$g」没有任何模板，分组标题永远不会出现');
     }
   });
@@ -249,7 +249,7 @@ void main() {
   });
 
   testWidgets('英文界面：分组标题跟着语言走，不露出中文', (tester) async {
-    // 分组名在数据层是中文键（`ShiftTemplate.group`），显示层靠
+    // 分组在数据层是语言无关键（`ShiftTemplate.groupKey`），显示层靠
     // L10n.templateGroup 映射；漏掉任何一支，英文界面上就会原样冒出中文标题。
     final previous = L10n.locale;
     addTearDown(() => L10n.locale = previous);
@@ -263,5 +263,22 @@ void main() {
     }
     expect(find.text(L10n.templateGroup(shiftTemplateGroups.first)),
         findsOneWidget);
+  });
+
+  test('分组键是语言无关键，且中英都有显示名', () {
+    // 键本身不该被当成显示名露出去 —— 英文界面上冒出一个「h12」，
+    // 中文界面上冒出原样的键，都是同一类缺陷。
+    final previous = L10n.locale;
+    addTearDown(() => L10n.locale = previous);
+
+    for (final locale in ['zh', 'en']) {
+      L10n.locale = locale;
+      for (final key in shiftTemplateGroups) {
+        expect(L10n.templateGroup(key), isNot(key),
+            reason: '分组键「$key」在 $locale 下没有显示名，会原样露出');
+        expect(L10n.templateGroup(key).trim(), isNotEmpty,
+            reason: '分组键「$key」在 $locale 下显示名为空');
+      }
+    }
   });
 }

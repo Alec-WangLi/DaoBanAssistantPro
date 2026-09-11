@@ -242,17 +242,19 @@ class L10n {
 
   /// 倒班方式列表的分组标题。
   ///
-  /// 分组名在数据层是中文键（`ShiftTemplate.group`），这里只做**显示层**映射：
-  /// 拿它当查找键去匹配数据，不要改数据。
+  /// 分组在数据层是**语言无关键**（`ShiftTemplate.groupKey`），这里映射到
+  /// 当前语言的显示名。键与显示名都必须与 `shiftTemplateGroups` 对得上 ——
+  /// 对不上的键会走 `_ => key` 原样露出，英文界面上就会冒出一个 `h12`。
   ///
-  /// 模板本身的标题/副标题不在这里翻——那是内容文案，不是界面标签。
-  static String templateGroup(String group) => switch (group) {
-        '12 小时制' => t('12 小时制', '12-hour shifts'),
-        '8 小时制' => t('8 小时制', '8-hour shifts'),
-        '6 小时制' => t('6 小时制', '6-hour shifts'),
-        '值班制' => t('值班制', '24-hour duty'),
-        '常白' => t('常白', 'Day shift only'),
-        _ => group,
+  /// 模板自身的标题/副标题**不在这里** —— 那是内容文案，跟着模板数据走，
+  /// 见 `domain/shift_templates.dart`。
+  static String templateGroup(String key) => switch (key) {
+        'h12' => t('12 小时制', '12-hour shifts'),
+        'h8' => t('8 小时制', '8-hour shifts'),
+        'h6' => t('6 小时制', '6-hour shifts'),
+        'duty' => t('值班制', '24-hour duty'),
+        'office' => t('常白', 'Day shift only'),
+        _ => key,
       };
   static String get customPatternHint => t('从默认四班两倒开始，边看边改', 'Start from the default and edit as you go');
   static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');

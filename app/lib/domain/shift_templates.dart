@@ -14,7 +14,7 @@ class ShiftTemplate {
     required this.title,
     required this.subtitle,
     required this.aliases,
-    required this.group,
+    required this.groupKey,
     required this.classes,
     required this.cycle,
     this.teamCount = 1,
@@ -32,8 +32,10 @@ class ShiftTemplate {
   /// 搜索词。
   final List<String> aliases;
 
-  /// 分组：12 小时制 / 8 小时制 / 6 小时制 / 值班制 / 常白。
-  final String group;
+  /// 分组键（语言无关）：'h12' / 'h8' / 'h6' / 'duty' / 'office'。
+  ///
+  /// 显示名走 `L10n.templateGroup` —— 数据层不持有界面文案。
+  final String groupKey;
 
   /// 班次定义。
   final List<ShiftClass> classes;
@@ -59,13 +61,16 @@ class ShiftTemplate {
   }
 }
 
-/// 界面上分组的显示顺序。
+/// 界面上分组的显示顺序（**语言无关键**，显示名走 `L10n.templateGroup`）。
+///
+/// 每个模板的 `groupKey` 必须落在这个列表里，否则它不会出现在选择页上，
+/// 而且是静默消失 —— 由 `shift_template_picker_test.dart` 守着。
 const shiftTemplateGroups = <String>[
-  '12 小时制',
-  '8 小时制',
-  '6 小时制',
-  '值班制',
-  '常白',
+  'h12',
+  'h8',
+  'h6',
+  'duty',
+  'office',
 ];
 
 // ---------------------------------------------------------------------------
@@ -131,7 +136,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上一天白班、一天夜班，然后休两天',
     subtitle: '白夜休休 · 四班两倒',
     aliases: ['白夜休休', '四班两倒', '4班2倒', '两班倒'],
-    group: '12 小时制',
+    groupKey: 'h12',
     classes: [_d12, _n12, _rest],
     cycle: [0, 1, 2, 2],
     teamCount: 4,
@@ -142,7 +147,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '白班两天、夜班两天，然后休两天',
     subtitle: '白白夜夜休休 · 三班两倒',
     aliases: ['白白夜夜休休', '三班两倒', '3班2倒'],
-    group: '12 小时制',
+    groupKey: 'h12',
     classes: [_d12, _n12, _rest],
     cycle: [0, 0, 1, 1, 2, 2],
     teamCount: 3,
@@ -153,7 +158,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上两天白班休两天，再上两天夜班休两天',
     subtitle: '白白休休夜夜休休',
     aliases: ['白白休休夜夜休休', '四班两倒'],
-    group: '12 小时制',
+    groupKey: 'h12',
     classes: [_d12, _n12, _rest],
     cycle: [0, 0, 2, 2, 1, 1, 2, 2],
     teamCount: 4,
@@ -164,7 +169,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '白班、夜班各上一整周，每周倒一次',
     subtitle: '上 12 休 12 · 两班倒',
     aliases: ['两班倒', '上12休12', '两班两倒', '一周一倒'],
-    group: '12 小时制',
+    groupKey: 'h12',
     classes: [_d12, _n12],
     cycle: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
     teamCount: 2,
@@ -175,7 +180,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '四夜三休、三白一休、三夜三休、四白，再连休七天',
     subtitle: 'DuPont · 28 天周期',
     aliases: ['dupont', '杜邦', '28天', '四班两倒'],
-    group: '12 小时制',
+    groupKey: 'h12',
     classes: [_d12, _n12, _rest],
     cycle: [
       1, 1, 1, 1, 2, 2, 2, 0, 0, 0, 2, 1, 1, 1,
@@ -191,7 +196,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '早班两天、中班两天、夜班两天，然后休两天',
     subtitle: '四班三倒 · 四班三运转',
     aliases: ['四班三倒', '四班三运转', '早晚中', '8小时'],
-    group: '8 小时制',
+    groupKey: 'h8',
     classes: [_e8, _m8, _n8, _rest],
     cycle: [0, 0, 1, 1, 2, 2, 3, 3],
     teamCount: 4,
@@ -202,7 +207,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '早班、中班、夜班各一天，然后休两天',
     subtitle: '五班三倒',
     aliases: ['五班三倒', '5班3倒'],
-    group: '8 小时制',
+    groupKey: 'h8',
     classes: [_e8, _m8, _n8, _rest],
     cycle: [0, 1, 2, 3, 3],
     teamCount: 5,
@@ -213,7 +218,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上一天班休两天，早中夜轮着来',
     subtitle: '六班三倒',
     aliases: ['六班三倒', '6班3倒'],
-    group: '8 小时制',
+    groupKey: 'h8',
     classes: [_e8, _m8, _n8, _rest],
     cycle: [0, 3, 1, 3, 2, 3],
     teamCount: 6,
@@ -226,7 +231,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '早中晚夜各一天，然后休一天',
     subtitle: '五班四倒',
     aliases: ['五班四倒', '5班4倒', '6小时'],
-    group: '6 小时制',
+    groupKey: 'h6',
     classes: [_e6, _m6, _l6, _n6, _rest],
     cycle: [0, 1, 2, 3, 4],
     teamCount: 5,
@@ -237,7 +242,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '早中晚夜各一天，然后休两天',
     subtitle: '六班四倒',
     aliases: ['六班四倒', '6班4倒'],
-    group: '6 小时制',
+    groupKey: 'h6',
     classes: [_e6, _m6, _l6, _n6, _rest],
     cycle: [0, 1, 2, 3, 4, 4],
     teamCount: 6,
@@ -250,7 +255,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上 24 小时，休 24 小时',
     subtitle: '上 24 休 24',
     aliases: ['上24休24', '24小时', '值班'],
-    group: '值班制',
+    groupKey: 'duty',
     classes: [_duty, _restGrey],
     cycle: [0, 1],
     teamCount: 2,
@@ -261,7 +266,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上 24 小时，休 48 小时',
     subtitle: '上 24 休 48',
     aliases: ['上24休48', '上1休2', '值班'],
-    group: '值班制',
+    groupKey: 'duty',
     classes: [_duty, _restGrey],
     cycle: [0, 1, 1],
     teamCount: 3,
@@ -272,7 +277,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上 24 小时，休 72 小时',
     subtitle: '上 24 休 72',
     aliases: ['上24休72', '上1休3', '值班'],
-    group: '值班制',
+    groupKey: 'duty',
     classes: [_duty, _restGrey],
     cycle: [0, 1, 1, 1],
     teamCount: 4,
@@ -285,7 +290,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '周一到周五上班，周末休息',
     subtitle: '长白班 · 双休',
     aliases: ['长白班', '行政班', '双休', '朝九晚五', '周末双休'],
-    group: '常白',
+    groupKey: 'office',
     classes: [_office, _restGrey],
     cycle: [0, 0, 0, 0, 0, 1, 1],
   ),
@@ -294,7 +299,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '这周休一天，下周休两天',
     subtitle: '大小周',
     aliases: ['大小周', '大周小周'],
-    group: '常白',
+    groupKey: 'office',
     classes: [_office, _restGrey],
     cycle: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1],
   ),
@@ -303,7 +308,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上一天休一天',
     subtitle: '做一休一',
     aliases: ['做一休一', '上一休一'],
-    group: '常白',
+    groupKey: 'office',
     classes: [_d12, _rest],
     cycle: [0, 1],
   ),
@@ -312,7 +317,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上两天休两天',
     subtitle: '做二休二',
     aliases: ['做二休二', '上二休二'],
-    group: '常白',
+    groupKey: 'office',
     classes: [_d12, _rest],
     cycle: [0, 0, 1, 1],
   ),
@@ -321,7 +326,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上四天休两天',
     subtitle: '做四休二',
     aliases: ['做四休二', '上四休二'],
-    group: '常白',
+    groupKey: 'office',
     classes: [_d12, _rest],
     cycle: [0, 0, 0, 0, 1, 1],
   ),
@@ -330,7 +335,7 @@ final List<ShiftTemplate> shiftTemplates = [
     title: '上六天休一天',
     subtitle: '做六休一',
     aliases: ['做六休一', '上六休一', '单休'],
-    group: '常白',
+    groupKey: 'office',
     classes: [_office, _restGrey],
     cycle: [0, 0, 0, 0, 0, 0, 1],
   ),

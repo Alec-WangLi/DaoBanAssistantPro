@@ -45,7 +45,9 @@ class _ShiftTemplatePickerScreenState
     if (q.isEmpty) return true;
     return t.title.toLowerCase().contains(q) ||
         t.subtitle.toLowerCase().contains(q) ||
-        t.group.toLowerCase().contains(q) ||
+        // 分组名走本地化显示名，不用原始键 —— 键是 `h12` 这种，对用户没有
+        // 意义；中文化后「常白」仍然搜得到，与改动前一致。
+        L10n.templateGroup(t.groupKey).toLowerCase().contains(q) ||
         t.aliases.any((a) => a.toLowerCase().contains(q));
   }
 
@@ -84,7 +86,7 @@ class _ShiftTemplatePickerScreenState
   List<Widget> _buildGrouped(BuildContext context, List<ShiftTemplate> matched) {
     final out = <Widget>[];
     for (final group in shiftTemplateGroups) {
-      final inGroup = matched.where((t) => t.group == group).toList();
+      final inGroup = matched.where((t) => t.groupKey == group).toList();
       if (inGroup.isEmpty) continue;
       out.add(Padding(
         padding: const EdgeInsets.only(bottom: 8, top: 4),
