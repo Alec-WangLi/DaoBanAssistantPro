@@ -200,7 +200,9 @@ class L10n {
   static String get cycleLengthUnit => t('天', 'days');
   static String get myCycleStart => t('我这组从这个周期开始', 'My crew starts this cycle on');
   static String get crewCycleStart => t('周期起始日', 'Cycle start date');
-  static String get abbrLabel => t('简称', 'Short');
+  // 英文用 'Abbr' 而不是 'Short'：这个标签浮在 60pt 宽的窄输入框上，
+  // 'Short'（5 字）会被裁成「Sh…」，'Abbr'（4 字）放得下且更准确。
+  static String get abbrLabel => t('简称', 'Abbr');
   static String get crewSettingsOptional =>
       t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
 
@@ -237,6 +239,21 @@ class L10n {
       t('选一个和你班表最像的，建好之后还能随时改', 'Pick the closest one — you can tweak it anytime');
   static String get searchPattern => t('搜索，如「四班三倒」「上24休48」', 'Search, e.g. "4-crew 3-shift"');
   static String get customPattern => t('我自己排', 'Start from scratch');
+
+  /// 倒班方式列表的分组标题。
+  ///
+  /// 分组名在数据层是中文键（`ShiftTemplate.group`），这里只做**显示层**映射：
+  /// 拿它当查找键去匹配数据，不要改数据。
+  ///
+  /// 模板本身的标题/副标题不在这里翻——那是内容文案，不是界面标签。
+  static String templateGroup(String group) => switch (group) {
+        '12 小时制' => t('12 小时制', '12-hour shifts'),
+        '8 小时制' => t('8 小时制', '8-hour shifts'),
+        '6 小时制' => t('6 小时制', '6-hour shifts'),
+        '值班制' => t('值班制', '24-hour duty'),
+        '常白' => t('常白', 'Day shift only'),
+        _ => group,
+      };
   static String get customPatternHint => t('从默认四班两倒开始，边看边改', 'Start from the default and edit as you go');
   static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');
   static String get crewsOnDuty => t('每天在岗', 'on duty');
@@ -295,8 +312,11 @@ class L10n {
       '关闭后去除真实背景模糊，模拟低端机效果', 'Turn off to remove real blur and preview the low-end effect');
 
   // 日期格式
+  // 英文下月份要带出来：`yyyy M` 会渲染成「2026 9」，读不出是哪个月。
+  // 用缩写月（Sep 2026）而不是全称，跟中文「2026年9月」的紧凑度对齐，
+  // 顶部那颗胶囊才放得下。
   static String yearMonth(DateTime d) => isEn
-      ? DateFormat('yyyy M', 'en').format(d)
+      ? DateFormat('MMM yyyy', 'en').format(d)
       : DateFormat('yyyy年M月', 'zh').format(d);
   static String monthDay(DateTime d) => isEn
       ? DateFormat('MMM d', 'en').format(d)
@@ -308,7 +328,8 @@ class L10n {
   static String monthDayWeekday(DateTime d) => isEn
       ? DateFormat('EEE, MMM d', 'en').format(d)
       : DateFormat('M月d日 EEEE', 'zh').format(d);
+  // 英文按 'Sep 9, 2026' 的顺序；`yyyy MMM d` 会串成「2026 Sep 9」，不像英文。
   static String yearMonthDay(DateTime d) => isEn
-      ? DateFormat('yyyy MMM d', 'en').format(d)
+      ? DateFormat('MMM d, yyyy', 'en').format(d)
       : DateFormat('yyyy年 M月 d日', 'zh').format(d);
 }

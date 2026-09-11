@@ -28,6 +28,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   static const _hPad = 12.0; // 网格左右留白
   static const _weekdayH = 26.0; // 周标题行高
   static const _aspect = 0.78; // 越小格子越高（0.78：格子加高，小屏 6 行放不下时网格自动滚动）
+  // 格子长高的上限（对应 _aspect 的下限）。空间富余时让格子吃到富余高度，但
+  // 不无限拉长——再瘦下去格子就不像日期格、像竖条了。
+  static const _aspectMin = 0.62;
   static const _cellInset = 2.0; // 格子/玻璃块统一内缩
 
   late DateTime _month; // 显示月的 1 号
@@ -69,6 +72,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   int get _leading => DateTime(_month.year, _month.month, 1).weekday - 1;
   int get _daysInMonth => DateTime(_month.year, _month.month + 1, 0).day;
+
+  /// 本月网格占几行（含月初的空格）。
+  int get _weekRows => (_leading + _daysInMonth + 6) ~/ 7;
 
   /// 选中日期在网格中的槽位矩形；不在本月返回 null。
   Rect? _selectedRect(double cellW, double cellH) {
@@ -118,13 +124,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           children: [
             _header(context),
             Expanded(
-              child: scheduleAsync.isLoading && schedule == null
-                  ? const Center(child: CircularProgressIndicator())
-                  // 网格可滚动：格子保持全尺寸，小屏 6 行放不下时滚动而非被裁切，
-                  // 避免底部行与信息卡重叠。
-                  : SingleChildScrollView(
-                      child: _buildGrid(context, schedule),
-                    ),
+              // 网格区高度要先量出来，才能决定格子长多高（见 _buildGrid）。
+              child: LayoutBuilder(
+                builder: (context, c) => scheduleAsync.isLoading && schedule == null
+                    ? const Center(child: CircularProgressIndicator())
+                    // 网格可滚动：格子保持全尺寸，小屏 6 行放不下时滚动而非被裁切，
+                    // 避免底部行与信息卡重叠。
+                    : SingleChildScrollView(
+                        child: _buildGrid(context, schedule, c.maxHeight),
+                      ),
+              ),
             ),
             _infoCard(context, schedule),
           ],
@@ -165,13 +174,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             context,
             onTap: _today,
             accent: true,
+            // accent 变体是实心主色底，内容用白（别再跟着 colorScheme.primary，
+            // 那样就是主色字压在主色底上）。
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   Icons.today_outlined,
                   size: 18,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: Colors.white,
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -179,7 +190,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: Colors.white.withValues(alpha: 0.98),
                   ),
                 ),
               ],
@@ -202,18 +213,23 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final decoration = accent
         ? BoxDecoration(
             borderRadius: BorderRadius.circular(AppTokens.radiusL),
+            // 实心主色 + 白字。原来是「主色 30% 透明度的底 + 主色字」——
+            // 同一个色相只差透明度，实测对比度浅色 3.0:1、深色 2.7:1，都低于
+            // WCAG AA 要求的 4.5:1，深色下那两个字几乎看不见。
+            // 改成实心后是 5.3:1（渐变深处 7:1），也跟主按钮（新增排班、
+            // 保存并重排闹钟）的实心主色形态一致。
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                primary.withValues(alpha: 0.30),
-                primary.withValues(alpha: 0.14),
+                primary,
+                Color.lerp(primary, Colors.black, 0.18)!,
               ],
             ),
-            border: Border.all(color: primary.withValues(alpha: 0.35)),
+            border: Border.all(color: primary),
             boxShadow: [
               BoxShadow(
-                color: primary.withValues(alpha: 0.18),
+                color: primary.withValues(alpha: isDark ? 0.45 : 0.28),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
@@ -420,11 +436,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Widget _buildGrid(BuildContext context, ShiftSchedule? schedule) {
+  Widget _buildGrid(
+      BuildContext context, ShiftSchedule? schedule, double availHeight) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cellW = (constraints.maxWidth - _hPad * 2) / 7;
-        final cellH = cellW / _aspect;
+        final naturalCellH = cellW / _aspect;
+        // 空间富余时让格子纵向长高，把高度吃掉；富余多少取决于当月几行、屏幕
+        // 多高，所以只能在这里算，不能写死。放不下（6 行小屏）时低于自然高度，
+        // 这时保持原比例、交给外层滚动。
+        final fillCellH = (availHeight - _weekdayH) / _weekRows;
+        final cellH = fillCellH > naturalCellH
+            ? math.min(fillCellH, cellW / _aspectMin)
+            : naturalCellH;
         final selectedRect = _selectedRect(cellW, cellH);
         final showBlock = _dragActive || selectedRect != null;
         final blockLeft = _dragActive
@@ -569,6 +593,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
         : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5);
+    // 班次色是给色块用的强色，当 12px 文字色会太浅（橙 2.06:1、灰 2.60:1），
+    // 得按格子底色算一版可读的。
+    final surface = Theme.of(context).colorScheme.surface;
 
     return Container(
       width: cellW,
@@ -606,7 +633,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         fontSize: 12,
                         height: 1.15,
                         fontWeight: FontWeight.w700,
-                        color: Color(shift.color),
+                        color: AppTokens.inkFor(Color(shift.color), surface),
                       ),
                     ),
                   const SizedBox(height: 2),
@@ -745,18 +772,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.14),
+                      // 实心主色 + 白字。原来是「主色 14% 淡底 + 主色字」，
+                      // 实测对比度 3.84:1（深色下 2.93:1），低于 AA 的 4.5:1。
+                      color: Theme.of(context).colorScheme.primary,
                       borderRadius: BorderRadius.circular(AppTokens.radiusL),
                     ),
                     child: Text(
                       L10n.today,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -791,7 +817,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Color(shift.color),
+                      color: AppTokens.inkFor(Color(shift.color),
+                          Theme.of(context).colorScheme.surface),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -883,7 +910,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Color(t.color))),
+                    // 色块底是班次色 14% 的淡染，字要按它算可读版本。
+                    color: AppTokens.inkFor(
+                        Color(t.color),
+                        Color.alphaBlend(
+                            Color(t.color).withValues(alpha: 0.14),
+                            Theme.of(context).colorScheme.surface)))),
           ],
         ),
       ));

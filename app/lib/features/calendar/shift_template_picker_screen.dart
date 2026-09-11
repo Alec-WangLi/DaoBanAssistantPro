@@ -88,7 +88,7 @@ class _ShiftTemplatePickerScreenState
       if (inGroup.isEmpty) continue;
       out.add(Padding(
         padding: const EdgeInsets.only(bottom: 8, top: 4),
-        child: Text(group,
+        child: Text(L10n.templateGroup(group),
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
       ));
       for (final t in inGroup) {

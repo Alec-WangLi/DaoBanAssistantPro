@@ -74,12 +74,22 @@ class ProfileScreen extends ConsumerWidget {
                     onSelected: (i) => ref
                         .read(appSettingsProvider.notifier)
                         .setAccentIndex(i),
+                    // 选中态用一圈白色描边，而不是只靠背后的药丸。
+                    // 药丸的颜色就是「当前主色」，选中那格色块的填充色跟它一模一样 ——
+                    // 只给药丸的话，用户反而看不见自己选中了什么颜色。
                     itemBuilder: (i, selected) => Container(
-                      width: 22,
-                      height: 22,
+                      width: 26,
+                      height: 26,
+                      padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: AppColors.accentPalette[i],
+                        color: selected ? Colors.white : Colors.transparent,
                         shape: BoxShape.circle,
+                      ),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: AppColors.accentPalette[i],
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
                   ),

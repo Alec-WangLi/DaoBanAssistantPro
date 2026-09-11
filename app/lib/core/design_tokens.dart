@@ -129,4 +129,47 @@ class AppTokens {
     if (!isDark) return inkLight;
     return accent.computeLuminance() > 0.45 ? inkLight : inkDark;
   }
+
+  // ── 文字可读性 ──
+
+  /// WCAG 对比度（1:1 ~ 21:1）。要求两个颜色都是不透明的，才等于屏幕上的观感。
+  static double contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final hi = la > lb ? la : lb;
+    final lo = la > lb ? lb : la;
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  /// 把「班次色」调成当**文字**用可读的版本：只动明度，不动色相。
+  ///
+  /// 班次色是给色块和圆点用的强色，直接拿来当小号文字色会明显不够看——
+  /// 模板里的橙 `#FF9F0A` 压在白底上只有 2.06:1、灰 `#9AA0B4` 只有 2.60:1，
+  /// 12px 的字基本读不出来（WCAG AA 对普通文字要求 4.5:1）。这两个颜色
+  /// 在日历格子里就是「中」「休」两个字，等于每天都少看一档信息。
+  ///
+  /// 做法：在浅色底上朝黑压、在深色底上朝白提，够到 [target] 就停。所以压在
+  /// 底上的字读得清，同时因为色相没动，还认得出是哪个班次。
+  static Color inkFor(Color color, Color background, {double target = 4.5}) {
+    // 每个格子每次 build 都算一遍的话，一屏 42 格 × 十几轮 pow 是白白烧 CPU
+    // （拖动时每帧都要重算），班次色又是有限的几种，缓存掉。
+    return _inkCache.putIfAbsent(
+      Object.hash(color.toARGB32(), background.toARGB32(), target),
+      () => _computeInk(color, background, target),
+    );
+  }
+
+  static final Map<int, Color> _inkCache = {};
+
+  static Color _computeInk(Color color, Color background, double target) {
+    if (contrastRatio(color, background) >= target) return color;
+    final toward =
+        background.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+    // 一档 4%，最多到 72%：再深就基本等于纯黑/纯白，色相也留不住了。
+    for (var t = 0.08; t < 0.72; t += 0.04) {
+      final candidate = Color.lerp(color, toward, t)!;
+      if (contrastRatio(candidate, background) >= target) return candidate;
+    }
+    return Color.lerp(color, toward, 0.72)!;
+  }
 }

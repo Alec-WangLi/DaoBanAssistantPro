@@ -339,7 +339,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             style: TextStyle(
                 fontSize: AppTokens.fontMicro,
                 fontWeight: FontWeight.w700,
-                color: color),
+                // 底色是班次色 16% 的淡染，字得按它算可读版本，不能直接用班次色
+                // （橙 `#FF9F0A` 这类浅色压上去几乎看不见）。
+                color: AppTokens.inkFor(
+                    color,
+                    Color.alphaBlend(
+                        color.withValues(alpha: 0.16),
+                        Theme.of(context).colorScheme.surface))),
           ),
         ),
       ],

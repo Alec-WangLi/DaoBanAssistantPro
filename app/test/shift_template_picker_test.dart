@@ -68,6 +68,7 @@ void main() {
   // 管理页用 L10n.monthDay（intl DateFormat 'zh'）渲染日期，测试里要自己初始化。
   setUpAll(() async {
     await initializeDateFormatting('zh');
+    await initializeDateFormatting('en');
   });
 
   test('每个模板的 group 都在分组列表里，不会静默消失', () {
@@ -233,5 +234,34 @@ void main() {
         reason: '班组名必须给满 teamCount 个，不能只给 4 个再靠兜底补位');
     expect(repo.lastTeamNames.any((n) => n.contains('班')), isFalse,
         reason: '英文界面下不该出现中文班组名');
+  });
+
+  test('每个分组标题都有英文映射，不会原样露出中文键', () {
+    // 上面的 widget 测试只能看到「已经构建出来」的那几个分组（长列表懒构建），
+    // 这里直接对映射函数本身全覆盖。
+    final previous = L10n.locale;
+    addTearDown(() => L10n.locale = previous);
+    L10n.locale = 'en';
+    for (final g in shiftTemplateGroups) {
+      expect(L10n.templateGroup(g), isNot(g),
+          reason: '分组「$g」没有英文映射，英文界面会原样露出中文');
+    }
+  });
+
+  testWidgets('英文界面：分组标题跟着语言走，不露出中文', (tester) async {
+    // 分组名在数据层是中文键（`ShiftTemplate.group`），显示层靠
+    // L10n.templateGroup 映射；漏掉任何一支，英文界面上就会原样冒出中文标题。
+    final previous = L10n.locale;
+    addTearDown(() => L10n.locale = previous);
+    L10n.locale = 'en';
+
+    await _openPicker(tester, <Object?>[]);
+
+    for (final group in shiftTemplateGroups) {
+      expect(find.text(group), findsNothing,
+          reason: '英文界面下的分组标题「$group」应该换成英文');
+    }
+    expect(find.text(L10n.templateGroup(shiftTemplateGroups.first)),
+        findsOneWidget);
   });
 }

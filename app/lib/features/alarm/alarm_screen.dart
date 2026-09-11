@@ -250,7 +250,8 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: Color(e.shift.color),
+                    color: AppTokens.inkFor(Color(e.shift.color),
+                        Theme.of(context).colorScheme.surface),
                   ),
                 ),
                 Text(
