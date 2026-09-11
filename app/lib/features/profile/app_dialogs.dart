@@ -40,7 +40,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.1\n'
+const String _changelogZh = 'v0.6.2\n'
+    '· 英文界面：倒班方式模板的标题与副标题改为模板自带双语，不再漏出中文\n'
+    '· 英文界面：从模板新建的排班，方案名与班次名（白班 / 夜班 / 休班 等）按你的语言生成，日历格子里的简称随之变成 D / N / O\n'
+    '· 英文界面：默认排班与首次启动自动生成的班表同样按语言生成；模板可用英文关键词搜索（如 4-crew、dupont）\n'
+    '· 周期色条超过 14 天时末格显示省略标记，不再静默截断（DuPont 这类 28 天周期一眼能看出后面还有）\n\n'
+    'v0.6.1\n'
     '· 日历：日期格按屏幕高度自适应长高，不再在网格与底部信息卡之间留一条空带\n'
     '· 日历：格子里的班次简称按底色自动调整明度，浅色班次（橙、灰）不再糊在白格子上\n'
     '· 对比度：「今天」按钮与信息卡「今天」徽章改为实心主色 + 白字，实测对比度由 2.7:1 提升到 5.3:1\n'
@@ -75,17 +80,14 @@ const String _changelogZh = 'v0.6.1\n'
     '· 移除随手机倾斜流动的动态光线（实测观感不佳），玻璃恢复静态高光\n'
     '· 应用图标重绘：中性底色 + 主色渐变玻璃符号，统一设计语言\n\n'
     'v0.4.4\n'
-    '· 视觉大一统——极简黑白背景(自动深浅)+ 5 色主色只染强调点，液态玻璃统一配方并新增随手机倾斜流动的动态光线，图标统一线性，动效全面换弹簧 Q 弹。\n\n'
-    'v0.4.3\n'
-    '· 修复：排班编辑「班次名称」与「第几天/工作」标签间距过紧\n'
-    '· 响铃界面：时间改粗体；「上滑关闭」改为跟随手指的滑块（拖到阈值触发、未到位回弹）\n'
-    '· 新增「高级材质」开关（我的 → 外观）：默认开启，关闭后全 App 去真实模糊、模拟低端机\n\n'
-    'v0.4.2\n'
-    '· 修复：恢复「后台弹出界面」权限（v0.4.1 误删，导致 App 从系统列表消失、锁屏全屏闹钟可能弹不出）\n'
-    '· 使用帮助按最新版重写（日历/排班/闹钟/待办/权限/更新 6 条）\n'
-    '· 响铃界面液态玻璃化：深空蓝紫流动光晕 + 玻璃胶囊标签 + 玻璃按钮 + Q弹入场\n\n';
+    '· 视觉大一统——极简黑白背景(自动深浅)+ 5 色主色只染强调点，液态玻璃统一配方并新增随手机倾斜流动的动态光线，图标统一线性，动效全面换弹簧 Q 弹。\n\n';
 
-const String _changelogEn = 'v0.6.1\n'
+const String _changelogEn = 'v0.6.2\n'
+    '· English UI: shift-pattern templates now carry their own bilingual titles and subtitles — no more Chinese leaking through\n'
+    '· English UI: a schedule created from a template gets its name and shift names (Day shift / Night shift / …) in your language, and calendar cells use D / N / O\n'
+    '· English UI: the default schedule and the one seeded on first launch are generated in your language; templates can be searched with English keywords (4-crew, dupont)\n'
+    '· The cycle colour strip now shows an ellipsis in its last cell when a pattern runs past 14 days, instead of truncating silently\n\n'
+    'v0.6.1\n'
     '· Calendar: day cells now grow to fill the screen height — the empty band between the grid and the info card is gone\n'
     '· Calendar: shift labels are lightness-adjusted against their backdrop, so pale shifts (amber, grey) no longer wash out on white cells\n'
     '· Contrast: the "Today" button and the info-card "Today" badge are now solid accent with white text (measured 2.7:1 -> 5.3:1)\n'
@@ -120,15 +122,7 @@ const String _changelogEn = 'v0.6.1\n'
     '· Removed the tilt-reactive dynamic light (felt off in practice); glass highlight back to static\n'
     '· Redesigned the app icon: neutral background with an accent-gradient glass mark, matching the design language\n\n'
     'v0.4.4\n'
-    '· Unified visual language — monochrome light/dark background, accent color confined to interactive highlights, unified glass recipe with tilt-reactive dynamic light, outlined icons, spring-based motion throughout.\n\n'
-    'v0.4.3\n'
-    '· Fixed: schedule editor spacing between "Shift name" and the day/work labels\n'
-    '· Ringing screen: bolder clock; "Swipe up to dismiss" is now a finger-tracking slider (threshold to trigger, springs back if released early)\n'
-    '· New "Advanced material" toggle (Me → Appearance): on by default; turn it off to remove all real blur and preview the low-end effect\n\n'
-    'v0.4.2\n'
-    '· Fixed: restored "Display over other apps" permission (removed by mistake in v0.4.1, hiding the app from the system list and possibly blocking the lock-screen alarm)\n'
-    '· Usage guide rewritten for the latest version (calendar/schedule/alarm/todo/permissions/update)\n'
-    '· Ringing screen in liquid glass: flowing deep-space gradient, glass label capsule, glass button, springy entrance\n\n';
+    '· Unified visual language — monochrome light/dark background, accent color confined to interactive highlights, unified glass recipe with tilt-reactive dynamic light, outlined icons, spring-based motion throughout.\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
