@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/widgets/centered_content.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
@@ -236,7 +237,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             )
           : !_loaded
               ? const Center(child: CircularProgressIndicator())
-              : ListView(
+              : CenteredContent(
+                child: ListView(
                   padding: EdgeInsets.fromLTRB(
                       AppTokens.spaceLg,
                       AppTokens.spaceSm,
@@ -257,6 +259,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     ],
                     _followHolidayCard(context),
                   ],
+                ),
                 ),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -369,7 +372,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final muted = Theme.of(context).colorScheme.onSurface
         .withValues(alpha: 0.55);
     return GlassTile(
-      padding: const EdgeInsets.all(AppTokens.spaceLg),
+      // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
+      padding: EdgeInsets.all(
+          AppLayout.of(context).isNarrow ? AppTokens.spaceMd : AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -430,7 +435,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final muted = Theme.of(context).colorScheme.onSurface
         .withValues(alpha: 0.55);
     return GlassTile(
-      padding: const EdgeInsets.all(AppTokens.spaceLg),
+      // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
+      padding: EdgeInsets.all(
+          AppLayout.of(context).isNarrow ? AppTokens.spaceMd : AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -762,7 +769,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 4) 周期设置：几天一循环，以及每天引用哪个班次。
   Widget _cycleCard(BuildContext context) {
     return GlassTile(
-      padding: const EdgeInsets.all(AppTokens.spaceLg),
+      // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
+      padding: EdgeInsets.all(
+          AppLayout.of(context).isNarrow ? AppTokens.spaceMd : AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -893,7 +902,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final muted = Theme.of(context).colorScheme.onSurface
         .withValues(alpha: 0.55);
     return GlassTile(
-      padding: const EdgeInsets.all(AppTokens.spaceLg),
+      // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
+      padding: EdgeInsets.all(
+          AppLayout.of(context).isNarrow ? AppTokens.spaceMd : AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1082,7 +1093,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final muted = Theme.of(context).colorScheme.onSurface
         .withValues(alpha: 0.55);
     return GlassTile(
-      padding: const EdgeInsets.all(AppTokens.spaceLg),
+      // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
+      padding: EdgeInsets.all(
+          AppLayout.of(context).isNarrow ? AppTokens.spaceMd : AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

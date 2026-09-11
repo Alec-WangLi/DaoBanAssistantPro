@@ -780,6 +780,55 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ? Color(shift.color)
         : Theme.of(context).colorScheme.primary;
 
+    // 短屏（手机横屏 / 小窗）走单行紧凑版：360×360 这类窗口里网格才是主角，
+    // 完整信息卡（约 340 高）会把网格挤到只剩一条缝。这里保留
+    // 「哪天 · 什么班 · 几点到几点」，带上闹钟图标；农历、今天徽章与其他
+    // 班组收起来 —— 网格上本来就直接画着班次与农历，信息没有丢。
+    if (compact) {
+      final timeText =
+          (shift != null && shift.startMinute != null && shift.endMinute != null)
+              ? _timeRange(shift)
+              : null;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 76),
+        child: GlassTile(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  [
+                    L10n.monthDayWeekday(_selected),
+                    if (shift != null) shift.name,
+                    if (timeText != null) timeText,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: AppTokens.fontSupport,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (shift != null && shift.alarmEnabled)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Icon(Icons.alarm_outlined, size: 16, color: muted),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Padding(
       // 底栏时要给悬浮胶囊让出高度（竖屏 120，短屏 76）；右栏时胶囊在
       // 屏幕底部、与这一栏无关，只需要常规留白。
@@ -789,8 +838,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       child: Stack(
         children: [
           GlassTile(
-            padding: EdgeInsets.fromLTRB(
-                22, compact ? 10 : 18, 18, compact ? 10 : 18),
+            padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -824,10 +872,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ],
               ],
             ),
-            SizedBox(height: compact ? 2 : 6),
+            const SizedBox(height: 6),
             if (lunar.isLegalHoliday) ...[
               _holidayBadge(context, lunar.legalHolidayName),
-              SizedBox(height: compact ? 2 : 6),
+              const SizedBox(height: 6),
             ],
             Text(
               lunar.fullDescription,
@@ -836,7 +884,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
               ),
             ),
-            SizedBox(height: compact ? 6 : 12),
+            const SizedBox(height: 12),
             if (shift != null)
               Row(
                 children: [
@@ -887,7 +935,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             else
               Text(L10n.noSchedule,
                   style: TextStyle(fontSize: 13, color: muted)),
-            SizedBox(height: compact ? 4 : 8),
+            const SizedBox(height: 8),
             if (shift != null)
               Text(
                 _alarmText(shift),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/widgets/centered_content.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
@@ -92,7 +93,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
 
     return Scaffold(
       body: SafeArea(
-        child: Column(
+        child: CenteredContent(child: Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -113,7 +114,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             Expanded(child: _customAlarmSection(context, alarms)),
           ],
         ),
-      ),
+      )),
       floatingActionButtonLocation: const _AboveCapsuleBarLocation(),
       floatingActionButton: _bottomActionBar(context),
     );

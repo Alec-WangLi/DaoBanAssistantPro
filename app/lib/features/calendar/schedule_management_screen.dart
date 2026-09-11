@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/widgets/centered_content.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
@@ -25,7 +26,8 @@ class ScheduleManagementScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(L10n.scheduleManagement)),
       body: async.isLoading && schedules.isEmpty
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
+          : CenteredContent(
+            child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
                 ...schedules.map((s) {
@@ -65,6 +67,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
                   label: Text(L10n.addSchedule),
                 ),
               ],
+            ),
             ),
     );
   }

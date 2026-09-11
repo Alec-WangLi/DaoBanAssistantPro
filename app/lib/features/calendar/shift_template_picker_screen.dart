@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/glass/glass.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/centered_content.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../data/app_repository.dart';
@@ -65,27 +66,29 @@ class _ShiftTemplatePickerScreenState
 
     return Scaffold(
       appBar: AppBar(title: Text(L10n.pickShiftPattern)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
-          Text(
-            L10n.pickShiftPatternHint,
-            style: TextStyle(
-              fontSize: AppTokens.fontSupport,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.6),
+      body: CenteredContent(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          children: [
+            Text(
+              L10n.pickShiftPatternHint,
+              style: TextStyle(
+                fontSize: AppTokens.fontSupport,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.6),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            onChanged: (v) => setState(() => _query = v),
-            decoration: glassInputDecoration(context, L10n.searchPattern),
-          ),
-          const SizedBox(height: 16),
-          ..._buildGrouped(context, matched),
-        ],
+            const SizedBox(height: 12),
+            TextField(
+              onChanged: (v) => setState(() => _query = v),
+              decoration: glassInputDecoration(context, L10n.searchPattern),
+            ),
+            const SizedBox(height: 16),
+            ..._buildGrouped(context, matched),
+          ],
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/widgets/centered_content.dart';
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
@@ -31,7 +32,7 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
+        child: CenteredContent(child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           physics: const BouncingScrollPhysics(),
           children: [
@@ -243,7 +244,7 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 

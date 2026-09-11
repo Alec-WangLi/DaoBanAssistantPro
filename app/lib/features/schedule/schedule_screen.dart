@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/widgets/centered_content.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
@@ -24,7 +25,7 @@ class ScheduleScreen extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: Column(
+        child: CenteredContent(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
@@ -56,7 +57,7 @@ class ScheduleScreen extends ConsumerWidget {
             ),
           ],
         ),
-      ),
+      )),
       floatingActionButtonLocation: const _AboveCapsuleFabLocation(),
       floatingActionButton: Container(
         width: 56,
