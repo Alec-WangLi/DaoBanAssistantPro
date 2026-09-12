@@ -264,10 +264,23 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: FilledButton.icon(
-            onPressed: _saving ? null : _save,
-            icon: const Icon(Icons.check_outlined),
-            label: Text(L10n.saveAndReschedule),
+          // 正文用 CenteredContent 限了 720，底部的保存按钮要跟它对齐，
+          // 否则宽屏上按钮横贯整屏、与居中的正文错位。不能直接复用
+          // CenteredContent：它里面的 Center 没设 heightFactor，在
+          // bottomNavigationBar 的松高度约束下会撑满整屏，把正文挤成 0
+          // （widget 测试当场抓出来过）。这里只做水平限宽居中。
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                  maxWidth: AppLayout.maxContentWidth),
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: const Icon(Icons.check_outlined),
+                label: Text(L10n.saveAndReschedule),
+              ),
+            ),
           ),
         ),
       ),

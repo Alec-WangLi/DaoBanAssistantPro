@@ -534,7 +534,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         final cellW = (constraints.maxWidth - _hPad * 2) / 7;
         final cellH = calendarCellHeight(
           cellW: cellW,
-          availHeight: availHeight,
+          // 预留 2px：cellH 按剩余空间均分算出来后，网格内容的高度就
+          // **正好等于**可用高度，一行都不多 —— 真机上一旦有亚像素取整，
+          // 最后一行就会被滚动容器裁掉一条。留 2px 让内容稳稳落在视口内。
+          // （真正的大头是 _minCellH 曾经顶得比视口还高，见那里的说明。）
+          availHeight: availHeight - 2,
           weekRows: _weekRows,
           weekdayH: _weekdayH,
           // 窄屏 / 短屏上格子可以更「瘦高」一些：格子本来就窄，再按 0.62
@@ -701,69 +705,86 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // 两位数在小窗格子里会折成两行（「10」变「1」「0」）——
-                  // 小窗格子只有 ~25 宽，18px 的两个数字刚好卡在边界上，
-                  // 换个字体就翻过去。用 FittedBox 按需缩，不赌字体宽度。
-                  // 竖屏/横屏格子够宽，缩放不生效，仍是原来的 18px。
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '${date.day}',
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 18,
-                        // 显式压紧行盒：M3 默认行高 1.5，三行文字的行盒加起来
-                        // 比格子可用高度多出几个像素，真机上每个格子都会
-                        // BOTTOM OVERFLOWED（content 被裁）。
-                        height: 1.15,
-                        fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurface,
+              // 整格内容一起可缩，而不是让某一行自己想办法。
+              //
+              // 格子高度是按**剩余空间**均分的（`calendarCellHeight`），并不会
+              // 跟着系统字号长 —— 用户把字号调到 1.2 倍以上，三行字就高过
+              // 格子，Column 报 BOTTOM OVERFLOWED、release 下被裁字。外层的
+              // 滚动容器救不了这里：它管的是「整个网格高过视口」，管不到
+              // 「字高过格子」。
+              //
+              // 宽度给死值，所以 scaleDown 只在**高度**不够时才动手；正常
+              // 字号下一像素都不缩，和没有这一层完全一样。
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: cellW - _cellInset * 2,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 两位数在小窗格子里会折成两行（「10」变「1」「0」）——
+                      // 小窗格子只有 ~25 宽，18px 的两个数字刚好卡在边界上，
+                      // 换个字体就翻过去。用 FittedBox 按需缩，不赌字体宽度。
+                      // 竖屏/横屏格子够宽，缩放不生效，仍是原来的 18px。
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${date.day}',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 18,
+                            // 显式压紧行盒：M3 默认行高 1.5，三行文字的行盒加起来
+                            // 比格子可用高度多出几个像素，真机上每个格子都会
+                            // BOTTOM OVERFLOWED（content 被裁）。
+                            height: 1.15,
+                            fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      if (shift != null)
+                        Text(
+                          shift.shortLabel,
+                          // 简称上限是 1–2 字，但格宽固定，多一个字就会撑破竖向
+                          // 节奏；单行 + 省略号让任何长度都不破版。
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.15,
+                            fontWeight: FontWeight.w700,
+                            color: AppTokens.inkFor(Color(shift.color), surface),
+                          ),
+                        ),
+                      const SizedBox(height: 2),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 1),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              if (lunar.isMakeupWorkday)
+                                TextSpan(
+                                  text: '班 ',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              TextSpan(text: lunar.shortLabel),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              TextStyle(fontSize: 11, height: 1.15, color: lunarColor),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  if (shift != null)
-                    Text(
-                      shift.shortLabel,
-                      // 简称上限是 1–2 字，但格宽固定，多一个字就会撑破竖向
-                      // 节奏；单行 + 省略号让任何长度都不破版。
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.15,
-                        fontWeight: FontWeight.w700,
-                        color: AppTokens.inkFor(Color(shift.color), surface),
-                      ),
-                    ),
-                  const SizedBox(height: 2),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 1),
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          if (lunar.isMakeupWorkday)
-                            TextSpan(
-                              text: '班 ',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          TextSpan(text: lunar.shortLabel),
-                        ],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 11, height: 1.15, color: lunarColor),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],
@@ -956,7 +977,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             Flexible(
               child: Text(
                 lunar.fullDescription,
-                maxLines: 1,
+                // 两行封顶：法定节假日名长（如「中秋节 · 农历八月十五」）
+                // 单行会截断成省略号。卡片本身定高（见 _infoCardHeight），
+                // 内容多一行只影响卡片内部留白，不会引起日期格抖动。
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
@@ -1061,11 +1085,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
 
     return Padding(
-      // 底栏时要给悬浮胶囊让出高度（竖屏 120，短屏 76）；右栏时胶囊在
-      // 屏幕底部、与这一栏无关，只需要常规留白。
+      // 底栏时要给悬浮胶囊让出高度（竖屏 84，短屏 76）；右栏时胶囊在
+      // 屏幕底部、与这一栏无关，只需要常规留白。竖屏的 84 = 胶囊高 64
+      // + 20 余量：留 120 时卡片底下空出一大截（v0.6.5 用户实测），
+      // 收到 84 后卡片贴着胶囊，省下的高度全给了信息卡本身。
       padding: inSidePane
           ? const EdgeInsets.fromLTRB(0, 8, 16, 16)
-          : const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          : const EdgeInsets.fromLTRB(16, 8, 16, 84),
       // 底栏这一份是**定高**的，右侧分栏那份不是：只有底栏会挤压网格，
       // 分栏时网格在左边、各占各的高度（见 _infoCardHeight 的说明）。
       child: inSidePane
@@ -1148,25 +1174,39 @@ String _alarmText(ShiftClass t) {
 /// 卡片自己定高，把多出来的空间留在卡片内部 —— 它是一块面板，不是一条
 /// 会伸缩的条。
 ///
-/// 取值 = 内容最坏情况（今天徽章 + 法定节假日 + 班次 + 闹钟 + 其他班组色块
-/// 换到第二行）在 420 宽、标准字号下的高度，再留一点余量。字号被系统放大到
-/// 装不下时，由卡片内部的滚动兜底，不会溢出。
+/// 取值 = 内容最坏情况（今天徽章 + 两行法定节假日（v0.6.6 起农历描述
+/// 允许换行）+ 班次 + 闹钟 + 其他班组色块换到第二行）在 420 宽、标准字号
+/// 下的高度，再留一点余量。字号被系统放大到装不下时，由卡片内部的滚动
+/// 兜底，不会溢出。
 ///
 /// 定高的下界由 `calendar_screen_test.dart` 的「点开某天」用例盯着：它把整月
 /// 每一天都点一遍，断言内容装得下、且不要留太多空白。
-const double _infoCardHeight = 216;
+const double _infoCardHeight = 248;
 
 // 格子高宽比：0.78 = 自然比例，0.62 = 「不许再瘦」的下限比例（越小格子越高）。
 const double _cellAspect = 0.78;
 const double _cellAspectMin = 0.62;
 
-/// 格子高的下限：日期 18×1.15 + 班次 12×1.15 + 农历 11×1.15 + 两处间距
-/// + 格子内缩。按字形估算只有 56，但实测（小窗 420×420，测试字体每字占满
-/// 一个字身）内容要 75px 才不溢出，所以留到 80。
+/// 格子高的下限 = **格子里的三行字实测要多高**。
 ///
-/// 它只在**空间不足**时生效：竖屏空间富余、走的是上面「拉高」那条分支，
-/// 不经过这里 —— 所以抬高它不会动到竖屏的观感。
-const double _minCellH = 80;
+/// 三行都是单行文字（日期 18、班次简称 12、农历 11，各自 `height: 1.15`
+/// 压过行盒）：18×1.15 + 2 + 12×1.15 + 2 + 11×1.15 ≈ 51.5，再加格子自身
+/// `_cellInset` 上下各 2 一共 4 —— 约 55.5。取 58，留 2.5 的字体度量余量。
+///
+/// **曾经是 80**，那是 `height: 1.15` 压行盒之前按 M3 默认行高 1.5 标定的
+/// （27 + 2 + 18 + 2 + 16.5 + 4 ≈ 70，再垫到 80）。行盒压紧后这个数一直没
+/// 跟着降，于是下限反过来把**网格**顶出了视口：400×869 的手机上网格视口
+/// 只有 405dp，五行的月份被顶到 26+5×80=426（溢出 21dp）、六行的顶到 506
+/// （溢出 101dp），最后一行被 `SingleChildScrollView` 裁在信息卡上沿 ——
+/// 用户看到的就是「最后一行被卡片压住」（v0.6.5 实测）。
+///
+/// 下限只该管「三行字装不装得下」，不管别的；把它抬到内容需求之上，就等于
+/// 让网格自己制造溢出。真正的兜底是外层那个滚动容器：空间确实不够时滚动，
+/// 而不是把每一格都撑破视口。
+///
+/// 字号被系统放大时格子**不会**跟着长高，那是 `_dayCell` 里那层
+/// `FittedBox` 的事 —— 内容按需缩，不由这个下限兜。
+const double _minCellH = 58;
 
 /// 日历格子高度：**宽高共同决定**。
 ///

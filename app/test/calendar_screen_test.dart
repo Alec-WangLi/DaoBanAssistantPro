@@ -182,7 +182,7 @@ void main() {
     );
     expect(landscape, lessThan(cellW / 0.78),
         reason: '横屏必须进入压缩分支，不能仍取按宽度算出来的 160');
-    expect(landscape, greaterThanOrEqualTo(80),
+    expect(landscape, greaterThanOrEqualTo(58),
         reason: '压缩不得低于可读下限，否则要裁字');
   });
 
@@ -216,10 +216,37 @@ void main() {
       weekdayH: 26,
       aspectMin: 0.46, // 窄屏放开的那档
     );
-    expect(small, greaterThanOrEqualTo(80),
+    expect(small, greaterThanOrEqualTo(58),
         reason: '富余分支同样要守住可读下限，否则格子装不下日期/班次/农历三行');
     expect(small, greaterThan(cellW / 0.46),
         reason: '按宽度算出来的 54 装不下三行字，下限必须把它顶上去');
+  });
+
+  // 回归：v0.6.5 用户实测「最后一行被信息卡压住」。
+  //
+  // 真因不是「格子算高了一点点」，而是可读下限被抬到了内容需求之上：
+  // 三行字（18/12/11，行盒 height 1.15 压过）实测只要 ≈52，加格子内缩 4
+  // 约 56，而当时的下限是 80 —— 于是在 400×869 的手机上，五行的月份被顶到
+  // 26+5×80=426、六行的顶到 506，双双超过只有 405 的网格视口，最后一行
+  // 被 `SingleChildScrollView` 裁在信息卡上沿（多出来的部分要靠滚动才看得到，
+  // 用户读到的就是「被卡片压住」）。
+  //
+  // 这里盯的是**不变量**：只要空间放得下可读下限，网格内容就不得高于视口。
+  test('竖屏 400×869：四/五/六行月份都要完整落在网格视口里，不许滚动', () {
+    // 小米 25102RKBEC：1200×2608 @3.0 → 400×869.33；
+    // 扣状态栏 48、导航栏 20、顶栏 56、信息卡块（8 + 248 + 84）340 → 405.33。
+    const cellW = (400 - 24) / 7;
+    const viewport = 405.33;
+    for (final rows in [4, 5, 6]) {
+      final cellH = calendarCellHeight(
+        cellW: cellW,
+        availHeight: viewport - 2, // 网格自己留的亚像素余量
+        weekRows: rows,
+        weekdayH: 26,
+      );
+      expect(26 + rows * cellH, lessThanOrEqualTo(viewport),
+          reason: '$rows 行：内容高过视口就会被裁掉最后一行（v0.6.5 用户实测）');
+    }
   });
 
   // 用信息卡自己的日期文本定位。不要用 L10n.today —— 「今天」在顶栏按钮和
