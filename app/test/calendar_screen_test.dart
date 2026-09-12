@@ -6,6 +6,8 @@
 //
 // 本机没有可运行目标（无 Android 设备 / 无 VS 工具链 / web 被本地通知插件挡住），
 // 所以界面行为全部靠 widget 测试覆盖。
+import 'dart:math' as math;
+
 import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -198,6 +200,28 @@ void main() {
     expect(portrait, closeTo(cellW / 0.62, 0.01));
   });
 
+  test('小窗 200 宽：格子高度仍不低于可读下限', () {
+    // 起因：小窗（小米小窗实测 200×400）cellW ≈ 25，naturalCellH ≈ 32，
+    // 而「不许再瘦」的比例在窄屏放开到 0.46 → cellW / 0.46 ≈ 54。
+    // 那时可用高度也还有富余，于是走的是**富余分支**、返回 54 ——
+    // 比格子里的三行字（约 51 + 内缩）还矮，整月每个格子都溢出。
+    //
+    // 下限是「装不下三行字」决定的，跟走哪个分支无关，所以它必须作用在
+    // 最终值上。
+    const cellW = 25.1; // (200 − 24) / 7
+    final small = calendarCellHeight(
+      cellW: cellW,
+      availHeight: 182, // 小窗扣掉两行顶栏与信息卡之后
+      weekRows: 5,
+      weekdayH: 26,
+      aspectMin: 0.46, // 窄屏放开的那档
+    );
+    expect(small, greaterThanOrEqualTo(80),
+        reason: '富余分支同样要守住可读下限，否则格子装不下日期/班次/农历三行');
+    expect(small, greaterThan(cellW / 0.46),
+        reason: '按宽度算出来的 54 装不下三行字，下限必须把它顶上去');
+  });
+
   // 用信息卡自己的日期文本定位。不要用 L10n.today —— 「今天」在顶栏按钮和
   // 信息卡的「今天」徽章各出现一次，find.text 会一次命中两个。
   Finder cardDate() =>
@@ -243,6 +267,39 @@ void main() {
     expect(find.text(L10n.today), findsOneWidget,
         reason: '320 宽下顶栏那两个该收起来，只留下信息卡的徽章');
     expect(find.byIcon(Icons.today_outlined), findsWidgets);
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('点开某天：信息卡定高，日期格不再跟着一涨一缩', (tester) async {
+    // 起因：竖屏是 `Column[顶栏, Expanded(网格), 信息卡]`，格子高度按**剩余
+    // 空间**算，所以信息卡随当天内容长高一点，六个格子就集体矮一点。
+    // 内容里会变的至少有四处：法定节假日徽章、农历描述换行、其他班组色块
+    // 换行、有没有班次/闹钟 —— 点一天晃一次。
+    await _pumpCalendar(tester, 'six_crew_three_shift');
+
+    final box = find.byKey(const Key('info-card-box'));
+    final cardH = tester.getSize(box).height;
+
+    // 把整月的每一天都点一遍：每天的农历、节气、节日与班次都不一样。
+    final daysInMonth =
+        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+    var maxContentH = 0.0;
+    for (var d = 1; d <= daysInMonth; d++) {
+      await tester.tap(find.text('$d').first);
+      await tester.pump();
+      expect(tester.getSize(box).height, cardH,
+          reason: '$d 日：信息卡高度不该随当天内容变，否则格子会跟着伸缩');
+      final contentH =
+          tester.getSize(find.byKey(const Key('info-card-content'))).height;
+      maxContentH = math.max(maxContentH, contentH);
+      expect(contentH, lessThanOrEqualTo(cardH),
+          reason: '$d 日：卡片内容 $contentH 装不进定高 $cardH');
+    }
+
+    // 定高不能只是「足够大」——留太多空白等于白占网格的高度。
+    expect(cardH - maxContentH, lessThanOrEqualTo(48),
+        reason: '定高 $cardH 比最满的一天（$maxContentH）高出太多，空格子白占网格');
+
     await _disposeCalendar(tester);
   });
 

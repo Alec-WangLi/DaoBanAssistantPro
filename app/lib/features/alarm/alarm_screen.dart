@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
+import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_button.dart';
@@ -112,6 +113,13 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             const SizedBox(height: 8),
             _sectionTitleRow(context, L10n.customAlarms),
             Expanded(child: _customAlarmSection(context, alarms)),
+            // 底部按钮条是 floatingActionButton、**悬浮在内容之上**
+            // （见 _AboveCapsuleBarLocation），正文不给自己留位置就会被压住：
+            // 小窗里「自定义闹钟」的空状态提示正好落在它下面。
+            // 竖屏内容本来就够短、轮不到压，所以只在小窗/横屏补这块留白。
+            if (AppLayout.of(context).isShort ||
+                AppLayout.of(context).isNarrow)
+              const SizedBox(height: 156),
           ],
         ),
       )),

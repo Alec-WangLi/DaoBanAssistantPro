@@ -85,6 +85,18 @@ final List<VisualScreen> visualScreens = [
 ///
 /// 横屏与小窗两张同样不是凑数：它们的尺寸正是用户反馈「几乎无法使用」的
 /// 那两种形态 —— 工装过去只拍 420×900，所以那些缺陷一张图都拍不到。
+///
+/// 小窗的尺寸必须是**量出来的**，不能估。v0.6.4 在这里填了 360×360，
+/// 而小米小窗在参考机（Redmi K90 Pro Max，1200×2608 @480dpi）上实际给
+/// 应用的是 200×400 逻辑像素：
+///
+/// ```
+/// adb shell dumpsys activity com.daoban.shiftassistantpro
+///   → mCurrentConfig={… sw200dp w200dp h400dp 480dpi … mWindowingMode=freeform}
+/// ```
+///
+/// 系统随后把它放大 1.43 倍显示，所以肉眼看不出它有这么小 —— 光看屏幕
+/// 估尺寸必然估大（360 是 200 的 1.8 倍，足够把溢出全藏起来）。
 final List<
     ({
       String suffix,
@@ -123,9 +135,9 @@ final List<
   ),
   (
     suffix: 'small',
-    label: '小窗 360×360',
+    label: '小窗 200×400',
     brightness: Brightness.light,
     language: 'zh',
-    size: const Size(360, 360),
+    size: const Size(200, 400),
   ),
 ];

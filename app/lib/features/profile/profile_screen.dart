@@ -206,7 +206,7 @@ class ProfileScreen extends ConsumerWidget {
                   ListTile(
                     leading: const Icon(Icons.info_outlined),
                     title: Text(L10n.version),
-                    trailing: Text('v$appVersion'),
+                    trailing: const Text('v$appVersion'),
                   ),
                   GlassPressable(
                     child: ListTile(

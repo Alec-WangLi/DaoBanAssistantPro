@@ -131,6 +131,25 @@ class _ShiftTemplatePickerScreenState
   Widget _templateCard(BuildContext context, ShiftTemplate t) {
     final muted =
         Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+    final texts = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(t.title,
+            style: const TextStyle(
+                fontSize: AppTokens.fontLead, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(t.subtitle,
+            style: TextStyle(fontSize: AppTokens.fontSupport, color: muted)),
+        if (t.teamCount > 1) ...[
+          const SizedBox(height: 4),
+          Text(
+            L10n.crewsOnDutyCount(t.workingTeamsPerDay),
+            style: TextStyle(fontSize: AppTokens.fontCaption, color: muted),
+          ),
+        ],
+      ],
+    );
+
     return GlassTile(
       enableBlur: false,
       margin: const EdgeInsets.only(bottom: 10),
@@ -141,34 +160,42 @@ class _ShiftTemplatePickerScreenState
               Navigator.of(context).pop(ShiftTemplateChoice.template(t)),
           child: Padding(
             padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _cycleStrip(context, t),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(t.title,
-                          style: const TextStyle(
-                              fontSize: AppTokens.fontLead, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Text(t.subtitle,
-                          style: TextStyle(fontSize: AppTokens.fontSupport, color: muted)),
-                      if (t.teamCount > 1) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          L10n.crewsOnDutyCount(t.workingTeamsPerDay),
-                          style: TextStyle(fontSize: AppTokens.fontCaption, color: muted),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_outlined, color: muted),
-              ],
-            ),
+            child: LayoutBuilder(builder: (context, c) {
+              // 卡片正文宽度 = 卡片宽 − 左右内边距。
+              final inner = c.maxWidth - 28;
+              // 色条、色条后的间距、右侧箭头都是**固定**宽度，只有标题那一栏
+              // 是可伸缩的。小窗（实测 200 逻辑像素宽）里 inner 只有 140，
+              // 三者相加 146 —— 标题被挤到 0 宽，整行溢出 8px。
+              //
+              // 所以这里不按屏宽分档，按**卡片自己拿到的宽度**判断：放不下
+              // 一整列可读的标题时，改成上下排（文字占满整行，色条挪到下面）。
+              // 用真实的 availableWidth 而不是断点，是因为卡片在弹层里，
+              // 弹层两侧的边距不由它决定，按屏宽推会推错。
+              const minTextWidth = 96.0;
+              final stacked = inner <
+                  _cycleStripWidth + 12 + _chevronWidth + minTextWidth;
+
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    texts,
+                    const SizedBox(height: 10),
+                    _cycleStrip(context, t),
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _cycleStrip(context, t),
+                  const SizedBox(width: 12),
+                  Expanded(child: texts),
+                  Icon(Icons.chevron_right_outlined, color: muted),
+                ],
+              );
+            }),
           ),
         ),
       ),
@@ -243,15 +270,25 @@ class _ShiftTemplatePickerScreenState
 /// 超过 14 天时最后一格画成省略标记 —— 28 天的 DuPont 原来会静默只剩半截，
 /// 看不出「后面还有」。副标题里写着周期天数，有了这个标记它就从
 /// 「唯一线索」退回「补充说明」，这是它该有的位置。
+/// 周期色条的固定几何（`_templateCard` 判断能不能与标题并排时要用到宽度）。
+const double _stripDot = 14;
+const double _stripSpacing = 2;
+const int _stripPerRow = 7;
+
+/// 色条宽度：按实际间距算，别写死 —— 改间距时宽度才不会对不上。
+const double _cycleStripWidth =
+    _stripDot * _stripPerRow + _stripSpacing * (_stripPerRow - 1);
+
+/// 卡片右侧箭头的占位宽（`Icon` 默认 24）。
+const double _chevronWidth = 24;
+
 Widget _cycleStrip(BuildContext context, ShiftTemplate t) {
-  const dot = 14.0;
-  const spacing = 2.0;
-  const perRow = 7;
+  const dot = _stripDot;
+  const spacing = _stripSpacing;
   final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
   final plan = cycleStripPlan(t);
   return SizedBox(
-    // 按实际间距算，别写死 —— 改间距时宽度才不会对不上。
-    width: dot * perRow + spacing * (perRow - 1),
+    width: _cycleStripWidth,
     child: Wrap(
       spacing: spacing,
       runSpacing: spacing,

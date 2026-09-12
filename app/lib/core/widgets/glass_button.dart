@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import '../layout.dart';
 import '../motion.dart';
 import '../glass/glass.dart';
 
@@ -70,23 +71,36 @@ class _GlassButtonState extends State<GlassButton> {
     final contentColor =
         widget.primary ? Colors.white : Theme.of(context).colorScheme.onSurface;
 
+    // 窄档（小窗实测 200 逻辑像素宽）里一个按钮可能只有 79 宽，图标 20 + 间距 6
+    // 会直接挤掉文字的位置：闹钟页并排的「新建闹钟 / 测试闹钟」此前各溢出 10px。
+    // 省掉图标把宽度让给文字；文字再放不下就走省略号 —— 标签不该撑破按钮。
+    //
+    // 这里用 Flexible 的前提是调用方给了有界宽度（现在三处都是：Expanded、
+    // Positioned(left/right)、Column 的子项）。放进无界的 Row 会触发框架断言。
+    final narrow = AppLayout.of(context).isNarrow;
+    final showIcon = widget.icon != null && !narrow;
+
     final childRow = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (widget.icon != null) ...[
+        if (showIcon) ...[
           IconTheme(
             data: IconThemeData(color: contentColor, size: 20),
             child: widget.icon!,
           ),
           const SizedBox(width: 6),
         ],
-        DefaultTextStyle.merge(
-          style: TextStyle(
-            color: contentColor,
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
+        Flexible(
+          child: DefaultTextStyle.merge(
+            style: TextStyle(
+              color: contentColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            child: widget.child,
           ),
-          child: widget.child,
         ),
       ],
     );

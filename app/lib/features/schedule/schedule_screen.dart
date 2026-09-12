@@ -36,13 +36,20 @@ class ScheduleScreen extends ConsumerWidget {
             Expanded(
               child: events.isEmpty
                   ? Center(
-                      child: Text(
-                        L10n.noEvents,
-                        style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.5),
+                      // 左右留白 + 居中换行：小窗（200 宽）里这一句话比屏还宽，
+                      // 居中之后两头都被切掉 —— Text 的横向溢出不是 RenderFlex
+                      // 溢出，工装的 failOnOverflow 抓不到，只能靠出图看。
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          L10n.noEvents,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.5),
+                          ),
                         ),
                       ),
                     )
@@ -201,9 +208,10 @@ class ScheduleScreen extends ConsumerWidget {
                         context,
                         initialTime: TimeOfDay.now(),
                       );
-                      if (p != null)
+                      if (p != null) {
                         setState(
                             () => timeMinute = p.hour * 60 + p.minute);
+                      }
                     },
                   ),
                   ListTile(
@@ -297,8 +305,9 @@ class ScheduleScreen extends ConsumerWidget {
                                 hour: timeMinute! ~/ 60,
                                 minute: timeMinute! % 60),
                       );
-                      if (p != null)
+                      if (p != null) {
                         setState(() => timeMinute = p.hour * 60 + p.minute);
+                      }
                     },
                   ),
                   ListTile(

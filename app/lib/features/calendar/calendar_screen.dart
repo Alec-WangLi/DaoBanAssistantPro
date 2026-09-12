@@ -165,8 +165,71 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Widget _header(BuildContext context) {
+    const pad = EdgeInsets.fromLTRB(12, 10, 12, 6);
+    // 窄档（小窗实测 200 逻辑像素宽）一行放不下 —— 四个圆形钮加年月胶囊的
+    // **固定**宽度是 184，而 200 宽的屏扣掉左右留白只剩 176：年月那个
+    // Expanded 会被挤成 0 宽，整行溢出。
+    // 拆成两行：上行只放「‹ 年月 ›」（年月能拿到 104），下行放「切换排班 / 今天」。
+    // 控件收到 32 见方：一是给年月腾出完整显示「2026年9月」的宽度（36 见方时
+    // 真机上只剩 76 可用，MiSans 下会被省略成「2026年…」），二是省下 10px 高度。
+    if (AppLayout.of(context).isNarrow) {
+      const narrowSide = 32.0;
+      const narrowGap = 4.0;
+      return Padding(
+        padding: pad,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                _circleIcon(context, Icons.chevron_left_outlined, L10n.prevMonth,
+                    _prev, size: narrowSide),
+                const SizedBox(width: narrowGap),
+                Expanded(
+                  child: _glassPill(
+                    context,
+                    onTap: _showMonthPicker,
+                    height: narrowSide,
+                    child: Text(
+                      L10n.yearMonth(_month),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: narrowGap),
+                _circleIcon(context, Icons.chevron_right_outlined, L10n.nextMonth,
+                    _next, size: narrowSide),
+              ],
+            ),
+            const SizedBox(height: narrowGap),
+            Row(
+              children: [
+                _circleIcon(context, Icons.swap_vert_outlined,
+                    L10n.switchSchedule, _showScheduleSwitcher, size: narrowSide),
+                const Spacer(),
+                _glassPill(
+                  context,
+                  onTap: _today,
+                  accent: true,
+                  height: narrowSide,
+                  // 窄档连年月都要省着放，「今天」只留图标（整屏的窄档同样如此）。
+                  child: const Icon(
+                    Icons.today_outlined,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      padding: pad,
       child: Row(
         children: [
           _circleIcon(
@@ -227,11 +290,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   /// 统一 40px 高的玻璃胶囊（accent=true 为主色调渐变，用于「今天」）。
+  /// 窄档传 36 —— 小窗里每一像素都要省。
   Widget _glassPill(
     BuildContext context, {
     VoidCallback? onTap,
     required Widget child,
     bool accent = false,
+    double height = 40,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
@@ -292,7 +357,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         borderRadius: BorderRadius.circular(AppTokens.radiusL),
         onTap: onTap,
         child: Container(
-          height: 40,
+          height: height,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           alignment: Alignment.center,
           decoration: decoration,
@@ -302,8 +367,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Widget _circleIcon(
-      BuildContext context, IconData icon, String tooltip, VoidCallback onTap) {
+  Widget _circleIcon(BuildContext context, IconData icon, String tooltip,
+      VoidCallback onTap,
+      {double size = 40}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Tooltip(
       message: tooltip,
@@ -313,8 +379,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: Container(
-            width: 40,
-            height: 40,
+            width: size,
+            height: size,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -626,7 +692,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 得按格子底色算一版可读的。
     final surface = Theme.of(context).colorScheme.surface;
 
-    return Container(
+    return SizedBox(
       width: cellW,
       height: cellH,
       child: Container(
@@ -638,16 +704,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    '${date.day}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      // 显式压紧行盒：M3 默认行高 1.5，三行文字的行盒加起来
-                      // 比格子可用高度多出几个像素，真机上每个格子都会
-                      // BOTTOM OVERFLOWED（content 被裁）。
-                      height: 1.15,
-                      fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
+                  // 两位数在小窗格子里会折成两行（「10」变「1」「0」）——
+                  // 小窗格子只有 ~25 宽，18px 的两个数字刚好卡在边界上，
+                  // 换个字体就翻过去。用 FittedBox 按需缩，不赌字体宽度。
+                  // 竖屏/横屏格子够宽，缩放不生效，仍是原来的 18px。
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${date.day}',
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 18,
+                        // 显式压紧行盒：M3 默认行高 1.5，三行文字的行盒加起来
+                        // 比格子可用高度多出几个像素，真机上每个格子都会
+                        // BOTTOM OVERFLOWED（content 被裁）。
+                        height: 1.15,
+                        fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -698,7 +772,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  /// 信息卡上的「法定节假日 · 名称」红色胶囊。
+  /// 信息卡上的「法定节假日 · 名称」红色胶囊。与农历描述同占一行，所以
+  /// 名字再长也只能占这一行 —— 文字可收缩 + 省略号。
   Widget _holidayBadge(BuildContext context, String name) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -712,12 +787,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         children: [
           const Icon(Icons.celebration_outlined, size: 14, color: AppTokens.holiday),
           const SizedBox(width: 5),
-          Text(
-            '${L10n.legalHoliday} · $name',
-            style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppTokens.holiday),
+          Flexible(
+            child: Text(
+              '${L10n.legalHoliday} · $name',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppTokens.holiday),
+            ),
           ),
         ],
       ),
@@ -829,146 +908,173 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       );
     }
 
+    final content = Column(
+      key: const Key('info-card-content'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              L10n.monthDayWeekday(_selected),
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            if (isToday) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  // 实心主色 + 白字。原来是「主色 14% 淡底 + 主色字」，
+                  // 实测对比度 3.84:1（深色下 2.93:1），低于 AA 的 4.5:1。
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(AppTokens.radiusL),
+                ),
+                child: Text(
+                  L10n.today,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        // 节假日徽章与农历描述**同一行**。原来徽章自占一行：放假那天卡片
+        // 凭空高 24，上面六个格子就集体矮一截 —— 这正是用户看到的「日期一会
+        // 变大一会变小」。并成一行后这一行的存在与否都不再改变卡片高度。
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (lunar.isLegalHoliday) ...[
+              _holidayBadge(context, lunar.legalHolidayName),
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Text(
+                lunar.fullDescription,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (shift != null)
+          Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                    color: Color(shift.color), shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  shift.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppTokens.inkFor(Color(shift.color),
+                        Theme.of(context).colorScheme.surface),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // 可收缩 + 省略号：宽屏下这张卡被放进 300 宽的侧栏，
+              // 「20:30 – 次日08:30」这类长串会把整行撑破。
+              if (shift.startMinute != null && shift.endMinute != null)
+                Flexible(
+                  child: Text(
+                    _timeRange(shift),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                ),
+            ],
+          )
+        else if (schedule != null && schedule.isBlank)
+          Text(
+            lunar.isLegalHoliday ? L10n.rest : L10n.workday,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
+            ),
+          )
+        else
+          Text(L10n.noSchedule, style: TextStyle(fontSize: 13, color: muted)),
+        const SizedBox(height: 8),
+        if (shift != null)
+          Text(
+            _alarmText(shift),
+            style: TextStyle(fontSize: 13, color: muted),
+          ),
+        if (schedule != null && schedule.teamCount > 1) ...[
+          const SizedBox(height: 10),
+          Text(L10n.otherCrews, style: TextStyle(fontSize: 12, color: muted)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: _otherCrewChips(schedule, _selected),
+          ),
+        ],
+      ],
+    );
+
+    final card = Stack(
+      children: [
+        GlassTile(
+          padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
+          child: inSidePane
+              ? content
+              // 兜底：字号被系统放大到装不下时，卡片内部滚动，而不是溢出成
+              // 黄黑条纹。正常字号下内容矮于卡片，这一层不产生任何滚动。
+              : SingleChildScrollView(child: content),
+        ),
+        Positioned(
+          left: 0,
+          top: 18,
+          bottom: 18,
+          width: 6,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        ),
+      ],
+    );
+
     return Padding(
       // 底栏时要给悬浮胶囊让出高度（竖屏 120，短屏 76）；右栏时胶囊在
       // 屏幕底部、与这一栏无关，只需要常规留白。
       padding: inSidePane
           ? const EdgeInsets.fromLTRB(0, 8, 16, 16)
-          : EdgeInsets.fromLTRB(16, 8, 16, compact ? 76 : 120),
-      child: Stack(
-        children: [
-          GlassTile(
-            padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            Row(
-              children: [
-                Text(
-                  L10n.monthDayWeekday(_selected),
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                if (isToday) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      // 实心主色 + 白字。原来是「主色 14% 淡底 + 主色字」，
-                      // 实测对比度 3.84:1（深色下 2.93:1），低于 AA 的 4.5:1。
-                      color: Theme.of(context).colorScheme.primary,
-                      borderRadius: BorderRadius.circular(AppTokens.radiusL),
-                    ),
-                    child: Text(
-                      L10n.today,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+          : const EdgeInsets.fromLTRB(16, 8, 16, 120),
+      // 底栏这一份是**定高**的，右侧分栏那份不是：只有底栏会挤压网格，
+      // 分栏时网格在左边、各占各的高度（见 _infoCardHeight 的说明）。
+      child: inSidePane
+          ? card
+          : SizedBox(
+              key: const Key('info-card-box'),
+              height: _infoCardHeight,
+              child: card,
             ),
-            const SizedBox(height: 6),
-            if (lunar.isLegalHoliday) ...[
-              _holidayBadge(context, lunar.legalHolidayName),
-              const SizedBox(height: 6),
-            ],
-            Text(
-              lunar.fullDescription,
-              style: TextStyle(
-                fontSize: 13,
-                color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (shift != null)
-              Row(
-                children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                        color: Color(shift.color), shape: BoxShape.circle),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      shift.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppTokens.inkFor(Color(shift.color),
-                            Theme.of(context).colorScheme.surface),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // 可收缩 + 省略号：宽屏下这张卡被放进 300 宽的侧栏，
-                  // 「20:30 – 次日08:30」这类长串会把整行撑破。
-                  if (shift.startMinute != null && shift.endMinute != null)
-                    Flexible(
-                      child: Text(
-                        _timeRange(shift),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                ],
-              )
-            else if (schedule != null && schedule.isBlank)
-              Text(
-                lunar.isLegalHoliday ? L10n.rest : L10n.workday,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
-                ),
-              )
-            else
-              Text(L10n.noSchedule,
-                  style: TextStyle(fontSize: 13, color: muted)),
-            const SizedBox(height: 8),
-            if (shift != null)
-              Text(
-                _alarmText(shift),
-                style: TextStyle(fontSize: 13, color: muted),
-              ),
-            if (schedule != null && schedule.teamCount > 1) ...[
-              const SizedBox(height: 10),
-              Text(L10n.otherCrews,
-                  style: TextStyle(fontSize: 12, color: muted)),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: _otherCrewChips(schedule, _selected),
-              ),
-            ],
-          ],
-        ),
-      ),
-          Positioned(
-            left: 0,
-            top: 18,
-            bottom: 18,
-            width: 6,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: accent,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-      ],
-    ),
     );
   }
 
@@ -1030,6 +1136,26 @@ String _alarmText(ShiftClass t) {
   return L10n.alarmAt(formatClock(t.alarmMinute!));
 }
 
+/// 信息卡（完整版）在**底栏**时的固定高度。
+///
+/// 为什么必须是定值：竖屏下这一页是
+/// `Column[顶栏, Expanded(网格), 信息卡]`，而格子高度是按**剩余空间**算的
+/// （`calendarCellHeight(availHeight:)`）。信息卡只要随当天内容长高一像素，
+/// 六个格子就集体矮一像素、选下一天再弹回来 —— 点一天晃一次。
+///
+/// 也不能反过来把网格与卡片解耦（留白、或让网格自己滚动）：v0.6.1 刚把
+/// 「网格与信息卡之间的一条空带」消掉，那条空带是明确不接受的。所以只能让
+/// 卡片自己定高，把多出来的空间留在卡片内部 —— 它是一块面板，不是一条
+/// 会伸缩的条。
+///
+/// 取值 = 内容最坏情况（今天徽章 + 法定节假日 + 班次 + 闹钟 + 其他班组色块
+/// 换到第二行）在 420 宽、标准字号下的高度，再留一点余量。字号被系统放大到
+/// 装不下时，由卡片内部的滚动兜底，不会溢出。
+///
+/// 定高的下界由 `calendar_screen_test.dart` 的「点开某天」用例盯着：它把整月
+/// 每一天都点一遍，断言内容装得下、且不要留太多空白。
+const double _infoCardHeight = 216;
+
 // 格子高宽比：0.78 = 自然比例，0.62 = 「不许再瘦」的下限比例（越小格子越高）。
 const double _cellAspect = 0.78;
 const double _cellAspectMin = 0.62;
@@ -1054,6 +1180,12 @@ const double _minCellH = 80;
 /// 原来空间不足时直接取 `cellW / _cellAspect`（只按宽度算）：横屏下 cellW 大
 /// → 格子高 160 → 一个月六行要 960px，一屏只看得到一行多。那道「不许再瘦」
 /// 的下限只在富余时生效、不足时反而没有任何压缩通道，逻辑正好反了。
+///
+/// [_minCellH] 那道下限**必须作用在最终值上**，不能只挂在其中一个分支里。
+/// 宽屏上 `cellW / aspectMin` 大，走富余分支不会低于下限；窄屏（小窗 200 宽
+/// 时 cellW ≈ 25）上它只有 54，于是富余分支返回一个**比格子里的三行字还矮**
+/// 的高度 —— 每个格子都会 BOTTOM OVERFLOWED。下限是「装不下三行字」这件事
+/// 决定的，跟走哪个分支无关。
 double calendarCellHeight({
   required double cellW,
   required double availHeight,
@@ -1063,7 +1195,8 @@ double calendarCellHeight({
 }) {
   final naturalCellH = cellW / _cellAspect;
   final fillCellH = (availHeight - weekdayH) / weekRows;
-  return fillCellH >= naturalCellH
+  final shrunk = fillCellH >= naturalCellH
       ? math.min(fillCellH, cellW / aspectMin)
-      : math.max(fillCellH, _minCellH);
+      : fillCellH;
+  return math.max(shrunk, _minCellH);
 }

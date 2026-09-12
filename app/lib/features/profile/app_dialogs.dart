@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.4\n'
+const String _changelogZh = 'v0.6.5\n'
+    '· 小窗（小米小窗 / 分屏）修好：系统在小窗里把「顶部系统栏高度」报成整个窗口的高度，每一页的顶部安全区因此把整屏吃掉 —— 日历只剩一片背景色，只看得到底部那条胶囊。现在会先给系统栏数据做一道体检，小窗下七个界面全部正常\n'
+    '· 小窗按实测尺寸（200×400）重新适配：日历顶栏改两行、日期格不再互相叠、倒班方式卡片改成上下排、闹钟页底部按钮不再压住正文\n'
+    '· 日历：今日信息卡改为定高，点选不同日期时上方的日期格不再跟着一涨一缩\n'
+    '· 日历：法定节假日徽章与农历说明并成一行，信息卡更紧凑\n'
+    '· 小窗里两位数的日期不再折成上下两行；清除全部代码检查提示\n\n'
+    'v0.6.4\n'
     '· 适配手机横屏与小窗：时间 / 日期 / 月份三个选择弹层此前在横屏下会溢出，现在按可用高度自适应\n'
     '· 日历在横屏与宽屏下改为左右分栏：左边日期网格、右边当天信息，格子不再被压成一屏只看得到一行\n'
     '· 小窗下信息卡压成一行（哪天 · 什么班 · 几点到几点），把高度让给日期网格\n'
@@ -85,11 +91,15 @@ const String _changelogZh = 'v0.6.4\n'
     'v0.4.8\n'
     '· 日历今日信息卡上移、不再被悬浮胶囊遮挡；胶囊通透度再微调\n\n'
     'v0.4.7\n'
-    '· 底部胶囊更通透、内容无遮挡穿过：去掉浮层四周的空背景「蒙版」\n\n'
-    'v0.4.6\n'
-    '· 底部导航胶囊改回半透明磨砂玻璃：内容滑过若隐若现，去掉投影和左上角高光\n\n';
+    '· 底部胶囊更通透、内容无遮挡穿过：去掉浮层四周的空背景「蒙版」\n';
 
-const String _changelogEn = 'v0.6.4\n'
+const String _changelogEn = 'v0.6.5\n'
+    '· Small windows (Xiaomi floating window / split screen) are fixed: the system reports the top system-bar height as the whole window height there, so every page\'s top safe area swallowed the entire screen — the calendar showed nothing but background, with only the bottom capsule visible. System-bar data is now sanity-checked, and all seven screens work in a small window\n'
+    '· The small-window layout was re-fitted to its measured size (200×400): the calendar header is two rows, day cells no longer overlap, pattern cards stack their colour strip below the text, and the alarm page\'s bottom buttons no longer cover the content\n'
+    '· Calendar: the day card is now a fixed-height panel, so the day cells above it no longer grow and shrink as you tap through dates\n'
+    '· Calendar: the public-holiday badge and the lunar line now share one row, making the card more compact\n'
+    '· Two-digit dates no longer wrap onto two lines in a small window; all analyzer findings cleared\n\n'
+    'v0.6.4\n'
     '· Phone landscape and small windows are now usable: the time, date and month pickers adapt to the available height instead of overflowing\n'
     '· On landscape and wide screens the calendar becomes two panes — month grid on the left, day details on the right — so day cells are no longer squashed\n'
     '· In a small window the day card collapses to a single line (date · shift · hours), giving the height back to the grid\n'
@@ -134,9 +144,7 @@ const String _changelogEn = 'v0.6.4\n'
     'v0.4.8\n'
     '· Raised the calendar today-info card so the floating capsule no longer covers it; capsule translucency tuned slightly\n\n'
     'v0.4.7\n'
-    '· More translucent bottom capsule, content flows underneath unobstructed — removed the empty “mask” band around it\n\n'
-    'v0.4.6\n'
-    '· Bottom nav capsule back to translucent frosted glass (content shows through while scrolling), removed its shadow and the top-left highlight\n\n';
+    '· More translucent bottom capsule, content flows underneath unobstructed — removed the empty “mask” band around it\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
