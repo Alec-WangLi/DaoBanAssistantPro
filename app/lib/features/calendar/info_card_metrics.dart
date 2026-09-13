@@ -35,12 +35,13 @@ import '../../core/l10n.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/shift_rotation.dart';
 
-/// 卡片**内部**的垂直固定开销：上下内边距 18×2 + 描边 1×2（[GlassPanel] 的
-/// `Border.all(width: 1)`，`Container` 会把它算进自己的内边距）。
-const double _cardChromeV = 38;
+/// 卡片**内部**的垂直固定开销：上下内边距 16×2（`AppTokens.spaceLg`）+ 描边
+/// 1×2（[GlassTile] 的 `Border.all(width: 1)`，`Container` 会把它算进自己的
+/// 内边距）。
+const double _cardChromeV = 34;
 
-/// 同理，左右各是 22 / 18 的内边距与 1 的描边 —— 内容区比卡片外框窄这么多。
-const double _cardChromeH = 42;
+/// 同理，左右各是 20 / 16 的内边距与 1 的描边 —— 内容区比卡片外框窄这么多。
+const double _cardChromeH = 38;
 
 /// 段落间距，与 `_infoCard` 里的取值一一对应。
 const double _gapAfterDate = AppTokens.spaceSm; // 8
@@ -48,18 +49,19 @@ const double _gapAfterBadge = AppTokens.spaceXs; // 4
 const double _gapBetweenSections = AppTokens.spaceMd; // 12
 
 /// 「其他班组」色块的形状与排布，与 `_otherCrewChips` / `Wrap` 一一对应。
-const double _chipGapX = 8; // Wrap.spacing
-const double _chipGapY = 6; // Wrap.runSpacing
+const double _chipGapX = AppTokens.spaceSm; // 8 — Wrap.spacing
+const double _chipGapY = AppTokens.gapIconText; // 6 — Wrap.runSpacing
 const double _chipPadH = 8;
-const double _chipPadV = 3;
+const double _chipPadV = AppTokens.padChipV; // 3
 const double _chipBorder = 1; // Border.all(width: 1)
 const double _chipDot = 8;
-const double _chipDotGap = 5;
+const double _chipDotGap = AppTokens.gapIconText; // 6 — 色点↔文字
 /// 班次行行首那个圆点的直径（`Container(width: 12, height: 12)`）。
 const double _shiftDot = 12;
-/// 标签「其他班组」与色块之间的间隔，以及标签自己的上内边距（`Padding(top: 5)`）。
+/// 标签「其他班组」与色块之间的间隔，以及标签自己的上内边距
+/// （`Padding(top: AppTokens.spaceXs)`，与色块文字的实际起点对齐）。
 const double _otherCrewsLabelGap = 8;
-const double _otherCrewsLabelTop = 5;
+const double _otherCrewsLabelTop = AppTokens.spaceXs; // 4
 
 /// 底栏信息卡的外框高度（竖屏 / 短屏非紧凑形态）。
 ///
@@ -72,8 +74,9 @@ double measureBottomInfoCardHeight({
   required DateTime month,
 }) {
   final measure = _Measure(
-    // 卡片里的 `Text` 都只写 fontSize/fontWeight，字体族与其它属性来自环境，
-    // 所以这里也要按同一套 `DefaultTextStyle` 合并，量出来才和渲染一致。
+    // 卡片里的 `Text` 用的都是 `AppTokens` 的角色令牌，字体族与其它属性来自
+    // 环境，所以这里也要按同一套 `DefaultTextStyle` 合并，量出来才和渲染一致。
+    // 下面的每个字号都直接引用**卡片渲染所用的同一个令牌对象**。
     def: DefaultTextStyle.of(context),
     scaler: MediaQuery.textScalerOf(context),
   );
@@ -85,7 +88,7 @@ double measureBottomInfoCardHeight({
   // 「今天」徽章只有一天有，且比日期那 18px 矮，所以不参与取大。
   final dateH = measure.text(
     L10n.monthDayWeekday(DateTime(month.year, month.month, 1)),
-    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+    AppTokens.sectionTitle,
     maxWidth: contentW,
   ).height;
 
@@ -94,19 +97,19 @@ double measureBottomInfoCardHeight({
   // 只占一行，所以这里不需要拿真的班次名去量宽度。
   final shiftLineH = measure.text(
     '班次',
-    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+    AppTokens.titleStrong,
     maxLines: 1,
     maxWidth: contentW,
   ).height;
   // 没有班次的日子走另外两种文案，都可能比班次行矮，取大兜住。
   final noShiftH = measure.text(
     L10n.noSchedule,
-    const TextStyle(fontSize: 13),
+    AppTokens.rowSecondary,
     maxWidth: contentW,
   ).height;
   final blankH = measure.text(
     L10n.rest,
-    const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+    AppTokens.labelStrong,
     maxWidth: contentW,
   ).height;
   final shiftRowH = [shiftLineH, noShiftH, blankH, _shiftDot]
@@ -123,7 +126,7 @@ double measureBottomInfoCardHeight({
   // 它那份是定值，先算好。
   final otherCrewsLabelH = showChips
       ? measure
-              .text(L10n.otherCrews, const TextStyle(fontSize: 12))
+              .text(L10n.otherCrews, AppTokens.microText)
               .height +
           _otherCrewsLabelTop
       : 0.0;
@@ -135,18 +138,12 @@ double measureBottomInfoCardHeight({
     final lunar = lunarOf(date);
 
     if (lunar.isLegalHoliday) {
-      // 徽章：图标 14 + 小字「法定节假日」12 + 大字节日名 14，外加 3×2 内边距
+      // 徽章：图标 16 + 小字「法定节假日」12 + 大字节日名 14，外加 3×2 内边距
       // 与 1×2 描边。两个字号不同的 span 并排，行高由大的那档决定。
       final textH = measure.rich(
         [
-          TextSpan(
-              text: L10n.legalHoliday,
-              style: const TextStyle(
-                  fontSize: AppTokens.fontCaption, fontWeight: FontWeight.w600)),
-          TextSpan(
-              text: lunar.legalHolidayName,
-              style: const TextStyle(
-                  fontSize: AppTokens.fontBody, fontWeight: FontWeight.w700)),
+          TextSpan(text: L10n.legalHoliday, style: AppTokens.microLabel),
+          TextSpan(text: lunar.legalHolidayName, style: AppTokens.labelStrong),
         ],
         maxLines: 1,
         maxWidth: contentW,
@@ -157,7 +154,7 @@ double measureBottomInfoCardHeight({
 
     final lh = measure.text(
       lunar.fullDescription,
-      const TextStyle(fontSize: 13),
+      AppTokens.rowSecondary,
       maxLines: 2,
       maxWidth: contentW,
     ).height;
@@ -180,18 +177,14 @@ double measureBottomInfoCardHeight({
 
 /// 单个色块的高度（`Wrap` 里一行的高度）。
 double _chipLineH(_Measure m) =>
-    m
-        .text('班', const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))
-        .height +
+    m.text('班', AppTokens.microLabel).height +
     _chipPadV * 2 +
     _chipBorder * 2;
 
 /// 某天色块折成几行 —— 按 `Wrap` 的贪心排布复算一遍。
 int _chipRows(
     _Measure m, double contentW, ShiftSchedule schedule, DateTime date) {
-  final labelW = m
-      .text(L10n.otherCrews, const TextStyle(fontSize: 12))
-      .width;
+  final labelW = m.text(L10n.otherCrews, AppTokens.microText).width;
   final avail = contentW - labelW - _otherCrewsLabelGap;
   if (avail <= 0) return 1;
 
@@ -207,10 +200,7 @@ int _chipRows(
     // 与 `_otherCrewChips` 同一个算式：色点 + 间隔 + 文字 + 左右内边距 + 描边。
     final w = _chipDot +
         _chipDotGap +
-        m
-            .text('$name ${t.shortLabel}',
-                const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))
-            .width +
+        m.text('$name ${t.shortLabel}', AppTokens.microLabel).width +
         _chipPadH * 2 +
         _chipBorder * 2;
     // `Wrap` 的贪心：放不下就换行，换行后这一块重新起算。

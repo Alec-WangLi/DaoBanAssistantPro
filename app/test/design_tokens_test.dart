@@ -27,8 +27,6 @@ double _wcagContrast(Color a, Color b) {
 const Set<String> _pending = {
   'lib/features/alarm/alarm_ringing_screen.dart',
   'lib/features/alarm/alarm_screen.dart',
-  'lib/features/calendar/calendar_screen.dart',
-  'lib/features/calendar/info_card_metrics.dart',
   'lib/features/calendar/schedule_editor_screen.dart',
   'lib/features/calendar/schedule_management_screen.dart',
   'lib/features/calendar/shift_template_picker_screen.dart',

@@ -6,6 +6,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
@@ -205,7 +206,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Widget _header(BuildContext context) {
-    const pad = EdgeInsets.fromLTRB(12, 10, 12, 6);
+    // 上下留白归到节奏档：10 → spaceMd(12)、6 → spaceSm(8)。
+    const pad =
+        EdgeInsets.fromLTRB(12, AppTokens.spaceMd, 12, AppTokens.spaceSm);
     // 窄档（小窗实测 200 逻辑像素宽）一行放不下 —— 四个圆形钮加年月胶囊的
     // **固定**宽度是 184，而 200 宽的屏扣掉左右留白只剩 176：年月那个
     // Expanded 会被挤成 0 宽，整行溢出。
@@ -233,8 +236,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       L10n.yearMonth(_month),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w800),
+                      style: AppTokens.titleStrong,
                     ),
                   ),
                 ),
@@ -255,9 +257,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   accent: true,
                   height: narrowSide,
                   // 窄档连年月都要省着放，「今天」只留图标（整屏的窄档同样如此）。
-                  child: const Icon(
+                  child: const AppIcon(
                     Icons.today_outlined,
-                    size: 18,
+                    size: AppTokens.iconMd,
                     color: Colors.white,
                   ),
                 ),
@@ -274,7 +276,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         children: [
           _circleIcon(
               context, Icons.chevron_left_outlined, L10n.prevMonth, _prev),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppTokens.gapIconText),
           Expanded(
             child: _glassPill(
               context,
@@ -283,18 +285,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 L10n.yearMonth(_month),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                style: AppTokens.titleStrong,
               ),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppTokens.gapIconText),
           _circleIcon(
               context, Icons.chevron_right_outlined, L10n.nextMonth, _next),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppTokens.gapIconText),
           // 切换排班：纯图标圆形钮（省宽，保证年月完整显示）
           _circleIcon(context, Icons.swap_vert_outlined, L10n.switchSchedule,
               _showScheduleSwitcher),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppTokens.gapIconText),
           _glassPill(
             context,
             onTap: _today,
@@ -304,9 +306,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                const AppIcon(
                   Icons.today_outlined,
-                  size: 18,
+                  size: AppTokens.iconMd,
                   color: Colors.white,
                 ),
                 // 320 宽下「今天」两个字会挤掉年月的显示宽度，窄屏只留图标。
@@ -314,9 +316,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   const SizedBox(width: 4),
                   Text(
                     L10n.today,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                    // 压在实心主色胶囊上的白字，「前景色已定」，不归明度两档。
+                    style: AppTokens.labelStrong.copyWith(
                       color: Colors.white.withValues(alpha: 0.98),
                     ),
                   ),
@@ -448,7 +449,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
               ],
             ),
-            child: Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurface),
+            child: AppIcon(icon,
+                size: AppTokens.iconMd,
+                color: Theme.of(context).colorScheme.onSurface),
           ),
         ),
       ),
@@ -488,9 +491,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(L10n.switchSchedule,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w700)),
+                  Text(L10n.switchSchedule, style: AppTokens.sectionTitle),
                   const SizedBox(height: 8),
                   Flexible(
                     child: ListView(
@@ -691,14 +692,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               child: Center(
                 child: Text(
                   labels[i],
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
-                  ),
+                  style: AppTokens.labelSecondary
+                      .copyWith(color: AppTokens.inkMuted(context)),
                 ),
               ),
             )),
@@ -731,10 +726,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       LunarInfo lunar, double cellW, double cellH, bool isToday) {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
-        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5);
+        : AppTokens.inkMuted(context);
     // 班次色是给色块用的强色，当 12px 文字色会太浅（橙 2.06:1、灰 2.60:1），
     // 得按格子底色算一版可读的。
     final surface = Theme.of(context).colorScheme.surface;
+    final primary = Theme.of(context).colorScheme.primary;
 
     return SizedBox(
       width: cellW,
@@ -772,18 +768,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         child: Text(
                           '${date.day}',
                           maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 18,
-                            // 显式压紧行盒：M3 默认行高 1.5，三行文字的行盒加起来
-                            // 比格子可用高度多出几个像素，真机上每个格子都会
-                            // BOTTOM OVERFLOWED（content 被裁）。
-                            height: 1.15,
+                          // `cellDate` 已带 height 1.15：M3 默认行高 1.5，三行文字的
+                          // 行盒加起来比格子可用高度多出几个像素，真机上每个格子
+                          // 都会 BOTTOM OVERFLOWED（content 被裁）。今天加粗走
+                          // 同一角色的 `copyWith`，不另立令牌。
+                          style: AppTokens.cellDate.copyWith(
                             fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
                             color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppTokens.gapHair),
                       if (shift != null)
                         Text(
                           shift.shortLabel,
@@ -791,14 +786,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           // 节奏；单行 + 省略号让任何长度都不破版。
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.15,
-                            fontWeight: FontWeight.w700,
+                          style: AppTokens.microStrong.copyWith(
                             color: AppTokens.inkFor(Color(shift.color), surface),
                           ),
                         ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppTokens.gapHair),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 1),
                         child: Text.rich(
@@ -807,19 +799,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               if (lunar.isMakeupWorkday)
                                 TextSpan(
                                   text: '班 ',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
+                                  // 调休日的「班」标记：与农历同一角色，转主色 + 加粗
+                                  // 区分（原为 9px，缩到读不出，现靠颜色/字重区分）。
+                                  // 单行写法是守门测试的要求：`fontWeight` 字面量只有
+                                  // 与 `copyWith` 同行才豁免。
+                                  style: AppTokens.tinyLabel
+                                      .copyWith(color: primary, fontWeight: FontWeight.w700),
                                 ),
                               TextSpan(text: lunar.shortLabel),
                             ],
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              TextStyle(fontSize: 11, height: 1.15, color: lunarColor),
+                          style: AppTokens.tinyLabel.copyWith(color: lunarColor),
                         ),
                       ),
                     ],
@@ -852,7 +844,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             AppTokens.holiday.withValues(alpha: 0.14), surface));
     return Container(
       key: const Key('info-card-holiday-badge'),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 8, vertical: AppTokens.padChipV),
       decoration: BoxDecoration(
         color: AppTokens.holiday.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(AppTokens.radiusS),
@@ -861,28 +854,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.celebration_outlined, size: 14, color: ink),
-          const SizedBox(width: 5),
+          AppIcon(Icons.celebration_outlined, size: AppTokens.iconSm, color: ink),
+          const SizedBox(width: AppTokens.gapIconText),
           Flexible(
             child: Text.rich(
               TextSpan(
                 children: [
                   TextSpan(
                     text: L10n.legalHoliday,
-                    style: TextStyle(
-                      fontSize: AppTokens.fontCaption,
-                      fontWeight: FontWeight.w600,
-                      color: ink,
-                    ),
+                    style: AppTokens.microLabel.copyWith(color: ink),
                   ),
                   const TextSpan(text: '  '),
                   TextSpan(
                     text: name,
-                    style: TextStyle(
-                      fontSize: AppTokens.fontBody,
-                      fontWeight: FontWeight.w700,
-                      color: ink,
-                    ),
+                    style: AppTokens.labelStrong.copyWith(color: ink),
                   ),
                 ],
               ),
@@ -943,10 +928,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final lunar = lunarOf(_selected);
     final shift = schedule?.shiftOn(_selected);
     final isToday = _selected == dateOnly(DateTime.now());
-    final muted = Theme.of(context)
-        .colorScheme
-        .onSurface
-        .withValues(alpha: 0.6);
+    final muted = AppTokens.inkMuted(context);
     final accent = shift != null
         ? Color(shift.color)
         : Theme.of(context).colorScheme.primary;
@@ -963,7 +945,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 76),
         child: GlassTile(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceMd),
           child: Row(
             children: [
               Container(
@@ -974,7 +957,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   borderRadius: BorderRadius.circular(AppTokens.radiusS),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppTokens.gapIconTextLg),
               Expanded(
                 child: Text(
                   [
@@ -984,15 +967,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ].join(' · '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: AppTokens.fontSupport,
-                      fontWeight: FontWeight.w600),
+                  style: AppTokens.labelSecondary,
                 ),
               ),
               if (shift != null && shift.alarmEnabled)
                 Padding(
                   padding: const EdgeInsets.only(left: 8),
-                  child: Icon(Icons.alarm_outlined, size: 16, color: muted),
+                  child: AppIcon(Icons.alarm_outlined,
+                      size: AppTokens.iconSm, color: muted),
                 ),
             ],
           ),
@@ -1008,16 +990,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           children: [
             Text(
               L10n.monthDayWeekday(_selected),
-              // w700 而不是 w800：设计规格第 3.7 节把字重收成「标题 w700 /
-              // 强调 w600 / 正文 w500」，w800 只留给响铃大时钟。
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              // 设计规格把字重收成「标题 w700 / 强调 w600 / 正文 w500」，
+              // w800 只留给响铃大时钟与角标「今天」，所以日期行走 w700 的
+              // sectionTitle。
+              style: AppTokens.sectionTitle,
             ),
             if (isToday) ...[
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.spaceSm, vertical: AppTokens.padChipV),
                 decoration: BoxDecoration(
                   // 实心主色 + 白字。原来是「主色 14% 淡底 + 主色字」，
                   // 实测对比度 3.84:1（深色下 2.93:1），低于 AA 的 4.5:1。
@@ -1026,11 +1008,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
                 child: Text(
                   L10n.today,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
+                  style: AppTokens.microStrong.copyWith(color: Colors.white),
                 ),
               ),
             ],
@@ -1054,8 +1032,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           // 两行封顶：整行宽度下通常一行就够，窄屏最多两行，再长就省略号。
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 13,
+          style: AppTokens.rowSecondary.copyWith(
             color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
           ),
         ),
@@ -1086,9 +1063,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     children: [
                       TextSpan(
                         text: shift.name,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                        style: AppTokens.titleStrong.copyWith(
                           color: AppTokens.inkFor(Color(shift.color),
                               Theme.of(context).colorScheme.surface),
                         ),
@@ -1096,12 +1071,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       if (shift.startMinute != null && shift.endMinute != null)
                         TextSpan(
                           text: '  ${_timeRange(shift)}',
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w500),
+                          style: AppTokens.rowPrimary,
                         ),
                       TextSpan(
                         text: '   ${_alarmText(shift)}',
-                        style: TextStyle(fontSize: 13, color: muted),
+                        style: AppTokens.rowSecondary.copyWith(color: muted),
                       ),
                     ],
                   ),
@@ -1114,14 +1088,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         else if (schedule != null && schedule.isBlank)
           Text(
             lunar.isLegalHoliday ? L10n.rest : L10n.workday,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+            style: AppTokens.labelStrong.copyWith(
               color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
             ),
           )
         else
-          Text(L10n.noSchedule, style: TextStyle(fontSize: 13, color: muted)),
+          Text(L10n.noSchedule,
+              style: AppTokens.rowSecondary.copyWith(color: muted)),
         if (schedule != null && schedule.teamCount > 1) ...[
           const SizedBox(height: AppTokens.spaceMd),
           // 标签与色块同一行：标签独占一行要白占 12 + 16 + 6 = 34dp，而
@@ -1132,15 +1105,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 5),
+                // 4 与色块文字的实际起点（padChipV 3 + 描边 1）对齐。
+                padding: const EdgeInsets.only(top: AppTokens.spaceXs),
                 child: Text(L10n.otherCrews,
-                    style: TextStyle(fontSize: 12, color: muted)),
+                    style: AppTokens.microText.copyWith(color: muted)),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
+                  spacing: AppTokens.spaceSm,
+                  runSpacing: AppTokens.gapIconText,
                   children: _otherCrewChips(schedule, _selected),
                 ),
               ),
@@ -1152,7 +1126,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     // 底栏时面板必须**撑满**那个定高盒子。`Stack` 默认 `StackFit.loose`，
     // 只给非定位子节点松约束，面板于是缩到内容高度；而左侧色条是
-    // `Positioned(top: 18, bottom: 18)`，量的却是外面那个定高盒子 —— 两边
+    // `Positioned(top/bottom: spaceLg)`，量的却是外面那个定高盒子 —— 两边
     // 各按各的高度走，色条就比卡片长出几十 dp、垂在空白里（v0.6.6 用户
     // 实测：卡片 126 高，色条 212 高）。给面板一层定高，两者才对得上。
     //
@@ -1160,7 +1134,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 所以不套这层，色条跟着面板走本来就是对的。
     final panel = GlassTile(
       key: const Key('info-card-panel'),
-      padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
+      padding: const EdgeInsets.fromLTRB(AppTokens.spaceXl, AppTokens.spaceLg,
+          AppTokens.spaceLg, AppTokens.spaceLg),
       child: inSidePane
           ? content
           // 兜底：字号被系统放大到装不下时，卡片内部滚动，而不是溢出成
@@ -1192,14 +1167,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
             Positioned(
               left: 0,
-              top: 18,
-              bottom: 18,
+              // 上下与面板内边距（spaceLg）一致，色条才是「卡片内高」而不是靠边。
+              top: AppTokens.spaceLg,
+              bottom: AppTokens.spaceLg,
               width: 6,
               child: DecoratedBox(
                 key: const Key('info-card-accent-bar'),
                 decoration: BoxDecoration(
                   color: accent,
-                  borderRadius: BorderRadius.circular(3),
+                  // 6dp 宽的细长条就是胶囊：圆角取高度的一半。
+                  borderRadius: AppTokens.pillOf(6),
                 ),
               ),
             ),
@@ -1221,7 +1198,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           ? schedule.teamNames[i]
           : (L10n.isEn ? 'Team ${i + 1}' : '${i + 1}班');
       chips.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 8, vertical: AppTokens.padChipV),
         decoration: BoxDecoration(
           color: Color(t.color).withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(AppTokens.radiusS),
@@ -1236,11 +1214,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               decoration:
                   BoxDecoration(color: Color(t.color), shape: BoxShape.circle),
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: AppTokens.gapIconText),
             Text('$name ${t.shortLabel}',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                style: AppTokens.microLabel.copyWith(
                     // 色块底是班次色 14% 的淡染，字要按它算可读版本。
                     color: AppTokens.inkFor(
                         Color(t.color),
@@ -1290,9 +1266,10 @@ const double _cellAspectMin = 0.62;
 
 /// 格子高的下限 = **格子里的三行字实测要多高**。
 ///
-/// 三行都是单行文字（日期 18、班次简称 12、农历 11，各自 `height: 1.15`
-/// 压过行盒）：18×1.15 + 2 + 12×1.15 + 2 + 11×1.15 ≈ 51.5，再加格子自身
-/// `_cellInset` 上下各 2 一共 4 —— 约 55.5。取 58，留 2.5 的字体度量余量。
+/// 三行都是单行文字（日期 `cellDate` 18、班次简称 `microStrong` 12、农历
+/// `tinyLabel` 11）。日期与农历的令牌自带 `height: 1.15` 压过行盒，班次简称
+/// 走字体默认行高：三行 + 两处 `gapHair` + 格子自身 `_cellInset` 上下各 2，
+/// 约 54–58。取 58 兜住上界，不赌具体字体度量。
 ///
 /// **曾经是 80**，那是 `height: 1.15` 压行盒之前按 M3 默认行高 1.5 标定的
 /// （27 + 2 + 18 + 2 + 16.5 + 4 ≈ 70，再垫到 80）。行盒压紧后这个数一直没

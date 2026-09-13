@@ -349,7 +349,10 @@ void main() {
     // 高度 = 本月最满的一天 + 卡片自身的上下内边距与描边，且**刚好**是这个值：
     // 留多了就是白占网格的高度（这正是写死 248 时的毛病），留少了就要裁字。
     // 允许 2dp 的取整余量。
-    final inner = cardH - 38;
+    //
+    // 卡片上下内边距是 `spaceLg`(16)×2，描边是 `Border.all(width: 1)`×2 ——
+    // 与 `info_card_metrics.dart` 的 `_cardChromeV` 同一个算式，别再写死。
+    final inner = cardH - (AppTokens.spaceLg * 2 + 2);
     expect(inner - maxContentH, greaterThanOrEqualTo(0),
         reason: '本月最满的一天 $maxContentH 装不进卡片内高 $inner');
     expect(inner - maxContentH, lessThanOrEqualTo(2),
@@ -426,8 +429,9 @@ void main() {
   //
   // 根因是色条与面板各量各的高度：`Stack` 默认 `StackFit.loose`，只给非定位
   // 子节点松约束，面板于是缩到内容高度（用户那天 126）；而色条是
-  // `Positioned(top: 18, bottom: 18)`，量的是外面那个定高盒子（248）—— 于是
-  // 色条比卡片长出 86dp 垂在空白里。修法是底栏时让面板撑满定高，两边同源。
+  // `Positioned(top: 18, bottom: 18)`（现值 `spaceLg`=16），量的是外面那个定高
+  // 盒子（248）—— 于是色条比卡片长出 86dp 垂在空白里。修法是底栏时让面板撑满
+  // 定高，两边同源。
   testWidgets('底栏信息卡：面板撑满定高，色条与面板上下对齐', (tester) async {
     await _pumpCalendar(tester, 'four_crew_three_shift');
 
@@ -437,9 +441,9 @@ void main() {
 
     expect(panel.height, closeTo(box.height, 0.5),
         reason: '面板要撑满定高盒子；否则色条按盒子高度画、会探出卡片的下沿');
-    expect(bar.top - panel.top, closeTo(18, 0.5),
+    expect(bar.top - panel.top, closeTo(AppTokens.spaceLg, 0.5),
         reason: '色条上端贴着面板内容区的上沿');
-    expect(panel.bottom - bar.bottom, closeTo(18, 0.5),
+    expect(panel.bottom - bar.bottom, closeTo(AppTokens.spaceLg, 0.5),
         reason: '色条下端贴着面板内容区的下沿');
 
     await _disposeCalendar(tester);
@@ -452,10 +456,11 @@ void main() {
   testWidgets('底栏信息卡：最满的一天也要装得进卡片，不靠卡内滚动', (tester) async {
     await _pumpCalendar(tester, 'six_crew_three_shift');
 
-    // 可用高度 = 定高 − 上下 padding(18×2) − 上下描边(1×2)。描边那 2px 来自
-    // GlassPanel 的 `Border.all(width: 1)`，`Container` 会把它算进自己的内边距。
-    final inner =
-        tester.getSize(find.byKey(const Key('info-card-box'))).height - 38;
+    // 可用高度 = 定高 − 上下 padding(spaceLg=16 ×2) − 上下描边(1×2)。描边那 2px
+    // 来自 GlassPanel 的 `Border.all(width: 1)`，`Container` 会把它算进自己的
+    // 内边距。与 `info_card_metrics.dart` 的 `_cardChromeV` 同一个算式。
+    final inner = tester.getSize(find.byKey(const Key('info-card-box'))).height -
+        (AppTokens.spaceLg * 2 + 2);
 
     final daysInMonth =
         DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
