@@ -228,8 +228,8 @@ void main() {
         [2, 6, 10]);
     expect(AppTokens.durFlow, const Duration(milliseconds: 650));
 
-    expect(AppTokens.inkMutedAlpha, 0.60,
-        reason: '浅色底下 0.55 只有 4.06:1，不过 AA');
+    expect(AppTokens.inkMutedAlpha, 0.62,
+        reason: '浅色最坏底 #F5F6FA 上 0.62 才到 4.70:1 过 AA（0.60 只有 4.33:1）');
     expect(AppTokens.inkFaintAlpha, 0.35,
         reason: '禁用/已完成档，有意低于 AA（见规格 §3.3）');
     expect(AppTokens.pillOf(40),
