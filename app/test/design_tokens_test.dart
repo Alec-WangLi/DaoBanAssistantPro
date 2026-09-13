@@ -104,9 +104,13 @@ String _charAfter(String s, int i) {
   return j < s.length ? s[j] : '';
 }
 
-List<String> _spacingViolations(String path) {
+List<String> _spacingViolations(String path) =>
+    _spacingViolationsIn(path, File(path).readAsStringSync());
+
+/// 扫一段源码里的间距字面量。拆出「读文件」这一步是为了能用临时文本单测 ——
+/// [path] 只进报告、不参与判断。
+List<String> _spacingViolationsIn(String path, String src) {
   final out = <String>[];
-  final src = File(path).readAsStringSync();
   final seen = <String>{};
   for (final call in _spacingCall.allMatches(src)) {
     final args = call.group(2)!;
@@ -115,7 +119,12 @@ List<String> _spacingViolations(String path) {
       final after = _charAfter(args, m.end);
       // 只把「整个参数就是一个数字」的当成间距值，跳过算式里的数字
       // （`width: cellW - _cellInset * 2` 的 2 是算式的一部分）。
-      if (before != ':' && before != ',' && before != '(') continue;
+      //
+      // **空串要放行**：位置 0 的数字前面没有字符可看，`_charBefore` 返回空串 ——
+      // 那正说明它就是整个参数本身（`EdgeInsets.all(2)` 的 args 就是 `"2"`，
+      // `SizedBox(width: 6)` 的 args 是 `"width: 6"` 有 `':'`）。少了这一条，
+      // 单参数写法会静默漏检，「守门测试绿」就不等于「文件里没有字面量」了。
+      if (before != '' && before != ':' && before != ',' && before != '(') continue;
       if (after != ',' && after != ')' && after != '') continue;
       final n = double.parse(m.group(0)!);
       if (_spacingOk(n)) continue;
@@ -181,6 +190,23 @@ void main() {
     expect(offenders, isEmpty,
         reason: '界面层只能引用令牌，发现 ${offenders.length} 处字面量：\n'
             '${offenders.join('\n')}');
+  });
+
+  test('间距扫描认得单参数写法（钉住空串放行那条）', () {
+    // 回归钉：曾经因为 `_charBefore` 在位置 0 返回空串、过滤条件却不放行空串，
+    // `EdgeInsets.all(2)` / `EdgeInsets.all(3)` 这类整个参数就是一个数字的写法
+    // 会被静默跳过 —— 于是界面里的漏网字面量「测试是绿的」。
+    const src = '''
+Widget a() => Padding(padding: const EdgeInsets.all(2), child: c);
+Widget b() => Padding(padding: const EdgeInsets.all(4), child: c);
+Widget d() => SizedBox(width: 6);
+Widget e() => const SizedBox(height: 8);
+Widget f() => SizedBox(width: cellW - _cellInset * 2);
+''';
+    final hit = _spacingViolationsIn('synthetic.dart', src);
+    expect(hit, hasLength(2), reason: hit.join('\n'));
+    expect(hit[0], contains('2.0'));
+    expect(hit[1], contains('6.0'));
   });
 
   test('迁移完成时 _pending 必须清空', () {

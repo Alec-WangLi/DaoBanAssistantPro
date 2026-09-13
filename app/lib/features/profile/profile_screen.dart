@@ -79,7 +79,7 @@ class ProfileScreen extends ConsumerWidget {
                     itemBuilder: (i, selected) => Container(
                       width: 26,
                       height: 26,
-                      padding: const EdgeInsets.all(2),
+                      padding: const EdgeInsets.all(AppTokens.gapHair),
                       decoration: BoxDecoration(
                         color: selected ? Colors.white : Colors.transparent,
                         shape: BoxShape.circle,

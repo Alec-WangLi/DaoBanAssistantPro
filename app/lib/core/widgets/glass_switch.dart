@@ -35,7 +35,7 @@ class GlassSwitch extends StatelessWidget {
         curve: Curves.easeOutCubic,
         width: width,
         height: height,
-        padding: const EdgeInsets.all(3),
+        padding: const EdgeInsets.all(AppTokens.padChipV),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(height / 2),
           color: value
