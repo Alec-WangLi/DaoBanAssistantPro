@@ -20,4 +20,8 @@ class AppColors {
   static const int shiftNight = 0xFF7A5CFF; // 上夜班
   static const int shiftAfterNight = 0xFF9AA0B4; // 下夜班
   static const int shiftRest = 0xFF5A5F73; // 大休
+
+  /// 响铃背景中间那团光斑的颜色。中性偏冷的浅蓝灰 ——
+  /// 它只在 `FlowingBackground` 里用，不参与主题主色，也不随明暗切换。
+  static const Color bgBlob = Color(0xFFB9BECF);
 }

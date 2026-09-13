@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'app_colors.dart';
+
 /// 缓慢流动的中性渐变光晕背景（液态玻璃氛围感）。
 class FlowingBackground extends StatefulWidget {
   const FlowingBackground({super.key, required this.child});
@@ -54,7 +56,7 @@ class _WavePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final blobs = <(Offset, double, Color, double)>[
       (Offset(size.width * 0.15, size.height * 0.12), 200, Colors.white, 0.0),
-      (Offset(size.width * 0.88, size.height * 0.32), 240, const Color(0xFFB9BECF), 1.3),
+      (Offset(size.width * 0.88, size.height * 0.32), 240, AppColors.bgBlob, 1.3),
       (Offset(size.width * 0.55, size.height * 0.9), 280, Colors.white, 2.1),
     ];
     for (final b in blobs) {

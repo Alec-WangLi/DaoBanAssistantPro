@@ -30,7 +30,20 @@ const List<String> _scanDirs = [
   'lib/features',
   'lib/core/widgets',
   'lib/core/glass',
+  'lib/core/theme',
 ];
+
+/// 文件级豁免：**配色层本身**。
+///
+/// 这两个文件是颜色的**定义处**，不是颜色的**用法** —— 主色板与中性 seed 本来
+/// 就该写成字面量，扫它们等于要求令牌引用自己。目录里其余文件（渲染件）照常扫。
+///
+/// 豁免只在 `_violations` 的**入口**处生效（见该函数），所以无论从目录遍历进来、
+/// 还是直接点某个文件，结果一致 —— 不会出现「目录扫是绿的、单点这个文件是红的」。
+const Set<String> _exemptFiles = {
+  'lib/core/theme/app_colors.dart',
+  'lib/core/theme/app_theme.dart',
+};
 
 /// 把源码里的**非代码部分**替换成**等长空格**：行注释、块注释、字符串字面量的内容。
 ///
@@ -155,8 +168,12 @@ final Map<String, RegExp> _rules = {
   '旧的按尺寸命名的字号令牌（改用角色令牌）': RegExp(r'AppTokens\.font[A-Z]'),
 };
 
-List<String> _violations(String path) =>
-    _violationsIn(path, File(path).readAsStringSync());
+/// 逐文件入口。文件级豁免（`_exemptFiles`）在这里判定 —— 不看调用方是谁：
+/// 从目录遍历进来、还是直接点某个文件，结果都一样。
+List<String> _violations(String path) {
+  if (_exemptFiles.contains(path)) return const [];
+  return _violationsIn(path, File(path).readAsStringSync());
+}
 
 /// 扫一段源码里的字面量。拆出「读文件」这一步是为了能用临时文本单测 ——
 /// [path] 只进报告、不参与判断（与 `_spacingViolationsIn` 同一套路）。
@@ -508,6 +525,23 @@ void main() {
     expect(offenders, isEmpty,
         reason: '界面层只能引用令牌，发现 ${offenders.length} 处字面量：\n'
             '${offenders.join('\n')}');
+  });
+
+  test('core/theme 纳入扫描，但配色层两文件显式豁免', () {
+    // 扫描目录表里必须含 core/theme —— 少了它，这个目录的守门就静默消失。
+    // 这一条断言专门钉住「扩范围」本身：把 core/theme 从 `_scanDirs` 里删掉，
+    // 下面的 isEmpty 仍然会过（豁免是看文件的），只有这里会红。
+    expect(_scanDirs, contains('lib/core/theme'));
+    // 配色层本身：豁免（它们是颜色**定义**，不是颜色**用法** —— 主色板与中性
+    // seed 本来就该写成字面量，扫它们等于要求令牌引用自己）。
+    expect(_violations('lib/core/theme/app_colors.dart'), isEmpty);
+    expect(_violations('lib/core/theme/app_theme.dart'), isEmpty);
+    // 渲染件不豁免 —— bgBlob 已收进配色层，这个文件必须干净。
+    expect(_violations('lib/core/theme/animated_background.dart'), isEmpty);
+    // 用一段仿真文本钉住「豁免按文件、不按目录」：同目录的其余文件照扫。
+    expect(
+        _violationsIn('lib/core/theme/x.dart', 'const c = Color(0xFFB9BECF);'),
+        hasLength(1));
   });
 
   test('间距扫描认得单参数写法（钉住空串放行那条）', () {
