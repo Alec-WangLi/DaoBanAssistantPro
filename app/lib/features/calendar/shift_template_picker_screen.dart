@@ -72,13 +72,8 @@ class _ShiftTemplatePickerScreenState
           children: [
             Text(
               L10n.pickShiftPatternHint,
-              style: TextStyle(
-                fontSize: AppTokens.fontSupport,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
-              ),
+              style: AppTokens.rowSecondary
+                  .copyWith(color: AppTokens.inkMuted(context)),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -101,7 +96,7 @@ class _ShiftTemplatePickerScreenState
       out.add(Padding(
         padding: const EdgeInsets.only(bottom: 8, top: 4),
         child: Text(L10n.templateGroup(group),
-            style: const TextStyle(fontSize: AppTokens.fontSupport, fontWeight: FontWeight.w700)),
+            style: AppTokens.rowSecondary),
       ));
       for (final t in inGroup) {
         out.add(_templateCard(context, t));
@@ -114,12 +109,8 @@ class _ShiftTemplatePickerScreenState
         child: Center(
           child: Text(
             L10n.noPatternMatch,
-            style: TextStyle(
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.5),
-            ),
+            style: AppTokens.rowPrimary
+                .copyWith(color: AppTokens.inkMuted(context)),
           ),
         ),
       ));
@@ -129,22 +120,19 @@ class _ShiftTemplatePickerScreenState
   }
 
   Widget _templateCard(BuildContext context, ShiftTemplate t) {
-    final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+    final muted = AppTokens.inkMuted(context);
     final texts = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(t.title,
-            style: const TextStyle(
-                fontSize: AppTokens.fontLead, fontWeight: FontWeight.w600)),
+        Text(t.title, style: AppTokens.titleStrong),
         const SizedBox(height: 4),
         Text(t.subtitle,
-            style: TextStyle(fontSize: AppTokens.fontSupport, color: muted)),
+            style: AppTokens.rowSecondary.copyWith(color: muted)),
         if (t.teamCount > 1) ...[
           const SizedBox(height: 4),
           Text(
             L10n.crewsOnDutyCount(t.workingTeamsPerDay),
-            style: TextStyle(fontSize: AppTokens.fontCaption, color: muted),
+            style: AppTokens.microLabel.copyWith(color: muted),
           ),
         ],
       ],
@@ -152,20 +140,20 @@ class _ShiftTemplatePickerScreenState
 
     return GlassTile(
       enableBlur: false,
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: EdgeInsets.zero,
       child: GlassPressable(
         child: InkWell(
           onTap: () =>
               Navigator.of(context).pop(ShiftTemplateChoice.template(t)),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(AppTokens.spaceMd),
             child: LayoutBuilder(builder: (context, c) {
               // 卡片正文宽度 = 卡片宽 − 左右内边距。
-              final inner = c.maxWidth - 28;
+              final inner = c.maxWidth - AppTokens.spaceMd * 2;
               // 色条、色条后的间距、右侧箭头都是**固定**宽度，只有标题那一栏
-              // 是可伸缩的。小窗（实测 200 逻辑像素宽）里 inner 只有 140，
-              // 三者相加 146 —— 标题被挤到 0 宽，整行溢出 8px。
+              // 是可伸缩的。小窗（实测 200 逻辑像素宽）里卡片只有 168 宽，
+              // inner 就 144，三者相加 146 —— 标题被挤到 0 宽，整行溢出。
               //
               // 所以这里不按屏宽分档，按**卡片自己拿到的宽度**判断：放不下
               // 一整列可读的标题时，改成上下排（文字占满整行，色条挪到下面）。
@@ -180,7 +168,7 @@ class _ShiftTemplatePickerScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     texts,
-                    const SizedBox(height: 10),
+                    const SizedBox(height: AppTokens.spaceMd),
                     _cycleStrip(context, t),
                   ],
                 );
@@ -211,7 +199,7 @@ class _ShiftTemplatePickerScreenState
         child: InkWell(
           onTap: () => Navigator.of(context).pop(const ShiftTemplateChoice.custom()),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(AppTokens.spaceMd),
             child: Row(
               children: [
                 Icon(Icons.tune_outlined, color: primary),
@@ -221,17 +209,12 @@ class _ShiftTemplatePickerScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(L10n.customPattern,
-                          style: const TextStyle(
-                              fontSize: AppTokens.fontLead, fontWeight: FontWeight.w600)),
+                          style: AppTokens.titleStrong),
                       const SizedBox(height: 4),
                       Text(
                         L10n.customPatternHint,
-                        style: TextStyle(
-                            fontSize: AppTokens.fontSupport,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.6)),
+                        style: AppTokens.rowSecondary
+                            .copyWith(color: AppTokens.inkMuted(context)),
                       ),
                     ],
                   ),
@@ -285,7 +268,7 @@ const double _chevronWidth = 24;
 Widget _cycleStrip(BuildContext context, ShiftTemplate t) {
   const dot = _stripDot;
   const spacing = _stripSpacing;
-  final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+  final muted = AppTokens.inkMuted(context);
   final plan = cycleStripPlan(t);
   return SizedBox(
     width: _cycleStripWidth,
@@ -299,7 +282,7 @@ Widget _cycleStrip(BuildContext context, ShiftTemplate t) {
             height: dot,
             decoration: BoxDecoration(
               color: Color(color),
-              borderRadius: BorderRadius.circular(3),
+              borderRadius: AppTokens.pillOf(dot),
             ),
           ),
         if (plan.truncated)
@@ -310,11 +293,12 @@ Widget _cycleStrip(BuildContext context, ShiftTemplate t) {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: muted.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(3),
+              borderRadius: AppTokens.pillOf(dot),
             ),
             child: Text('…',
-                // 画在 14×14 色块里的省略号字形，不是正文排版 —— 提到 12 会顶出格子。
-                style: TextStyle(fontSize: 10, height: 1, color: muted)),
+                // 画在 14×14 色块里的省略号字形，不是正文排版 ——
+                // 令牌里最小的一档 11 已经是这个格子放得下的上限。
+                style: AppTokens.tinyLabel.copyWith(color: muted)),
           ),
       ],
     ),

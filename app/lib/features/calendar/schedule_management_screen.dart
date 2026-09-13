@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets/centered_content.dart';
+import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
@@ -34,7 +35,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
                   final isCurrent = s.id == current?.schedule.id;
                   return GlassTile(
                     enableBlur: false,
-                    margin: const EdgeInsets.only(bottom: 10),
+                    margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
                     padding: EdgeInsets.zero,
                     child: GlassPressable(
                       child: ListTile(

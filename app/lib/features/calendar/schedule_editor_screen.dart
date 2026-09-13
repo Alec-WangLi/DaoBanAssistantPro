@@ -5,6 +5,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_delete_button.dart';
@@ -303,8 +304,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       teamOffsets: _teamOffsets,
     );
     final today = dateOnly(DateTime.now());
-    final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
 
     return GlassTile(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
@@ -312,9 +312,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(L10n.previewNext14,
-              style: const TextStyle(
-                  fontSize: AppTokens.fontCaption, fontWeight: FontWeight.w700)),
+          Text(L10n.previewNext14, style: AppTokens.microLabel),
           const SizedBox(height: AppTokens.spaceSm),
           // 7 列 × 2 行，与日历的 7 列节奏一致 —— 横向滚动会让最后一格
           // 永远吊在半路，这里两行排满就没有裁切，也不需要滑动提示。
@@ -347,11 +345,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         // （大字号系统字体下同理）。
         Text('${date.month}/${date.day}',
             maxLines: 1,
-            style: TextStyle(fontSize: AppTokens.fontCaption, color: muted)),
+            style: AppTokens.microText.copyWith(color: muted)),
         const SizedBox(height: AppTokens.spaceXs),
         Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: AppTokens.spaceSm, vertical: 2),
+              horizontal: AppTokens.spaceSm, vertical: AppTokens.gapHair),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.16),
             borderRadius: BorderRadius.circular(AppTokens.radiusS),
@@ -361,9 +359,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             s?.shortLabel ?? '—',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                fontSize: AppTokens.fontCaption,
-                fontWeight: FontWeight.w700,
+            style: AppTokens.microLabel.copyWith(
                 // 底色是班次色 16% 的淡染，字得按它算可读版本，不能直接用班次色
                 // （橙 `#FF9F0A` 这类浅色压上去几乎看不见）。
                 color: AppTokens.inkFor(
@@ -382,8 +378,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 两者合成一张卡：名称原本单独占一张几乎空着的卡，而「我这组从哪天开始」
   /// 是整页第二重要的字段，放在一起信息密度更合理。
   Widget _headerCard(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurface
-        .withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     return GlassTile(
       // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
       padding: EdgeInsets.all(
@@ -413,27 +408,27 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceMd),
               child: Row(
                 children: [
-                  Icon(Icons.today_outlined,
-                      size: 20, color: Theme.of(context).colorScheme.primary),
+                  AppIcon(Icons.today_outlined,
+                      size: AppTokens.iconMd,
+                      color: Theme.of(context).colorScheme.primary),
                   const SizedBox(width: AppTokens.spaceMd),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(L10n.myCycleStart,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: AppTokens.fontLead)),
+                            style: AppTokens.titleStrong),
                         const SizedBox(height: AppTokens.spaceXs),
                         Text(
                           L10n.yearMonthDay(_myCrewStart),
-                          style: TextStyle(
-                              fontSize: AppTokens.fontSupport, color: muted),
+                          style:
+                              AppTokens.rowSecondary.copyWith(color: muted),
                         ),
                       ],
                     ),
                   ),
-                  Icon(Icons.edit_outlined, size: 20, color: muted),
+                  AppIcon(Icons.edit_outlined,
+                      size: AppTokens.iconMd, color: muted),
                 ],
               ),
             ),
@@ -445,8 +440,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 3) 班次设置：每个班次定义一次，周期里直接引用。
   Widget _classesCard(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurface
-        .withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     return GlassTile(
       // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
       padding: EdgeInsets.all(
@@ -456,13 +450,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         children: [
           Text(
             L10n.shiftClasses,
-            style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: AppTokens.fontLead),
+            style: AppTokens.titleStrong,
           ),
           const SizedBox(height: AppTokens.spaceXs),
           Text(
             L10n.shiftClassesHint,
-            style: TextStyle(fontSize: AppTokens.fontSupport, color: muted),
+            style: AppTokens.rowSecondary.copyWith(color: muted),
           ),
           const SizedBox(height: AppTokens.spaceMd),
           ..._classes.asMap().entries.map((e) => _classRow(context, e.key)),
@@ -483,8 +476,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final c = _classes[index];
     final primary = Theme.of(context).colorScheme.primary;
     final outline = Theme.of(context).colorScheme.outlineVariant;
-    final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.all(AppTokens.spaceMd),
@@ -542,9 +534,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             itemBuilder: (i, selected) => Center(
               child: Text(
                 i == 0 ? L10n.work : L10n.rest,
-                style: TextStyle(
-                  fontSize: AppTokens.fontSupport,
-                  fontWeight: FontWeight.w700,
+                style: AppTokens.rowSecondary.copyWith(
                   color: selected
                       ? Theme.of(context).colorScheme.onSurface
                       : muted,
@@ -581,15 +571,14 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: AppTokens.spaceXs),
                 child: Text(L10n.crossesMidnight,
-                    style: TextStyle(
-                        fontSize: AppTokens.fontCaption, color: muted)),
+                    style: AppTokens.microText.copyWith(color: muted)),
               ),
             const SizedBox(height: AppTokens.spaceXs),
             Row(
               children: [
                 Expanded(
                   child: Text(L10n.linkedAlarm,
-                      style: const TextStyle(fontSize: AppTokens.fontBody)),
+                      style: AppTokens.rowPrimary),
                 ),
                 GlassSwitch(
                   value: c.alarmEnabled,
@@ -720,8 +709,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     required VoidCallback onTap,
   }) {
     final primary = Theme.of(context).colorScheme.primary;
-    final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     return Material(
       color: Colors.transparent,
       child: GlassPressable(
@@ -744,19 +732,18 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       Text(label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: AppTokens.fontSupport, color: muted)),
+                          style:
+                              AppTokens.rowSecondary.copyWith(color: muted)),
                       const SizedBox(height: AppTokens.spaceXs),
                       Text(value,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: AppTokens.fontBody,
-                              fontWeight: FontWeight.w600)),
+                          style: AppTokens.rowPrimary),
                     ],
                   ),
                 ),
-                Icon(Icons.access_time_outlined, size: 18, color: muted),
+                AppIcon(Icons.access_time_outlined,
+                    size: AppTokens.iconMd, color: muted),
               ],
             ),
           ),
@@ -799,9 +786,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   Widget _cycleStepper(BuildContext context) {
     return Row(
       children: [
-        Text(L10n.cycleSection,
-            style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: AppTokens.fontLead)),
+        Text(L10n.cycleSection, style: AppTokens.titleStrong),
         const Spacer(),
         IconButton(
           icon: const Icon(Icons.remove_circle_outline_outlined),
@@ -809,7 +794,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               _cycle.length > 1 ? () => _setCycleLength(_cycle.length - 1) : null,
         ),
         Text('${_cycle.length}${L10n.cycleLengthUnit}',
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+            style: AppTokens.rowPrimary),
         IconButton(
           icon: const Icon(Icons.add_circle_outline_outlined),
           onPressed:
@@ -835,8 +820,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   Widget _cycleRow(BuildContext context, int index) {
-    final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     final timeText = _rangeText(_classes[_cycle[index]]);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
@@ -854,9 +838,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 child: Text(L10n.dayN(index + 1),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: AppTokens.fontSupport,
-                        fontWeight: FontWeight.w600)),
+                    style: AppTokens.rowSecondary),
               ),
               const SizedBox(width: AppTokens.spaceSm),
               Expanded(
@@ -888,8 +870,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               if (showTime) ...[
                 const SizedBox(width: AppTokens.spaceMd),
                 Text(timeText,
-                    style: TextStyle(
-                        fontSize: AppTokens.fontSupport, color: muted)),
+                    style: AppTokens.rowSecondary.copyWith(color: muted)),
               ],
             ],
           );
@@ -912,8 +893,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 5) 班组设置（可选）—— 默认折叠。
   Widget _crewCard(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurface
-        .withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     return GlassTile(
       // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
       padding: EdgeInsets.all(
@@ -931,9 +911,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   Expanded(
                     child: Text(
                       L10n.crewSettingsOptional,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: AppTokens.fontLead),
+                      style: AppTokens.titleStrong,
                     ),
                   ),
                   Icon(_crewExpanded
@@ -948,9 +926,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             Row(
               children: [
                 Text(L10n.teamCountN(_teamCount),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: AppTokens.fontBody)),
+                    style: AppTokens.rowPrimary),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.remove_circle_outline_outlined),
@@ -969,8 +945,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             const SizedBox(height: AppTokens.spaceXs),
             ...List.generate(_teamCount, (i) => _crewRow(context, i)),
             Text(L10n.teamHint,
-                style: TextStyle(
-                    fontSize: AppTokens.fontSupport, color: muted)),
+                style: AppTokens.rowSecondary.copyWith(color: muted)),
           ],
         ],
       ),
@@ -980,10 +955,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   Widget _crewRow(BuildContext context, int i) {
     final primary = Theme.of(context).colorScheme.primary;
     final outline = Theme.of(context).colorScheme.outlineVariant;
-    final muted = Theme.of(context)
-        .colorScheme
-        .onSurface
-        .withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     final isOurs = i == _ourTeamIndex;
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceSm),
@@ -1012,8 +984,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     border: InputBorder.none,
                     hintText: L10n.teamName,
                   ),
-                  style: TextStyle(
-                      fontWeight: isOurs ? FontWeight.w700 : FontWeight.w500),
+                  style: AppTokens.titleStrong
+                      .copyWith(fontWeight: isOurs ? FontWeight.w700 : FontWeight.w500),
                 ),
               ),
               const SizedBox(width: AppTokens.spaceSm),
@@ -1030,9 +1002,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   ),
                   child: Text(
                     isOurs ? L10n.myTeam : L10n.setAsMine,
-                    style: TextStyle(
-                      fontSize: AppTokens.fontSupport,
-                      fontWeight: FontWeight.w700,
+                    style: AppTokens.rowSecondary.copyWith(
                       color: isOurs
                           ? Theme.of(context).colorScheme.onPrimary
                           : primary,
@@ -1047,20 +1017,18 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             onTap: () => _pickCrewStartDate(i),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 2, vertical: AppTokens.spaceXs),
+                  horizontal: AppTokens.gapHair, vertical: AppTokens.spaceXs),
               child: Row(
                 children: [
-                  Icon(Icons.event_outlined, size: 16, color: muted),
+                  AppIcon(Icons.event_outlined,
+                      size: AppTokens.iconSm, color: muted),
                   const SizedBox(width: AppTokens.spaceSm),
                   Text(L10n.crewCycleStart,
-                      style: TextStyle(
-                          fontSize: AppTokens.fontSupport, color: muted)),
+                      style: AppTokens.rowSecondary.copyWith(color: muted)),
                   const SizedBox(width: AppTokens.spaceSm),
                   Text(
                     L10n.yearMonthDay(_crewStartDate(i)),
-                    style: const TextStyle(
-                        fontSize: AppTokens.fontSupport,
-                        fontWeight: FontWeight.w600),
+                    style: AppTokens.rowSecondary,
                   ),
                 ],
               ),
@@ -1103,8 +1071,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 6) 跟随法定节假日：打开即变成空白表（无班次、无周期）。
   Widget _followHolidayCard(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurface
-        .withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     return GlassTile(
       // 窄屏把卡片内边距收一档，把宽度留给内容（字号不缩，可读性优先）。
       padding: EdgeInsets.all(
@@ -1117,9 +1084,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               Expanded(
                 child: Text(
                   L10n.followHoliday,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: AppTokens.fontLead),
+                  style: AppTokens.titleStrong,
                 ),
               ),
               GlassSwitch(
@@ -1160,7 +1125,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           const SizedBox(height: AppTokens.spaceSm),
           Text(
             L10n.followHolidayHint,
-            style: TextStyle(fontSize: AppTokens.fontSupport, color: muted),
+            style: AppTokens.rowSecondary.copyWith(color: muted),
           ),
         ],
       ),
@@ -1190,9 +1155,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               children: [
                 Text(
                   L10n.shiftColor,
-                  style: const TextStyle(
-                      fontSize: AppTokens.fontLead,
-                      fontWeight: FontWeight.w700),
+                  style: AppTokens.titleStrong,
                 ),
                 const SizedBox(height: AppTokens.spaceLg),
                 Wrap(
@@ -1379,7 +1342,7 @@ double _chipWidth(String label) =>
     AppTokens.spaceMd * 2 +
     8 +
     AppTokens.spaceSm +
-    _textWidth(label, const TextStyle(fontSize: AppTokens.fontSupport));
+    _textWidth(label, AppTokens.rowSecondary);
 
 /// 这一行放不放得下右侧的只读时间。
 ///
@@ -1401,7 +1364,7 @@ bool cycleRowFitsTime({
       AppTokens.spaceSm +
       chips +
       AppTokens.spaceMd +
-      _textWidth(timeText, const TextStyle(fontSize: AppTokens.fontSupport));
+      _textWidth(timeText, AppTokens.rowSecondary);
   return needed <= rowWidth;
 }
 

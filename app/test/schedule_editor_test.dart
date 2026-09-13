@@ -959,8 +959,9 @@ void main() {
     final editables = tester.widgetList<EditableText>(find.byType(EditableText));
     expect(editables, isNotEmpty);
     for (final e in editables) {
-      expect(e.style.fontSize, AppTokens.fontLead,
-          reason: '输入框字号应为 ${AppTokens.fontLead}，实际 ${e.style.fontSize}');
+      expect(e.style.fontSize, AppTokens.titleStrong.fontSize,
+          reason:
+              '输入框字号应为 ${AppTokens.titleStrong.fontSize}，实际 ${e.style.fontSize}');
     }
   });
 
@@ -970,13 +971,13 @@ void main() {
     double sizeOf(String text) =>
         tester.widget<Text>(find.text(text)).style!.fontSize!;
 
-    expect(sizeOf(L10n.shiftClasses), AppTokens.fontLead); // 卡片标题
-    expect(sizeOf(L10n.cycleSection), AppTokens.fontLead); // 卡片标题
-    expect(sizeOf(L10n.dayN(1)), AppTokens.fontSupport); // 行内次要标签
+    expect(sizeOf(L10n.shiftClasses), AppTokens.titleStrong.fontSize); // 卡片标题
+    expect(sizeOf(L10n.cycleSection), AppTokens.titleStrong.fontSize); // 卡片标题
+    expect(sizeOf(L10n.dayN(1)), AppTokens.rowSecondary.fontSize); // 行内次要标签
 
     // 预览条是唯一被压到最低一档的地方（7 列网格，再大就换行破版）
     final previewTitle = tester.widget<Text>(find.text(L10n.previewNext14));
-    expect(previewTitle.style!.fontSize, AppTokens.fontCaption);
+    expect(previewTitle.style!.fontSize, AppTokens.microLabel.fontSize);
   });
 
   testWidgets('周期行把可选班次铺成 chip，点一下就切换', (tester) async {
