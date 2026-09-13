@@ -439,6 +439,29 @@ List<String> _constantViolationsIn(String path, String src) {
   return out;
 }
 
+/// 15 条角色排版令牌 —— 它们是阶梯的核心，必须逐条自检。
+const Set<String> _typography = {
+  'ringClock', 'pageTitle', 'bigNumber', 'dialogTitle', 'sectionTitle',
+  'cellDate', 'titleStrong', 'labelStrong', 'rowPrimary', 'rowSecondary',
+  'labelSecondary', 'microStrong', 'microLabel', 'microText', 'tinyLabel',
+};
+
+/// 「阶梯」= 排版 / 图标 / 间距 / 光学 / 圆角 / 明度 alpha / 时长。
+///
+/// **不在内**（有意，不是遗漏）：配色（`bg*` / `surface*` / `ink*` / `danger` /
+/// `success` / `holiday`）、玻璃配方（`blur*` / `glass*`）、弹簧与缩放
+/// （`qSpring` / `pressScale` / `pillGrow`）—— 它们不是阶梯，各自有别的用例盯着，
+/// 或本身就是配方。
+bool _isLadderToken(String n) =>
+    _typography.contains(n) ||
+    n.startsWith('icon') ||
+    n.startsWith('space') ||
+    n.startsWith('gap') ||
+    n.startsWith('pad') ||
+    n.startsWith('radius') ||
+    n.startsWith('dur') ||
+    (n.startsWith('ink') && n.endsWith('Alpha'));
+
 void main() {
   test('角色令牌的尺寸与规格一致', () {
     void check(String name, TextStyle t, double size, FontWeight weight,
@@ -489,6 +512,12 @@ void main() {
 
     expect(AppTokens.durFlow, const Duration(milliseconds: 650),
         reason: 'durFlow —— 响铃界面入场动画的一次性控制器（非背景光晕循环）');
+    expect(AppTokens.durFast, const Duration(milliseconds: 120),
+        reason: 'durFast —— 短促反馈（按下 / 淡入淡出）');
+    expect(AppTokens.durMed, const Duration(milliseconds: 220),
+        reason: 'durMed —— 常规过渡（展开 / 切换）');
+    expect(AppTokens.durSlow, const Duration(milliseconds: 340),
+        reason: 'durSlow —— 较慢的位移 / 形变过渡');
 
     expect(AppTokens.inkMutedAlpha, 0.62,
         reason: '浅色最坏底 #F5F6FA 上 0.62 才到 4.70:1 过 AA（0.60 只有 4.33:1）');
@@ -496,6 +525,25 @@ void main() {
         reason: '禁用/已完成档，有意低于 AA（见规格 §3.3）');
     expect(AppTokens.pillOf(40),
         const BorderRadius.all(Radius.circular(20)));
+  });
+
+  test('自检覆盖了每一个阶梯令牌（漏一个就红）', () {
+    final tokenSrc = File('lib/core/design_tokens.dart').readAsStringSync();
+    final testSrc = File('test/design_tokens_test.dart').readAsStringSync();
+
+    final names = RegExp(
+            r'^\s*static const (?:double|TextStyle|Duration) (\w+)\s*=',
+            multiLine: true)
+        .allMatches(tokenSrc)
+        .map((m) => m.group(1)!)
+        .where(_isLadderToken)
+        .toList();
+
+    expect(names, isNotEmpty, reason: '一个阶梯令牌都没抽到 —— 抽取的正则不对');
+    final missing =
+        names.where((n) => !testSrc.contains('AppTokens.$n')).toList();
+    expect(missing, isEmpty,
+        reason: '这些阶梯令牌没有自检断言，加令牌时漏了：$missing');
   });
 
   test('界面层不写数值', () {
