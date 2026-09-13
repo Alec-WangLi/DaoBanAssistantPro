@@ -372,11 +372,17 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // 导航项图标：规格 §3.6 把「导航项」归 iconLg
-                                  // （出图对比：24 在胶囊里站得住，20 偏小）。
+                                  // 导航项图标：常规态归 iconLg（规格 §3.6，出图对比：
+                                  // 24 在 64dp 胶囊里站得住、20 偏小）。矮屏 52dp
+                                  // 胶囊的竖向预算更小，回落到 iconMd —— 这是原设计
+                                  // （`isShort ? 20 : 22`）「矮屏用小一号图标」的忠实
+                                  // 翻译，属同一角色按布局档位的个别变化：不新增令牌，
+                                  // 也不违背「导航项归 iconLg」。
                                   AppIcon(
                                     items[i].$1,
-                                    size: AppTokens.iconLg,
+                                    size: isShort
+                                        ? AppTokens.iconMd
+                                        : AppTokens.iconLg,
                                     color: selected ? fg : inactiveColor,
                                   ),
                                   const SizedBox(height: AppTokens.gapHair),
