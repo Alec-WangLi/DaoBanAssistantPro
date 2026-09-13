@@ -279,10 +279,7 @@ class _GlassNavBarState extends State<_GlassNavBar> {
     final capsuleH = isShort ? _capsuleHeightShort : _capsuleHeight;
     final outerPad = isShort ? _outerPadShort : _outerPad;
     final activeColor = Theme.of(context).colorScheme.primary;
-    final inactiveColor = Theme.of(context)
-        .colorScheme
-        .onSurface
-        .withValues(alpha: isDark ? 0.72 : 0.55);
+    final inactiveColor = AppTokens.navInactiveForeground(context, isDark: isDark);
     final fg = AppTokens.navForeground(isDark, activeColor); // 滑块上选中项前景
     final selectedIndex = _previewIndex ?? _committedIndex;
 

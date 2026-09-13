@@ -202,6 +202,18 @@ class AppTokens {
     return accent.computeLuminance() > 0.45 ? inkLight : inkDark;
   }
 
+  /// 导航胶囊上**未选中**项的前景（图标与文字）。
+  ///
+  /// 与 [navForeground] 同一族的「前景色已定」情形：胶囊是磨砂玻璃、压在任意
+  /// 内容之上，对比度要求与页面正文不同，所以不并入 inkMuted / inkFaint 那两档
+  /// （规格 §3.3 已为这类情形留了口子）。暗色下底更透，故取值比亮色更实。
+  static Color navInactiveForeground(BuildContext context,
+          {required bool isDark}) =>
+      Theme.of(context)
+          .colorScheme
+          .onSurface
+          .withValues(alpha: isDark ? 0.72 : 0.55);
+
   // ── 文字明度：两档 ──
   //
   // 「层级只靠字号、字重、明度」里的明度就是这一层。此前它没有令牌，于是
