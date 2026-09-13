@@ -41,7 +41,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.11\n'
+const String _changelogZh = 'v0.6.12\n'
+    '· 底部导航的四个图标调大一档，在胶囊里更醒目、与文字的比例更接近常见底栏\n'
+    '· 内部整理：把设计规范里几处说法与实际不符的地方改正（导航图标的尺寸档位、小尺寸元素的圆角规则）\n\n'
+    'v0.6.11\n'
     '· 全 App 的排版、间距与图标收敛到一套统一的设计规范：同一个用途的字号、字重、行高、透明度、间距从此只有一个来源，不会再各自跑偏\n'
     '· 次要文字的透明度此前散着 0.45 / 0.5 / 0.55 / 0.6 四种，现在统一到两档（常规 0.62、更淡的 0.35），同一个层级在哪个页面看都一样\n'
     '· 图标尺寸统一到三档（16 / 20 / 24），不再各处写 14 / 18 / 22 / 28\n'
@@ -90,14 +93,12 @@ const String _changelogZh = 'v0.6.11\n'
     '· 周期设置改成**行内直接点选班次**：每个可选班次平铺成一个彩色小块，点一下就换，不再弹出下拉菜单\n'
     '· 选中的班次块用班次色实心填充，文字颜色按底色自动取白或黑，浅色班次上的字不再糊得读不出来\n'
     '· 班次简称输入框加宽，两个汉字（如「大夜」）不会被裁掉\n'
-    '· 删除班次改为低调图标（不再每行一个红点），按下时变红，并在真正删除前先确认一次\n\n'
-    'v0.6.2\n'
-    '· 英文界面：倒班方式模板的标题与副标题改为模板自带双语，不再漏出中文\n'
-    '· 英文界面：从模板新建的排班，方案名与班次名（白班 / 夜班 / 休班 等）按你的语言生成，日历格子里的简称随之变成 D / N / O\n'
-    '· 英文界面：默认排班与首次启动自动生成的班表同样按语言生成；模板可用英文关键词搜索（如 4-crew、dupont）\n'
-    '· 周期色条超过 14 天时末格显示省略标记，不再静默截断（DuPont 这类 28 天周期一眼能看出后面还有）\n';
+    '· 删除班次改为低调图标（不再每行一个红点），按下时变红，并在真正删除前先确认一次\n';
 
-const String _changelogEn = 'v0.6.11\n'
+const String _changelogEn = 'v0.6.12\n'
+    '· The four bottom-nav icons are one step larger — more present in the capsule, and closer to the usual tab-bar ratio against their labels\n'
+    '· Internal cleanup: corrected a few mismatches between the design spec and the actual code (the nav icon\'s size tier, and the rule for small elements\' corner radius)\n\n'
+    'v0.6.11\n'
     '· Typography, spacing and icons across the app now come from one shared design system: a single source per role for size, weight, line height, opacity and spacing, so they can no longer drift apart\n'
     '· Secondary text opacity used to be scattered across four values (0.45 / 0.5 / 0.55 / 0.6). It is now two tiers — 0.62 regular and 0.35 for the faintest — so the same level looks the same on every screen\n'
     '· Icon sizes are down to three steps (16 / 20 / 24) instead of ad-hoc 14 / 18 / 22 / 28\n'
@@ -146,12 +147,7 @@ const String _changelogEn = 'v0.6.11\n'
     '· The cycle section now lets you pick a shift inline: every option is a coloured chip you tap, with no dropdown to open\n'
     '· A selected chip is filled with its shift colour, and its text is picked as white or black for readability — pale shifts are no longer washed out\n'
     '· The shift-abbreviation field is wider, so two characters are no longer clipped\n'
-    '· Deleting a shift uses a quieter icon (no red dot on every row) that turns red while pressed, and asks for confirmation first\n\n'
-    'v0.6.2\n'
-    '· English UI: shift-pattern templates now carry their own bilingual titles and subtitles — no more Chinese leaking through\n'
-    '· English UI: a schedule created from a template gets its name and shift names (Day shift / Night shift / …) in your language, and calendar cells use D / N / O\n'
-    '· English UI: the default schedule and the one seeded on first launch are generated in your language; templates can be searched with English keywords (4-crew, dupont)\n'
-    '· The cycle colour strip now shows an ellipsis in its last cell when a pattern runs past 14 days, instead of truncating silently\n';
+    '· Deleting a shift uses a quieter icon (no red dot on every row) that turns red while pressed, and asks for confirmation first\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
