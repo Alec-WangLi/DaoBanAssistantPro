@@ -27,12 +27,29 @@ class AppTokens {
   static const double radiusL = 22;
   static const double radiusXL = 28;
 
-  // ── 间距（4px 栅格） ──
+  /// 胶囊圆角：高度的一半。用于导航胶囊、开关轨道、分段滑块，以及
+  /// 信息卡左侧那根 6dp 色条这类「细长条」。
+  static BorderRadius pillOf(double height) =>
+      BorderRadius.all(Radius.circular(height / 2));
+
+  // ── 间距：两套刻度 ──
+  //
+  // 「节奏」用于分隔两个**板块**：页面留白、区块间距、卡片内边距、列表行。
+  // 4px 栅格。判据是「这个间距在分隔板块，还是在贴合一个控件内部的两个元素」。
   static const double spaceXs = 4;
   static const double spaceSm = 8;
   static const double spaceMd = 12;
   static const double spaceLg = 16;
   static const double spaceXl = 20;
+  static const double space2xl = 24;
+  static const double space3xl = 32;
+
+  // 「光学」用于**一个控件内部**两个元素的贴合：图标与文字之间、小胶囊的
+  // 上下内边距。硬套 4px 会让图标显得脱开、胶囊显得臃肿，所以单独留四档。
+  static const double gapHair = 2;
+  static const double padChipV = 3;
+  static const double gapIconText = 6;
+  static const double gapIconTextLg = 10;
 
   // ── 玻璃模糊 sigma ──
   static const double blurChip = 12;
@@ -44,17 +61,67 @@ class AppTokens {
   static const Duration durMed = Duration(milliseconds: 220);
   static const Duration durSlow = Duration(milliseconds: 340);
 
+  /// 响铃界面背景光晕的循环周期。不是过渡，是「缓慢流动」的呼吸节奏。
+  static const Duration durFlow = Duration(milliseconds: 650);
+
   // ── Q 弹弹簧 + 缩放 ──
   static const SpringDescription qSpring =
       SpringDescription(mass: 1, stiffness: 400, damping: 16);
   static const double pressScale = 0.96;
   static const double pillGrow = 1.06;
 
-  // ── 排版（system 字体） ──
+  // ── 排版：角色令牌 ──
   //
-  // 全 App 实际只用到这四档：16 输入框与卡片标题 / 14 行内主文字 /
-  // 13 次要标签 / 12 微字。令牌里**只留这四档** —— 多留一档就迟早有人
-  // 顺手用上，档位又散了。
+  // 令牌即完整样式（字号 + 字重 + 行高）。界面层只写角色名，不写 fontSize /
+  // fontWeight；颜色由调用处 `copyWith(color:)` 覆盖 —— 同一个角色在不同底色上
+  // （尤其班次色块）要取不同的可读色，所以颜色不进令牌。
+  //
+  // 名字说的是「什么时候用它」，不是「它多大」。这也是为什么不再按
+  // fontLead / fontBody 那样按尺寸命名：按尺寸命名会让人挑「最像的那个大小」，
+  // 12.5 / 13.5 / 14.5 / 15 / 22 就是这么来的。
+  //
+  // 一个角色内的个别变化走 `copyWith`，不另立令牌（格子里的「今天」加粗、
+  // 选择器选中项加粗、导航标签选中态、调休日「班」标记转主色）。
+  static const TextStyle ringClock =
+      TextStyle(fontSize: 84, fontWeight: FontWeight.w800, height: 1.0);
+  static const TextStyle pageTitle =
+      TextStyle(fontSize: 28, fontWeight: FontWeight.w700);
+  static const TextStyle bigNumber =
+      TextStyle(fontSize: 24, fontWeight: FontWeight.w700);
+  static const TextStyle dialogTitle =
+      TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
+  static const TextStyle sectionTitle =
+      TextStyle(fontSize: 18, fontWeight: FontWeight.w700);
+  static const TextStyle cellDate =
+      TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1.15);
+  static const TextStyle titleStrong =
+      TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
+  static const TextStyle labelStrong =
+      TextStyle(fontSize: 14, fontWeight: FontWeight.w700);
+  static const TextStyle rowPrimary =
+      TextStyle(fontSize: 14, fontWeight: FontWeight.w500);
+  static const TextStyle rowSecondary =
+      TextStyle(fontSize: 13, fontWeight: FontWeight.w400);
+  static const TextStyle labelSecondary =
+      TextStyle(fontSize: 13, fontWeight: FontWeight.w600);
+  static const TextStyle microStrong =
+      TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+  static const TextStyle microLabel =
+      TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
+  static const TextStyle microText =
+      TextStyle(fontSize: 12, fontWeight: FontWeight.w400);
+  static const TextStyle tinyLabel =
+      TextStyle(fontSize: 11, fontWeight: FontWeight.w400, height: 1.15);
+
+  // ── 图标尺寸：三档 ──
+  static const double iconSm = 16;
+  static const double iconMd = 20;
+  static const double iconLg = 24;
+
+  // ── 排版（旧，按尺寸命名）──
+  //
+  // 角色令牌上线后这八档不再新增调用，保留只为让尚未迁移的界面继续编译。
+  // Task 8 确认无调用方后整体删除。
   static const double fontDisplayXl = 84;
   static const double fontDisplay = 28;
   static const double fontTitle = 20;
@@ -134,6 +201,20 @@ class AppTokens {
     if (!isDark) return inkLight;
     return accent.computeLuminance() > 0.45 ? inkLight : inkDark;
   }
+
+  // ── 文字明度：两档 ──
+  //
+  // 「层级只靠字号、字重、明度」里的明度就是这一层。此前它没有令牌，于是
+  // 次要文字散着 0.45 / 0.5 / 0.55 / 0.6 四种 alpha —— 同一个角色被调了不同值。
+  // 压在主色胶囊上的次要白字不归这两档（那是「前景色已定」的情形）。
+
+  /// 次要文字：副标题 · 说明 · hint · 分组标签 · 星期行。
+  static Color inkMuted(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+
+  /// 更淡的：禁用态 · 占位 · 待办已完成。
+  static Color inkFaint(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.35);
 
   // ── 文字可读性 ──
 
