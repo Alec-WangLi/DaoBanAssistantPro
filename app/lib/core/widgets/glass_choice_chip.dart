@@ -35,6 +35,7 @@ class GlassChoiceChip extends StatelessWidget {
 
   /// 外层补的竖向内边距：把**命中区**补到 44，视觉上仍是 32 的小 chip。
   /// 手指够得着，也为以后的车机留余量。
+  // design-tokens-ignore: 命中区补到 44dp 触摸目标的推导值，不是设计间距
   static const double _hitPad = 6;
 
   @override

@@ -170,7 +170,7 @@ class _GlassNavBar extends StatefulWidget {
 
 class _GlassNavBarState extends State<_GlassNavBar> {
   static const _outerPad = 24.0;
-  static const _innerPad = 6.0;
+  static const _innerPad = AppTokens.gapIconText;
   static const _capsuleHeight = 64.0;
 
   /// 短屏（可用高 < 480）用的紧凑尺寸：横屏下 64 高的胶囊约占可用高度的

@@ -122,7 +122,7 @@ class _GlassSegmentState extends State<GlassSegment> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final activeColor = Theme.of(context).colorScheme.primary;
     final selectedIdx = _preview ?? _committed;
-    const inset = 3.0;
+    const inset = AppTokens.padChipV;
 
     return SizedBox(
       height: widget.height,

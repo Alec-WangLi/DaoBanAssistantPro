@@ -260,7 +260,7 @@ class _ShiftTemplatePickerScreenState
 /// 「唯一线索」退回「补充说明」，这是它该有的位置。
 /// 周期色条的固定几何（`_templateCard` 判断能不能与标题并排时要用到宽度）。
 const double _stripDot = 14;
-const double _stripSpacing = 2;
+const double _stripSpacing = AppTokens.gapHair;
 const int _stripPerRow = 7;
 
 /// 色条宽度：按实际间距算，别写死 —— 改间距时宽度才不会对不上。

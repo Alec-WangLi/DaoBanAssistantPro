@@ -30,7 +30,7 @@ class CalendarScreen extends ConsumerStatefulWidget {
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   static const _hPad = 12.0; // 网格左右留白
   static const _weekdayH = 26.0; // 周标题行高
-  static const _cellInset = 2.0; // 格子/玻璃块统一内缩
+  static const _cellInset = AppTokens.gapHair; // 格子/玻璃块统一内缩
 
   late DateTime _month; // 显示月的 1 号
   late DateTime _selected; // 选中的日期（默认今天）

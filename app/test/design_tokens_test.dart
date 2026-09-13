@@ -2,11 +2,15 @@
 //
 // 这一轮（设计语言 v2）把「界面层不写数值」从文档里的一句话变成了会红的东西。
 //
-// 两条：
+// 三组：
 //   1. 角色令牌的字号 / 字重 / 行高必须等于规格里那张表 —— 改令牌就得先改规格。
 //   2. lib/features · lib/core/widgets · lib/core/glass 下不许出现字面量。
 //      迁移期间曾用 _pending 兜住还没迁完的文件，收口时已连同进度用例一起删除；
 //      这条规则从此扫**全部**文件、没有任何豁免。
+//   3. 间距类常量（名字带 Pad/Gap/Inset/Spacing 的 const）的值也必须在 4px 栅格上
+//      —— 否则把字面量提成常量就能绕过第 2 条。真要保留 off-grid 值必须写
+//      `// design-tokens-ignore: <理由>` 具名豁免（作用域：同一行或紧邻上一行），
+//      命中的豁免会打进日志 —— 故意不扫要看得见（见 `_constantViolationsIn`）。
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -345,6 +349,79 @@ List<String> _spacingViolationsIn(String path, String src) {
   return out;
 }
 
+/// 间距类常量：名字里带 `Pad` / `Gap` / `Inset` / `Spacing` 的 `const`。
+///
+/// 为什么按名字收窄：实测扫描目录里 off-grid 的常量有 15 处，**只有 4 处是
+/// 真间距**，其余是控件几何（`_trackHeight` 190）、比例（`_cellAspect` 0.78）、
+/// 计数（`maxSlots` 14）甚至一个测试 id。全扫要付 11 条永久豁免注释，豁免一多
+/// 就没人读了 —— 那是「守门测试绿但没人信」的另一条路。
+///
+/// 已知边界：把间距提成名字不含这四个词的常量（比如叫 `_k`）仍能逃。
+/// 这条规则拦的是「顺手提成常量」的习惯，不是对抗性绕过 —— 要拦后者得做标识符
+/// 解析，不划算。
+/// **大小写不敏感**：真实的那处 `const inset = 3.0;` 是全小写，区分大小写会漏掉它。
+///
+/// 行首要写 `[ \t]*` 而**不是** `\s*`：`\s` 含换行，多行模式下 `^` 会在空行的
+/// 行首先匹配，再把中间的空行一并吃掉 —— 匹配起点落到**空行**上，`_lineAt` 报出
+/// 的行号也跟着上移，于是 `_ignoreReasonAt` 查错了行：声明上方隔两行的标记会被
+/// 当成本行豁免。`[ \t]*` 只吃缩进，匹配起点稳落在声明自己那一行。
+final RegExp _constDecl = RegExp(
+    r'^[ \t]*(?:static\s+)?const\s+(?:double\s+)?'
+    r'(\w*(?:Pad|Gap|Inset|Spacing)\w*)\s*=\s*(-?[0-9][0-9.]*)\s*;',
+    multiLine: true,
+    caseSensitive: false);
+
+/// 具名豁免标记。冒号后必须**有非空理由**。
+final RegExp _ignoreMarker = RegExp(r'//\s*design-tokens-ignore:\s*(\S.*?)\s*$');
+
+/// 查某一行（或紧邻上一行）有没有具名豁免，有则返回理由。
+///
+/// **必须在原始源码上查** —— 规则跑的是 `blankNonCode` 的副本，注释在那里已经
+/// 是空格了。两份串等长，所以行号通用。
+String? _ignoreReasonAt(String rawSrc, int line) {
+  final lines = rawSrc.split('\n');
+  for (final i in [line - 1, line - 2]) {
+    if (i < 0 || i >= lines.length) continue;
+    final m = _ignoreMarker.firstMatch(lines[i]);
+    if (m != null) return m.group(1);
+  }
+  return null;
+}
+
+/// 豁免过的条目会打进日志 —— 让「故意不扫」看得见，而不是默不作声。
+final List<String> spacingConstantWaivers = [];
+
+List<String> _constantViolations(String path) =>
+    _constantViolationsIn(path, File(path).readAsStringSync());
+
+/// 扫一段源码里的**间距类常量**。拆出「读文件」这一步是为了能用临时文本单测 ——
+/// [path] 只进报告、不参与判断（与 `_spacingViolationsIn` 同一套路）。
+///
+/// 与字面量规则同走**双轨**：规则跑在 [blankNonCode] 剥过的副本上 —— 否则一行
+/// **被注释掉的** `// static const double _oldPad = 6;` 会被误报；而具名豁免标记
+/// 是注释，必须回到原始 [src] 上查（见 `_ignoreReasonAt`）。两份串等长，行号通用。
+List<String> _constantViolationsIn(String path, String src) {
+  final code = blankNonCode(src);
+  final out = <String>[];
+  for (final m in _constDecl.allMatches(code)) {
+    final name = m.group(1)!;
+    final value = double.parse(m.group(2)!);
+    if (_spacingOk(value)) continue;
+    final at = _lineAt(src, m.start);
+    final reason = _ignoreReasonAt(src, at.line);
+    if (reason != null) {
+      spacingConstantWaivers.add('$path:${at.line}  $name = $value —— $reason');
+      continue;
+    }
+    out.add('$path:${at.line}  间距类常量的值不在 4px 栅格上：'
+        '$name = $value\n      ${at.text}\n'
+        '      要么改引用已有令牌（spaceXxx / gapHair / padChipV / '
+        'gapIconText / gapIconTextLg），要么加 '
+        '`// design-tokens-ignore: <理由>` 说明它为什么不是设计间距');
+  }
+  return out;
+}
+
 void main() {
   test('角色令牌的尺寸与规格一致', () {
     void check(String name, TextStyle t, double size, FontWeight weight,
@@ -406,6 +483,9 @@ void main() {
 
   test('界面层不写数值', () {
     final offenders = <String>[];
+    // 豁免清单只统计**真实界面文件**里命中的豁免：清一次，免得此前单测调用
+    // `_constantViolationsIn` 留下的临时条目混进来。
+    spacingConstantWaivers.clear();
     for (final dir in _scanDirs) {
       final d = Directory(dir);
       if (!d.existsSync()) {
@@ -416,7 +496,14 @@ void main() {
         final path = e.path.replaceAll(Platform.pathSeparator, '/');
         offenders.addAll(_violations(path));
         offenders.addAll(_spacingViolations(path));
+        offenders.addAll(_constantViolations(path));
       }
+    }
+    // 豁免是**故意不扫**，不能默不作声 —— 打进日志，让人一眼看见哪些地方被放过。
+    if (spacingConstantWaivers.isNotEmpty) {
+      // ignore: avoid_print
+      print('间距类常量的具名豁免（design-tokens-ignore）：\n'
+          '${spacingConstantWaivers.join('\n')}');
     }
     expect(offenders, isEmpty,
         reason: '界面层只能引用令牌，发现 ${offenders.length} 处字面量：\n'
@@ -561,6 +648,60 @@ Text('x', style: AppTokens.tinyLabel.copyWith(
         _spacingViolationsIn('t.dart', 'SizedBox(width: 6, child: Text("x")'),
         isEmpty,
         reason: '未闭合的调用跳过，不崩也不报');
+  });
+
+  // ── 间距类常量：提升成命名常量不能绕过扫描 ──
+  //
+  // 间距规则只看 `SizedBox` / `EdgeInsets` 的字面量参数；把 `6` 提成
+  // `const double _innerPad = 6;` 再引用，数字本身就从参数位挪走了 —— 旧规则
+  // 静默放行，等于给「顺手包一层常量」开了后门。下面两条把它堵上：规则**按名字
+  // 收窄**到含 `Pad`/`Gap`/`Inset`/`Spacing` 的 `const`（大小写不敏感），并要求
+  // 「真要保留 off-grid 值」必须**具名豁免**、且豁免要写清理由。
+
+  test('间距类常量不再逃过扫描', () {
+    // 名字带这四个词的常量要查
+    expect(_constantViolationsIn('t.dart', 'static const double _extraPad = 6;'),
+        hasLength(1));
+    expect(
+        _constantViolationsIn('t.dart', 'const double _fooSpacing = 2;'),
+        hasLength(1));
+    expect(_constantViolationsIn('t.dart', 'const inset = 3.0;'), hasLength(1));
+    // 合法值不报
+    expect(_constantViolationsIn('t.dart', 'static const double _aPad = 8;'),
+        isEmpty);
+    expect(_constantViolationsIn('t.dart', 'static const double _aGap = 1;'),
+        isEmpty);
+    // 名字不含这四个词的不查 —— 控件几何 / 比例不归间距管
+    expect(_constantViolationsIn('t.dart', 'static const _trackHeight = 190.0;'),
+        isEmpty);
+    expect(_constantViolationsIn('t.dart', 'static const _aspect = 0.78;'),
+        isEmpty);
+    // 注释掉的声明不算
+    expect(
+        _constantViolationsIn('t.dart', '// static const double _oldPad = 6;'),
+        isEmpty);
+  });
+
+  test('具名豁免：写了理由才豁免', () {
+    expect(
+        _constantViolationsIn('t.dart',
+            '// design-tokens-ignore: 命中区推导值\nstatic const double _hitPad = 6;'),
+        isEmpty,
+        reason: '带理由的标记应当豁免');
+    expect(
+        _constantViolationsIn('t.dart',
+            'static const double _hitPad = 6; // design-tokens-ignore: 同行也行'),
+        isEmpty);
+    expect(
+        _constantViolationsIn(
+            't.dart', '// design-tokens-ignore:\nstatic const double _hitPad = 6;'),
+        hasLength(1),
+        reason: '只有标记没理由不算数');
+    expect(
+        _constantViolationsIn('t.dart',
+            '// design-tokens-ignore: 隔了两行\n\n\nstatic const double _hitPad = 6;'),
+        hasLength(1),
+        reason: '豁免只作用于紧邻的上一行或同一行');
   });
 
   // ── 扫描器自身的「已知边界」：也用能失败的用例钉住 ──
