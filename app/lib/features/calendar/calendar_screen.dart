@@ -795,52 +795,59 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 信息卡上的「法定节假日 + 节日名」红色胶囊。
   ///
-  /// 「法定节假日」收成 9px 压在节日名的左上角、名字用 13px 粗体：名字读起来
-  /// 还是主信息，而整枚胶囊从一百多 dp 缩到七十上下。它自己占一行，不必再靠
-  /// 宽度去和农历抢位置，大小对比就够说清哪行是节日名了。
+  /// **配方与「其他班组」色块同一套**（14% 淡染底 / 45% 描边 / `radiusS` /
+  /// 文字走 [AppTokens.inkFor]）—— 两者是同一类「信息胶囊」，没理由两套。
+  /// 这里原来单独一套（12% / 35% / `radiusL` / 原色字），原色红压在同色淡底
+  /// 上只有 3.46:1（浅色）/ 3.37:1（深色），两套主题都够不到 AA 的 4.5:1；
+  /// 调度色块那条路径正是为此才走 `inkFor`。
   ///
-  /// 名字外面那层 `Flexible` 不能省：`Row` 给非弹性子节点的是**无界**主轴约束，
-  /// 少了它，长节日名不会换行也不会省略，会把胶囊撑出卡片。
+  /// 图标 + 「法定节假日」+ 节日名**一行**放下：徽章自占一行，宽度不再是稀缺
+  /// 资源，不必再拆成上下两行、也不必把标签缩到 9px。大小与字重（12/w600 对
+  /// 14/w700）留给主次关系。
   Widget _holidayBadge(BuildContext context, String name) {
+    final surface = Theme.of(context).colorScheme.surface;
+    final ink = AppTokens.inkFor(
+        AppTokens.holiday,
+        Color.alphaBlend(
+            AppTokens.holiday.withValues(alpha: 0.14), surface));
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 3, 12, 4),
+      key: const Key('info-card-holiday-badge'),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppTokens.holiday.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppTokens.radiusL),
-        border: Border.all(color: AppTokens.holiday.withValues(alpha: 0.35)),
+        color: AppTokens.holiday.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(AppTokens.radiusS),
+        border: Border.all(color: AppTokens.holiday.withValues(alpha: 0.45)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.celebration_outlined,
-              size: 16, color: AppTokens.holiday),
-          const SizedBox(width: 7),
+          Icon(Icons.celebration_outlined, size: 14, color: ink),
+          const SizedBox(width: 5),
           Flexible(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  L10n.legalHoliday,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    height: 1.1,
-                    fontWeight: FontWeight.w600,
-                    color: AppTokens.holiday,
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: L10n.legalHoliday,
+                    style: TextStyle(
+                      fontSize: AppTokens.fontCaption,
+                      fontWeight: FontWeight.w600,
+                      color: ink,
+                    ),
                   ),
-                ),
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.15,
-                    fontWeight: FontWeight.w800,
-                    color: AppTokens.holiday,
+                  const TextSpan(text: '  '),
+                  TextSpan(
+                    text: name,
+                    style: TextStyle(
+                      fontSize: AppTokens.fontBody,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -961,8 +968,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           children: [
             Text(
               L10n.monthDayWeekday(_selected),
+              // w700 而不是 w800：设计规格第 3.7 节把字重收成「标题 w700 /
+              // 强调 w600 / 正文 w500」，w800 只留给响铃大时钟。
               style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             if (isToday) ...[
               const SizedBox(width: 8),
@@ -987,7 +996,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ],
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: AppTokens.spaceSm),
         // 节假日徽章自占一行、农历独占下一行。
         //
         // 这两条曾经并排过，理由是「徽章自占一行的话，放假那天卡片凭空高 24，
@@ -997,7 +1006,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         // 剩一半宽度，两行都显示不全（v0.6.7 用户实测）。
         if (lunar.isLegalHoliday) ...[
           _holidayBadge(context, lunar.legalHolidayName),
-          const SizedBox(height: 6),
+          // 徽章是给下面这行农历作注解的，贴紧一点成一组。
+          const SizedBox(height: AppTokens.spaceXs),
         ],
         Text(
           lunar.fullDescription,
@@ -1009,9 +1019,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
           ),
         ),
-        // 这一段与上一段之间的留白收到 10：卡片内部只有 210dp，最满的一天
-        // （六班组 + 节假日徽章 + 两行色块）已经贴着上限，2dp 也是钱。
-        const SizedBox(height: 10),
+        // 段与段之间一律用栅格上的 12（原来这里是 10，不在 4px 栅格上）。
+        const SizedBox(height: AppTokens.spaceMd),
         // 班次名、时间、闹钟**同一行**。分开写要两行（一行文字 + 它的间距，
         // 约 26dp），而卡片内部可用高度只有 210dp —— 六班组那种排满的日子
         // 本来就已经被底边裁掉一截（v0.6.7 实测 224dp）。
@@ -1074,8 +1083,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         else
           Text(L10n.noSchedule, style: TextStyle(fontSize: 13, color: muted)),
         if (schedule != null && schedule.teamCount > 1) ...[
-          const SizedBox(height: 10),
-          // 标签与色块同一行：标签独占一行要白占 10 + 16 + 6 = 32dp，而
+          const SizedBox(height: AppTokens.spaceMd),
+          // 标签与色块同一行：标签独占一行要白占 12 + 16 + 6 = 34dp，而
           // 6 个班组要**两行**色块 —— 那两行必须留得住，否则最后一行会被
           // 卡片底边裁掉（正是 v0.6.7 实测到的问题）。标签还在、还在左边，
           // 只是不再独占一行。

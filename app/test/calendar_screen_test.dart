@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
@@ -405,17 +406,18 @@ void main() {
     await _pumpCalendar(tester, 'four_crew_three_shift');
 
     // 找出本月的第一个法定节假日（中秋那种）。
+    final badgeFinder = find.byKey(const Key('info-card-holiday-badge'));
     final daysInMonth =
         DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
     var found = false;
     for (var d = 1; d <= daysInMonth && !found; d++) {
       await tester.tap(find.text('$d').first);
       await tester.pump();
-      found = find.text(L10n.legalHoliday).evaluate().isNotEmpty;
+      found = badgeFinder.evaluate().isNotEmpty;
     }
     expect(found, isTrue, reason: '本月应当有法定节假日，否则这条用例没有意义');
 
-    final badge = tester.getRect(find.text(L10n.legalHoliday));
+    final badge = tester.getRect(badgeFinder);
     final lunar = tester.getRect(find.textContaining('农历').first);
     final content = tester.getRect(find.byKey(const Key('info-card-content')));
 
@@ -423,6 +425,41 @@ void main() {
         reason: '农历要排在徽章**下面**，不再和它挤同一行');
     expect(lunar.left, closeTo(content.left, 0.5),
         reason: '农历要从内容区左边起排（占满整行），而不是被徽章推到右边');
+
+    await _disposeCalendar(tester);
+  });
+
+  // 对比度审计跑不到节假日徽章：工装渲染的日历选中的是「今天」，而今天未必是
+  // 节假日，徽章根本不出现在图里。这条直接在控件树上量它的真配色补上缺口 ——
+  // v0.6.8 之前它用原色红压在同色淡底上，浅深两套主题都只有 3.4:1。
+  testWidgets('节假日徽章：文字与淡染底要过 AA 对比度', (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+
+    final badgeFinder = find.byKey(const Key('info-card-holiday-badge'));
+    final daysInMonth =
+        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+    for (var d = 1; d <= daysInMonth; d++) {
+      await tester.tap(find.text('$d').first);
+      await tester.pump();
+      if (badgeFinder.evaluate().isNotEmpty) break;
+    }
+    expect(badgeFinder, findsOneWidget, reason: '本月应当有法定节假日');
+
+    final text = tester.widget<Text>(
+        find.descendant(of: badgeFinder, matching: find.byType(Text)).first);
+    // 分隔用的纯空白 span 没有样式，跳过。
+    final spans = (text.textSpan! as TextSpan)
+        .children!
+        .whereType<TextSpan>()
+        .where((s) => s.style?.color != null);
+    final surface = Theme.of(tester.element(badgeFinder)).colorScheme.surface;
+    final bg =
+        Color.alphaBlend(AppTokens.holiday.withValues(alpha: 0.14), surface);
+    for (final span in spans) {
+      final ink = span.style!.color!;
+      expect(AppTokens.contrastRatio(ink, bg), greaterThanOrEqualTo(4.5),
+          reason: '「${span.text!.trim()}」压在徽章底上对比度不够 AA');
+    }
 
     await _disposeCalendar(tester);
   });
