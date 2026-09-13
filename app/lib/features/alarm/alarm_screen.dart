@@ -102,8 +102,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                 alignment: Alignment.centerLeft,
                 child: Text(
                   L10n.titleAlarm,
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.w700),
+                  style: AppTokens.bigNumber,
                 ),
               ),
             ),
@@ -150,13 +149,8 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
           child: Text(
             L10n.noUpcoming30,
-            style: TextStyle(
-              fontSize: 13,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.5),
-            ),
+            style: AppTokens.rowSecondary
+                .copyWith(color: AppTokens.inkMuted(context)),
           ),
         ),
       );
@@ -177,13 +171,8 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(
             L10n.noCustomAlarms,
-            style: TextStyle(
-              fontSize: 13,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.5),
-            ),
+            style: AppTokens.rowSecondary
+                .copyWith(color: AppTokens.inkMuted(context)),
           ),
         ),
       );
@@ -211,7 +200,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               child: Text(L10n.newAlarm),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppTokens.spaceMd),
           Expanded(
             child: GlassButton(
               icon: const Icon(Icons.bolt_outlined),
@@ -229,13 +218,13 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
       child: Text(
         title,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        style: AppTokens.titleStrong,
       ),
     );
   }
 
   Widget _shiftAlarmTile(BuildContext context, _ShiftAlarmEntry e) {
-    final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     return GlassTile(
       enableBlur: false,
       margin: const EdgeInsets.only(bottom: 8),
@@ -256,23 +245,21 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               children: [
                 Text(
                   e.shift.name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                  style: AppTokens.titleStrong.copyWith(
                     color: AppTokens.inkFor(Color(e.shift.color),
                         Theme.of(context).colorScheme.surface),
                   ),
                 ),
                 Text(
                   L10n.monthDayWeekday(e.date),
-                  style: TextStyle(fontSize: 12, color: muted),
+                  style: AppTokens.microText.copyWith(color: muted),
                 ),
               ],
             ),
           ),
           Text(
             _fmt(e.shift.alarmMinute!),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            style: AppTokens.titleStrong,
           ),
         ],
       ),
@@ -301,18 +288,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               children: [
                 Text(
                   _fmt(a.hour * 60 + a.minute),
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700),
+                  style: AppTokens.sectionTitle,
                 ),
                 Text(
                   _repeatLabel(a),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.55),
-                  ),
+                  style: AppTokens.microText
+                      .copyWith(color: AppTokens.inkMuted(context)),
                 ),
               ],
             ),
@@ -387,8 +368,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                 contentPadding: EdgeInsets.zero,
                 title: Text(L10n.time),
                 trailing: Text(_fmt(time.hour * 60 + time.minute),
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w700)),
+                    style: AppTokens.sectionTitle),
                 onTap: () async {
                   final p = await showGlassTimePicker(
                       context, initialTime: time);
@@ -401,8 +381,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                 onSelected: (i) => setState(() => repeatType = i),
                 itemBuilder: (i, selected) => Text(
                   [L10n.once, L10n.daily, L10n.weekly][i],
-                  style: TextStyle(
-                    fontSize: 13,
+                  // 基线 13px：未选中 w500、选中 w700。13 档最重的角色是 w600 的
+                  // labelSecondary，两个分支都由这里显式给字重，按 spec 走 copyWith。
+                  style: AppTokens.labelSecondary.copyWith(
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
@@ -425,7 +406,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                 ),
               if (repeatType == 2)
                 Wrap(
-                  spacing: 6,
+                  spacing: AppTokens.gapIconText,
                   children: List.generate(7, (i) {
                     final bit = 1 << i;
                     final selected = (weekdays & bit) != 0;
@@ -443,7 +424,8 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                         duration: AppTokens.durMed,
                         curve: Curves.easeOutBack,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 7),
+                            horizontal: AppTokens.spaceMd,
+                            vertical: AppTokens.spaceSm),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(AppTokens.radiusL),
                           color: selected
@@ -460,8 +442,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                         ),
                         child: Text(
                           L10n.weekday(i),
-                          style: TextStyle(
-                            fontSize: 13,
+                          // 同上面的分段器：13 档取 w600 的 labelSecondary，
+                          // 选中加粗到 w700 由这里显式给出。
+                          style: AppTokens.labelSecondary.copyWith(
                             fontWeight: selected
                                 ? FontWeight.w700
                                 : FontWeight.w500,

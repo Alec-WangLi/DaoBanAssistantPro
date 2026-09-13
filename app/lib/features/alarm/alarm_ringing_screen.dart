@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../core/theme/animated_background.dart';
+import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_button.dart';
 import 'alarm_service.dart';
 
@@ -36,7 +37,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     super.initState();
     _enter = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 650),
+      duration: AppTokens.durFlow,
     )..forward();
     _scale = CurvedAnimation(parent: _enter, curve: Curves.easeOutBack);
     _slide = AnimationController(
@@ -124,11 +125,9 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                             children: [
                               Text(
                                 timeStr,
-                                style: const TextStyle(
+                                // 84/w800/h1 都在 ringClock 里，不再写行内字重。
+                                style: AppTokens.ringClock.copyWith(
                                   color: Colors.white,
-                                  fontSize: AppTokens.fontDisplayXl,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1,
                                   letterSpacing: 2,
                                 ),
                               ),
@@ -166,7 +165,8 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   /// 闹钟标签的玻璃胶囊。
   Widget _labelCapsule() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTokens.spaceLg, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTokens.radiusL),
         gradient: LinearGradient(
@@ -179,11 +179,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
       child: Text(
         widget.label,
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: AppTokens.inkDark,
-          fontSize: AppTokens.fontBody,
-          fontWeight: FontWeight.w500,
-        ),
+        style: AppTokens.rowPrimary.copyWith(color: AppTokens.inkDark),
       ),
     );
   }
@@ -257,12 +253,12 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                         ),
                       ],
                     ),
-                    child: Icon(
+                    child: AppIcon(
                       armed
                           ? Icons.check_outlined
                           : Icons.keyboard_arrow_up_outlined,
                       color: armed ? primary : AppTokens.inkMutedDark,
-                      size: 28,
+                      size: AppTokens.iconLg,
                     ),
                   ),
                 ),
@@ -273,9 +269,8 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                       opacity: (1 - p * 1.6).clamp(0.0, 1.0),
                       child: Text(
                         L10n.swipeUpToDismiss,
-                        style: const TextStyle(
-                            color: AppTokens.inkMutedDark,
-                            fontSize: AppTokens.fontCaption),
+                        style: AppTokens.microText
+                            .copyWith(color: AppTokens.inkMutedDark),
                       ),
                     ),
                   ),
