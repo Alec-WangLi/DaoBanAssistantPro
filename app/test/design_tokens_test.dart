@@ -140,7 +140,9 @@ String blankNonCode(String src) {
 /// （逐行的正则只看得到一行）：
 ///
 ///   1. 图标：`Icon(` 与 `size: 28` 分写两行时，逐行的 `[^)]*` 跨不过换行
-///      （Task 5 实测的响铃界面那处就是这么写的）；
+///      （Task 5 实测的响铃界面那处就是这么写的）。这条现在**不在这张表里** ——
+///      它挪进了 `_iconViolationsIn`，用配对括号扫（`[^)]*` 连嵌套的 `)` 都跨不过），
+///      但它代表的「值分行必漏」适用于本表其余规则；
 ///   2. 明度：`Theme.of(context)` / `.colorScheme` / `.onSurface` / `.withValues(…)`
 ///      链式跨行时关键字不在同一行（Task 7 实测的导航未选中标签色）；
 ///   3. 字重：`fontWeight: selected\n ? FontWeight.w700\n : FontWeight.w500`
@@ -150,9 +152,10 @@ String blankNonCode(String src) {
 /// 特例。所以**一律**整文件扫：省下的那点开销，远抵不上「守门测试绿」失去可信度。
 final Map<String, RegExp> _rules = {
   '字号字面量（改用角色令牌）': RegExp(r'fontSize:\s*[0-9]'),
-  // 图标：`Icon(` 与 `size: 28` 分写两行时，`[^)]*` 要能跨过换行。
-  '图标尺寸字面量（改用 iconSm/Md/Lg）':
-      RegExp(r'(Icon|IconThemeData)\([^)]*size:\s*[0-9]'),
+  // 图标尺寸**不在这张表里** —— 旧的 `Icon\([^)]*size:` 里那个 `[^)]*` 跨不过
+  // 嵌套的 `)`，于是 `Icon(getIcon(d), size: 28)` 整条不匹配、静默漏检。现已挪进
+  // `_iconViolationsIn`，用配对括号扫（与间距那条同一个理由，见该函数）。汇总在
+  // `_violationsIn` 里接回来。
   // 明度：`onSurface` 与 `.withValues(` 之间允许换行 —— 链式写法会把它拆到下一行。
   '文字明度字面量（改用 inkMuted / inkFaint）':
       RegExp(r'onSurface\s*\.\s*withValues\(\s*alpha:'),
@@ -162,6 +165,9 @@ final Map<String, RegExp> _rules = {
   '字重字面量（改用角色令牌，个别变化走 copyWith）':
       RegExp(r'fontWeight:[^;,)]*?FontWeight\.'),
   '圆角字面量（改用 radiusS/M/L/XL 或 pillOf）': RegExp(r'circular\([0-9]'),
+  // 时长：**只认 `milliseconds:`** —— `seconds:` / `microseconds:` 一律逃
+  //（树里 `lib/core/widgets/glass_snackbar.dart` 就有 `Duration(seconds: 2)`，
+  // 本轮有意不收进令牌、也不扩规则）。已知边界，见「时长规则边界」用例。
   '时长字面量（改用 durFast/Med/Slow/RingEnter）':
       RegExp(r'Duration\(milliseconds:\s*[0-9]'),
   '颜色字面量（改用令牌）': RegExp(r'Color\(0x'),
@@ -198,6 +204,10 @@ List<String> _violationsIn(String path, String src) {
       out.add('$path:${at.line}  ${rule.key}\n      ${at.text}');
     }
   }
+  // 图标尺寸那条不在这张正则表里（它要用配对括号扫，见 `_iconViolationsIn`），
+  // 在**这里**接回汇总 —— 于是 `_violations`、以及所有调 `_violationsIn` 的用例
+  // 都照常覆盖图标，调用方不用记得「还有一条得单独扫」。
+  out.addAll(_iconViolationsIn(path, src));
   return out;
 }
 
@@ -252,6 +262,11 @@ bool _insideCopyWith(String src, int index) {
 /// 栅格外的值必须有名有姓。
 bool _spacingOk(double n) => n == 1 || n % 4 == 0;
 
+/// 间距调用的**函数头**：`SizedBox(` 与 `EdgeInsets.<某方法>(`。
+///
+/// **已知边界（有意不处理）**：`EdgeInsetsDirectional.*` 不被 `EdgeInsets\.[a-zA-Z]+\(`
+/// 匹配 —— 整个方向性内边距**完全不被扫**（树里暂无使用，所以没暴露）。要覆盖得把
+/// head 扩成 `(EdgeInsets|EdgeInsetsDirectional)\.[a-zA-Z]+\(`。
 final RegExp _spacingHead = RegExp(r'(SizedBox|EdgeInsets\.[a-zA-Z]+)\(');
 final RegExp _numberIn = RegExp(r'[0-9]+(?:\.[0-9]+)?');
 
@@ -366,6 +381,49 @@ List<String> _spacingViolationsIn(String path, String src) {
   return out;
 }
 
+/// `Icon(` / `IconThemeData(` 的**函数头**。参数由 `_balancedArgs` 配对取，
+/// 不用一条正则吃下整条调用 —— 见 `_iconViolationsIn`。
+final RegExp _iconHead = RegExp(r'(Icon|IconThemeData)\(');
+
+/// 图标尺寸的 `size:` —— 后面必须**直接跟数字**（引用令牌的写法 `size: AppTokens.x`
+/// 不匹配，那是我们要的）。
+final RegExp _iconSize = RegExp(r'size:\s*[0-9]');
+
+/// 扫一段源码里的**图标尺寸字面量**。拆出「读文件」这一步是为了能用临时文本单测 ——
+/// [path] 只进报告、不参与判断（与 `_spacingViolationsIn` 同一套路）。
+///
+/// 调用与参数**分两步取**（`_iconHead` 认函数头 + `_balancedArgs` 按括号深度配平），
+/// 而不是一条 `Icon\([^)]*size:` 正则吃下整条调用。理由与间距那条**完全相同**：
+/// `[^)]*` 跨不过嵌套的 `)`，于是 `Icon(getIcon(d), size: 28)` 这种**参数里带函数
+/// 调用**的写法整条不匹配、静默漏检 —— 与 §3.2 修掉的 `SizedBox` 洞同类（当时把
+/// `SizedBox`/`EdgeInsets` 从 `[^()]*` 换成配对括号，只有图标这条没跟着改，
+/// v0.6.12 审查发现）。配对括号**天然跨行**，所以 `Icon(` 与 `size: 28` 分写两行
+/// 也照报（Task 5 那处就是这样）。
+///
+/// `size:` 还要求落在**深度 0**（`_depthAt`）—— 嵌套调用自己的 `size:` 不是图标
+/// 尺寸（`Icon(buildGlyph(d, size: 2))` 里那个），深度闸挡住这类误报。
+///
+/// 规则跑在 [blankNonCode] 剥过的副本上，参数里的 `)` 不会打乱深度；报告行号回
+/// 原始 [src] 取（两份等长，偏移通用）。
+List<String> _iconViolationsIn(String path, String src) {
+  final code = blankNonCode(src);
+  final out = <String>[];
+  for (final head in _iconHead.allMatches(code)) {
+    final span = _balancedArgs(code, head.end - 1);
+    if (span == null) continue;
+    final (argStart, argEnd) = span;
+    final args = code.substring(argStart, argEnd);
+    for (final m in _iconSize.allMatches(args)) {
+      // 嵌套调用里的 `size:` 不归这次调用管。
+      if (_depthAt(args, m.start) != 0) continue;
+      final at = _lineAt(src, argStart + m.start); // 行号在两份源码上一致
+      out.add('$path:${at.line}  图标尺寸字面量（改用 iconSm/Md/Lg）\n'
+          '      ${at.text}');
+    }
+  }
+  return out;
+}
+
 /// 间距类常量：名字里带 `Pad` / `Gap` / `Inset` / `Spacing` 的 `const`。
 ///
 /// 为什么按名字收窄：实测扫描目录里 off-grid 的常量有 15 处，**只有 4 处是
@@ -382,6 +440,12 @@ List<String> _spacingViolationsIn(String path, String src) {
 /// 行首先匹配，再把中间的空行一并吃掉 —— 匹配起点落到**空行**上，`_lineAt` 报出
 /// 的行号也跟着上移，于是 `_ignoreReasonAt` 查错了行：声明上方隔两行的标记会被
 /// 当成本行豁免。`[ \t]*` 只吃缩进，匹配起点稳落在声明自己那一行。
+///
+/// **已知边界（有意不处理）**：只认**字面** `const` + **数字** RHS，所以下面三种
+/// 写法会逃 —— 它们拦的是「顺手把间距提成常量」，不是对抗性绕过：
+///   - `final double _pad = 6;`（不是 `const`）；
+///   - `const double _a = 1, _pad = 6;`（多声明符，第二项不落在行首、前面没有 `const`）；
+///   - `static const double _pad = AppTokens.spaceXs / 2;`（RHS 是算式而非数字）。
 final RegExp _constDecl = RegExp(
     r'^[ \t]*(?:static\s+)?const\s+(?:double\s+)?'
     r'(\w*(?:Pad|Gap|Inset|Spacing)\w*)\s*=\s*(-?[0-9][0-9.]*)\s*;',
@@ -395,6 +459,11 @@ final RegExp _ignoreMarker = RegExp(r'//\s*design-tokens-ignore:\s*(\S.*?)\s*$')
 ///
 /// **必须在原始源码上查** —— 规则跑的是 `blankNonCode` 的副本，注释在那里已经
 /// 是空格了。两份串等长，所以行号通用。
+///
+/// **已知边界（有意不处理）**：它按**行**在原始源码上找 marker，不做「这行是不是
+/// 字符串内容」的判断 —— 于是「声明上一行的字符串内容里恰好写着
+/// `// design-tokens-ignore: x`」能伪造一次豁免。要堵得让豁免判定也过一遍词法，
+/// 但豁免标记**本身是注释**、必须看原文，与「规则看剥过的副本」不同源，本轮不做。
 String? _ignoreReasonAt(String rawSrc, int line) {
   final lines = rawSrc.split('\n');
   for (final i in [line - 1, line - 2]) {
@@ -533,6 +602,12 @@ void main() {
     final tokenSrc = File('lib/core/design_tokens.dart').readAsStringSync();
     final testSrc = File('test/design_tokens_test.dart').readAsStringSync();
 
+    // **已知边界（有意不处理）**：
+    //   - 抽取正则只认 `static const`、且类型与名字之间**恰好一个空格** ——
+    //     `static final TextStyle`（或两个空格）会静默逃过抽取，不会被要求断言；
+    //   - `contains('AppTokens.$n')` 是「源码里出现过」的代理，不是「真的断言过」：
+    //     排版那 15 条用的是 `check(...)` 而非 `expect(AppTokens.…)`，改成后者会让
+    //     它们全部误报。故保留这份代理，只保证「名字被提到」，不保证「被比较」。
     // 类型也要捕获 —— 「排版」由声明类型（`TextStyle`）判定，而不是靠一份手写的
     // 令牌名单（见 `_isLadderToken`）。
     final names = RegExp(
@@ -638,6 +713,33 @@ Icon(
 );
 ''';
     expect(_violationsIn('synthetic.dart', good), isEmpty);
+  });
+
+  test('图标规则走配对括号：参数里带函数调用也要报', () {
+    // **旧行为已反转**：图标规则的参数部分曾写成 `Icon\([^)]*size:` ——
+    // `[^)]*` **跨不过嵌套的 `)`**，于是 `Icon(getIcon(d), size: 28)` 这种
+    // 「参数里带函数调用」的写法整条不匹配、静默漏检（v0.6.12 审查发现）。这跟
+    // §3.2 修掉的 `SizedBox` 洞**是同一类**（当时把 `SizedBox`/`EdgeInsets` 从
+    // `[^()]*` 换成配对括号，只有图标没跟着改）。现在 `_iconViolationsIn` 也走
+    // `_iconHead` + `_balancedArgs`，下面钉住「买到的性质」。
+    expect(_iconViolationsIn('t.dart', 'Icon(getIcon(d), size: 28)'),
+        hasLength(1),
+        reason: '嵌套调用之后的 size: 也要报 —— 本次修复买到的性质');
+    // 汇总路径也要覆盖：`_violations`（经 `_violationsIn`）照样报它。
+    expect(_violationsIn('t.dart', 'Icon(getIcon(d), size: 28)'), hasLength(1));
+
+    // 反面：改用令牌，不得误报。
+    expect(_iconViolationsIn('t.dart', 'Icon(Icons.x, size: AppTokens.iconMd)'),
+        isEmpty);
+    // 既有性质，别弄丢：直接数字照报。
+    expect(_iconViolationsIn('t.dart', 'Icon(Icons.x, size: 28)'), hasLength(1));
+    // 既有性质：`Icon(` 与 `size: 28` 分写两行照报（配对括号天然跨行）。
+    expect(_iconViolationsIn('t.dart', 'Icon(\n  Icons.x,\n  size: 28,\n)'),
+        hasLength(1));
+    // 深度闸：嵌套调用自己的 `size:` 不是图标尺寸 —— 去掉 `_iconViolationsIn`
+    // 里的 `_depthAt` 判据，这条立刻转红。
+    expect(_iconViolationsIn('t.dart', 'Icon(buildGlyph(d, size: 2))'), isEmpty,
+        reason: '嵌套调用里的 size 不是图标尺寸（深度闸）');
   });
 
   test('明度规则整文件扫描：链式跨行也要报', () {
@@ -873,6 +975,19 @@ Text('x', style: TextStyle(
         _violationsIn('synthetic.dart', src).where((v) => v.contains('字重'));
     expect(weight, isEmpty,
         reason: '条件表达式里带函数调用时字重应当漏检（已知边界）');
+  });
+
+  test('时长规则边界：只认 milliseconds，seconds 会漏（已知边界）', () {
+    // 时长规则是 `Duration\(milliseconds:\s*[0-9]`（见 `_rules`）—— `seconds:` /
+    // `microseconds:` 一律不匹配。树里已真有这种写法
+    //（`lib/core/widgets/glass_snackbar.dart` 的 `Duration(seconds: 2)`），本轮
+    // 有意不收进令牌、也不扩规则。这条钉住「它确实会漏」，免得将来有人把它当成
+    // 「已经能处理」而据此清理代码里其实没被覆盖的写法。
+    expect(_violationsIn('t.dart', 'const d = Duration(seconds: 2);'), isEmpty,
+        reason: 'seconds: 不在时长规则内（已知边界，非本轮范围）');
+    // 反面：`milliseconds` 写法照报 —— 别把边界修成「时长一律不查」。
+    expect(_violationsIn('t.dart', 'const d = Duration(milliseconds: 250);'),
+        hasLength(1));
   });
 
   // ── 令牌规格（本文件原有的一组，随守门测试一并保留）──
