@@ -26,8 +26,6 @@ double _wcagContrast(Color a, Color b) {
 /// 全部删完（集合为空）是这一轮的终点，由最后一条用例盯着。
 const Set<String> _pending = {
   'lib/features/home/home_shell.dart',
-  'lib/features/profile/app_dialogs.dart',
-  'lib/features/profile/profile_screen.dart',
   'lib/features/schedule/schedule_screen.dart',
 };
 

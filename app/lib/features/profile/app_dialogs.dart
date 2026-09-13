@@ -4,6 +4,7 @@ import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
+import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../alarm/alarm_service.dart';
@@ -25,7 +26,7 @@ void showAppInfoDialog(
         child: SingleChildScrollView(
           child: Text(
             content,
-            style: const TextStyle(fontSize: 13.5, height: 1.55),
+            style: AppTokens.rowSecondary.copyWith(height: 1.55),
           ),
         ),
       ),
@@ -174,17 +175,12 @@ void showUpdateDialog(BuildContext context, UpdateCheckResult result) {
         children: [
           Text(
             '${L10n.version}：v$current',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            style: AppTokens.labelStrong,
           ),
           Text(
             L10n.currentVersionHint,
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(dialogContext)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.5),
-            ),
+            style: AppTokens.tinyLabel
+                .copyWith(color: AppTokens.inkMuted(dialogContext)),
           ),
           _updateChannelRow(context, dialogContext, L10n.stableChannel,
               L10n.stableChannelHint, result.latestStable, current),
@@ -200,26 +196,24 @@ void showUpdateDialog(BuildContext context, UpdateCheckResult result) {
 Widget _updateChannelRow(
     BuildContext outer, BuildContext ctx, String label, String hint,
     UpdateInfo? info, String current) {
-  final muted = Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.55);
+  final muted = AppTokens.inkMuted(ctx);
   final downloadable = info == null
       ? null
       : (UpdateChecker.compareVersion(info.version, current) > 0 ? info : null);
   return Padding(
-    padding: const EdgeInsets.only(top: 10),
+    padding: const EdgeInsets.only(top: AppTokens.spaceMd),
     child: Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style:
-                      const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              Text(label, style: AppTokens.labelStrong),
               Text(
                 info == null ? L10n.none : 'v${info.version}',
-                style: TextStyle(fontSize: 13, color: muted),
+                style: AppTokens.rowSecondary.copyWith(color: muted),
               ),
-              Text(hint, style: TextStyle(fontSize: 11, color: muted)),
+              Text(hint, style: AppTokens.tinyLabel.copyWith(color: muted)),
             ],
           ),
         ),
@@ -233,7 +227,8 @@ Widget _updateChannelRow(
             label: L10n.download,
           )
         else
-          Text(L10n.alreadyLatest, style: TextStyle(fontSize: 13, color: muted)),
+          Text(L10n.alreadyLatest,
+              style: AppTokens.rowSecondary.copyWith(color: muted)),
       ],
     ),
   );
@@ -258,10 +253,7 @@ void showUsageGuideDialog(BuildContext context) {
     barrierColor: Colors.black26,
     builder: (context) {
       final accent = Theme.of(context).colorScheme.primary;
-      final muted = Theme.of(context)
-          .colorScheme
-          .onSurface
-          .withValues(alpha: 0.6);
+      final muted = AppTokens.inkMuted(context);
       return GlassDialog(
         title: L10n.usageGuide,
         showClose: true,
@@ -290,23 +282,19 @@ void showUsageGuideDialog(BuildContext context) {
                           border: Border.all(
                               color: accent.withValues(alpha: 0.35)),
                         ),
-                        child: Icon(it.$1, size: 20, color: accent),
+                        child: AppIcon(it.$1,
+                            size: AppTokens.iconMd, color: accent),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(it.$2,
-                                style: const TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 3),
+                            Text(it.$2, style: AppTokens.labelStrong),
+                            const SizedBox(height: AppTokens.padChipV),
                             Text(it.$3,
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    height: 1.45,
-                                    color: muted)),
+                                style: AppTokens.microText
+                                    .copyWith(height: 1.45, color: muted)),
                           ],
                         ),
                       ),
@@ -377,10 +365,7 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
-    final muted = Theme.of(context)
-        .colorScheme
-        .onSurface
-        .withValues(alpha: 0.6);
+    final muted = AppTokens.inkMuted(context);
     return GlassDialog(
       title: L10n.downloadingUpdate,
       content: Column(
@@ -388,11 +373,12 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
         children: [
           Text(
             'v${widget.info.version}',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: AppTokens.labelSecondary,
           ),
           const SizedBox(height: 16),
           if (_failed)
-            Text(L10n.downloadFailed, style: TextStyle(fontSize: 13, color: muted))
+            Text(L10n.downloadFailed,
+                style: AppTokens.rowSecondary.copyWith(color: muted))
           else if (_percent >= 0) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(AppTokens.radiusS),
@@ -405,16 +391,16 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
             ),
             const SizedBox(height: 8),
             Text('$_percent%',
-                style: TextStyle(fontSize: 13, color: muted)),
+                style: AppTokens.rowSecondary.copyWith(color: muted)),
           ] else ...[
             const SizedBox(
               width: 28,
               height: 28,
               child: CircularProgressIndicator(strokeWidth: 2.6),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppTokens.gapIconTextLg),
             Text(L10n.downloadingUpdate,
-                style: TextStyle(fontSize: 13, color: muted)),
+                style: AppTokens.rowSecondary.copyWith(color: muted)),
           ],
         ],
       ),

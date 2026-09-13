@@ -36,8 +36,7 @@ class ProfileScreen extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           physics: const BouncingScrollPhysics(),
           children: [
-            Text(L10n.titleProfile,
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+            Text(L10n.titleProfile, style: AppTokens.pageTitle),
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionAppearance),
             GlassTile(
@@ -46,8 +45,7 @@ class ProfileScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(L10n.themeMode,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(L10n.themeMode, style: AppTokens.labelStrong),
                   const SizedBox(height: 8),
                   GlassSegment(
                     count: 3,
@@ -57,16 +55,16 @@ class ProfileScreen extends ConsumerWidget {
                         .setThemeMode(AppThemeMode.values[i]),
                     itemBuilder: (i, selected) => Text(
                       [L10n.followSystem, L10n.light, L10n.dark][i],
-                      style: TextStyle(
-                        fontSize: 13,
+                      // 基线 13px：未选中 w500、选中 w700。13 档最重的角色是 w600 的
+                      // labelSecondary，两个分支都由这里显式给字重，按 spec 走 copyWith。
+                      style: AppTokens.labelSecondary.copyWith(
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w500,
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(L10n.accentColor,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(L10n.accentColor, style: AppTokens.labelStrong),
                   const SizedBox(height: 12),
                   GlassSegment(
                     height: 40,
@@ -95,8 +93,7 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(L10n.language,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(L10n.language, style: AppTokens.labelStrong),
                   const SizedBox(height: 8),
                   GlassSegment(
                     count: 2,
@@ -106,8 +103,9 @@ class ProfileScreen extends ConsumerWidget {
                         .setLanguage(i == 0 ? 'zh' : 'en'),
                     itemBuilder: (i, selected) => Text(
                       i == 0 ? '中文' : 'English',
-                      style: TextStyle(
-                        fontSize: 13,
+                      // 基线 13px：未选中 w500、选中 w700。13 档最重的角色是 w600 的
+                      // labelSecondary，两个分支都由这里显式给字重，按 spec 走 copyWith。
+                      style: AppTokens.labelSecondary.copyWith(
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w500,
                       ),
@@ -121,16 +119,11 @@ class ProfileScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(L10n.advancedMaterial,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 2),
+                                style: AppTokens.labelStrong),
+                            const SizedBox(height: AppTokens.gapHair),
                             Text(L10n.advancedMaterialHint,
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.5))),
+                                style: AppTokens.microText
+                                    .copyWith(color: AppTokens.inkMuted(context))),
                           ],
                         ),
                       ),
@@ -253,14 +246,8 @@ class ProfileScreen extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
       child: Text(
         title,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Theme.of(context)
-              .colorScheme
-              .onSurface
-              .withValues(alpha: 0.5),
-        ),
+        style: AppTokens.labelSecondary
+            .copyWith(color: AppTokens.inkMuted(context)),
       ),
     );
   }
@@ -332,7 +319,7 @@ class ProfileScreen extends ConsumerWidget {
           child: SingleChildScrollView(
             child: SelectableText(
               log.isEmpty ? L10n.noLog : log,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              style: AppTokens.microText.copyWith(fontFamily: 'monospace'),
             ),
           ),
         ),
@@ -377,11 +364,7 @@ class ProfileScreen extends ConsumerWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  L10n.ringtone,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700),
-                ),
+                child: Text(L10n.ringtone, style: AppTokens.titleStrong),
               ),
               Flexible(
                 child: ListView(
@@ -545,7 +528,8 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
         _battery == null;
     return GlassTile(
       enableBlur: false,
-      padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
+      padding: const EdgeInsets.fromLTRB(
+          4, AppTokens.gapIconText, 4, AppTokens.gapIconText),
       child: loading
           ? Padding(
               padding: const EdgeInsets.all(16),
@@ -625,11 +609,8 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Text(
         title,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: Theme.of(context).colorScheme.primary,
-        ),
+        style: AppTokens.labelSecondary
+            .copyWith(color: Theme.of(context).colorScheme.primary),
       ),
     );
   }
