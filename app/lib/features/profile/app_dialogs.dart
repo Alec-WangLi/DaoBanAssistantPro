@@ -41,7 +41,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.10\n'
+const String _changelogZh = 'v0.6.11\n'
+    '· 全 App 的排版、间距与图标收敛到一套统一的设计规范：同一个用途的字号、字重、行高、透明度、间距从此只有一个来源，不会再各自跑偏\n'
+    '· 次要文字的透明度此前散着 0.45 / 0.5 / 0.55 / 0.6 四种，现在统一到两档（常规 0.55、更淡的 0.35），同一个层级在哪个页面看都一样\n'
+    '· 图标尺寸统一到三档（16 / 20 / 24），不再各处写 14 / 18 / 22 / 28\n'
+    '· 卡片圆角由 20 归到 22，与列表行、提示条同档\n'
+    '· 外观上的变化很轻：14 处字号、约 12 处字重各只动了一档，其余都只是内部换了写法\n\n'
+    'v0.6.10\n'
     '· 修好「我的 → 关于」里的版本号：它从 v0.6.5 起就没再更新过，一直显示 v0.6.5。现在显示的是真实版本，而且升级到新版后「版本更新」简介会重新弹出（此前它一直不弹）\n'
     '· 「检查更新」里的「当前版本」不再显示错，也不会再给已经装上的版本挂「下载」按钮\n'
     '· 日历：当天信息卡的高度改为按**本月实际最满的一天**算出来，不再写死。没有法定节假日的月份卡片会明显变矮，省下的高度全部给日期网格\n'
@@ -89,15 +95,15 @@ const String _changelogZh = 'v0.6.10\n'
     '· 英文界面：倒班方式模板的标题与副标题改为模板自带双语，不再漏出中文\n'
     '· 英文界面：从模板新建的排班，方案名与班次名（白班 / 夜班 / 休班 等）按你的语言生成，日历格子里的简称随之变成 D / N / O\n'
     '· 英文界面：默认排班与首次启动自动生成的班表同样按语言生成；模板可用英文关键词搜索（如 4-crew、dupont）\n'
-    '· 周期色条超过 14 天时末格显示省略标记，不再静默截断（DuPont 这类 28 天周期一眼能看出后面还有）\n\n'
-    'v0.6.1\n'
-    '· 日历：日期格按屏幕高度自适应长高，不再在网格与底部信息卡之间留一条空带\n'
-    '· 日历：格子里的班次简称按底色自动调整明度，浅色班次（橙、灰）不再糊在白格子上\n'
-    '· 对比度：「今天」按钮与信息卡「今天」徽章改为实心主色 + 白字，实测对比度由 2.7:1 提升到 5.3:1\n'
-    '· 我的：主色调选中项加白色描边——此前选中色块与选中药丸同色，等于看不出选了哪个\n'
-    '· 英文界面修正：月份标题（此前显示为「2026 9」）、起始日日期格式、被裁切的班次简称标签、未跟随语言的倒班方式分组标题\n';
+    '· 周期色条超过 14 天时末格显示省略标记，不再静默截断（DuPont 这类 28 天周期一眼能看出后面还有）\n';
 
-const String _changelogEn = 'v0.6.10\n'
+const String _changelogEn = 'v0.6.11\n'
+    '· Typography, spacing and icons across the app now come from one shared design system: a single source per role for size, weight, line height, opacity and spacing, so they can no longer drift apart\n'
+    '· Secondary text opacity used to be scattered across four values (0.45 / 0.5 / 0.55 / 0.6). It is now two tiers — 0.55 regular and 0.35 for the faintest — so the same level looks the same on every screen\n'
+    '· Icon sizes are down to three steps (16 / 20 / 24) instead of ad-hoc 14 / 18 / 22 / 28\n'
+    '· Card corners moved from 20 to 22, matching list rows and the snackbar\n'
+    '· The visible change is subtle: 14 text sizes and about 12 font weights each moved one step, and the rest is only a change in how it is written internally\n\n'
+    'v0.6.10\n'
     '· Fixed the version number in Me → About: it had not been updated since v0.6.5 and kept showing v0.6.5. It now shows the real version, and the "what\'s new" dialog reappears after an update (it had stopped appearing entirely)\n'
     '· The "current version" in Check for updates is no longer wrong, and it no longer offers a "Download" button for a version you already have\n'
     '· Calendar: the day card\'s height is now computed from the fullest day of the displayed month instead of being hard-coded. Months without a public holiday get a noticeably shorter card, and the freed height all goes to the date grid\n'
@@ -145,14 +151,7 @@ const String _changelogEn = 'v0.6.10\n'
     '· English UI: shift-pattern templates now carry their own bilingual titles and subtitles — no more Chinese leaking through\n'
     '· English UI: a schedule created from a template gets its name and shift names (Day shift / Night shift / …) in your language, and calendar cells use D / N / O\n'
     '· English UI: the default schedule and the one seeded on first launch are generated in your language; templates can be searched with English keywords (4-crew, dupont)\n'
-    '· The cycle colour strip now shows an ellipsis in its last cell when a pattern runs past 14 days, instead of truncating silently\n\n'
-    'v0.6.1\n'
-    '· Calendar: day cells now grow to fill the screen height — the empty band between the grid and the info card is gone\n'
-    '· Calendar: shift labels are lightness-adjusted against their backdrop, so pale shifts (amber, grey) no longer wash out on white cells\n'
-    '· Contrast: the "Today" button and the info-card "Today" badge are now solid accent with white text (measured 2.7:1 -> 5.3:1)\n'
-    '· Me: the selected accent swatch gets a white ring — previously it shared its colour with its own selection pill and was invisible\n'
-    '· English UI fixes: month header (showed "2026 9"), start-date format, the clipped shift-abbr label, and pattern group headings that stayed Chinese\n\n'
-    '· More translucent bottom capsule, content flows underneath unobstructed — removed the empty “mask” band around it\n';
+    '· The cycle colour strip now shows an ellipsis in its last cell when a pattern runs past 14 days, instead of truncating silently\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

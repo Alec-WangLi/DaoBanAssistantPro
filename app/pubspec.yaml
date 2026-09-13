@@ -1,7 +1,7 @@
 name: shiftassistantpro
 description: 倒班助手Pro — Flutter 倒班排班助手（本地离线，液态玻璃设计）
 publish_to: 'none'
-version: 0.6.10+81
+version: 0.6.11+82
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

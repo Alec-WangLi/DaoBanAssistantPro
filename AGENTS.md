@@ -14,9 +14,9 @@
 ## 版本号规则（重要，务必遵守）
 - 版本号形如 `X.Y.Z+build`。**`X.Y` 由用户决定，AI 只能改最后一位 `Z`（以及 `build` 同步 +1）**。
 - 每轮改动收尾：`app/pubspec.yaml` 的 `version` 与 `app/lib/core/app_info.dart` 的 `appVersion` 同步。**这条由 `app/test/app_info_test.dart` 盯着** —— 两处不一致直接测试失败（v0.6.6~v0.6.9 曾漏改四轮，代价是「我的」页版本号显示错、升级后的更新弹窗再也不弹）。
-- 更新日志在 `app/lib/features/profile/app_dialogs.dart` 的 `_changelogZh` / `_changelogEn`：prepend 新版本、删最旧一条、保持 10 条。**正式版（末位 `Z=0`）发布时，其条目必须重写为「归纳总结版」——合并自上一个正式版以来所有测试版的更新内容；测试版条目一律原样保留，只写自己这版改了什么。**（例：v0.4.0 条目归纳 0.3.1~0.4.0 全部更新；v0.3.0 条目归纳 0.2.1~0.3.0，0.2.4 条目保留至今。）
+- 更新日志在 `app/lib/features/profile/app_dialogs.dart` 的 `_changelogZh` / `_changelogEn`：prepend 新版本、删最旧一条、保持 10 条。**正式版（末位 `Z=0`）发布时，其条目必须重写为「归纳总结版」——合并自上一个正式版以来所有测试版的更新内容；测试版条目一律原样保留，只写自己这版改了什么。**（例：v0.4.0 条目归纳 0.3.1~0.4.0 全部更新；v0.3.0 条目归纳 0.2.1~0.3.0，0.2.4 条目保留至今。）**这三条是长期规则（窗口固定 10 条、正式版归纳、测试版原样），v0.6.11 未改动。**
 - 打完版本本地 `git tag vX.Y.Z`。
-- 最近历史：0.1.45(+46) → **0.2.0(+47)**（第二大版）→ 0.2.1(+48)~0.2.4(+51) 测试版 → **0.3.0(+52)**（正式稳定版）→ 0.3.1(+53) 测试版 → 0.3.2(+54) 测试版 → 0.3.3(+55) 测试版 → 0.3.4(+56) 测试版 → 0.3.5(+57)~0.3.7(+59) 测试版 → **0.4.0(+60)**（正式稳定版）→ 0.4.1(+61) 测试版 → 0.4.2(+62) 测试版 → 0.4.4(+64)~0.4.9(+69) 测试版 → **0.5.0(+70)**（正式稳定版 · 开源）→ **0.6.0(+71)**（正式稳定版）→ 0.6.1(+72)~0.6.10(+81) 测试版（当前）。更早见 `git log` 或应用内更新日志。
+- 最近历史：0.1.45(+46) → **0.2.0(+47)**（第二大版）→ 0.2.1(+48)~0.2.4(+51) 测试版 → **0.3.0(+52)**（正式稳定版）→ 0.3.1(+53) 测试版 → 0.3.2(+54) 测试版 → 0.3.3(+55) 测试版 → 0.3.4(+56) 测试版 → 0.3.5(+57)~0.3.7(+59) 测试版 → **0.4.0(+60)**（正式稳定版）→ 0.4.1(+61) 测试版 → 0.4.2(+62) 测试版 → 0.4.4(+64)~0.4.9(+69) 测试版 → **0.5.0(+70)**（正式稳定版 · 开源）→ **0.6.0(+71)**（正式稳定版）→ 0.6.1(+72)~0.6.11(+82) 测试版（当前）。更早见 `git log` 或应用内更新日志。
 
 ## 目录架构地图（app/lib）
 ```
@@ -25,6 +25,7 @@ core/theme/                 深空蓝紫配色 + 深浅主题
 core/glass/glass.dart        GlassPanel / GlassTile（BackdropFilter 模糊 + 渐变 + 白描边，solid=近实心；`glassBlurDisabled`=低端机自动 + 「高级材质」手动开关取或，列表行默认 `enableBlur:false`；`GlassBlur` 供胶囊/按钮/提示条复用）
 core/l10n.dart               L10n 静态 i18n（locale 'zh'/'en'，t(zh,en)，isEn，日期格式 helper）
 core/app_info.dart           const appVersion（与 pubspec 同步，由 test/app_info_test.dart 把关）
+core/design_tokens.dart      设计语言唯一来源：按**角色**命名的排版 / 明度 / 间距 / 图标 / 圆角 / 时长令牌（界面层只写角色名，不写字面量；由 test/design_tokens_test.dart 守门）
 core/widgets/                共享玻璃组件（见下）
 domain/shift_rotation.dart   轮换引擎（纯 Dart 可单测）+ dayNumber()/dateOnly()
 domain/lunar_info.dart       农历（lunar_plus）
@@ -58,7 +59,7 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
 - 改表后：`dart run build_runner build --delete-conflicting-outputs`。
-- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 126 条，只增不减）。
+- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 134 条，只增不减）。
 - 构建：`flutter build apk --release --target-platform android-arm64` → `app/build/app/outputs/flutter-apk/app-release.apk`（**切 arm64 单 ABI**，APK 从 ~60MB 降到 ~21MB；仅 64 位设备）。
 - 分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，用 `aapt2 dump badging` 校验 versionName/versionCode 与包名。
 - 一键发布（GitHub Releases）：`scripts/release.ps1`。
@@ -73,6 +74,7 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 - 发布收尾：commit + `git tag vX.Y.Z` + `git push`（分支 + tag）之后，再跑 `scripts\release.ps1 -SkipConfirm` 把 APK 挂到 GitHub Release；发布说明先写到 `tools\gh\release-notes-vX.Y.Z.md`（脚本会自动复用），末位非 0 自动标为「预发布测试版」。
 
 ## 最近改动
+- **v0.6.11**（测试版 · 设计语言 v2 收口）：全 App 的排版 / 间距 / 图标收敛到 `core/design_tokens.dart` 的**角色令牌** —— 令牌从「按尺寸命名」（`fontBody` 14 / `fontCaption` 12，挑哪一档靠感觉，于是长出 12.5 / 13.5 / 14.5 / 15 / 22 这些「最像的」值）改成**按用途命名**（页面标题 / 卡片标题 / 行内主文字 / 次要说明 / 微标签，名字直接说明什么时候用）；文字明度收成两档（`inkMuted` 0.55 / `inkFaint` 0.35，此前散着 0.45 / 0.5 / 0.55 / 0.6）；间距归回 4px 栅格并单留一组「光学」微距（`gapHair` / `padChipV` / `gapIconText` / `gapIconTextLg`）；图标收成三档（16 / 20 / 24）；卡片圆角 20→22。新增 `app/test/design_tokens_test.dart` 守门 —— 界面层写死字号 / 字重 / 透明度 / 圆角 / 时长 / 颜色 / 图标尺寸即测试变红（扫描为整文件级，已补上 `Icon(` 与 `size:` 跨行、三元跨行、`withValues` 跨行三类盲点的用例）。19 个界面 / 组件文件迁完、旧字号令牌删净、迁移期 `_pending` 豁免清空。外观只动了 14 处字号、约 12 处字重各一档。
 - **v0.6.10**（测试版 · 版本号与信息卡高度）：修好「我的 → 关于」版本号停在 v0.6.5 的 bug（v0.6.6~v0.6.9 只涨了 pubspec，`app_info.dart` 漏改四轮 —— 连带 `lastSeenVersion` 卡住导致升级后的更新弹窗再也不弹、「检查更新」给已装版本挂下载按钮）；新增 `test/app_info_test.dart` 把「两处同步」从口头约定变成会失败的用例。底栏信息卡不再写死 248，改由 `features/calendar/info_card_metrics.dart` 按**本月实际最满的一天**用 `TextPainter` 实测（固定块 + 节假日徽章 + 农历行数 + 其他班组色块折行数），绝不裁字、网格拿到全部剩余高度；代价是换月时高度可能变一次。更新日志补回 v0.6.6~v0.6.9 并滚掉 v0.6.0 及更早；使用帮助新增「外观」「横屏 · 宽屏 · 小窗」两节。
 - **v0.6.6~v0.6.9**：日历信息卡与日期网格的连续微调 —— 格子高度下限从过时的 80 降到实测需求（最后一行不再被卡片压住）；农历描述允许两行；底栏留白 120→84；格子内容随系统字号按需缩放；色条与面板上下对齐；撤掉卡片底部柔光、放开与胶囊的间距；节假日徽章自占一行并与其他班组色块统一配方、对比度过 AA。
 - **v0.6.5**：小窗（小米小窗 / 分屏）修好 —— 系统把小窗的「顶部系统栏高度」报成整个窗口高度，每页的顶部安全区把整屏吃掉；按实测尺寸 200×400 重做小窗适配。

@@ -1,6 +1,6 @@
-# 倒班助手Pro · 产品与技术规格（现状规格 · v0.6.0）
+# 倒班助手Pro · 产品与技术规格（现状规格 · v0.6.11）
 
-> 本文档是**唯一权威规格**，反映当前实现现状（v0.6.0 正式稳定版）。早期「MVP 确认稿」的功能已随 0.2~0.6 各版演进并入正文，不再单列历史章节。
+> 本文档是**唯一权威规格**，反映当前实现现状（v0.6.11）。早期「MVP 确认稿」的功能已随 0.2~0.6 各版演进并入正文，不再单列历史章节。
 
 ---
 
@@ -98,6 +98,7 @@
 - 材质核心：`core/glass/glass.dart` **GlassPanel / GlassTile**（BackdropFilter 模糊 + 渐变 + 白描边 + 高光；`solid` 近实心；`enableBlur` 低端降级）。
 - 共享组件（`core/widgets/`）：GlassSegment（胶囊滑块）、GlassSwitch（Q弹开关）、GlassDialog、GlassButton（主色实心 + 玻璃描边）、GlassActionButton（primary / secondary / danger）、GlassPressable（统一玻璃触摸反馈）、GlassDeleteButton + `dangerButtonStyle`、玻璃弹层选择器（`showGlassTimePicker` / `showGlassDatePicker` / `showGlassMonthPicker`，底部 `solid` 近实心）、`glassInputDecoration`、`showGlassSnack`（提示条玻璃化）。
 - 主题 token：**深空蓝紫渐变**；跟随系统深浅双套；5 种主色调（`AppColors.accentPalette`）；中英双语（L10n）。
+- **设计令牌（单一来源）**：`core/design_tokens.dart` 的 `AppTokens` 按**角色**命名 —— 排版（页面标题 / 卡片标题 / 行内主文字 / 次要说明 / 微标签）、文字明度两档（`inkMuted` 0.55 / `inkFaint` 0.35）、间距（4px 栅格节奏 + 一组「光学」微距）、图标三档（16 / 20 / 24）、圆角 / 时长 / 玻璃配方。界面层只引用角色名，**不许写 `fontSize` / `fontWeight` / 透明度 / 圆角 / 时长 / 颜色 / 图标尺寸字面量** —— 这条由 `app/test/design_tokens_test.dart` 强制（整文件级扫描，写死即测试失败）。
 - 性能策略：API 31+ 真实时模糊，26–30 假玻璃降级（半透明 + 饱和 + 高光）；弹窗遮罩统一 `barrierColor: Colors.black26`；底部弹层 `GlassPanel(solid: true)`。
 
 ## 7. 版本与发布链路（现状）
