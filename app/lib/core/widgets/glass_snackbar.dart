@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
 import '../glass/glass.dart';
+import 'app_icon.dart';
 
 /// 液态玻璃提示条：统一所有 SnackBar 的风格。
 ///
@@ -86,18 +87,15 @@ class _GlassSnackContent extends StatelessWidget {
                     color: iconColor.withValues(alpha: 0.14),
                     border: Border.all(color: iconColor.withValues(alpha: 0.35)),
                   ),
-                  child: Icon(icon, size: 18, color: iconColor),
+                  child: AppIcon(icon!,
+                      size: AppTokens.iconMd, color: iconColor),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppTokens.gapIconTextLg),
               ],
               Expanded(
                 child: Text(
                   message,
-                  style: TextStyle(
-                    color: onSurface,
-                    fontSize: AppTokens.fontBody,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTokens.rowPrimary.copyWith(color: onSurface),
                 ),
               ),
             ],

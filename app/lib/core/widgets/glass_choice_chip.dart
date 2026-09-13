@@ -40,7 +40,6 @@ class GlassChoiceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Semantics(
@@ -84,13 +83,12 @@ class GlassChoiceChip extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTokens.fontSupport,
+                    style: AppTokens.rowSecondary.copyWith(
                       fontWeight:
                           selected ? FontWeight.w700 : FontWeight.w500,
                       color: selected
                           ? AppTokens.onSolid(color)
-                          : onSurface.withValues(alpha: 0.55),
+                          : AppTokens.inkMuted(context),
                     ),
                   ),
                 ],

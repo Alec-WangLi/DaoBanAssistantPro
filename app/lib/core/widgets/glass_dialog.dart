@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import 'app_icon.dart';
 
 /// 通用玻璃弹窗：玻璃容器 + 主色标题条 + 内容 + 底部操作按钮。
 ///
@@ -58,14 +59,11 @@ class GlassDialog extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppTokens.radiusS),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppTokens.gapIconTextLg),
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                      fontSize: AppTokens.fontHeading,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppTokens.dialogTitle,
                   ),
                 ),
                 if (showClose) const _GlassCloseButton(),
@@ -122,7 +120,8 @@ class _GlassCloseButton extends StatelessWidget {
             ),
             border: Border.all(color: AppTokens.glassBorder(isDark)),
           ),
-          child: Icon(Icons.close_outlined, size: 18, color: onSurface),
+          child: AppIcon(Icons.close_outlined,
+              size: AppTokens.iconMd, color: onSurface),
         ),
       ),
     );

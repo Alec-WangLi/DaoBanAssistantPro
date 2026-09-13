@@ -33,8 +33,8 @@ class GlassPanel extends StatelessWidget {
   const GlassPanel({
     super.key,
     required this.child,
-    this.borderRadius = const BorderRadius.all(Radius.circular(28)),
-    this.blurSigma = 24,
+    this.borderRadius = const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+    this.blurSigma = AppTokens.blurPanel,
     this.enableBlur = true,
     this.solid = false,
     this.padding,
@@ -87,7 +87,7 @@ class GlassPanel extends StatelessWidget {
         boxShadow: [AppTokens.glassShadow(isDark)],
       ),
       child: Padding(
-        padding: padding ?? const EdgeInsets.all(20),
+        padding: padding ?? const EdgeInsets.all(AppTokens.spaceXl),
         child: Material(color: Colors.transparent, child: child),
       ),
     );
@@ -120,7 +120,7 @@ class GlassTile extends StatelessWidget {
   const GlassTile({
     super.key,
     required this.child,
-    this.borderRadius = const BorderRadius.all(Radius.circular(20)),
+    this.borderRadius = const BorderRadius.all(Radius.circular(AppTokens.radiusL)),
     this.padding,
     this.margin,
     this.enableBlur = true,
@@ -142,7 +142,7 @@ class GlassTile extends StatelessWidget {
       margin: margin,
       enableBlur: enableBlur,
       onTap: onTap,
-      blurSigma: 18,
+      blurSigma: AppTokens.blurCard,
       child: child,
     );
   }

@@ -101,18 +101,14 @@ class _GlassActionButtonState extends State<GlassActionButton> {
       children: [
         if (widget.icon != null) ...[
           IconTheme(
-            data: IconThemeData(color: contentColor, size: 18),
+            data: IconThemeData(color: contentColor, size: AppTokens.iconMd),
             child: widget.icon!,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppTokens.gapIconText),
         ],
         Text(
           widget.label,
-          style: TextStyle(
-            color: contentColor,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppTokens.labelStrong.copyWith(color: contentColor),
         ),
       ],
     );
@@ -137,7 +133,8 @@ class _GlassActionButtonState extends State<GlassActionButton> {
                   decoration: decoration,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 11),
+                        horizontal: AppTokens.spaceLg,
+                        vertical: AppTokens.spaceMd),
                     child: content,
                   ),
                 ),

@@ -56,7 +56,7 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
         return Center(
           child: Text(
             '$i'.padLeft(2, '0'),
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            style: AppTokens.dialogTitle,
           ),
         );
       }),
@@ -80,8 +80,7 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
               children: [
                 Text(
                   L10n.selectTime,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700),
+                  style: AppTokens.titleStrong,
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -98,9 +97,7 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
                           onChanged: (i) => _hour = i,
                         ),
                       ),
-                      const Text(':',
-                          style: TextStyle(
-                              fontSize: 22, fontWeight: FontWeight.w700)),
+                      const Text(':', style: AppTokens.bigNumber),
                       Expanded(
                         child: _wheel(
                           itemCount: 60,
@@ -182,7 +179,6 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
     // 日期格按可用高度收缩；高屏上取到上限 40，与今天一致。
     final rowH =
         (AppLayout.of(context).availableHeight * 0.10).clamp(32.0, 40.0);
@@ -207,7 +203,7 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
           onTap: enabled ? () => Navigator.pop(context, date) : null,
           child: Container(
             height: rowH,
-            margin: const EdgeInsets.all(2),
+            margin: const EdgeInsets.all(AppTokens.gapHair),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: isSelected ? accent : Colors.transparent,
@@ -215,14 +211,13 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
             ),
             child: Text(
               '$d',
-              style: TextStyle(
-                fontSize: 14,
+              style: AppTokens.rowPrimary.copyWith(
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected
                     ? Colors.white
                     : (enabled
-                        ? onSurface
-                        : onSurface.withValues(alpha: 0.3)),
+                        ? Theme.of(context).colorScheme.onSurface
+                        : AppTokens.inkFaint(context)),
               ),
             ),
           ),
@@ -261,8 +256,7 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
                     child: Center(
                       child: Text(
                         L10n.yearMonth(_month),
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700),
+                        style: AppTokens.titleStrong,
                       ),
                     ),
                   ),
@@ -280,10 +274,8 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
                     child: Center(
                       child: Text(
                         L10n.weekdays[i],
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: onSurface.withValues(alpha: 0.5),
+                        style: AppTokens.microLabel.copyWith(
+                          color: AppTokens.inkMuted(context),
                         ),
                       ),
                     ),
@@ -357,8 +349,7 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                 children: [
                   Text(
                     L10n.jumpToMonth,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700),
+                    style: AppTokens.titleStrong,
                   ),
                   const SizedBox(height: 8),
                   // 年份滚轮
@@ -382,8 +373,7 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                         return Center(
                           child: Text(
                             '${_minYear + i}',
-                            style: const TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.w600),
+                            style: AppTokens.dialogTitle,
                           ),
                         );
                       }),
@@ -400,7 +390,8 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                       child: Column(
                         children: List.generate(4, (r) {
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.only(
+                                bottom: AppTokens.spaceSm),
                             child: Row(
                               children: List.generate(3, (c) {
                                 final month = r * 3 + c + 1;
@@ -412,7 +403,7 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                                     child: Container(
                                       height: rowH,
                                       margin: const EdgeInsets.symmetric(
-                                          horizontal: 3),
+                                          horizontal: AppTokens.spaceXs),
                                       alignment: Alignment.center,
                                       decoration: BoxDecoration(
                                         color: isCurrent
@@ -430,8 +421,7 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                                       ),
                                       child: Text(
                                         L10n.monthShort(month),
-                                        style: TextStyle(
-                                          fontSize: 14,
+                                        style: AppTokens.rowPrimary.copyWith(
                                           fontWeight: isCurrent
                                               ? FontWeight.w700
                                               : FontWeight.w500,

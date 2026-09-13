@@ -85,18 +85,14 @@ class _GlassButtonState extends State<GlassButton> {
       children: [
         if (showIcon) ...[
           IconTheme(
-            data: IconThemeData(color: contentColor, size: 20),
+            data: IconThemeData(color: contentColor, size: AppTokens.iconMd),
             child: widget.icon!,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppTokens.gapIconText),
         ],
         Flexible(
           child: DefaultTextStyle.merge(
-            style: TextStyle(
-              color: contentColor,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTokens.titleStrong.copyWith(color: contentColor),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             child: widget.child,

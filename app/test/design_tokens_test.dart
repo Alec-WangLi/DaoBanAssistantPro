@@ -25,14 +25,6 @@ double _wcagContrast(Color a, Color b) {
 /// 尚未迁完的文件 —— 每完成一个任务就删掉对应的行。
 /// 全部删完（集合为空）是这一轮的终点，由最后一条用例盯着。
 const Set<String> _pending = {
-  'lib/core/glass/glass.dart',
-  'lib/core/widgets/glass_action_button.dart',
-  'lib/core/widgets/glass_button.dart',
-  'lib/core/widgets/glass_choice_chip.dart',
-  'lib/core/widgets/glass_delete_button.dart',
-  'lib/core/widgets/glass_dialog.dart',
-  'lib/core/widgets/glass_pickers.dart',
-  'lib/core/widgets/glass_snackbar.dart',
   'lib/features/alarm/alarm_ringing_screen.dart',
   'lib/features/alarm/alarm_screen.dart',
   'lib/features/calendar/calendar_screen.dart',

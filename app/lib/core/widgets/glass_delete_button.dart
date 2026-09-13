@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
 import '../l10n.dart';
+import 'app_icon.dart';
 
 /// 统一「删除」按钮：红色调圆形玻璃底 + 删除图标，替换散落的裸删除 IconButton。
 class GlassDeleteButton extends StatelessWidget {
@@ -57,7 +58,7 @@ class GlassDeleteButton extends StatelessWidget {
       child: IconButton(
         tooltip: tooltip ?? L10n.delete,
         onPressed: onPressed,
-        icon: const Icon(Icons.delete_outlined, size: 20),
+        icon: const AppIcon(Icons.delete_outlined),
         color: AppTokens.danger,
       ),
     );
@@ -88,8 +89,7 @@ class _CompactDeleteButtonState extends State<_CompactDeleteButton> {
 
   @override
   Widget build(BuildContext context) {
-    final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+    final muted = AppTokens.inkMuted(context);
     return Tooltip(
       message: widget.tooltip ?? L10n.delete,
       child: InkResponse(
@@ -101,9 +101,9 @@ class _CompactDeleteButtonState extends State<_CompactDeleteButton> {
         child: SizedBox(
           width: 36,
           height: 36,
-          child: Icon(
+          child: AppIcon(
             Icons.delete_outlined,
-            size: 18,
+            size: AppTokens.iconMd,
             color: _pressed ? AppTokens.danger : muted,
           ),
         ),
