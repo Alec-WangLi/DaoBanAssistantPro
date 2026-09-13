@@ -231,16 +231,53 @@ bool _insideCopyWith(String src, int index) {
 /// 栅格外的值必须有名有姓。
 bool _spacingOk(double n) => n == 1 || n % 4 == 0;
 
-final RegExp _spacingCall =
-    RegExp(r'(SizedBox|EdgeInsets\.[a-zA-Z]+)\(([^()]*)\)');
+final RegExp _spacingHead = RegExp(r'(SizedBox|EdgeInsets\.[a-zA-Z]+)\(');
 final RegExp _numberIn = RegExp(r'[0-9]+(?:\.[0-9]+)?');
 
-/// 注意 `_spacingCall` 的参数部分写的是 `[^()]*` 而不是 `[^)]*`：**参数里一旦
-/// 出现另一个括号就整条跳过**。否则 `SizedBox(width: cellW, child: Center(…)`
-/// 会把 `child` 里那些字号、个数一路当成间距扫进来，全是误报。
+/// 从 `open`（左括号的下标）出发找它的配对右括号，返回**参数串**在原串里的
+/// `[start, end)`。找不到闭合（源码被截断）返回 null，当作没有这次调用。
 ///
-/// 代价是带到子 widget 的 `SizedBox`（`child: Row(…)` 那种）不检查 —— 那种位置
-/// 本来也很少写间距值。审计实测：这条规则在现有代码里报出 43 处，**零误报**。
+/// 为什么不能用 `\(([^()]*)\)`：那样 `SizedBox(width: 6, child: Center(…))`
+/// 整条不匹配 —— 带子 widget 的写法里写多大的间距都没人管（v0.6.11 审查发现）。
+///
+/// 字符串在调用方已经用 `blankNonCode` 清成空格，所以参数里的 `)` 不会干扰深度。
+(int, int)? _balancedArgs(String code, int open) {
+  var depth = 0;
+  for (var i = open; i < code.length; i++) {
+    final c = code[i];
+    if (c == '(') {
+      depth++;
+    } else if (c == ')') {
+      depth--;
+      if (depth == 0) return (open + 1, i);
+    }
+  }
+  return null;
+}
+
+/// [index] 处在参数串 [s] 里的括号嵌套深度（`(` 记 +1，`)` 记 -1）。
+///
+/// 只有**深度 0** 的数字才是这次调用的直接参数。嵌套调用里的数字一律不算 ——
+/// 那正是旧正则 `\(([^()]*)\)` 用「有嵌套括号就整条跳过」挡住的那一批：
+/// `child: Row(…)` 里的 `withValues(alpha: 0.35)` / `strokeWidth: 2.6` /
+/// `maxLength: 2` / `List.generate(7, …)`。改成配对括号扫描后，闸门得从「整条
+/// 跳过」挪到这里 —— 否则带子 widget 的 `SizedBox` 一放开，child 里的透明度、
+/// 描边宽、个数全成了间距误报（实测 15 处）。
+///
+/// 嵌套调用自己的间距不会被漏：它的函数头会被 `_spacingHead` 单独命中。
+int _depthAt(String s, int index) {
+  var depth = 0;
+  for (var i = 0; i < index; i++) {
+    final c = s[i];
+    if (c == '(') {
+      depth++;
+    } else if (c == ')') {
+      depth--;
+    }
+  }
+  return depth;
+}
+
 String _charBefore(String s, int i) {
   var j = i - 1;
   while (j >= 0 && (s[j] == ' ' || s[j] == '\n')) {
@@ -264,12 +301,25 @@ List<String> _spacingViolations(String path) =>
 
 /// 扫一段源码里的间距字面量。拆出「读文件」这一步是为了能用临时文本单测 ——
 /// [path] 只进报告、不参与判断。
+///
+/// 调用与参数**分两步取**：`_spacingHead` 只认函数头，参数再用 `_balancedArgs`
+/// 按括号深度配平取出（而不是一条正则吃下整条调用）—— 否则参数里一旦有嵌套
+/// 括号（`child: Row(…)`）就会整条跳过。取出后再用 `_depthAt` 只留**直接参数**
+/// 上的数字：嵌套调用里的 `alpha:` / `strokeWidth:` / 个数不是间距（见 `_depthAt`）。
+/// 规则跑在 [blankNonCode] 剥过的副本上，参数里的 `)` 不会打乱深度；
+/// 报告行号回原始 [src] 取（两份等长，偏移通用）。
 List<String> _spacingViolationsIn(String path, String src) {
+  final code = blankNonCode(src);
   final out = <String>[];
   final seen = <String>{};
-  for (final call in _spacingCall.allMatches(src)) {
-    final args = call.group(2)!;
+  for (final head in _spacingHead.allMatches(code)) {
+    final span = _balancedArgs(code, head.end - 1);
+    if (span == null) continue;
+    final (argStart, argEnd) = span;
+    final args = code.substring(argStart, argEnd);
     for (final m in _numberIn.allMatches(args)) {
+      // 嵌套调用里的数字不归这次调用管（`alpha: 0.35` / `strokeWidth: 2.6` …）。
+      if (_depthAt(args, m.start) != 0) continue;
       final before = _charBefore(args, m.start);
       final after = _charAfter(args, m.end);
       // 只把「整个参数就是一个数字」的当成间距值，跳过算式里的数字
@@ -279,11 +329,13 @@ List<String> _spacingViolationsIn(String path, String src) {
       // 那正说明它就是整个参数本身（`EdgeInsets.all(2)` 的 args 就是 `"2"`，
       // `SizedBox(width: 6)` 的 args 是 `"width: 6"` 有 `':'`）。少了这一条，
       // 单参数写法会静默漏检，「守门测试绿」就不等于「文件里没有字面量」了。
-      if (before != '' && before != ':' && before != ',' && before != '(') continue;
+      if (before != '' && before != ':' && before != ',' && before != '(') {
+        continue;
+      }
       if (after != ',' && after != ')' && after != '') continue;
       final n = double.parse(m.group(0)!);
       if (_spacingOk(n)) continue;
-      final line = src.substring(0, call.start + m.start).split('\n').length;
+      final line = _lineAt(src, argStart + m.start).line;
       final key = '$line:$n';
       if (!seen.add(key)) continue;
       out.add('$path:$line  间距不在 4px 栅格上：$n'
@@ -457,23 +509,65 @@ Text('x', style: AppTokens.tinyLabel.copyWith(
     expect(_violationsIn('synthetic.dart', good), isEmpty);
   });
 
+  // ── 间距扫描：带子 widget 的调用也要扫 ──
+  //
+  // **旧行为已反转**：`_spacingCall` 的参数部分曾写成 `[^()]*`，参数里一旦出现
+  // 另一个括号就**整条跳过** —— 于是 `SizedBox(width: 6, child: Row(…))` 这种带
+  // 子 widget 的写法里写多大的间距都不会被发现（v0.6.11 审查发现）。现在参数改用
+  // 配对括号扫描（`_spacingHead` 认函数头 + `_balancedArgs` 按深度取参数）：字符串
+  // 内容已由 `blankNonCode` 清成空格，参数里的 `)` 不会打乱深度，嵌套括号自然配平。
+
+  test('带子 widget 的 SizedBox 也要扫', () {
+    expect(
+        _spacingViolationsIn('t.dart', 'SizedBox(width: 6, child: Text("x"))'),
+        hasLength(1),
+        reason: '带 child 的 SizedBox 必须照扫');
+    expect(
+        _spacingViolationsIn('t.dart', 'SizedBox(width: 4, child: Text("x"))'),
+        isEmpty);
+    // 保留原语义：算式里的数字不算间距值。
+    expect(
+        _spacingViolationsIn('t.dart',
+            'SizedBox(width: cellW - _cellInset * 2, child: Text("x"))'),
+        isEmpty,
+        reason: '算式里的 2 不是间距值');
+    // 嵌套两层也要能配平。
+    expect(
+        _spacingViolationsIn('t.dart',
+            'SizedBox(width: 6, child: Center(child: Text("x")))'),
+        hasLength(1));
+    // 反面：子 widget 自己调用的参数不是这次调用的间距 —— 旧正则靠「有嵌套括号
+    // 就整条跳过」挡住，现在靠 `_depthAt` 只扫深度 0 的数字。少了这道闸，下面
+    // 这几个都会被误报（实测在现有代码里一次报出 15 处）。
+    expect(
+        _spacingViolationsIn(
+            't.dart', 'SizedBox(width: 8, child: Text("x", overflow: 3))'),
+        isEmpty,
+        reason: '嵌套调用里的 3 不是间距');
+    expect(
+        _spacingViolationsIn('t.dart',
+            'SizedBox(width: 12, child: BoxShadow(alpha: 0.35, blur: 2))'),
+        isEmpty,
+        reason: '嵌套调用里的 0.35 / 2 不是间距');
+    // `EdgeInsets.symmetric` / `EdgeInsets.all` 两种形态都认得（`all` 那条在
+    // 「间距扫描认得单参数写法」里钉过，这里补 `symmetric`）。
+    expect(
+        _spacingViolationsIn(
+            't.dart', 'EdgeInsets.symmetric(horizontal: 6, vertical: 8)'),
+        hasLength(1));
+    // 调用没闭合（源码被截断）当成没有这次调用：既不报，也不能一路走到文件尾
+    // 把后面的代码全当成参数（那样会误报）。
+    expect(
+        _spacingViolationsIn('t.dart', 'SizedBox(width: 6, child: Text("x")'),
+        isEmpty,
+        reason: '未闭合的调用跳过，不崩也不报');
+  });
+
   // ── 扫描器自身的「已知边界」：也用能失败的用例钉住 ──
   //
-  // 上面三条钉的是「值跨行会不会漏」；这一组钉的是**扫描器边界本身**。
-  // 三条行为都是有意为之，将来一次「顺手重构」就可能把洞悄悄开大。
+  // 上面各条钉的是「会怎么报」；这一组钉的是**扫描器边界本身**（有意不处理的
+  // 写法）。两条行为都是有意为之，将来一次「顺手重构」就可能把洞悄悄开大。
   // 每条都写成能失败的用例 —— 把对应实现改成相反的极端行为，用例会红。
-
-  test('间距扫描边界：带子 widget 的 SizedBox 不扫（参数里有嵌套括号就整条跳过）',
-      () {
-    // `_spacingCall` 的参数部分是 `[^()]*` 而非 `[^)]*`：参数里一旦出现另一个
-    // 括号就整条跳过（否则 `child: Row(…)` 里那些字号、个数会被当成间距扫进来）。
-    // 这条钉住这个**有意为之**的漏扫：若有人把 `[^()]*` 放宽成 `[^)]*`，
-    // `width: 6` 就会被扫出来，本用例转红。
-    const src = '''
-Widget a() => SizedBox(width: 6, child: Center(child: Text('x')));
-''';
-    expect(_spacingViolationsIn('synthetic.dart', src), isEmpty);
-  });
 
   test('字面量扫描边界：注释与字符串内容不参与扫描', () {
     // **旧行为已反转**：扫描器曾读原始源码，注释里的 `fontSize: 10` 也会被报
