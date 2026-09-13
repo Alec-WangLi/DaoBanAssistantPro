@@ -41,7 +41,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.12\n'
+const String _changelogZh = 'v0.6.13\n'
+    '· 应用图标重画：变成「日历 + 换班箭头」。此前只有一张方图，在会统一图标形状的启动器上会被缩到一块白底上，显得又小又淡；现在补上了 Android 自适应图标（含 Android 13+「主题图标」用的单色层），图标能跟着系统的形状与配色走\n'
+    '· 响铃界面的「上滑关闭」滑块加宽：轨道 56→72，手指真正能拖中的范围放宽到 112，不用再瞄着戳\n'
+    '· 修好响铃界面在手机横屏、以及 200×400 小窗下会溢出画面的问题（小窗里时钟会折成两行，把整列顶出屏幕）\n'
+    '· 内部整理：通知小图标改回正确的 drawable（此前指向启动器图标，不是通知该用的资源）\n\n'
+    'v0.6.12\n'
     '· 底部导航的四个图标调大一档，在胶囊里更醒目、与文字的比例更接近常见底栏\n'
     '· 内部整理：把设计规范里几处说法与实际不符的地方改正（导航图标的尺寸档位、小尺寸元素的圆角规则）\n\n'
     'v0.6.11\n'
@@ -87,15 +92,14 @@ const String _changelogZh = 'v0.6.12\n'
     '· 小窗下信息卡压成一行（哪天 · 什么班 · 几点到几点），把高度让给日期网格\n'
     '· 悬浮导航胶囊在矮屏下自动收紧，各页底部留白同步收窄\n'
     '· 平板与车机等宽屏设备：内容限宽居中，不再横向拉满整屏\n'
-    '· 窄屏下编辑器卡片内边距收紧，字号不缩\n\n'
-    'v0.6.3\n'
-    '· 排班编辑界面的字号与全 App 统一：此前班次名称与简称输入框被单独压小了一号，同一张卡片里的方案名称输入框却是一号大\n'
-    '· 周期设置改成**行内直接点选班次**：每个可选班次平铺成一个彩色小块，点一下就换，不再弹出下拉菜单\n'
-    '· 选中的班次块用班次色实心填充，文字颜色按底色自动取白或黑，浅色班次上的字不再糊得读不出来\n'
-    '· 班次简称输入框加宽，两个汉字（如「大夜」）不会被裁掉\n'
-    '· 删除班次改为低调图标（不再每行一个红点），按下时变红，并在真正删除前先确认一次\n';
+    '· 窄屏下编辑器卡片内边距收紧，字号不缩\n';
 
-const String _changelogEn = 'v0.6.12\n'
+const String _changelogEn = 'v0.6.13\n'
+    '· The app icon is redrawn: a calendar with shift-cycle arrows. It used to be a single square bitmap, which launchers that unify icon shapes would shrink onto a white plate, leaving it small and washed out. It now ships an Android adaptive icon (with a monochrome layer for Android 13+ themed icons), so it follows the system\'s shape and tint\n'
+    '· The "swipe up to dismiss" slider on the ringing screen is wider: the visible track goes 56 → 72 and the area your finger can actually grab is 112, so there is nothing to aim at\n'
+    '· Fixed the ringing screen overflowing on landscape phones and in 200×400 small windows, where the clock wrapped to two lines and pushed the column off screen\n'
+    '· Internal: the notification small icon now points at a proper drawable instead of the launcher icon\n\n'
+    'v0.6.12\n'
     '· The four bottom-nav icons are one step larger — more present in the capsule, and closer to the usual tab-bar ratio against their labels\n'
     '· Internal cleanup: corrected a few mismatches between the design spec and the actual code (the nav icon\'s size tier, and the rule for small elements\' corner radius)\n\n'
     'v0.6.11\n'
@@ -141,13 +145,7 @@ const String _changelogEn = 'v0.6.12\n'
     '· In a small window the day card collapses to a single line (date · shift · hours), giving the height back to the grid\n'
     '· The floating nav capsule shrinks on short screens, and pages reserve less space beneath it\n'
     '· On tablets and car head units the content is centred with a maximum width instead of stretching across the screen\n'
-    '· Narrow screens get tighter editor paddings (text sizes unchanged)\n\n'
-    'v0.6.3\n'
-    '· Schedule editor typography now matches the rest of the app (input fields were a size smaller — two fields on the same card did not even match each other)\n'
-    '· The cycle section now lets you pick a shift inline: every option is a coloured chip you tap, with no dropdown to open\n'
-    '· A selected chip is filled with its shift colour, and its text is picked as white or black for readability — pale shifts are no longer washed out\n'
-    '· The shift-abbreviation field is wider, so two characters are no longer clipped\n'
-    '· Deleting a shift uses a quieter icon (no red dot on every row) that turns red while pressed, and asks for confirmation first\n';
+    '· Narrow screens get tighter editor paddings (text sizes unchanged)\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
