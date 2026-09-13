@@ -35,13 +35,16 @@ import '../../core/l10n.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/shift_rotation.dart';
 
-/// 卡片**内部**的垂直固定开销：上下内边距 16×2（`AppTokens.spaceLg`）+ 描边
-/// 1×2（[GlassTile] 的 `Border.all(width: 1)`，`Container` 会把它算进自己的
-/// 内边距）。
-const double _cardChromeV = 34;
+/// 卡片**内部**的垂直固定开销：上下内边距 `spaceLg`×2 + 描边 1×2（[GlassTile]
+/// 的 `Border.all(width: 1)`，`Container` 会把它算进自己的内边距）。
+///
+/// 写成 token 算式而不是 34，是为了和渲染侧同源：渲染侧的内边距就在
+/// `calendar_screen.dart` 的 `GlassTile(padding: …)` 里，改那一处这里跟着走。
+const double _cardChromeV = AppTokens.spaceLg * 2 + 2;
 
-/// 同理，左右各是 20 / 16 的内边距与 1 的描边 —— 内容区比卡片外框窄这么多。
-const double _cardChromeH = 38;
+/// 同理，左右各是 `spaceXl`(20) / `spaceLg`(16) 的内边距与 1 的描边 ——
+/// 内容区比卡片外框窄这么多。
+const double _cardChromeH = AppTokens.spaceXl + AppTokens.spaceLg + 2;
 
 /// 段落间距，与 `_infoCard` 里的取值一一对应。
 const double _gapAfterDate = AppTokens.spaceSm; // 8

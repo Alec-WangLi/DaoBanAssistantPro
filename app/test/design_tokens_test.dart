@@ -5,8 +5,8 @@
 // 两条：
 //   1. 角色令牌的字号 / 字重 / 行高必须等于规格里那张表 —— 改令牌就得先改规格。
 //   2. lib/features · lib/core/widgets · lib/core/glass 下不许出现字面量。
-//      迁移期间用 _pending 兜住还没迁完的文件，每迁完一块划掉一个；
-//      Task 8 收口后这个集合已删 —— 这条规则从此扫**全部**文件、没有任何豁免。
+//      迁移期间曾用 _pending 兜住还没迁完的文件，收口时已连同进度用例一起删除；
+//      这条规则从此扫**全部**文件、没有任何豁免。
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -220,13 +220,31 @@ void main() {
     check('microText', AppTokens.microText, 12, FontWeight.w400);
     check('tinyLabel', AppTokens.tinyLabel, 11, FontWeight.w400, 1.15);
 
-    expect([AppTokens.iconSm, AppTokens.iconMd, AppTokens.iconLg], [16, 20, 24]);
-    expect([AppTokens.spaceXs, AppTokens.spaceSm, AppTokens.spaceMd,
-        AppTokens.spaceLg, AppTokens.spaceXl, AppTokens.space2xl,
-        AppTokens.space3xl], [4, 8, 12, 16, 20, 24, 32]);
-    expect([AppTokens.gapHair, AppTokens.gapIconText, AppTokens.gapIconTextLg],
-        [2, 6, 10]);
-    expect(AppTokens.durFlow, const Duration(milliseconds: 650));
+    // 图标三档。每项单列一行、各带 reason —— 早前这几组写成「手写枚举」
+    // （`expect([a, b, c], [1, 2, 3])`），漏掉 `padChipV` 正是这么来的：加了
+    // 令牌却忘了往枚举里补一项，断言照绿。逐项列出后，缺哪一项一眼可见。
+    expect(AppTokens.iconSm, 16, reason: 'iconSm —— 小注 / 行内提示');
+    expect(AppTokens.iconMd, 20, reason: 'iconMd —— 按钮内 / 列表项 / 导航项');
+    expect(AppTokens.iconLg, 24, reason: 'iconLg —— 默认（IconTheme 也设成它）');
+
+    // 节奏：4px 栅格。
+    expect(AppTokens.spaceXs, 4, reason: 'spaceXs');
+    expect(AppTokens.spaceSm, 8, reason: 'spaceSm');
+    expect(AppTokens.spaceMd, 12, reason: 'spaceMd');
+    expect(AppTokens.spaceLg, 16, reason: 'spaceLg');
+    expect(AppTokens.spaceXl, 20, reason: 'spaceXl');
+    expect(AppTokens.space2xl, 24, reason: 'space2xl');
+    expect(AppTokens.space3xl, 32, reason: 'space3xl');
+
+    // 光学：一个控件内部两个元素的贴合。
+    expect(AppTokens.gapHair, 2, reason: 'gapHair —— 发丝线 / 描边');
+    expect(AppTokens.padChipV, 3, reason: 'padChipV —— 小胶囊 / 徽章上下内边距');
+    expect(AppTokens.gapIconText, 6, reason: 'gapIconText —— 图标↔文字');
+    expect(AppTokens.gapIconTextLg, 10,
+        reason: 'gapIconTextLg —— 图标↔文字（大号）');
+
+    expect(AppTokens.durFlow, const Duration(milliseconds: 650),
+        reason: 'durFlow —— 响铃界面入场动画的一次性控制器（非背景光晕循环）');
 
     expect(AppTokens.inkMutedAlpha, 0.62,
         reason: '浅色最坏底 #F5F6FA 上 0.62 才到 4.70:1 过 AA（0.60 只有 4.33:1）');
@@ -339,6 +357,55 @@ Text('x', style: AppTokens.tinyLabel.copyWith(
 ));
 ''';
     expect(_violationsIn('synthetic.dart', good), isEmpty);
+  });
+
+  // ── 扫描器自身的「已知边界」：也用能失败的用例钉住 ──
+  //
+  // 上面三条钉的是「值跨行会不会漏」；这一组钉的是**扫描器边界本身**。
+  // 三条行为都是有意为之，将来一次「顺手重构」就可能把洞悄悄开大。
+  // 每条都写成能失败的用例 —— 把对应实现改成相反的极端行为，用例会红。
+
+  test('间距扫描边界：带子 widget 的 SizedBox 不扫（参数里有嵌套括号就整条跳过）',
+      () {
+    // `_spacingCall` 的参数部分是 `[^()]*` 而非 `[^)]*`：参数里一旦出现另一个
+    // 括号就整条跳过（否则 `child: Row(…)` 里那些字号、个数会被当成间距扫进来）。
+    // 这条钉住这个**有意为之**的漏扫：若有人把 `[^()]*` 放宽成 `[^)]*`，
+    // `width: 6` 就会被扫出来，本用例转红。
+    const src = '''
+Widget a() => SizedBox(width: 6, child: Center(child: Text('x')));
+''';
+    expect(_spacingViolationsIn('synthetic.dart', src), isEmpty);
+  });
+
+  test('字面量扫描边界：注释里的 fontSize 也会被扫到（扫描读原始源码）', () {
+    // 扫描器读的是原始源码、**不**跳过注释与字符串 —— 这是有意为之：
+    // 跳过注释需要词法分析，属于更大的改动，本轮不做（见文件头与规格 §5）。
+    // 这条从**正面**钉住它，免得将来有人「优化」成跳过注释，却没意识到那是
+    // 行为变更（那样注释里就不能再写 `fontSize: 10` 这种示例了）。
+    const src = '''
+// 历史遗留写法示例：fontSize: 10
+Widget a() => const SizedBox.shrink();
+''';
+    final hit = _violationsIn('synthetic.dart', src);
+    expect(hit, hasLength(1), reason: hit.join('\n'));
+    expect(hit.single, contains('字号'));
+  });
+
+  test('字重扫描边界：条件表达式里带函数调用会漏（要修需括号感知解析）', () {
+    // 字重正则把 `)` `,` `;` 当作值的边界（见 `_rules` 注释）。所以
+    // `fontWeight: f(x) ? …` 里那个 `)` 会提前终止值的扫描、匹配不到后面的
+    // `FontWeight.` —— 这是**已知边界**：要修需要括号感知的解析，本轮不做。
+    // 这条钉住「它确实会漏」，免得将来有人把它当成「已经能处理」而据此清理
+    // 代码里其实没被覆盖的写法。
+    const src = '''
+Text('x', style: TextStyle(
+  fontWeight: heavy(x) ? FontWeight.w700 : FontWeight.w500,
+));
+''';
+    final weight =
+        _violationsIn('synthetic.dart', src).where((v) => v.contains('字重'));
+    expect(weight, isEmpty,
+        reason: '条件表达式里带函数调用时字重应当漏检（已知边界）');
   });
 
   // ── 令牌规格（本文件原有的一组，随守门测试一并保留）──

@@ -60,7 +60,12 @@ class AppTokens {
   static const Duration durMed = Duration(milliseconds: 220);
   static const Duration durSlow = Duration(milliseconds: 340);
 
-  /// 响铃界面背景光晕的循环周期。不是过渡，是「缓慢流动」的呼吸节奏。
+  /// 响铃界面的**入场动画**时长：一次性控制器（`alarm_ringing_screen.dart` 里
+  /// `_enter.forward()`），驱动 FadeTransition / ScaleTransition 的淡入与放大。
+  ///
+  /// 注意它**不是**背景光晕的循环周期 —— 真正的光晕循环是
+  /// `core/theme/animated_background.dart` 里另一个 26s 的 `repeat()`，
+  /// 本轮未纳入令牌（范围外）。
   static const Duration durFlow = Duration(milliseconds: 650);
 
   // ── Q 弹弹簧 + 缩放 ──
