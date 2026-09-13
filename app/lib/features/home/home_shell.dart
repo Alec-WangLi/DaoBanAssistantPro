@@ -9,6 +9,7 @@ import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/motion.dart';
 import '../../core/update_checker.dart';
+import '../../core/widgets/app_icon.dart';
 import '../../data/app_repository.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_ringing_screen.dart';
@@ -374,16 +375,19 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
+                                  // 导航项图标：规格 §3.6 把「导航项」归 iconMd
+                                  // （原 22 不在三档里，短屏与常规统一到 20）。
+                                  AppIcon(
                                     items[i].$1,
-                                    size: isShort ? 20 : 22,
+                                    size: AppTokens.iconMd,
                                     color: selected ? fg : inactiveColor,
                                   ),
-                                  const SizedBox(height: 2),
+                                  const SizedBox(height: AppTokens.gapHair),
                                   Text(
                                     items[i].$2,
-                                    style: TextStyle(
-                                      fontSize: 10,
+                                    // 基线 11px w400：未选中 w500、选中 w700，
+                                    // 两个分支都由这里显式给字重，按规格走 copyWith。
+                                    style: AppTokens.tinyLabel.copyWith(
                                       fontWeight: selected
                                           ? FontWeight.w700
                                           : FontWeight.w500,

@@ -61,6 +61,8 @@ ThemeData buildLightTheme({Color seed = AppColors.primary}) {
     scaffoldBackgroundColor: AppTokens.bgLight,
     splashFactory: InkSparkle.splashFactory,
     pageTransitionsTheme: _pageTransitions,
+    // 图标三档的基准：没包 AppIcon 的图标也停在 iconLg(24)，而不是裸默认值。
+    iconTheme: const IconThemeData(size: AppTokens.iconLg),
     appBarTheme: const AppBarTheme(
       centerTitle: false,
       elevation: 0,
@@ -93,6 +95,8 @@ ThemeData buildDarkTheme({Color seed = AppColors.primary}) {
     scaffoldBackgroundColor: AppTokens.bgDark,
     splashFactory: InkSparkle.splashFactory,
     pageTransitionsTheme: _pageTransitions,
+    // 图标三档的基准：没包 AppIcon 的图标也停在 iconLg(24)，而不是裸默认值。
+    iconTheme: const IconThemeData(size: AppTokens.iconLg),
     appBarTheme: const AppBarTheme(
       centerTitle: false,
       elevation: 0,

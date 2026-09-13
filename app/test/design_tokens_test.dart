@@ -23,11 +23,9 @@ double _wcagContrast(Color a, Color b) {
 }
 
 /// 尚未迁完的文件 —— 每完成一个任务就删掉对应的行。
-/// 全部删完（集合为空）是这一轮的终点，由最后一条用例盯着。
-const Set<String> _pending = {
-  'lib/features/home/home_shell.dart',
-  'lib/features/schedule/schedule_screen.dart',
-};
+/// Task 7 之后已全部迁完，集合为空：这一轮的终点到了，
+/// `界面层不写数值` 从此扫全部文件（`_pending` 保留为临时豁免的开关）。
+const Set<String> _pending = {};
 
 const List<String> _scanDirs = [
   'lib/features',

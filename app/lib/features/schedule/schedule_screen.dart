@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/design_tokens.dart';
+import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
@@ -30,8 +32,7 @@ class ScheduleScreen extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: Text(L10n.titleTodo,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+              child: Text(L10n.titleTodo, style: AppTokens.pageTitle),
             ),
             Expanded(
               child: events.isEmpty
@@ -44,12 +45,7 @@ class ScheduleScreen extends ConsumerWidget {
                         child: Text(
                           L10n.noEvents,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.5),
-                          ),
+                          style: TextStyle(color: AppTokens.inkMuted(context)),
                         ),
                       ),
                     )
@@ -93,8 +89,8 @@ class ScheduleScreen extends ConsumerWidget {
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: () => _showAddDialog(context, ref),
-            child:
-                const Icon(Icons.add_outlined, color: Colors.white, size: 28),
+            child: const AppIcon(Icons.add_outlined,
+                color: Colors.white, size: AppTokens.iconLg),
           ),
         ),
       ),
@@ -113,7 +109,8 @@ class ScheduleScreen extends ConsumerWidget {
 
     return GlassTile(
       enableBlur: false,
-      margin: const EdgeInsets.only(bottom: 10),
+      // 卡片之间：分隔两条待办（两个板块），归节奏档。
+      margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       onTap: () => _showEditDialog(context, ref, e),
       child: Row(
@@ -130,11 +127,9 @@ class ScheduleScreen extends ConsumerWidget {
               children: [
                 Text(
                   e.title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                  style: AppTokens.titleStrong.copyWith(
                     color: e.isCompleted
-                        ? onSurface.withValues(alpha: 0.45)
+                        ? AppTokens.inkFaint(context)
                         : onSurface,
                     decoration:
                         e.isCompleted ? TextDecoration.lineThrough : null,
@@ -142,11 +137,10 @@ class ScheduleScreen extends ConsumerWidget {
                 ),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: AppTokens.microText.copyWith(
                     color: e.isCompleted
-                        ? onSurface.withValues(alpha: 0.35)
-                        : onSurface.withValues(alpha: 0.55),
+                        ? AppTokens.inkFaint(context)
+                        : AppTokens.inkMuted(context),
                   ),
                 ),
               ],
