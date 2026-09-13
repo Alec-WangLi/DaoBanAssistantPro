@@ -312,7 +312,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(L10n.previewNext14, style: AppTokens.microLabel),
+          // 基线是 12/w700，microStrong 精确匹配（12 档只有它有 w700）
+          Text(L10n.previewNext14, style: AppTokens.microStrong),
           const SizedBox(height: AppTokens.spaceSm),
           // 7 列 × 2 行，与日历的 7 列节奏一致 —— 横向滚动会让最后一格
           // 永远吊在半路，这里两行排满就没有裁切，也不需要滑动提示。
@@ -359,7 +360,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             s?.shortLabel ?? '—',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTokens.microLabel.copyWith(
+            style: AppTokens.microStrong.copyWith(
                 // 底色是班次色 16% 的淡染，字得按它算可读版本，不能直接用班次色
                 // （橙 `#FF9F0A` 这类浅色压上去几乎看不见）。
                 color: AppTokens.inkFor(
@@ -740,7 +741,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       Text(value,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTokens.rowPrimary),
+                          // 基线是 14/w600（值要比上面 w400 的「开始/结束」重）。
+                          // 14 档没有 w600，取最接近的 labelStrong —— +100 而非精确。
+                          style: AppTokens.labelStrong),
                     ],
                   ),
                 ),
@@ -796,7 +799,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               _cycle.length > 1 ? () => _setCycleLength(_cycle.length - 1) : null,
         ),
         Text('${_cycle.length}${L10n.cycleLengthUnit}',
-            style: AppTokens.rowPrimary),
+            // 基线是裸 TextStyle(fontWeight: w600)（字号随主题 = 14）。
+            // 14 档没有 w600，取最接近的 labelStrong —— +100 而非精确。
+            style: AppTokens.labelStrong),
         IconButton(
           icon: const Icon(Icons.add_circle_outline_outlined),
           onPressed:
@@ -928,7 +933,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             Row(
               children: [
                 Text(L10n.teamCountN(_teamCount),
-                    style: AppTokens.rowPrimary),
+                    // 基线就是 14/w700，labelStrong 精确匹配
+                    style: AppTokens.labelStrong),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.remove_circle_outline_outlined),

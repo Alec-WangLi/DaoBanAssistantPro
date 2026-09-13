@@ -135,7 +135,9 @@ class _ShiftTemplatePickerScreenState
           const SizedBox(height: 4),
           Text(
             L10n.crewsOnDutyCount(t.workingTeamsPerDay),
-            style: AppTokens.microLabel.copyWith(color: muted),
+            // 基线是 12/**w400**（跟上面 13/w400 的副标题同重），microText 精确匹配；
+            // 写成 microLabel 会让这行比副标题还重，把层次弄反。
+            style: AppTokens.microText.copyWith(color: muted),
           ),
         ],
       ],

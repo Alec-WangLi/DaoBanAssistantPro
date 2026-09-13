@@ -985,9 +985,30 @@ void main() {
     expect(segmentLabel.style!.fontSize, AppTokens.labelSecondary.fontSize);
     expect(segmentLabel.style!.fontWeight, FontWeight.w700);
 
-    // 预览条是唯一被压到最低一档的地方（7 列网格，再大就换行破版）
+    // 预览条是唯一被压到最低一档的地方（7 列网格，再大就换行破版）。基线是
+    // 12/w700 —— microStrong 精确匹配，别写成 12/w600 的 microLabel。
     final previewTitle = tester.widget<Text>(find.text(L10n.previewNext14));
-    expect(previewTitle.style!.fontSize, AppTokens.microLabel.fontSize);
+    expect(previewTitle.style!.fontSize, AppTokens.microStrong.fontSize);
+    expect(previewTitle.style!.fontWeight, AppTokens.microStrong.fontWeight);
+  });
+
+  testWidgets('14 档的读数没被摊平成 w500：周期长度与时间值都是 labelStrong',
+      (tester) async {
+    await _pumpEditor(tester, _domain());
+
+    // 周期长度读数（基线的裸 `TextStyle(fontWeight: w600)`，字号随主题 = 14）
+    final readout = tester.widget<Text>(find.text('6${L10n.cycleLengthUnit}'));
+    expect(readout.style!.fontSize, AppTokens.labelStrong.fontSize);
+    expect(readout.style!.fontWeight, AppTokens.labelStrong.fontWeight);
+
+    // 时间 chip 的值（基线 14/w600）。08:30 同时是白班的开始与夜班的结束，
+    // 两处都该落在同一档上。
+    final times = tester.widgetList<Text>(find.text('08:30')).toList();
+    expect(times, isNotEmpty, reason: '时间 chip 的值应该在树上');
+    for (final t in times) {
+      expect(t.style!.fontSize, AppTokens.labelStrong.fontSize);
+      expect(t.style!.fontWeight, AppTokens.labelStrong.fontWeight);
+    }
   });
 
   testWidgets('班组行里的标签保留各自的字重：chip 是 w700，日期值是 w600',
@@ -1003,6 +1024,11 @@ void main() {
     final chip = tester.widget<Text>(find.text(L10n.myTeam));
     expect(chip.style!.fontSize, AppTokens.labelSecondary.fontSize);
     expect(chip.style!.fontWeight, FontWeight.w700);
+
+    // 班组数（基线就是 14/w700）→ labelStrong 精确匹配
+    final teamCount = tester.widget<Text>(find.text(L10n.teamCountN(4)));
+    expect(teamCount.style!.fontSize, AppTokens.labelStrong.fontSize);
+    expect(teamCount.style!.fontWeight, AppTokens.labelStrong.fontWeight);
 
     // 第 2 组（下标 1）的「周期起始日」= 基准日 − offsets[1] = 05-31，只在这一行
     // 出现；原来是 w600，labelSecondary 正好是 13/w600，不需要 copyWith。
