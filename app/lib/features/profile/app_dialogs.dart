@@ -293,7 +293,7 @@ void showUsageGuideDialog(BuildContext context) {
                             Text(it.$2, style: AppTokens.labelStrong),
                             const SizedBox(height: AppTokens.padChipV),
                             Text(it.$3,
-                                style: AppTokens.microText
+                                style: AppTokens.rowSecondary
                                     .copyWith(height: 1.45, color: muted)),
                           ],
                         ),
