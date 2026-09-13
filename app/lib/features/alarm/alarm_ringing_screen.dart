@@ -37,7 +37,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     super.initState();
     _enter = AnimationController(
       vsync: this,
-      duration: AppTokens.durFlow,
+      duration: AppTokens.durRingEnter,
     )..forward();
     _scale = CurvedAnimation(parent: _enter, curve: Curves.easeOutBack);
     _slide = AnimationController(

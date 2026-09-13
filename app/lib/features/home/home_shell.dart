@@ -372,11 +372,11 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // 导航项图标：规格 §3.6 把「导航项」归 iconMd
-                                  // （原 22 不在三档里，短屏与常规统一到 20）。
+                                  // 导航项图标：规格 §3.6 把「导航项」归 iconLg
+                                  // （出图对比：24 在胶囊里站得住，20 偏小）。
                                   AppIcon(
                                     items[i].$1,
-                                    size: AppTokens.iconMd,
+                                    size: AppTokens.iconLg,
                                     color: selected ? fg : inactiveColor,
                                   ),
                                   const SizedBox(height: AppTokens.gapHair),

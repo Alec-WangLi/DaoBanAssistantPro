@@ -162,7 +162,7 @@ final Map<String, RegExp> _rules = {
   '字重字面量（改用角色令牌，个别变化走 copyWith）':
       RegExp(r'fontWeight:[^;,)]*?FontWeight\.'),
   '圆角字面量（改用 radiusS/M/L/XL 或 pillOf）': RegExp(r'circular\([0-9]'),
-  '时长字面量（改用 durFast/Med/Slow/Flow）':
+  '时长字面量（改用 durFast/Med/Slow/RingEnter）':
       RegExp(r'Duration\(milliseconds:\s*[0-9]'),
   '颜色字面量（改用令牌）': RegExp(r'Color\(0x'),
   '旧的按尺寸命名的字号令牌（改用角色令牌）': RegExp(r'AppTokens\.font[A-Z]'),
@@ -492,8 +492,9 @@ void main() {
     // （`expect([a, b, c], [1, 2, 3])`），漏掉 `padChipV` 正是这么来的：加了
     // 令牌却忘了往枚举里补一项，断言照绿。逐项列出后，缺哪一项一眼可见。
     expect(AppTokens.iconSm, 16, reason: 'iconSm —— 小注 / 行内提示');
-    expect(AppTokens.iconMd, 20, reason: 'iconMd —— 按钮内 / 列表项 / 导航项');
-    expect(AppTokens.iconLg, 24, reason: 'iconLg —— 默认（IconTheme 也设成它）');
+    expect(AppTokens.iconMd, 20, reason: 'iconMd —— 按钮内 / 列表项');
+    expect(AppTokens.iconLg, 24,
+        reason: 'iconLg —— 默认（IconTheme 也设成它）· 导航项');
 
     // 节奏：4px 栅格。
     expect(AppTokens.spaceXs, 4, reason: 'spaceXs');
@@ -511,8 +512,8 @@ void main() {
     expect(AppTokens.gapIconTextLg, 10,
         reason: 'gapIconTextLg —— 图标↔文字（大号）');
 
-    expect(AppTokens.durFlow, const Duration(milliseconds: 650),
-        reason: 'durFlow —— 响铃界面入场动画的一次性控制器（非背景光晕循环）');
+    expect(AppTokens.durRingEnter, const Duration(milliseconds: 650),
+        reason: 'durRingEnter —— 响铃界面入场动画的一次性控制器（非背景光晕循环）');
     expect(AppTokens.durFast, const Duration(milliseconds: 120),
         reason: 'durFast —— 短促反馈（按下 / 淡入淡出）');
     expect(AppTokens.durMed, const Duration(milliseconds: 220),

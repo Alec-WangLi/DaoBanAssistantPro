@@ -66,7 +66,7 @@ class AppTokens {
   /// 注意它**不是**背景光晕的循环周期 —— 真正的光晕循环是
   /// `core/theme/animated_background.dart` 里另一个 26s 的 `repeat()`，
   /// 本轮未纳入令牌（范围外）。
-  static const Duration durFlow = Duration(milliseconds: 650);
+  static const Duration durRingEnter = Duration(milliseconds: 650);
 
   // ── Q 弹弹簧 + 缩放 ──
   static const SpringDescription qSpring =
