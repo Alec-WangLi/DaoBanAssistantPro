@@ -534,11 +534,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             itemBuilder: (i, selected) => Center(
               child: Text(
                 i == 0 ? L10n.work : L10n.rest,
-                style: AppTokens.rowSecondary.copyWith(
+                // 13 档最重的角色是 w600，分段器标签原本就是 w700：选中态只改
+                // 色不改重，字重是控件自己的标签强调，按 spec 走 copyWith。
+                style: AppTokens.labelSecondary.copyWith(
                   color: selected
                       ? Theme.of(context).colorScheme.onSurface
                       : muted,
-                ),
+                ).copyWith(fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -838,7 +840,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 child: Text(L10n.dayN(index + 1),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTokens.rowSecondary),
+                    style: AppTokens.labelSecondary),
               ),
               const SizedBox(width: AppTokens.spaceSm),
               Expanded(
@@ -1002,11 +1004,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   ),
                   child: Text(
                     isOurs ? L10n.myTeam : L10n.setAsMine,
-                    style: AppTokens.rowSecondary.copyWith(
+                    // 可点的 chip 按钮标签，原本就是 w700（比同行的说明文字重），
+                    // 13 档最重只到 w600，按 spec 的「角色内个别变化」走 copyWith。
+                    style: AppTokens.labelSecondary.copyWith(
                       color: isOurs
                           ? Theme.of(context).colorScheme.onPrimary
                           : primary,
-                    ),
+                    ).copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -1028,7 +1032,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   const SizedBox(width: AppTokens.spaceSm),
                   Text(
                     L10n.yearMonthDay(_crewStartDate(i)),
-                    style: AppTokens.rowSecondary,
+                    style: AppTokens.labelSecondary,
                   ),
                 ],
               ),

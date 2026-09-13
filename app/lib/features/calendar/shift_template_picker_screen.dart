@@ -96,7 +96,10 @@ class _ShiftTemplatePickerScreenState
       out.add(Padding(
         padding: const EdgeInsets.only(bottom: 8, top: 4),
         child: Text(L10n.templateGroup(group),
-            style: AppTokens.rowSecondary),
+            // 分组标题：下面每张卡片的副标题是 w400，标题原本就是 w700 用来压住
+            // 一组卡片，13 档最重只到 w600，按 spec 的 copyWith 保住 w700。
+            style: AppTokens.labelSecondary
+                .copyWith(fontWeight: FontWeight.w700)),
       ));
       for (final t in inGroup) {
         out.add(_templateCard(context, t));

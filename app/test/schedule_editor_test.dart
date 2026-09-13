@@ -973,11 +973,43 @@ void main() {
 
     expect(sizeOf(L10n.shiftClasses), AppTokens.titleStrong.fontSize); // 卡片标题
     expect(sizeOf(L10n.cycleSection), AppTokens.titleStrong.fontSize); // 卡片标题
-    expect(sizeOf(L10n.dayN(1)), AppTokens.rowSecondary.fontSize); // 行内次要标签
+
+    // 行内标签（第 N 天）落在 13 档里带强调的那一支：labelSecondary = 13/w600。
+    // 迁移时如果只对字号不对字重，会掉到 w400 的 rowSecondary —— 这正是要钉住的。
+    final dayLabel = tester.widget<Text>(find.text(L10n.dayN(1)));
+    expect(dayLabel.style!.fontSize, AppTokens.labelSecondary.fontSize);
+    expect(dayLabel.style!.fontWeight, AppTokens.labelSecondary.fontWeight);
+
+    // 分段器「工作/休息」原本就是 w700，13 档没有更重角色 → 走 copyWith 保住
+    final segmentLabel = tester.widget<Text>(find.text(L10n.work).first);
+    expect(segmentLabel.style!.fontSize, AppTokens.labelSecondary.fontSize);
+    expect(segmentLabel.style!.fontWeight, FontWeight.w700);
 
     // 预览条是唯一被压到最低一档的地方（7 列网格，再大就换行破版）
     final previewTitle = tester.widget<Text>(find.text(L10n.previewNext14));
     expect(previewTitle.style!.fontSize, AppTokens.microLabel.fontSize);
+  });
+
+  testWidgets('班组行里的标签保留各自的字重：chip 是 w700，日期值是 w600',
+      (tester) async {
+    await _pumpEditor(
+      tester,
+      _domain(anchor: DateTime.utc(2025, 6, 1), teamOffsets: const [0, 1, 2, 3]),
+    );
+    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.pumpAndSettle();
+
+    // 「我的班组」chip：可点按钮的标签，13 档里没有 w700，走 copyWith
+    final chip = tester.widget<Text>(find.text(L10n.myTeam));
+    expect(chip.style!.fontSize, AppTokens.labelSecondary.fontSize);
+    expect(chip.style!.fontWeight, FontWeight.w700);
+
+    // 第 2 组（下标 1）的「周期起始日」= 基准日 − offsets[1] = 05-31，只在这一行
+    // 出现；原来是 w600，labelSecondary 正好是 13/w600，不需要 copyWith。
+    final dateText = tester
+        .widget<Text>(find.text(L10n.yearMonthDay(DateTime.utc(2025, 5, 31))));
+    expect(dateText.style!.fontSize, AppTokens.labelSecondary.fontSize);
+    expect(dateText.style!.fontWeight, AppTokens.labelSecondary.fontWeight);
   });
 
   testWidgets('周期行把可选班次铺成 chip，点一下就切换', (tester) async {
