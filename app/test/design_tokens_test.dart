@@ -439,21 +439,22 @@ List<String> _constantViolationsIn(String path, String src) {
   return out;
 }
 
-/// 15 条角色排版令牌 —— 它们是阶梯的核心，必须逐条自检。
-const Set<String> _typography = {
-  'ringClock', 'pageTitle', 'bigNumber', 'dialogTitle', 'sectionTitle',
-  'cellDate', 'titleStrong', 'labelStrong', 'rowPrimary', 'rowSecondary',
-  'labelSecondary', 'microStrong', 'microLabel', 'microText', 'tinyLabel',
-};
-
 /// 「阶梯」= 排版 / 图标 / 间距 / 光学 / 圆角 / 明度 alpha / 时长。
+///
+/// **排版按「声明类型」认，不按名字**：凡 `design_tokens.dart` 里声明为 `TextStyle`
+/// 的常量一律算阶梯。用类型而不用一份手写名单，是因为名单本身会漂 —— 加一档角色
+/// 令牌却忘了往名单里补，那条新令牌就静默逃过本检查，正是本检查要防的那类缺口
+/// （`padChipV` 就是这么漏掉的）。类型跟声明走，加多少档都自动覆盖。
+///
+/// 其余按名字前缀认：`icon*` / `space*` / `gap*` / `pad*` / `radius*` / `dur*`，
+/// 以及 `ink*Alpha`（文字明度两档）。
 ///
 /// **不在内**（有意，不是遗漏）：配色（`bg*` / `surface*` / `ink*` / `danger` /
 /// `success` / `holiday`）、玻璃配方（`blur*` / `glass*`）、弹簧与缩放
 /// （`qSpring` / `pressScale` / `pillGrow`）—— 它们不是阶梯，各自有别的用例盯着，
 /// 或本身就是配方。
-bool _isLadderToken(String n) =>
-    _typography.contains(n) ||
+bool _isLadderToken(String type, String n) =>
+    type == 'TextStyle' ||
     n.startsWith('icon') ||
     n.startsWith('space') ||
     n.startsWith('gap') ||
@@ -531,12 +532,14 @@ void main() {
     final tokenSrc = File('lib/core/design_tokens.dart').readAsStringSync();
     final testSrc = File('test/design_tokens_test.dart').readAsStringSync();
 
+    // 类型也要捕获 —— 「排版」由声明类型（`TextStyle`）判定，而不是靠一份手写的
+    // 令牌名单（见 `_isLadderToken`）。
     final names = RegExp(
-            r'^\s*static const (?:double|TextStyle|Duration) (\w+)\s*=',
+            r'^\s*static const (double|TextStyle|Duration) (\w+)\s*=',
             multiLine: true)
         .allMatches(tokenSrc)
-        .map((m) => m.group(1)!)
-        .where(_isLadderToken)
+        .where((m) => _isLadderToken(m.group(1)!, m.group(2)!))
+        .map((m) => m.group(2)!)
         .toList();
 
     expect(names, isNotEmpty, reason: '一个阶梯令牌都没抽到 —— 抽取的正则不对');
