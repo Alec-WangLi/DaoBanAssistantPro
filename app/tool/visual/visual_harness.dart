@@ -45,7 +45,10 @@ const Size kVisualSize = Size(420, 900);
 const double kVisualDpr = 2.0;
 
 /// 产物目录（相对 `app/`，即运行 `flutter test` 时的工作目录）。
-const String kVisualOutDir = 'build/visual';
+///
+/// 不是 `const`：宣传图脚本（`tool/promo/`）要在 main() 里把它改成
+/// `build/promo`，免得把宣传用的截图混进回归工装的产物里。回归工装自己不碰它。
+String kVisualOutDir = 'build/visual';
 
 // ---------------------------------------------------------------------------
 // 字体
