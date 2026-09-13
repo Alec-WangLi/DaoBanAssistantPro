@@ -100,13 +100,16 @@ class L10n {
   static String get clearResetSubtitle => t('清空排班与日程，恢复默认四班两倒', 'Clear schedules & events, restore default rotation');
   static String get version => t('版本', 'Version');
   static String get changelog => t('版本更新', "What's new");
-  static String get changelogSubtitle => t('查看本版本更新内容', 'View changes in this version');
+  static String get changelogSubtitle => t('查看最近版本的更新内容', 'Release notes for recent versions');
   static String get checkUpdate => t('检查更新', 'Check for update');
   static String get checkUpdateSubtitle => t('获取正式版与测试版', 'Get stable & beta releases');
   static String get alreadyLatest => t('已是最新', 'Up to date');
   static String get updateCheckFailed => t('检查更新失败（网络异常，请稍后再试）', 'Update check failed (network error), try later');
   static String get stableChannel => t('正式版', 'Stable');
   static String get testChannel => t('测试版', 'Beta');
+  // 渠道没有发布时的占位。不要复用 `none`（「不设」，说的是「这个可选字段留空」）——
+  // 摆在「测试版」后面会读成「App 决定不给你测试版」，而意思是「当前没有」。
+  static String get channelNone => t('暂无', 'None yet');
   static String get legalHoliday => t('法定节假日', 'Legal holiday');
   static String get currentVersionHint => t('你手机上安装的版本', 'The version installed on this device');
   static String get stableChannelHint => t('稳定版本，推荐日常使用', 'Stable build, recommended for daily use');
@@ -310,8 +313,8 @@ class L10n {
       'View daily shifts (date/shift/lunar/weekday); statutory holidays marked red, makeup workdays tagged "班"; switch schedules and jump year/month from the toolbar; tap a day for details.');
   static String get guideSchedTitle => t('排班管理', 'Schedule management');
   static String get guideSchedDesc => t(
-      '「我的 → 排班管理」可建/切多套排班；新建时先选一个内置倒班方式模板（19 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日；可选「法定班次」跟随节假日。',
-      'Me → Schedule management: create/switch multiple schedules; start from a built-in shift-pattern template (19 common patterns, searchable), then tweak shift times, the cycle table and each team\'s cycle start date; optional "Legal-holiday schedule".');
+      '「我的 → 排班管理」可新建 / 编辑 / 删除多套排班；新建时先选一个内置倒班方式模板（19 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日；打开「跟随法定节假日（无班次）」可得到一张只随节假日休班的空白表。要换成哪一套上场，走日历顶栏的「切换排班」。',
+      'Me → Schedule management: create / edit / delete multiple schedules; start from a built-in shift-pattern template (19 common patterns, searchable), then tweak shift times, the cycle table and each team\'s cycle start date; turn on "Follow legal holidays (no shifts)" for a blank schedule that simply rests on legal holidays. To change which schedule is active, use "Switch schedule" in the calendar toolbar.');
   static String get guideAlarmTitle => t('闹钟', 'Alarms');
   static String get guideAlarmDesc => t(
       '白班/上夜班自动响铃（时间在排班编辑里改）；闹钟页显示未来 30 天、每天可单独开关；也可加自定义闹钟（一次性/每天/每周）。',

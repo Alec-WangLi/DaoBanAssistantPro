@@ -287,9 +287,9 @@ class ScheduleScreen extends ConsumerWidget {
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('时间（可选）'),
-                    trailing:
-                        Text(timeMinute == null ? '不设' : _fmt(timeMinute!)),
+                    title: Text(L10n.timeOptional),
+                    trailing: Text(
+                        timeMinute == null ? L10n.none : _fmt(timeMinute!)),
                     onTap: () async {
                       final p = await showGlassTimePicker(
                         context,
@@ -306,8 +306,10 @@ class ScheduleScreen extends ConsumerWidget {
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('提前提醒（可选）'),
-                    trailing: Text(advance == null ? '不设' : '$advance 分钟'),
+                    title: Text(L10n.advanceRemindOptional),
+                    trailing: Text(advance == null
+                        ? L10n.none
+                        : (L10n.isEn ? '$advance min' : '$advance 分钟')),
                     onTap: () =>
                         setState(() => advance = advance == null ? 15 : null),
                   ),
