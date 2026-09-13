@@ -793,11 +793,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  /// 信息卡上的「法定节假日 · 名称」红色胶囊。与农历描述同占一行，所以
-  /// 名字再长也只能占这一行 —— 文字可收缩 + 省略号。
+  /// 信息卡上的「法定节假日 + 节日名」红色胶囊。
+  ///
+  /// 「法定节假日」收成 9px 压在节日名的左上角、名字用 13px 粗体：名字读起来
+  /// 还是主信息，而整枚胶囊从一百多 dp 缩到七十上下。它自己占一行，不必再靠
+  /// 宽度去和农历抢位置，大小对比就够说清哪行是节日名了。
+  ///
+  /// 名字外面那层 `Flexible` 不能省：`Row` 给非弹性子节点的是**无界**主轴约束，
+  /// 少了它，长节日名不会换行也不会省略，会把胶囊撑出卡片。
   Widget _holidayBadge(BuildContext context, String name) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(8, 3, 12, 4),
       decoration: BoxDecoration(
         color: AppTokens.holiday.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppTokens.radiusL),
@@ -806,17 +812,35 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.celebration_outlined, size: 14, color: AppTokens.holiday),
-          const SizedBox(width: 5),
+          const Icon(Icons.celebration_outlined,
+              size: 16, color: AppTokens.holiday),
+          const SizedBox(width: 7),
           Flexible(
-            child: Text(
-              '${L10n.legalHoliday} · $name',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppTokens.holiday),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  L10n.legalHoliday,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    height: 1.1,
+                    fontWeight: FontWeight.w600,
+                    color: AppTokens.holiday,
+                  ),
+                ),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.15,
+                    fontWeight: FontWeight.w800,
+                    color: AppTokens.holiday,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -964,33 +988,38 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        // 节假日徽章与农历描述**同一行**。原来徽章自占一行：放假那天卡片
-        // 凭空高 24，上面六个格子就集体矮一截 —— 这正是用户看到的「日期一会
-        // 变大一会变小」。并成一行后这一行的存在与否都不再改变卡片高度。
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (lunar.isLegalHoliday) ...[
-              _holidayBadge(context, lunar.legalHolidayName),
-              const SizedBox(width: 8),
-            ],
-            Flexible(
-              child: Text(
-                lunar.fullDescription,
-                // 两行封顶：法定节假日名长（如「中秋节 · 农历八月十五」）
-                // 单行会截断成省略号。卡片本身定高（见 _infoCardHeight），
-                // 内容多一行只影响卡片内部留白，不会引起日期格抖动。
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
-                ),
-              ),
-            ),
-          ],
+        // 节假日徽章自占一行、农历独占下一行。
+        //
+        // 这两条曾经并排过，理由是「徽章自占一行的话，放假那天卡片凭空高 24，
+        // 上面六个格子就集体矮一截」。但卡片 v0.6.6 起是**定高**的，多出来的
+        // 内容由定高吸收、网格不再跟着抖 —— 那条理由已经不成立。代价却是实打
+        // 实的：徽章连图标带「法定节假日 · 」有一百多 dp 宽，把农历挤到右边只
+        // 剩一半宽度，两行都显示不全（v0.6.7 用户实测）。
+        if (lunar.isLegalHoliday) ...[
+          _holidayBadge(context, lunar.legalHolidayName),
+          const SizedBox(height: 6),
+        ],
+        Text(
+          lunar.fullDescription,
+          // 两行封顶：整行宽度下通常一行就够，窄屏最多两行，再长就省略号。
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
+          ),
         ),
-        const SizedBox(height: 12),
+        // 这一段与上一段之间的留白收到 10：卡片内部只有 210dp，最满的一天
+        // （六班组 + 节假日徽章 + 两行色块）已经贴着上限，2dp 也是钱。
+        const SizedBox(height: 10),
+        // 班次名、时间、闹钟**同一行**。分开写要两行（一行文字 + 它的间距，
+        // 约 26dp），而卡片内部可用高度只有 210dp —— 六班组那种排满的日子
+        // 本来就已经被底边裁掉一截（v0.6.7 实测 224dp）。
+        //
+        // 三段并成一段富文本，是为了让省略号落对地方：各自 Flexible 的话，
+        // 剩余宽度会被三等分，最长的时间串（「20:30 – 次日08:30」）反而先
+        // 被截掉。并成一段后按「班次名 → 时间 → 闹钟」的顺序从尾部省略，
+        // 优先级正好反过来。
         if (shift != null)
           Row(
             children: [
@@ -1001,32 +1030,36 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     color: Color(shift.color), shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  shift.name,
+              Expanded(
+                child: Text.rich(
+                  key: const Key('info-card-shift-line'),
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: shift.name,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppTokens.inkFor(Color(shift.color),
+                              Theme.of(context).colorScheme.surface),
+                        ),
+                      ),
+                      if (shift.startMinute != null && shift.endMinute != null)
+                        TextSpan(
+                          text: '  ${_timeRange(shift)}',
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w500),
+                        ),
+                      TextSpan(
+                        text: '   ${_alarmText(shift)}',
+                        style: TextStyle(fontSize: 13, color: muted),
+                      ),
+                    ],
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppTokens.inkFor(Color(shift.color),
-                        Theme.of(context).colorScheme.surface),
-                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              // 可收缩 + 省略号：宽屏下这张卡被放进 300 宽的侧栏，
-              // 「20:30 – 次日08:30」这类长串会把整行撑破。
-              if (shift.startMinute != null && shift.endMinute != null)
-                Flexible(
-                  child: Text(
-                    _timeRange(shift),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
             ],
           )
         else if (schedule != null && schedule.isBlank)
@@ -1040,20 +1073,29 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           )
         else
           Text(L10n.noSchedule, style: TextStyle(fontSize: 13, color: muted)),
-        const SizedBox(height: 8),
-        if (shift != null)
-          Text(
-            _alarmText(shift),
-            style: TextStyle(fontSize: 13, color: muted),
-          ),
         if (schedule != null && schedule.teamCount > 1) ...[
           const SizedBox(height: 10),
-          Text(L10n.otherCrews, style: TextStyle(fontSize: 12, color: muted)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: _otherCrewChips(schedule, _selected),
+          // 标签与色块同一行：标签独占一行要白占 10 + 16 + 6 = 32dp，而
+          // 6 个班组要**两行**色块 —— 那两行必须留得住，否则最后一行会被
+          // 卡片底边裁掉（正是 v0.6.7 实测到的问题）。标签还在、还在左边，
+          // 只是不再独占一行。
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Text(L10n.otherCrews,
+                    style: TextStyle(fontSize: 12, color: muted)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: _otherCrewChips(schedule, _selected),
+                ),
+              ),
+            ],
           ),
         ],
       ],
@@ -1070,7 +1112,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final panel = GlassTile(
       key: const Key('info-card-panel'),
       padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
-      child: inSidePane ? content : _cardBodyWithGlow(content, accent),
+      child: inSidePane
+          ? content
+          // 兜底：字号被系统放大到装不下时，卡片内部滚动，而不是溢出成
+          // 黄黑条纹。正常字号下内容矮于卡片，这一层不产生任何滚动。
+          : SingleChildScrollView(child: content),
     );
 
     final card = Stack(
@@ -1097,71 +1143,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
 
     return Padding(
-      // 底栏时要给悬浮胶囊让出高度（竖屏 84，短屏 76）；右栏时胶囊在
-      // 屏幕底部、与这一栏无关，只需要常规留白。竖屏的 84 = 胶囊高 64
-      // + 20 余量：留 120 时卡片底下空出一大截（v0.6.5 用户实测），
-      // 收到 84 后卡片贴着胶囊，省下的高度全给了信息卡本身。
+      // 底栏时要给悬浮胶囊让出高度（竖屏 96，短屏 76）；右栏时胶囊在
+      // 屏幕底部、与这一栏无关，只需要常规留白。竖屏的 96 = 胶囊高 64
+      // + 32 余量：84 时卡片底边几乎贴在胶囊上（v0.6.7 用户实测），
+      // 又放开了 12。上界是网格给的：再往上加，6 行的月份会被挤出视口。
       padding: inSidePane
           ? const EdgeInsets.fromLTRB(0, 8, 16, 16)
-          : const EdgeInsets.fromLTRB(16, 8, 16, 84),
+          : const EdgeInsets.fromLTRB(16, 8, 16, 96),
       child: card,
     );
   }
 
-  /// 底栏卡片的正文：内容 + 底部色晕。
-  ///
-  /// 色晕吃的是内容之后的**剩余**高度 —— 内容少的日子它铺满空档，内容最满
-  /// 的日子高度归零、一点都不显示。
-  ///
-  /// `Expanded` 要求列高有界，而这里还要保住「字号被系统放大到装不下时卡片
-  /// 内部滚动」的兜底（滚动容器给出的正是无界高度）—— 两者靠
-  /// `ConstrainedBox(minHeight: 可用高) + IntrinsicHeight` 凑齐：正常字号下
-  /// 列被撑到可用高、色晕拿到差额；内容真的超出时列回落到内容高、滚动条
-  /// 生效、色晕正好是 0。
-  Widget _cardBodyWithGlow(Widget content, Color accent) {
-    return LayoutBuilder(
-      builder: (context, c) => SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: c.maxHeight),
-          child: IntrinsicHeight(
-            child: Column(
-              // 色晕要铺满整行。默认的 center 会让它按自身宽度收缩 ——
-              // `DecoratedBox` 没有子节点，宽度就是 0，等于什么都没画。
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                content,
-                Expanded(child: _bottomGlow(accent)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 卡片下部的柔色晕：贴底、向上向外渐隐，与左侧色条同色（当天班次色）。
-  ///
-  /// 圆心落在底边之下、半径按短边算（`RadialGradient.radius` 是短边的倍数），
-  /// 所以横向也会自然淡出、不会在左右留硬边。
-  ///
-  /// 圆心的下沉量与半径必须**成对**调：半径一旦超过「圆心到顶边的距离」，
-  /// 渐变在余量区顶边还没衰减到 0，就会在那里留一条突兀的横线。这里取
-  /// 圆心 1.15、半径 1.2 —— 顶边处刚好衰减完，四周都是软的。
-  Widget _bottomGlow(Color accent) {
-    return DecoratedBox(
-      key: const Key('info-card-glow'),
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(0, 1.15),
-          radius: 1.2,
-          colors: [
-            accent.withValues(alpha: 0.24),
-            accent.withValues(alpha: 0.0),
-          ],
-        ),
-      ),
-    );
-  }
 
   /// 其他班组当天班次：色点 + 组名 + 简称，横向换行，6 个班组也放得下。
   List<Widget> _otherCrewChips(ShiftSchedule schedule, DateTime date) {

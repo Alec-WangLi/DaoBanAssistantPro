@@ -36,6 +36,15 @@ List<String> _chipTexts(WidgetTester tester) => tester
     .where(_chipPattern.hasMatch)
     .toList();
 
+/// 信息卡「班次名 · 时间 · 闹钟」那一行的纯文本。
+///
+/// 三段并成了一段富文本（为了让省略号从尾部、也就是最不重要的闹钟开始截），
+/// 所以整行内容要从 `textSpan` 上取，不能按独立 `Text` 去找。
+String _shiftLine(WidgetTester tester) => tester
+    .widget<Text>(find.byKey(const Key('info-card-shift-line')))
+    .textSpan!
+    .toPlainText();
+
 /// 造一套真库（内存）+ 一套当前排班，再渲染日历页。
 ///
 /// 落库方式照抄 `createScheduleFromTemplatePicker`：模板提供
@@ -142,7 +151,9 @@ void main() {
     await _pumpCalendar(tester, 'duty_24_48', width: 640);
 
     expect(L10n.isEn, isFalse);
-    expect(find.text('08:00 – 次日08:00'), findsOneWidget);
+    // 班次名、时间、闹钟并成了一段富文本（见 info-card-shift-line 的说明），
+    // 所以按整行的纯文本断言，而不是找独立的 Text。
+    expect(_shiftLine(tester), contains('08:00 – 次日08:00'));
 
     await _disposeCalendar(tester);
   });
@@ -159,12 +170,19 @@ void main() {
     await _pumpCalendar(tester, 'duty_24_48', width: 640);
 
     expect(L10n.isEn, isTrue, reason: '语言应当已从设置里读成 en');
-    final time = find.text('08:00 – 08:00 (next day)');
-    expect(time, findsOneWidget);
+    final rendered = _shiftLine(tester);
+    expect(rendered, contains('08:00 – 08:00 (next day)'));
 
-    // 时间这一条里不能有中文（旧实现硬编码「次日」就会漏出来）
-    final rendered = tester.widget<Text>(time).data!;
-    expect(RegExp(r'[一-鿿]').hasMatch(rendered), isFalse);
+    // 时间那一段里不能有中文（旧实现硬编码「次日」就会漏出来）。
+    // 只查时间那一段：数据库里存的班次名是按**存库时**的语言生成的，而
+    // 存库发生在 App 读出设置之前，所以它还是中文 —— 那是另一回事。
+    final spans = (tester
+            .widget<Text>(find.byKey(const Key('info-card-shift-line')))
+            .textSpan! as TextSpan)
+        .children!
+        .whereType<TextSpan>();
+    final timeSpan = spans.firstWhere((s) => (s.text ?? '').contains('08:00'));
+    expect(RegExp(r'[一-鿿]').hasMatch(timeSpan.text!), isFalse);
     expect(find.textContaining('次日'), findsNothing);
 
     await _disposeCalendar(tester);
@@ -353,46 +371,77 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  testWidgets('底栏信息卡：色晕只占内容之后剩余的高度', (tester) async {
-    await _pumpCalendar(tester, 'four_crew_three_shift');
+  // 回归：卡片是**定高**的，内容装不下时靠卡内滚动兜底 —— 也就是说内容一旦
+  // 超过可用高度，最后一行就被底边裁掉，而卡片本身不会变大去提醒你。
+  // v0.6.7 实测：六班组那种排满的日子内容已经 224dp，可用只有 210dp，
+  // 「其他班组」最后一行被裁掉一截。这条不变量盯住它。
+  testWidgets('底栏信息卡：最满的一天也要装得进卡片，不靠卡内滚动', (tester) async {
+    await _pumpCalendar(tester, 'six_crew_three_shift');
 
-    // 面板里真正可用的高度 = 定高 − 上下 padding(18×2) − 上下描边(1×2)。
-    // 描边那 2px 来自 GlassPanel 的 `Border.all(width: 1)`：`Container` 会把
-    // 描边算进自己的内边距，所以 `LayoutBuilder` 量到的是 210 而不是 212。
+    // 可用高度 = 定高 − 上下 padding(18×2) − 上下描边(1×2)。描边那 2px 来自
+    // GlassPanel 的 `Border.all(width: 1)`，`Container` 会把它算进自己的内边距。
     final inner =
         tester.getSize(find.byKey(const Key('info-card-box'))).height - 38;
-    var sawGlow = false;
 
     final daysInMonth =
         DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
     for (var d = 1; d <= daysInMonth; d++) {
       await tester.tap(find.text('$d').first);
       await tester.pump();
-      final content = find.byKey(const Key('info-card-content'));
-      final glow = find.byKey(const Key('info-card-glow'));
-      final contentH = tester.getSize(content).height;
-      final glowH = tester.getSize(glow).height;
-      expect(glowH, closeTo(math.max(0, inner - contentH), 0.5),
-          reason: '$d 日：色晕要精确等于内容之后的剩余高度'
-              '（内容 $contentH、可用 $inner）');
-      if (glowH > 0) {
-        sawGlow = true;
-        expect(tester.getSize(glow).width, closeTo(tester.getSize(content).width, 0.5),
-            reason: '$d 日：色晕要铺满整行，不能缩成 0 宽');
-      }
+      final contentH =
+          tester.getSize(find.byKey(const Key('info-card-content'))).height;
+      expect(contentH, lessThanOrEqualTo(inner),
+          reason: '$d 日：内容 $contentH 高过卡片内部的 $inner，'
+              '最后一行会被底边裁掉');
     }
-    expect(sawGlow, isTrue, reason: '总得有个日子内容装不满，色晕要真的露出来');
 
     await _disposeCalendar(tester);
   });
 
-  testWidgets('底栏信息卡：内容装得不满的日子色晕撑起空档', (tester) async {
-    // 单班组标准周没有「其他班组」那一段，卡片是典型的内容偏少。
-    await _pumpCalendar(tester, 'standard_week');
+  // 回归：v0.6.7 用户实测「法定节假日徽章太宽，把农历挤到右边，两行都显示不全」。
+  // 徽章连图标带「法定节假日 · 」有一百多 dp，和农历并排时农历只剩一半宽度。
+  testWidgets('信息卡：节假日徽章自占一行，农历独占下一行且不再被挤到右边',
+      (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift');
 
-    expect(tester.getSize(find.byKey(const Key('info-card-glow'))).height,
-        greaterThan(0),
-        reason: '内容装不满时，剩余高度应当由色晕接管，而不是空着');
+    // 找出本月的第一个法定节假日（中秋那种）。
+    final daysInMonth =
+        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+    var found = false;
+    for (var d = 1; d <= daysInMonth && !found; d++) {
+      await tester.tap(find.text('$d').first);
+      await tester.pump();
+      found = find.text(L10n.legalHoliday).evaluate().isNotEmpty;
+    }
+    expect(found, isTrue, reason: '本月应当有法定节假日，否则这条用例没有意义');
+
+    final badge = tester.getRect(find.text(L10n.legalHoliday));
+    final lunar = tester.getRect(find.textContaining('农历').first);
+    final content = tester.getRect(find.byKey(const Key('info-card-content')));
+
+    expect(lunar.top, greaterThanOrEqualTo(badge.bottom - 0.5),
+        reason: '农历要排在徽章**下面**，不再和它挤同一行');
+    expect(lunar.left, closeTo(content.left, 0.5),
+        reason: '农历要从内容区左边起排（占满整行），而不是被徽章推到右边');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('信息卡：班次名、时间、闹钟在同一行', (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+    // 默认选中今天；先点一个「上夜班」的日子，让时间与闹钟都出来。
+    await tester.tap(find.text('${DateTime.now().day}').first);
+    await tester.pump();
+
+    final line = _shiftLine(tester);
+    expect(line, contains('闹钟'), reason: '闹钟要并进班次那一行，不再单独占一行');
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('info-card-shift-line')))
+          .maxLines,
+      1,
+      reason: '整行只占一行文字，这就是「并进同一行」的落点',
+    );
 
     await _disposeCalendar(tester);
   });
