@@ -54,6 +54,7 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 - 闹钟页 = **未来 30 天**班次闹钟（每条可单独开关、响过自动隐藏）+ 自定义闹钟分区；`Timer.periodic(1min)` + 回到前台重建；响过的一次性自定义闹钟自动删除。
 - 已接受的 OS 限制：小米/华为「免解锁弹全屏」受系统限制——屏幕会点亮，但需解锁后关闭（已确认，不要再当 bug 处理）。
 - **应用图标是全脚本生成的**：`scripts/icon_gen.py` 出图形（预览落 `work/icon-preview.png`），`scripts/icon_land.py` 落地到 Android / iOS / Web。产物 —— `mipmap-anydpi-v26/ic_launcher.xml`、`drawable-*/ic_launcher_{background,foreground,monochrome}.png`、各尺寸 PNG —— 都是生成物，**别手改**；改图形只改 `icon_gen.py`。几何常量彼此咬合（自适应安全区是**直径 66dp 的圆**，方形符号须内接，边长上限≈画布 43%），改一个要连带验另两个，约束写在常量旁。minSdk 26，真机永远走自适应那套，`mipmap-*/ic_launcher.png` 只是兜底。
+- **README / 酷安配图是生成的，别手改 `docs/images/` 里的 PNG**：原始截图由 `app/tool/promo/render_promo_test.dart` 出（复用 `tool/visual/visual_harness.dart`，但用自己的一份屏单和自己的假库 —— 补了待办与自定义闹钟、并把「今天」调到白班，否则拍出来是空屏、「闹钟：未开启」），合成由 `scripts/make_promo_images.py` 做（套机身外框 → `docs/images/`，透明底以便 GitHub 深浅主题都能显示；另出大图与封面到 `work/promo-out/`，不入库）。改配图就改这两个脚本再各跑一次；酷安发帖稿在 `docs/coolapk-post.md`。
 - 弹窗遮罩统一 `barrierColor: Colors.black26`（不能太暗）；底部弹层 `GlassPanel(solid:true)`（背景暗、面板不暗）。
 - **`SYSTEM_ALERT_WINDOW` 不能删**：代码里没有 `WindowManager.addView`，但「后台弹出界面」权限卡（`AlarmService.checkOverlayPermission`→`Settings.canDrawOverlays`）依赖它在 manifest 声明——删了 App 就从系统「后台弹出界面」列表消失、小米/华为锁屏全屏闹钟可能弹不出。grep 判"未使用"是误判，勿再删。
 
