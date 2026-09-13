@@ -32,7 +32,10 @@ class AlarmService {
         }
       }
     });
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // 通知小图标必须是 drawable：插件用 getIdentifier(name, "drawable", pkg) 查它，
+    // 而且是按**白剪影**渲染的 —— 塞一个满幅彩色的启动器图标进去只会得到一坨白块。
+    // 原生 AlarmRingService 早就在用 drawable/ic_notification，这里与它对齐。
+    const android = AndroidInitializationSettings('ic_notification');
     const ios = DarwinInitializationSettings();
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: ios),
