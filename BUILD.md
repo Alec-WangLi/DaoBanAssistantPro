@@ -47,7 +47,12 @@ App 内置 19 种常见倒班方式模板，**新建排班时选一个最接近�
 
 ## 签名
 
-`release` 当前复用 **debug 证书**签名（可安装自用；如需正式分发请换成自己的 keystore，改 `android/app/build.gradle.kts` 的 `signingConfig`）。
+`release` 走 **独立正式签名**（v0.4.1 起，不再是 debug 证书）：`app/android/app/build.gradle.kts`
+在检测到 `app/android/key.properties` 时读取它指向的 keystore，**缺失则回退 debug 证书**，
+方便别人克隆后本机调试。
+
+keystore 与口令不入库（见 `.gitignore` 的 `key.properties` / `keystore/`），自己构建正式分发版
+时请生成一套并写好 `key.properties`。注意**换签名后旧版必须卸载重装**。
 
 ## 目录结构
 

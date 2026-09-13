@@ -41,7 +41,19 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.6.13\n'
+const String _changelogZh = 'v0.7.0\n'
+    '· 正式稳定版（归纳 0.6.1~0.6.13 全部更新）\n'
+    '· 应用图标重画为「日历 + 换班箭头」，并补上 Android 自适应图标 —— 图标从此跟随系统的形状与配色（含 Android 13+ 的「主题图标」），在会统一图标形状的启动器上不再被缩到一块白底上、显得又小又淡\n'
+    '· 全 App 的排版、间距与图标收敛到一套统一的设计规范：同一个用途的字号、字重、行高、透明度、间距从此只有一个来源，不会再各自跑偏。外观上的变化很轻，14 处字号、约 12 处字重各只动一档\n'
+    '· 横屏、平板/车机等宽屏、小米小窗三种形态全面适配：日历在宽屏改为左右分栏，小窗按实测尺寸（200×400）重做，各页在矮屏下自动收紧，正文限宽居中不再横向拉满\n'
+    '· 日历底栏信息卡连续修整：高度按本月实际最满的一天实测（不再写死），左侧色条与卡片对齐、底栏留白收窄、系统字号放大也不再裁字；日期网格的最后一行不再被卡片压住\n'
+    '· 法定节假日徽章改用淡染底色 + 描边，节日名对比度达到无障碍标准；调休上班日带「班」标记\n'
+    '· 英文界面大幅补完：月份标题、日期格式、班次简称、倒班方式模板与分组标题、从模板新建的方案与班次名都按当前语言生成，模板可用英文关键词搜索\n'
+    '· 排班编辑器的周期设置改为行内直接点选班次（不再弹下拉），编辑界面的字号与全 App 统一\n'
+    '· 响铃界面：「上滑关闭」滑块加宽（轨道 56→72，手指真正能拖中的范围放宽到 112），并修好横屏与小窗下会溢出画面的问题\n'
+    '· 修好「我的 → 关于」里的版本号（从 v0.6.5 起就没再更新过），以及「检查更新」给已装版本挂「下载」按钮\n'
+    '· 内部：新增设计守门测试（界面层写死字号 / 字重 / 圆角 / 图标尺寸等即测试失败）；应用图标改为全脚本生成\n\n'
+    'v0.6.13\n'
     '· 应用图标重画：变成「日历 + 换班箭头」。此前只有一张方图，在会统一图标形状的启动器上会被缩到一块白底上，显得又小又淡；现在补上了 Android 自适应图标（含 Android 13+「主题图标」用的单色层），图标能跟着系统的形状与配色走\n'
     '· 响铃界面的「上滑关闭」滑块加宽：轨道 56→72，手指真正能拖中的范围放宽到 112，不用再瞄着戳\n'
     '· 修好响铃界面在手机横屏、以及 200×400 小窗下会溢出画面的问题（小窗里时钟会折成两行，把整列顶出屏幕）\n'
@@ -85,16 +97,21 @@ const String _changelogZh = 'v0.6.13\n'
     '· 小窗按实测尺寸（200×400）重新适配：日历顶栏改两行、日期格不再互相叠、倒班方式卡片改成上下排、闹钟页底部按钮不再压住正文\n'
     '· 日历：今日信息卡改为定高，点选不同日期时上方的日期格不再跟着一涨一缩\n'
     '· 日历：法定节假日徽章与农历说明并成一行，信息卡更紧凑\n'
-    '· 小窗里两位数的日期不再折成上下两行；清除全部代码检查提示\n\n'
-    'v0.6.4\n'
-    '· 适配手机横屏与小窗：时间 / 日期 / 月份三个选择弹层此前在横屏下会溢出，现在按可用高度自适应\n'
-    '· 日历在横屏与宽屏下改为左右分栏：左边日期网格、右边当天信息，格子不再被压成一屏只看得到一行\n'
-    '· 小窗下信息卡压成一行（哪天 · 什么班 · 几点到几点），把高度让给日期网格\n'
-    '· 悬浮导航胶囊在矮屏下自动收紧，各页底部留白同步收窄\n'
-    '· 平板与车机等宽屏设备：内容限宽居中，不再横向拉满整屏\n'
-    '· 窄屏下编辑器卡片内边距收紧，字号不缩\n';
+    '· 小窗里两位数的日期不再折成上下两行；清除全部代码检查提示\n';
 
-const String _changelogEn = 'v0.6.13\n'
+const String _changelogEn = 'v0.7.0\n'
+    '· Stable release (consolidating v0.6.1–v0.6.13)\n'
+    '· The app icon is redrawn as a calendar with shift-cycle arrows, and now ships an Android adaptive icon — it follows the system\'s shape and tint (including Android 13+ themed icons) instead of being shrunk onto a white plate by launchers that unify icon shapes\n'
+    '· Typography, spacing and icons across the app now come from one shared design system: a single source per role for size, weight, line height, opacity and spacing, so they can no longer drift apart. The visible change is subtle — 14 text sizes and about 12 font weights each moved one step\n'
+    '· Landscape phones, wide screens (tablets, car head units) and Xiaomi floating windows are all properly supported: the calendar becomes two panes when wide, the floating window was rebuilt around its measured 200×400 size, short screens tighten up automatically, and content is centred with a maximum width instead of stretching\n'
+    '· Sustained fixes to the calendar\'s info card: its height is measured against the busiest day of the month (no longer hard-coded), the colour bar lines up with the card, the space beneath is tighter, and enlarged system text no longer clips; the last row of the month grid is no longer hidden behind the card\n'
+    '· The legal-holiday badge uses a tinted fill with an outline, and its holiday name now passes the accessibility contrast threshold; makeup workdays carry a "班" mark\n'
+    '· The English UI is largely completed: month headings, date formats, shift abbreviations, pattern templates and their group headings, and the schedules and shifts created from a template are all generated in your language, and templates are searchable with English keywords\n'
+    '· The schedule editor\'s cycle section now lets you pick a shift inline instead of opening a dropdown, and its typography matches the rest of the app\n'
+    '· Ringing screen: the "swipe up to dismiss" slider is wider (track 56 → 72, and the area your finger can grab is 112), and it no longer overflows in landscape or in a small window\n'
+    '· Fixed the version number in Me → About (it had not been updated since v0.6.5) and the "Download" button that Check for updates offered for a version you already had\n'
+    '· Internal: a design guard test now fails the build when UI code hard-codes sizes, weights, radii or icon sizes; the app icon is generated entirely from a script\n\n'
+    'v0.6.13\n'
     '· The app icon is redrawn: a calendar with shift-cycle arrows. It used to be a single square bitmap, which launchers that unify icon shapes would shrink onto a white plate, leaving it small and washed out. It now ships an Android adaptive icon (with a monochrome layer for Android 13+ themed icons), so it follows the system\'s shape and tint\n'
     '· The "swipe up to dismiss" slider on the ringing screen is wider: the visible track goes 56 → 72 and the area your finger can actually grab is 112, so there is nothing to aim at\n'
     '· Fixed the ringing screen overflowing on landscape phones and in 200×400 small windows, where the clock wrapped to two lines and pushed the column off screen\n'
@@ -138,14 +155,7 @@ const String _changelogEn = 'v0.6.13\n'
     '· The small-window layout was re-fitted to its measured size (200×400): the calendar header is two rows, day cells no longer overlap, pattern cards stack their colour strip below the text, and the alarm page\'s bottom buttons no longer cover the content\n'
     '· Calendar: the day card is now a fixed-height panel, so the day cells above it no longer grow and shrink as you tap through dates\n'
     '· Calendar: the public-holiday badge and the lunar line now share one row, making the card more compact\n'
-    '· Two-digit dates no longer wrap onto two lines in a small window; all analyzer findings cleared\n\n'
-    'v0.6.4\n'
-    '· Phone landscape and small windows are now usable: the time, date and month pickers adapt to the available height instead of overflowing\n'
-    '· On landscape and wide screens the calendar becomes two panes — month grid on the left, day details on the right — so day cells are no longer squashed\n'
-    '· In a small window the day card collapses to a single line (date · shift · hours), giving the height back to the grid\n'
-    '· The floating nav capsule shrinks on short screens, and pages reserve less space beneath it\n'
-    '· On tablets and car head units the content is centred with a maximum width instead of stretching across the screen\n'
-    '· Narrow screens get tighter editor paddings (text sizes unchanged)\n';
+    '· Two-digit dates no longer wrap onto two lines in a small window; all analyzer findings cleared\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
@@ -203,7 +213,7 @@ Widget _updateChannelRow(
             children: [
               Text(label, style: AppTokens.labelStrong),
               Text(
-                info == null ? L10n.none : 'v${info.version}',
+                info == null ? L10n.channelNone : 'v${info.version}',
                 style: AppTokens.rowSecondary.copyWith(color: muted),
               ),
               Text(hint, style: AppTokens.tinyLabel.copyWith(color: muted)),
