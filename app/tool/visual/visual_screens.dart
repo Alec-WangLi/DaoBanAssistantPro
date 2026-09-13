@@ -5,6 +5,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
@@ -74,6 +75,14 @@ final List<VisualScreen> visualScreens = [
     slug: '07_profile',
     title: '我的',
     build: (db) async => const ProfileScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 响铃屏是推在栈顶的全屏页，平时只有闹钟真响才看得到 —— 正因如此，
+    // 它的布局（尤其是底部「上滑关闭」滑块）此前没有任何可重复的看图手段。
+    slug: '08_ringing',
+    title: '响铃',
+    build: (db) async => const AlarmRingingScreen(label: '早班'),
     needsOnboardingPrefs: false,
   ),
 ];

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
+import '../../core/layout.dart';
 import '../../core/theme/animated_background.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_button.dart';
@@ -22,9 +23,21 @@ class AlarmRingingScreen extends StatefulWidget {
 class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     with TickerProviderStateMixin {
   static const double _trackHeight = 190;
-  static const double _trackWidth = 56;
+  static const double _trackWidth = 72;
+  // 热区比轨道宽：轨道是看得见的胶囊，热区是手指真正要戳中的范围。
+  // 整屏本身已经可以上滑关闭（见 build 里那层铺满的 GestureDetector），
+  // 但滑块是屏幕上唯一写着「上滑关闭」的地方，手指会往它上面落，所以单独放宽。
+  static const double _hitWidth = 112;
   static const double _thumbSize = 46;
   static const double _armThreshold = 0.7;
+
+  // 矮屏（可用高 < 480：手机横屏、小窗、车机）各收一档。不收的话
+  // 900×420 会溢出 4px、200×400 会溢出 108px —— 视觉工装 `tool/visual` 抓到的。
+  static const double _trackHeightShort = 132;
+  static const double _thumbSizeShort = 40;
+  // 底部留白至少要盖住「再睡一会」按钮（高 52、离底 24），否则滑块压在按钮上。
+  static const double _gapBelow = 96;
+  static const double _gapBelowShort = 84;
 
   late final AnimationController _enter;
   late final Animation<double> _scale;
@@ -66,9 +79,9 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
-  void _onSliderDragUpdate(DragUpdateDetails d) {
+  void _onSliderDragUpdate(DragUpdateDetails d, double trackHeight) {
     // 直接设值 → 圆钮 1:1 跟随手指，无延迟。
-    final v = (_slide.value - d.delta.dy / _trackHeight).clamp(0.0, 1.0);
+    final v = (_slide.value - d.delta.dy / trackHeight).clamp(0.0, 1.0);
     _slide.value = v;
   }
 
@@ -96,6 +109,11 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
 
   @override
   Widget build(BuildContext context) {
+    final layout = AppLayout.of(context);
+    final trackHeight = layout.isShort ? _trackHeightShort : _trackHeight;
+    final thumbSize = layout.isShort ? _thumbSizeShort : _thumbSize;
+    final gapBelow = layout.isShort ? _gapBelowShort : _gapBelow;
+
     final now = TimeOfDay.now();
     final timeStr = '${now.hourOfPeriod.toString().padLeft(2, '0')}:'
         '${now.minute.toString().padLeft(2, '0')}';
@@ -123,12 +141,22 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                           opacity: _enter,
                           child: Column(
                             children: [
-                              Text(
-                                timeStr,
-                                // 84/w800/h1 都在 ringClock 里，不再写行内字重。
-                                style: AppTokens.ringClock.copyWith(
-                                  color: Colors.white,
-                                  letterSpacing: 2,
+                              // 窄屏（小窗 200dp）下 84px 的「06:30」会折成两行、
+                              // 把整列顶爆。scaleDown 只在放不下时才缩，常规屏不受影响。
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppTokens.space2xl),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    timeStr,
+                                    maxLines: 1,
+                                    // 84/w800/h1 都在 ringClock 里，不再写行内字重。
+                                    style: AppTokens.ringClock.copyWith(
+                                      color: Colors.white,
+                                      letterSpacing: 2,
+                                    ),
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 16),
@@ -138,8 +166,8 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                         ),
                       ),
                       const Spacer(),
-                      _dismissSlider(),
-                      const SizedBox(height: 96),
+                      _dismissSlider(trackHeight, thumbSize),
+                      SizedBox(height: gapBelow),
                     ],
                   ),
                   Positioned(
@@ -185,97 +213,106 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   }
 
   /// 上滑关闭滑块：圆钮跟随手指，拖到阈值即触发关闭，未到位则 Q弹回弹。
-  Widget _dismissSlider() {
+  Widget _dismissSlider(double trackHeight, double thumbSize) {
     final primary = Theme.of(context).colorScheme.primary;
     return AnimatedBuilder(
       animation: _slide,
       builder: (context, _) {
         final p = _slide.value.clamp(0.0, 1.0);
         final armed = p >= _armThreshold;
-        final thumbBottom = p * (_trackHeight - _thumbSize);
-        final fillHeight = p * _trackHeight;
+        final thumbBottom = p * (trackHeight - thumbSize);
+        final fillHeight = p * trackHeight;
         return SizedBox(
-          width: _trackWidth,
-          height: _trackHeight,
+          width: _hitWidth,
+          height: trackHeight,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onVerticalDragUpdate: _onSliderDragUpdate,
+            onVerticalDragUpdate: (d) => _onSliderDragUpdate(d, trackHeight),
             onVerticalDragEnd: _onSliderDragEnd,
-            child: Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                // 轨道
-                Container(
-                  width: _trackWidth,
-                  height: _trackHeight,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(_trackWidth / 2),
-                    color: Colors.white.withValues(alpha: 0.08),
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.14)),
-                  ),
-                ),
-                // 填充（随进度从底部增长）
-                Positioned(
-                  bottom: 0,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(_trackWidth / 2),
-                    child: Container(
+            // 视觉居中在更宽的热区里；两类子控件都按 _trackWidth 定宽，
+            // 所以轨道、填充、圆钮的相对位置不受热区宽度影响。
+            child: Center(
+              child: SizedBox(
+                width: _trackWidth,
+                height: trackHeight,
+                child: Stack(
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    // 轨道
+                    Container(
                       width: _trackWidth,
-                      height: fillHeight,
+                      height: trackHeight,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            primary.withValues(alpha: armed ? 0.9 : 0.7),
-                            primary.withValues(alpha: armed ? 0.7 : 0.35),
+                        borderRadius: BorderRadius.circular(_trackWidth / 2),
+                        color: Colors.white.withValues(alpha: 0.08),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14)),
+                      ),
+                    ),
+                    // 填充（随进度从底部增长）
+                    Positioned(
+                      bottom: 0,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(_trackWidth / 2),
+                        child: Container(
+                          width: _trackWidth,
+                          height: fillHeight,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                primary.withValues(alpha: armed ? 0.9 : 0.7),
+                                primary.withValues(alpha: armed ? 0.7 : 0.35),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 圆钮（跟随手指）
+                    Positioned(
+                      bottom: thumbBottom,
+                      child: Container(
+                        width: thumbSize,
+                        height: thumbSize,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  primary.withValues(alpha: armed ? 0.6 : 0.3),
+                              blurRadius: 16,
+                              spreadRadius: 2,
+                            ),
                           ],
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-                // 圆钮（跟随手指）
-                Positioned(
-                  bottom: thumbBottom,
-                  child: Container(
-                    width: _thumbSize,
-                    height: _thumbSize,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: primary.withValues(alpha: armed ? 0.6 : 0.3),
-                          blurRadius: 16,
-                          spreadRadius: 2,
+                        child: AppIcon(
+                          armed
+                              ? Icons.check_outlined
+                              : Icons.keyboard_arrow_up_outlined,
+                          color: armed ? primary : AppTokens.inkMutedDark,
+                          size: AppTokens.iconLg,
                         ),
-                      ],
-                    ),
-                    child: AppIcon(
-                      armed
-                          ? Icons.check_outlined
-                          : Icons.keyboard_arrow_up_outlined,
-                      color: armed ? primary : AppTokens.inkMutedDark,
-                      size: AppTokens.iconLg,
-                    ),
-                  ),
-                ),
-                // 提示文字（随进度淡出）
-                Positioned.fill(
-                  child: Center(
-                    child: Opacity(
-                      opacity: (1 - p * 1.6).clamp(0.0, 1.0),
-                      child: Text(
-                        L10n.swipeUpToDismiss,
-                        style: AppTokens.microText
-                            .copyWith(color: AppTokens.inkMutedDark),
                       ),
                     ),
-                  ),
+                    // 提示文字（随进度淡出）
+                    Positioned.fill(
+                      child: Center(
+                        child: Opacity(
+                          opacity: (1 - p * 1.6).clamp(0.0, 1.0),
+                          child: Text(
+                            L10n.swipeUpToDismiss,
+                            style: AppTokens.microText
+                                .copyWith(color: AppTokens.inkMutedDark),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );
