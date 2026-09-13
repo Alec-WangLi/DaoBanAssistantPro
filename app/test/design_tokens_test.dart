@@ -37,6 +37,18 @@ const List<String> _scanDirs = [
 ///
 /// 注意：**具名豁免标记写在注释里**，所以豁免判定必须回到**原始源码**上查，
 /// 不能查这个副本（注释在这里已经是空格了）。见 `_ignoreReasonAt`。
+///
+/// 两处必须按 Dart 词法走对，否则会**漏检**（把真代码当成注释/字符串清掉）：
+///   - **原始字符串** `r'…'` / `R"…"` 里 `\` **不转义**：`r'a\'` 在结束引号前
+///     有一个 `\`，若照普通字符串「跳转义」就会以为引号没结束、一路吞到下一个
+///     引号（或文件尾），把中间真代码静默清掉。故先看引号前是不是 `r`/`R`
+///     前缀（且它前面不是标识符字符）。
+///   - **块注释可嵌套**：`/* a /* b */ c */` 里 `indexOf('*/')` 会停在内层，
+///     把内层之后的正文当代码露出来（误报）。故按深度找配对的 `*/`。
+///
+/// 已知边界（有意不处理）：字符串**插值里嵌套同引号字面量**
+/// （`Text('${m['k']}')`）会把内层内容露出来 —— 是**误报**方向，且引号奇偶
+/// 仍平衡、不会跑飞。要处理需真正的插值感知解析，本轮不做。
 String blankNonCode(String src) {
   final out = src.split('');
   void blank(int from, int to) {
@@ -55,30 +67,47 @@ String blankNonCode(String src) {
       i = stop;
       continue;
     }
-    // 块注释：到 */ 之后
+    // 块注释：**可嵌套**，按深度找配对的 `*/`。未闭合则到文件尾
+    // （j 每轮至少 +1，不会死循环）。
     if (src.startsWith('/*', i)) {
-      final end = src.indexOf('*/', i + 2);
-      final stop = end < 0 ? src.length : end + 2;
-      blank(i, stop);
-      i = stop;
+      var depth = 1;
+      var j = i + 2;
+      while (j < src.length && depth > 0) {
+        if (src.startsWith('/*', j)) {
+          depth++;
+          j += 2;
+        } else if (src.startsWith('*/', j)) {
+          depth--;
+          j += 2;
+        } else {
+          j++;
+        }
+      }
+      blank(i, j);
+      i = j;
       continue;
     }
     final c = src[i];
     if (c == "'" || c == '"') {
-      // r'…' 这种原始字符串：引号本身照常处理，内容一样要清。
+      // 原始字符串前缀：`r'…'` / `R"…"`。`r` 前面若还是标识符字符，那 `r` 是
+      // 标识符的一部分（`abr'…'`），不是前缀。
+      final raw = i > 0 &&
+          (src[i - 1] == 'r' || src[i - 1] == 'R') &&
+          (i < 2 || !_identChar.hasMatch(src[i - 2]));
       final triple = i + 2 < src.length && src[i + 1] == c && src[i + 2] == c;
       final quote = triple ? c * 3 : c;
       var j = i + quote.length;
       while (j < src.length) {
-        if (src[j] == '\\') {
-          j += 2; // 跳过转义的下一个字符
+        // 原始字符串里 `\` 不转义，只有普通字符串才跳过转义的下一个字符。
+        if (!raw && src[j] == '\\') {
+          j += 2;
           continue;
         }
         if (src.startsWith(quote, j)) break;
         j++;
       }
       final stop = j >= src.length ? src.length : j + quote.length;
-      // 只清**内容**，引号保留（更直观，也不影响任何规则）。
+      // 只清**内容**，引号（含 `r` 前缀）保留 —— 更直观，也不影响任何规则。
       blank(i + quote.length, j);
       i = stop;
       continue;
@@ -468,6 +497,8 @@ Widget a() => const SizedBox.shrink();
     expect(_violationsIn('t.dart', "Text('fontSize: 10');"), isEmpty);
     expect(_violationsIn('t.dart', 'Text("Color(0xFFFFFFFF)");'), isEmpty);
     expect(_violationsIn('t.dart', "Text('''\nfontSize: 10\n''');"), isEmpty);
+    // 原始字符串内容同样清。
+    expect(_violationsIn('t.dart', "Text(r'fontSize: 10');"), isEmpty);
 
     // 但真代码照报。
     expect(_violationsIn('t.dart', 'Text(x, style: TextStyle(fontSize: 10));'),
@@ -478,6 +509,32 @@ Widget a() => const SizedBox.shrink();
         "Text('https://example.com');\nText(x, style: TextStyle(fontSize: 10));";
     expect(_violationsIn('t.dart', src), hasLength(1),
         reason: '字符串里的 // 不得吞掉紧随其后的代码');
+
+    // ── 原始字符串：结束引号前的 `\` 不转义，后面的真代码**不得**被吞掉 ──
+    //
+    // `r'a\'` 是合法 Dart（内容是 `a\`）。若照普通字符串「跳转义」，扫描器会
+    // 以为引号没结束、一路吞到下一个引号或文件尾 —— 把中间的真代码静默清成
+    // 空格，那是**漏检**。下面这条钉住「后面的 fontSize: 10 照报」。
+    const rawBackslash = r"var s = r'a\'; var t = TextStyle(fontSize: 10);";
+    final rawHit = _violationsIn('t.dart', rawBackslash);
+    expect(rawHit, hasLength(1), reason: rawHit.join('\n'));
+    expect(rawHit.single, contains('字号'));
+    // 反面：普通字符串里的转义行为**不变** —— `'a\\'` 是两个字符 `a\`，
+    // `\\` 吃掉的是反斜杠而不是引号，字符串正常结束，后面真代码照报。
+    const escaped = r"var s = 'a\\'; var t = TextStyle(fontSize: 10);";
+    expect(_violationsIn('t.dart', escaped), hasLength(1));
+
+    // ── 块注释可嵌套：内层注释的正文不得被当成代码露出来 ──
+    //
+    // `/* a /* b */ fontSize: 10 */` 整体是一段注释（内层 `/* b */` 配对后
+    // 仍在注释内）。若用 `indexOf('*/')` 停在第一个 `*/`，`fontSize: 10` 就
+    // 会露成代码、被**误报** —— 正是本任务要消掉的那一类。
+    expect(_violationsIn('t.dart', '/* a /* b */ fontSize: 10 */'), isEmpty);
+    // 单层块注释（既有行为）照旧不报。
+    expect(_violationsIn('t.dart', '/* fontSize: 10 */'), isEmpty);
+    // 嵌套注释**结束之后**的真代码照报 —— 别把嵌套修成「一路吞到文件尾」。
+    expect(_violationsIn('t.dart', '/* a /* b */ c */ TextStyle(fontSize: 10);'),
+        hasLength(1));
   });
 
   test('字重扫描边界：条件表达式里带函数调用会漏（要修需括号感知解析）', () {
