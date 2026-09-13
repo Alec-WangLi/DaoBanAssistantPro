@@ -28,6 +28,66 @@ const List<String> _scanDirs = [
   'lib/core/glass',
 ];
 
+/// 把源码里的**非代码部分**替换成**等长空格**：行注释、块注释、字符串字面量的内容。
+///
+/// 为什么要等长替换而不是删掉：所有规则都靠「命中偏移 → 行号」定位（`_lineAt`），
+/// 删字符会让偏移全错。换成空格则偏移与行号纹丝不动。
+///
+/// 换行**保留** —— 行数也不能变。
+///
+/// 注意：**具名豁免标记写在注释里**，所以豁免判定必须回到**原始源码**上查，
+/// 不能查这个副本（注释在这里已经是空格了）。见 `_ignoreReasonAt`。
+String blankNonCode(String src) {
+  final out = src.split('');
+  void blank(int from, int to) {
+    for (var k = from; k < to && k < out.length; k++) {
+      if (out[k] != '\n') out[k] = ' ';
+    }
+  }
+
+  var i = 0;
+  while (i < src.length) {
+    // 行注释：到行尾（不含换行）
+    if (src.startsWith('//', i)) {
+      final nl = src.indexOf('\n', i);
+      final stop = nl < 0 ? src.length : nl;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    // 块注释：到 */ 之后
+    if (src.startsWith('/*', i)) {
+      final end = src.indexOf('*/', i + 2);
+      final stop = end < 0 ? src.length : end + 2;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    final c = src[i];
+    if (c == "'" || c == '"') {
+      // r'…' 这种原始字符串：引号本身照常处理，内容一样要清。
+      final triple = i + 2 < src.length && src[i + 1] == c && src[i + 2] == c;
+      final quote = triple ? c * 3 : c;
+      var j = i + quote.length;
+      while (j < src.length) {
+        if (src[j] == '\\') {
+          j += 2; // 跳过转义的下一个字符
+          continue;
+        }
+        if (src.startsWith(quote, j)) break;
+        j++;
+      }
+      final stop = j >= src.length ? src.length : j + quote.length;
+      // 只清**内容**，引号保留（更直观，也不影响任何规则）。
+      blank(i + quote.length, j);
+      i = stop;
+      continue;
+    }
+    i++;
+  }
+  return out.join();
+}
+
 /// 界面层禁止的字面量。这一组**整文件扫描**：正则在全文上跑、命中偏移再换算回行号。
 ///
 /// 不逐行跑，是因为迁移期实测出三个漏洞 —— 值一旦与关键字**分行**就会静默漏检
@@ -67,15 +127,24 @@ List<String> _violations(String path) =>
 
 /// 扫一段源码里的字面量。拆出「读文件」这一步是为了能用临时文本单测 ——
 /// [path] 只进报告、不参与判断（与 `_spacingViolationsIn` 同一套路）。
+///
+/// **双轨**：规则跑在 [blankNonCode] 剥过的副本上（注释与字符串内容已成空格），
+/// 免得注释里写 `fontSize: 10` 这种示例把测试打红；而**报告行文本**要回到原始
+/// 源码上取，才能拿到带注释的可读上下文。两份串等长，偏移通用。
+/// 具名豁免标记写在注释里，因此豁免判定也一律回原文查（见 `_ignoreReasonAt`）。
 List<String> _violationsIn(String path, String src) {
+  final code = blankNonCode(src);
   final out = <String>[];
   for (final rule in _rules.entries) {
-    for (final m in rule.value.allMatches(src)) {
+    for (final m in rule.value.allMatches(code)) {
       // `copyWith(fontWeight: …)` 是一个角色内的刻意变化，允许（见规格 §3.2）。
       // 判据是「这次匹配落在某个 `copyWith(` 调用的括号里」，而不是「同一行含
       // copyWith」—— 值跨行时 `copyWith(` 会留在上一行，行级判定会把合法调用误报。
-      if (rule.key.startsWith('字重') && _insideCopyWith(src, m.start)) continue;
-      final at = _lineAt(src, m.start);
+      //
+      // 注意这里查的是 `code`（剥过的副本）：字符串里的 `copyWith` 文本不该
+      // 影响括号配对。偏移在两份串上一致（等长替换）。
+      if (rule.key.startsWith('字重') && _insideCopyWith(code, m.start)) continue;
+      final at = _lineAt(src, m.start); // 行号在两份源码上一致（等长替换）
       out.add('$path:${at.line}  ${rule.key}\n      ${at.text}');
     }
   }
@@ -377,18 +446,38 @@ Widget a() => SizedBox(width: 6, child: Center(child: Text('x')));
     expect(_spacingViolationsIn('synthetic.dart', src), isEmpty);
   });
 
-  test('字面量扫描边界：注释里的 fontSize 也会被扫到（扫描读原始源码）', () {
-    // 扫描器读的是原始源码、**不**跳过注释与字符串 —— 这是有意为之：
-    // 跳过注释需要词法分析，属于更大的改动，本轮不做（见文件头与规格 §5）。
-    // 这条从**正面**钉住它，免得将来有人「优化」成跳过注释，却没意识到那是
-    // 行为变更（那样注释里就不能再写 `fontSize: 10` 这种示例了）。
-    const src = '''
+  test('字面量扫描边界：注释与字符串内容不参与扫描', () {
+    // **旧行为已反转**：扫描器曾读原始源码，注释里的 `fontSize: 10` 也会被报
+    // （上一轮的设计，当时的理由是「跳过注释需要词法分析，本轮不做」）。那让
+    // 「注释里不能提及被禁模式」成了一条没法长期维持的约定 —— 有人把基线值写进
+    // 注释说明问题，构建就红了。那是**误报**，不是漏检。现在规则跑 `blankNonCode`
+    // 剥过的副本（注释与字符串内容已成等长空格），二者里的字面量一律不报。
+    //
+    // 这条从**正面**钉住新语义：把实现改回「读原始源码」，下面几个 `isEmpty`
+    // 立刻转红。**具名豁免标记仍是注释**，所以豁免判定必须回原始源码查 ——
+    // 这个「规则看剥过的副本、豁免看原文」的双轨结构见 `_violationsIn`。
+    const legacy = '''
 // 历史遗留写法示例：fontSize: 10
 Widget a() => const SizedBox.shrink();
 ''';
-    final hit = _violationsIn('synthetic.dart', src);
-    expect(hit, hasLength(1), reason: hit.join('\n'));
-    expect(hit.single, contains('字号'));
+    expect(_violationsIn('synthetic.dart', legacy), isEmpty);
+
+    // 行注释 / 块注释 / 单双引号字符串 / 跨行三引号字符串，内容都不参与扫描。
+    expect(_violationsIn('t.dart', '// 基线是 fontSize: 10\n'), isEmpty);
+    expect(_violationsIn('t.dart', '/*\n fontSize: 10\n*/\n'), isEmpty);
+    expect(_violationsIn('t.dart', "Text('fontSize: 10');"), isEmpty);
+    expect(_violationsIn('t.dart', 'Text("Color(0xFFFFFFFF)");'), isEmpty);
+    expect(_violationsIn('t.dart', "Text('''\nfontSize: 10\n''');"), isEmpty);
+
+    // 但真代码照报。
+    expect(_violationsIn('t.dart', 'Text(x, style: TextStyle(fontSize: 10));'),
+        hasLength(1));
+    // 字符串里含 `//` 不能把后面的代码当成注释吞掉（否则会漏检真代码 ——
+    // 那是把误报修成漏检，比原来更糟）。
+    const src =
+        "Text('https://example.com');\nText(x, style: TextStyle(fontSize: 10));";
+    expect(_violationsIn('t.dart', src), hasLength(1),
+        reason: '字符串里的 // 不得吞掉紧随其后的代码');
   });
 
   test('字重扫描边界：条件表达式里带函数调用会漏（要修需括号感知解析）', () {
