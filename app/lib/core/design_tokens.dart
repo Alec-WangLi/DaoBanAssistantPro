@@ -105,7 +105,7 @@ class AppTokens {
   static const TextStyle labelSecondary =
       TextStyle(fontSize: 13, fontWeight: FontWeight.w600);
   static const TextStyle microStrong =
-      TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+      TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.15);
   static const TextStyle microLabel =
       TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
   static const TextStyle microText =

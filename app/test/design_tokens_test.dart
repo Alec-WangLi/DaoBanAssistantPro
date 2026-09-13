@@ -156,7 +156,7 @@ void main() {
     check('rowPrimary', AppTokens.rowPrimary, 14, FontWeight.w500);
     check('rowSecondary', AppTokens.rowSecondary, 13, FontWeight.w400);
     check('labelSecondary', AppTokens.labelSecondary, 13, FontWeight.w600);
-    check('microStrong', AppTokens.microStrong, 12, FontWeight.w700);
+    check('microStrong', AppTokens.microStrong, 12, FontWeight.w700, 1.15);
     check('microLabel', AppTokens.microLabel, 12, FontWeight.w600);
     check('microText', AppTokens.microText, 12, FontWeight.w400);
     check('tinyLabel', AppTokens.tinyLabel, 11, FontWeight.w400, 1.15);

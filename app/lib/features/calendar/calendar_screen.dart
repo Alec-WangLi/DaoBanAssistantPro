@@ -491,7 +491,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(L10n.switchSchedule, style: AppTokens.sectionTitle),
+                  // 底部弹层标题走 `dialogTitle`（规格 §3.2「弹窗与**底部弹层**
+                  // 标题」），与 `glass_dialog` 里那些弹窗同角色 —— 原为
+                  // 18/w700，本轮统一成 20/w600。
+                  Text(L10n.switchSchedule, style: AppTokens.dialogTitle),
                   const SizedBox(height: 8),
                   Flexible(
                     child: ListView(
@@ -1267,9 +1270,10 @@ const double _cellAspectMin = 0.62;
 /// 格子高的下限 = **格子里的三行字实测要多高**。
 ///
 /// 三行都是单行文字（日期 `cellDate` 18、班次简称 `microStrong` 12、农历
-/// `tinyLabel` 11）。日期与农历的令牌自带 `height: 1.15` 压过行盒，班次简称
-/// 走字体默认行高：三行 + 两处 `gapHair` + 格子自身 `_cellInset` 上下各 2，
-/// 约 54–58。取 58 兜住上界，不赌具体字体度量。
+/// `tinyLabel` 11），三者的令牌都自带 `height: 1.15` 压过行盒：
+/// 18×1.15 + `gapHair` 2 + 12×1.15 + `gapHair` 2 + 11×1.15 ≈ 51.2，再加格子
+/// 自身 `_cellInset` 上下各 2 一共 4 —— 约 55.2，落在 58 之内，留约 2.8 余量。
+/// 取 58 是为了不赌具体字体度量（三行都有显式行高，理论上已经与字体度量无关）。
 ///
 /// **曾经是 80**，那是 `height: 1.15` 压行盒之前按 M3 默认行高 1.5 标定的
 /// （27 + 2 + 18 + 2 + 16.5 + 4 ≈ 70，再垫到 80）。行盒压紧后这个数一直没
