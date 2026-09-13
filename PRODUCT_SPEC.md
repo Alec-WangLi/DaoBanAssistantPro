@@ -102,7 +102,7 @@
 
 ## 7. 版本与发布链路（现状）
 
-- 版本号唯一来源 `app/pubspec.yaml`（`X.Y.Z+build`），与 `app/lib/core/app_info.dart` 的 `appVersion` 同步；末位 `Z=0` 为正式版（条目需归纳为总结版），非 0 为测试版（条目原样保留）。
+- 版本号唯一来源 `app/pubspec.yaml`（`X.Y.Z+build`），与 `app/lib/core/app_info.dart` 的 `appVersion` 同步，一致性由 `app/test/app_info_test.dart` 把关；末位 `Z=0` 为正式版（条目需归纳为总结版），非 0 为测试版（条目原样保留）。
 - 应用内更新：`UpdateChecker` 无鉴权请求公开仓库 `/releases`（未认证限 60 次/小时）；APK 直接经 `browser_download_url` 下载安装。
 - 本地发布：`scripts/release.ps1`（读版本号 → 校验 → 按末位自动标正式/预发布 → 上传 GitHub Release；发布说明写到 `tools\gh\release-notes-vX.Y.Z.md` 自动复用）；APK 产出 `dist/倒班助手Pro-vX.Y.Z.apk`（`dist/`、`*.apk` 均不入库）。
 - 验收标准：`flutter analyze` 0 error / 0 warning；`flutter test` 全绿。

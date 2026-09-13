@@ -19,6 +19,7 @@ import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/lunar_info.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
@@ -316,11 +317,14 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  testWidgets('点开某天：信息卡定高，日期格不再跟着一涨一缩', (tester) async {
+  testWidgets('点开某天：信息卡高度只由本月决定，不随选中哪天变', (tester) async {
     // 起因：竖屏是 `Column[顶栏, Expanded(网格), 信息卡]`，格子高度按**剩余
     // 空间**算，所以信息卡随当天内容长高一点，六个格子就集体矮一点。
     // 内容里会变的至少有四处：法定节假日徽章、农历描述换行、其他班组色块
     // 换行、有没有班次/闹钟 —— 点一天晃一次。
+    //
+    // v0.6.10 起高度是**算**出来的（`info_card_metrics.dart`）：取本月最满的
+    // 一天。所以这里同时盯两件事 —— 月内恒定，且紧到不留白。
     await _pumpCalendar(tester, 'six_crew_three_shift');
 
     final box = find.byKey(const Key('info-card-box'));
@@ -339,12 +343,81 @@ void main() {
           tester.getSize(find.byKey(const Key('info-card-content'))).height;
       maxContentH = math.max(maxContentH, contentH);
       expect(contentH, lessThanOrEqualTo(cardH),
-          reason: '$d 日：卡片内容 $contentH 装不进定高 $cardH');
+          reason: '$d 日：卡片内容 $contentH 装不进卡片 $cardH');
     }
 
-    // 定高不能只是「足够大」——留太多空白等于白占网格的高度。
-    expect(cardH - maxContentH, lessThanOrEqualTo(48),
-        reason: '定高 $cardH 比最满的一天（$maxContentH）高出太多，空格子白占网格');
+    // 高度 = 本月最满的一天 + 卡片自身的上下内边距与描边，且**刚好**是这个值：
+    // 留多了就是白占网格的高度（这正是写死 248 时的毛病），留少了就要裁字。
+    // 允许 2dp 的取整余量。
+    final inner = cardH - 38;
+    expect(inner - maxContentH, greaterThanOrEqualTo(0),
+        reason: '本月最满的一天 $maxContentH 装不进卡片内高 $inner');
+    expect(inner - maxContentH, lessThanOrEqualTo(2),
+        reason: '卡片内高 $inner 比最满的一天 $maxContentH 高出太多，空格子白占网格');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('信息卡高度跟着「其他班组」占几行走', (tester) async {
+    // 高度的逐日差异只有三处：节假日徽章、农历行数、其他班组色块折行数。
+    // 前两处是「本月有没有」，第三处是「这个排班有几个班组」—— 班组越多色块
+    // 占的行越多，卡片越高。这条用例盯住它确实跟着变（否则高度就是写死的）。
+    final heights = <String, double>{};
+    for (final t in ['four_crew_three_shift', 'six_crew_three_shift']) {
+      await _pumpCalendar(tester, t);
+      heights[t] = tester.getSize(find.byKey(const Key('info-card-box'))).height;
+      await _disposeCalendar(tester);
+    }
+
+    expect(heights['six_crew_three_shift'],
+        greaterThan(heights['four_crew_three_shift']!),
+        reason: '六个班组的色块比四个班组多占行，卡片该更高');
+  });
+
+  testWidgets('没有法定节假日的月份：卡片更矮，网格拿到更多高度', (tester) async {
+    // 「换月时高度可能变一次」是这套做法的代价，也是它的收益：没有节假日的
+    // 月份不必为节假日徽章那一行留着空。这里盯住收益真的兑现了 —— 卡片变矮，
+    // 而矮下来的高度确实还给了网格。
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+
+    final box = find.byKey(const Key('info-card-box'));
+    final grid = find.byType(SingleChildScrollView).first;
+
+    DateTime? plainMonth;
+    DateTime? holidayMonth;
+    var plainCardH = 0.0;
+    var plainGridH = 0.0;
+    var holidayCardH = 0.0;
+    var holidayGridH = 0.0;
+    final start = DateTime(DateTime.now().year, DateTime.now().month, 1);
+    for (var i = 0; i < 24 && (plainMonth == null || holidayMonth == null); i++) {
+      if (i > 0) {
+        await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+        await tester.pumpAndSettle();
+      }
+      final m = DateTime(start.year, start.month + i, 1);
+      final days = DateTime(m.year, m.month + 1, 0).day;
+      final hasHoliday = List.generate(
+              days, (k) => lunarOf(DateTime(m.year, m.month, k + 1)))
+          .any((l) => l.isLegalHoliday);
+      if (hasHoliday) {
+        holidayMonth ??= m;
+      } else {
+        plainMonth ??= m;
+      }
+
+      if (m == plainMonth) plainCardH = tester.getSize(box).height;
+      if (m == plainMonth) plainGridH = tester.getSize(grid).height;
+      if (m == holidayMonth) holidayCardH = tester.getSize(box).height;
+      if (m == holidayMonth) holidayGridH = tester.getSize(grid).height;
+    }
+
+    expect(plainMonth, isNotNull, reason: '两年内总该有一个月没有法定节假日');
+    expect(holidayMonth, isNotNull, reason: '两年内总该有一个月有法定节假日');
+    expect(plainCardH, lessThan(holidayCardH),
+        reason: '没有节假日的月份不该留着徽章那一行的高度');
+    expect(plainGridH, greaterThan(holidayGridH),
+        reason: '卡片矮下来的高度要真的给到网格，而不是留在空档里');
 
     await _disposeCalendar(tester);
   });

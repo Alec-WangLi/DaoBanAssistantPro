@@ -14,6 +14,7 @@ import '../../domain/lunar_info.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
+import 'info_card_metrics.dart';
 import 'schedule_editor_screen.dart';
 import 'shift_template_picker_screen.dart';
 
@@ -39,6 +40,45 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   double _visualRow = 0; // 选中块视觉行（连续小数，拖动时用）
   double _grabCol = 0; // 手指相对选中块左缘的抓取偏移（列）
   double _grabRow = 0; // 手指相对选中块上缘的抓取偏移（行）
+
+  /// 底栏信息卡高度的**上一次**计算结果。
+  ///
+  /// 高度只跟「月份 / 排班 / 宽度 / 语言 / 系统字号」有关，跟选中哪天无关 ——
+  /// 这正是它不随点日期抖动的原因。而这几样在一次拖动里都不会变，所以量一次
+  /// 缓存住即可：`_dayRows` 每帧都重建，量一次要排三十来个 `TextPainter`。
+  /// 只留一条（同时只会显示一个月的卡片），键变了就重量。
+  String? _cardHeightKey;
+  double? _cardHeight;
+
+  /// 底栏信息卡该多高：取本月最满的一天（见 `info_card_metrics.dart`）。
+  double _bottomCardHeight(BuildContext context, ShiftSchedule? schedule,
+      double cardOuterWidth) {
+    final key = [
+      _month.year,
+      _month.month,
+      cardOuterWidth.toStringAsFixed(1),
+      L10n.isEn,
+      // 系统字号：`TextScaler` 可能是非线性的，拿某一档的实际缩放当代表值。
+      MediaQuery.textScalerOf(context).scale(14).toStringAsFixed(3),
+      schedule?.teamCount,
+      schedule?.ourTeamIndex,
+      schedule?.isBlank,
+      schedule?.teamNames.join('/'),
+      // 色块上写的是「组名 + 班次简称」，简称改了高度也可能变（比如从 1 字变
+      // 2 字、窄屏多折一行）。
+      schedule?.classes.map((c) => c.shortLabel).join('/'),
+    ].join('|');
+    if (key == _cardHeightKey && _cardHeight != null) return _cardHeight!;
+    final h = measureBottomInfoCardHeight(
+      context: context,
+      cardOuterWidth: cardOuterWidth,
+      schedule: schedule,
+      month: _month,
+    );
+    _cardHeightKey = key;
+    _cardHeight = h;
+    return h;
+  }
 
   @override
   void initState() {
@@ -1128,38 +1168,44 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           : SingleChildScrollView(child: content),
     );
 
-    final card = Stack(
-      children: [
-        SizedBox(
-          key: const Key('info-card-box'),
-          height: inSidePane ? null : _infoCardHeight,
-          child: panel,
-        ),
-        Positioned(
-          left: 0,
-          top: 18,
-          bottom: 18,
-          width: 6,
-          child: DecoratedBox(
-            key: const Key('info-card-accent-bar'),
-            decoration: BoxDecoration(
-              color: accent,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-        ),
-      ],
-    );
+    final padding = inSidePane
+        ? const EdgeInsets.fromLTRB(0, 8, 16, 16)
+        // 底栏时要给悬浮胶囊让出高度（竖屏 96，短屏 76）；右栏时胶囊在
+        // 屏幕底部、与这一栏无关，只需要常规留白。竖屏的 96 = 胶囊高 64
+        // + 32 余量：84 时卡片底边几乎贴在胶囊上（v0.6.7 用户实测），
+        // 又放开了 12。
+        : const EdgeInsets.fromLTRB(16, 8, 16, 96);
 
+    // 卡片外框宽度要量出来才能算高度（内容区宽度决定农历与色块折几行），
+    // 而宽度只有这里才知道 —— 所以在内边距**里面**再套一层 LayoutBuilder。
     return Padding(
-      // 底栏时要给悬浮胶囊让出高度（竖屏 96，短屏 76）；右栏时胶囊在
-      // 屏幕底部、与这一栏无关，只需要常规留白。竖屏的 96 = 胶囊高 64
-      // + 32 余量：84 时卡片底边几乎贴在胶囊上（v0.6.7 用户实测），
-      // 又放开了 12。上界是网格给的：再往上加，6 行的月份会被挤出视口。
-      padding: inSidePane
-          ? const EdgeInsets.fromLTRB(0, 8, 16, 16)
-          : const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      child: card,
+      padding: padding,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Stack(
+          children: [
+            SizedBox(
+              key: const Key('info-card-box'),
+              height: inSidePane
+                  ? null
+                  : _bottomCardHeight(context, schedule, constraints.maxWidth),
+              child: panel,
+            ),
+            Positioned(
+              left: 0,
+              top: 18,
+              bottom: 18,
+              width: 6,
+              child: DecoratedBox(
+                key: const Key('info-card-accent-bar'),
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1222,26 +1268,21 @@ String _alarmText(ShiftClass t) {
   return L10n.alarmAt(formatClock(t.alarmMinute!));
 }
 
-/// 信息卡（完整版）在**底栏**时的固定高度。
+/// 信息卡（完整版）在**底栏**时的高度不再是写死的常数，改成按当前月最满的
+/// 一天算出来 —— 实现在 `info_card_metrics.dart`，那里写了为什么。
 ///
-/// 为什么必须是定值：竖屏下这一页是
-/// `Column[顶栏, Expanded(网格), 信息卡]`，而格子高度是按**剩余空间**算的
-/// （`calendarCellHeight(availHeight:)`）。信息卡只要随当天内容长高一像素，
+/// 这里只留一条约束给下游：**高度必须与「选中哪天」无关**。竖屏下这一页是
+/// `Column[顶栏, Expanded(网格), 信息卡]`，格子高度按**剩余空间**算
+/// （`calendarCellHeight(availHeight:)`），卡片只要随当天内容长高一像素，
 /// 六个格子就集体矮一像素、选下一天再弹回来 —— 点一天晃一次。
 ///
 /// 也不能反过来把网格与卡片解耦（留白、或让网格自己滚动）：v0.6.1 刚把
-/// 「网格与信息卡之间的一条空带」消掉，那条空带是明确不接受的。所以只能让
-/// 卡片自己定高，把多出来的空间留在卡片内部 —— 它是一块面板，不是一条
+/// 「网格与信息卡之间的一条空带」消掉，那条空带是明确不接受的。所以卡片
+/// 始终撑满自己的盒子，多出来的空间留在卡片内部 —— 它是一块面板，不是一条
 /// 会伸缩的条。
 ///
-/// 取值 = 内容最坏情况（今天徽章 + 两行法定节假日（v0.6.6 起农历描述
-/// 允许换行）+ 班次 + 闹钟 + 其他班组色块换到第二行）在 420 宽、标准字号
-/// 下的高度，再留一点余量。字号被系统放大到装不下时，由卡片内部的滚动
-/// 兜底，不会溢出。
-///
-/// 定高的下界由 `calendar_screen_test.dart` 的「点开某天」用例盯着：它把整月
-/// 每一天都点一遍，断言内容装得下、且不要留太多空白。
-const double _infoCardHeight = 248;
+/// 高度算得准不准由 `calendar_screen_test.dart` 的「点开某天」用例盯着：它把
+/// 整月每一天都点一遍，断言高度不变、内容装得下、且贴得够紧。
 
 // 格子高宽比：0.78 = 自然比例，0.62 = 「不许再瘦」的下限比例（越小格子越高）。
 const double _cellAspect = 0.78;
