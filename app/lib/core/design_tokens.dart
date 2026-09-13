@@ -206,13 +206,26 @@ class AppTokens {
   // 次要文字散着 0.45 / 0.5 / 0.55 / 0.6 四种 alpha —— 同一个角色被调了不同值。
   // 压在主色胶囊上的次要白字不归这两档（那是「前景色已定」的情形）。
 
-  /// 次要文字：副标题 · 说明 · hint · 分组标签 · 星期行。
-  static Color inkMuted(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+  /// 次要文字的透明度。暗色底上过 AA（0.60 → 5.87:1）；浅色**卡片**上 4.52:1，
+  /// 也过。0.55 曾是最常用的值，但它只有 3.78:1（页面底 `#F5F6FA`）/ 3.86:1
+  /// （卡片 `#FFFFFF`），低于 WCAG AA 普通文字要求的 4.5:1，所以本轮提到 0.60。
+  ///
+  /// 注意：浅色**页面底** `#F5F6FA` 上 0.60 是 4.41:1，仍差 0.09（页面底比卡片
+  /// 暗一点，是这一档的最差底）；要连页面底一起过线需 0.62（4.70:1）。
+  static const double inkMutedAlpha = 0.60;
 
-  /// 更淡的：禁用态 · 占位 · 待办已完成。
+  /// 更淡那档的透明度。用于**禁用态 / 占位 / 待办已完成** —— 低对比正是它的
+  /// 用途（已完成的删除线承载语义），因此**有意低于 AA**（0.35 → 页面底 2.16:1），
+  /// 是明确豁免而不是漏网。
+  static const double inkFaintAlpha = 0.35;
+
+  static Color inkMuted(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface
+          .withValues(alpha: inkMutedAlpha);
+
   static Color inkFaint(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.35);
+      Theme.of(context).colorScheme.onSurface
+          .withValues(alpha: inkFaintAlpha);
 
   // ── 文字可读性 ──
 

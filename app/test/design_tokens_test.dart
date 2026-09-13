@@ -227,6 +227,13 @@ void main() {
     expect([AppTokens.gapHair, AppTokens.gapIconText, AppTokens.gapIconTextLg],
         [2, 6, 10]);
     expect(AppTokens.durFlow, const Duration(milliseconds: 650));
+
+    expect(AppTokens.inkMutedAlpha, 0.60,
+        reason: '浅色底下 0.55 只有 4.06:1，不过 AA');
+    expect(AppTokens.inkFaintAlpha, 0.35,
+        reason: '禁用/已完成档，有意低于 AA（见规格 §3.3）');
+    expect(AppTokens.pillOf(40),
+        const BorderRadius.all(Radius.circular(20)));
   });
 
   test('界面层不写数值', () {
