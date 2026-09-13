@@ -382,8 +382,8 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                                   const SizedBox(height: AppTokens.gapHair),
                                   Text(
                                     items[i].$2,
-                                    // 基线 11px w400：未选中 w500、选中 w700，
-                                    // 两个分支都由这里显式给字重，按规格走 copyWith。
+                                    // 迁移前的基线字号是 10（现为 tinyLabel 11/w400）；
+                                    // 未选中 w500、选中 w700，两个分支都由这里显式给字重，按规格走 copyWith。
                                     style: AppTokens.tinyLabel.copyWith(
                                       fontWeight: selected
                                           ? FontWeight.w700

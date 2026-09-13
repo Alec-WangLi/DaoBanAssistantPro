@@ -6,7 +6,7 @@
 //   1. 角色令牌的字号 / 字重 / 行高必须等于规格里那张表 —— 改令牌就得先改规格。
 //   2. lib/features · lib/core/widgets · lib/core/glass 下不许出现字面量。
 //      迁移期间用 _pending 兜住还没迁完的文件，每迁完一块划掉一个；
-//      最后一块迁完时这个集合必须为空。
+//      Task 8 收口后这个集合已删 —— 这条规则从此扫**全部**文件、没有任何豁免。
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -22,45 +22,104 @@ double _wcagContrast(Color a, Color b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/// 尚未迁完的文件 —— 每完成一个任务就删掉对应的行。
-/// Task 7 之后已全部迁完，集合为空：这一轮的终点到了，
-/// `界面层不写数值` 从此扫全部文件（`_pending` 保留为临时豁免的开关）。
-const Set<String> _pending = {};
-
 const List<String> _scanDirs = [
   'lib/features',
   'lib/core/widgets',
   'lib/core/glass',
 ];
 
+/// 界面层禁止的字面量。这一组**整文件扫描**：正则在全文上跑、命中偏移再换算回行号。
+///
+/// 不逐行跑，是因为迁移期实测出三个漏洞 —— 值一旦与关键字**分行**就会静默漏检
+/// （逐行的正则只看得到一行）：
+///
+///   1. 图标：`Icon(` 与 `size: 28` 分写两行时，逐行的 `[^)]*` 跨不过换行
+///      （Task 5 实测的响铃界面那处就是这么写的）；
+///   2. 明度：`Theme.of(context)` / `.colorScheme` / `.onSurface` / `.withValues(…)`
+///      链式跨行时关键字不在同一行（Task 7 实测的导航未选中标签色）；
+///   3. 字重：`fontWeight: selected\n ? FontWeight.w700\n : FontWeight.w500`
+///      这种三元跨行写法（Task 7 审查发现，`home_shell.dart` 导航标签）。
+///
+/// 既然这三条会漏，其余几条就没有理由再逐行 —— 「逐行」是个整类缺陷，不是这三条的
+/// 特例。所以**一律**整文件扫：省下的那点开销，换不回「守门测试绿 ≠ 文件里没有字面量」。
 final Map<String, RegExp> _rules = {
   '字号字面量（改用角色令牌）': RegExp(r'fontSize:\s*[0-9]'),
-  '字重字面量（改用角色令牌，个别变化走 copyWith）':
-      RegExp(r'fontWeight:\s*FontWeight\.'),
+  // 图标：`Icon(` 与 `size: 28` 分写两行时，`[^)]*` 要能跨过换行。
+  '图标尺寸字面量（改用 iconSm/Md/Lg）':
+      RegExp(r'(Icon|IconThemeData)\([^)]*size:\s*[0-9]'),
+  // 明度：`onSurface` 与 `.withValues(` 之间允许换行 —— 链式写法会把它拆到下一行。
   '文字明度字面量（改用 inkMuted / inkFaint）':
-      RegExp(r'onSurface\.withValues\(\s*alpha:'),
+      RegExp(r'onSurface\s*\.\s*withValues\(\s*alpha:'),
+  // 字重：`fontWeight:` 与 `FontWeight.` 之间允许一段不含 `,` `;` `)` 的值表达式，
+  // 于是 `fontWeight: selected ? FontWeight.w700 : FontWeight.w500` 这类三元也认得。
+  // 逗号/分号/右括号当作值的边界，免得跨过语句去匹配后面无关的 `FontWeight.`。
+  '字重字面量（改用角色令牌，个别变化走 copyWith）':
+      RegExp(r'fontWeight:[^;,)]*?FontWeight\.'),
   '圆角字面量（改用 radiusS/M/L/XL 或 pillOf）': RegExp(r'circular\([0-9]'),
   '时长字面量（改用 durFast/Med/Slow/Flow）':
       RegExp(r'Duration\(milliseconds:\s*[0-9]'),
   '颜色字面量（改用令牌）': RegExp(r'Color\(0x'),
   '旧的按尺寸命名的字号令牌（改用角色令牌）': RegExp(r'AppTokens\.font[A-Z]'),
-  '图标尺寸字面量（改用 iconSm/Md/Lg）':
-      RegExp(r'(Icon|IconThemeData)\([^)]*size:\s*[0-9]'),
 };
 
-List<String> _violations(String path) {
+List<String> _violations(String path) =>
+    _violationsIn(path, File(path).readAsStringSync());
+
+/// 扫一段源码里的字面量。拆出「读文件」这一步是为了能用临时文本单测 ——
+/// [path] 只进报告、不参与判断（与 `_spacingViolationsIn` 同一套路）。
+List<String> _violationsIn(String path, String src) {
   final out = <String>[];
-  final lines = File(path).readAsLinesSync();
-  for (var i = 0; i < lines.length; i++) {
-    final line = lines[i];
-    for (final rule in _rules.entries) {
-      if (!rule.value.hasMatch(line)) continue;
+  for (final rule in _rules.entries) {
+    for (final m in rule.value.allMatches(src)) {
       // `copyWith(fontWeight: …)` 是一个角色内的刻意变化，允许（见规格 §3.2）。
-      if (rule.key.startsWith('字重') && line.contains('copyWith')) continue;
-      out.add('$path:${i + 1}  ${rule.key}\n      ${line.trim()}');
+      // 判据是「这次匹配落在某个 `copyWith(` 调用的括号里」，而不是「同一行含
+      // copyWith」—— 值跨行时 `copyWith(` 会留在上一行，行级判定会把合法调用误报。
+      if (rule.key.startsWith('字重') && _insideCopyWith(src, m.start)) continue;
+      final at = _lineAt(src, m.start);
+      out.add('$path:${at.line}  ${rule.key}\n      ${at.text}');
     }
   }
   return out;
+}
+
+/// [offset] 处在 [src] 的哪一行（1 起），以及那一行的文本（去首尾空白）。
+({int line, String text}) _lineAt(String src, int offset) {
+  final before = src.substring(0, offset);
+  final line = '\n'.allMatches(before).length + 1;
+  final start = before.lastIndexOf('\n') + 1;
+  var end = src.indexOf('\n', offset);
+  if (end < 0) end = src.length;
+  return (line: line, text: src.substring(start, end).trim());
+}
+
+final RegExp _identChar = RegExp(r'[A-Za-z0-9_$]');
+
+/// [index] 处的字符是否落在某个 `copyWith(` 调用的括号内：从匹配点向前走、做括号
+/// 配对，找到**包裹它的那个左括号**，再看左括号前面的标识符是不是 `copyWith`。
+/// 比「同一行含 copyWith」稳 —— 值跨行时行级判定会把合法调用误报（见 `_violationsIn`）。
+bool _insideCopyWith(String src, int index) {
+  var depth = 0;
+  for (var i = index - 1; i >= 0; i--) {
+    final c = src[i];
+    if (c == ')') {
+      depth++;
+    } else if (c == '(') {
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
+      var j = i - 1;
+      while (j >= 0 && (src[j] == ' ' || src[j] == '\n')) {
+        j--;
+      }
+      final end = j + 1;
+      while (j >= 0 && _identChar.hasMatch(src[j])) {
+        j--;
+      }
+      return src.substring(j + 1, end) == 'copyWith';
+    }
+  }
+  return false;
 }
 
 /// 间距位置上只允许两类数字：`1`（描边与发丝线），以及 **4 的倍数**。
@@ -180,7 +239,6 @@ void main() {
       for (final e in d.listSync(recursive: true)) {
         if (e is! File || !e.path.endsWith('.dart')) continue;
         final path = e.path.replaceAll(Platform.pathSeparator, '/');
-        if (_pending.contains(path)) continue;
         offenders.addAll(_violations(path));
         offenders.addAll(_spacingViolations(path));
       }
@@ -207,10 +265,73 @@ Widget f() => SizedBox(width: cellW - _cellInset * 2);
     expect(hit[1], contains('6.0'));
   });
 
-  test('迁移完成时 _pending 必须清空', () {
-    // 这条用例本身不失败，只在日志里提示进度，方便执行者随时看还剩多少。
-    // 真正的强制来自：_pending 里划掉文件后，上一条用例立刻开始盯这个文件。
-    expect(_pending.length, lessThanOrEqualTo(19));
+  // ── 三条整文件扫描规则的正反两面钉子 ──
+  //
+  // 这三条规则原先逐行跑，各有一个「值跨行时静默漏检」的洞（见 `_rules` 的注释）。
+  // 每条都**正反两面**钉：正面是跨行写法必须报，反面是合法写法不得误报 ——
+  // 只钉正面的话，把规则改成「一律不查」也能让用例过。
+
+  test('图标规则整文件扫描：`size` 写在下一行也要报', () {
+    const bad = '''
+Icon(
+  Icons.alarm,
+  size: 28,
+);
+''';
+    final hit = _violationsIn('synthetic.dart', bad);
+    expect(hit, hasLength(1), reason: hit.join('\n'));
+    expect(hit.single, contains('图标'));
+
+    // 反面：同一写法改用令牌，不得误报。
+    const good = '''
+Icon(
+  Icons.alarm,
+  size: AppTokens.iconLg,
+);
+''';
+    expect(_violationsIn('synthetic.dart', good), isEmpty);
+  });
+
+  test('明度规则整文件扫描：链式跨行也要报', () {
+    const bad = '''
+final c = Theme.of(context)
+    .colorScheme
+    .onSurface
+    .withValues(alpha: 0.5);
+''';
+    final hit = _violationsIn('synthetic.dart', bad);
+    expect(hit, hasLength(1), reason: hit.join('\n'));
+    expect(hit.single, contains('明度'));
+
+    // 反面：改用 inkMuted / inkFaint，不得误报。
+    const good = 'final c = AppTokens.inkMuted(context);';
+    expect(_violationsIn('synthetic.dart', good), isEmpty);
+  });
+
+  test('字重规则整文件扫描：三元跨行也要报（copyWith 里不报）', () {
+    // 正面：不在 copyWith 里的三元跨行 —— 逐行跑时 `fontWeight:` 那行没有
+    // `FontWeight.`、`FontWeight.` 那行没有 `fontWeight:`，两边都漏。
+    const bad = '''
+Text('x', style: TextStyle(
+  fontWeight: selected
+      ? FontWeight.w700
+      : FontWeight.w500,
+));
+''';
+    final hit = _violationsIn('synthetic.dart', bad);
+    expect(hit, hasLength(1), reason: hit.join('\n'));
+    expect(hit.single, contains('字重'));
+
+    // 反面：同样的三元放进 copyWith —— 一个角色内的刻意变化，合法、不得误报。
+    // `copyWith(` 留在上一行，正是「行级豁免」会失手的地方。
+    const good = '''
+Text('x', style: AppTokens.tinyLabel.copyWith(
+  fontWeight: selected
+      ? FontWeight.w700
+      : FontWeight.w500,
+));
+''';
+    expect(_violationsIn('synthetic.dart', good), isEmpty);
   });
 
   // ── 令牌规格（本文件原有的一组，随守门测试一并保留）──
@@ -223,7 +344,6 @@ Widget f() => SizedBox(width: cellW - _cellInset * 2);
     expect(AppTokens.radiusM, 16);
     expect(AppTokens.radiusL, 22);
     expect(AppTokens.radiusXL, 28);
-    expect(AppTokens.blurChip, 12);
     expect(AppTokens.blurCard, 18);
     expect(AppTokens.blurPanel, 24);
   });

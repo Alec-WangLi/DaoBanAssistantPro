@@ -52,7 +52,6 @@ class AppTokens {
   static const double gapIconTextLg = 10;
 
   // ── 玻璃模糊 sigma ──
-  static const double blurChip = 12;
   static const double blurCard = 18;
   static const double blurPanel = 24;
 
@@ -117,19 +116,6 @@ class AppTokens {
   static const double iconSm = 16;
   static const double iconMd = 20;
   static const double iconLg = 24;
-
-  // ── 排版（旧，按尺寸命名）──
-  //
-  // 角色令牌上线后这八档不再新增调用，保留只为让尚未迁移的界面继续编译。
-  // Task 8 确认无调用方后整体删除。
-  static const double fontDisplayXl = 84;
-  static const double fontDisplay = 28;
-  static const double fontTitle = 20;
-  static const double fontHeading = 18;
-  static const double fontLead = 16;
-  static const double fontBody = 14;
-  static const double fontSupport = 13;
-  static const double fontCaption = 12;
 
   /// 强调色渐变（按钮/导航选中/填充条用）：顶 0.85 → 底 0.50。
   static LinearGradient accentGradient(Color accent) => LinearGradient(
