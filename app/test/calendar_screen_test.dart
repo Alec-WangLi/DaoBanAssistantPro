@@ -330,6 +330,73 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  // 回归：v0.6.6 用户实测「信息卡最左侧那根色条错位，且不跟卡片变高变矮」。
+  //
+  // 根因是色条与面板各量各的高度：`Stack` 默认 `StackFit.loose`，只给非定位
+  // 子节点松约束，面板于是缩到内容高度（用户那天 126）；而色条是
+  // `Positioned(top: 18, bottom: 18)`，量的是外面那个定高盒子（248）—— 于是
+  // 色条比卡片长出 86dp 垂在空白里。修法是底栏时让面板撑满定高，两边同源。
+  testWidgets('底栏信息卡：面板撑满定高，色条与面板上下对齐', (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+
+    final box = tester.getRect(find.byKey(const Key('info-card-box')));
+    final panel = tester.getRect(find.byKey(const Key('info-card-panel')));
+    final bar = tester.getRect(find.byKey(const Key('info-card-accent-bar')));
+
+    expect(panel.height, closeTo(box.height, 0.5),
+        reason: '面板要撑满定高盒子；否则色条按盒子高度画、会探出卡片的下沿');
+    expect(bar.top - panel.top, closeTo(18, 0.5),
+        reason: '色条上端贴着面板内容区的上沿');
+    expect(panel.bottom - bar.bottom, closeTo(18, 0.5),
+        reason: '色条下端贴着面板内容区的下沿');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('底栏信息卡：色晕只占内容之后剩余的高度', (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+
+    // 面板里真正可用的高度 = 定高 − 上下 padding(18×2) − 上下描边(1×2)。
+    // 描边那 2px 来自 GlassPanel 的 `Border.all(width: 1)`：`Container` 会把
+    // 描边算进自己的内边距，所以 `LayoutBuilder` 量到的是 210 而不是 212。
+    final inner =
+        tester.getSize(find.byKey(const Key('info-card-box'))).height - 38;
+    var sawGlow = false;
+
+    final daysInMonth =
+        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+    for (var d = 1; d <= daysInMonth; d++) {
+      await tester.tap(find.text('$d').first);
+      await tester.pump();
+      final content = find.byKey(const Key('info-card-content'));
+      final glow = find.byKey(const Key('info-card-glow'));
+      final contentH = tester.getSize(content).height;
+      final glowH = tester.getSize(glow).height;
+      expect(glowH, closeTo(math.max(0, inner - contentH), 0.5),
+          reason: '$d 日：色晕要精确等于内容之后的剩余高度'
+              '（内容 $contentH、可用 $inner）');
+      if (glowH > 0) {
+        sawGlow = true;
+        expect(tester.getSize(glow).width, closeTo(tester.getSize(content).width, 0.5),
+            reason: '$d 日：色晕要铺满整行，不能缩成 0 宽');
+      }
+    }
+    expect(sawGlow, isTrue, reason: '总得有个日子内容装不满，色晕要真的露出来');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('底栏信息卡：内容装得不满的日子色晕撑起空档', (tester) async {
+    // 单班组标准周没有「其他班组」那一段，卡片是典型的内容偏少。
+    await _pumpCalendar(tester, 'standard_week');
+
+    expect(tester.getSize(find.byKey(const Key('info-card-glow'))).height,
+        greaterThan(0),
+        reason: '内容装不满时，剩余高度应当由色晕接管，而不是空着');
+
+    await _disposeCalendar(tester);
+  });
+
   testWidgets('单班组排班：不渲染「其他班组」那一段', (tester) async {
     await _pumpCalendar(tester, 'standard_week');
 

@@ -1059,15 +1059,26 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       ],
     );
 
+    // 底栏时面板必须**撑满**那个定高盒子。`Stack` 默认 `StackFit.loose`，
+    // 只给非定位子节点松约束，面板于是缩到内容高度；而左侧色条是
+    // `Positioned(top: 18, bottom: 18)`，量的却是外面那个定高盒子 —— 两边
+    // 各按各的高度走，色条就比卡片长出几十 dp、垂在空白里（v0.6.6 用户
+    // 实测：卡片 126 高，色条 212 高）。给面板一层定高，两者才对得上。
+    //
+    // 右栏那份反过来要贴内容高度：那边没有「撑满」的必要，也就没有空档，
+    // 所以不套这层，色条跟着面板走本来就是对的。
+    final panel = GlassTile(
+      key: const Key('info-card-panel'),
+      padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
+      child: inSidePane ? content : _cardBodyWithGlow(content, accent),
+    );
+
     final card = Stack(
       children: [
-        GlassTile(
-          padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
-          child: inSidePane
-              ? content
-              // 兜底：字号被系统放大到装不下时，卡片内部滚动，而不是溢出成
-              // 黄黑条纹。正常字号下内容矮于卡片，这一层不产生任何滚动。
-              : SingleChildScrollView(child: content),
+        SizedBox(
+          key: const Key('info-card-box'),
+          height: inSidePane ? null : _infoCardHeight,
+          child: panel,
         ),
         Positioned(
           left: 0,
@@ -1075,6 +1086,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           bottom: 18,
           width: 6,
           child: DecoratedBox(
+            key: const Key('info-card-accent-bar'),
             decoration: BoxDecoration(
               color: accent,
               borderRadius: BorderRadius.circular(3),
@@ -1092,15 +1104,62 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       padding: inSidePane
           ? const EdgeInsets.fromLTRB(0, 8, 16, 16)
           : const EdgeInsets.fromLTRB(16, 8, 16, 84),
-      // 底栏这一份是**定高**的，右侧分栏那份不是：只有底栏会挤压网格，
-      // 分栏时网格在左边、各占各的高度（见 _infoCardHeight 的说明）。
-      child: inSidePane
-          ? card
-          : SizedBox(
-              key: const Key('info-card-box'),
-              height: _infoCardHeight,
-              child: card,
+      child: card,
+    );
+  }
+
+  /// 底栏卡片的正文：内容 + 底部色晕。
+  ///
+  /// 色晕吃的是内容之后的**剩余**高度 —— 内容少的日子它铺满空档，内容最满
+  /// 的日子高度归零、一点都不显示。
+  ///
+  /// `Expanded` 要求列高有界，而这里还要保住「字号被系统放大到装不下时卡片
+  /// 内部滚动」的兜底（滚动容器给出的正是无界高度）—— 两者靠
+  /// `ConstrainedBox(minHeight: 可用高) + IntrinsicHeight` 凑齐：正常字号下
+  /// 列被撑到可用高、色晕拿到差额；内容真的超出时列回落到内容高、滚动条
+  /// 生效、色晕正好是 0。
+  Widget _cardBodyWithGlow(Widget content, Color accent) {
+    return LayoutBuilder(
+      builder: (context, c) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: c.maxHeight),
+          child: IntrinsicHeight(
+            child: Column(
+              // 色晕要铺满整行。默认的 center 会让它按自身宽度收缩 ——
+              // `DecoratedBox` 没有子节点，宽度就是 0，等于什么都没画。
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                content,
+                Expanded(child: _bottomGlow(accent)),
+              ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 卡片下部的柔色晕：贴底、向上向外渐隐，与左侧色条同色（当天班次色）。
+  ///
+  /// 圆心落在底边之下、半径按短边算（`RadialGradient.radius` 是短边的倍数），
+  /// 所以横向也会自然淡出、不会在左右留硬边。
+  ///
+  /// 圆心的下沉量与半径必须**成对**调：半径一旦超过「圆心到顶边的距离」，
+  /// 渐变在余量区顶边还没衰减到 0，就会在那里留一条突兀的横线。这里取
+  /// 圆心 1.15、半径 1.2 —— 顶边处刚好衰减完，四周都是软的。
+  Widget _bottomGlow(Color accent) {
+    return DecoratedBox(
+      key: const Key('info-card-glow'),
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: const Alignment(0, 1.15),
+          radius: 1.2,
+          colors: [
+            accent.withValues(alpha: 0.24),
+            accent.withValues(alpha: 0.0),
+          ],
+        ),
+      ),
     );
   }
 
