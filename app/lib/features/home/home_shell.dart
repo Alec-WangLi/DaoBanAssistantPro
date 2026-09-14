@@ -174,6 +174,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         ),
       ),
       bottomNavigationBar: _GlassNavBar(
+        // 给工装用：按图标找 tab 时得能把它和页面里的同名图标区分开 —— 信息卡上
+        // 那个「N 项待办」徽章用的就是 `event_note_outlined`，与「待办」tab 同款。
+        key: const Key('glass-nav-bar'),
         controller: _controller,
         items: _items,
       ),
@@ -184,6 +187,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 /// 悬浮液态玻璃胶囊导航：点击切整数 tab，拖拽跟手、松手停在手指位置。
 class _GlassNavBar extends StatefulWidget {
   const _GlassNavBar({
+    super.key,
     required this.controller,
     required this.items,
   });

@@ -39,9 +39,17 @@ typedef _Shot = ({
 /// 切到某个底部导航 tab。
 ///
 /// 用**图标**而不是文字定位：导航标签与页面标题有两处重名（「闹钟」「我的」），
-/// `find.text` 会一次命中两个而抛错；四个导航图标则各不相同。
+/// `find.text` 会一次命中两个而抛错。
+///
+/// 但「四个导航图标各不相同」这句话**已经不再成立** —— v0.7.1 给日历信息卡加了
+/// 「N 项待办」徽章，用的就是 `event_note_outlined`，与「待办」tab 同款。所以查找
+/// 必须**限定在导航栏里**（导航栏带 `glass-nav-bar` 这个 key）。别再退回裸的
+/// `find.byIcon`：那会在「待办」这张图上匹配到两个控件、直接抛错。
 Future<void> _tapTab(WidgetTester tester, IconData icon) async {
-  await tester.tap(find.byIcon(icon));
+  await tester.tap(find.descendant(
+    of: find.byKey(const Key('glass-nav-bar')),
+    matching: find.byIcon(icon),
+  ));
 }
 
 /// 逐段移动的滚动手势。
