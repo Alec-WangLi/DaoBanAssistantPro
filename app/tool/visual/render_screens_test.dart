@@ -76,4 +76,19 @@ void main() {
       },
     );
   });
+
+  // 「两字简称」的日历：内置模板的简称都是单字，单字看不出胶囊放不放得下两个
+  // 字。v0.7.1 真机上两个字的简称被省略成「上…」、系统字号放大后整串消失 ——
+  // 这类问题只有看图能发现，所以单出一张。
+  visualTest('日历 · 两字简称', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await makeLongCycleCurrent(db);
+    await renderScreen(
+      tester,
+      name: '09_calendar_long_abbr',
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+    );
+  });
 }

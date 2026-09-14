@@ -333,6 +333,19 @@ Future<AppDatabase> makeVisualDatabase() async {
   return db;
 }
 
+/// 把「12 天长周期」那套设成当前方案（简称是「上夜 / 下夜」两个字）。
+///
+/// 用它单出一张「两字简称」的日历图：内置模板的简称都是**单字**，单字看不出
+/// 胶囊放不放得下两个字的简称。v0.7.1 真机上两个字被省略成「上…」、系统字号
+/// 放大后整串字直接消失，就是这类只有看图才能发现的问题。
+///
+/// 按名字找而不是记 id：id 由自增决定，写死会在改种子顺序时静默找错方案。
+Future<void> makeLongCycleCurrent(AppDatabase db) async {
+  final rows = await db.select(db.shiftScheduleRows).get();
+  final longCycle = rows.firstWhere((r) => r.name.contains('12 天'));
+  await AppRepository(db).setCurrentSchedule(longCycle.id);
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});

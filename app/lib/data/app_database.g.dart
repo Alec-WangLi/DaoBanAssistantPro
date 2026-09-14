@@ -1282,6 +1282,16 @@ class $ScheduleEventsTable extends ScheduleEvents
       defaultConstraints: GeneratedColumn.constraintIsAlways(
           'CHECK ("is_completed" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _alarmEnabledMeta =
+      const VerificationMeta('alarmEnabled');
+  @override
+  late final GeneratedColumn<bool> alarmEnabled = GeneratedColumn<bool>(
+      'alarm_enabled', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("alarm_enabled" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -1296,6 +1306,7 @@ class $ScheduleEventsTable extends ScheduleEvents
         timeMinute,
         advanceRemindMinutes,
         isCompleted,
+        alarmEnabled,
         createdAt
       ];
   @override
@@ -1341,6 +1352,12 @@ class $ScheduleEventsTable extends ScheduleEvents
           isCompleted.isAcceptableOrUnknown(
               data['is_completed']!, _isCompletedMeta));
     }
+    if (data.containsKey('alarm_enabled')) {
+      context.handle(
+          _alarmEnabledMeta,
+          alarmEnabled.isAcceptableOrUnknown(
+              data['alarm_enabled']!, _alarmEnabledMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -1368,6 +1385,8 @@ class $ScheduleEventsTable extends ScheduleEvents
           DriftSqlType.int, data['${effectivePrefix}advance_remind_minutes']),
       isCompleted: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_completed'])!,
+      alarmEnabled: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}alarm_enabled'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -1386,6 +1405,12 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
   final int? timeMinute;
   final int? advanceRemindMinutes;
   final bool isCompleted;
+
+  /// 到点是否走**闹钟**那条链路（全屏 + 循环铃声），而不是只弹一条通知。
+  ///
+  /// 与 [advanceRemindMinutes] 耦合：闹钟要有可响的时点，所以「不设提醒」的待办
+  /// 不可能开着闹钟（界面上这两者联动，见 `schedule_screen.dart`）。
+  final bool alarmEnabled;
   final DateTime createdAt;
   const ScheduleEvent(
       {required this.id,
@@ -1394,6 +1419,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
       this.timeMinute,
       this.advanceRemindMinutes,
       required this.isCompleted,
+      required this.alarmEnabled,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1408,6 +1434,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
       map['advance_remind_minutes'] = Variable<int>(advanceRemindMinutes);
     }
     map['is_completed'] = Variable<bool>(isCompleted);
+    map['alarm_enabled'] = Variable<bool>(alarmEnabled);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -1424,6 +1451,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           ? const Value.absent()
           : Value(advanceRemindMinutes),
       isCompleted: Value(isCompleted),
+      alarmEnabled: Value(alarmEnabled),
       createdAt: Value(createdAt),
     );
   }
@@ -1439,6 +1467,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
       advanceRemindMinutes:
           serializer.fromJson<int?>(json['advanceRemindMinutes']),
       isCompleted: serializer.fromJson<bool>(json['isCompleted']),
+      alarmEnabled: serializer.fromJson<bool>(json['alarmEnabled']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1452,6 +1481,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
       'timeMinute': serializer.toJson<int?>(timeMinute),
       'advanceRemindMinutes': serializer.toJson<int?>(advanceRemindMinutes),
       'isCompleted': serializer.toJson<bool>(isCompleted),
+      'alarmEnabled': serializer.toJson<bool>(alarmEnabled),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1463,6 +1493,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           Value<int?> timeMinute = const Value.absent(),
           Value<int?> advanceRemindMinutes = const Value.absent(),
           bool? isCompleted,
+          bool? alarmEnabled,
           DateTime? createdAt}) =>
       ScheduleEvent(
         id: id ?? this.id,
@@ -1473,6 +1504,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
             ? advanceRemindMinutes.value
             : this.advanceRemindMinutes,
         isCompleted: isCompleted ?? this.isCompleted,
+        alarmEnabled: alarmEnabled ?? this.alarmEnabled,
         createdAt: createdAt ?? this.createdAt,
       );
   ScheduleEvent copyWithCompanion(ScheduleEventsCompanion data) {
@@ -1487,6 +1519,9 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           : this.advanceRemindMinutes,
       isCompleted:
           data.isCompleted.present ? data.isCompleted.value : this.isCompleted,
+      alarmEnabled: data.alarmEnabled.present
+          ? data.alarmEnabled.value
+          : this.alarmEnabled,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1500,6 +1535,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           ..write('timeMinute: $timeMinute, ')
           ..write('advanceRemindMinutes: $advanceRemindMinutes, ')
           ..write('isCompleted: $isCompleted, ')
+          ..write('alarmEnabled: $alarmEnabled, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1507,7 +1543,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
 
   @override
   int get hashCode => Object.hash(id, title, date, timeMinute,
-      advanceRemindMinutes, isCompleted, createdAt);
+      advanceRemindMinutes, isCompleted, alarmEnabled, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1518,6 +1554,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           other.timeMinute == this.timeMinute &&
           other.advanceRemindMinutes == this.advanceRemindMinutes &&
           other.isCompleted == this.isCompleted &&
+          other.alarmEnabled == this.alarmEnabled &&
           other.createdAt == this.createdAt);
 }
 
@@ -1528,6 +1565,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
   final Value<int?> timeMinute;
   final Value<int?> advanceRemindMinutes;
   final Value<bool> isCompleted;
+  final Value<bool> alarmEnabled;
   final Value<DateTime> createdAt;
   const ScheduleEventsCompanion({
     this.id = const Value.absent(),
@@ -1536,6 +1574,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
     this.timeMinute = const Value.absent(),
     this.advanceRemindMinutes = const Value.absent(),
     this.isCompleted = const Value.absent(),
+    this.alarmEnabled = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   ScheduleEventsCompanion.insert({
@@ -1545,6 +1584,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
     this.timeMinute = const Value.absent(),
     this.advanceRemindMinutes = const Value.absent(),
     this.isCompleted = const Value.absent(),
+    this.alarmEnabled = const Value.absent(),
     required DateTime createdAt,
   })  : title = Value(title),
         date = Value(date),
@@ -1556,6 +1596,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
     Expression<int>? timeMinute,
     Expression<int>? advanceRemindMinutes,
     Expression<bool>? isCompleted,
+    Expression<bool>? alarmEnabled,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -1566,6 +1607,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
       if (advanceRemindMinutes != null)
         'advance_remind_minutes': advanceRemindMinutes,
       if (isCompleted != null) 'is_completed': isCompleted,
+      if (alarmEnabled != null) 'alarm_enabled': alarmEnabled,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -1577,6 +1619,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
       Value<int?>? timeMinute,
       Value<int?>? advanceRemindMinutes,
       Value<bool>? isCompleted,
+      Value<bool>? alarmEnabled,
       Value<DateTime>? createdAt}) {
     return ScheduleEventsCompanion(
       id: id ?? this.id,
@@ -1585,6 +1628,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
       timeMinute: timeMinute ?? this.timeMinute,
       advanceRemindMinutes: advanceRemindMinutes ?? this.advanceRemindMinutes,
       isCompleted: isCompleted ?? this.isCompleted,
+      alarmEnabled: alarmEnabled ?? this.alarmEnabled,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -1610,6 +1654,9 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
     if (isCompleted.present) {
       map['is_completed'] = Variable<bool>(isCompleted.value);
     }
+    if (alarmEnabled.present) {
+      map['alarm_enabled'] = Variable<bool>(alarmEnabled.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1625,6 +1672,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
           ..write('timeMinute: $timeMinute, ')
           ..write('advanceRemindMinutes: $advanceRemindMinutes, ')
           ..write('isCompleted: $isCompleted, ')
+          ..write('alarmEnabled: $alarmEnabled, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -2853,6 +2901,7 @@ typedef $$ScheduleEventsTableCreateCompanionBuilder = ScheduleEventsCompanion
   Value<int?> timeMinute,
   Value<int?> advanceRemindMinutes,
   Value<bool> isCompleted,
+  Value<bool> alarmEnabled,
   required DateTime createdAt,
 });
 typedef $$ScheduleEventsTableUpdateCompanionBuilder = ScheduleEventsCompanion
@@ -2863,6 +2912,7 @@ typedef $$ScheduleEventsTableUpdateCompanionBuilder = ScheduleEventsCompanion
   Value<int?> timeMinute,
   Value<int?> advanceRemindMinutes,
   Value<bool> isCompleted,
+  Value<bool> alarmEnabled,
   Value<DateTime> createdAt,
 });
 
@@ -2893,6 +2943,9 @@ class $$ScheduleEventsTableFilterComposer
 
   ColumnFilters<bool> get isCompleted => $composableBuilder(
       column: $table.isCompleted, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get alarmEnabled => $composableBuilder(
+      column: $table.alarmEnabled, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -2926,6 +2979,10 @@ class $$ScheduleEventsTableOrderingComposer
   ColumnOrderings<bool> get isCompleted => $composableBuilder(
       column: $table.isCompleted, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get alarmEnabled => $composableBuilder(
+      column: $table.alarmEnabled,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -2956,6 +3013,9 @@ class $$ScheduleEventsTableAnnotationComposer
 
   GeneratedColumn<bool> get isCompleted => $composableBuilder(
       column: $table.isCompleted, builder: (column) => column);
+
+  GeneratedColumn<bool> get alarmEnabled => $composableBuilder(
+      column: $table.alarmEnabled, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -2994,6 +3054,7 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             Value<int?> timeMinute = const Value.absent(),
             Value<int?> advanceRemindMinutes = const Value.absent(),
             Value<bool> isCompleted = const Value.absent(),
+            Value<bool> alarmEnabled = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               ScheduleEventsCompanion(
@@ -3003,6 +3064,7 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             timeMinute: timeMinute,
             advanceRemindMinutes: advanceRemindMinutes,
             isCompleted: isCompleted,
+            alarmEnabled: alarmEnabled,
             createdAt: createdAt,
           ),
           createCompanionCallback: ({
@@ -3012,6 +3074,7 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             Value<int?> timeMinute = const Value.absent(),
             Value<int?> advanceRemindMinutes = const Value.absent(),
             Value<bool> isCompleted = const Value.absent(),
+            Value<bool> alarmEnabled = const Value.absent(),
             required DateTime createdAt,
           }) =>
               ScheduleEventsCompanion.insert(
@@ -3021,6 +3084,7 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             timeMinute: timeMinute,
             advanceRemindMinutes: advanceRemindMinutes,
             isCompleted: isCompleted,
+            alarmEnabled: alarmEnabled,
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0

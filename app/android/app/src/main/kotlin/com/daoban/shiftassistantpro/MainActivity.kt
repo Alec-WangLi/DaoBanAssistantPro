@@ -29,6 +29,12 @@ class MainActivity : FlutterActivity() {
         var pendingAlarmLabel: String? = null
 
         /**
+         * 与 [pendingAlarmLabel] 配套的说明（标题下面那行）。班次/自定义闹钟为空，
+         * 待办的联动闹钟会带上「9月15日 周二 · 14:30」这样一行。
+         */
+        var pendingAlarmDetail: String? = null
+
+        /**
          * 由待办提醒的通知冷启动拉起时待处理的待办 id（Flutter 启动后读取）。
          * -1 = 没有。热启动不走这里，直接推 `onTodoTapped` 给已经在跑的 Dart。
          */
@@ -91,19 +97,25 @@ class MainActivity : FlutterActivity() {
 
     private fun handleAlarmIntent(intent: Intent?) {
         val label = intent?.getStringExtra("alarm_label")
+        val detail = intent?.getStringExtra("alarm_detail")
         AlarmLog.info(
             this,
             "MainActivity.handleAlarmIntent: label=$label, ${AlarmLog.deviceState(this)}"
         )
         if (label != null) {
             pendingAlarmLabel = label
+            pendingAlarmDetail = detail
             if (Build.VERSION.SDK_INT >= 27) {
                 setShowWhenLocked(true)
                 setTurnScreenOn(true)
                 AlarmLog.info(this, "MainActivity: 已 setShowWhenLocked(true)+setTurnScreenOn(true)")
             }
             AlarmLog.info(this, "MainActivity: invokeMethod(onAlarmFired, $label)")
-            flutterChannel?.invokeMethod("onAlarmFired", label)
+            // 两张牌一起给：响铃界面除了标题还要显示说明（待办的联动闹钟靠它
+            // 交代「什么事、几点」）。
+            flutterChannel?.invokeMethod(
+                "onAlarmFired", mapOf("label" to label, "detail" to detail)
+            )
         }
 
         // 待办提醒的通知被点开：冷启动时 Dart 还没就绪，先记下来由它 `init` 时取；
@@ -400,6 +412,7 @@ class MainActivity : FlutterActivity() {
                             val id = call.argument<Int>("id") ?: 0
                             val millis = call.argument<Long>("millis") ?: 0L
                             val label = call.argument<String>("label") ?: "闹钟"
+                            val detail = call.argument<String>("detail")
                             val repeatType = call.argument<Int>("repeatType") ?: 0
                             val hour = call.argument<Int>("hour") ?: 0
                             val minute = call.argument<Int>("minute") ?: 0
@@ -410,7 +423,7 @@ class MainActivity : FlutterActivity() {
                             val uri = sp.getString("flutter.ringtoneUri", null)
                             AlarmScheduler.schedule(
                                 this, id, millis, label, uri,
-                                repeatType, hour, minute, weekdays
+                                repeatType, hour, minute, weekdays, detail
                             )
                             AlarmLog.info(
                                 this,
@@ -459,10 +472,16 @@ class MainActivity : FlutterActivity() {
                             }
                         }.start()
                     }
-                    "getPendingAlarmLabel" -> {
+                    "getPendingAlarm" -> {
+                        // 冷启动那次：把标签与说明一起给出去，读完两个都清空。
                         val label = pendingAlarmLabel
+                        val detail = pendingAlarmDetail
                         pendingAlarmLabel = null
-                        result.success(label)
+                        pendingAlarmDetail = null
+                        result.success(
+                            if (label == null) null
+                            else mapOf("label" to label, "detail" to detail)
+                        )
                     }
                     "getPendingTodoId" -> {
                         val id = pendingTodoId

@@ -12,9 +12,13 @@ import 'alarm_service.dart';
 /// 底部「上滑关闭」滑块跟随手指；整屏上滑也可关闭；「再睡一会」玻璃按钮。
 /// 铃声由原生前台服务 AlarmRingService 统一播放。
 class AlarmRingingScreen extends StatefulWidget {
-  const AlarmRingingScreen({super.key, required this.label});
+  const AlarmRingingScreen({super.key, required this.label, this.detail});
 
   final String label;
+
+  /// 标题下面那行说明。待办的「联动闹钟」用它交代「什么事、几点」
+  /// （如「9月15日 周二 · 14:30」），班次/自定义闹钟不带，只显示标题。
+  final String? detail;
 
   @override
   State<AlarmRingingScreen> createState() => _AlarmRingingScreenState();
@@ -74,7 +78,8 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
 
   void _snooze() {
     AlarmService.stopAlarmSound();
-    AlarmService.snoozeAlarm(widget.label);
+    // 说明也要跟着续排，否则再睡一会之后那一次就只剩标题了。
+    AlarmService.snoozeAlarm(AlarmRing(widget.label, widget.detail));
     AlarmService.ringingAlarm.value = null;
     Navigator.of(context).popUntil((r) => r.isFirst);
   }
@@ -190,8 +195,9 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     );
   }
 
-  /// 闹钟标签的玻璃胶囊。
+  /// 闹钟标签的玻璃胶囊：标题一行，待办的联动闹钟再加一行说明。
   Widget _labelCapsule() {
+    final detail = widget.detail;
     return Container(
       padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.spaceLg, vertical: 8),
@@ -204,10 +210,25 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
         ),
         border: Border.all(color: AppTokens.glassBorder(true)),
       ),
-      child: Text(
-        widget.label,
-        textAlign: TextAlign.center,
-        style: AppTokens.rowPrimary.copyWith(color: AppTokens.inkDark),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.label,
+            textAlign: TextAlign.center,
+            style: AppTokens.rowPrimary.copyWith(color: AppTokens.inkDark),
+          ),
+          // 说明走这一屏既有的次要文字色（上滑滑块的提示字用的也是它）。
+          if (detail != null) ...[
+            const SizedBox(height: AppTokens.spaceXs),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: AppTokens.microText
+                  .copyWith(color: AppTokens.inkMutedDark),
+            ),
+          ],
+        ],
       ),
     );
   }

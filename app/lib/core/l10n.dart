@@ -188,6 +188,12 @@ class L10n {
   /// 没设时间的待办在通知里显示的时间段。
   static String get allDay => t('全天', 'All day');
 
+  /// 待办编辑里的「联动闹钟」开关。
+  static String get linkAlarm => t('联动闹钟', 'Ring as alarm');
+  static String get linkAlarmHint => t(
+      '到点全屏响铃（像班次闹钟那样）；关掉则只弹一条通知',
+      'Rings full-screen like a shift alarm; off means a notification only');
+
   /// 信息卡日期行上的待办提示：只说有几项，不列内容。
   static String todoCount(int n) =>
       isEn ? (n == 1 ? '1 todo' : '$n todos') : '$n 项待办';

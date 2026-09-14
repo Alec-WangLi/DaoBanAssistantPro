@@ -54,6 +54,12 @@ class ScheduleEvents extends Table {
   IntColumn get timeMinute => integer().nullable()();
   IntColumn get advanceRemindMinutes => integer().nullable()();
   BoolColumn get isCompleted => boolean().withDefault(const Constant(false))();
+
+  /// 到点是否走**闹钟**那条链路（全屏 + 循环铃声），而不是只弹一条通知。
+  ///
+  /// 与 [advanceRemindMinutes] 耦合：闹钟要有可响的时点，所以「不设提醒」的待办
+  /// 不可能开着闹钟（界面上这两者联动，见 `schedule_screen.dart`）。
+  BoolColumn get alarmEnabled => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -102,12 +108,16 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 7) {
+            // 待办的「联动闹钟」开关。默认关 = 保持旧行为（只弹通知）。
+            await m.addColumn(scheduleEvents, scheduleEvents.alarmEnabled);
+          }
           if (from < 5) {
             await m.createTable(shiftAlarmOverrides);
           }

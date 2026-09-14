@@ -138,13 +138,29 @@ class ScheduleScreen extends ConsumerWidget {
                         e.isCompleted ? TextDecoration.lineThrough : null,
                   ),
                 ),
-                Text(
-                  subtitle,
-                  style: AppTokens.microText.copyWith(
-                    color: e.isCompleted
-                        ? AppTokens.inkFaint(context)
-                        : AppTokens.inkMuted(context),
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTokens.microText.copyWith(
+                          color: e.isCompleted
+                              ? AppTokens.inkFaint(context)
+                              : AppTokens.inkMuted(context),
+                        ),
+                      ),
+                    ),
+                    // 开了联动闹钟的待办给个小铃铛：不用点进去就知道哪条会响。
+                    // 已完成的不给 —— 它不会再响了。
+                    if (e.alarmEnabled && !e.isCompleted) ...[
+                      const SizedBox(width: AppTokens.gapIconText),
+                      AppIcon(Icons.alarm_outlined,
+                          size: AppTokens.iconSm,
+                          color: AppTokens.inkMuted(context)),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -173,9 +189,7 @@ class ScheduleScreen extends ConsumerWidget {
 
   void _showAddDialog(BuildContext context, WidgetRef ref) {
     final titleCtrl = TextEditingController();
-    DateTime date = dateOnly(DateTime.now());
-    int? timeMinute;
-    int? advance;
+    final fields = _EventFields(date: dateOnly(DateTime.now()));
 
     showDialog(
       context: context,
@@ -194,54 +208,7 @@ class ScheduleScreen extends ConsumerWidget {
                     decoration: glassInputDecoration(context, L10n.title),
                   ),
                   const SizedBox(height: 12),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(L10n.date),
-                    trailing: Text(L10n.monthDay(date)),
-                    onTap: () async {
-                      final p = await showGlassDatePicker(
-                        context,
-                        initialDate: date,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (p != null) setState(() => date = dateOnly(p));
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(L10n.timeOptional),
-                    trailing: Text(
-                        timeMinute == null ? L10n.none : _fmt(timeMinute!)),
-                    onTap: () async {
-                      final p = await showGlassTimePicker(
-                        context,
-                        initialTime: TimeOfDay.now(),
-                      );
-                      if (p != null) {
-                        setState(
-                            () => timeMinute = p.hour * 60 + p.minute);
-                      }
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(L10n.advanceRemindOptional),
-                    trailing: Text(
-                        L10n.remindOptionLabel(advance ?? L10n.remindNone)),
-                    onTap: () async {
-                      final picked = await showGlassOptionPicker<int>(
-                        context,
-                        title: L10n.advanceRemindOptional,
-                        options: L10n.remindOptions,
-                        labelOf: L10n.remindOptionLabel,
-                        selected: advance ?? L10n.remindNone,
-                      );
-                      // null = 点外面关掉了，保持原值不动。
-                      if (picked == null) return;
-                      setState(() => advance = picked < 0 ? null : picked);
-                    },
-                  ),
+                  ...fields.build(context, setState),
                 ],
               ),
               actions: [
@@ -257,9 +224,10 @@ class ScheduleScreen extends ConsumerWidget {
                     if (title.isEmpty) return;
                     await ref.read(appRepositoryProvider).addEvent(
                           title: title,
-                          date: date,
-                          timeMinute: timeMinute,
-                          advanceRemindMinutes: advance,
+                          date: fields.date,
+                          timeMinute: fields.timeMinute,
+                          advanceRemindMinutes: fields.advance,
+                          alarmEnabled: fields.alarm,
                         );
                     await _rescheduleReminders(ref);
                     if (context.mounted) Navigator.pop(context);
@@ -276,9 +244,12 @@ class ScheduleScreen extends ConsumerWidget {
 
   void _showEditDialog(BuildContext context, WidgetRef ref, ScheduleEvent e) {
     final titleCtrl = TextEditingController(text: e.title);
-    DateTime date = e.date;
-    int? timeMinute = e.timeMinute;
-    int? advance = e.advanceRemindMinutes;
+    final fields = _EventFields(
+      date: e.date,
+      timeMinute: e.timeMinute,
+      advance: e.advanceRemindMinutes,
+      alarm: e.alarmEnabled,
+    );
 
     showDialog(
       context: context,
@@ -297,48 +268,7 @@ class ScheduleScreen extends ConsumerWidget {
                     decoration: glassInputDecoration(context, L10n.title),
                   ),
                   const SizedBox(height: 12),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(L10n.date),
-                    trailing: Text(L10n.monthDay(date)),
-                    onTap: () async {
-                      final p = await showGlassDatePicker(
-                        context,
-                        initialDate: date,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (p != null) setState(() => date = dateOnly(p));
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(L10n.timeOptional),
-                    trailing: Text(
-                        timeMinute == null ? L10n.none : _fmt(timeMinute!)),
-                    onTap: () async {
-                      final p = await showGlassTimePicker(
-                        context,
-                        initialTime: timeMinute == null
-                            ? TimeOfDay.now()
-                            : TimeOfDay(
-                                hour: timeMinute! ~/ 60,
-                                minute: timeMinute! % 60),
-                      );
-                      if (p != null) {
-                        setState(() => timeMinute = p.hour * 60 + p.minute);
-                      }
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(L10n.advanceRemindOptional),
-                    trailing: Text(advance == null
-                        ? L10n.none
-                        : (L10n.isEn ? '$advance min' : '$advance 分钟')),
-                    onTap: () =>
-                        setState(() => advance = advance == null ? 15 : null),
-                  ),
+                  ...fields.build(context, setState),
                 ],
               ),
               actions: [
@@ -355,9 +285,10 @@ class ScheduleScreen extends ConsumerWidget {
                     await ref.read(appRepositoryProvider).updateEvent(
                           e,
                           title: title,
-                          date: date,
-                          timeMinute: timeMinute,
-                          advanceRemindMinutes: advance,
+                          date: fields.date,
+                          timeMinute: fields.timeMinute,
+                          advanceRemindMinutes: fields.advance,
+                          alarmEnabled: fields.alarm,
                         );
                     await _rescheduleReminders(ref);
                     if (context.mounted) Navigator.pop(context);
@@ -370,6 +301,99 @@ class ScheduleScreen extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+/// 待办弹窗里那几个可编辑字段：日期 / 时间 / 提醒档位 / 联动闹钟。
+///
+/// **「添加」与「编辑」两个弹窗共用同一份实现**。v0.7.1 就是在这里出的岔子：
+/// 两处各写了一遍，改提醒档位时只改到「添加」，编辑弹窗还停在旧的两档开关上
+/// （点它只在「不设 / 15 分钟」之间跳）。现在只有一个来源，改一处两处都对。
+class _EventFields {
+  _EventFields({
+    required this.date,
+    this.timeMinute,
+    this.advance,
+    this.alarm = false,
+  });
+
+  DateTime date;
+
+  /// 分钟自午夜；null = 没设时间。
+  int? timeMinute;
+
+  /// 提醒档位：null = 不设，0 = 准时，其余为提前的分钟数。
+  int? advance;
+
+  /// 到点走**闹钟**（全屏 + 循环铃声）而不是只弹一条通知。
+  bool alarm;
+
+  List<Widget> build(BuildContext context, StateSetter setState) {
+    return [
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(L10n.date),
+        trailing: Text(L10n.monthDay(date)),
+        onTap: () async {
+          final p = await showGlassDatePicker(
+            context,
+            initialDate: date,
+            firstDate: DateTime(2000),
+            lastDate: DateTime(2100),
+          );
+          if (p != null) setState(() => date = dateOnly(p));
+        },
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(L10n.timeOptional),
+        trailing: Text(timeMinute == null ? L10n.none : _fmt(timeMinute!)),
+        onTap: () async {
+          final p = await showGlassTimePicker(
+            context,
+            initialTime: timeMinute == null
+                ? TimeOfDay.now()
+                : TimeOfDay(hour: timeMinute! ~/ 60, minute: timeMinute! % 60),
+          );
+          if (p != null) setState(() => timeMinute = p.hour * 60 + p.minute);
+        },
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(L10n.advanceRemindOptional),
+        trailing: Text(L10n.remindOptionLabel(advance ?? L10n.remindNone)),
+        onTap: () async {
+          final picked = await showGlassOptionPicker<int>(
+            context,
+            title: L10n.advanceRemindOptional,
+            options: L10n.remindOptions,
+            labelOf: L10n.remindOptionLabel,
+            selected: advance ?? L10n.remindNone,
+          );
+          // null = 点外面关掉了，保持原值不动。
+          if (picked == null) return;
+          setState(() {
+            advance = picked < 0 ? null : picked;
+            // 「不设」的意思就是别提醒我 —— 联动闹钟跟着关掉。不然开关开着、
+            // 却没有可响的时刻，用户会以为它会响（而它永远不会）。
+            if (advance == null) alarm = false;
+          });
+        },
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(L10n.linkAlarm),
+        subtitle: Text(L10n.linkAlarmHint),
+        trailing: GlassSwitch(
+          value: alarm,
+          onChanged: (v) => setState(() {
+            alarm = v;
+            // 开着闹钟就得有个可响的时点：提醒是「不设」时自动补成「准时」。
+            if (v) advance ??= 0;
+          }),
+        ),
+      ),
+    ];
   }
 }
 

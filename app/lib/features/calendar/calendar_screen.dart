@@ -760,12 +760,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 排布按**这天有没有班次**分两种，一个方案要么整月有班次、要么整月没有，
   /// 所以两种排布不会混在同一个月里：
   ///
-  /// - **有班次**：日期缩到左上角当定位标记，班次做成带底色的胶囊垂直居中，
-  ///   农历留底部居中。日历里最该一眼看到的是「哪天是什么班」，所以班次占
-  ///   中位、带底色，日期退成配角。格子窄到装不下胶囊（小窗）时退回彩色文字。
-  /// - **无班次**（「跟随法定节假日（无班次）」那套方案，以及还没建排班）：
-  ///   日期 + 农历居中两行。把日期钉在左上角，这一支就成了「左上角一个日期、
-  ///   底部一个农历、中间空一格」，很难看 —— 所以整月都保持居中。
+  /// 三行**全部居中**：日期 / 班次 / 农历。日历里最该一眼看到的是「哪天是什么
+  /// 班」，所以班次做成带底色的胶囊占中位，日期与农历都不抢戏。
+  ///
+  /// 日期曾经缩到左上角当定位标记 —— 收回居中，因为格子是**圆角**矩形，左上角
+  /// 那一小块是被切掉的：日期贴着内容框的左缘，就会蹭到圆角的弧度外，看起来像
+  /// 溢出了格子（班组多、卡片更高、格子更矮时最明显）。
+  ///
+  /// 「无班次」（「跟随法定节假日（无班次）」那套方案，以及还没建排班）只是少画
+  /// 中间那一行，三行居中的骨架不变。
   ///
   /// 格子里的字按**格子高度**等比缩放（[AppTokens.scaled]）：格子高是按剩余
   /// 空间算出来的，长高时字不跟着长，格子里就空出一大块、字显得小。
@@ -782,8 +785,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 缩放系数按**去掉格子内缩后的可用高**算：内容排在被 `_cellInset` 收窄的
     // 盒子里，用 cellH 直接算会让内容恒比盒子高一点点，外层的 FittedBox 每次
     // 都缩回去一档，等于缩放没生效。
-    final s = ((cellH - _cellInset * 2) / _cellDesignH)
-        .clamp(1.0, _cellMaxScale);
+    final s =
+        ((cellH - _cellInset * 2) / _cellDesignH).clamp(1.0, _cellMaxScale);
     final contentW = cellW - _cellInset * 2;
     // 太窄就画不出胶囊（小窗里格宽只有 25），退回彩色文字。
     final chip = shift != null && contentW >= _chipMinContentW;
@@ -793,7 +796,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       child: Text(
         '${date.day}',
         maxLines: 1,
-        // `cellDate` 自带 height 1.15：M3 默认行高 1.5，三行文字的行盒加起来
+        // `cellDateSm` 自带 height 1.15：M3 默认行高 1.5，三行文字的行盒加起来
         // 比格子可用高度多出几个像素，真机上每个格子都会 BOTTOM OVERFLOWED。
         // 今天加粗走同一角色的 `copyWith`，不另立令牌。
         style: AppTokens.scaled(AppTokens.cellDateSm, s).copyWith(
@@ -827,29 +830,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       ),
     );
 
-    final children = <Widget>[];
-    if (chip) {
-      children.add(Align(alignment: Alignment.centerLeft, child: dateLine));
+    final children = <Widget>[dateLine];
+    if (shift != null) {
       children.add(const SizedBox(height: AppTokens.gapHair));
-      children.add(_shiftChip(context, shift, s, contentW, solid,
-          ValueKey('day-chip-${date.day}')));
-    } else {
-      children.add(dateLine);
-      children.add(const SizedBox(height: AppTokens.gapHair));
-      if (shift != null) {
-        children.add(Text(
-          shift.shortLabel,
-          // 简称上限是 1–2 字，但格宽固定，多一个字就会撑破竖向节奏；
-          // 单行 + 省略号让任何长度都不破版。
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTokens.scaled(AppTokens.microStrong, s).copyWith(
-            // 班次色是给色块用的强色，当文字色太浅（橙 2.06:1、灰 2.60:1），
-            // 得按格子底色算一版可读的。
-            color: AppTokens.inkFor(Color(shift.color), surface),
-          ),
-        ));
-      }
+      children.add(chip
+          ? _shiftChip(context, shift, s, solid,
+              ValueKey('day-chip-${date.day}'))
+          : Text(
+              shift.shortLabel,
+              // 窄到画不出胶囊时的退路：班次色是给色块用的强色，当文字色太浅
+              // （橙 2.06:1、灰 2.60:1），要按格子底色算一版可读的。
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTokens.scaled(AppTokens.microStrong, s).copyWith(
+                color: AppTokens.inkFor(Color(shift.color), surface),
+              ),
+            ));
     }
     children
       ..add(const SizedBox(height: AppTokens.gapHair))
@@ -905,7 +901,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// —— 两个候选（`inkFor` 与 `onSolid`）各自在对应底色上可读，中间态可接受，
   /// 而 Color.lerp 两个可读色反而会穿过不可读区。
   Widget _shiftChip(BuildContext context, ShiftClass shift, double s,
-      double contentW, bool solid, Key key) {
+      bool solid, Key key) {
     final color = Color(shift.color);
     final fill = solid ? 1.0 : 0.14;
     final ink = solid
@@ -916,11 +912,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 color.withValues(alpha: fill),
                 Theme.of(context).colorScheme.surface));
     final label = shift.shortLabel;
-    // 宽度兜底：简称是用户可改的，两个字塞进窄格子时会显示成「早…」，比不用
-    // 胶囊还差。按可用宽度算一版字号上限，与高度缩放取小。
-    final textW = contentW - _chipPadH * s * 2 - 2;
-    final fontSize = math.min(
-        AppTokens.cellShift.fontSize! * s, textW / label.runes.length);
 
     return AnimatedContainer(
       key: key,
@@ -934,11 +925,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         border: Border.all(
             color: solid ? color : color.withValues(alpha: 0.45)),
       ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: AppTokens.cellShift.copyWith(fontSize: fontSize, color: ink),
+      // 文字套一层 `scaleDown`：简称是用户可改的（可能两个字、三个字），系统
+      // 字号也可能被放大 —— 光按「字数 × 基准字号」算可用宽度是**零余量**的，
+      // 差一点点就退化成省略号，再多一点整串字都放不下、只剩一个空胶囊
+      // （v0.7.1 真机实测：两字简称显示成「上…」，系统字号放大后直接空白）。
+      // 交给 FittedBox 按实际排版缩，放得下就一个像素都不缩。
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          maxLines: 1,
+          style: AppTokens.scaled(AppTokens.cellShift, s).copyWith(color: ink),
+        ),
       ),
     );
   }
@@ -1452,22 +1450,24 @@ const double _cellAspect = 0.78;
 const double _cellAspectMin = 0.62;
 
 /// 格子内容在**设计尺寸**下的自然高度：日期 `cellDateSm` 13×1.15 + `gapHair` +
-/// 班次胶囊（`cellShift` 15×1.15 + 上下 `padChipV` 各 3 + 描边 1×2）+ `gapHair`
-/// + 农历 `tinyLabel` 11×1.15 ≈ 56.9。
+/// 班次胶囊（`cellShift` 13×1.15 + 上下 `padChipV` 各 3 + 描边 1×2）+ `gapHair`
+/// + 农历 `tinyLabel` 11×1.15 ≈ 54.6。
 ///
 /// 格子里的字按 `(cellH − 内缩) / 这个值` 等比缩放（见 `_dayCell`），所以它就是
 /// 「缩放系数 1.0」的那把尺子。
-const double _cellDesignH = 57;
+const double _cellDesignH = 55;
 
 /// 格子字号的缩放上限。再大就喧宾夺主：格子被字填满、格子之间的呼吸感没了。
-const double _cellMaxScale = 1.35;
+/// 1.25 是 v0.7.2 从 1.35 调下来的（配合 `cellShift` 15→13），单字胶囊的字号
+/// 上限从 20.25 降到 16.25。
+const double _cellMaxScale = 1.25;
 
 /// 班次胶囊的左右内边距。比信息卡色块的 8 窄一档：这里装的是 1–2 个字的简称，
-/// 8 会让单字胶囊的宽度接近文字的两倍，手机上（格内容宽约 44）就装不下。
+/// 8 会让单字胶囊的宽度接近文字的两倍，手机上（格内容宽约 52）就装不下。
 const double _chipPadH = AppTokens.gapIconText;
 
 /// 画胶囊所需的最小内容宽度。单字胶囊在设计尺寸下自然宽
-/// `_chipPadH`×2 + 描边 1×2 + 15 = 29，留一点余量取 34。
+/// `_chipPadH`×2 + 描边 1×2 + 13 = 27，留一点余量取 34。
 /// 小窗（200 宽）格子内容宽只有 21，落到这条线以下就退回纯色文字。
 const double _chipMinContentW = 34;
 
@@ -1475,14 +1475,12 @@ const double _chipMinContentW = 34;
 ///
 /// 不画胶囊的那一支（无班次方案、小窗）是日期 `cellDateSm` 13 + `gapHair` 2 +
 /// 班次简称 `microStrong` 12 + `gapHair` 2 + 农历 `tinyLabel` 11，三者都自带
-/// `height: 1.15` 压过行盒：≈ 48.9，再加格子自身 `_cellInset` 上下各 2 一共 4
-/// —— 约 52.9，落在 58 之内，留约 5 的余量。
+/// `height: 1.15` 压过行盒：≈ 45.4，再加格子自身 `_cellInset` 上下各 2 一共 4
+/// —— 约 49.4，稳稳落在 58 之内。
 ///
-/// 画胶囊那一支更高（内容 ≈ 56.9、加内缩约 60.9），**高过这道下限 3dp**。但
-/// 两支不会同时出现在一条分支上：下限真正生效的地方（小窗、短屏）正是格宽装不下
-/// 胶囊的地方，那里量的是 52.9；卡在两条线之间的格子（横屏那种又宽又矮的）由
-/// `_dayCell` 那层 `FittedBox` 按需缩掉几个百分点。所以不为胶囊抬高下限 ——
-/// 抬了就等于让网格自己制造溢出（见下）。
+/// 画胶囊那一支高一些（内容 ≈ 54.6、加内缩约 58.6），**正好贴着这道下限**：
+/// 多出来的零点几像素由 `_dayCell` 那层 `FittedBox` 按需缩掉，肉眼看不出来，
+/// 所以这里不为它抬低下限。
 ///
 /// **曾经是 80**，那是 `height: 1.15` 压行盒之前按 M3 默认行高 1.5 标定的
 /// （27 + 2 + 18 + 2 + 16.5 + 4 ≈ 70，再垫到 80）。行盒压紧后这个数一直没

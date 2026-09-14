@@ -126,13 +126,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   }
 
   void _showRinging() {
-    final label = AlarmService.ringingAlarm.value;
-    if (label == null || !mounted) return;
-    AlarmService.logInfo('HomeShell: 弹出全屏响铃界面 label=$label');
+    final ring = AlarmService.ringingAlarm.value;
+    if (ring == null || !mounted) return;
+    AlarmService.logInfo('HomeShell: 弹出全屏响铃界面 label=${ring.title}');
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => AlarmRingingScreen(label: label),
+        builder: (_) =>
+            AlarmRingingScreen(label: ring.title, detail: ring.detail),
       ),
     );
   }

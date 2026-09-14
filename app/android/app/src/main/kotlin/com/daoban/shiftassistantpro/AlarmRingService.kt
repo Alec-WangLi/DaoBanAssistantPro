@@ -26,12 +26,13 @@ class AlarmRingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val label = intent?.getStringExtra("label") ?: "闹钟"
+        val detail = intent?.getStringExtra("detail")
         val uriStr = intent?.getStringExtra("uri")
         AlarmLog.info(
             this,
             "AlarmRingService.onStartCommand: label=$label, ${AlarmLog.deviceState(this)}"
         )
-        startForeground(1, buildNotification(label))
+        startForeground(1, buildNotification(label, detail))
         AlarmLog.info(this, "AlarmRingService: startForeground 完成，通知已带 fullScreenIntent + CATEGORY_ALARM")
         wakeScreen()
         startSound(uriStr)
@@ -74,7 +75,7 @@ class AlarmRingService : Service() {
         }
     }
 
-    private fun buildNotification(label: String): Notification {
+    private fun buildNotification(label: String, detail: String?): Notification {
         val channelId = "alarm_ring"
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
@@ -105,7 +106,9 @@ class AlarmRingService : Service() {
         return Notification.Builder(this, channelId)
             .setSmallIcon(getDrawableId("ic_notification"))
             .setContentTitle(label)
-            .setContentText("闹钟响了，点击停止")
+            // 待办的联动闹钟会带说明（「9月15日 周二 · 14:30」），那比一句通用的
+            // 「闹钟响了」有用得多 —— 用户瞟一眼通知就知道是什么事。
+            .setContentText(detail ?: "闹钟响了，点击停止")
             .setContentIntent(pi)
             .setFullScreenIntent(fullScreenPi, true)
             .setCategory(Notification.CATEGORY_ALARM)

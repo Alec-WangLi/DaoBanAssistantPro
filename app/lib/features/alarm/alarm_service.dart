@@ -23,6 +23,27 @@ class RingtonePickException implements Exception {
   bool get isTooLarge => code == 'RINGTONE_TOO_LARGE';
 }
 
+/// 正在响铃的闹钟要显示的内容：主标题 +（可选的）说明。
+///
+/// 说明是给待办的「联动闹钟」准备的：光一个标题说不清「这是什么事、几点钟」，
+/// 响铃界面要把待办本身交代清楚（`detail` 就是「9月15日 周二 · 14:30」）。
+/// 班次/自定义闹钟不带说明，响铃界面只显示标题，与从前一致。
+class AlarmRing {
+  const AlarmRing(this.title, [this.detail]);
+
+  final String title;
+  final String? detail;
+
+  /// 由原生侧回传的 `{label, detail}` 构造；label 为空返回 null。
+  static AlarmRing? fromMap(Object? raw) {
+    if (raw is! Map) return null;
+    final label = raw['label'];
+    if (label is! String || label.isEmpty) return null;
+    final detail = raw['detail'];
+    return AlarmRing(label, (detail is String && detail.isNotEmpty) ? detail : null);
+  }
+}
+
 /// 联动班次闹钟 + 自定义闹钟服务。
 ///
 /// 排班闹钟排定未来 365 天；每次打开 App 自动续排，跟着排班走、不过期。
@@ -51,10 +72,11 @@ class AlarmService {
     // 待办提醒被点开时同样由它通知我们切到「待办」页。
     _settingsChannel.setMethodCallHandler((call) async {
       if (call.method == 'onAlarmFired') {
-        final label = call.arguments;
-        await logInfo('Dart 收到 onAlarmFired: label=$label');
-        if (label is String && label.isNotEmpty) {
-          ringingAlarm.value = label;
+        // 原生侧回传的是 {label, detail} 两张牌（见 MainActivity.handleAlarmIntent）
+        final ring = AlarmRing.fromMap(call.arguments);
+        await logInfo('Dart 收到 onAlarmFired: ${ring?.title}');
+        if (ring != null) {
+          ringingAlarm.value = ring;
         }
       } else if (call.method == 'onTodoTapped') {
         await logInfo('Dart 收到 onTodoTapped');
@@ -84,16 +106,17 @@ class AlarmService {
       if (launch?.didNotificationLaunchApp == true) {
         final payload = launch?.notificationResponse?.payload;
         if (payload != null && payload.isNotEmpty) {
-          ringingAlarm.value = payload;
+          // 插件这条路径的载荷就是标签（没有说明），与原生那两条一致地包一层。
+          ringingAlarm.value = AlarmRing(payload);
         }
       }
     } catch (_) {}
 
     // 冷启动：检查是否由原生闹钟（AlarmReceiver）拉起
-    final nativeLabel = await getPendingAlarmLabel();
-    if (nativeLabel != null) {
-      await logInfo('Dart init: 冷启动读取 pendingAlarmLabel=$nativeLabel');
-      ringingAlarm.value = nativeLabel;
+    final nativeAlarm = await getPendingAlarm();
+    if (nativeAlarm != null) {
+      await logInfo('Dart init: 冷启动读取 pendingAlarm=${nativeAlarm.title}');
+      ringingAlarm.value = nativeAlarm;
     }
 
     // 冷启动：检查是否由待办提醒的通知拉起
@@ -107,7 +130,7 @@ class AlarmService {
   static void _onNotificationResponse(NotificationResponse response) {
     final payload = response.payload;
     if (payload != null && payload.isNotEmpty) {
-      ringingAlarm.value = payload;
+      ringingAlarm.value = AlarmRing(payload);
     }
   }
 
@@ -207,10 +230,14 @@ class AlarmService {
 
   /// 排一个原生闹钟（setAlarmClock → AlarmReceiver → 前台服务响铃 + 全屏）。
   /// [repeatType]：0=一次性，1=每天，2=每周（触发后由原生侧自动续排下一次）。
+  ///
+  /// [detail] 是响铃界面上标题下面那行说明（待办的联动闹钟用它交代「什么事、
+  /// 几点」）；班次/自定义闹钟不传，响铃界面就只显示标题。
   static Future<void> scheduleNativeAlarm(
     int id,
     DateTime fireAt,
     String label, {
+    String? detail,
     int repeatType = 0,
     int hour = 0,
     int minute = 0,
@@ -221,6 +248,7 @@ class AlarmService {
         'id': id,
         'millis': fireAt.millisecondsSinceEpoch,
         'label': label,
+        'detail': detail,
         'repeatType': repeatType,
         'hour': hour,
         'minute': minute,
@@ -247,11 +275,11 @@ class AlarmService {
     } catch (_) {}
   }
 
-  /// 读取由原生闹钟拉起时携带的闹钟标签（一次性）。
-  static Future<String?> getPendingAlarmLabel() async {
+  /// 读取由原生闹钟拉起时携带的标题与说明（一次性）。
+  static Future<AlarmRing?> getPendingAlarm() async {
     try {
-      final label = await _settingsChannel.invokeMethod('getPendingAlarmLabel');
-      return (label is String && label.isNotEmpty) ? label : null;
+      final raw = await _settingsChannel.invokeMethod('getPendingAlarm');
+      return AlarmRing.fromMap(raw);
     } catch (_) {
       return null;
     }
@@ -438,8 +466,9 @@ class AlarmService {
     } catch (_) {}
   }
 
-  /// 当前正在响铃的闹钟标签（null 表示没在响）。由通知回调/冷启动触发。
-  static final ValueNotifier<String?> ringingAlarm = ValueNotifier<String?>(null);
+  /// 当前正在响铃的闹钟（null 表示没在响）。由通知回调/冷启动触发。
+  static final ValueNotifier<AlarmRing?> ringingAlarm =
+      ValueNotifier<AlarmRing?>(null);
 
   /// 开始响铃（原生 MediaPlayer 循环播放 + 震动），绕开通知声音系统。
   static Future<void> startAlarmSound() async {
@@ -460,11 +489,11 @@ class AlarmService {
     } catch (_) {}
   }
 
-  /// 再睡一会：5 分钟后重新响铃（原生闹钟）。
-  static Future<void> snoozeAlarm(String label) async {
+  /// 再睡一会：5 分钟后重新响铃（原生闹钟），标题与说明原样带过去。
+  static Future<void> snoozeAlarm(AlarmRing ring) async {
     try {
       final fire = DateTime.now().add(const Duration(minutes: 5));
-      await scheduleNativeAlarm(99998, fire, label);
+      await scheduleNativeAlarm(99998, fire, ring.title, detail: ring.detail);
     } catch (e) {
       await appendLog('snoozeAlarm 排定失败: $e');
     }
@@ -674,6 +703,10 @@ class AlarmService {
   ///
   /// 待办页的增删改**不**走 [rescheduleAll]：那会把上千条班次闹钟全部取消再
   /// 重排一遍，而勾一个复选框其实只需要改这一条待办的通知。
+  ///
+  /// 一条待办按 `alarmEnabled` **二选一**：联动闹钟（全屏 + 循环铃声）或普通
+  /// 通知。两者用的是同一个 id（`_eventBaseId + e.id`），但目标组件不同
+  /// （`AlarmReceiver` / `TodoReminderReceiver`），所以取消时两种都要扫。
   static Future<void> rescheduleEventReminders(
       List<ScheduleEvent> events) async {
     await cancelAllTodoReminders();
@@ -682,12 +715,17 @@ class AlarmService {
       final fireAt = eventReminderTime(e);
       if (fireAt == null || !fireAt.isAfter(now)) continue;
       try {
-        await scheduleTodoReminder(
-          _eventBaseId + e.id,
-          fireAt,
-          title: e.title,
-          body: eventReminderBody(e),
-        );
+        if (e.alarmEnabled) {
+          await scheduleNativeAlarm(_eventBaseId + e.id, fireAt, e.title,
+              detail: eventReminderBody(e));
+        } else {
+          await scheduleTodoReminder(
+            _eventBaseId + e.id,
+            fireAt,
+            title: e.title,
+            body: eventReminderBody(e),
+          );
+        }
       } catch (err) {
         await appendLog('rescheduleEventReminders: 排定失败: $err');
       }

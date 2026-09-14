@@ -76,21 +76,28 @@ object AlarmScheduler {
         }
     }
 
-    /** 按 id 区间取消全部待办提醒。 */
+    /** 按 id 区间取消全部待办提醒与待办闹钟。 */
     fun cancelTodoReminders(context: Context, from: Int = 0, to: Int = 1000) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        // **两种目标都要扫**：同一条待办按「联动闹钟」开关二选一 —— 开走
+        // AlarmReceiver（响铃），关走 TodoReminderReceiver（通知）。两者用的是
+        // 同一个 id，只扫一种就会把另一种留成幽灵闹钟，到点还会响。
+        val targets = listOf(AlarmReceiver::class.java, TodoReminderReceiver::class.java)
         for (i in from until to) {
-            try {
-                val pi = PendingIntent.getBroadcast(
-                    context,
-                    TODO_BASE_ID + i,
-                    // 只比 action/data/type/class/categories，extras 不参与，所以
-                    // 这里给个空 Intent 也能稳稳取消掉排定时那个。
-                    Intent(context, TodoReminderReceiver::class.java),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                am.cancel(pi)
-            } catch (_: Exception) {
+            val id = TODO_BASE_ID + i
+            for (target in targets) {
+                try {
+                    val pi = PendingIntent.getBroadcast(
+                        context,
+                        id,
+                        // 只比 action/data/type/class/categories，extras 不参与，
+                        // 所以空 Intent 也能稳稳取消掉排定时那个。
+                        Intent(context, target),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    am.cancel(pi)
+                } catch (_: Exception) {
+                }
             }
         }
     }
@@ -104,7 +111,8 @@ object AlarmScheduler {
         repeatType: Int = 0,
         hour: Int = 0,
         minute: Int = 0,
-        weekdays: Int = 0
+        weekdays: Int = 0,
+        detail: String? = null
     ) {
         // showIntent：系统「闹钟图标/通知」用的 Activity，点击回到本 App。
         val show = Intent(context, MainActivity::class.java).apply {
@@ -114,6 +122,7 @@ object AlarmScheduler {
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
             putExtra("alarm_label", label)
+            putExtra("alarm_detail", detail)
         }
         val showPi = PendingIntent.getActivity(
             context, id, show,
@@ -129,6 +138,7 @@ object AlarmScheduler {
             putExtra("hour", hour)
             putExtra("minute", minute)
             putExtra("weekdays", weekdays)
+            putExtra("detail", detail)
         }
         val opPi = PendingIntent.getBroadcast(
             context, id, op,

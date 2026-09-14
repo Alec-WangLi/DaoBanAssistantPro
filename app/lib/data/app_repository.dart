@@ -294,6 +294,7 @@ class AppRepository {
     required DateTime date,
     int? timeMinute,
     int? advanceRemindMinutes,
+    bool alarmEnabled = false,
   }) {
     return db.into(db.scheduleEvents).insert(
           ScheduleEventsCompanion.insert(
@@ -301,6 +302,7 @@ class AppRepository {
             date: dateOnly(date),
             timeMinute: Value(timeMinute),
             advanceRemindMinutes: Value(advanceRemindMinutes),
+            alarmEnabled: Value(alarmEnabled),
             createdAt: DateTime.now(),
           ),
         );
@@ -312,6 +314,7 @@ class AppRepository {
     required DateTime date,
     int? timeMinute,
     int? advanceRemindMinutes,
+    bool alarmEnabled = false,
   }) {
     return (db.update(db.scheduleEvents)..where((r) => r.id.equals(e.id)))
         .write(ScheduleEventsCompanion(
@@ -319,6 +322,7 @@ class AppRepository {
       date: Value(dateOnly(date)),
       timeMinute: Value(timeMinute),
       advanceRemindMinutes: Value(advanceRemindMinutes),
+      alarmEnabled: Value(alarmEnabled),
     ));
   }
 

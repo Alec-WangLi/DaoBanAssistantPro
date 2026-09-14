@@ -18,6 +18,7 @@ ScheduleEvent _event({
   int? timeMinute,
   int? advance,
   bool completed = false,
+  bool alarm = false,
 }) {
   final d = date ?? DateTime.now();
   return ScheduleEvent(
@@ -27,6 +28,7 @@ ScheduleEvent _event({
     timeMinute: timeMinute,
     advanceRemindMinutes: advance,
     isCompleted: completed,
+    alarmEnabled: alarm,
     createdAt: DateTime.now(),
   );
 }

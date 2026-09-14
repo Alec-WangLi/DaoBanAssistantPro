@@ -41,7 +41,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.7.1\n'
+const String _changelogZh = 'v0.7.2\n'
+    '· 日历格子：班次的字号调小一档；两个字的简称（如「上夜」「下夜」）不再被省略成「上…」，系统字号放大时也不会整串字消失\n'
+    '· 日历格子：日期回到居中。此前它贴在左上角，会蹭到格子的圆角外、看起来像溢出了格子（班组多的方案上最明显）\n'
+    '· **修好「编辑待办事项」弹窗里的提醒**：此前点它只会在「不设 / 15 分钟」两档之间跳、弹不出选择界面（同一个弹窗在「添加待办事项」里是好的）\n'
+    '· 待办新增**联动闹钟**开关：打开后到点像班次闹钟一样全屏响铃，关掉则只弹一条通知（二选一）；响铃界面会显示这条待办的日期与时间，不用猜是什么事\n'
+    '· 待办列表里开了联动闹钟的那条带一个小铃铛图标，不用点进去就知道哪条会响\n'
+    '· 内部：两个待办弹窗的字段合成一份实现（v0.7.1 就是两处各写一遍，才漏改了编辑那个）\n\n'
+    'v0.7.1\n'
     '· 日历格子重做：班次变成带底色的胶囊，一眼就能扫出哪天是什么班；日期收成左上角的小字，农历留在底部。格子里的字现在跟着格子高度一起放大（此前格子会长高、字不变，格子里空着一大块、字显得小）\n'
     '· 选中那天的班次胶囊变成实心，滑块落在哪格一眼就能锁定\n'
     '· 「跟随法定节假日（无班次）」那套方案保持原来的居中排布，不受上面两条影响\n'
@@ -96,14 +103,16 @@ const String _changelogZh = 'v0.7.1\n'
     '· 顺带修好一个一直存在的问题：六班组那种排满的日子，卡片最后一行其实早就被底边裁掉了一截\n\n'
     'v0.6.7\n'
     '· 信息卡左侧那根颜色条不再错位：此前它比卡片本身长出一大截、垂在空白里（内容少的日子差得最多，能差 80 多 dp）。现在它两端与卡片严丝合缝，也跟着卡片一起变高变矮\n'
-    '· 内容偏少的日子，卡片下部不再空荡荡\n\n'
-    'v0.6.6\n'
-    '· 日历最后一行不再被信息卡压住：五行的月份裁掉一条、六行的月份整个 31 号看不见，要靠滚动才露出来。真因是「格子高度的下限」还停在旧值 —— 比格子里的三行字实际需要的还高，等于让网格自己撑破屏幕\n'
-    '· 节假日农历描述不再被截成省略号：「中秋节 · 农历八月十五」这类长名字此前单行显示，尾部被吃掉；现在允许两行\n'
-    '· 信息卡底下的留白收窄，卡片贴近悬浮胶囊，省下的高度还给了日期网格\n'
-    '· 系统字号放大时日历格子不再裁字：格子高度按屏幕剩余空间均分、不会跟着字号长，现在格子里的内容按需整体微缩\n';
+    '· 内容偏少的日子，卡片下部不再空荡荡\n';
 
-const String _changelogEn = 'v0.7.1\n'
+const String _changelogEn = 'v0.7.2\n'
+    '· Calendar cells: the shift label is one step smaller, and two-character abbreviations (like "上夜" / "下夜") are no longer shortened to "上…" — nor do they vanish entirely when the system font is enlarged\n'
+    '· Calendar cells: the date is centred again. It used to sit in the top-left corner, where it collided with the cell\'s rounded corner and looked like it spilled out of the cell (most visible on schedules with many crews)\n'
+    '· **Fixed the reminder row in the Edit todo dialog**: it only toggled between "none" and "15 min ahead" instead of opening the picker (the same row works in Add todo)\n'
+    '· Todos gained a **Ring as alarm** switch: when on, the todo rings full-screen like a shift alarm at its time; when off it posts a notification only (either/or). The ringing screen shows the todo\'s date and time, so you know what it is about\n'
+    '· Todos that ring as an alarm carry a small bell icon in the list, so you can tell which ones will ring without opening them\n'
+    '· Internal: the two todo dialogs now share one implementation (v0.7.1 had them written twice, which is how the edit dialog got missed)\n\n'
+    'v0.7.1\n'
     '· Calendar cells reworked: each shift is now a filled chip, so you can see at a glance which shift a day is; the date shrinks into the top-left corner and the lunar date stays at the bottom. Cell text now scales with the cell height (previously cells grew taller while the text stayed put, leaving a large empty area and making the text look small)\n'
     '· The selected day\'s shift chip turns solid, so it is obvious where the selection block landed\n'
     '· Schedules set to "follow legal holidays (no shifts)" keep their centred layout, unaffected by the two changes above\n'
@@ -158,12 +167,7 @@ const String _changelogEn = 'v0.7.1\n'
     '· Fixed a long-standing issue: on a full six-team day the card\'s last row was being clipped by its bottom edge\n\n'
     'v0.6.7\n'
     '· The colour bar on the left of the day card is aligned again: it used to run far past the card and hang in the empty space (up to 80-odd dp on light days). It now matches the card exactly at both ends and grows and shrinks with it\n'
-    '· Days with little content no longer leave the card looking empty at the bottom\n\n'
-    'v0.6.6\n'
-    '· The calendar\'s last row is no longer covered by the day card: five-row months lost a row and six-row months lost the 31st entirely, reachable only by scrolling. The real cause was the day-cell minimum height, left at an old value higher than three lines of text actually need — which pushed the grid past the viewport\n'
-    '· Long lunar descriptions are no longer truncated: names like "中秋节 · 农历八月十五" were shown on one line with an ellipsis; two lines are now allowed\n'
-    '· Less dead space under the day card, so it sits closer to the floating capsule and the freed height goes back to the grid\n'
-    '· Day cells no longer clip text at large system font sizes: cell height is divided from the space left over and does not grow with the font, so cell contents now scale down together instead\n';
+    '· Days with little content no longer leave the card looking empty at the bottom\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

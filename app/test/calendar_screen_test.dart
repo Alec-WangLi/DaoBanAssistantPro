@@ -699,6 +699,21 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  testWidgets('格子班次胶囊：简称套在 FittedBox 里，不靠算宽度', (tester) async {
+    // v0.7.1 的坑：胶囊字号原本按「字数 × 基准字号」硬算可用宽度，是**零余量**
+    // 的 —— 两字简称差一点点就退化成「上…」，系统字号一放大整串字都没了
+    // （真机实测）。改成让 FittedBox 按实际排版缩，这里钉住那个兜底还在。
+    await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
+
+    final chip = find.byKey(ValueKey('day-chip-${DateTime.now().day}'));
+    expect(chip, findsOneWidget, reason: '今天那格应该有班次胶囊');
+    expect(find.descendant(of: chip, matching: find.byType(FittedBox)),
+        findsOneWidget,
+        reason: '胶囊文字必须套 FittedBox 兜底（宽度算不准，让排版自己缩）');
+
+    await _disposeCalendar(tester);
+  });
+
   testWidgets('信息卡待办提示：选中那天有待办才显示，且不改变卡片高度', (tester) async {
     final db = await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
     final today = dateOnly(DateTime.now());

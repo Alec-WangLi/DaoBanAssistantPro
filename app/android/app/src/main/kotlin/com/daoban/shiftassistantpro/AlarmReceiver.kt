@@ -14,6 +14,7 @@ import android.content.Intent
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val label = intent.getStringExtra("label") ?: "闹钟"
+        val detail = intent.getStringExtra("detail")
         val uri = intent.getStringExtra("uri")
         val id = intent.getIntExtra("id", 0)
         val repeatType = intent.getIntExtra("repeatType", 0)
@@ -30,6 +31,7 @@ class AlarmReceiver : BroadcastReceiver() {
         try {
             val serviceIntent = Intent(context, AlarmRingService::class.java).apply {
                 putExtra("label", label)
+                putExtra("detail", detail)
                 putExtra("uri", uri)
             }
             context.startForegroundService(serviceIntent)
@@ -50,6 +52,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
             launch.putExtra("alarm_label", label)
+            launch.putExtra("alarm_detail", detail)
             context.startActivity(launch)
             AlarmLog.info(context, "AlarmReceiver: startActivity 成功（直接拉起全屏）")
         } catch (e: Exception) {
@@ -64,11 +67,15 @@ class AlarmReceiver : BroadcastReceiver() {
         when (repeatType) {
             1 -> {
                 val next = AlarmScheduler.nextDaily(now, hour, minute)
-                AlarmScheduler.schedule(context, id, next, label, uri, repeatType, hour, minute, weekdays)
+                AlarmScheduler.schedule(
+                    context, id, next, label, uri, repeatType, hour, minute, weekdays, detail
+                )
             }
             2 -> if (weekdays != 0) {
                 val next = AlarmScheduler.nextWeekly(now, weekdays, hour, minute)
-                AlarmScheduler.schedule(context, id, next, label, uri, repeatType, hour, minute, weekdays)
+                AlarmScheduler.schedule(
+                    context, id, next, label, uri, repeatType, hour, minute, weekdays, detail
+                )
             }
         }
     }
