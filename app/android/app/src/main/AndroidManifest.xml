@@ -53,6 +53,17 @@
             </intent-filter>
         </receiver>
         <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <!-- 开机重排：setAlarmClock 的记录重启即清空，靠 AlarmStore 那份落盘清单
+             把闹钟排回去（见 BootReceiver 的说明）。只用到 RECEIVE_BOOT_COMPLETED，
+             上面已声明。不 directBootAware：有锁屏密码时 BOOT_COMPLETED 要等首次
+             解锁，这是已知边界，写在该文件的注释里。 -->
+        <receiver android:name=".BootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
         <!-- 待办提醒：到点弹普通通知（与响铃闹钟那条链路分开，见 TodoReminderReceiver）。 -->
         <receiver android:name=".TodoReminderReceiver" android:exported="false" />
         <service

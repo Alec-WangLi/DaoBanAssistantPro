@@ -9,6 +9,7 @@
 //
 // 界面清单与变体在 visual_screens.dart，与对比度审计共用同一份。
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -56,6 +57,39 @@ void main() {
           language: variant.language,
           size: variant.size,
           extraPrefs: screen.needsOnboardingPrefs ? onboardingPrefs : const {},
+        );
+      });
+    }
+  }
+
+  // 「向下滚动后」：首屏之下的内容（权限卡、自定义闹钟列表……）也要拍得到，
+  // 清单见 `visualScrollDown`。只出浅色 / 深色两档——滚动后要看的是**版式与
+  // 文案**，跟语言、横竖屏无关，每档都出一份只是把图数翻倍。
+  for (final entry in visualScrollDown.entries) {
+    final screen = visualScreens.firstWhere(
+      (s) => s.slug == entry.key,
+      orElse: () => throw StateError(
+          'visualScrollDown 里的 ${entry.key} 不在 visualScreens 里 —— 屏改名了？'),
+    );
+    for (final variant in visualVariants
+        .where((v) => v.suffix == 'light' || v.suffix == 'dark')) {
+      visualTest('${screen.title} · ${variant.label} · 向下滚动后', (tester) async {
+        failOnOverflow(tester);
+        final db = await freshDb();
+        await renderScreen(
+          tester,
+          name: '${screen.slug}_${variant.suffix}_scrolled',
+          home: await screen.build(db),
+          overrides: <Override>[databaseProvider.overrideWithValue(db)],
+          brightness: variant.brightness,
+          language: variant.language,
+          size: variant.size,
+          extraPrefs: screen.needsOnboardingPrefs ? onboardingPrefs : const {},
+          beforeCapture: (t) async {
+            // 拖主滚动区：各屏的首个 Scrollable 就是页面本身（列表 / 滚动容器）。
+            await t.drag(find.byType(Scrollable).first, Offset(0, -entry.value));
+            await settleVisual(t);
+          },
         );
       });
     }

@@ -77,6 +77,11 @@ class AlarmReceiver : BroadcastReceiver() {
                     context, id, next, label, uri, repeatType, hour, minute, weekdays, detail
                 )
             }
+            else -> {
+                // 一次性闹钟：响过就没有了，落盘清单里那条也要删 —— 留着的话，
+                // 下次重启 BootReceiver 会把它当成「还没到点」再排一遍。
+                AlarmStore.remove(context, id)
+            }
         }
     }
 }

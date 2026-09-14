@@ -41,7 +41,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.7.4\n'
+const String _changelogZh = 'v0.7.5\n'
+    '· 修好「关掉响铃界面后重新进入 App，响铃界面又弹一次、而且没有声音」：根因是热启动那条路把闹钟标签留在了原生侧没人清，下一次 App 界面重建时被当成一个新闹钟读了出来 —— 界面被一个陈旧的值唤醒，而根本没有闹钟在响\n'
+    '· 重启手机后闹钟不再丢：此前重启会清空系统里排定的闹钟，要等你下次打开 App 才会重排。现在多了一份落盘的闹钟清单，开机后自动把闹钟排回去（重复的顺延到下一次；关机期间已经错过的一次性闹钟不会补响）\n'
+    '· 内部：视觉工装新增「向下滚动后」的图 —— 首屏之下的内容（权限卡就是其中之一）此前从来没被拍过，上一版那行名不副实的「后台弹出界面」正是这样活下来的\n\n'
+    'v0.7.4\n'
     '· 修好一个隐患：关掉响铃界面之后，App 主界面会留在锁屏上（锁屏下能直接看到并操作 App 内容）。原因是「可以盖在锁屏上」这个状态只有打开、从来没撤回过 —— 现在响铃一停就撤销，关掉闹钟回到的就是锁屏\n'
     '· 修好「日历里选中那天的滑块没把格子盖住」：滑块与格子的圆角差了一档（22 与 16），四个角各露出一条底下的卡片。现在两者同源，并加了一条测试钉着它们相等\n'
     '· 响铃界面屏蔽系统返回手势：此前响铃时一次返回就会退回主界面（锁屏下等于把 App 内容露出来），现在只保留「上滑关闭」与「再睡一会」两个出口\n'
@@ -113,7 +117,11 @@ const String _changelogZh = 'v0.7.4\n'
     '· 「法定节假日」徽章不再把农历挤到右边：徽章自占一行、农历独占下一行，长农历也能完整显示\n'
     '· 「其他班组」标签移到色块那一行左侧，不再独占一行；闹钟并进当天班次那一行\n'
     '· 顺带修好一个一直存在的问题：六班组那种排满的日子，卡片最后一行其实早就被底边裁掉了一截\n';
-const String _changelogEn = 'v0.7.4\n'
+const String _changelogEn = 'v0.7.5\n'
+    '· Fixed the ringing screen popping up a second time — and silently — when you reopened the app after dismissing an alarm: the warm-start path left the alarm label behind on the native side with nobody to clear it, so the next time the app\'s UI was recreated it was read back as a brand-new alarm. Nothing was ringing; the screen had just been woken by a stale value\n'
+    '· Alarms now survive a reboot: restarting the phone used to wipe every scheduled alarm, and only opening the app put them back. A persisted alarm list now lets the app re-schedule everything right after boot (repeating alarms roll forward to their next occurrence; one-shot alarms missed while the phone was off are not replayed)\n'
+    '· Internal: the visual harness gained a "scrolled down" image — content below the fold (the permissions card among it) had never been photographed, which is how last release\'s mislabelled row survived so long\n\n'
+    'v0.7.4\n'
     '· Fixed a privacy hole: after you dismissed the ringing screen, the app\'s main UI stayed on top of the lock screen, where anyone could read and operate it. The "show over the lock screen" state was only ever switched on and never released — it is now released the moment the alarm stops, so dismissing an alarm lands you back on the lock screen\n'
     '· Fixed the calendar selection block not covering the day cell: the block and the cell used different corner radii (22 vs 16), leaving a sliver of the cell showing at each of the four corners. Both now share one source, with a test pinning them together\n'
     '· The ringing screen now blocks the system back gesture: one back press used to drop you into the main UI (which, on the lock screen, means exposing the app\'s content). Only "slide to dismiss" and "snooze" remain\n'

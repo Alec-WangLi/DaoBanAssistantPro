@@ -147,6 +147,35 @@ object AlarmScheduler {
 
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         am.setAlarmClock(AlarmManager.AlarmClockInfo(millis, showPi), opPi)
+
+        // 同时落盘一份：重启后 AlarmManager 里的记录会被清空，只有这份清单能告诉
+        // BootReceiver「重启前排过什么」。**排定与落盘必须成对**，漏了这条记录，
+        // 那个闹钟以后就只在「App 打开过」的情况下能响。
+        AlarmStore.put(
+            context,
+            AlarmStore.Entry(
+                id = id, millis = millis, label = label, uri = uri,
+                repeatType = repeatType, hour = hour, minute = minute,
+                weekdays = weekdays, detail = detail
+            )
+        )
+    }
+
+    /**
+     * 取消一条闹钟：AlarmManager 的记录与落盘清单**一起**撤。
+     *
+     * 凡是绕开这里、只 `am.cancel(...)` 的调用点，都会在清单里留下一条「幽灵闹钟」
+     * —— 界面上看不出来，直到某天重启后它自己响了。
+     */
+    fun cancel(context: Context, id: Int) {
+        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val op = Intent(context, AlarmReceiver::class.java)
+        val opPi = PendingIntent.getBroadcast(
+            context, id, op,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        am.cancel(opPi)
+        AlarmStore.remove(context, id)
     }
 
     /** 下一次 [hour]:[minute]（今天该时刻已过则顺延到明天）。 */

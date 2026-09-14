@@ -150,8 +150,15 @@ class MainActivity : FlutterActivity() {
             "MainActivity.handleAlarmIntent: label=$label, ${AlarmLog.deviceState(this)}"
         )
         if (label != null) {
-            pendingAlarmLabel = label
-            pendingAlarmDetail = detail
+            // **只有 Dart 还没就绪（冷启动）时才暂存**，由它 init 时来取；热启动直接
+            // 推过去就行。以前这里是无条件暂存的，而清空只发生在 `getPendingAlarm`
+            // —— Dart 每次引擎启动只调那一次。于是热启动留下的值没人清：界面销毁重建
+            // 时 Dart 会把这枚**陈旧的**值当成新闹钟读出来，再弹一次响铃界面，而且
+            // 没有声音（根本没有闹钟在响）。与下面 todo_id 那段同一套写法。
+            if (flutterChannel == null) {
+                pendingAlarmLabel = label
+                pendingAlarmDetail = detail
+            }
             if (Build.VERSION.SDK_INT >= 27) {
                 setShowWhenLocked(true)
                 setTurnScreenOn(true)
@@ -505,8 +512,9 @@ class MainActivity : FlutterActivity() {
                     "cancelNativeAlarm" -> {
                         try {
                             val id = call.argument<Int>("id") ?: 0
-                            val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                            am.cancel(nativePendingIntent(id))
+                            // 走 AlarmScheduler.cancel：排定记录与落盘清单一起撤。
+                            // 直接 am.cancel 会在清单里留下一条幽灵闹钟。
+                            AlarmScheduler.cancel(this, id)
                             result.success(null)
                         } catch (e: Exception) {
                             result.error("CANCEL_ALARM_FAILED", e.message, null)
@@ -520,6 +528,9 @@ class MainActivity : FlutterActivity() {
                                 for (id in 0..400) am.cancel(nativePendingIntent(id))
                                 for (id in 10000..11000) am.cancel(nativePendingIntent(id))
                                 for (id in 99990..100000) am.cancel(nativePendingIntent(id))
+                                // 清单一起清空：随后 Dart 会把要留的重新排一遍，
+                                // 两份清单因此始终一致。
+                                AlarmStore.clear(this)
                                 result.success(null)
                             } catch (e: Exception) {
                                 result.error("CANCEL_ALL_ALARM_FAILED", e.message, null)
