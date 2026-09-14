@@ -7,4 +7,4 @@
 /// 错的，会给已经装上的版本再挂一个「下载」按钮。
 ///
 /// 现在由 `test/app_info_test.dart` 盯着两处一致，改漏了会直接把测试打红。
-const String appVersion = '0.7.5';
+const String appVersion = '0.8.0';
