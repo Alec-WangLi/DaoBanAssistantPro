@@ -11,11 +11,13 @@
 import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_action_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
@@ -41,8 +43,9 @@ Future<void> _dispose(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 20));
 }
 
-Future<AppDatabase> _pumpTodos(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(420, 900);
+Future<AppDatabase> _pumpTodos(WidgetTester tester,
+    {double height = 900}) async {
+  tester.view.physicalSize = Size(420, height);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -73,6 +76,24 @@ Finder _alarmSwitch() => find.descendant(
 bool _switchOn(WidgetTester tester) =>
     tester.widget<GlassSwitch>(_alarmSwitch()).value;
 
+/// 把插件通道挂上空实现。
+///
+/// 测试环境没有原生侧，没人接的 MethodChannel 调用**永远不会完成** ——
+/// 保存链路里有「重排提醒」这一步（要过通道），不桩的话它卡在那里，
+/// 弹窗就永远关不掉，测出来的失败像是保存坏了。与视觉工装
+/// （`tool/visual/visual_harness.dart` 的 `stubPluginChannels`）同一件事。
+void _stubPluginChannels() {
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  for (final name in const [
+    'dexterous.com/flutter/local_notifications',
+    'com.daoban.shiftassistantpro/settings',
+  ]) {
+    messenger.setMockMethodCallHandler(
+        MethodChannel(name), (call) async => null);
+  }
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh');
@@ -82,6 +103,7 @@ void main() {
   setUp(() {
     L10n.locale = 'zh';
     SharedPreferences.setMockInitialValues({});
+    _stubPluginChannels();
   });
 
   testWidgets('编辑弹窗：提醒档位弹得出选择器（v0.7.1 只会在两档之间跳）',
@@ -161,6 +183,56 @@ void main() {
     final saved = (await AppRepository(db).listEvents()).single;
     expect(saved.advanceRemindMinutes, isNull);
     expect(saved.alarmEnabled, isFalse);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('键盘弹起把可用高压掉一大截时，保存按钮仍在弹窗里、点得动',
+      (tester) async {
+    // v0.7.2 真机上「填好了点添加 / 点保存没反应、待办也没出现」就是这个：
+    // 弹窗内容把底部的操作按钮**挤出面板** —— 按钮还画在屏幕上，却已经不在
+    // 弹窗的可点区域内，手指点下去穿到遮罩上，于是弹窗关闭、什么都没存。
+    // 根因是内容区那句 `maxHeight - 100` 在 Column 里拿到的是无穷高度，形同虚设。
+    // 视口取矮一些：要复现的是「可用高度装不下弹窗内容」，
+    // 高屏上得把键盘模拟得极端夸张才逼得出来，不如直接用一个矮视口。
+    final db = await _pumpTodos(tester, height: 560);
+    await AppRepository(db).addEvent(
+      title: '旧标题',
+      date: dateOnly(DateTime.now()),
+      timeMinute: 14 * 60,
+    );
+    await _settle(tester);
+
+    // 模拟键盘占掉底部一块（**逻辑像素**；真机 2608 物理高、dpr 3，键盘约 327 逻辑）。
+    // 560 高的视口 + 120 的键盘 = 可用 360，装不下这个弹窗（内容约 450）——
+    // 正是真机上「键盘弹起 + 弹窗内容多」的那个场景。
+    tester.view.viewInsets = const FakeViewPadding(bottom: 120);
+    addTearDown(tester.view.resetViewInsets);
+
+    await _openEdit(tester, '旧标题');
+
+    final panel = tester.getRect(find.byKey(const Key('glass-dialog-panel')));
+    final button = tester.getRect(find
+        .ancestor(
+            of: find.text(L10n.save), matching: find.byType(GlassActionButton))
+        .first);
+    expect(button.bottom, lessThanOrEqualTo(panel.bottom),
+        reason: '按钮被挤出面板之后就点不到了 —— 手指会点到遮罩上，弹窗白关一次');
+    expect(tester.takeException(), isNull);
+
+    // 真改一个字段再存：只断言「点得到」不够，要断言保存确实走完了
+    await tester.enterText(find.byType(TextField), '新标题');
+    await _settle(tester);
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    // 保存链路里若有异常，会以未处理异步错误的形式在这里浮出来
+    final err = tester.takeException();
+    expect(err, isNull, reason: '保存过程中抛了异常：$err');
+
+    expect((await AppRepository(db).listEvents()).single.title, '新标题',
+        reason: '保存没生效就说明按钮还是点不到（或保存链路断了）');
+    expect(find.text(L10n.editEvent), findsNothing, reason: '保存后弹窗该关掉');
 
     await _dispose(tester);
   });

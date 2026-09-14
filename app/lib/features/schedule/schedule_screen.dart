@@ -166,6 +166,9 @@ class ScheduleScreen extends ConsumerWidget {
             ),
           ),
           GlassDeleteButton(
+            // 列表行尾部用紧凑形态：完整形态是个 48pt 的红圆，一屏五行就是五个
+            // 警报，盖过待办本身（组件注释里写明了这个分工）。
+            compact: true,
             onPressed: () async {
               await ref.read(appRepositoryProvider).deleteEvent(e);
               await _rescheduleReminders(ref);
@@ -222,6 +225,9 @@ class ScheduleScreen extends ConsumerWidget {
                   onPressed: () async {
                     final title = titleCtrl.text.trim();
                     if (title.isEmpty) return;
+                    // 异步之前先把 navigator 抓住：await 之后再碰 context 不安全
+                    // （`if (context.mounted)` 在某些时机下会判假，弹窗就永远关不掉）。
+                    final navigator = Navigator.of(context);
                     await ref.read(appRepositoryProvider).addEvent(
                           title: title,
                           date: fields.date,
@@ -230,7 +236,7 @@ class ScheduleScreen extends ConsumerWidget {
                           alarmEnabled: fields.alarm,
                         );
                     await _rescheduleReminders(ref);
-                    if (context.mounted) Navigator.pop(context);
+                    navigator.pop();
                   },
                   label: L10n.add,
                 ),
@@ -282,6 +288,7 @@ class ScheduleScreen extends ConsumerWidget {
                   onPressed: () async {
                     final title = titleCtrl.text.trim();
                     if (title.isEmpty) return;
+                    final navigator = Navigator.of(context);
                     await ref.read(appRepositoryProvider).updateEvent(
                           e,
                           title: title,
@@ -291,7 +298,7 @@ class ScheduleScreen extends ConsumerWidget {
                           alarmEnabled: fields.alarm,
                         );
                     await _rescheduleReminders(ref);
-                    if (context.mounted) Navigator.pop(context);
+                    navigator.pop();
                   },
                   label: L10n.save,
                 ),

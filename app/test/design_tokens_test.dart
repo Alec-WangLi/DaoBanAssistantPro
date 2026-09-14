@@ -548,7 +548,7 @@ void main() {
     check('sectionTitle', AppTokens.sectionTitle, 18, FontWeight.w700);
     check('cellDate', AppTokens.cellDate, 18, FontWeight.w600, 1.15);
     check('cellDateSm', AppTokens.cellDateSm, 13, FontWeight.w600, 1.15);
-    check('cellShift', AppTokens.cellShift, 13, FontWeight.w700, 1.15);
+    check('cellShift', AppTokens.cellShift, 12, FontWeight.w700, 1.15);
     check('titleStrong', AppTokens.titleStrong, 16, FontWeight.w700);
     check('labelStrong', AppTokens.labelStrong, 14, FontWeight.w700);
     check('rowPrimary', AppTokens.rowPrimary, 14, FontWeight.w500);

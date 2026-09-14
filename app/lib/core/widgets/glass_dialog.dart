@@ -29,6 +29,9 @@ class GlassDialog extends StatelessWidget {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Container(
+        // 给测试一个抓手：断言「操作按钮在面板里」（见 todo_dialog_test.dart
+        // 的键盘用例 —— 按钮被挤出面板时，点它只会点到遮罩）。
+        key: const Key('glass-dialog-panel'),
         constraints: const BoxConstraints(maxWidth: 420),
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
         decoration: BoxDecoration(
@@ -70,15 +73,21 @@ class GlassDialog extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            // 内容过高时滚动而不是溢出。上限取弹窗自己的预算减去标题行
-            // 与按钮行 —— `Dialog` 的 insetPadding 已被 LayoutBuilder 扣掉。
-            // 弹窗本来矮时不会因此被撑高（外层 Column 是 min）。
-            LayoutBuilder(
-              builder: (context, constraints) => ConstrainedBox(
-                constraints:
-                    BoxConstraints(maxHeight: constraints.maxHeight - 100),
-                child: SingleChildScrollView(child: content),
-              ),
+            // 内容过长时**卡内滚动**，而不是把弹窗撑到屏幕外。
+            //
+            // 这里曾经是 `LayoutBuilder` + `ConstrainedBox(maxHeight - 100)`：
+            // 想给内容留个上限，但 Column 给子组件的是**无界高度** ——
+            // `constraints.maxHeight` 是无穷，那个上限根本不生效。于是键盘弹起、
+            // 可用高度变小时，内容把底部的操作按钮**挤出面板**：按钮还画在屏幕上，
+            // 却已经不在弹窗的可点区域内，手指点下去穿到遮罩上 ——
+            // **弹窗关闭、什么都没存**。v0.7.2 真机实测到的「待办填好了点添加 /
+            // 点保存没反应、待办也没出现」就是这个（像素采样：面板底边 y≈1486，
+            // 而按钮画在 1458~1595）。
+            //
+            // `Flexible` 让内容只吃「标题行与按钮行之外剩下多少」，不够就在卡内
+            // 滚动，底部按钮因此**永远在面板里、永远点得到**。
+            Flexible(
+              child: SingleChildScrollView(child: content),
             ),
             if (actions.isNotEmpty) ...[
               const SizedBox(height: 16),

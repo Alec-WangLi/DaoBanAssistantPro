@@ -112,10 +112,10 @@ class AppTokens {
   /// 用 w700 而不是更重的字重：设计规格把 w800 留给响铃大时钟与「今天」徽章，
   /// 胶囊靠**字号 + 底色**取得分量，不靠再压一档字重。
   ///
-  /// 13 是 v0.7.2 从 15 调下来的：15 再乘缩放上限已经比格子本身的比例还大，
-  /// 一个字的胶囊看着发胀。两字以上的简称由胶囊里的 `FittedBox` 自己兜。
+  /// 13 是 v0.7.2 从 15 调下来的；12 是 v0.7.3 再收一档 —— 两个字时胶囊仍会
+  /// 顶到格子邊（左右只剩 1.5px），连滑块一起看很挤。
   static const TextStyle cellShift =
-      TextStyle(fontSize: 13, fontWeight: FontWeight.w700, height: 1.15);
+      TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.15);
 
   static const TextStyle titleStrong =
       TextStyle(fontSize: 16, fontWeight: FontWeight.w700);

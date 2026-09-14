@@ -299,6 +299,8 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             ),
           ),
           GlassDeleteButton(
+            // 与待办列表同理：行尾用紧凑形态，别让一屏几行的列表挂满红圆。
+            compact: true,
             onPressed: () async {
               await ref.read(appRepositoryProvider).deleteCustomAlarm(a);
               _reschedule();

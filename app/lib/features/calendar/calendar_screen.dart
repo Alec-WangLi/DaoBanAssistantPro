@@ -834,8 +834,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     if (shift != null) {
       children.add(const SizedBox(height: AppTokens.gapHair));
       children.add(chip
-          ? _shiftChip(context, shift, s, solid,
-              ValueKey('day-chip-${date.day}'))
+          // 两侧留硬边距：胶囊再宽也碰不到格子边（更碰不到选中滑块）。
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _chipSideGap),
+              child: _shiftChip(context, shift, s, solid,
+                  ValueKey('day-chip-${date.day}')),
+            )
           : Text(
               shift.shortLabel,
               // 窄到画不出胶囊时的退路：班次色是给色块用的强色，当文字色太浅
@@ -1462,9 +1466,17 @@ const double _cellDesignH = 55;
 /// 上限从 20.25 降到 16.25。
 const double _cellMaxScale = 1.25;
 
-/// 班次胶囊的左右内边距。比信息卡色块的 8 窄一档：这里装的是 1–2 个字的简称，
-/// 8 会让单字胶囊的宽度接近文字的两倍，手机上（格内容宽约 52）就装不下。
-const double _chipPadH = AppTokens.gapIconText;
+/// 班次胶囊的左右内边距。用最小的一档栅格（4）：这里装的是 1–2 个字的简称，
+/// 信息卡色块那 8 会让单字胶囊的宽度接近文字的两倍，手机上（格内容宽约 52）
+/// 就装不下。v0.7.3 从 6 收到 4 —— 配合字号 13→12，让两个字也留得出余量。
+const double _chipPadH = AppTokens.spaceXs;
+
+/// 胶囊与格子左右边缘的**硬边距**。
+///
+/// 简称是用户可改的（两个字、甚至三个字），胶囊宽度会随字号缩放长到「内容宽」
+/// 为止 —— 那样它就**贴住格子边**，与选中滑块一起看很挤（用户实测反馈）。
+/// 这里两侧各留一条硬边距，放不下就由胶囊内的 `FittedBox` 缩文字，而不是撑满。
+const double _chipSideGap = 4;
 
 /// 画胶囊所需的最小内容宽度。单字胶囊在设计尺寸下自然宽
 /// `_chipPadH`×2 + 描边 1×2 + 13 = 27，留一点余量取 34。
