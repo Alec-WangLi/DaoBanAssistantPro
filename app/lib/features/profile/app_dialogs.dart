@@ -41,7 +41,17 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.7.0\n'
+const String _changelogZh = 'v0.7.1\n'
+    '· 日历格子重做：班次变成带底色的胶囊，一眼就能扫出哪天是什么班；日期收成左上角的小字，农历留在底部。格子里的字现在跟着格子高度一起放大（此前格子会长高、字不变，格子里空着一大块、字显得小）\n'
+    '· 选中那天的班次胶囊变成实心，滑块落在哪格一眼就能锁定\n'
+    '· 「跟随法定节假日（无班次）」那套方案保持原来的居中排布，不受上面两条影响\n'
+    '· 闹钟铃声现在可以从手机里挑自己的音频了（此前只能选内置与系统的）。选中后会把文件复制到应用内部保存，换回内置或系统铃声时自动清掉，不会留下占地方的副本；自选文件万一损坏或丢失，会自动回落到内置铃声接着响，而不是一声不出\n'
+    '· **修好待办提醒一直没生效的问题**：此前「提前提醒」设了也只是在列表里显示一行字，到点什么都不会发生。现在会真的在通知栏弹出提醒（标题是待办名，点开直接进待办页）；增删改待办后立刻重排，不必等下次开 App\n'
+    '· 提醒档位新增「准时」，并可以选提前 5 分钟 / 15 分钟 / 30 分钟 / 1 小时 / 1 天（此前只有「提前 15 分钟」和「不设」两档）\n'
+    '· 日历当天信息卡上会显示「N 项待办」，不用翻到待办页就知道今天有事\n'
+    '· 顺带修好一个一直存在的问题：日历格子里「今天」的日期从来没加粗过\n'
+    '· 铃声选择器标出当前用的是哪一个，不用再靠记忆\n\n'
+    'v0.7.0\n'
     '· 正式稳定版（归纳 0.6.1~0.6.13 全部更新）\n'
     '· 应用图标重画为「日历 + 换班箭头」，并补上 Android 自适应图标 —— 图标从此跟随系统的形状与配色（含 Android 13+ 的「主题图标」），在会统一图标形状的启动器上不再被缩到一块白底上、显得又小又淡\n'
     '· 全 App 的排版、间距与图标收敛到一套统一的设计规范：同一个用途的字号、字重、行高、透明度、间距从此只有一个来源，不会再各自跑偏。外观上的变化很轻，14 处字号、约 12 处字重各只动一档\n'
@@ -91,15 +101,19 @@ const String _changelogZh = 'v0.7.0\n'
     '· 日历最后一行不再被信息卡压住：五行的月份裁掉一条、六行的月份整个 31 号看不见，要靠滚动才露出来。真因是「格子高度的下限」还停在旧值 —— 比格子里的三行字实际需要的还高，等于让网格自己撑破屏幕\n'
     '· 节假日农历描述不再被截成省略号：「中秋节 · 农历八月十五」这类长名字此前单行显示，尾部被吃掉；现在允许两行\n'
     '· 信息卡底下的留白收窄，卡片贴近悬浮胶囊，省下的高度还给了日期网格\n'
-    '· 系统字号放大时日历格子不再裁字：格子高度按屏幕剩余空间均分、不会跟着字号长，现在格子里的内容按需整体微缩\n\n'
-    'v0.6.5\n'
-    '· 小窗（小米小窗 / 分屏）修好：系统在小窗里把「顶部系统栏高度」报成整个窗口的高度，每一页的顶部安全区因此把整屏吃掉 —— 日历只剩一片背景色，只看得到底部那条胶囊。现在会先给系统栏数据做一道体检，小窗下七个界面全部正常\n'
-    '· 小窗按实测尺寸（200×400）重新适配：日历顶栏改两行、日期格不再互相叠、倒班方式卡片改成上下排、闹钟页底部按钮不再压住正文\n'
-    '· 日历：今日信息卡改为定高，点选不同日期时上方的日期格不再跟着一涨一缩\n'
-    '· 日历：法定节假日徽章与农历说明并成一行，信息卡更紧凑\n'
-    '· 小窗里两位数的日期不再折成上下两行；清除全部代码检查提示\n';
+    '· 系统字号放大时日历格子不再裁字：格子高度按屏幕剩余空间均分、不会跟着字号长，现在格子里的内容按需整体微缩\n';
 
-const String _changelogEn = 'v0.7.0\n'
+const String _changelogEn = 'v0.7.1\n'
+    '· Calendar cells reworked: each shift is now a filled chip, so you can see at a glance which shift a day is; the date shrinks into the top-left corner and the lunar date stays at the bottom. Cell text now scales with the cell height (previously cells grew taller while the text stayed put, leaving a large empty area and making the text look small)\n'
+    '· The selected day\'s shift chip turns solid, so it is obvious where the selection block landed\n'
+    '· Schedules set to "follow legal holidays (no shifts)" keep their centred layout, unaffected by the two changes above\n'
+    '· The alarm ringtone can now be your own audio file (previously only built-in and system ringtones). The file is copied into the app; switching back to a built-in or system ringtone removes that copy, so no space is wasted. If the file is ever damaged or lost, the alarm falls back to the built-in ringtone instead of ringing silently\n'
+    '· **Fixed todo reminders never firing**: "remind ahead" was only shown as a line of text and did nothing at the time. It now posts a real notification (titled with the todo, tapping it opens the todo list), and reminders are rescheduled the moment you add, edit, complete or delete a todo instead of waiting for the next app launch\n'
+    '· New "on time" reminder option, plus 5 / 15 / 30 minutes, 1 hour and 1 day ahead (previously only "15 min ahead" and "none")\n'
+    '· The calendar\'s info card now shows "N todos" for the selected day, so you know there is something today without opening the todo list\n'
+    '· Also fixed a long-standing issue: today\'s date in the calendar grid was never bolded\n'
+    '· The ringtone picker marks which one is currently in use\n\n'
+    'v0.7.0\n'
     '· Stable release (consolidating v0.6.1–v0.6.13)\n'
     '· The app icon is redrawn as a calendar with shift-cycle arrows, and now ships an Android adaptive icon — it follows the system\'s shape and tint (including Android 13+ themed icons) instead of being shrunk onto a white plate by launchers that unify icon shapes\n'
     '· Typography, spacing and icons across the app now come from one shared design system: a single source per role for size, weight, line height, opacity and spacing, so they can no longer drift apart. The visible change is subtle — 14 text sizes and about 12 font weights each moved one step\n'
@@ -149,13 +163,7 @@ const String _changelogEn = 'v0.7.0\n'
     '· The calendar\'s last row is no longer covered by the day card: five-row months lost a row and six-row months lost the 31st entirely, reachable only by scrolling. The real cause was the day-cell minimum height, left at an old value higher than three lines of text actually need — which pushed the grid past the viewport\n'
     '· Long lunar descriptions are no longer truncated: names like "中秋节 · 农历八月十五" were shown on one line with an ellipsis; two lines are now allowed\n'
     '· Less dead space under the day card, so it sits closer to the floating capsule and the freed height goes back to the grid\n'
-    '· Day cells no longer clip text at large system font sizes: cell height is divided from the space left over and does not grow with the font, so cell contents now scale down together instead\n\n'
-    'v0.6.5\n'
-    '· Small windows (Xiaomi floating window / split screen) are fixed: the system reports the top system-bar height as the whole window height there, so every page\'s top safe area swallowed the entire screen — the calendar showed nothing but background, with only the bottom capsule visible. System-bar data is now sanity-checked, and all seven screens work in a small window\n'
-    '· The small-window layout was re-fitted to its measured size (200×400): the calendar header is two rows, day cells no longer overlap, pattern cards stack their colour strip below the text, and the alarm page\'s bottom buttons no longer cover the content\n'
-    '· Calendar: the day card is now a fixed-height panel, so the day cells above it no longer grow and shrink as you tap through dates\n'
-    '· Calendar: the public-holiday badge and the lunar line now share one row, making the card more compact\n'
-    '· Two-digit dates no longer wrap onto two lines in a small window; all analyzer findings cleared\n';
+    '· Day cells no longer clip text at large system font sizes: cell height is divided from the space left over and does not grow with the font, so cell contents now scale down together instead\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

@@ -630,4 +630,117 @@ void main() {
 
     await _disposeCalendar(tester);
   });
+
+  testWidgets('格子班次胶囊：选中那天实心（班次色 100%），其余淡染', (tester) async {
+    await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
+
+    // 胶囊底色 = 班次色按 alpha 合成，所以 alpha 就是「实心 / 淡染」的判据。
+    // 读 `AnimatedContainer` 上的 `decoration`（目标值）：补间进行中也断言目标，
+    // 与「落地后应该是什么」一致。
+    BoxDecoration chipDeco(int day) =>
+        tester.widget<AnimatedContainer>(find.byKey(ValueKey('day-chip-$day')))
+            .decoration! as BoxDecoration;
+    double chipAlpha(int day) => chipDeco(day).color!.a;
+
+    final today = DateTime.now().day;
+    final other = today == 1 ? 2 : 1;
+
+    // 初始选中「今天」（`initState` 就把 `_selected` 设成今天）。
+    expect(chipAlpha(today), closeTo(1.0, 1e-6),
+        reason: '选中那天的胶囊要实心 —— 首帧就选中的日子也必须生效，'
+            '这里曾经因为底色走 AnimatedContainer 而停在淡染');
+    expect(chipAlpha(other), closeTo(0.14, 1e-6), reason: '没选中的那天要淡染');
+
+    // 换选一天：实心跟着走。
+    await tester.tap(find.text('$other').first);
+    await tester.pumpAndSettle();
+    expect(chipAlpha(other), closeTo(1.0, 1e-6));
+    expect(chipAlpha(today), closeTo(0.14, 1e-6));
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('格子班次胶囊：实心时文字色取 onSolid，且与底色过 AA', (tester) async {
+    await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
+    final today = DateTime.now().day;
+
+    final chip = tester.widget<AnimatedContainer>(
+        find.byKey(ValueKey('day-chip-$today')));
+    final deco = chip.decoration! as BoxDecoration;
+    final ink = tester
+        .widget<Text>(find.descendant(
+            of: find.byKey(ValueKey('day-chip-$today')),
+            matching: find.byType(Text)))
+        .style!
+        .color!;
+
+    // 实心胶囊只有「白或黑」两种文字色（`onSolid`），且对任何底色都 ≥ 4.58:1。
+    expect(ink, AppTokens.onSolid(deco.color!));
+    expect(AppTokens.contrastRatio(ink, deco.color!), greaterThanOrEqualTo(4.5));
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('选中块：不能带 boxShadow —— 阴影会从半透明块内透出来洗掉胶囊色相',
+      (tester) async {
+    await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
+
+    final block = tester
+        .widget<Container>(find.byKey(const Key('calendar-selection-block')));
+    final deco = block.decoration! as BoxDecoration;
+
+    // 这一层画在网格之上，必须半透明（不透明会把选中那格的内容整个糊掉），
+    // 于是任何 boxShadow 都会从块内部透出来再叠一层主色：实测格子内部吃到
+    // 约 33% 主色，橙 `#FF9F0A` 的实心胶囊被洗成棕 `#C28758`。
+    expect(deco.boxShadow, anyOf(isNull, isEmpty),
+        reason: '选中块只留 2px 主色描边 + 13% 淡染，不要阴影');
+    expect(deco.color!.a, lessThan(1.0), reason: '填充必须半透明，内容才看得见');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('信息卡待办提示：选中那天有待办才显示，且不改变卡片高度', (tester) async {
+    final db = await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
+    final today = dateOnly(DateTime.now());
+    await AppRepository(db).addEvent(
+      title: '交体检报告',
+      date: today,
+      timeMinute: 14 * 60 + 30,
+      advanceRemindMinutes: 15,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('info-card-todo-hint')), findsOneWidget);
+    expect(find.text(L10n.todoCount(1)), findsOneWidget);
+    final heightOnTodoDay =
+        tester.getSize(find.byKey(const Key('info-card-box'))).height;
+
+    // 换到本月里没待办的一天：提示要消失，而卡片高度必须**一点不变** ——
+    // 它是定高的（`info_card_metrics.dart`），变一点上面的格子就跟着抖。
+    final other = today.day == 1 ? 2 : 1;
+    await tester.tap(find.text('$other').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('info-card-todo-hint')), findsNothing);
+    expect(tester.getSize(find.byKey(const Key('info-card-box'))).height,
+        heightOnTodoDay,
+        reason: '有没有待办提示都不该改变卡片高度');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('信息卡待办提示：窄屏不显示（放不下，会挤掉日期的字）', (tester) async {
+    final db = await _pumpCalendar(tester, 'white_white_night_night_rest_rest',
+        width: 320);
+    await AppRepository(db).addEvent(
+      title: '交体检报告',
+      date: dateOnly(DateTime.now()),
+      timeMinute: 14 * 60,
+      advanceRemindMinutes: 15,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('info-card-todo-hint')), findsNothing);
+
+    await _disposeCalendar(tester);
+  });
 }

@@ -21,7 +21,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:drift/drift.dart' show driftRuntimeOptions;
+import 'package:drift/drift.dart' show Value, driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -298,6 +298,29 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
     ourTeamIndex: 0,
     teamOffsets: const [0, 6],
   );
+
+  // 待办：信息卡日期行上那个「N 项待办」提示只在**选中那天**有待办时才画得出来，
+  // 所以至少要在今天放一条。另外两条各有各的用：一条带提前提醒（列表副标题上
+  // 那句提醒文案要有东西可显示）、一条已完成（已完成是另一套颜色 + 划线）。
+  await repo.addEvent(
+    title: '交体检报告',
+    date: today,
+    timeMinute: 14 * 60 + 30,
+    advanceRemindMinutes: 15,
+  );
+  await repo.addEvent(title: '还备用钥匙', date: today);
+  await repo.addEvent(
+    title: '季度考核面谈',
+    date: today.add(const Duration(days: 3)),
+    timeMinute: 9 * 60,
+    advanceRemindMinutes: 1440,
+  );
+  await db.into(db.scheduleEvents).insert(ScheduleEventsCompanion.insert(
+        title: '领劳保用品',
+        date: today,
+        createdAt: DateTime.now(),
+        isCompleted: const Value(true),
+      ));
 
   return currentId;
 }

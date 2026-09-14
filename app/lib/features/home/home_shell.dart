@@ -55,10 +55,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       AlarmService.requestPermissions();
       // 冷启动由闹钟通知拉起的情况
       if (AlarmService.ringingAlarm.value != null) _showRinging();
+      // 冷启动由待办提醒的通知拉起的情况：直接落到「待办」页
+      if (AlarmService.openTodoRequested.value) _openTodoPage();
       _maybeShowLaunchDialogs();
       _maybeAutoCheckUpdate();
     });
     AlarmService.ringingAlarm.addListener(_onRingingChanged);
+    AlarmService.openTodoRequested.addListener(_onTodoRequested);
   }
 
   /// 首次使用弹「使用帮助」；每次更新后弹「版本更新」简介。
@@ -97,12 +100,29 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void dispose() {
     AlarmService.ringingAlarm.removeListener(_onRingingChanged);
+    AlarmService.openTodoRequested.removeListener(_onTodoRequested);
     _controller.dispose();
     super.dispose();
   }
 
   void _onRingingChanged() {
     if (AlarmService.ringingAlarm.value != null) _showRinging();
+  }
+
+  /// 用户点了待办提醒的通知：切到「待办」页，并把请求清掉。
+  ///
+  /// 清位会再触发一次监听，靠开头那句「值为假就直接返回」兜住，不会递归。
+  void _onTodoRequested() {
+    if (!AlarmService.openTodoRequested.value) return;
+    _openTodoPage();
+  }
+
+  /// 切到「待办」页。下标 2 与 `_items` / `_screens` 的顺序绑定
+  /// （0 日历、1 闹钟、2 待办、3 我的），改那一组时这里要跟着改。
+  void _openTodoPage() {
+    AlarmService.openTodoRequested.value = false;
+    if (!mounted || !_controller.hasClients) return;
+    _controller.jumpToPage(2);
   }
 
   void _showRinging() {
@@ -121,17 +141,23 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     if (_startupRescheduled) return;
     final sched = ref.read(activeScheduleProvider).valueOrNull?.toDomain();
     final alarms = ref.read(customAlarmsProvider).valueOrNull;
-    if (sched == null || alarms == null) return;
+    // 待办也要等流到齐再排，理由同前两个：`activeScheduleProvider` 会先
+    // `seedIfEmpty`，这几个流非空就说明首启播种已经完成、库可以读了。
+    final events = ref.read(eventsProvider).valueOrNull;
+    if (sched == null || alarms == null || events == null) return;
     _startupRescheduled = true;
     final overrides =
         await ref.read(appRepositoryProvider).listShiftAlarmOverrides();
-    AlarmService.reschedule(sched, alarms, overrides: overrides);
+    AlarmService.reschedule(sched, alarms, overrides: overrides, events: events);
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(activeScheduleProvider, (_, __) => _tryStartupReschedule());
     ref.listen(customAlarmsProvider, (_, __) => _tryStartupReschedule());
+    // 待办的流也要听：三个流谁最后到齐都要能触发那次重排，漏掉这一个会出现
+    // 「待办先到、另两个后到，于是重排跑了但没排待办」——不报错，只是提醒不发。
+    ref.listen(eventsProvider, (_, __) => _tryStartupReschedule());
     ref.watch(appSettingsProvider); // 语言切换时重建导航标签
     return Scaffold(
       extendBody: true,
@@ -185,6 +211,13 @@ class _GlassNavBarState extends State<_GlassNavBar> {
   double _visualPage = 0; // 滑块左缘位置（以功能区宽度为单位，可为小数）
   double _grabOffset = 0; // 手指相对滑块左缘的抓取偏移（跟手不跳的关键）
 
+  /// 本控件正在自己驱动页面（`_release` 里那段翻页动画）。
+  ///
+  /// 用来把「手势翻页」和「外部程序化切页」分开：动画期间控制器会持续上报
+  /// 中间位置，若照单全收，滑块会跟着动画往回滑一下再过去，与「松手即吸附」
+  /// 的既有手感打架。
+  bool _drivingPage = false;
+
   PageController get controller => widget.controller;
   List<(IconData, String)> get items => widget.items;
 
@@ -193,6 +226,29 @@ class _GlassNavBarState extends State<_GlassNavBar> {
     super.initState();
     _committedIndex = controller.initialPage;
     _visualPage = _committedIndex.toDouble();
+    // 外部程序化切页（点了待办提醒的通知 → 跳到待办页）不经过这里的手势处理，
+    // 所以还要听控制器：不听的话页面已经翻过去了、底部高亮还停在原来那一格。
+    controller.addListener(_syncFromController);
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_syncFromController);
+    super.dispose();
+  }
+
+  /// 页面被外部改了就跟着对齐高亮。自己驱动的动画不上报（见 [_drivingPage]）。
+  void _syncFromController() {
+    if (_drivingPage || !controller.hasClients) return;
+    final page = controller.page;
+    if (page == null) return;
+    final i = page.round();
+    if (i == _committedIndex && (page - _visualPage).abs() < 0.001) return;
+    setState(() {
+      _committedIndex = i;
+      _visualPage = page;
+      _previewIndex = null;
+    });
   }
 
   int _indexForDx(double dx, double itemW) {
@@ -253,11 +309,14 @@ class _GlassNavBarState extends State<_GlassNavBar> {
       _visualPage = target.toDouble();
     });
     if (controller.hasClients) {
-      controller.animateToPage(
+      _drivingPage = true;
+      controller
+          .animateToPage(
         target,
         duration: AppTokens.durMed,
         curve: Curves.easeOutCubic,
-      );
+      )
+          .whenComplete(() => _drivingPage = false);
     }
   }
 
@@ -328,6 +387,7 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                       children: [
                         // 滑块：平滑吸附到最近功能区，按下放大、松手弹簧回弹
                         AnimatedPositioned(
+                          key: const Key('nav-highlight'),
                           duration: _dragging
                               ? Duration.zero
                               : AppTokens.durFast,

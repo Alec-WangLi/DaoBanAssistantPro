@@ -4,8 +4,24 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 
-import '../../data/app_database.dart';
+import '../../core/l10n.dart';
+import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
+
+/// 没设时间的待办，提醒以当天这个整点为基准（「全天」那类待办没有更准的时点）。
+const int allDayReminderHour = 9;
+
+/// 「从文件中选择铃声」失败。[code] 是原生侧给的错误码。
+///
+/// 要单独成类而不是返回 null：**文件太大**和**读不出来**得在界面上说成两句话，
+/// 否则用户只会对着同一个文件反复重试。
+class RingtonePickException implements Exception {
+  RingtonePickException(this.code);
+
+  final String code;
+
+  bool get isTooLarge => code == 'RINGTONE_TOO_LARGE';
+}
 
 /// 联动班次闹钟 + 自定义闹钟服务。
 ///
@@ -20,9 +36,19 @@ class AlarmService {
   static const _shiftBaseId = 0;
   static const _customBaseId = 10000;
 
+  /// 待办提醒的原生 id 基址。三段互不重叠：班次 0..400、自定义 10000..11000、
+  /// 待办 20000..21000（原生侧按这几个区间扫，见 `MainActivity` 的 cancel 分支）。
+  static const _eventBaseId = 20000;
+
   static Future<void> init() async {
+    // 时区库：当前**没有**用它的地方 —— 排定全部走原生（epoch 毫秒）或
+    // `scheduleNativeAlarm`。留着是因为 `flutter_local_notifications` 的
+    // 时区型 API 一旦被用到（比如以后真要上 `zonedSchedule`）就得先有它，
+    // 而那时还必须补 `tz.setLocalLocation`，否则 `tz.local` 是 UTC、会整体
+    // 差一个时区偏移（见 `scheduleTodoReminder` 的说明）。
     tz.initializeTimeZones();
-    // 原生闹钟触发时（App 已在后台），MainActivity 通过此回调通知我们弹出响铃界面
+    // 原生闹钟触发时（App 已在后台），MainActivity 通过此回调通知我们弹出响铃界面；
+    // 待办提醒被点开时同样由它通知我们切到「待办」页。
     _settingsChannel.setMethodCallHandler((call) async {
       if (call.method == 'onAlarmFired') {
         final label = call.arguments;
@@ -30,8 +56,15 @@ class AlarmService {
         if (label is String && label.isNotEmpty) {
           ringingAlarm.value = label;
         }
+      } else if (call.method == 'onTodoTapped') {
+        await logInfo('Dart 收到 onTodoTapped');
+        openTodoRequested.value = true;
       }
     });
+
+    // 通知通道的名字要在系统「通知」设置里显示，得跟着界面语言走；而通道只能
+    // 在原生侧建。启动时把当前语言的名字递过去（同名重复创建 = 更新，不是报错）。
+    await ensureTodoChannel(L10n.todoReminderChannel);
     // 通知小图标必须是 drawable：插件用 getIdentifier(name, "drawable", pkg) 查它，
     // 而且是按**白剪影**渲染的 —— 塞一个满幅彩色的启动器图标进去只会得到一坨白块。
     // 原生 AlarmRingService 早就在用 drawable/ic_notification，这里与它对齐。
@@ -61,6 +94,13 @@ class AlarmService {
     if (nativeLabel != null) {
       await logInfo('Dart init: 冷启动读取 pendingAlarmLabel=$nativeLabel');
       ringingAlarm.value = nativeLabel;
+    }
+
+    // 冷启动：检查是否由待办提醒的通知拉起
+    final todoId = await getPendingTodoId();
+    if (todoId != null) {
+      await logInfo('Dart init: 冷启动读取 pendingTodoId=$todoId');
+      openTodoRequested.value = true;
     }
   }
 
@@ -356,6 +396,48 @@ class AlarmService {
     } catch (_) {}
   }
 
+  /// 让用户从系统文件选择器挑一个音频当铃声。
+  ///
+  /// 原生侧会把选中的文件**复制进应用私有目录**再返回 `file://` 路径 —— 不直接
+  /// 用选择器给的 `content://`，那种授权不持久，重启或清理后就失效，而闹钟到点
+  /// 读不到文件时用户是听不见错误的。
+  ///
+  /// 返回 `(显示名, URI)`；用户取消返回 null；失败抛 [RingtonePickException]。
+  static Future<({String name, String uri})?> pickRingtoneFile() async {
+    try {
+      final raw =
+          await _settingsChannel.invokeMethod('pickRingtoneFile') as Map?;
+      if (raw == null) return null;
+      final uri = raw['uri'] as String? ?? '';
+      if (uri.isEmpty) return null;
+      return (name: raw['name'] as String? ?? '', uri: uri);
+    } on PlatformException catch (e) {
+      throw RingtonePickException(e.code);
+    } catch (e) {
+      throw RingtonePickException('PICK_RINGTONE_FAILED');
+    }
+  }
+
+  /// 删掉复制进私有目录的自选铃声文件（换回内置/系统铃声时用，不留垃圾）。
+  static Future<void> clearRingtoneFile() async {
+    try {
+      await _settingsChannel.invokeMethod('clearRingtoneFile');
+    } catch (_) {}
+  }
+
+  /// 让原生侧确保「待办提醒」通知通道存在，并（重新）设置它的显示名。
+  ///
+  /// 通道名要在系统「通知」设置里显示，所以必须跟着界面语言走。通道只能在原生侧
+  /// 创建（通知由 `TodoReminderReceiver` 在后台发出），但语言只有 Dart 侧知道 ——
+  /// 于是启动时由这里把当前语言的名字递过去。同名通道重复创建是更新而不是报错，
+  /// 所以每次启动调一次就能跟着语言切换走。
+  static Future<void> ensureTodoChannel(String name) async {
+    try {
+      await _settingsChannel
+          .invokeMethod('ensureTodoChannel', {'name': name});
+    } catch (_) {}
+  }
+
   /// 当前正在响铃的闹钟标签（null 表示没在响）。由通知回调/冷启动触发。
   static final ValueNotifier<String?> ringingAlarm = ValueNotifier<String?>(null);
 
@@ -388,14 +470,111 @@ class AlarmService {
     }
   }
 
-  /// 清除并按 [schedule] + [customAlarms] + [overrides] 重排所有闹钟。
+  /// 排一条待办提醒（**普通通知**，不是全屏响铃闹钟）。
+  ///
+  /// **为什么不走 `flutter_local_notifications` 的 `zonedSchedule`**：它的排定
+  /// API 只收 `TZDateTime`，而时区库的「本地时区」从来没设过（`init` 里只有
+  /// `initializeTimeZones()`，依赖里也没有 `flutter_timezone`），`tz.local` 是
+  /// UTC —— 照那样排，提醒会整体差一个时区偏移，而且不报错、只是时候不对。
+  /// 原生这条走 epoch 毫秒，根本不碰时区。
+  static Future<void> scheduleTodoReminder(
+    int id,
+    DateTime fireAt, {
+    required String title,
+    required String body,
+  }) async {
+    try {
+      await _settingsChannel.invokeMethod('scheduleTodoReminder', {
+        'id': id,
+        'millis': fireAt.millisecondsSinceEpoch,
+        'title': title,
+        'body': body,
+      });
+    } catch (e) {
+      await appendLog('scheduleTodoReminder 失败: $e');
+    }
+  }
+
+  /// 取消全部待办提醒（按 id 区间扫，见 `_eventBaseId`）。
+  static Future<void> cancelAllTodoReminders() async {
+    try {
+      await _settingsChannel.invokeMethod('cancelAllTodoReminders');
+    } catch (_) {}
+  }
+
+  /// 用户点了待办提醒的通知 → 置位，壳子读到后切到「待办」页。
+  ///
+  /// 与 [ringingAlarm] 同一套机制：冷启动由 `init` 读原生侧的 pending 值置位，
+  /// 热启动由原生侧反向 `onTodoTapped` 置位。
+  static final ValueNotifier<bool> openTodoRequested = ValueNotifier<bool>(false);
+
+  /// 读取由通知拉起时带着的待办 id（一次性）。
+  static Future<int?> getPendingTodoId() async {
+    try {
+      final id = await _settingsChannel.invokeMethod('getPendingTodoId');
+      return id is int ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 待办提醒的触发时刻；这条待办不需要提醒时返回 null。
+  ///
+  /// 基准时间：待办设了时间就按那个时间，没设时间按当天 [allDayReminderHour]:00
+  /// —— 界面上允许只设提醒不设时间，没有基准就排不出提醒。
+  /// `advanceRemindMinutes` 为 0 表示「准时」（事件当时提醒）。
+  ///
+  /// 抽成顶层纯函数是为了能直接单测时间推算：它错了不会报错，只会**在错的时候
+  /// 提醒**，那是靠界面看不出来的。
+  static DateTime? eventReminderTime(ScheduleEvent e) {
+    final advance = e.advanceRemindMinutes;
+    if (advance == null || e.isCompleted) return null;
+    final base = e.timeMinute ?? allDayReminderHour * 60;
+    // e.date 是 `dateOnly(...)` 存下的（UTC 日期），只取它的年月日再按本地时区
+    // 重建 —— 直接用会带着 UTC 标志，交给原生算 epoch 毫秒时会差一个时区。
+    final d = e.date;
+    return DateTime(d.year, d.month, d.day)
+        .add(Duration(minutes: base - advance));
+  }
+
+  /// 待办提醒通知的正文：日期 + 时间。
+  ///
+  /// 写**完整日期**而不是「今天 / 明天」：提前一天的那档提醒是在前一天响的，
+  /// 写「今天」就错了。
+  static String eventReminderBody(ScheduleEvent e) {
+    final d = e.date;
+    final date = L10n.monthDayWeekday(DateTime(d.year, d.month, d.day));
+    final t = e.timeMinute;
+    return t == null ? '$date · ${L10n.allDay}' : '$date · ${formatClock(t)}';
+  }
+
+  /// 一次把全部闹钟重排：先读齐库里的排班 / 自定义闹钟 / 按天覆盖 / 待办，
+  /// 再交给 [reschedule]。
+  ///
+  /// 调用点原先各自读库再分别传进来（六处），加待办之后每处都还要多读一次 ——
+  /// 与其让每个调用点抄一遍，不如在这里读齐。漏传一个参数不会报错，只会让
+  /// 那类提醒静默不生效，所以这个「读齐」的动作只该有一份。
+  static Future<void> rescheduleAll(AppRepository repo) async {
+    final sched = await repo.getActiveSchedule();
+    if (sched == null) return;
+    await reschedule(
+      sched,
+      await repo.listCustomAlarms(),
+      overrides: await repo.listShiftAlarmOverrides(),
+      events: await repo.listEvents(),
+    );
+  }
+
+  /// 清除并按 [schedule] + [customAlarms] + [events] + [overrides] 重排所有闹钟。
   ///
   /// [overrides] 为按天覆盖（dayNumber → enabled）；值为 false 的日期跳过班次闹钟。
+  /// [events] 是要排提醒的待办（`advanceRemindMinutes` 为 null 的跳过）。
   static Future<void> reschedule(
     ShiftSchedule schedule,
     List<CustomAlarm> customAlarms, {
     int days = 60,
     Map<int, bool> overrides = const {},
+    List<ScheduleEvent> events = const [],
   }) async {
     await logInfo(
         'reschedule: 开始，排班=${schedule.name}，自定义闹钟=${customAlarms.length} 个');
@@ -411,9 +590,10 @@ class AlarmService {
         await appendLog('reschedule: cancelAll 二次仍异常: $e2');
       }
     }
-    // 按 id 兜底取消所有通知闹钟 + 原生闹钟，清理历史累积（避免 500 上限）
+    // 按 id 兜底取消所有通知闹钟 + 原生闹钟 + 待办提醒，清理历史累积（避免 500 上限）
     await cancelAllNotificationAlarms();
     await cancelAllNativeAlarms();
+    await cancelAllTodoReminders();
 
     final today = dateOnly(DateTime.now());
 
@@ -483,7 +663,35 @@ class AlarmService {
         await appendLog('reschedule: 自定义闹钟排定失败: $e');
       }
     }
+
+    // 3) 待办提醒：普通通知，不进闹钟那套（全屏 + 循环响铃对一条待办太重）。
+    //    每条待办只有一个日期、没有重复，所以一次排完就是全部。
+    await rescheduleEventReminders(events);
     await logInfo('reschedule: 完成');
+  }
+
+  /// 只重排待办提醒（待办增删改之后调用）。
+  ///
+  /// 待办页的增删改**不**走 [rescheduleAll]：那会把上千条班次闹钟全部取消再
+  /// 重排一遍，而勾一个复选框其实只需要改这一条待办的通知。
+  static Future<void> rescheduleEventReminders(
+      List<ScheduleEvent> events) async {
+    await cancelAllTodoReminders();
+    final now = DateTime.now();
+    for (final e in events) {
+      final fireAt = eventReminderTime(e);
+      if (fireAt == null || !fireAt.isAfter(now)) continue;
+      try {
+        await scheduleTodoReminder(
+          _eventBaseId + e.id,
+          fireAt,
+          title: e.title,
+          body: eventReminderBody(e),
+        );
+      } catch (err) {
+        await appendLog('rescheduleEventReminders: 排定失败: $err');
+      }
+    }
   }
 
   /// 下一次 [hour]:[minute]（今天未过则今天，否则明天），按设备本地时区。

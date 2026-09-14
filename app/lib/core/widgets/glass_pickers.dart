@@ -5,7 +5,9 @@ import '../design_tokens.dart';
 import '../glass/glass.dart';
 import '../layout.dart';
 import '../l10n.dart';
+import 'app_icon.dart';
 import 'glass_action_button.dart';
+import 'glass_pressable.dart';
 
 /// 玻璃时间选择器：底部玻璃弹层 + 时/分滚轮 + Q弹按钮。
 Future<TimeOfDay?> showGlassTimePicker(
@@ -448,4 +450,63 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
       ),
     );
   }
+}
+
+/// 从一列选项里挑一个（底部玻璃弹层，选中项打勾并转主色）。
+///
+/// 标签由调用方给：选项本身可能是 `int`（比如提醒档位里的「不设 / 准时」），
+/// 排版与文案都在调用方手里，这里只管「列出、标出当前项、返回选中值」。
+///
+/// **[T] 不要用可空类型**：这个弹层靠「返回 null = 用户取消了」来判断，选项里
+/// 再出现 null，「选了它」和「点外面关掉」就分不开了。需要「无」这一档时用
+/// 一个哨兵值（见 `L10n.remindNone`）。
+Future<T?> showGlassOptionPicker<T>(
+  BuildContext context, {
+  required String title,
+  required List<T> options,
+  required String Function(T) labelOf,
+  required T selected,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black26,
+    builder: (sheetContext) => GlassPanel(
+      solid: true,
+      margin: const EdgeInsets.all(12),
+      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(title, style: AppTokens.titleStrong),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final option in options)
+                    GlassPressable(
+                      child: ListTile(
+                        title: Text(labelOf(option)),
+                        trailing: option == selected
+                            ? AppIcon(Icons.check,
+                                size: AppTokens.iconMd,
+                                color: Theme.of(sheetContext)
+                                    .colorScheme
+                                    .primary)
+                            : null,
+                        onTap: () => Navigator.pop(sheetContext, option),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

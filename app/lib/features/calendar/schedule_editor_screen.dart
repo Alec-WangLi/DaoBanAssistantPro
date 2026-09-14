@@ -1286,14 +1286,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       final repo = ref.read(appRepositoryProvider);
       // 重排必须用**当前**方案，不能用刚编辑的这套：用户可能编辑的是一套
       // 非当前方案，按它重排会把闹钟排到错的班表上，直到冷启动才自愈。
-      final active = await repo.getActiveSchedule();
-      if (active != null) {
-        await AlarmService.reschedule(
-          active,
-          await repo.listCustomAlarms(),
-          overrides: await repo.listShiftAlarmOverrides(),
-        );
-      }
+      // （`rescheduleAll` 读的就是当前方案。）
+      await AlarmService.rescheduleAll(repo);
       // 返回 true 告知上层「已保存」，由上层弹提示（避免 SnackBar 随页面一起销毁）
       if (mounted) Navigator.of(context).pop(true);
     } finally {

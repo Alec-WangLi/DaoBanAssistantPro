@@ -95,7 +95,7 @@ class L10n {
   static String get scheduleManagement => t('排班管理', 'Schedule management');
   static String get scheduleManagementSubtitle => t('管理、编辑你的排班表', 'Manage and edit your schedules');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
-  static String get ringtoneSubtitle => t('选择内置或系统铃声', 'Choose a built-in or system ringtone');
+  static String get ringtoneSubtitle => t('选择内置、系统或你的铃声', 'Choose a built-in, system, or your own ringtone');
   static String get clearReset => t('清空重置', 'Clear & reset');
   static String get clearResetSubtitle => t('清空排班与日程，恢复默认四班两倒', 'Clear schedules & events, restore default rotation');
   static String get version => t('版本', 'Version');
@@ -134,6 +134,19 @@ class L10n {
   static String get noRingtones => t('没有读取到系统铃声，请选择内置铃声', 'No system ringtones found, choose the built-in one');
   static String get setBuiltinRingtone => t('已设为内置铃声', 'Set to built-in ringtone');
   static String get ringtoneSet => t('铃声已设置，下次响铃生效', 'Ringtone set, takes effect next alarm');
+  static String get myRingtone => t('我的铃声', 'My ringtone');
+  static String get pickRingtoneFromFile => t('从文件中选择…', 'Choose from files…');
+  static String get pickRingtonePrivacy => t(
+      '选中的音频会被复制到应用内部。不会上传，也不会读取其他文件。',
+      'The audio you pick is copied into the app. Nothing is uploaded, and no other file is read.');
+  static String get systemRingtones => t('系统铃声', 'System ringtones');
+  static String get removeRingtone => t('移除', 'Remove');
+  static String get ringtoneFileRemoved => t('已移除自选铃声', 'Custom ringtone removed');
+  static String get ringtoneTooLarge => t(
+      '这个文件太大了（上限 32 MB），换一个小一点的音频',
+      'That file is too large (32 MB max), pick a smaller one');
+  static String get ringtoneCopyFailed =>
+      t('没能读取这个文件，换一个试试', "Couldn't read that file, try another one");
 
   // 待办（日程）
   static String get noEvents => t('还没有待办事项，点右下角添加', 'No todos yet, tap + to add');
@@ -142,9 +155,45 @@ class L10n {
   static String get title => t('标题', 'Title');
   static String get date => t('日期', 'Date');
   static String get timeOptional => t('时间（可选）', 'Time (optional)');
-  static String get advanceRemindOptional => t('提前提醒（可选）', 'Remind ahead (optional)');
+  static String get advanceRemindOptional => t('提醒（可选）', 'Remind (optional)');
   static String get none => t('不设', 'None');
-  static String advanceXMinutes(int n) => isEn ? '$n min ahead' : '提前$n分钟';
+
+  /// 「不设」在选择器里的取值。
+  ///
+  /// 用 -1 而不是 null：选择器靠「返回 null = 用户取消 / 点外面关掉」来判断，
+  /// 选项本身不能再是 null，否则「选不设」和「直接关掉」分不开。
+  static const int remindNone = -1;
+
+  /// 提醒档位：-1 = 不设，0 = 准时（事件当时提醒），其余为提前的分钟数。
+  ///
+  /// 「准时」是特意留的一档：只有「不设 / 提前 15 分钟」两档时，不想提前、
+  /// 只想在事件当时被叫一下的人只能选「不设」，等于没有提醒。
+  static const List<int> remindOptions = [remindNone, 0, 5, 15, 30, 60, 1440];
+
+  /// 提醒档位的显示文案。[v] 取 [remindOptions] 里的值。
+  static String remindOptionLabel(int v) {
+    if (v < 0) return none;
+    if (v == 0) return t('准时', 'On time');
+    if (v % 1440 == 0) {
+      final d = v ~/ 1440;
+      return isEn ? '$d d ahead' : '提前$d天';
+    }
+    if (v % 60 == 0) {
+      final h = v ~/ 60;
+      return isEn ? '$h h ahead' : '提前$h小时';
+    }
+    return isEn ? '$v min ahead' : '提前$v分钟';
+  }
+
+  /// 没设时间的待办在通知里显示的时间段。
+  static String get allDay => t('全天', 'All day');
+
+  /// 信息卡日期行上的待办提示：只说有几项，不列内容。
+  static String todoCount(int n) =>
+      isEn ? (n == 1 ? '1 todo' : '$n todos') : '$n 项待办';
+
+  /// 待办提醒的通知通道名（在系统「通知」设置里显示给用户的那个名字）。
+  static String get todoReminderChannel => t('待办提醒', 'Todo reminders');
 
   // 闹钟
   static String get customAlarms => t('自定义闹钟', 'Custom alarms');
@@ -321,8 +370,8 @@ class L10n {
       'Day/night shifts ring automatically (set the time in schedule editing); the alarm page lists the next 30 days with per-day toggles; add custom alarms (once/daily/weekly).');
   static String get guideTodoTitle => t('待办', 'Todo');
   static String get guideTodoDesc => t(
-      '记录交班/开会等事件，可设时间与提前提醒，完成后勾选（变暗 + 删除线）。',
-      'Log handover/meeting events with optional time and reminders; tick when done (dims + strikethrough).');
+      '记录交班/开会等事件，可设时间与提醒档位（准时 / 提前若干时间），到点会在通知栏弹出提醒；完成后勾选（变暗 + 删除线）。当天有待办时，日历底栏的信息卡上也会显示「N 项待办」。',
+      'Log handover/meeting events with an optional time and a reminder (on time, or some time ahead); a notification appears at that moment. Tick an item when done (dims + strikethrough). When the selected day has todos, the calendar\'s info card also shows "N todos".');
   static String get guideAppearanceTitle => t('外观', 'Appearance');
   static String get guideAppearanceDesc => t(
       '「我的 → 外观」可切跟随系统/浅色/深色，选 5 种主色调，中英文切换；「高级材质」关掉后全 App 取消背景模糊，省电、低端机更流畅。',

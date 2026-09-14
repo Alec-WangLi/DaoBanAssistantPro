@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import java.io.File
@@ -26,6 +27,24 @@ class MainActivity : FlutterActivity() {
     companion object {
         /** 由原生闹钟拉起时待处理的闹钟标签（Flutter 启动后读取）。 */
         var pendingAlarmLabel: String? = null
+
+        /**
+         * 由待办提醒的通知冷启动拉起时待处理的待办 id（Flutter 启动后读取）。
+         * -1 = 没有。热启动不走这里，直接推 `onTodoTapped` 给已经在跑的 Dart。
+         */
+        var pendingTodoId: Int = -1
+
+        /** 自选铃声请求码 —— 与插件占用的请求码区分开。 */
+        private const val REQ_PICK_RINGTONE = 40071
+
+        /** 自选铃声在私有目录里的子目录名（`filesDir/ringtone/`）。 */
+        const val RINGTONE_DIR = "ringtone"
+
+        /**
+         * 自选铃声的文件大小上限。铃声要整个复制进私有目录，用户误选一个几百 MB
+         * 的整轨音频会白白占掉存储、还拖慢那次选择；给个上限并在界面上说清楚。
+         */
+        private const val MAX_RINGTONE_BYTES = 32L * 1024 * 1024
     }
 
     private val settingsChannel = "com.daoban.shiftassistantpro/settings"
@@ -33,6 +52,9 @@ class MainActivity : FlutterActivity() {
     private var playingRingtone: android.media.Ringtone? = null
     private var alarmPlayer: MediaPlayer? = null
     private var alarmVibrator: Vibrator? = null
+
+    /** 等文件选择器回来的那个 Flutter 回调（同一时刻只允许一个）。 */
+    private var pendingRingtoneResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // 关键：必须在 setContentView（super.onCreate 内部）之前设置，锁屏冷启动才能点亮屏幕并显示
@@ -82,6 +104,18 @@ class MainActivity : FlutterActivity() {
             }
             AlarmLog.info(this, "MainActivity: invokeMethod(onAlarmFired, $label)")
             flutterChannel?.invokeMethod("onAlarmFired", label)
+        }
+
+        // 待办提醒的通知被点开：冷启动时 Dart 还没就绪，先记下来由它 `init` 时取；
+        // 热启动时 Dart 已经在跑，直接推给它（与闹钟的 onAlarmFired 同一套）。
+        val todoId = intent?.getIntExtra("todo_id", -1) ?: -1
+        if (todoId >= 0) {
+            AlarmLog.info(this, "MainActivity: 收到待办提醒点击 todo_id=$todoId")
+            if (flutterChannel == null) {
+                pendingTodoId = todoId
+            } else {
+                flutterChannel?.invokeMethod("onTodoTapped", todoId)
+            }
         }
     }
 
@@ -249,6 +283,40 @@ class MainActivity : FlutterActivity() {
                             result.error("LIST_RINGTONES_FAILED", e.message, null)
                         }
                     }
+                    "pickRingtoneFile" -> {
+                        // 系统文件选择器（SAF）挑一个音频，选完**复制进应用私有
+                        // 目录**再存路径。
+                        //
+                        // 不直接存选择器给的 `content://` URI：那种授权不持久，
+                        // 重启或系统清理后被回收，闹钟到点会读不到 —— 而失败发生
+                        // 在响铃那一刻，用户听不到任何错误提示。复制进私有目录就
+                        // 没有这个问题，也不需要申请任何存储权限。
+                        if (pendingRingtoneResult != null) {
+                            result.error("PICK_IN_PROGRESS", "已有选择器在等待", null)
+                        } else {
+                            pendingRingtoneResult = result
+                            try {
+                                startActivityForResult(
+                                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        type = "audio/*"
+                                    },
+                                    REQ_PICK_RINGTONE
+                                )
+                            } catch (e: Exception) {
+                                pendingRingtoneResult = null
+                                result.error("PICK_RINGTONE_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                    "clearRingtoneFile" -> {
+                        try {
+                            File(filesDir, RINGTONE_DIR).listFiles()?.forEach { it.delete() }
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("CLEAR_RINGTONE_FAILED", e.message, null)
+                        }
+                    }
                     "getVolumeLevels" -> {
                         try {
                             val audio = getSystemService(AUDIO_SERVICE) as AudioManager
@@ -306,26 +374,11 @@ class MainActivity : FlutterActivity() {
                     "startAlarm" -> {
                         try {
                             stopAlarmInternal()
-                            val uriStr = call.argument<String>("uri")
-                            val uri = if (uriStr.isNullOrEmpty()) {
-                                Uri.parse(
-                                    "android.resource://$packageName/raw/alarm_beep"
-                                )
-                            } else {
-                                Uri.parse(uriStr)
-                            }
-                            val mp = MediaPlayer()
-                            mp.setDataSource(this, uri)
-                            mp.isLooping = true
-                            mp.setAudioAttributes(
-                                AudioAttributes.Builder()
-                                    .setUsage(AudioAttributes.USAGE_ALARM)
-                                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                                    .build()
+                            // 音源挑选与「自选铃声坏了回落内置」都在 AlarmSound 里
+                            // （后台那条链路 AlarmRingService 用的是同一份）。
+                            alarmPlayer = AlarmSound.start(
+                                this, call.argument<String>("uri")
                             )
-                            mp.prepare()
-                            mp.start()
-                            alarmPlayer = mp
 
                             val v = getSystemService(VIBRATOR_SERVICE) as Vibrator
                             alarmVibrator = v
@@ -411,6 +464,52 @@ class MainActivity : FlutterActivity() {
                         pendingAlarmLabel = null
                         result.success(label)
                     }
+                    "getPendingTodoId" -> {
+                        val id = pendingTodoId
+                        pendingTodoId = -1
+                        result.success(if (id >= 0) id else null)
+                    }
+                    "scheduleTodoReminder" -> {
+                        try {
+                            val id = call.argument<Int>("id") ?: -1
+                            val millis = call.argument<Long>("millis") ?: 0L
+                            val title = call.argument<String>("title") ?: ""
+                            val body = call.argument<String>("body") ?: ""
+                            if (id < 0 || title.isEmpty()) {
+                                result.error("BAD_ARGS", "id/title 缺失", null)
+                            } else {
+                                AlarmScheduler.scheduleQuiet(this, id, millis, title, body)
+                                AlarmLog.info(
+                                    this, "scheduleTodoReminder: id=$id, millis=$millis"
+                                )
+                                result.success(null)
+                            }
+                        } catch (e: Exception) {
+                            result.error("SCHEDULE_TODO_FAILED", e.message, null)
+                        }
+                    }
+                    "cancelAllTodoReminders" -> {
+                        // 与另外两个 cancelAll 一样放后台：一千次 PendingIntent 操作
+                        // 会把主线程卡住（重排时正播着开关动画）。
+                        Thread {
+                            try {
+                                AlarmScheduler.cancelTodoReminders(this)
+                                result.success(null)
+                            } catch (e: Exception) {
+                                result.error("CANCEL_TODO_FAILED", e.message, null)
+                            }
+                        }.start()
+                    }
+                    "ensureTodoChannel" -> {
+                        try {
+                            TodoReminderReceiver.ensureChannel(
+                                this, call.argument<String>("name")
+                            )
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("ENSURE_CHANNEL_FAILED", e.message, null)
+                        }
+                    }
                     "getTotalRamBytes" -> {
                         try {
                             val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -424,6 +523,108 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // -----------------------------------------------------------------------
+    // 自选铃声：系统文件选择器 → 复制进私有目录
+    // -----------------------------------------------------------------------
+
+    /**
+     * 文件选择器回来。[FlutterActivity] 是 `android.app.Activity`（不是
+     * `ComponentActivity`），所以用不了 `registerForActivityResult`，只能走
+     * `startActivityForResult` + 这个回调。
+     *
+     * **必须调 super**：插件的 onActivityResult 也走这里转发（通知权限、
+     * 精确闹钟授权都要），漏掉会让那些插件的授权流程收不到结果。
+     */
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_PICK_RINGTONE) return
+        val result = pendingRingtoneResult
+        pendingRingtoneResult = null
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) {
+            // 用户按返回取消了：不是错误，回 null 让界面什么都不做。
+            result?.success(null)
+            return
+        }
+        // 复制是磁盘 I/O（一个音频文件可能十几 MB），放后台线程，拷完回主线程。
+        Thread {
+            var tooLarge = false
+            val copied = try {
+                copyRingtoneIntoPrivateDir(uri)
+            } catch (e: RingtoneTooLargeException) {
+                tooLarge = true
+                null
+            }
+            runOnUiThread {
+                // 错误码分开给：文件太大要在界面上说清是「太大」而不是「失败」，
+                // 否则用户只会反复重试同一个文件。
+                when {
+                    tooLarge -> result?.error(
+                        "RINGTONE_TOO_LARGE", "铃声文件太大", null
+                    )
+                    copied == null -> result?.error(
+                        "COPY_RINGTONE_FAILED", "复制铃声文件失败", null
+                    )
+                    else -> result?.success(
+                        mapOf("name" to copied.first, "uri" to copied.second)
+                    )
+                }
+            }
+        }.start()
+    }
+
+    /**
+     * 把 [uri] 指向的音频复制到 `filesDir/ringtone/`，返回 (显示名, file:// URI)。
+     * 失败返回 null；文件超过 [MAX_RINGTONE_BYTES] 抛 [RingtoneTooLargeException]。
+     */
+    private fun copyRingtoneIntoPrivateDir(uri: Uri): Pair<String, String>? {
+        return try {
+            val name = queryDisplayName(uri) ?: "ringtone"
+            val size = queryFileSize(uri)
+            if (size != null && size > MAX_RINGTONE_BYTES) {
+                throw RingtoneTooLargeException(size)
+            }
+            val dir = File(filesDir, RINGTONE_DIR).apply { mkdirs() }
+            // 只留一份：换铃声时把上一个删掉，别在私有目录里堆垃圾。
+            dir.listFiles()?.forEach { it.delete() }
+            val safe = name.replace(Regex("[^\\p{L}\\p{N}._-]"), "_").take(48)
+            val dest = File(dir, safe)
+            contentResolver.openInputStream(uri).use { input ->
+                if (input == null) return null
+                dest.outputStream().use { out -> input.copyTo(out) }
+            }
+            AlarmLog.info(this, "ringtone: 已复制 $name（$size 字节）到 $dest")
+            name to Uri.fromFile(dest).toString()
+        } catch (e: RingtoneTooLargeException) {
+            AlarmLog.error(this, "ringtone: 文件太大，拒绝复制 ${e.bytes} 字节")
+            throw e
+        } catch (e: Exception) {
+            AlarmLog.error(this, "ringtone: 复制失败 ${e.javaClass.name}: ${e.message}")
+            null
+        }
+    }
+
+    /** 文件选择器里那一项的显示名（`OpenableColumns.DISPLAY_NAME`）。 */
+    private fun queryDisplayName(uri: Uri): String? = try {
+        contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (i >= 0 && c.moveToFirst()) c.getString(i) else null
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** 文件大小（读不到返回 null，由复制本身兜底）。 */
+    private fun queryFileSize(uri: Uri): Long? = try {
+        contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val i = c.getColumnIndex(OpenableColumns.SIZE)
+            if (i >= 0 && c.moveToFirst() && !c.isNull(i)) c.getLong(i) else null
+        }
+    } catch (_: Exception) {
+        null
     }
 
     private fun appendLog(msg: String) = AlarmLog.error(this, msg)
@@ -471,3 +672,6 @@ class MainActivity : FlutterActivity() {
         }
     }
 }
+
+/** 自选的铃声文件超过 [MainActivity] 允许复制的上限。要单独一类错误码，用户才知道该换个文件。 */
+class RingtoneTooLargeException(val bytes: Long) : Exception("ringtone too large: $bytes")

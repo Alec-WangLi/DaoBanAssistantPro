@@ -53,6 +53,8 @@
             </intent-filter>
         </receiver>
         <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <!-- 待办提醒：到点弹普通通知（与响铃闹钟那条链路分开，见 TodoReminderReceiver）。 -->
+        <receiver android:name=".TodoReminderReceiver" android:exported="false" />
         <service
             android:name=".AlarmRingService"
             android:exported="false"

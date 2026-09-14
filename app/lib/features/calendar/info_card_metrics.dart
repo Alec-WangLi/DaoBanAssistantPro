@@ -70,11 +70,16 @@ const double _otherCrewsLabelTop = AppTokens.spaceXs; // 4
 ///
 /// [cardOuterWidth] 是卡片**外框**宽度（还没扣内边距与描边）。[month] 只用到
 /// 年月，用来枚举这个月有哪些天。
+///
+/// [hasTodoHint] 表示这个月里存在待办 —— 有的话日期行要按「今天/待办徽章」的
+/// 高度预留（见 [_todoHintH]）。按月而不是按天：按天算的话，点一天卡片高度就
+/// 变一次，上面的网格跟着抖 —— 那正是这个文件要消灭的东西。
 double measureBottomInfoCardHeight({
   required BuildContext context,
   required double cardOuterWidth,
   required ShiftSchedule? schedule,
   required DateTime month,
+  required bool hasTodoHint,
 }) {
   final measure = _Measure(
     // 卡片里的 `Text` 用的都是 `AppTokens` 的角色令牌，字体族与其它属性来自
@@ -89,11 +94,18 @@ double measureBottomInfoCardHeight({
   //
   // 日期行。`monthDayWeekday` 在整月里都是「9月25日 周五」这种单行，取任意一天。
   // 「今天」徽章只有一天有，且比日期那 18px 矮，所以不参与取大。
-  final dateH = measure.text(
+  //
+  // 但**待办提示徽章要参与**：它也是这一行里的元素，字号比日期小一档（12px），
+  // 却带上下内边距与描边 —— 行高被字体压得紧的时候（测试字体就是），它比日期
+  // 那行还高一点点。不把它算进来的话，有待办的那天卡片内容会顶出定高，而没
+  // 待办的日子又不会 —— 正是「卡片高度不能随选中哪天变」要防的。
+  final dateTextH = measure.text(
     L10n.monthDayWeekday(DateTime(month.year, month.month, 1)),
     AppTokens.sectionTitle,
     maxWidth: contentW,
   ).height;
+  final dateH =
+      hasTodoHint ? math.max(dateTextH, _todoHintH(measure)) : dateTextH;
 
   // 班次行：有班次时是「● 上夜班  20:30 – 次日08:30   闹钟 19:30」一行富文本，
   // 时间是 16px，所以行高由 16px 那一档决定；富文本整串 `maxLines: 1`，多长都
@@ -183,6 +195,14 @@ double _chipLineH(_Measure m) =>
     m.text('班', AppTokens.microLabel).height +
     _chipPadV * 2 +
     _chipBorder * 2;
+
+/// 日期行上「N 项待办」徽章的高度：图标与文字取高，加上下内边距与描边。
+/// 与 `calendar_screen.dart` 的 `_todoHintBadge` 一一对应（改那边要改这里）。
+double _todoHintH(_Measure m) =>
+    math.max(m.text(L10n.todoCount(1), AppTokens.microStrong).height,
+        AppTokens.iconSm) +
+    AppTokens.padChipV * 2 +
+    2;
 
 /// 某天色块折成几行 —— 按 `Wrap` 的贪心排布复算一遍。
 int _chipRows(

@@ -547,6 +547,8 @@ void main() {
     check('dialogTitle', AppTokens.dialogTitle, 20, FontWeight.w600);
     check('sectionTitle', AppTokens.sectionTitle, 18, FontWeight.w700);
     check('cellDate', AppTokens.cellDate, 18, FontWeight.w600, 1.15);
+    check('cellDateSm', AppTokens.cellDateSm, 13, FontWeight.w600, 1.15);
+    check('cellShift', AppTokens.cellShift, 15, FontWeight.w700, 1.15);
     check('titleStrong', AppTokens.titleStrong, 16, FontWeight.w700);
     check('labelStrong', AppTokens.labelStrong, 14, FontWeight.w700);
     check('rowPrimary', AppTokens.rowPrimary, 14, FontWeight.w500);
@@ -596,6 +598,21 @@ void main() {
         reason: '禁用/已完成档，有意低于 AA（见规格 §3.3）');
     expect(AppTokens.pillOf(40),
         const BorderRadius.all(Radius.circular(20)));
+  });
+
+  test('scaled：只动字号，字重与行高原样保留', () {
+    // 日历格子按格子高度等比缩放三行字，缩放的是**字号**这一维；字重与行高
+    // 是角色的身份，跟着一起变就等于格子里的字换了个角色。
+    const base = AppTokens.cellShift;
+    final big = AppTokens.scaled(base, 1.35);
+    expect(big.fontSize, closeTo(base.fontSize! * 1.35, 1e-9));
+    expect(big.fontWeight, base.fontWeight);
+    expect(big.height, base.height);
+
+    final small = AppTokens.scaled(AppTokens.tinyLabel, 0.9);
+    expect(small.fontSize, closeTo(AppTokens.tinyLabel.fontSize! * 0.9, 1e-9));
+    expect(small.fontWeight, AppTokens.tinyLabel.fontWeight);
+    expect(small.height, AppTokens.tinyLabel.height);
   });
 
   test('自检覆盖了每一个阶梯令牌（漏一个就红）', () {

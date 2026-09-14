@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
@@ -292,12 +293,7 @@ class ProfileScreen extends ConsumerWidget {
     if (confirmed == true) {
       final repo = ref.read(appRepositoryProvider);
       await repo.clearAll();
-      final sched = await repo.getActiveSchedule();
-      final alarms = await repo.listCustomAlarms();
-      final overrides = await repo.listShiftAlarmOverrides();
-      if (sched != null) {
-        await AlarmService.reschedule(sched, alarms, overrides: overrides);
-      }
+      await AlarmService.rescheduleAll(repo);
       if (context.mounted) {
         showGlassSnack(context, L10n.resetDone, icon: Icons.check_circle_outlined);
       }
@@ -347,9 +343,19 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  /// 选择器里「不是铃声 URI」的两个动作。带 `action:` 前缀，不会和系统铃声的
+  /// `content://` 或自选铃声的 `file://` 撞上。
+  static const String _actionPickFile = 'action:pickFile';
+  static const String _actionRemoveFile = 'action:removeFile';
+
   Future<void> _showRingtonePicker(BuildContext context, WidgetRef ref) async {
+    final sp = await SharedPreferences.getInstance();
+    // 没存 = 内置铃声（不是存了 'builtin'，见下面写入的分支）。
+    final current = sp.getString('ringtoneUri');
+    final currentTitle = sp.getString('ringtoneTitle');
     final ringtones = await AlarmService.listRingtones();
     if (!context.mounted) return;
+
     final selection = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -375,23 +381,61 @@ class ProfileScreen extends ConsumerWidget {
                         leading: const Icon(Icons.alarm_outlined),
                         title: Text(L10n.builtinRingtone),
                         subtitle: Text(L10n.builtinRingtoneSubtitle),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.play_circle_outlined),
-                          tooltip: L10n.preview,
-                          onPressed: () => AlarmService.playRingtone(null),
+                        trailing: _ringtoneTrailing(
+                          context,
+                          selected: current == null,
+                          onPreview: () => AlarmService.playRingtone(null),
                         ),
                         onTap: () => Navigator.pop(sheetContext, 'builtin'),
                       ),
+                    ),
+                    // 自选铃声：只在真的设过时出现，免得平时多占一行。
+                    if (_isFileRingtone(current))
+                      GlassPressable(
+                        child: ListTile(
+                          leading: const Icon(Icons.music_note_outlined),
+                          title: Text(
+                            (currentTitle == null || currentTitle.isEmpty)
+                                ? L10n.myRingtone
+                                : currentTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(L10n.myRingtone),
+                          trailing: _ringtoneTrailing(
+                            context,
+                            selected: true,
+                            onPreview: () => AlarmService.playRingtone(current),
+                            onRemove: () =>
+                                Navigator.pop(sheetContext, _actionRemoveFile),
+                          ),
+                          onTap: () => Navigator.pop(sheetContext, current),
+                        ),
+                      ),
+                    GlassPressable(
+                      child: ListTile(
+                        leading: const Icon(Icons.folder_open_outlined),
+                        title: Text(L10n.pickRingtoneFromFile),
+                        // 复制进私有目录这件事要写明白：用户有权知道选中的文件
+                        // 被怎么处理了。
+                        subtitle: Text(L10n.pickRingtonePrivacy),
+                        onTap: () =>
+                            Navigator.pop(sheetContext, _actionPickFile),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                      child: Text(L10n.systemRingtones,
+                          style: AppTokens.labelStrong),
                     ),
                     ...ringtones.map((r) => GlassPressable(
                           child: ListTile(
                             leading: const Icon(Icons.music_note_outlined),
                             title: Text(r.title),
-                            trailing: IconButton(
-                              icon:
-                                  const Icon(Icons.play_circle_outlined),
-                              tooltip: L10n.preview,
-                              onPressed: () => AlarmService.playRingtone(r.uri),
+                            trailing: _ringtoneTrailing(
+                              context,
+                              selected: current == r.uri,
+                              onPreview: () => AlarmService.playRingtone(r.uri),
                             ),
                             onTap: () => Navigator.pop(sheetContext, r.uri),
                           ),
@@ -412,11 +456,35 @@ class ProfileScreen extends ConsumerWidget {
     await AlarmService.stopRingtone();
     if (selection == null || !context.mounted) return;
 
-    final sp = await SharedPreferences.getInstance();
-    if (selection == 'builtin') {
+    if (selection == _actionPickFile) {
+      await _pickRingtoneFile(context, ref, sp);
+      return;
+    }
+
+    if (selection == _actionRemoveFile) {
+      await AlarmService.clearRingtoneFile();
       await sp.remove('ringtoneUri');
-    } else {
+      await sp.remove('ringtoneTitle');
+      await _rescheduleAlarms(ref);
+      if (context.mounted) {
+        showGlassSnack(context, L10n.ringtoneFileRemoved,
+            icon: Icons.delete_outline);
+      }
+      return;
+    }
+
+    if (selection == 'builtin') {
+      // 换回内置铃声：把复制进来的文件删掉，别在私有目录里留垃圾。
+      await AlarmService.clearRingtoneFile();
+      await sp.remove('ringtoneUri');
+      await sp.remove('ringtoneTitle');
+    } else if (_isFileRingtone(selection)) {
       await sp.setString('ringtoneUri', selection);
+    } else {
+      // 系统铃声：同样清掉自选文件。
+      await AlarmService.clearRingtoneFile();
+      await sp.setString('ringtoneUri', selection);
+      await sp.remove('ringtoneTitle');
     }
     await _rescheduleAlarms(ref);
     if (context.mounted) {
@@ -428,14 +496,68 @@ class ProfileScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _rescheduleAlarms(WidgetRef ref) async {
-    final repo = ref.read(appRepositoryProvider);
-    final sched = await repo.getActiveSchedule();
-    final alarms = await repo.listCustomAlarms();
-    final overrides = await repo.listShiftAlarmOverrides();
-    if (sched != null) {
-      await AlarmService.reschedule(sched, alarms, overrides: overrides);
+  /// 「我的铃声」那一行的判断依据：自选铃声存的是 `file://` 路径，
+  /// 内置是没存、系统铃声是 `content://`。
+  static bool _isFileRingtone(String? uri) =>
+      uri != null && uri.startsWith('file://');
+
+  /// 列表行右侧：试听按钮 +（自选铃声那行再加一个）移除按钮 + 选中对勾。
+  Widget _ringtoneTrailing(
+    BuildContext context, {
+    required bool selected,
+    required VoidCallback onPreview,
+    VoidCallback? onRemove,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.play_circle_outlined),
+          tooltip: L10n.preview,
+          onPressed: onPreview,
+        ),
+        if (onRemove != null)
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: L10n.removeRingtone,
+            onPressed: onRemove,
+          ),
+        if (selected)
+          AppIcon(Icons.check,
+              size: AppTokens.iconMd,
+              color: Theme.of(context).colorScheme.primary),
+      ],
+    );
+  }
+
+  Future<void> _pickRingtoneFile(
+      BuildContext context, WidgetRef ref, SharedPreferences sp) async {
+    try {
+      final picked = await AlarmService.pickRingtoneFile();
+      // 用户按返回取消了 —— 什么都不做，也不提示。
+      if (picked == null || !context.mounted) return;
+      // 这里**不要**再调 clearRingtoneFile：原生侧复制新文件之前已经把旧的那份
+      // 删掉了，再清一次会把刚复制进来的这个也删掉。
+      await sp.setString('ringtoneUri', picked.uri);
+      await sp.setString('ringtoneTitle', picked.name);
+      await _rescheduleAlarms(ref);
+      if (context.mounted) {
+        showGlassSnack(context, L10n.ringtoneSet,
+            icon: Icons.music_note_outlined);
+      }
+    } on RingtonePickException catch (e) {
+      // 「太大」和「读不出来」要说成两句不同的话，否则用户只会反复重试同一个文件。
+      if (!context.mounted) return;
+      showGlassSnack(
+        context,
+        e.isTooLarge ? L10n.ringtoneTooLarge : L10n.ringtoneCopyFailed,
+        icon: Icons.error_outline,
+      );
     }
+  }
+
+  Future<void> _rescheduleAlarms(WidgetRef ref) async {
+    await AlarmService.rescheduleAll(ref.read(appRepositoryProvider));
   }
 }
 

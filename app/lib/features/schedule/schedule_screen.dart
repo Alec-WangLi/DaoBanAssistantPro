@@ -14,6 +14,7 @@ import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
+import '../alarm/alarm_service.dart';
 
 /// 日程：最简事件（标题 + 日期 + 可选时间 + 可选提前提醒 + 完成勾选）。
 class ScheduleScreen extends ConsumerWidget {
@@ -102,7 +103,7 @@ class ScheduleScreen extends ConsumerWidget {
       L10n.monthDayWeekday(e.date),
       if (e.timeMinute != null) _fmt(e.timeMinute!),
       if (e.advanceRemindMinutes != null)
-        L10n.advanceXMinutes(e.advanceRemindMinutes!),
+        L10n.remindOptionLabel(e.advanceRemindMinutes!),
     ].join(' · ');
 
     final onSurface = Theme.of(context).colorScheme.onSurface;
@@ -117,8 +118,10 @@ class ScheduleScreen extends ConsumerWidget {
         children: [
           GlassSwitch(
             value: e.isCompleted,
-            onChanged: (v) =>
-                ref.read(appRepositoryProvider).setEventCompleted(e, v),
+            onChanged: (v) async {
+              await ref.read(appRepositoryProvider).setEventCompleted(e, v);
+              await _rescheduleReminders(ref);
+            },
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -147,12 +150,25 @@ class ScheduleScreen extends ConsumerWidget {
             ),
           ),
           GlassDeleteButton(
-            onPressed: () =>
-                ref.read(appRepositoryProvider).deleteEvent(e),
+            onPressed: () async {
+              await ref.read(appRepositoryProvider).deleteEvent(e);
+              await _rescheduleReminders(ref);
+            },
           ),
         ],
       ),
     );
+  }
+
+  /// 待办增删改之后立刻重排提醒。
+  ///
+  /// **不重排的话要等到下次开 App 才排**，而那时候提醒时间早就过去了 ——
+  /// 用户看到的就是「设了提前提醒，却什么都不会发生」。
+  ///
+  /// 只重排待办提醒，不动班次闹钟：勾一个复选框不该把上千条班次闹钟全扫一遍。
+  Future<void> _rescheduleReminders(WidgetRef ref) async {
+    final repo = ref.read(appRepositoryProvider);
+    await AlarmService.rescheduleEventReminders(await repo.listEvents());
   }
 
   void _showAddDialog(BuildContext context, WidgetRef ref) {
@@ -211,11 +227,20 @@ class ScheduleScreen extends ConsumerWidget {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(L10n.advanceRemindOptional),
-                    trailing: Text(advance == null
-                        ? L10n.none
-                        : (L10n.isEn ? '$advance min' : '$advance 分钟')),
-                    onTap: () => setState(
-                        () => advance = advance == null ? 15 : null),
+                    trailing: Text(
+                        L10n.remindOptionLabel(advance ?? L10n.remindNone)),
+                    onTap: () async {
+                      final picked = await showGlassOptionPicker<int>(
+                        context,
+                        title: L10n.advanceRemindOptional,
+                        options: L10n.remindOptions,
+                        labelOf: L10n.remindOptionLabel,
+                        selected: advance ?? L10n.remindNone,
+                      );
+                      // null = 点外面关掉了，保持原值不动。
+                      if (picked == null) return;
+                      setState(() => advance = picked < 0 ? null : picked);
+                    },
                   ),
                 ],
               ),
@@ -227,16 +252,17 @@ class ScheduleScreen extends ConsumerWidget {
                 const SizedBox(width: 8),
                 GlassActionButton(
                   variant: GlassActionVariant.primary,
-                  onPressed: () {
+                  onPressed: () async {
                     final title = titleCtrl.text.trim();
                     if (title.isEmpty) return;
-                    ref.read(appRepositoryProvider).addEvent(
+                    await ref.read(appRepositoryProvider).addEvent(
                           title: title,
                           date: date,
                           timeMinute: timeMinute,
                           advanceRemindMinutes: advance,
                         );
-                    Navigator.pop(context);
+                    await _rescheduleReminders(ref);
+                    if (context.mounted) Navigator.pop(context);
                   },
                   label: L10n.add,
                 ),
@@ -323,17 +349,18 @@ class ScheduleScreen extends ConsumerWidget {
                 const SizedBox(width: 8),
                 GlassActionButton(
                   variant: GlassActionVariant.primary,
-                  onPressed: () {
+                  onPressed: () async {
                     final title = titleCtrl.text.trim();
                     if (title.isEmpty) return;
-                    ref.read(appRepositoryProvider).updateEvent(
+                    await ref.read(appRepositoryProvider).updateEvent(
                           e,
                           title: title,
                           date: date,
                           timeMinute: timeMinute,
                           advanceRemindMinutes: advance,
                         );
-                    Navigator.pop(context);
+                    await _rescheduleReminders(ref);
+                    if (context.mounted) Navigator.pop(context);
                   },
                   label: L10n.save,
                 ),

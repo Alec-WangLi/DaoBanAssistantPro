@@ -98,6 +98,22 @@ class AppTokens {
       TextStyle(fontSize: 18, fontWeight: FontWeight.w700);
   static const TextStyle cellDate =
       TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1.15);
+
+  /// 日历格子上「有班次」那套排布用的日期字号。
+  ///
+  /// 有班次时日期不再是格子里的主角 —— 班次胶囊才是，所以日期降成左上角的
+  /// 定位标记，比无班次排布里的 [cellDate] 小一档。字号差别也是这排布的
+  /// 一部分：日期一缩小、胶囊一放大，「这格是什么班」一眼就出来了。
+  static const TextStyle cellDateSm =
+      TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.15);
+
+  /// 日历格子里班次胶囊的文字。整格内容会按格子高度等比缩放，这是基准值。
+  ///
+  /// 用 w700 而不是更重的字重：设计规格把 w800 留给响铃大时钟与「今天」徽章，
+  /// 胶囊靠**字号 + 底色**取得分量，不靠再压一档字重。
+  static const TextStyle cellShift =
+      TextStyle(fontSize: 15, fontWeight: FontWeight.w700, height: 1.15);
+
   static const TextStyle titleStrong =
       TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
   static const TextStyle labelStrong =
@@ -116,6 +132,18 @@ class AppTokens {
       TextStyle(fontSize: 12, fontWeight: FontWeight.w400);
   static const TextStyle tinyLabel =
       TextStyle(fontSize: 11, fontWeight: FontWeight.w400, height: 1.15);
+
+  /// 按比例放大/缩小一个角色令牌，其余属性（字重、行高）原样保留。
+  ///
+  /// 给**日历格子**用：格子的高度是按剩余空间算出来的，同一台设备上会随月份
+  /// 行数、信息卡高度浮动，而字号是写死的 —— 格子长高、字不跟着长，格子里就
+  /// 空出一大块，字看着就小。所以格子里的字要按格子尺寸等比缩放。
+  ///
+  /// 缩放系数由调用方按格子高度算好并夹住上下限，这里只做派生。字号走
+  /// `t.fontSize! * s` 而不是字面量，是守门测试要求的（`fontSize:` 后跟数字
+  /// 直接报红，见 `design_tokens_test.dart`）。
+  static TextStyle scaled(TextStyle t, double s) =>
+      t.copyWith(fontSize: t.fontSize! * s);
 
   // ── 图标尺寸：三档 ──
   static const double iconSm = 16;

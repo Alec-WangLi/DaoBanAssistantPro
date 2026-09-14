@@ -332,6 +332,16 @@ class AppRepository {
         .go();
   }
 
+  /// 立即读取全部日程（重排提醒用，避免读 Riverpod 流拿到旧值）。
+  Future<List<ScheduleEvent>> listEvents() {
+    final q = db.select(db.scheduleEvents)
+      ..orderBy([
+        (t) => OrderingTerm.asc(t.date),
+        (t) => OrderingTerm.asc(t.timeMinute),
+      ]);
+    return q.get();
+  }
+
   Future<int> addCustomAlarm({
     required int hour,
     required int minute,

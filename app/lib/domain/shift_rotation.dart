@@ -26,6 +26,14 @@ int daysBetween(DateTime a, DateTime b) {
 /// 取 UTC 的"纯日期"（时间归零）。
 DateTime dateOnly(DateTime d) => DateTime.utc(d.year, d.month, d.day);
 
+/// 两个 DateTime 是不是同一天。
+///
+/// **不能写成 `a == b`**：`DateTime.==` 连 `isUtc` 一起比，而 [dateOnly] 给的是
+/// UTC 日期、日历网格里逐格构造的是本地日期 —— 同一天也会判成不等。日历上
+/// 「今天加粗」与「选中那格的胶囊实心」都靠这个判断，用 `==` 会静默失效
+/// （网格里的「今天」因此从来没加粗过）。
+bool isSameDay(DateTime a, DateTime b) => daysBetween(a, b) == 0;
+
 /// 纯日期 → 自 epoch 的天数（按天闹钟覆盖表的主键）。
 int dayNumber(DateTime date) {
   final d = DateTime.utc(date.year, date.month, date.day);

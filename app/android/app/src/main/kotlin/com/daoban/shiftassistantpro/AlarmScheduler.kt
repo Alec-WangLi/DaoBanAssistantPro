@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import java.util.Calendar
 
 /**
@@ -16,6 +17,83 @@ object AlarmScheduler {
 
     /** 自定义闹钟的原生 id 基址（id = 10000 + 数据库自增 id），与排班闹钟 0..59 隔离。 */
     const val CUSTOM_BASE_ID = 10000
+
+    /**
+     * 待办提醒的原生 id 基址（id = 20000 + 数据库自增 id）。
+     *
+     * 三段互不重叠，各自按区间扫着取消 —— 见 `MainActivity` 里那几个 cancel 分支。
+     */
+    const val TODO_BASE_ID = 20000
+
+    /**
+     * 排一条「安静的」提醒：到点只弹一条通知，不响铃、不全屏、不进系统闹钟栏。
+     *
+     * 与 [schedule] 的两点不同，都是刻意的：
+     *
+     *  - 用 `setExactAndAllowWhileIdle` 而不是 `setAlarmClock`。后者会被系统当成
+     *    真闹钟：状态栏常驻闹钟图标、时钟应用的「下次闹钟」里也会列出来。对一条
+     *    「交体检报告」太重了，用户会以为手机一直在设闹钟。
+     *  - 精确闹钟权限没给（`canScheduleExactAlarms` 为假）时**退化成非精确**排定，
+     *    宁可晚几分钟也不静默不响。少数 ROM 上前面报 true、`setExact...` 仍抛
+     *    `SecurityException`，所以那条路也再兜一次。
+     */
+    fun scheduleQuiet(
+        context: Context,
+        id: Int,
+        millis: Long,
+        title: String,
+        body: String
+    ) {
+        val op = Intent(context, TodoReminderReceiver::class.java).apply {
+            putExtra("id", id)
+            putExtra("title", title)
+            putExtra("body", body)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context, id, op,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                !am.canScheduleExactAlarms()
+            ) {
+                AlarmLog.info(context, "scheduleQuiet: 无精确闹钟权限，退化为非精确排定")
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pi)
+            } else {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pi)
+            }
+        } catch (e: SecurityException) {
+            AlarmLog.error(
+                context,
+                "scheduleQuiet: setExact 被拒(${e.message})，退化为非精确排定"
+            )
+            try {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pi)
+            } catch (e2: Exception) {
+                AlarmLog.error(context, "scheduleQuiet: 退化排定也失败: ${e2.message}")
+            }
+        }
+    }
+
+    /** 按 id 区间取消全部待办提醒。 */
+    fun cancelTodoReminders(context: Context, from: Int = 0, to: Int = 1000) {
+        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        for (i in from until to) {
+            try {
+                val pi = PendingIntent.getBroadcast(
+                    context,
+                    TODO_BASE_ID + i,
+                    // 只比 action/data/type/class/categories，extras 不参与，所以
+                    // 这里给个空 Intent 也能稳稳取消掉排定时那个。
+                    Intent(context, TodoReminderReceiver::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                am.cancel(pi)
+            } catch (_: Exception) {
+            }
+        }
+    }
 
     fun schedule(
         context: Context,

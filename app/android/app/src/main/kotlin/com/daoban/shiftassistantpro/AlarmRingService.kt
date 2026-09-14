@@ -7,9 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
 import android.media.MediaPlayer
-import android.net.Uri
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.VibrationEffect
@@ -41,26 +39,8 @@ class AlarmRingService : Service() {
     }
 
     private fun startSound(uriStr: String?) {
-        try {
-            val uri = if (uriStr.isNullOrEmpty()) {
-                Uri.parse("android.resource://$packageName/raw/alarm_beep")
-            } else {
-                Uri.parse(uriStr)
-            }
-            val mp = MediaPlayer()
-            mp.setDataSource(this, uri)
-            mp.isLooping = true
-            mp.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            mp.prepare()
-            mp.start()
-            player = mp
-        } catch (_: Exception) {
-        }
+        // 音源挑选与「自选铃声坏了回落内置」都在 AlarmSound 里（两条响铃链路共用）。
+        player = AlarmSound.start(this, uriStr)
         try {
             val v = getSystemService(VIBRATOR_SERVICE) as Vibrator
             vibrator = v

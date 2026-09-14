@@ -310,14 +310,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   }
 
   Future<void> _reschedule() async {
-    final repo = ref.read(appRepositoryProvider);
-    // 直接查库拿最新排班 + 闹钟 + 按天覆盖，避免刚增删改后 Riverpod 流还未刷新导致漏排/错排
-    final sched = await repo.getActiveSchedule();
-    final alarms = await repo.listCustomAlarms();
-    final overrides = await repo.listShiftAlarmOverrides();
-    if (sched != null) {
-      await AlarmService.reschedule(sched, alarms, overrides: overrides);
-    }
+    // 直接查库拿最新排班 + 闹钟 + 按天覆盖 + 待办，避免刚增删改后 Riverpod 流
+    // 还未刷新导致漏排/错排。
+    await AlarmService.rescheduleAll(ref.read(appRepositoryProvider));
   }
 
   Future<void> _testAlarm(BuildContext context) async {

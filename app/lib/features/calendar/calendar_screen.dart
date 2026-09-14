@@ -51,9 +51,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   String? _cardHeightKey;
   double? _cardHeight;
 
+  /// 本月里有没有**未完成**的待办。
+  ///
+  /// 信息卡日期行上的「N 项待办」徽章只在有待办的日子画，而卡片是定高的 ——
+  /// 高度必须按**月**预留（有一天可能有就留），按天算的话点一天高度变一次，
+  /// 上面的网格跟着抖。
+  bool get _monthHasPendingTodos {
+    final events = ref.watch(eventsProvider).valueOrNull;
+    if (events == null) return false;
+    // `e.date` 是 `dateOnly` 存的 UTC 纯日期，年月日与本地日期一致，直接取用。
+    return events.any((e) =>
+        !e.isCompleted &&
+        e.date.year == _month.year &&
+        e.date.month == _month.month);
+  }
+
   /// 底栏信息卡该多高：取本月最满的一天（见 `info_card_metrics.dart`）。
   double _bottomCardHeight(BuildContext context, ShiftSchedule? schedule,
       double cardOuterWidth) {
+    final hasTodoHint = _monthHasPendingTodos;
     final key = [
       _month.year,
       _month.month,
@@ -68,6 +84,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       // 色块上写的是「组名 + 班次简称」，简称改了高度也可能变（比如从 1 字变
       // 2 字、窄屏多折一行）。
       schedule?.classes.map((c) => c.shortLabel).join('/'),
+      // 有待办的那天日期行要多留一点（徽章比日期字高），按月参与。
+      hasTodoHint,
     ].join('|');
     if (key == _cardHeightKey && _cardHeight != null) return _cardHeight!;
     final h = measureBottomInfoCardHeight(
@@ -75,6 +93,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       cardOuterWidth: cardOuterWidth,
       schedule: schedule,
       month: _month,
+      hasTodoHint: hasTodoHint,
     );
     _cardHeightKey = key;
     _cardHeight = h;
@@ -461,12 +480,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Future<void> _switchSchedule(int id) async {
     final repo = ref.read(appRepositoryProvider);
     await repo.setCurrentSchedule(id);
-    final sched = await repo.getScheduleDomain(id);
-    if (sched != null && mounted) {
-      final alarms = await repo.listCustomAlarms();
-      final overrides = await repo.listShiftAlarmOverrides();
-      await AlarmService.reschedule(sched, alarms, overrides: overrides);
-    }
+    // 重排读的是库里**刚设成当前**的那套方案（`rescheduleAll` 自己读），
+    // 所以这里不用先把领域模型取出来。
+    if (mounted) await AlarmService.rescheduleAll(repo);
   }
 
   Future<void> _showScheduleSwitcher() async {
@@ -706,15 +722,30 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   List<Widget> _dayRows(
       BuildContext context, double cellW, double cellH, ShiftSchedule? schedule) {
-    final today = dateOnly(DateTime.now());
+    // 比「同一天」用 `isSameDay` 而不是 `==`：`dateOnly` 是 UTC 日期、这里的
+    // `date` 是本地日期，`DateTime.==` 连 `isUtc` 一起比，`==` 恒为假
+    // （「今天」的日期因此一直没加粗过）。
+    final today = DateTime.now();
+    // 班次胶囊画成实心的那一格 = 滑块当前吸附到的格。拖动中跟 `_visual` 走而不是
+    // 跟 `_selected`：`_selected` 要松手才更新，跟它的话，手指滑过的中间格会停在
+    // 「淡染胶囊压在淡主色底上」的糊态；跟吸附格则滑块盖住的格子永远是实心的。
+    // 吸附用的是松手时同一个函数，所以「实心 → 松手落地」不会跳格。
+    final blockDate = _dragActive ? _nearestDateFromVisual() : _selected;
     final cells = <Widget>[];
     for (var i = 0; i < _leading; i++) {
       cells.add(SizedBox(width: cellW, height: cellH));
     }
     for (var d = 1; d <= _daysInMonth; d++) {
       final date = DateTime(_month.year, _month.month, d);
-      cells.add(_dayCell(context, date, schedule?.shiftOn(date), lunarOf(date),
-          cellW, cellH, date == today));
+      cells.add(_dayCell(
+          context,
+          date,
+          schedule?.shiftOn(date),
+          lunarOf(date),
+          cellW,
+          cellH,
+          isSameDay(date, today),
+          blockDate != null && isSameDay(date, blockDate)));
     }
     final rows = <Widget>[];
     for (var i = 0; i < cells.length; i += 7) {
@@ -725,15 +756,104 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   /// 磨砂卡片日期格。
+  ///
+  /// 排布按**这天有没有班次**分两种，一个方案要么整月有班次、要么整月没有，
+  /// 所以两种排布不会混在同一个月里：
+  ///
+  /// - **有班次**：日期缩到左上角当定位标记，班次做成带底色的胶囊垂直居中，
+  ///   农历留底部居中。日历里最该一眼看到的是「哪天是什么班」，所以班次占
+  ///   中位、带底色，日期退成配角。格子窄到装不下胶囊（小窗）时退回彩色文字。
+  /// - **无班次**（「跟随法定节假日（无班次）」那套方案，以及还没建排班）：
+  ///   日期 + 农历居中两行。把日期钉在左上角，这一支就成了「左上角一个日期、
+  ///   底部一个农历、中间空一格」，很难看 —— 所以整月都保持居中。
+  ///
+  /// 格子里的字按**格子高度**等比缩放（[AppTokens.scaled]）：格子高是按剩余
+  /// 空间算出来的，长高时字不跟着长，格子里就空出一大块、字显得小。
+  ///
+  /// [solid] 表示这格的班次胶囊要画成实心（滑块当前吸附的那一格）。
   Widget _dayCell(BuildContext context, DateTime date, ShiftClass? shift,
-      LunarInfo lunar, double cellW, double cellH, bool isToday) {
+      LunarInfo lunar, double cellW, double cellH, bool isToday, bool solid) {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
         : AppTokens.inkMuted(context);
-    // 班次色是给色块用的强色，当 12px 文字色会太浅（橙 2.06:1、灰 2.60:1），
-    // 得按格子底色算一版可读的。
     final surface = Theme.of(context).colorScheme.surface;
     final primary = Theme.of(context).colorScheme.primary;
+
+    // 缩放系数按**去掉格子内缩后的可用高**算：内容排在被 `_cellInset` 收窄的
+    // 盒子里，用 cellH 直接算会让内容恒比盒子高一点点，外层的 FittedBox 每次
+    // 都缩回去一档，等于缩放没生效。
+    final s = ((cellH - _cellInset * 2) / _cellDesignH)
+        .clamp(1.0, _cellMaxScale);
+    final contentW = cellW - _cellInset * 2;
+    // 太窄就画不出胶囊（小窗里格宽只有 25），退回彩色文字。
+    final chip = shift != null && contentW >= _chipMinContentW;
+
+    final dateLine = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        '${date.day}',
+        maxLines: 1,
+        // `cellDate` 自带 height 1.15：M3 默认行高 1.5，三行文字的行盒加起来
+        // 比格子可用高度多出几个像素，真机上每个格子都会 BOTTOM OVERFLOWED。
+        // 今天加粗走同一角色的 `copyWith`，不另立令牌。
+        style: AppTokens.scaled(AppTokens.cellDateSm, s).copyWith(
+          fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+    );
+
+    final lunarStyle = AppTokens.scaled(AppTokens.tinyLabel, s);
+    final lunarLine = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            if (lunar.isMakeupWorkday)
+              TextSpan(
+                text: '班 ',
+                // 调休日的「班」标记：与农历同一角色，转主色 + 加粗区分。
+                // 单行写法是守门测试的要求：`fontWeight` 字面量只有与
+                // `copyWith` 同行才豁免。
+                style: lunarStyle
+                    .copyWith(color: primary, fontWeight: FontWeight.w700),
+              ),
+            TextSpan(text: lunar.shortLabel),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: lunarStyle.copyWith(color: lunarColor),
+      ),
+    );
+
+    final children = <Widget>[];
+    if (chip) {
+      children.add(Align(alignment: Alignment.centerLeft, child: dateLine));
+      children.add(const SizedBox(height: AppTokens.gapHair));
+      children.add(_shiftChip(context, shift, s, contentW, solid,
+          ValueKey('day-chip-${date.day}')));
+    } else {
+      children.add(dateLine);
+      children.add(const SizedBox(height: AppTokens.gapHair));
+      if (shift != null) {
+        children.add(Text(
+          shift.shortLabel,
+          // 简称上限是 1–2 字，但格宽固定，多一个字就会撑破竖向节奏；
+          // 单行 + 省略号让任何长度都不破版。
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTokens.scaled(AppTokens.microStrong, s).copyWith(
+            // 班次色是给色块用的强色，当文字色太浅（橙 2.06:1、灰 2.60:1），
+            // 得按格子底色算一版可读的。
+            color: AppTokens.inkFor(Color(shift.color), surface),
+          ),
+        ));
+      }
+    }
+    children
+      ..add(const SizedBox(height: AppTokens.gapHair))
+      ..add(lunarLine);
 
     return SizedBox(
       width: cellW,
@@ -746,84 +866,113 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             Positioned.fill(
               // 整格内容一起可缩，而不是让某一行自己想办法。
               //
-              // 格子高度是按**剩余空间**均分的（`calendarCellHeight`），并不会
-              // 跟着系统字号长 —— 用户把字号调到 1.2 倍以上，三行字就高过
-              // 格子，Column 报 BOTTOM OVERFLOWED、release 下被裁字。外层的
-              // 滚动容器救不了这里：它管的是「整个网格高过视口」，管不到
-              // 「字高过格子」。
+              // 字号已按格子高度缩放，这一层只是**兜底**：用户把系统字号调到
+              // 1.2 倍以上时三行字仍可能高过格子，Column 会报 BOTTOM OVERFLOWED、
+              // release 下被裁字。外层的滚动容器救不了这里：它管的是「整个网格
+              // 高过视口」，管不到「字高过格子」。
               //
-              // 宽度给死值，所以 scaleDown 只在**高度**不够时才动手；正常
-              // 字号下一像素都不缩，和没有这一层完全一样。
+              // 宽度给死值，所以 scaleDown 只在**高度**不够时才动手。
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: SizedBox(
-                  width: cellW - _cellInset * 2,
+                  width: contentW,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // 两位数在小窗格子里会折成两行（「10」变「1」「0」）——
-                      // 小窗格子只有 ~25 宽，18px 的两个数字刚好卡在边界上，
-                      // 换个字体就翻过去。用 FittedBox 按需缩，不赌字体宽度。
-                      // 竖屏/横屏格子够宽，缩放不生效，仍是原来的 18px。
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '${date.day}',
-                          maxLines: 1,
-                          // `cellDate` 已带 height 1.15：M3 默认行高 1.5，三行文字的
-                          // 行盒加起来比格子可用高度多出几个像素，真机上每个格子
-                          // 都会 BOTTOM OVERFLOWED（content 被裁）。今天加粗走
-                          // 同一角色的 `copyWith`，不另立令牌。
-                          style: AppTokens.cellDate.copyWith(
-                            fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppTokens.gapHair),
-                      if (shift != null)
-                        Text(
-                          shift.shortLabel,
-                          // 简称上限是 1–2 字，但格宽固定，多一个字就会撑破竖向
-                          // 节奏；单行 + 省略号让任何长度都不破版。
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTokens.microStrong.copyWith(
-                            color: AppTokens.inkFor(Color(shift.color), surface),
-                          ),
-                        ),
-                      const SizedBox(height: AppTokens.gapHair),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 1),
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              if (lunar.isMakeupWorkday)
-                                TextSpan(
-                                  text: '班 ',
-                                  // 调休日的「班」标记：与农历同一角色，转主色 + 加粗
-                                  // 区分（原为 9px，缩到读不出，现靠颜色/字重区分）。
-                                  // 单行写法是守门测试的要求：`fontWeight` 字面量只有
-                                  // 与 `copyWith` 同行才豁免。
-                                  style: AppTokens.tinyLabel
-                                      .copyWith(color: primary, fontWeight: FontWeight.w700),
-                                ),
-                              TextSpan(text: lunar.shortLabel),
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTokens.tinyLabel.copyWith(color: lunarColor),
-                        ),
-                      ),
-                    ],
+                    children: children,
                   ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 日历格子里的班次胶囊。
+  ///
+  /// 配方与信息卡的「其他班组」色块、「法定节假日」徽章**同一套**：班次色淡染底
+  /// + 同色描边 + [AppTokens.inkFor] 文字。同一个「信息胶囊」在应用里只该有一套
+  /// 长相，不因为进了日历就换配方。
+  ///
+  /// [solid] 为真时底色换成班次色实心、文字走 [AppTokens.onSolid]，用于滑块当前
+  /// 吸附的那一格 —— 那一格是全屏唯一需要「一眼锁定」的。**只换颜色，不换几何**
+  /// （描边宽度、内边距、字号一律不动），所以胶囊尺寸与内容高度不随选中态变化，
+  /// 不会连带触发布局跳动。
+  ///
+  /// 底色走 [AnimatedContainer]，选中/取消时渐变过去而不是硬切；文字色是跳变的
+  /// —— 两个候选（`inkFor` 与 `onSolid`）各自在对应底色上可读，中间态可接受，
+  /// 而 Color.lerp 两个可读色反而会穿过不可读区。
+  Widget _shiftChip(BuildContext context, ShiftClass shift, double s,
+      double contentW, bool solid, Key key) {
+    final color = Color(shift.color);
+    final fill = solid ? 1.0 : 0.14;
+    final ink = solid
+        ? AppTokens.onSolid(color)
+        : AppTokens.inkFor(
+            color,
+            Color.alphaBlend(
+                color.withValues(alpha: fill),
+                Theme.of(context).colorScheme.surface));
+    final label = shift.shortLabel;
+    // 宽度兜底：简称是用户可改的，两个字塞进窄格子时会显示成「早…」，比不用
+    // 胶囊还差。按可用宽度算一版字号上限，与高度缩放取小。
+    final textW = contentW - _chipPadH * s * 2 - 2;
+    final fontSize = math.min(
+        AppTokens.cellShift.fontSize! * s, textW / label.runes.length);
+
+    return AnimatedContainer(
+      key: key,
+      duration: AppTokens.durMed,
+      curve: Curves.easeOut,
+      padding: EdgeInsets.symmetric(
+          horizontal: _chipPadH * s, vertical: AppTokens.padChipV * s),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: fill),
+        borderRadius: BorderRadius.circular(AppTokens.radiusS),
+        border: Border.all(
+            color: solid ? color : color.withValues(alpha: 0.45)),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTokens.cellShift.copyWith(fontSize: fontSize, color: ink),
+      ),
+    );
+  }
+
+  /// 信息卡日期行上的「N 项待办」提示。
+  ///
+  /// 形状与同一行的「今天」徽章对齐（同内边距、同圆角），颜色走「信息胶囊」那套
+  /// 淡染配方（14% 底 + 45% 描边 + `inkFor` 文字）—— 同一行两个徽章等高等形，
+  /// 只有轻重不同。高度与「今天」徽章一样是 12px 文字那一档，所以日期行的高度
+  /// 不因它而变。
+  Widget _todoHintBadge(BuildContext context, int count) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final ink = AppTokens.inkFor(
+        accent,
+        Color.alphaBlend(accent.withValues(alpha: 0.14),
+            Theme.of(context).colorScheme.surface));
+    return Container(
+      key: const Key('info-card-todo-hint'),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTokens.spaceSm, vertical: AppTokens.padChipV),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(AppTokens.radiusL),
+        border: Border.all(color: accent.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppIcon(Icons.event_note_outlined,
+              size: AppTokens.iconSm, color: ink),
+          const SizedBox(width: AppTokens.gapIconText),
+          Text(L10n.todoCount(count),
+              style: AppTokens.microStrong.copyWith(color: ink)),
+        ],
       ),
     );
   }
@@ -909,18 +1058,28 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget _glassBlock(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
     return Container(
+      key: const Key('calendar-selection-block'),
       margin: const EdgeInsets.all(_cellInset),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTokens.radiusL),
         color: accent.withValues(alpha: 0.13),
         border: Border.all(color: accent, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: 0.25),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        // **没有 boxShadow**，这是有意的，别加回来。
+        //
+        // 这一层画在网格**之上**（Stack 的后一个 child），所以它必须是半透明的
+        // —— 不透明就把选中那格的日期、班次胶囊、农历全糊掉了（试过，格子直接
+        // 变空）。而正因为它是半透明的，一旦有 `boxShadow`（主色 25%），阴影就会
+        // 从块**内部**透出来再叠一层：格子内部实际吃到约 33% 的主色，而不是
+        // 设计要的 13%。
+        //
+        // 后果是选中那格的**实心班次胶囊被洗掉色相**：橙 `#FF9F0A` 洗成棕
+        // `#C28758`，蓝 `#4C8DFF` 会和主色块糊成一片。而「选中那格的班次最抢眼」
+        // 正是实心胶囊的全部意义。
+        //
+        // 想在块外留光晕也不行：阴影只能画在内容之上，才会被看得见；画在内容
+        // 之下就会被格子自身近乎不透明的卡片底（白 92%）盖住。所以这里二选一，
+        // 选保住胶囊的色相 —— 「选中」这个信号由 2px 主色描边 + 13% 淡染承担，
+        // 它们本来就扛得住。
       ),
     );
   }
@@ -985,6 +1144,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       );
     }
 
+    // 选中那天还没完成的待办条数。只说数量，不列内容（用户要的只是「今天有
+    // 待办」这一眼）。`e.date` 是 `dateOnly` 存的 UTC 日期，比「同一天」要走
+    // `isSameDay`，不能直接用 `==`。
+    final pendingTodos = ref
+            .watch(eventsProvider)
+            .valueOrNull
+            ?.where((e) => !e.isCompleted && isSameDay(e.date, _selected))
+            .length ??
+        0;
+
     final content = Column(
       key: const Key('info-card-content'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1014,6 +1183,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   style: AppTokens.microStrong.copyWith(color: Colors.white),
                 ),
               ),
+            ],
+            // 待办提示塞在**这一行**里，不新占一行：这一行本来就有个和它一样高的
+            // 「今天」徽章，所以卡片高度（进而格子高度）一像素都不动 —— 信息卡是
+            // 定高的，多一行会让六个格子集体矮一截（见 `info_card_metrics.dart`）。
+            //
+            // 窄屏不显示：三个元素并排在这点宽度里放不下，而挤掉日期的字比少一条
+            // 提示更糟（紧凑卡片分支同样把农历、今天徽章都收起来了）。
+            //
+            // 侧栏（横屏的左右分栏）同样不显示 —— 那一栏比竖屏底栏还窄，
+            // 实测这一行会横向溢出 24px。
+            if (pendingTodos > 0 &&
+                !inSidePane &&
+                !AppLayout.of(context).isNarrow) ...[
+              const SizedBox(width: AppTokens.spaceSm),
+              _todoHintBadge(context, pendingTodos),
             ],
           ],
         ),
@@ -1267,13 +1451,38 @@ String _alarmText(ShiftClass t) {
 const double _cellAspect = 0.78;
 const double _cellAspectMin = 0.62;
 
+/// 格子内容在**设计尺寸**下的自然高度：日期 `cellDateSm` 13×1.15 + `gapHair` +
+/// 班次胶囊（`cellShift` 15×1.15 + 上下 `padChipV` 各 3 + 描边 1×2）+ `gapHair`
+/// + 农历 `tinyLabel` 11×1.15 ≈ 56.9。
+///
+/// 格子里的字按 `(cellH − 内缩) / 这个值` 等比缩放（见 `_dayCell`），所以它就是
+/// 「缩放系数 1.0」的那把尺子。
+const double _cellDesignH = 57;
+
+/// 格子字号的缩放上限。再大就喧宾夺主：格子被字填满、格子之间的呼吸感没了。
+const double _cellMaxScale = 1.35;
+
+/// 班次胶囊的左右内边距。比信息卡色块的 8 窄一档：这里装的是 1–2 个字的简称，
+/// 8 会让单字胶囊的宽度接近文字的两倍，手机上（格内容宽约 44）就装不下。
+const double _chipPadH = AppTokens.gapIconText;
+
+/// 画胶囊所需的最小内容宽度。单字胶囊在设计尺寸下自然宽
+/// `_chipPadH`×2 + 描边 1×2 + 15 = 29，留一点余量取 34。
+/// 小窗（200 宽）格子内容宽只有 21，落到这条线以下就退回纯色文字。
+const double _chipMinContentW = 34;
+
 /// 格子高的下限 = **格子里的三行字实测要多高**。
 ///
-/// 三行都是单行文字（日期 `cellDate` 18、班次简称 `microStrong` 12、农历
-/// `tinyLabel` 11），三者的令牌都自带 `height: 1.15` 压过行盒：
-/// 18×1.15 + `gapHair` 2 + 12×1.15 + `gapHair` 2 + 11×1.15 ≈ 51.2，再加格子
-/// 自身 `_cellInset` 上下各 2 一共 4 —— 约 55.2，落在 58 之内，留约 2.8 余量。
-/// 取 58 是为了不赌具体字体度量（三行都有显式行高，理论上已经与字体度量无关）。
+/// 不画胶囊的那一支（无班次方案、小窗）是日期 `cellDateSm` 13 + `gapHair` 2 +
+/// 班次简称 `microStrong` 12 + `gapHair` 2 + 农历 `tinyLabel` 11，三者都自带
+/// `height: 1.15` 压过行盒：≈ 48.9，再加格子自身 `_cellInset` 上下各 2 一共 4
+/// —— 约 52.9，落在 58 之内，留约 5 的余量。
+///
+/// 画胶囊那一支更高（内容 ≈ 56.9、加内缩约 60.9），**高过这道下限 3dp**。但
+/// 两支不会同时出现在一条分支上：下限真正生效的地方（小窗、短屏）正是格宽装不下
+/// 胶囊的地方，那里量的是 52.9；卡在两条线之间的格子（横屏那种又宽又矮的）由
+/// `_dayCell` 那层 `FittedBox` 按需缩掉几个百分点。所以不为胶囊抬高下限 ——
+/// 抬了就等于让网格自己制造溢出（见下）。
 ///
 /// **曾经是 80**，那是 `height: 1.15` 压行盒之前按 M3 默认行高 1.5 标定的
 /// （27 + 2 + 18 + 2 + 16.5 + 4 ≈ 70，再垫到 80）。行盒压紧后这个数一直没
