@@ -5,6 +5,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -95,6 +96,52 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /**
+     * 撤掉「盖在锁屏上」的状态 —— 与 [applyShowWhenLocked] 成对。
+     *
+     * `setShowWhenLocked(true)` 是**只进不出**的：不显式关掉，这个 Activity 会一直
+     * 处于「可以盖在锁屏上」的状态，直到进程被杀。后果是用户关掉响铃界面之后，露
+     * 出来的是 **App 主界面**、锁屏回不来 —— 真人测试反馈，这也意味着锁屏下能直接
+     * 看到并操作 App 内容。
+     *
+     * 响铃一停就撤掉这两个标志，系统会把锁屏盖回来，正好是「关掉响铃 → 回到锁屏」。
+     */
+    private fun exitLockScreenMode() {
+        if (Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(false)
+            setTurnScreenOn(false)
+            AlarmLog.info(this, "MainActivity: 已 setShowWhenLocked(false)+setTurnScreenOn(false)")
+        }
+    }
+
+    /**
+     * 小米机型的 App 权限页 —— 「后台弹出界面」「锁屏显示」这两项都在那里。
+     *
+     * 这不是标准 Android 权限：MIUI 的 `ActivityStarterImpl` 会**静默**拒绝从后台
+     * 拉起 Activity（logcat 里只有一行 `MIUILOG- Permission Denied Activity`），
+     * 表现就是闹钟只响、不弹界面。它没有公开 API，状态也读不到，只能把用户送到
+     * 这个页面自己开。
+     */
+    private fun miuiPermissionEditor(): Intent =
+        Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+            putExtra("extra_pkgname", packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+    /** 这台机器上有没有那个页面（非小米机型解析不到）。 */
+    private fun miuiPermissionPageAvailable(): Boolean = try {
+        if (Build.VERSION.SDK_INT >= 33) {
+            packageManager.resolveActivity(
+                miuiPermissionEditor(), PackageManager.ResolveInfoFlags.of(0L)
+            ) != null
+        } else {
+            @Suppress("DEPRECATION")
+            (packageManager.resolveActivity(miuiPermissionEditor(), 0) != null)
+        }
+    } catch (_: Exception) {
+        false
+    }
+
     private fun handleAlarmIntent(intent: Intent?) {
         val label = intent?.getStringExtra("alarm_label")
         val detail = intent?.getStringExtra("alarm_detail")
@@ -149,6 +196,23 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         } catch (e: Exception) {
                             result.error("OPEN_SETTINGS_FAILED", e.message, null)
+                        }
+                    }
+                    "checkMiuiPermissionPage" -> {
+                        result.success(miuiPermissionPageAvailable())
+                    }
+                    "openMiuiPermissionPage" -> {
+                        try {
+                            startActivity(miuiPermissionEditor())
+                            result.success(true)
+                        } catch (e: Exception) {
+                            // 解析得到不等于打得开（个别 ROM 会拦），失败让 Dart 侧
+                            // 落回系统「应用信息」页，至少用户能自己翻到权限那一栏。
+                            AlarmLog.error(
+                                this,
+                                "打开小米权限页失败: ${e.javaClass.name}: ${e.message}"
+                            )
+                            result.success(false)
                         }
                     }
                     "openOverlaySettings" -> {
@@ -405,6 +469,9 @@ class MainActivity : FlutterActivity() {
                     "stopAlarm" -> {
                         stopAlarmInternal()
                         stopService(Intent(this, AlarmRingService::class.java))
+                        // 响铃结束，把「盖在锁屏上」一起撤掉：滑块关闭与「再睡一会」
+                        // 两条路都走这里，主界面不会留在锁屏上。
+                        exitLockScreenMode()
                         result.success(null)
                     }
                     "scheduleNativeAlarm" -> {

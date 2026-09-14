@@ -56,10 +56,16 @@ class L10n {
   static String get permAutoStart => t('自启动', 'Auto-start');
   static String get permAutoStartHint => t('小米/华为等机型需手动开启', 'Enable manually on MIUI/HyperOS');
   static String get goCheck => t('去查看', 'Check');
-  static String get permOverlay => t('后台弹出界面', 'Display over other apps');
-  static String get permOverlayHint => t('锁屏时全屏响铃需要', 'Needed for lock-screen fullscreen alarm');
+  static String get permOverlay => t('显示悬浮窗', 'Display over other apps');
+  static String get permOverlayHint =>
+      t('弹响铃界面时需要', 'Needed to pop up the alarm screen');
   static String get permFsi => t('全屏通知', 'Full-screen notifications');
   static String get permFsiHint => t('否则只弹一条通知，不弹全屏响铃', 'Otherwise only a notification shows');
+  static String get permMiuiPopup =>
+      t('后台弹出界面（小米）', 'Background pop-up (MIUI)');
+  static String get permMiuiPopupHint => t(
+      '闹钟只响、界面不弹时来这里开：小米把「后台弹出界面」单独设成一项权限，默认是关的',
+      'Enable this if the alarm rings but no screen pops up. MIUI gates background pop-ups separately, off by default.');
   static String get permBattery => t('电池优化', 'Battery optimization');
   static String get permBatteryHint => t('设为「不限制」，否则后台可能不响', 'Set "Unrestricted", or alarms may not fire');
   static String get enabled => t('已开启', 'Enabled');
@@ -389,8 +395,8 @@ class L10n {
       'On phone landscape and wide screens (tablets, car head units) the calendar becomes two panes — month grid on the left, day details on the right — and content is centred with a maximum width instead of stretching across. All pages also work in a Xiaomi floating window or split screen.');
   static String get guidePermTitle => t('权限', 'Permissions');
   static String get guidePermDesc => t(
-      '首次使用务必到「我的 → 权限」开齐：通知、闹钟和提醒（精确闹钟）、自启动、后台弹出界面、全屏通知、电池优化，否则闹钟可能不响或锁屏不弹全屏。',
-      'On first use, enable all in Me → Permissions: notifications, alarms & reminders (exact alarm), auto-start, display-over-other-apps, full-screen notifications, battery optimization — or alarms may not ring or pop over the lock screen.');
+      '首次使用务必到「我的 → 权限」开齐：通知、闹钟和提醒（精确闹钟）、显示悬浮窗、全屏通知、电池优化。小米机型还要在系统的「应用 → 权限 → 其他权限」里额外开「后台弹出界面」和「锁屏显示」——不开的话，闹钟到点只会响，不会弹出响铃界面。',
+      'On first use, enable all in Me → Permissions: notifications, alarms & reminders (exact alarm), display over other apps, full-screen notifications, battery optimization. On Xiaomi devices also turn on "Open new windows while running in the background" and "Show on Lock screen" under the system app permissions — without them the alarm only rings and never pops up its screen.');
   static String get guideUpdateTitle => t('更新', 'Update');
   static String get guideUpdateDesc => t(
       '「我的 → 检查更新」查看最新正式版/测试版，应用内下载并自动拉起安装。',

@@ -699,6 +699,30 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  testWidgets('选中块：圆角必须与格子卡片同源 —— 差一档就从四个角露出卡片',
+      (tester) async {
+    // v0.7.3 真机实测：块走 radiusL(22)、卡片走 radiusM(16)，两者尺寸与位置
+    // 完全一致（同 inset、同一格），于是四个角各露出一条约 4dp 的月牙 ——
+    // 看起来就是「滑块没把日期格子盖住」。两处现在都取 `_cellRadius`，
+    // 这条用例钉着它们相等：哪天有人只改其中一边，这里会红。
+    await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
+    final today = DateTime.now().day;
+
+    final blockRadius = (tester
+            .widget<Container>(find.byKey(const Key('calendar-selection-block')))
+            .decoration! as BoxDecoration)
+        .borderRadius;
+    final cardRadius = (tester
+            .widget<Container>(find.byKey(ValueKey('day-card-$today')))
+            .decoration! as BoxDecoration)
+        .borderRadius;
+
+    expect(blockRadius, cardRadius,
+        reason: '选中块盖在同一格上，圆角大一点就会在四个角露出底下的卡片');
+
+    await _disposeCalendar(tester);
+  });
+
   testWidgets('格子班次胶囊：简称套在 FittedBox 里，不靠算宽度', (tester) async {
     // v0.7.1 的坑：胶囊字号原本按「字数 × 基准字号」硬算可用宽度，是**零余量**
     // 的 —— 两字简称差一点点就退化成「上…」，系统字号一放大整串字都没了

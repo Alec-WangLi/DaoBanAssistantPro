@@ -123,70 +123,77 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     final timeStr = '${now.hourOfPeriod.toString().padLeft(2, '0')}:'
         '${now.minute.toString().padLeft(2, '0')}';
 
-    return Scaffold(
-      backgroundColor: AppTokens.bgDark,
-      body: FlowingBackground(
-        child: SafeArea(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragUpdate: _onBodyDragUpdate,
-            onVerticalDragEnd: _onBodyDragEnd,
-            child: AnimatedOpacity(
-              opacity: (1 - _bodyDragDy.abs() / 300).clamp(0.0, 1.0),
-              duration: AppTokens.durFast,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Column(
-                    children: [
-                      const Spacer(),
-                      ScaleTransition(
-                        scale: _scale,
-                        child: FadeTransition(
-                          opacity: _enter,
-                          child: Column(
-                            children: [
-                              // 窄屏（小窗 200dp）下 84px 的「06:30」会折成两行、
-                              // 把整列顶爆。scaleDown 只在放不下时才缩，常规屏不受影响。
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AppTokens.space2xl),
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    timeStr,
-                                    maxLines: 1,
-                                    // 84/w800/h1 都在 ringClock 里，不再写行内字重。
-                                    style: AppTokens.ringClock.copyWith(
-                                      color: Colors.white,
-                                      letterSpacing: 2,
+    // 屏蔽系统返回手势：响铃界面是压在 App 主界面之上的一层路由，而这一层可能正
+    // 盖在锁屏上（见 MainActivity 的 setShowWhenLocked）。一次返回就退回主界面 =
+    // 锁屏下把 App 内容露出来，所以这里只留「上滑关闭」与「再睡一会」两个显式出口
+    // —— 它们走 `_finish`/`_snooze` 里的 `Navigator.pop`，不受 `canPop` 约束。
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppTokens.bgDark,
+        body: FlowingBackground(
+          child: SafeArea(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onVerticalDragUpdate: _onBodyDragUpdate,
+              onVerticalDragEnd: _onBodyDragEnd,
+              child: AnimatedOpacity(
+                opacity: (1 - _bodyDragDy.abs() / 300).clamp(0.0, 1.0),
+                duration: AppTokens.durFast,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Column(
+                      children: [
+                        const Spacer(),
+                        ScaleTransition(
+                          scale: _scale,
+                          child: FadeTransition(
+                            opacity: _enter,
+                            child: Column(
+                              children: [
+                                // 窄屏（小窗 200dp）下 84px 的「06:30」会折成两行、
+                                // 把整列顶爆。scaleDown 只在放不下时才缩，常规屏不受影响。
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: AppTokens.space2xl),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      timeStr,
+                                      maxLines: 1,
+                                      // 84/w800/h1 都在 ringClock 里，不再写行内字重。
+                                      style: AppTokens.ringClock.copyWith(
+                                        color: Colors.white,
+                                        letterSpacing: 2,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 16),
-                              _labelCapsule(),
-                            ],
+                                const SizedBox(height: 16),
+                                _labelCapsule(),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const Spacer(),
-                      _dismissSlider(trackHeight, thumbSize),
-                      SizedBox(height: gapBelow),
-                    ],
-                  ),
-                  Positioned(
-                    left: 24,
-                    right: 24,
-                    bottom: 24,
-                    child: GlassButton(
-                      primary: true,
-                      icon: const Icon(Icons.snooze_outlined),
-                      onPressed: _snooze,
-                      child: Text(L10n.snooze),
+                        const Spacer(),
+                        _dismissSlider(trackHeight, thumbSize),
+                        SizedBox(height: gapBelow),
+                      ],
                     ),
-                  ),
-                ],
+                    Positioned(
+                      left: 24,
+                      right: 24,
+                      bottom: 24,
+                      child: GlassButton(
+                        primary: true,
+                        icon: const Icon(Icons.snooze_outlined),
+                        onPressed: _snooze,
+                        child: Text(L10n.snooze),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

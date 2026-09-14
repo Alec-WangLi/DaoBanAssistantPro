@@ -576,6 +576,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
   bool? _overlay;
   bool? _fsi;
   bool? _battery;
+  bool? _miui;
 
   @override
   void initState() {
@@ -601,6 +602,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
     final overlay = await AlarmService.checkOverlayPermission();
     final fsi = await AlarmService.checkFullScreenIntentPermission();
     final battery = await AlarmService.checkBatteryOptimization();
+    final miui = await AlarmService.checkMiuiPermissionPage();
     if (!mounted) return;
     setState(() {
       _notif = notif;
@@ -608,6 +610,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
       _overlay = overlay;
       _fsi = fsi;
       _battery = battery;
+      _miui = miui;
     });
   }
 
@@ -623,6 +626,13 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
 
   Future<void> _openAutoStart() async {
     await AlarmService.openAppSettings();
+  }
+
+  /// 小米那项「后台弹出界面」读不到状态，只能送到那个页面让用户自己开；
+  /// 万一页面打不开（非小米或 ROM 拦了），落回系统「应用信息」页。
+  Future<void> _openMiuiPermissionPage() async {
+    final ok = await AlarmService.openMiuiPermissionPage();
+    if (!ok) await AlarmService.openAppSettings();
   }
 
   Future<void> _openOverlay() async {
@@ -713,6 +723,19 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
                   onOpen: _openAutoStart,
                   actionLabel: L10n.goCheck,
                 ),
+                // 只在小米机型出现：那项权限是 MIUI 私有的，别家没有，摆出来只会
+                // 让人白跑一趟。状态也读不到，所以同样是「去查看」而不是开关态。
+                if (_miui == true) ...[
+                  const Divider(height: 1),
+                  _permTile(
+                    icon: Icons.open_in_new_outlined,
+                    title: L10n.permMiuiPopup,
+                    subtitle: L10n.permMiuiPopupHint,
+                    enabled: null,
+                    onOpen: _openMiuiPermissionPage,
+                    actionLabel: L10n.goCheck,
+                  ),
+                ],
                 const Divider(height: 1),
                 _permTile(
                   icon: Icons.battery_saver_outlined,

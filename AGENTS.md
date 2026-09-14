@@ -52,11 +52,12 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 - 闹钟链路：`setAlarmClock` → `AlarmReceiver` → `AlarmRingService`（前台服务 MediaPlayer + Vibrator + WakeLock + fullScreenIntent）；`MainActivity` 在 `super.onCreate` 前 `setShowWhenLocked`/`setTurnScreenOn`。
 - `AlarmService.reschedule` 排**未来 60 天**班次闹钟 + 自定义闹钟（一次性/每天/每周，重复型由原生侧同一 id 续排）；按天覆盖值为 false 的日期跳过。
 - 闹钟页 = **未来 30 天**班次闹钟（每条可单独开关、响过自动隐藏）+ 自定义闹钟分区；`Timer.periodic(1min)` + 回到前台重建；响过的一次性自定义闹钟自动删除。
-- 已接受的 OS 限制：小米/华为「免解锁弹全屏」受系统限制——屏幕会点亮，但需解锁后关闭（已确认，不要再当 bug 处理）。
+- **小米机型锁屏弹不出响铃界面 = 少开了一项系统权限，不是「OS 限制」**：MIUI 的「后台弹出界面」（系统里显示为 `Open new windows while running in the background`，与「显示悬浮窗」是两项）不开时，`ActivityStarterImpl` 会**静默**拒绝从后台拉起 Activity（logcat 里只有 `MIUILOG- Permission Denied Activity`），系统把它降级成 "invisible launch"——Activity 起来了但不显示、`onNewIntent` 都不走，**连通知那条 fullScreenIntent 的 PendingIntent 也一起被拒**。表现就是闹钟只响、不弹界面。两项都开之后实测：退后台 → 自动拉前台弹出响铃界面；退后台 + 锁屏 → 点亮屏幕并顶掉 keyguard（`mKeyguardOccluded=true`）。这项权限**读不到状态**、也没法用 adb 授予（MIUI 的 op 常量是 `OP_BACKGROUND_START_ACTIVITY`，但没进 `AppOpsManager` 的名字表），只能引导用户去开：`am start -a miui.intent.action.APP_PERM_EDITOR --es extra_pkgname <包名>`。**再遇到「锁屏不弹」先查这项权限，别当 OS 限制记档。**
+- **响铃结束必须撤掉 `setShowWhenLocked`**：它是只进不出的，不显式关掉，这个 Activity 会一直能盖在锁屏上——用户关掉响铃界面后露出来的是 App 主界面（锁屏下能直接操作 App 内容，真人反馈的隐患）。`MainActivity.exitLockScreenMode()` 在 `stopAlarm` 里调用。
 - **应用图标是全脚本生成的**：`scripts/icon_gen.py` 出图形（预览落 `work/icon-preview.png`），`scripts/icon_land.py` 落地到 Android / iOS / Web。产物 —— `mipmap-anydpi-v26/ic_launcher.xml`、`drawable-*/ic_launcher_{background,foreground,monochrome}.png`、各尺寸 PNG —— 都是生成物，**别手改**；改图形只改 `icon_gen.py`。几何常量彼此咬合（自适应安全区是**直径 66dp 的圆**，方形符号须内接，边长上限≈画布 43%），改一个要连带验另两个，约束写在常量旁。minSdk 26，真机永远走自适应那套，`mipmap-*/ic_launcher.png` 只是兜底。
 - **README / 酷安配图是生成的，别手改 `docs/images/` 里的 PNG**：原始截图由 `app/tool/promo/render_promo_test.dart` 出（复用 `tool/visual/visual_harness.dart`，但用自己的一份屏单和自己的假库 —— 补了待办与自定义闹钟、并把「今天」调到白班，否则拍出来是空屏、「闹钟：未开启」），合成由 `scripts/make_promo_images.py` 做（套机身外框 → `docs/images/`，透明底以便 GitHub 深浅主题都能显示；另出大图与封面到 `work/promo-out/`，不入库）。改配图就改这两个脚本再各跑一次；酷安发帖稿在 `docs/coolapk-post.md`。
 - 弹窗遮罩统一 `barrierColor: Colors.black26`（不能太暗）；底部弹层 `GlassPanel(solid:true)`（背景暗、面板不暗）。
-- **`SYSTEM_ALERT_WINDOW` 不能删**：代码里没有 `WindowManager.addView`，但「后台弹出界面」权限卡（`AlarmService.checkOverlayPermission`→`Settings.canDrawOverlays`）依赖它在 manifest 声明——删了 App 就从系统「后台弹出界面」列表消失、小米/华为锁屏全屏闹钟可能弹不出。grep 判"未使用"是误判，勿再删。
+- **`SYSTEM_ALERT_WINDOW` 不能删**：代码里没有 `WindowManager.addView`，但「显示悬浮窗」权限卡（`AlarmService.checkOverlayPermission`→`Settings.canDrawOverlays`）依赖它在 manifest 声明——删了 App 就从系统「显示悬浮窗」列表消失、小米/华为锁屏全屏闹钟可能弹不出（AOSP 层那次后台启动豁免走的就是它，`BAL_ALLOW_SAW_PERMISSION`）。grep 判"未使用"是误判，勿再删。
 
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。

@@ -32,6 +32,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   static const _weekdayH = 26.0; // 周标题行高
   static const _cellInset = AppTokens.gapHair; // 格子/玻璃块统一内缩
 
+  /// 格子卡片与选中块的圆角：**必须同源**。
+  ///
+  /// 选中块就盖在同一格上（同 inset、同尺寸），圆角差一档，四个角就会露出底下
+  /// 的卡片。v0.7.3 真机实测正是如此：块是 `radiusL`(22)、卡片是 `radiusM`(16)，
+  /// 四个角各露出一条约 4dp 的月牙，看起来就是「滑块没把格子盖住」。
+  ///
+  /// 两处都从这一个来源取，`calendar_screen_test` 里另有一条用例钉着两者相等
+  /// —— 光靠自觉，这两个数迟早还会各走各的。
+  static BorderRadius get _cellRadius =>
+      BorderRadius.circular(AppTokens.radiusM);
+
   late DateTime _month; // 显示月的 1 号
   late DateTime _selected; // 选中的日期（默认今天）
 
@@ -859,6 +870,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       width: cellW,
       height: cellH,
       child: Container(
+        key: ValueKey('day-card-${date.day}'),
         margin: const EdgeInsets.all(_cellInset),
         decoration: _cardDecoration(context),
         child: Stack(
@@ -1040,7 +1052,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       color: isDark
           ? Colors.white.withValues(alpha: 0.06)
           : Colors.white.withValues(alpha: 0.92),
-      borderRadius: BorderRadius.circular(AppTokens.radiusM),
+      borderRadius: _cellRadius,
       border: Border.all(
         color: isDark
             ? Colors.white.withValues(alpha: 0.10)
@@ -1056,14 +1068,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  /// 可拖拽的玻璃选择块（与格子同 inset，精确覆盖）。
+  /// 可拖拽的玻璃选择块（与格子同 inset、同圆角，精确覆盖）。
   Widget _glassBlock(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
     return Container(
       key: const Key('calendar-selection-block'),
       margin: const EdgeInsets.all(_cellInset),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppTokens.radiusL),
+        borderRadius: _cellRadius,
         color: accent.withValues(alpha: 0.13),
         border: Border.all(color: accent, width: 2),
         // **没有 boxShadow**，这是有意的，别加回来。

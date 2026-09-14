@@ -183,18 +183,42 @@ class AlarmService {
     } catch (_) {}
   }
 
-  /// 打开「后台弹出界面 / 悬浮窗」权限设置（全屏闹钟需要）。
+  /// 打开「显示悬浮窗」权限设置（弹响铃界面的 AOSP 层豁免靠它）。
   static Future<void> openOverlaySettings() async {
     try {
       await _settingsChannel.invokeMethod('openOverlaySettings');
     } catch (_) {}
   }
 
-  /// 本应用是否已获得「后台弹出界面 / 悬浮窗」权限。
+  /// 本应用是否已获得「显示悬浮窗」权限（`SYSTEM_ALERT_WINDOW`）。
   static Future<bool> checkOverlayPermission() async {
     try {
       return await _settingsChannel.invokeMethod('checkOverlayPermission') ??
           false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 这台机器上有没有小米的 App 权限页（非小米机型没有）。
+  ///
+  /// 那里装着一项**小米私有**的权限「后台弹出界面」，与上面的「显示悬浮窗」是
+  /// 两回事：不开它，MIUI 会静默拒绝从后台拉起 Activity，闹钟只响、不弹界面。
+  /// 这项权限读不到状态（没有公开 API），所以界面上只做「去查看」。
+  static Future<bool> checkMiuiPermissionPage() async {
+    try {
+      return await _settingsChannel.invokeMethod('checkMiuiPermissionPage') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 打开小米的 App 权限页；打不开返回 false，由调用方落回系统「应用信息」。
+  static Future<bool> openMiuiPermissionPage() async {
+    try {
+      return await _settingsChannel.invokeMethod('openMiuiPermissionPage') ==
+          true;
     } catch (_) {
       return false;
     }
