@@ -72,6 +72,11 @@ features/profile/            我的页 + 权限卡 + app_dialogs（更新日志/
 - `dist/`、`*.apk`、`*.aab` 均 gitignore，不进仓库。
 
 ## 工作流
+- **正式版（末位 `Z=0`）发布前必须过一遍「仓库门面」** —— 用户提过两次，别再漏：
+  1. `README.md` 的**文案**：版本号、功能清单逐条对着当前实现核（每次都会过时几处，例：0.8.0 那轮核出「月视图仍写按颜色区分」「铃声仍写只有内置与系统」「schemaVersion 还停在 6」）。
+  2. `README.md` 的**配图**：`docs/images/` 里的 `hero.png` 与 `shot-*.png` 全是生成物，**改了 UI 就得重跑** `toolchain/flutter/bin/flutter test tool/promo/render_promo_test.dart` → `python scripts/make_promo_images.py`。只改文字不换图 = README 上挂的还是几个版本前的界面（0.8.0 那轮就漏了，图停在 v0.7.0）。
+  3. **GitHub 仓库描述与 topics**（`gh repo edit --description … --add-topic …`）—— 建仓时是空的，正式版顺手维护。
+  4. `PRODUCT_SPEC.md` 抬头版本 + 受影响的条目；`AGENTS.md` 的版本史与「最近改动」；`docs/coolapk-post.md` 里对应段落。
 - 已升级为 **Superpowers 技能驱动**：新功能/改 UI → `brainstorming` 先磨需求；报 Bug → `systematic-debugging` 先根因后修复；写码 → `test-driven-development`；收尾 → `verification-before-completion` + `requesting-code-review`；多步/架构级 → `writing-plans` → `executing-plans`。
 - 旧的 `/grill-me` 已被 `brainstorming` 取代，仅作轻量备胎。
 - 用户偏好「全按推荐」、少磨叽；但涉及方案选型仍要给带推荐答案的方向、确认后再动手。
