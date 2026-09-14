@@ -1,15 +1,15 @@
 {
-    "prerelease":  {
-                       "version":  "0.6.13",
-                       "url":  "https://github.com/Alec-WangLi/DaoBanAssistantPro/releases/download/v0.6.13/DaoBanAssistantPro-v0.6.13.apk",
-                       "prerelease":  true,
-                       "asset":  "DaoBanAssistantPro-v0.6.13.apk"
-                   },
     "stable":  {
                    "version":  "0.7.0",
                    "url":  "https://github.com/Alec-WangLi/DaoBanAssistantPro/releases/download/v0.7.0/DaoBanAssistantPro-v0.7.0.apk",
                    "prerelease":  false,
                    "asset":  "DaoBanAssistantPro-v0.7.0.apk"
                },
-    "updatedAt":  "2026-09-13T10:56:07Z"
+    "prerelease":  {
+                       "version":  "0.7.1",
+                       "url":  "https://github.com/Alec-WangLi/DaoBanAssistantPro/releases/download/v0.7.1/DaoBanAssistantPro-v0.7.1.apk",
+                       "prerelease":  true,
+                       "asset":  "DaoBanAssistantPro-v0.7.1.apk"
+                   },
+    "updatedAt":  "2026-09-14T11:55:07Z"
 }
