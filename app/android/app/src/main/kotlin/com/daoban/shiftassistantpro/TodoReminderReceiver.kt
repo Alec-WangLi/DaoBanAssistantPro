@@ -58,6 +58,11 @@ class TodoReminderReceiver : BroadcastReceiver() {
         val id = intent.getIntExtra("id", 0)
         AlarmLog.info(context, "TodoReminderReceiver: id=$id, title=$title")
 
+        // 一次性提醒：**触发即消费**，落盘清单里那条先删掉。放在最前面是有意的
+        // —— 后面每条提前 return（没通知权限等）都算「已经到过点」，留着它只会让
+        // 下次重启时 BootReceiver 把一条过期提醒当成新排的。
+        AlarmStore.removeQuiet(context, id)
+
         // Android 13+ 没给通知权限时 notify() 是**静默无效**的，不留一行日志的话
         // 用户报「提醒没来」时完全查不出原因。
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(

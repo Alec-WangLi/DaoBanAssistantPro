@@ -714,17 +714,10 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
                   enabled: _fsi!,
                   onOpen: _openFullScreenIntent,
                 ),
-                _groupHeader(context, L10n.permGroupBackground),
-                _permTile(
-                  icon: Icons.power_settings_new_outlined,
-                  title: L10n.permAutoStart,
-                  subtitle: L10n.permAutoStartHint,
-                  enabled: null, // 系统不提供检测，始终显示「去查看」
-                  onOpen: _openAutoStart,
-                  actionLabel: L10n.goCheck,
-                ),
-                // 只在小米机型出现：那项权限是 MIUI 私有的，别家没有，摆出来只会
-                // 让人白跑一趟。状态也读不到，所以同样是「去查看」而不是开关态。
+                // 下面两行只在小米机型出现：它们是 MIUI 私有的权限，别家没有，摆出来
+                // 只会让人白跑一趟。状态都读不到（没有公开 API），所以是「去查看」
+                // 而不是开关态 —— 也正是因此要**分成两行**：一个的症状是「退到后台
+                // 不弹」，另一个是「锁屏不弹」，用户能各自对号入座。
                 if (_miui == true) ...[
                   const Divider(height: 1),
                   _permTile(
@@ -735,7 +728,25 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
                     onOpen: _openMiuiPermissionPage,
                     actionLabel: L10n.goCheck,
                   ),
+                  const Divider(height: 1),
+                  _permTile(
+                    icon: Icons.screen_lock_portrait_outlined,
+                    title: L10n.permMiuiLockScreen,
+                    subtitle: L10n.permMiuiLockScreenHint,
+                    enabled: null,
+                    onOpen: _openMiuiPermissionPage,
+                    actionLabel: L10n.goCheck,
+                  ),
                 ],
+                _groupHeader(context, L10n.permGroupBackground),
+                _permTile(
+                  icon: Icons.power_settings_new_outlined,
+                  title: L10n.permAutoStart,
+                  subtitle: L10n.permAutoStartHint,
+                  enabled: null, // 系统不提供检测，始终显示「去查看」
+                  onOpen: _openAutoStart,
+                  actionLabel: L10n.goCheck,
+                ),
                 const Divider(height: 1),
                 _permTile(
                   icon: Icons.battery_saver_outlined,

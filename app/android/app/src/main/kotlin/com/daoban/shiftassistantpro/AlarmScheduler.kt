@@ -74,6 +74,15 @@ object AlarmScheduler {
                 AlarmLog.error(context, "scheduleQuiet: 退化排定也失败: ${e2.message}")
             }
         }
+
+        // 与闹钟同样落盘一份：重启后 AlarmManager 里的记录会被清空，只有这份清单
+        // 能让 BootReceiver 把提醒排回去。放在三条排定分支之后统一写 —— 精确 /
+        // 退化 / 再退化的结果都该进清单，否则「没有精确闹钟权限」的机器上一重启
+        // 提醒就全没了。
+        AlarmStore.putQuiet(
+            context,
+            AlarmStore.Quiet(id = id, millis = millis, title = title, body = body)
+        )
     }
 
     /** 按 id 区间取消全部待办提醒与待办闹钟。 */
@@ -100,6 +109,9 @@ object AlarmScheduler {
                 }
             }
         }
+        // 落盘清单同步清掉这一段（提醒那条链路的那份）。清了之后 Dart 会把要留的
+        // 重新排一遍，两份清单因此始终一致 —— 与 cancelAllNativeAlarms 同一套。
+        AlarmStore.clearQuiets(context, TODO_BASE_ID + from, TODO_BASE_ID + to)
     }
 
     fun schedule(

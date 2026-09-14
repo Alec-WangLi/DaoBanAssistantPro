@@ -5,18 +5,22 @@ import android.content.Context
 import android.content.Intent
 
 /**
- * 开机重排：把重启前留下的闹钟清单重新排进 AlarmManager。
+ * 开机重排：把重启前留下的闹钟与提醒重新排进 AlarmManager。
  *
- * 没有它的话，「重启后闹钟会丢」—— `setAlarmClock` 的记录重启即清空，而重排此前
- * 只发生在打开 App 的时候（Dart 侧 `reschedule`）。
+ * 没有它的话，「重启后闹钟会丢」—— `AlarmManager` 的记录重启即清空（`setAlarmClock`
+ * 与 `setExactAndAllowWhileIdle` 都一样），而重排此前只发生在打开 App 的时候
+ * （Dart 侧 `reschedule`）。
  *
- * 三种情况的处理不一样，别混：
+ * 两类东西都从 [AlarmStore] 读，规则也一致：**没到点的排回去，关机期间已经错过的
+ * 丢掉、不补**。闹钟分三种情况，别混：
  *
  *  - **每天 / 每周**：按 `nextDaily` / `nextWeekly` 重算下一次 —— 直接把旧时刻排
  *    回去会排出一条已经过期的记录（`setAlarmClock` 对过去的时刻会立即触发）。
  *  - **一次性、还没到点**：原时刻排回去。
  *  - **一次性、关机期间已经错过**：从清单里删掉，**不在开机瞬间补响** —— 半夜的
  *    闹钟在早上开机时突然响，比不响更糟。
+ *
+ * 安静提醒（待办提醒）都是一次性的，没有重复那一档。
  *
  * 权限：只需要 `RECEIVE_BOOT_COMPLETED`（manifest 里已有，不用新增）。小米机型上
  * 还要用户开「自启动」，否则 MIUI 可能压根不把这个广播发给 App。
@@ -70,5 +74,26 @@ class BootReceiver : BroadcastReceiver() {
             }
         }
         AlarmLog.info(context, "BootReceiver: 重排完成，$rescheduled 条")
+
+        // 安静提醒（待办提醒那条链路）：规则与闹钟一致 —— 还没到点的排回去，
+        // 关机期间**已经错过的不补发**。一次重启冒出一串「你几小时前该交体检报告」
+        // 比不提醒更烦。
+        var quiets = 0
+        for (q in AlarmStore.allQuiets(context)) {
+            if (q.millis <= now) {
+                AlarmStore.removeQuiet(context, q.id)
+                continue
+            }
+            try {
+                AlarmScheduler.scheduleQuiet(context, q.id, q.millis, q.title, q.body)
+                quiets++
+            } catch (ex: Exception) {
+                AlarmLog.error(
+                    context,
+                    "BootReceiver: 重排提醒 id=${q.id} 失败: ${ex.javaClass.name}: ${ex.message}"
+                )
+            }
+        }
+        AlarmLog.info(context, "BootReceiver: 提醒重排完成，$quiets 条")
     }
 }
