@@ -291,19 +291,62 @@ def calendar():
     return img.convert('RGB')
 
 
+def calendar_chips():
+    """日历格子的三处改动：班次胶囊、选中实心、信息卡待办数。
+
+    整屏只裁「网格 + 信息卡日期行」—— 上下各去掉状态栏与底部导航，那两处与
+    这张图要说的事无关，留着只是把主体压小。
+    """
+    W, H = 1500, 1080
+    img = _gradient(W, H)
+    _title(img, '日历格子重做 · 今天有几项待办一眼看到',
+           '班次变成带底色的胶囊，选中那天的胶囊变实心')
+
+    shot = Image.open(os.path.join(RAW, 'cal-full.png')).convert('RGBA')
+    shot.putalpha(_rounded_mask(*shot.size, 24))
+    sx, sy = 110, 236
+    img.alpha_composite(shot, (sx, sy))
+
+    # 圈号直接标在截图上（坐标是量出来的），右侧配文字说明 —— 用引线连来连去
+    # 反而更难对齐，而且截图一换就得重算角度。
+    #
+    # 位置都**偏在指的东西旁边**、不压在上面：第一版把圈号摆在正中心，结果 ② 和 ③
+    # 把「实心胶囊」与「1 项待办」徽章整个盖住了 —— 指的东西被自己的圈挡住。
+    marks = [
+        ((244, 86), '班次胶囊', '格子里写明哪天是什么班 —— 一眼扫出这个月怎么倒'),
+        ((18, 322), '选中那天变实心', '滑块落在哪一格，一眼就能锁定'),
+        ((466, 733), '今日信息卡待办数', '不用翻到待办页，就知道今天有 N 件事'),
+    ]
+    d = ImageDraw.Draw(img)
+    for i, ((mx, my), head, tail) in enumerate(marks):
+        cx, cy = sx + mx, sy + my
+        d.ellipse((cx - 21, cy - 21, cx + 21, cy + 21), fill=ACCENT,
+                  outline=(255, 255, 255), width=3)
+        d.text((cx, cy + 1), str(i + 1), font=_font('msyhbd.ttc', 26),
+               fill=INK, anchor='mm')
+        ly = 430 + i * 200
+        d.ellipse((760, ly - 24, 808, ly + 24), fill=ACCENT)
+        d.text((784, ly + 1), str(i + 1), font=_font('msyhbd.ttc', 28),
+               fill=INK, anchor='mm')
+        d.text((836, ly - 14), head, font=_font('msyhbd.ttc', 36), fill=INK)
+        d.text((836, ly + 42), tail, font=_font('msyh.ttc', 27), fill=INK_SUB)
+    return img.convert('RGB')
+
+
 JOBS = [
     ('v080-cover.png', cover),
     ('v080-miui-ring.png', miui_ring),
     ('v080-reboot.png', reboot),
     ('v080-permissions.png', permissions),
     ('v080-calendar.png', calendar),
+    ('v080-calendar-chips.png', calendar_chips),
 ]
 
 
 def main():
     missing = [f for f in os.listdir(RAW) if f.endswith('.png')]
     need = ['miui-off.png', 'miui-on.png', 'perm-old.png', 'perm-new.png',
-            'cal-before.png', 'cal-after.png']
+            'cal-before.png', 'cal-after.png', 'cal-full.png']
     lack = [n for n in need if n not in missing]
     if lack:
         raise SystemExit('docs/images/raw/ 缺素材：%s' % '、'.join(lack))
