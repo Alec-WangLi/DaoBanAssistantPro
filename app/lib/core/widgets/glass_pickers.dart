@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
 import '../glass/glass.dart';
+import '../haptics.dart';
 import '../layout.dart';
 import '../l10n.dart';
 import 'app_icon.dart';
@@ -120,8 +121,11 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
                     ),
                     GlassActionButton(
                       variant: GlassActionVariant.primary,
-                      onPressed: () => Navigator.pop(
-                          context, TimeOfDay(hour: _hour, minute: _minute)),
+                      onPressed: () {
+                        Haptics.select();
+                        Navigator.pop(
+                            context, TimeOfDay(hour: _hour, minute: _minute));
+                      },
                       label: L10n.confirm,
                     ),
                   ],
@@ -202,7 +206,12 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
           date.day == selected.day;
       rowCells.add(Expanded(
         child: GestureDetector(
-          onTap: enabled ? () => Navigator.pop(context, date) : null,
+          onTap: enabled
+              ? () {
+                  Haptics.select();
+                  Navigator.pop(context, date);
+                }
+              : null,
           child: Container(
             height: rowH,
             margin: const EdgeInsets.all(AppTokens.gapHair),
@@ -400,8 +409,11 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                                 final isCurrent = month == currentMonth;
                                 return Expanded(
                                   child: GestureDetector(
-                                    onTap: () => Navigator.pop(
-                                        context, DateTime(_year, month, 1)),
+                                    onTap: () {
+                                      Haptics.select();
+                                      Navigator.pop(
+                                          context, DateTime(_year, month, 1));
+                                    },
                                     child: Container(
                                       height: rowH,
                                       margin: const EdgeInsets.symmetric(
@@ -498,7 +510,10 @@ Future<T?> showGlassOptionPicker<T>(
                                     .colorScheme
                                     .primary)
                             : null,
-                        onTap: () => Navigator.pop(sheetContext, option),
+                        onTap: () {
+                          Haptics.select();
+                          Navigator.pop(sheetContext, option);
+                        },
                       ),
                     ),
                 ],

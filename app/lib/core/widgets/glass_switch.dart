@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import '../haptics.dart';
 
 /// 玻璃开关：圆钮 + 玻璃轨道 + Q弹回弹（easeOutBack 过冲）。
 ///
@@ -29,7 +30,10 @@ class GlassSwitch extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => onChanged(!value),
+      onTap: () {
+        Haptics.select();
+        onChanged(!value);
+      },
       child: AnimatedContainer(
         duration: AppTokens.durMed,
         curve: Curves.easeOutCubic,

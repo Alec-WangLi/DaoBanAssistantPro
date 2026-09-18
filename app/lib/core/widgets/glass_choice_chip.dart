@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import '../haptics.dart';
 
 /// 可选中的彩色 chip：一排平铺出来，点一下就选中。
 ///
@@ -51,7 +52,10 @@ class GlassChoiceChip extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(AppTokens.radiusS),
-          onTap: onTap,
+          onTap: () {
+            Haptics.select();
+            onTap();
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: _hitPad),
             child: Container(

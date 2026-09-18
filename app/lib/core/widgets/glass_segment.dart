@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import '../haptics.dart';
 import '../motion.dart';
 
 /// 胶囊分段选择器：与底部导航滑块同款手感。
@@ -104,7 +105,11 @@ class _GlassSegmentState extends State<GlassSegment> {
       _committed = target;
       _visual = target.toDouble();
     });
-    if (target != widget.selectedIndex) widget.onSelected(target);
+    if (target != widget.selectedIndex) {
+      // 只有选中项真的变了才震 —— 拖动回原位、点当前段都不该有反馈。
+      Haptics.select();
+      widget.onSelected(target);
+    }
   }
 
   void _cancel() {
