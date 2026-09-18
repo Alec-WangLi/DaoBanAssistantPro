@@ -216,7 +216,7 @@ class AppRepository {
     return (await db._loadChildren(row)).toDomain();
   }
 
-  /// 删除一套排班方案（连带其班次定义与周期），并保证始终有一套当前方案。
+  /// 删除一套排班方案（连带其班次定义、周期与按天改班覆盖），并保证始终有一套当前方案。
   Future<void> deleteSchedule(int id) async {
     await db.transaction(() async {
       await (db.delete(db.shiftCycleRows)

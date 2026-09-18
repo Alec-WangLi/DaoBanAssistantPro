@@ -213,8 +213,99 @@ void main() {
     await repo.deleteSchedule(scheduleId);
     expect(await db.select(db.shiftDayOverrides).get(), isEmpty);
 
-    // clearAll 这条路也走一遍
+    // clearAll 这条路也走一遍。**先重新挂一条覆盖**：deleteSchedule 之后
+    // `seedIfEmpty` 重建的方案里本来就没有覆盖，不挂的话下面那句「empty」
+    // 无论 clearAll 删没删覆盖都能通过 —— 断言不可能失败，等于没测。
+    final reseeded = await db.select(db.shiftScheduleRows).getSingle();
+    final rescheduledClass = (await (db.select(db.shiftClassRows)
+              ..where((t) => t.scheduleId.equals(reseeded.id)))
+            .get())
+        .first;
+    await db.into(db.shiftDayOverrides).insert(
+          ShiftDayOverridesCompanion.insert(
+            scheduleId: reseeded.id,
+            day: dayNumber(DateTime(2026, 9, 22)),
+            classId: rescheduledClass.id,
+          ),
+        );
+    expect(await db.select(db.shiftDayOverrides).get(), isNotEmpty,
+        reason: '先确认覆盖确实挂上了，否则下面那句断言不可能失败');
+
     await repo.clearAll();
     expect(await db.select(db.shiftDayOverrides).get(), isEmpty);
+  });
+
+  test('删班次的连带清理只作用于本方案，不碰别的方案', () async {
+    // 方案 A（当前方案），并在它的「大休」班次上挂一条覆盖。
+    final (aId, aRestId) = await seed();
+    await db.into(db.shiftDayOverrides).insert(
+          ShiftDayOverridesCompanion.insert(
+            scheduleId: aId,
+            day: dayNumber(DateTime(2026, 9, 20)),
+            classId: aRestId,
+          ),
+        );
+
+    // 方案 B（非当前方案）：自己的班次 + 自己的覆盖行。
+    final b = defaultSchedule();
+    final bId = await repo.saveSchedule(
+      name: '乙方案',
+      anchorDate: b.anchorDate,
+      classes: b.classes,
+      cycle: b.cycle,
+      makeCurrent: false,
+      teamCount: b.teamCount,
+      teamNames: b.teamNames,
+      ourTeamIndex: b.ourTeamIndex,
+      teamOffsets: b.teamOffsets,
+    );
+    final bClasses = await (db.select(db.shiftClassRows)
+          ..where((t) => t.scheduleId.equals(bId)))
+        .get();
+    final bRestId = bClasses.firstWhere((c) => c.isRest).id;
+    await db.into(db.shiftDayOverrides).insert(
+          ShiftDayOverridesCompanion.insert(
+            scheduleId: bId,
+            day: dayNumber(DateTime(2026, 9, 21)),
+            classId: bRestId,
+          ),
+        );
+
+    // 从 A 删掉「大休」并保存：悬空清理必须只扫 A 自己的班次。
+    final d = (await repo.getActiveSchedule())!;
+    final kept = d.classes.where((c) => c.id != aRestId).toList();
+    final keptIndex = {for (var i = 0; i < kept.length; i++) kept[i].id!: i};
+    final cycle = d.cycle
+        .map((ci) => keptIndex[d.classes[ci].id])
+        .whereType<int>()
+        .toList();
+    await repo.saveSchedule(
+      scheduleId: aId,
+      name: d.name,
+      anchorDate: d.anchorDate,
+      classes: kept,
+      cycle: cycle,
+      teamCount: d.teamCount,
+      teamNames: d.teamNames,
+      ourTeamIndex: d.ourTeamIndex,
+      teamOffsets: d.teamOffsets,
+    );
+
+    final aOverrides = await (db.select(db.shiftDayOverrides)
+          ..where((t) => t.scheduleId.equals(aId)))
+        .get();
+    expect(aOverrides, isEmpty, reason: 'A 上指向被删班次的覆盖要清掉');
+
+    final bOverrides = await (db.select(db.shiftDayOverrides)
+          ..where((t) => t.scheduleId.equals(bId)))
+        .get();
+    expect(bOverrides, hasLength(1),
+        reason: '清理不能跨方案 —— 一句不带 where 的 delete 就会误删 B 的覆盖');
+
+    final bAfter = await (db.select(db.shiftClassRows)
+          ..where((t) => t.scheduleId.equals(bId)))
+        .get();
+    expect(bAfter.map((c) => c.id), contains(bRestId),
+        reason: 'stale 查询若没按 scheduleId 过滤，会把 B 的班次行一起删掉');
   });
 }
