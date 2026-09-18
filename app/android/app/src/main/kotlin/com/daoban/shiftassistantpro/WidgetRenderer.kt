@@ -1,6 +1,8 @@
 package com.daoban.shiftassistantpro
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.widget.RemoteViews
 
@@ -27,6 +29,26 @@ object WidgetRenderer {
     private fun dpToPx(context: Context, dp: Int): Int =
         (dp * context.resources.displayMetrics.density).toInt()
 
+    /**
+     * 打开 App 的 PendingIntent。
+     *
+     * 用 `getActivity` + 显式组件：隐式 LAUNCHER intent 在某些 ROM 上会被解析到
+     * 「选择启动器」之类的东西上。requestCode 用 widget id 区分 —— 同一个
+     * PendingIntent 被不同实例共用时，extras 会互相覆盖。
+     */
+    private fun launchIntent(context: Context, requestCode: Int, epochDay: Int? = null): PendingIntent {
+        val i = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            if (epochDay != null) putExtra("widget_day", epochDay)
+        }
+        return PendingIntent.getActivity(
+            context,
+            requestCode,
+            i,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     /** 主题模式 → 此刻该用暗色吗。`system` 读宿主当前的配置，所以永远是新鲜的。 */
     fun isDark(context: Context, themeMode: String): Boolean = when (themeMode) {
         "light" -> false
@@ -42,25 +64,26 @@ object WidgetRenderer {
         context: Context,
         snap: WidgetStore.Snapshot?,
         tier: WidgetTier,
+        widgetId: Int,
     ): RemoteViews {
-        if (snap == null) return placeholder(context, dark = isDark(context, "system"))
+        if (snap == null) return placeholder(context, dark = isDark(context, "system"), widgetId = widgetId)
         val todayIndex = snap.indexOfToday()
         if (todayIndex < 0) {
             // 快照过期：App 超过 14 天没打开，这份 days 里已经没有今天了。
             AlarmLog.info(context, "WidgetRenderer: 快照已过期，走占位态")
-            return placeholder(context, isDark(context, snap.themeMode))
+            return placeholder(context, isDark(context, snap.themeMode), widgetId = widgetId)
         }
         // 空表（没建过排班 / 选了「跟随法定节假日」那种空白表方案）：整张卡只留
         // 一句来自快照的提示。这一支必须在分档**之前** —— 三档尺寸在空表下长得
         // 一致，不必各写一套。
-        if (!snap.hasSchedule) return empty(context, snap)
+        if (!snap.hasSchedule) return empty(context, snap, widgetId)
         val dark = isDark(context, snap.themeMode)
         return when (tier) {
             // 小卡与大卡自己算 dark（它们只在这一个地方被调），中卡由外面传进去 ——
             // 中卡的三行共用一个 dark，传参比在循环里每次重算清楚。
-            WidgetTier.SMALL -> small(context, snap, todayIndex)
-            WidgetTier.MEDIUM -> medium(context, snap, todayIndex, dark = dark)
-            WidgetTier.LARGE -> large(context, snap, todayIndex)
+            WidgetTier.SMALL -> small(context, snap, todayIndex, widgetId)
+            WidgetTier.MEDIUM -> medium(context, snap, todayIndex, dark = dark, widgetId = widgetId)
+            WidgetTier.LARGE -> large(context, snap, todayIndex, widgetId)
         }
     }
 
@@ -77,6 +100,7 @@ object WidgetRenderer {
         context: Context,
         snap: WidgetStore.Snapshot,
         todayIndex: Int,
+        widgetId: Int,
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_small)
         val dark = isDark(context, snap.themeMode)
@@ -87,6 +111,8 @@ object WidgetRenderer {
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
+        // 整卡点击 → 打开 App（落在日历页的今天）。这一步不传 epochDay。
+        v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, widgetId))
 
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         val muted =
@@ -172,6 +198,7 @@ object WidgetRenderer {
         snap: WidgetStore.Snapshot,
         todayIndex: Int,
         dark: Boolean,
+        widgetId: Int,
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_medium)
         v.setInt(
@@ -179,6 +206,8 @@ object WidgetRenderer {
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
+        // 整卡点击 → 打开 App（落在日历页的今天）。
+        v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, widgetId))
 
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         val muted =
@@ -263,6 +292,7 @@ object WidgetRenderer {
         context: Context,
         snap: WidgetStore.Snapshot,
         todayIndex: Int,
+        widgetId: Int,
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_large)
         val dark = isDark(context, snap.themeMode)
@@ -271,6 +301,9 @@ object WidgetRenderer {
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
+        // 整卡点击 → 打开 App（落在日历页的今天）：点在格子之间的空隙 / 第 8 格
+        // 那些没被下面逐格覆盖的地方时走这一条。
+        v.setOnClickPendingIntent(R.id.wg_l_root, launchIntent(context, widgetId))
 
         // 这里**不**声明 ink：大卡的日期走 muted、简称走 abbrInk（Dart 侧按班次色
         // 算好的白/黑二选一），没有需要纯正文色的地方。声明了会被 analyze 报未使用。
@@ -314,6 +347,12 @@ object WidgetRenderer {
             }
             val d = snap.days[i]
             v.setViewVisibility(cells[cell], android.view.View.VISIBLE)
+            // 点某一格 → 打开 App 并跳到那天。requestCode 用 `widgetId * 16 + cell`
+            // 错开（widget id 是系统给的小整数，格子最多 8 个），避免实例之间撞号。
+            v.setOnClickPendingIntent(
+                cells[cell],
+                launchIntent(context, widgetId * 16 + cell, epochDay = d.day.toInt()),
+            )
             v.setTextViewText(dates[cell], d.dateShort)
             v.setTextColor(dates[cell], muted)
 
@@ -354,7 +393,7 @@ object WidgetRenderer {
      * 文案来自快照的 `emptyHint`（Dart 侧 `L10n.widgetEmptyHint` 产出）——
      * Kotlin 侧仍然一个字面量都没有。
      */
-    private fun empty(context: Context, snap: WidgetStore.Snapshot): RemoteViews {
+    private fun empty(context: Context, snap: WidgetStore.Snapshot, widgetId: Int): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_small)
         val dark = isDark(context, snap.themeMode)
         v.setInt(
@@ -362,6 +401,9 @@ object WidgetRenderer {
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
+        // 空表态也要能点开 App —— 用的是同一个 widget_small 布局，根 id 同为
+        // `wg_s_root`。用户看到「还没排班」时点一下应该进 App 去建排班。
+        v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, widgetId))
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         v.setTextViewText(R.id.wg_s_relative, snap.emptyHint)
         v.setTextColor(R.id.wg_s_relative, ink)
@@ -374,13 +416,16 @@ object WidgetRenderer {
         return v
     }
 
-    private fun placeholder(context: Context, dark: Boolean): RemoteViews {
+    private fun placeholder(context: Context, dark: Boolean, widgetId: Int): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_placeholder)
         v.setInt(
             R.id.wg_ph_root,
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
+        // 占位态也要能点开 App —— 它多半是「还没有快照」，点进去最该做的是打开
+        // App 让它推一份下来。
+        v.setOnClickPendingIntent(R.id.wg_ph_root, launchIntent(context, widgetId))
         v.setImageViewResource(R.id.wg_ph_icon, R.mipmap.ic_launcher)
         v.setTextViewText(
             R.id.wg_ph_label,

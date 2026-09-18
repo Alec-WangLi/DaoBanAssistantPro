@@ -66,7 +66,7 @@ class ShiftWidgetProvider : AppWidgetProvider() {
                 // 真机标定用：对着三档各拉一次，adb logcat -s ShiftAssistant 读回来。
                 AlarmLog.info(context, "ShiftWidgetProvider: id=$id, ${w}x${h}dp → $tier")
                 try {
-                    mgr.updateAppWidget(id, WidgetRenderer.render(context, snap, tier))
+                    mgr.updateAppWidget(id, WidgetRenderer.render(context, snap, tier, id))
                 } catch (e: Exception) {
                     AlarmLog.error(context, "ShiftWidgetProvider: 渲染 id=$id 失败: ${e.message}")
                 }
@@ -90,6 +90,23 @@ class ShiftWidgetProvider : AppWidgetProvider() {
         newOptions: android.os.Bundle,
     ) {
         renderAll(context, appWidgetManager, intArrayOf(appWidgetId))
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        // 最后一个实例被删掉时才取消刷新闹钟 —— 否则桌面上没小组件了，
+        // 它还会一天一次地把自己排回来，永远。
+        // `WidgetRefreshScheduler.cancel()` 本来就是为这里准备的（Task 6 写了没接）。
+        //
+        // 为什么判「最后一个」：多个实例共用同一个请求码，还剩实例时把它取消掉，
+        // 剩下的那个就再也不刷新了。
+        val mgr = AppWidgetManager.getInstance(context)
+        val remaining = mgr.getAppWidgetIds(
+            ComponentName(context, ShiftWidgetProvider::class.java)
+        )
+        if (remaining.isEmpty()) {
+            WidgetRefreshScheduler.cancel(context)
+            AlarmLog.info(context, "ShiftWidgetProvider.onDeleted: 无实例，已取消刷新闹钟")
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {

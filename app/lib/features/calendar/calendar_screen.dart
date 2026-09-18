@@ -16,6 +16,7 @@ import '../../domain/lunar_info.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
+import '../widget/widget_service.dart';
 import 'info_card_metrics.dart';
 import 'schedule_editor_screen.dart';
 import 'shift_override_picker.dart';
@@ -141,6 +142,40 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final n = DateTime.now();
     _month = DateTime(n.year, n.month, 1);
     _selected = dateOnly(n);
+    WidgetService.widgetLaunchRequested.addListener(_onWidgetLaunchRequested);
+    // 冷启动 / 小组件点击时本页尚未挂载（HomeShell 先 `jumpToPage(0)`、下一帧才建出
+    // 本页）：那一刻的通知没人接，值会滞留在 notifier 上。这里补一次同步读取，
+    // 把「已经落在 notifier 里的跳转意图」落到网格上 —— 否则热启动从别的 tab 切回
+    // 日历时选中的还是今天。**不走 `_onWidgetLaunchRequested`**：那里 `setState` 在
+    // `initState` 里是多余的（首帧本来就要 build），直接赋值即可。
+    final pending = WidgetService.widgetLaunchRequested.value;
+    if (pending != null) {
+      WidgetService.widgetLaunchRequested.value = null;
+      _month = DateTime(pending.year, pending.month, 1);
+      _selected = dateOnly(pending);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetService.widgetLaunchRequested.removeListener(_onWidgetLaunchRequested);
+    super.dispose();
+  }
+
+  /// 用户在桌面小组件上点了某一天。
+  ///
+  /// 消费完由**这里**把 notifier 置回 null（不是 HomeShell）—— HomeShell 只负责
+  /// 切到日历页，切完还得有人把日期落到网格上。置回会再触发一次监听，
+  /// 靠开头那句「值为 null 就返回」兜住，不会递归。
+  void _onWidgetLaunchRequested() {
+    final d = WidgetService.widgetLaunchRequested.value;
+    if (d == null) return;
+    WidgetService.widgetLaunchRequested.value = null;
+    if (!mounted) return;
+    setState(() {
+      _month = DateTime(d.year, d.month, 1);
+      _selected = dateOnly(d);
+    });
   }
 
   void _prev() =>
