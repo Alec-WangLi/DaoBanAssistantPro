@@ -166,10 +166,15 @@ void main() {
     });
 
     test('没被覆盖的日子仍是轮转结果', () {
-      final s = withOverrides({dayNumber(day): 3});
+      // 覆盖值取 1（上夜班），**不能取 3**：那天轮转是 `622 % 4 = 2`（下夜班）、
+      // 次日是 `623 % 4 = 3`（大休），取 3 的话「覆盖值」与「次日的轮转值」正好
+      // 是同一个下标 —— 一个把日键丢掉、永远返回 `classes[ov]` 的实现也能过。
+      final s = withOverrides({dayNumber(day): 1});
       final bare = withOverrides(const {});
       final next = day.add(const Duration(days: 1));
       expect(s.shiftOn(next)!.name, bare.shiftOn(next)!.name);
+      expect(s.shiftOn(next)!.name, isNot(s.shiftOn(day)!.name),
+          reason: '次日没被覆盖，得是它自己的轮转班次，不是覆盖值照抄一天');
     });
 
     test('下标越界回退到轮转，不抛异常', () {
