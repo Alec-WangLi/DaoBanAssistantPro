@@ -48,10 +48,13 @@ object WidgetRenderer {
         // 一句来自快照的提示。这一支必须在分档**之前** —— 三档尺寸在空表下长得
         // 一致，不必各写一套。
         if (!snap.hasSchedule) return empty(context, snap)
+        val dark = isDark(context, snap.themeMode)
         return when (tier) {
+            // 小卡与大卡自己算 dark（它们只在这一个地方被调），中卡由外面传进去 ——
+            // 中卡的三行共用一个 dark，传参比在循环里每次重算清楚。
             WidgetTier.SMALL -> small(context, snap, todayIndex)
-            WidgetTier.MEDIUM -> small(context, snap, todayIndex) // Task 4 换成 medium(...)
-            WidgetTier.LARGE -> small(context, snap, todayIndex)  // Task 4 换成 large(...)
+            WidgetTier.MEDIUM -> medium(context, snap, todayIndex, dark = dark)
+            WidgetTier.LARGE -> large(context, snap, todayIndex)
         }
     }
 
@@ -137,6 +140,150 @@ object WidgetRenderer {
         }
         v.setTextColor(R.id.wg_s_next, muted)
 
+        return v
+    }
+
+    private fun medium(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+        dark: Boolean,
+    ): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_medium)
+        v.setInt(
+            R.id.wg_m_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
+        val muted =
+            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val divider =
+            context.getColor(if (dark) R.color.wg_divider_dark else R.color.wg_divider_light)
+        val empty = context.getColor(
+            if (dark) R.color.wg_empty_dark else R.color.wg_empty_light
+        )
+
+        // 三行的 id 表。顺序与 widget_medium.xml 里的行顺序一一对应。
+        val dots = intArrayOf(R.id.wg_m_dot1, R.id.wg_m_dot2, R.id.wg_m_dot3)
+        val labels = intArrayOf(R.id.wg_m_label1, R.id.wg_m_label2, R.id.wg_m_label3)
+        val dates = intArrayOf(R.id.wg_m_date1, R.id.wg_m_date2, R.id.wg_m_date3)
+        val shifts = intArrayOf(R.id.wg_m_shift1, R.id.wg_m_shift2, R.id.wg_m_shift3)
+        val times = intArrayOf(R.id.wg_m_time1, R.id.wg_m_time2, R.id.wg_m_time3)
+        val divs = intArrayOf(R.id.wg_m_div1, R.id.wg_m_div2)
+
+        for (row in 0 until 3) {
+            val i = todayIndex + row
+            if (i >= snap.days.size) {
+                // 窗口耗尽（不可能 —— 14 天窗口，只会显示前 3 天）。防御性隐藏整行。
+                for (idArr in listOf(dots, labels, dates, shifts, times)) {
+                    v.setViewVisibility(idArr[row], android.view.View.GONE)
+                }
+                continue
+            }
+            val d = snap.days[i]
+
+            // 色点：Task 5 换成圆形位图。今天是实心圆点，其余是同样的实心 ——
+            // 「今天」那行靠字重与相对称法区分，不靠点的形状。
+            v.setInt(
+                dots[row],
+                "setBackgroundColor",
+                if (d.hasShift) d.color else empty,
+            )
+
+            v.setTextViewText(labels[row], relativeLabel(snap, i, todayIndex))
+            v.setTextColor(labels[row], ink)
+            v.setTextViewText(dates[row], d.dateShort)
+            v.setTextColor(dates[row], muted)
+
+            v.setTextViewText(
+                shifts[row],
+                if (d.hasShift) d.shiftName else d.weekday,
+            )
+            v.setTextColor(shifts[row], ink)
+
+            if (d.timeRange == null) {
+                v.setViewVisibility(times[row], android.view.View.GONE)
+            } else {
+                v.setViewVisibility(times[row], android.view.View.VISIBLE)
+                v.setTextViewText(times[row], d.timeRange)
+                v.setTextColor(times[row], muted)
+            }
+        }
+        // 最后一行下面不画分隔线。
+        v.setViewVisibility(divs[0], android.view.View.VISIBLE)
+        v.setViewVisibility(divs[1], android.view.View.VISIBLE)
+        v.setInt(divs[0], "setBackgroundColor", divider)
+        v.setInt(divs[1], "setBackgroundColor", divider)
+
+        return v
+    }
+
+    /** 大卡的格子：今天起连续 7 天。第 8 格恒隐藏 —— 它占着位置让前 7 格保持 4 列均分。 */
+    private fun large(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+    ): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_large)
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            R.id.wg_l_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+
+        // 这里**不**声明 ink：大卡的日期走 muted、简称走 abbrInk（Dart 侧按班次色
+        // 算好的白/黑二选一），没有需要纯正文色的地方。声明了会被 analyze 报未使用。
+        val muted =
+            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val empty = context.getColor(
+            if (dark) R.color.wg_empty_dark else R.color.wg_empty_light
+        )
+
+        // 显式列 id，**不要**用 `resources.getIdentifier("wg_l_cell$n", ...)` ——
+        // 后者靠名字反射，改个 id 名只在运行时静默返回 0，编译期毫无提示。
+        val cells = intArrayOf(
+            R.id.wg_l_cell1, R.id.wg_l_cell2, R.id.wg_l_cell3, R.id.wg_l_cell4,
+            R.id.wg_l_cell5, R.id.wg_l_cell6, R.id.wg_l_cell7, R.id.wg_l_cell8,
+        )
+        val dates = intArrayOf(
+            R.id.wg_l_date1, R.id.wg_l_date2, R.id.wg_l_date3, R.id.wg_l_date4,
+            R.id.wg_l_date5, R.id.wg_l_date6, R.id.wg_l_date7, R.id.wg_l_date8,
+        )
+        val pills = intArrayOf(
+            R.id.wg_l_pill1, R.id.wg_l_pill2, R.id.wg_l_pill3, R.id.wg_l_pill4,
+            R.id.wg_l_pill5, R.id.wg_l_pill6, R.id.wg_l_pill7, R.id.wg_l_pill8,
+        )
+        val abbrs = intArrayOf(
+            R.id.wg_l_abbr1, R.id.wg_l_abbr2, R.id.wg_l_abbr3, R.id.wg_l_abbr4,
+            R.id.wg_l_abbr5, R.id.wg_l_abbr6, R.id.wg_l_abbr7, R.id.wg_l_abbr8,
+        )
+
+        for (cell in 0 until 7) {
+            val i = todayIndex + cell
+            val d = snap.days[i]
+            v.setViewVisibility(cells[cell], android.view.View.VISIBLE)
+            v.setTextViewText(dates[cell], d.dateShort)
+            v.setTextColor(dates[cell], muted)
+
+            if (d.hasShift) {
+                // Task 5 把这里换成带圆角的位图。
+                v.setInt(pills[cell], "setBackgroundColor", d.color)
+                v.setTextViewText(abbrs[cell], d.shiftAbbr)
+                v.setTextColor(abbrs[cell], d.abbrInk)
+            } else {
+                // 休班：只留一个浅色空胶囊，**不写字** —— 写「休」会和真的叫
+                // 「休班」的班次撞在一起，用户分不出哪个是排出来的、哪个是空着的。
+                v.setInt(pills[cell], "setBackgroundColor", empty)
+                v.setTextViewText(abbrs[cell], "")
+            }
+        }
+
+        // 第 8 格必须显式 GONE：它有 layout_columnWeight，不隐藏就仍占掉四分之一
+        // 宽度，前 7 格会被挤成一行 7 个。
+        v.setViewVisibility(cells[7], android.view.View.GONE)
         return v
     }
 
