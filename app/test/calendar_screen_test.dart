@@ -32,6 +32,17 @@ ShiftTemplate _template(String id) =>
 /// 色块 chip 的文本形状：`组名 简称`（例：`二班 休`）。
 final _chipPattern = RegExp(r'^[一二三四五六七八九]班 [早中夜休值晚]$');
 
+/// 长按拖选用例圈住的那一段日子（闭区间 8…15）。
+///
+/// 锚点固定取每月的 8 日 / 15 日那两格，**不取「今天」**：今天可能落在网格的
+/// 最后一行，往下拖就掉出本月（`_dateFromPosition` 返回 null），区间会只剩一天，
+/// 用例于是随机某天转红。而 8 日 → 槽位 `leading + 7` → 网格第 1 行、15 日 →
+/// 槽位 `leading + 14` → 第 2 行 —— 任何月份、任何月初偏移下都成立，两格永远
+/// 相差一行（= 7 天），所以「往下拖一格」圈住的正是这 8 天。
+const int _rangeFirstDay = 8;
+const int _rangeLastDay = 15;
+const int _rangeSpan = _rangeLastDay - _rangeFirstDay + 1;
+
 List<String> _chipTexts(WidgetTester tester) => tester
     .widgetList<Text>(find.byType(Text))
     .map((t) => t.data ?? '')
@@ -811,6 +822,141 @@ void main() {
     expect(_shiftLine(tester), contains(target.name));
     // 并且带上「已调整」标记
     expect(find.text(L10n.adjusted), findsWidgets);
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('被覆盖的那天在格子上有小圆点标记', (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+    final today = dateOnly(DateTime.now());
+
+    expect(find.byKey(ValueKey('day-adjusted-${today.day}')), findsNothing);
+
+    final classes = await db.select(db.shiftClassRows).get();
+    final repo = AppRepository(db);
+    await repo.setDayOverrides([today], classId: classes.first.id);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(ValueKey('day-adjusted-${today.day}')), findsOneWidget,
+        reason: '被调整过的那天要有可辨认的标记');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 长按拖选一段日子 ──
+  //
+  // 两端固定取 `_rangeFirstDay` / `_rangeLastDay`（见文件头：为什么不用「今天」）。
+  // 拖动距离 60：实测测试面上格子高约 91（420 宽 / 1600 高），60 落在
+  // 「半格 < 60 < 一格半」之间 —— 从格子中心往下拖必落到下一行，且只落一行。
+
+  /// 长按 [fromDay] 那一格，松开时停在 `fromDay + stepRows * 7` 那一格。
+  Future<void> longPressDragCell(
+      WidgetTester tester, int fromDay, int stepRows) async {
+    final start = tester.getCenter(find.byKey(ValueKey('day-card-$fromDay')));
+    final gesture = await tester.startGesture(start);
+    await tester.pump(const Duration(milliseconds: 600)); // 过长按判定
+    await gesture.moveBy(Offset(0, 60.0 * stepRows));      // 每 60 ≈ 一行
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('长按拖选一段日子后弹层改多天', (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    // 长按「8 日」那格，往下拖一格 → 圈住 8…15 共 8 天
+    await longPressDragCell(tester, _rangeFirstDay, 1);
+
+    // 弹层出来了，标题是「起点 – 终点 · 8 天」
+    expect(find.textContaining('$_rangeSpan 天'), findsOneWidget);
+
+    final classes = await db.select(db.shiftClassRows).get();
+    await tester.tap(find.text(classes.first.name).last);
+    await tester.pumpAndSettle();
+
+    // 圈住的那 8 天都要落库，而且**就是这 8 天**（不是数目对、日子错）。
+    final rows = await db.select(db.shiftDayOverrides).get();
+    final now = DateTime.now();
+    expect(
+        rows.map((r) => r.day).toSet(),
+        {
+          for (var d = _rangeFirstDay; d <= _rangeLastDay; d++)
+            dayNumber(DateTime(now.year, now.month, d)),
+        },
+        reason: '圈住的 8…15 每一天都要落库');
+    expect(rows.map((r) => r.classId).toSet(), {classes.first.id});
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('长按向上拖选：起点在终点之后，区间要归一成正序', (tester) async {
+    // 拖回去（15 日 → 8 日）时 `_rangeAnchor` 是**后**一天、`_rangeFocus` 是
+    // **前**一天。`adjustDays` 不认 `from > to`（会静默拼出空列表、弹一条
+    // 误导的提示），所以松手前必须把两端调换成正序 —— 这条用例钉住那步。
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    await longPressDragCell(tester, _rangeLastDay, -1); // 往上拖一格
+
+    expect(find.textContaining('$_rangeSpan 天'), findsOneWidget,
+        reason: '起点在后、终点在前，区间跨度仍是 8 天');
+
+    final classes = await db.select(db.shiftClassRows).get();
+    await tester.tap(find.text(classes.first.name).last);
+    await tester.pumpAndSettle();
+
+    final now = DateTime.now();
+    final rows = await db.select(db.shiftDayOverrides).get();
+    expect(
+        rows.map((r) => r.day).toSet(),
+        {
+          for (var d = _rangeFirstDay; d <= _rangeLastDay; d++)
+            dayNumber(DateTime(now.year, now.month, d)),
+        },
+        reason: '归一之后落的还是 8…15 这 8 天，不是空区间');
+
+    await _disposeCalendar(tester);
+  });
+
+  // 长按拖选（LongPress）与滑块（Pan）挂在**同一个** `GestureDetector` 上，
+  // 靠竞技场分流：按住不动约 500ms 长按赢，立刻滑动超过 touch slop 则是 Pan 赢。
+  // 上面两条钉住长按那一支；这条钉住 Pan 那一支没被长按顶掉 —— 顶掉了日历就
+  // 没法拖着滑块选日子了，而这是这一页最早的交互。
+  testWidgets('长按手势没顶掉单格滑块：立刻滑动仍是拖拽选中', (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    // 先点中 8 日：滑块落在它上面（拖拽的基准是**滑块**，不是手指按下的地方）。
+    await tester.tap(find.text('$_rangeFirstDay').first);
+    await tester.pumpAndSettle();
+
+    // 卡片外面还裹着一层 `_cellInset`（= gapHair）的四边内缩，所以格子高 =
+    // 卡片高 + 2×gapHair。滑块走的是「松手位置 − 起手位置」，位移给满一格。
+    final card = find.byKey(const ValueKey('day-card-$_rangeFirstDay'));
+    final cellH = tester.getSize(card).height + AppTokens.gapHair * 2;
+
+    final gesture = await tester.startGesture(tester.getCenter(card));
+    // 第一下先走掉 touch slop（这一下只让 Pan 赢得竞技场，滑块纹丝不动），
+    // 第二下才是真正的位移。
+    await gesture.moveBy(const Offset(0, 20));
+    await tester.pump();
+    await gesture.moveBy(Offset(0, cellH));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    // 滑块吸附到下一行那一格 → 选中日变成 15 日，且那一格的胶囊是实心的。
+    final now = DateTime.now();
+    expect(
+        find.text(L10n.monthDayWeekday(
+            DateTime(now.year, now.month, _rangeLastDay))),
+        findsOneWidget,
+        reason: '立刻滑动仍要吸附到下一行那一格');
+    final chip = tester.widget<AnimatedContainer>(
+        find.byKey(const ValueKey('day-chip-$_rangeLastDay')));
+    expect((chip.decoration! as BoxDecoration).color!.a, closeTo(1.0, 1e-6),
+        reason: '松手后滑块落在那格，胶囊要实心');
+    // 而且这一下**不是**长按拖选：没弹改班层，也就没落任何覆盖。
+    expect(await db.select(db.shiftDayOverrides).get(), isEmpty,
+        reason: '立刻滑动不该被当成长按拖选');
 
     await _disposeCalendar(tester);
   });

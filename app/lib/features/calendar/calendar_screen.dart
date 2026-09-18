@@ -54,6 +54,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   double _grabCol = 0; // 手指相对选中块左缘的抓取偏移（列）
   double _grabRow = 0; // 手指相对选中块上缘的抓取偏移（行）
 
+  /// 长按拖选：起点与当前终点（null = 不在范围选择态）。
+  DateTime? _rangeAnchor;
+  DateTime? _rangeFocus;
+
   /// 底栏信息卡高度的**上一次**计算结果。
   ///
   /// 高度只跟「月份 / 排班 / 宽度 / 语言 / 系统字号」有关，跟选中哪天无关 ——
@@ -156,17 +160,31 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         _hPad + col * cellW, _weekdayH + row * cellH, cellW, cellH);
   }
 
-  /// 手指位置 → 选中日期（2D 拖拽/点按）。
-  void _selectFromPosition(Offset pos, double cellW, double cellH) {
+  /// 手指位置 → 那一格的日期（越界 / 空格 / 不是本月都返回 null）。
+  DateTime? _dateFromPosition(Offset pos, double cellW, double cellH) {
     final col = ((pos.dx - _hPad) / cellW).floor();
     final row = ((pos.dy - _weekdayH) / cellH).floor();
-    if (col < 0 || col > 6 || row < 0) return;
+    if (col < 0 || col > 6 || row < 0) return null;
     final index = row * 7 + col;
-    if (index < _leading) return;
+    if (index < _leading) return null;
     final day = index - _leading + 1;
-    if (day < 1 || day > _daysInMonth) return;
-    final date = DateTime(_month.year, _month.month, day);
-    if (date != _selected) setState(() => _selected = date);
+    if (day < 1 || day > _daysInMonth) return null;
+    return DateTime(_month.year, _month.month, day);
+  }
+
+  /// 手指位置 → 选中日期（2D 拖拽/点按）。
+  void _selectFromPosition(Offset pos, double cellW, double cellH) {
+    final date = _dateFromPosition(pos, cellW, cellH);
+    if (date != null && date != _selected) setState(() => _selected = date);
+  }
+
+  /// [date] 是否落在长按拖选的范围里（闭区间，两端谁前谁后都算）。
+  bool _inSelectedRange(DateTime date) {
+    final a = _rangeAnchor, b = _rangeFocus;
+    if (a == null || b == null) return false;
+    final lo = daysBetween(a, b) >= 0 ? a : b;
+    final hi = daysBetween(a, b) >= 0 ? b : a;
+    return daysBetween(lo, date) >= 0 && daysBetween(date, hi) >= 0;
   }
 
   /// 松手时：由选中块的连续视觉位置吸附到最近一格，返回该格日期（越界/空格返回 null）。
@@ -724,6 +742,39 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               if (date != null) _selected = date;
             });
           },
+          // 长按拖选：按住不动约 500ms 长按赢，立刻滑动仍然是上面的 Pan 赢 ——
+          // 两套手势在竞技场里天然分流，互不顶掉（`_pressed` / `_dragActive` 是
+          // 两套状态，长按起手时要把滑块那套先熄掉，免得玻璃块跟长按同时亮）。
+          onLongPressStart: (d) {
+            final date = _dateFromPosition(d.localPosition, cellW, cellH);
+            if (date == null) return;
+            setState(() {
+              _pressed = false;
+              _dragActive = false;
+              _rangeAnchor = date;
+              _rangeFocus = date;
+            });
+          },
+          onLongPressMoveUpdate: (d) {
+            if (_rangeAnchor == null) return;
+            final date = _dateFromPosition(d.localPosition, cellW, cellH);
+            if (date == null || date == _rangeFocus) return;
+            setState(() => _rangeFocus = date);
+          },
+          onLongPressEnd: (_) {
+            final from = _rangeAnchor;
+            final to = _rangeFocus;
+            setState(() {
+              _rangeAnchor = null;
+              _rangeFocus = null;
+            });
+            if (from == null || to == null) return;
+            // 起点终点谁在前都行，调换成正序 —— `adjustDays` 不认 `from > to`，
+            // 传反了它会静默拼出空列表、弹一条误导的提示。
+            final a = daysBetween(from, to) >= 0 ? from : to;
+            final b = daysBetween(from, to) >= 0 ? to : from;
+            adjustDays(a, b);
+          },
           child: ClipRect(
             child: Stack(
               children: [
@@ -805,7 +856,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           cellW,
           cellH,
           isSameDay(date, today),
-          blockDate != null && isSameDay(date, blockDate)));
+          blockDate != null && isSameDay(date, blockDate),
+          schedule?.dayOverrides.containsKey(dayNumber(date)) ?? false,
+          _rangeAnchor != null &&
+              _rangeFocus != null &&
+              _inSelectedRange(date)));
     }
     final rows = <Widget>[];
     for (var i = 0; i < cells.length; i += 7) {
@@ -834,8 +889,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 空间算出来的，长高时字不跟着长，格子里就空出一大块、字显得小。
   ///
   /// [solid] 表示这格的班次胶囊要画成实心（滑块当前吸附的那一格）。
+  ///
+  /// [adjusted] 表示这天被「按天改班」覆盖过，胶囊右上角点一个小圆点。
+  /// [inRange] 表示这天落在长按拖选的范围里，整格铺一层主色淡染。
   Widget _dayCell(BuildContext context, DateTime date, ShiftClass? shift,
-      LunarInfo lunar, double cellW, double cellH, bool isToday, bool solid) {
+      LunarInfo lunar, double cellW, double cellH, bool isToday, bool solid,
+      bool adjusted, bool inRange) {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
         : AppTokens.inkMuted(context);
@@ -897,8 +956,29 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           // 两侧留硬边距：胶囊再宽也碰不到格子边（更碰不到选中滑块）。
           ? Padding(
               padding: const EdgeInsets.symmetric(horizontal: _chipSideGap),
-              child: _shiftChip(context, shift, s, solid,
-                  ValueKey('day-chip-${date.day}')),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _shiftChip(context, shift, s, solid,
+                      ValueKey('day-chip-${date.day}')),
+                  if (adjusted)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        key: ValueKey('day-adjusted-${date.day}'),
+                        // 尺寸用光学微距令牌而不是跟着 `s` 缩放：小窗里
+                        // 1–2px 的点等于没有（spec §7.4）。
+                        width: AppTokens.gapHair,
+                        height: AppTokens.gapHair,
+                        decoration: BoxDecoration(
+                          color: Color(shift.color),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             )
           : Text(
               shift.shortLabel,
@@ -924,6 +1004,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         decoration: _cardDecoration(context),
         child: Stack(
           children: [
+            // 长按拖选时，圈住的日子铺一层主色淡染（画在内容下面，不挡字）。
+            // 逐格画而不是画一个外接矩形：日期区间在月历里是折行的（周五到
+            // 下周二），外接矩形会把区间之外整整一行都染上。
+            if (inRange)
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: primary.withValues(alpha: 0.18),
+                    borderRadius: _cellRadius,
+                  ),
+                ),
+              ),
             Positioned.fill(
               // 整格内容一起可缩，而不是让某一行自己想办法。
               //
