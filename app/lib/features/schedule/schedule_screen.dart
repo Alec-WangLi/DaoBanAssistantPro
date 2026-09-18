@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
-import '../../core/haptics.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/glass/glass.dart';
@@ -120,13 +119,12 @@ class ScheduleScreen extends ConsumerWidget {
           GlassSwitch(
             value: e.isCompleted,
             onChanged: (v) async {
+              // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassSwitch`，
+              // Task 4 已经让它在自己的 `onTap` 里发一次 `select()`（「选中变了」
+              // 正是它的语义）。再加一次就是每拨一下震两下 —— 两下比一下信息量
+              // **更少**，正是这套设计要消灭的噪音。spec §4.2 那张表原来点了这
+              // 一行，已作废：**§4.1 覆盖过的控件不再进 §4.2 的表**。
               await ref.read(appRepositoryProvider).setEventCompleted(e, v);
-              // 「待办勾选完成」是词汇表里点名的 commit 语义（见 `haptics.dart`
-              // 的 `commit()` 文档），所以它**有意**与上面那个 `GlassSwitch`
-              // 自带的 `select()` 并存：`select` 说「开关动了」，`commit` 说
-              // 「这条待办真的落了库」。放在 `setEventCompleted` **之后** ——
-              // 写失败就不该报「落实了」。
-              Haptics.commit();
               await _rescheduleReminders(ref);
             },
           ),

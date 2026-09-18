@@ -7,8 +7,15 @@
 //      都是破坏性确认，所以触觉挂在按钮里、按变体门住，一处覆盖四处）
 //   2. 非危险的同类按钮不震（决策①：普通点击一律不震）—— 这条是**护栏**：
 //      若哪天有人把 `commit()` 提到变体判断之外，它立刻红
-//   3. 待办勾选完成震一次（真库 + Riverpod 夹具，抄 `todo_dialog_test.dart`
-//      的 `_pumpTodos`）
+//   3. 待办勾选完成**只震 `select` 一次**，`commit()` 不许出现 —— 这条钉的是
+//      一条**裁决**，不是一条实现（见下）
+//
+// **第 3 条的由来**：spec §4.2 那张提交点表原来把「待办勾选完成 → `commit()`」
+// 点在了 `schedule_screen.dart` 的 `onChanged` 上，而那个控件是 `GlassSwitch`，
+// §4.1 已经让它自震一次 `select()` —— 照办就是每拨一下震两下。裁决是**不加**：
+// 一个开关翻转只携带一条信息，两下比一下信息量更少。所以这一条断言的不是
+// 「能震就行」，而是**「`commit()` 没有回来」**：哪天有人照旧表把那一行加回去，
+// 它立刻红。这条用例是那次裁决唯一常驻的执行证据。
 //
 // **不覆盖**：「应用改班 / 恢复轮转」与「切换排班方案」这两处。它们要弹选择层、
 // 要驱动 `AlarmService.rescheduleAll` 扫班次闹钟，夹具成本远高于收益，所以这里
@@ -148,7 +155,8 @@ void main() {
     expect(fired, isEmpty, reason: '决策①：普通点击一律不震');
   });
 
-  testWidgets('待办勾选完成：写库之后震一次 commit', (tester) async {
+  testWidgets('待办勾选完成只震 select 一次：素材是 GlassSwitch，commit 不许再叠一次',
+      (tester) async {
     final db = await _pumpTodos(tester);
     final repo = AppRepository(db);
     await repo.addEvent(
@@ -162,18 +170,16 @@ void main() {
     await _settle(tester);
 
     // 库里真的写进去了 —— 没有这一条，下面那断言就只是「点了 → 震了」，
-    // 证明不了震在**落库之后**。
+    // 证明不了那一次震的是这个交互而不是别处。
     expect((await repo.listEvents()).single.isCompleted, isTrue,
-        reason: '勾选没落库，触觉就只是空响');
+        reason: '勾选没落库，这次点击就没真的发生');
 
-    // **两次是有意的**：`GlassSwitch` 自己先发 `select`（Task 4 的「开关翻转」），
-    // 随后调用点的 `commit` 再发一次（spec §4.2 的表逐字要求
-    // 「待办勾选完成 → commit」）。不是漏改，是两档语义叠在同一个控件上 ——
-    // 这条断言把它钉住，免得将来有人只看到其中一次就以为另一次是 bug。
-    expect(fired, [
-      'HapticFeedbackType.selectionClick',
-      'HapticFeedbackType.lightImpact',
-    ]);
+    // **整串都要对**：`GlassSwitch` 自己那一次 `select`（Task 4 的「选中变了」），
+    // 且**到此为止**。`commit()` 半个都不许有 —— 一个开关翻转只携带一条信息，
+    // 叠一档「动作落实」就是每拨一下震两下，正是这套设计要消灭的噪音。
+    // 谁把 `Haptics.commit()` 加回 `onChanged`，这条立刻红。
+    expect(fired, ['HapticFeedbackType.selectionClick'],
+        reason: '待办勾选是 §4.1 覆盖过的控件：只该有 select，commit 不能回来');
 
     await _dispose(tester);
   });
