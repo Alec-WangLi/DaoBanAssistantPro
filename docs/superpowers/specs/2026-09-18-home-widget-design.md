@@ -235,14 +235,20 @@ Dart 侧新增 `WidgetService.widgetLaunchRequested`（`ValueNotifier<DateTime?>
 
 ### 8.1 卡片底
 
-用 `AppTokens.glassSurface(isDark, blurOn: false)`，即「高级材质关闭」时的那一档：
+**用 App 自己的 surface 色、高不透明度**，不照抄 `AppTokens.glassSurface(isDark, blurOn: false)`：
 
 | | 亮 | 暗 |
 |---|---|---|
-| 渐变起（左上） | 白 82% | 白 16% |
-| 渐变止（右下） | 白 60% | 白 8% |
+| 渐变起（左上） | `surfaceLight` 白 95%（`#F2FFFFFF`） | `surfaceDark` 90%（`#E616161E`） |
+| 渐变止（右下） | 白 88%（`#E0FFFFFF`） | `surfaceDark` 80%（`#CC16161E`） |
 
 做成两张 `<shape>` drawable 静态引用。Android 的 `<gradient android:angle>` 是**逆时针**且 0 = 左→右，所以 Flutter 的 topLeft→bottomRight 对应 `angle=315`。
+
+> **这一处是初稿写错、真机实测才发现的。** 初稿抄的是 `glassSurface(isDark, blurOn: false)`（亮 白 82%→60%、暗 白 16%→8%）—— 那是 App 里「高级材质关闭」时的那一档。它在 App 里成立，是因为它垫在**自己的中性底色**（`bgLight` / `bgDark`）上；而小组件垫的是**任意壁纸**，`RemoteViews` 又采不到壁纸。
+>
+> 后果在真机上很直接：深色卡（白 16%）叠在浅色壁纸上 ≈ 半透明，配 `inkDark`（近白）文字**几乎读不出来**。2026-09-18 首张真机截图（HyperOS「自定义时段」深色 + 浅色壁纸）确认：结构全对、数据全对，字看不清。
+>
+> 高不透明度让**对比度由卡片自己决定，与壁纸无关** —— 这样 §2 决策 ④ 那个「深浅色跟随 App 主题设置」才真正安全：卡片只是换个底色，不依赖背后是什么。这也符合设计理念第 6 条「**可读性优先于观感**：任何压在色块上的文字必须过 WCAG AA 4.5:1」。
 
 ### 8.2 描边 —— 一处**有意偏离** `glassBorder`
 

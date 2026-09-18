@@ -561,13 +561,23 @@ git commit -m "feat(widget): 快照生成纯函数 —— 原生侧从此只排�
   本来就走的是 `glassSurface(isDark, blurOn: false)` 那一档（「高级材质」关闭时的配方）。
 -->
 <resources>
-    <!-- 卡片底：glassSurface(isDark, blurOn: false) 的渐变两端。 -->
-    <!-- 亮：白 82% → 白 60%。 -->
-    <color name="wg_card_from_light">#D1FFFFFF</color>
-    <color name="wg_card_to_light">#99FFFFFF</color>
-    <!-- 暗：白 16% → 白 8%。 -->
-    <color name="wg_card_from_dark">#29FFFFFF</color>
-    <color name="wg_card_to_dark">#14FFFFFF</color>
+    <!-- 卡片底：**不透明到能自保证对比度**。 -->
+    <!--
+      原稿照抄 glassSurface(isDark, blurOn: false)（亮 白82%→60%、暗 白16%→8%）。
+      那套配方是为「垫在 App 自己的中性底色 bgLight(#F5F6FA) / bgDark(#0B0B10) 上」
+      设计的 —— 在 App 里它成立。但小组件垫的是**任意壁纸**，而 RemoteViews 采不到
+      壁纸：深色卡（白 16%）叠在浅色壁纸上 ≈ 半透明，配 `inkDark`（近白）文字直接糊掉。
+      真机实测确认（2026-09-18，HyperOS「自定义时段」深色 + 浅色壁纸：结构全对、
+      数据全对，字几乎看不清）。
+
+      所以改成**用 App 自己的 surface 色、高不透明度**：亮面几乎白、暗面几乎
+      surfaceDark。这样对比度由卡片自己决定，与壁纸无关 —— 而「跟随 App 主题」
+      这个已定决策（spec §2 ④）才真正安全。
+    -->
+    <color name="wg_card_from_light">#F2FFFFFF</color>   <!-- surfaceLight 白 95% -->
+    <color name="wg_card_to_light">#E0FFFFFF</color>     <!-- 白 88% -->
+    <color name="wg_card_from_dark">#E616161E</color>    <!-- surfaceDark 90% -->
+    <color name="wg_card_to_dark">#CC16161E</color>      <!-- surfaceDark 80% -->
 
     <!-- 描边：走 navBorder 那条路（inkLight 14% / 白 16%），不走 glassBorder。 -->
     <!-- glassBorder 亮色是白 90%，它在 App 里成立是因为底下垫着 bgLight(#F5F6FA)； -->
