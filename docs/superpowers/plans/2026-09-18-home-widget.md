@@ -2731,36 +2731,45 @@ object WidgetChip {
 **(a) 小卡的色条**（`small` 里）—— 把那段 `v.setInt(R.id.wg_s_bar, "setBackgroundColor", ...)` 整块替换成：
 
 ```kotlin
-        // 色条：6dp 宽、撑满班次区高度。高度要到布局跑完才知道，这里按一个
-        // 足够大的固定值画（180dp 档位下这个区域约 60dp），贴上去时 ImageView
-        // 会按自己的 scaleType 处理 —— 位图比控件大只会被裁，不会糊。
-        if (today.hasShift) {
-            v.setImageViewBitmap(
-                R.id.wg_s_bar,
-                WidgetChip.bar(today.color, dpToPx(context, 6), dpToPx(context, 72)),
-            )
-        } else {
-            v.setInt(
-                R.id.wg_s_bar,
-                "setBackgroundColor",
-                context.getColor(if (dark) R.color.wg_empty_dark else R.color.wg_empty_light),
-            )
-        }
+        // 色条：6dp 宽、撑满班次区高度。高度要到布局跑完才知道，这里按一个固定值
+        // 画（180dp 档位下这个区域约 60dp），贴上去时 ImageView 会用 `fitXY` 把它
+        // 缩放到控件大小 —— **是缩放不是裁切**，所以 6dp 宽这条被纵向压到约 0.83×、
+        // 圆头成微椭圆。肉眼几乎无差，但别在注释里写成「只会被裁」（那是错的，
+        // 而且与 Task 5 特意修掉的那类「假保证」同源）。
+        //
+        // ⚠️ 休班日也要**设位图**，不能只 `setBackgroundColor`。理由：`setBackgroundColor`
+        // 设的是 background，而班次日设的是 image；宿主在布局 id 不变时会走
+        // `RemoteViews.reapply`，它只重放**新的**动作列表 —— 没被重设的 image 会留着
+        // 旧位图、盖在新背景色上面。结果就是「昨天白班、今天休班」那天，色条还挂着
+        // 昨天的颜色。统一都设位图，从结构上免疫，而不是逐个分支打补丁。
+        v.setImageViewBitmap(
+            R.id.wg_s_bar,
+            WidgetChip.bar(
+                if (today.hasShift) {
+                    today.color
+                } else {
+                    context.getColor(if (dark) R.color.wg_empty_dark else R.color.wg_empty_light)
+                },
+                dpToPx(context, 6),
+                dpToPx(context, 72),
+            ),
+        )
 ```
 
 并在 `widget_small.xml` 里给 `wg_s_bar` 加上 `android:scaleType="fitXY"`。
 
-**(b) 中卡的色点**（`medium` 里）—— 把 `v.setInt(dots[row], "setBackgroundColor", ...)` 换成分支：
+**(b) 中卡的色点**（`medium` 里）—— 把 `v.setInt(dots[row], "setBackgroundColor", ...)` 换掉：
 
 ```kotlin
-            if (d.hasShift) {
-                v.setImageViewBitmap(
-                    dots[row],
-                    WidgetChip.circle(d.color, dpToPx(context, 8)),
-                )
-            } else {
-                v.setInt(dots[row], "setBackgroundColor", empty)
-            }
+            // 休班也设位图（浅色圆点），理由同 (a)：只 `setBackgroundColor`
+            // 会让上一次的位图留在 ImageView 上。
+            v.setImageViewBitmap(
+                dots[row],
+                WidgetChip.circle(
+                    if (d.hasShift) d.color else empty,
+                    dpToPx(context, 8),
+                ),
+            )
 ```
 
 并在 `widget_medium.xml` 里给三个 `wg_m_dotN` 加上 `android:scaleType="fitXY"`。
@@ -2768,21 +2777,25 @@ object WidgetChip {
 **(c) 大卡的胶囊**（`large` 里）—— 把 `v.setInt(pills[cell], "setBackgroundColor", d.color)` 换掉。胶囊宽度由简称字数决定，固定给一个够宽的：
 
 ```kotlin
-            if (d.hasShift) {
-                // 胶囊宽度写死：RemoteViews 里量不到文字宽度（排版在宿主进程做）。
-                // 3 个字的简称（中文最多 2 字、英文最多 4 个字母的缩写）在 12sp 下
-                // 约 40dp 就够；给 48dp 留余量，多的部分由 fitXY 拉伸，
-                // 而 TextView 是居中的，视觉上看不出来。
-                v.setImageViewBitmap(
-                    pills[cell],
-                    WidgetChip.pill(d.color, dpToPx(context, 48), dpToPx(context, 22)),
-                )
-                v.setTextViewText(abbrs[cell], d.shiftAbbr)
-                v.setTextColor(abbrs[cell], d.abbrInk)
-            } else {
-                v.setInt(pills[cell], "setBackgroundColor", empty)
-                v.setTextViewText(abbrs[cell], "")
-            }
+            // 胶囊宽度写死：RemoteViews 里量不到文字宽度（排版在宿主进程做）。
+            // 3 个字的简称（中文最多 2 字、英文最多 4 个字母的缩写）在 12sp 下
+            // 约 40dp 就够；给 48dp 留余量，多的部分由 fitXY 拉伸，
+            // 而 TextView 是居中的，视觉上看不出来。
+            //
+            // 休班也设位图（浅色空胶囊），理由同 (a)。
+            v.setImageViewBitmap(
+                pills[cell],
+                WidgetChip.pill(
+                    if (d.hasShift) d.color else empty,
+                    dpToPx(context, 48),
+                    dpToPx(context, 22),
+                ),
+            )
+            // 文字也走「无条件设」：休班那格清空。写「休」会和真叫「休班」的
+            // 班次撞在一起，用户分不出哪个是排出来的、哪个是空着的。
+            // `abbrInk` 在无班次时 Dart 侧给的是 0（透明），空串配透明字正好。
+            v.setTextViewText(abbrs[cell], if (d.hasShift) d.shiftAbbr else "")
+            v.setTextColor(abbrs[cell], d.abbrInk)
 ```
 
 并在 `widget_large.xml` 里给八个 `wg_l_pillN` 加上 `android:scaleType="fitXY"`。
