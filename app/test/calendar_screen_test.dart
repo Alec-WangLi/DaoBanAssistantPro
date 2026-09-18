@@ -852,6 +852,64 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  // ── spec §11：唯一一条撤掉按天调整的路 —— 「恢复轮转」 ──
+  //
+  // 改班那条路（`setDayOverrides`）上面已经钉住了；撤回来这条（`choice.restore`
+  // → `repo.clearDayOverrides(days)`，`adjustDays` 里那两行）此前**一次也没跑过**。
+  // 它要是接错了（比如清了别的日子、或者干脆没清），日历上那天会一直挂着
+  // 「已调整」，用户再也回不到轮转。
+  testWidgets('信息卡弹层选「恢复轮转」：覆盖行清掉，「已调整」也不再显示',
+      (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+    final today = dateOnly(DateTime.now());
+
+    // 先造出「今天被单独改过」的状态
+    final classes = await db.select(db.shiftClassRows).get();
+    await AppRepository(db).setDayOverrides([today], classId: classes.first.id);
+    await tester.pumpAndSettle();
+
+    expect(await db.select(db.shiftDayOverrides).get(), hasLength(1));
+    expect(find.byKey(const Key('info-card-adjusted')), findsOneWidget);
+    expect(find.byKey(ValueKey('day-adjusted-${today.day}')), findsOneWidget);
+
+    // 点开信息卡那行（入口就是它），底部弹层里挑「恢复轮转」
+    await tester.tap(find.byKey(const Key('info-card-shift-entry')));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.restoreRotation), findsOneWidget,
+        reason: '这天被覆盖过，弹层才该给这条退路');
+
+    await tester.tap(find.text(L10n.restoreRotation));
+    await tester.pumpAndSettle();
+
+    // 覆盖行清干净，界面回到轮转态
+    expect(await db.select(db.shiftDayOverrides).get(), isEmpty,
+        reason: '「恢复轮转」要把这天的覆盖行真的删掉');
+    expect(find.byKey(const Key('info-card-adjusted')), findsNothing,
+        reason: '覆盖没了，「已调整」这句说明也要跟着消失');
+    expect(find.byKey(ValueKey('day-adjusted-${today.day}')), findsNothing,
+        reason: '格子上的小圆点同理');
+    // 这里不断「已把 1 天恢复为轮转」那条提示：`adjustDays` 走完
+    // `clearDayOverrides` 之后还要 `await AlarmService.rescheduleAll(repo)`，
+    // 而那一串原生插件调用在 flutter_test 里不会 resolve（上一版我试着多
+    // `pump` 了 20 秒假时钟，SnackBar 依然是 0 —— 换成「改班」那条路同样为 0，
+    // 所以是环境如此，不是恢复这条路的毛病）。提示条因此测不到，覆盖行与
+    // 「已调整」标记这两条是这条用例真正要钉住的东西。
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('没被覆盖过的那天：弹层不给「恢复轮转」', (tester) async {
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    await tester.tap(find.byKey(const Key('info-card-shift-entry')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.restoreRotation), findsNothing,
+        reason: '本来就在轮转上，没有可恢复的东西 —— 这条由 canRestore 把住');
+
+    await _disposeCalendar(tester);
+  });
+
   testWidgets('被覆盖的那天在格子上有小圆点标记', (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
     final today = dateOnly(DateTime.now());
