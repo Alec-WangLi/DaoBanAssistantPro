@@ -86,11 +86,16 @@
         </LinearLayout>
     </LinearLayout>
 
-    <View
+    <!-- 分隔线用 ImageView 而不是 <View>：白名单是靠 `@RemoteView` 注解过滤的，
+         而 `android.view.View` **没有**这个注解（`Space` 也没有）。用 <View> 的
+         后果是宿主在 apply() 阶段抛 InflateException，整张卡片渲染不出来，
+         而不是只丢这一条线。 -->
+    <ImageView
         android:id="@+id/wg_s_divider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="8dp"
+        android:contentDescription="@null" />
 
     <TextView
         android:id="@+id/wg_s_next"

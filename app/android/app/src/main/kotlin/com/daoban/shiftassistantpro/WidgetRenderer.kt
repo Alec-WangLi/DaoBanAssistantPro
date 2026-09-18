@@ -44,6 +44,10 @@ object WidgetRenderer {
             AlarmLog.info(context, "WidgetRenderer: 快照已过期，走占位态")
             return placeholder(context, isDark(context, snap.themeMode))
         }
+        // 空表（没建过排班 / 选了「跟随法定节假日」那种空白表方案）：整张卡只留
+        // 一句来自快照的提示。这一支必须在分档**之前** —— 三档尺寸在空表下长得
+        // 一致，不必各写一套。
+        if (!snap.hasSchedule) return empty(context, snap)
         return when (tier) {
             WidgetTier.SMALL -> small(context, snap, todayIndex)
             WidgetTier.MEDIUM -> small(context, snap, todayIndex) // Task 4 换成 medium(...)
@@ -133,6 +137,36 @@ object WidgetRenderer {
         }
         v.setTextColor(R.id.wg_s_next, muted)
 
+        return v
+    }
+
+    /**
+     * 空表态：没有排班（`snap.hasSchedule == false`）。
+     *
+     * 为什么不复用 `small()` 加几个 if：那条路要隐藏六七个视图，且留下的东西
+     * （「今天 周四 / 周四 / 后天 周五」）看着像一张正常的班次卡，用户会以为
+     * 排班已经生效了。这里清空重设，语义上就是「还没排班」这一件事。
+     *
+     * 文案来自快照的 `emptyHint`（Dart 侧 `L10n.widgetEmptyHint` 产出）——
+     * Kotlin 侧仍然一个字面量都没有。
+     */
+    private fun empty(context: Context, snap: WidgetStore.Snapshot): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_small)
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            R.id.wg_s_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
+        v.setTextViewText(R.id.wg_s_relative, snap.emptyHint)
+        v.setTextColor(R.id.wg_s_relative, ink)
+        for (id in intArrayOf(
+            R.id.wg_s_weekday, R.id.wg_s_date, R.id.wg_s_bar,
+            R.id.wg_s_shift, R.id.wg_s_time, R.id.wg_s_divider, R.id.wg_s_next,
+        )) {
+            v.setViewVisibility(id, android.view.View.GONE)
+        }
         return v
     }
 

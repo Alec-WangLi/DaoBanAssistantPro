@@ -22,7 +22,10 @@ const MethodChannel _channel =
 class WidgetService {
   WidgetService._();
 
-  /// 原生推过来的「点了小组件的某一天」。`CalendarScreen` 与 `HomeShell` 都监听它。
+  /// 原生推过来的「点了小组件的某一天」。
+  ///
+  /// `HomeShell` 监听它做跳页（本任务已接）。`CalendarScreen` 还要读它来定位到
+  /// 那一天 —— **那是 Task 7 的活**，此处尚未实现，别提前接。
   ///
   /// 与 `AlarmService.openTodoRequested` 同款：值非 null 表示有一次待处理的请求，
   /// 消费方处理完负责置回 null（置回会再触发一次监听，靠「值为 null 就返回」兜住）。
@@ -45,9 +48,19 @@ class WidgetService {
         accent: settings.accentColor.toARGB32(),
       ));
       await _channel.invokeMethod<bool>('widgetPushSnapshot', {'json': json});
-    } catch (_) {
-      // 小组件是锦上添花：没有它 App 一切照常。推失败不打扰用户、也不中断调用方
+    } catch (e) {
+      // 小组件是锦上添花：没有它 App 一切照常，推失败不打扰用户、也不中断调用方
       // （它多半跑在 build 之后的后帧回调里）。
+      //
+      // 但**要留痕**：「桌面怎么没变」这类问题只能靠日志排查，而这一层恰好是唯一
+      // 知道 push 发生过的地方 —— 静默吞掉等于把唯一线索也扔了。
+      // 直接走 channel 而不 import `alarm_service.dart`：那两个文件互相 import 会
+      // 成环，而 `logInfo` 本来就是同一条 channel 上的一个方法名。
+      try {
+        await _channel.invokeMethod('logInfo', {'msg': 'widgetPushSnapshot 失败: $e'});
+      } catch (_) {
+        // 连日志都发不出去（引擎已经没了）—— 到这一步没什么可做的了。
+      }
     }
   }
 

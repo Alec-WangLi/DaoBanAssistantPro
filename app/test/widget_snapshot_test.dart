@@ -208,8 +208,14 @@ void main() {
     expect(labels['dayAfter'], L10n.widgetDayAfter);
     // 关键：这三个词**不在** days[] 里 —— 若有人把它们烘进 days[i]，
     // 跨天之后 days[i] 会自称「明天」。这条断言把「相对文案只在顶层」钉住。
-    for (final d in s['days']! as List) {
-      expect((d as Map).values, isNot(contains(L10n.widgetTomorrow)));
+    for (final word in [
+      L10n.widgetToday,
+      L10n.widgetTomorrow,
+      L10n.widgetDayAfter,
+    ]) {
+      for (final d in s['days']! as List) {
+        expect((d as Map).values, isNot(contains(word)));
+      }
     }
   });
 }
