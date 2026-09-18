@@ -102,8 +102,10 @@ ShiftSchedule _domain({
   List<int>? cycle,
   DateTime? anchor,
   List<int>? teamOffsets,
+  Map<int, int>? dayOverrides,
 }) {
   return ShiftSchedule(
+    dayOverrides: dayOverrides ?? const {},
     name: '测试排班',
     anchorDate: anchor ?? DateTime.utc(2025, 6, 1),
     classes: classes ??
@@ -1105,5 +1107,75 @@ void main() {
       isTrue,
       reason: '只有一个班次定义时，窄屏也该放得下',
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // 按天改班：编辑器改班次定义时必须把 id 原样交还给保存
+  //
+  // 覆盖表（shift_day_overrides）引用的是班次行 id，而 saveSchedule 是增量更新：
+  // 没有 id 的班次走 INSERT，库里不在新列表里的旧行连同引用它的覆盖一起被删。
+  // 所以编辑器一旦丢 id，用户只是改个简称就会把自己的按天调整全部弄丢。
+  // ---------------------------------------------------------------------------
+
+  testWidgets('改班次简称不会丢掉它的 id（丢了的话覆盖会指飞）', (tester) async {
+    // 三个班次都带上库里已有的行 id —— 编辑器必须原样交还给 saveSchedule。
+    final domain = _domain(
+      classes: const [
+        ShiftClass(
+            id: 11,
+            name: '白班',
+            abbr: '白',
+            startMinute: 8 * 60 + 30,
+            endMinute: 20 * 60 + 30,
+            color: 0xFF4C8DFF),
+        ShiftClass(
+            id: 12,
+            name: '夜班',
+            abbr: '夜',
+            startMinute: 20 * 60 + 30,
+            endMinute: 8 * 60 + 30,
+            color: 0xFF7A5CFF),
+        ShiftClass(
+            id: 13, name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+      ],
+    );
+    final repo = await _pumpEditor(tester, domain);
+    final before = domain.classes.map((c) => c.id).toList();
+
+    // 只改第一个班次的简称：这正是「改一个字段就丢 id」的最小复现。
+    await tester.enterText(
+        find.widgetWithText(TextField, L10n.abbrLabel).first, 'X');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    final after = repo.saved!.classes;
+    expect(after.map((c) => c.abbr), ['X', '夜', '休'], reason: '改动本身要落进保存');
+    expect(after.map((c) => c.id).toList(), before,
+        reason: 'id 集合必须逐位不变 —— 少一个，saveSchedule 就会把这个班次当成'
+            '新班次 INSERT，并把旧行连同引用它的按天覆盖一起删掉');
+  });
+
+  testWidgets('预览不叠按天覆盖，并在有覆盖时给出提示', (tester) async {
+    final today = dateOnly(DateTime.now());
+    final domain = _domain(
+      classes: const [
+        ShiftClass(name: '甲班', abbr: '甲', color: 0xFF4C8DFF),
+        ShiftClass(name: '乙班', abbr: '乙', color: 0xFF7A5CFF),
+      ],
+      cycle: const [0], // 轮转恒为「甲班」，今天那格有没有被覆盖一眼可辨
+      dayOverrides: {dayNumber(today): 1}, // 今天单独改成「乙班」
+    );
+    await _pumpEditor(tester, domain);
+
+    expect(find.text(L10n.previewHasOverrides(1)), findsOneWidget,
+        reason: '预览不再叠覆盖，必须告诉用户「日历上跟这里不一样」');
+
+    // 14 格都按轮转显示「甲班」；预览若把覆盖叠了进来，今天会显示「乙班」。
+    expect(find.descendant(of: _strip(), matching: find.text('甲')),
+        findsNWidgets(14));
+    expect(find.descendant(of: _strip(), matching: find.text('乙')),
+        findsNothing);
   });
 }

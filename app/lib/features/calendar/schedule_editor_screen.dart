@@ -60,6 +60,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 班次定义（一个班次只定义一次）。
   List<ShiftClass> _classes = [];
 
+  /// 本方案已设置的按天调整天数（只用于预览上方那行提示）。
+  ///
+  /// 从 `_load` 读到的领域对象上取，不再查库 —— 覆盖数就在手里，多一次
+  /// 数据库往返只会让它在保存后有机会跟界面上的方案对不上。
+  int _overrideDays = 0;
+
   /// 周期序列：长度即周期，元素是 [_classes] 的下标。
   List<int> _cycle = [];
 
@@ -116,6 +122,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         _scheduleNameCtrl.text = dd.name;
         _anchor = dd.anchorDate;
         _classes = List.of(dd.classes);
+        _overrideDays = dd.dayOverrides.length;
         _cycle = List.of(dd.cycle);
         _teamCount = dd.teamCount;
         _teamNames = List.of(dd.teamNames);
@@ -293,6 +300,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 用 [_anchor] 而不是 [_myCrewStart]：`anchorDate` 才是真正持久化的字段，
   /// 这里要预览的就是保存后日历会显示的东西。
   Widget _previewStrip(BuildContext context) {
+    // **有意不传 dayOverrides**：预览要回答的是「按这套规则未来 14 天是什么班」。
+    // 叠上按天覆盖之后，用户改周期就看不出规则本身的变化了，预览会失去意义。
+    // 代价是它跟日历上看到的不一致 —— 所以下面在有覆盖时给一行提示。
     final schedule = ShiftSchedule(
       name: _name,
       anchorDate: dateOnly(_anchor),
@@ -312,6 +322,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 预览不叠按天覆盖（见方法开头），跟日历不一致时得说清楚，否则
+          // 用户会以为自己的调整丢了。
+          if (_overrideDays > 0) ...[
+            Text(
+              L10n.previewHasOverrides(_overrideDays),
+              key: const Key('editor-override-hint'),
+              style: AppTokens.labelSecondary.copyWith(color: muted),
+            ),
+            const SizedBox(height: AppTokens.spaceSm),
+          ],
           // 基线是 12/w700，microStrong 精确匹配（12 档只有它有 w700）
           Text(L10n.previewNext14, style: AppTokens.microStrong),
           const SizedBox(height: AppTokens.spaceSm),
@@ -1314,6 +1334,10 @@ ShiftClass _editClass(
   bool clearAlarmMinute = false,
 }) {
   return ShiftClass(
+    // 必须带下去：丢了 id 就等于把这个班次变成「新班次」，保存时会插一条新行，
+    // 而旧行连同引用它的按天覆盖（shift_day_overrides.classId）一起被删 ——
+    // 用户只是改个简称，按天调整就全指飞了。
+    id: c.id,
     name: name ?? c.name,
     abbr: abbr ?? c.abbr,
     startMinute: clearTimes ? null : (startMinute ?? c.startMinute),
