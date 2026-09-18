@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -1338,6 +1339,34 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(fired, isEmpty, reason: '拖回原来那格不该震');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('信息卡那行用玻璃按压缩放，不引入 Material 水波纹', (tester) async {
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    final entry = find.byKey(const Key('info-card-shift-entry'));
+    expect(entry, findsOneWidget);
+
+    // 这一行的按压反馈必须是 GlassPressable（Q 弹缩放），不能是裸 InkWell。
+    //
+    // `info-card-shift-entry` 这个 key 就挂在 GlassPressable 上，所以不能写
+    // `find.descendant(of: entry, matching: find.byType(GlassPressable))` ——
+    // descendant 只找**后代**，不含自身，那样写恒为空。
+    expect(
+      find.descendant(of: entry, matching: find.byType(InkWell)),
+      findsNothing,
+      reason: '全 app 的按压反馈是玻璃缩放；水波纹只该出现在弹层的 ListTile 里',
+    );
+    expect(tester.widget(entry), isA<GlassPressable>());
+
+    // 点击必须照旧能打开选择层
+    await tester.tap(entry);
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.restoreRotation), findsNothing,
+        reason: '今天没被调整过，所以不该有「恢复轮转」');
+    expect(find.byType(ListTile), findsWidgets, reason: '选择层该弹出来了');
 
     await _disposeCalendar(tester);
   });

@@ -1104,7 +1104,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   // 只能靠 key 找（`_rangeSpan` 那几条用例）。
                   key: ValueKey('day-range-${date.day}'),
                   decoration: BoxDecoration(
-                    color: primary.withValues(alpha: 0.18),
+                    // 14% 是全 app 的淡染约定值（同一行「已调整」胶囊、待办徽章
+                    // 都用它）—— 原来是 18%，是这里唯一一处 18% 的染色。
+                    color: primary.withValues(alpha: 0.14),
                     borderRadius: _cellRadius,
                   ),
                 ),
@@ -1495,17 +1497,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         // 优先级正好反过来。
         if (shift != null && schedule != null)
           // `GlassPressable` **没有 `onTap`** —— 它只是个按压缩放的视觉包装
-          // （`Listener` + `QScale`），点击一律由子 widget 承载。所以这里套
-          // `InkWell`（`GlassPressable` 内部已经给了 `Material`，水波纹拿得到），
-          // 与 `glass_pickers.dart` 里 `GlassPressable(child: ListTile(onTap: …))`
-          // 是同一套做法。
+          // （`Listener` + `QScale`），点击一律由子 widget 承载。这里用
+          // `GestureDetector` 只拿点击：全 app 的按压反馈就是玻璃的 Q 弹缩放，
+          // **没有任何玻璃面带过 Material 水波纹**；套 `InkWell` 会凭空多出
+          // 一圈水波纹，在这张玻璃卡上显得最扎眼（spec §7.2）。
+          //
+          // `opaque`：行内元素之间有空隙（圆点、间距、`Expanded` 文字），不加这个
+          // 点在空隙上不响应。
           //
           // 空白表方案没有班次定义可挑，入口不给（spec §7.3）—— 传 null 禁用它。
           // 已知小瑕疵：`GlassPressable` 的按压缩放挡不住，空白表下按这行仍会
           // 缩一下。不值得为它再加一层条件包装。
           GlassPressable(
             key: const Key('info-card-shift-entry'),
-            child: InkWell(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: schedule.classes.isEmpty
                   ? null
                   : () => adjustDays(_selected, _selected),

@@ -134,9 +134,13 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
 
 /// 班次色的圆点，落在 `ListTile.leading` 位。
 ///
-/// 尺寸取 `iconMd`：弹层里这一档是 leading 图标的位置，跟同层其他弹层的
-/// leading 图标同一档才对（**不是**信息卡上那个 12dp 的小色点，两者尺寸不同是
-/// 有意的）。
+/// 尺寸取 `iconMd`（20dp），**有意不与信息卡里那个 12dp 的色点统一**：
+/// - 这里它在 `ListTile.leading`，对面那个打勾（`trailing`）也是 20dp，缩到 12
+///   会和它失衡；
+/// - 信息卡里那个 12dp 是行内元素，本来就该小一档。
+///
+/// 两个尺寸都在设计令牌上，不是随手写的数 —— 这是**有据可查的决定**，
+/// 不是遗漏（spec §7.4）。
 class _ClassDot extends StatelessWidget {
   const _ClassDot({required this.color});
 
