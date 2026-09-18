@@ -21,6 +21,12 @@ import android.widget.RemoteViews
  */
 object WidgetRenderer {
 
+    /**
+     * dp → px。`RemoteViews` 里的尺寸单位是 px，送给 `WidgetChip` 画位图前要自己乘密度。
+     */
+    private fun dpToPx(context: Context, dp: Int): Int =
+        (dp * context.resources.displayMetrics.density).toInt()
+
     /** 主题模式 → 此刻该用暗色吗。`system` 读宿主当前的配置，所以永远是新鲜的。 */
     fun isDark(context: Context, themeMode: String): Boolean = when (themeMode) {
         "light" -> false
@@ -111,19 +117,29 @@ object WidgetRenderer {
             v.setTextColor(R.id.wg_s_time, muted)
         }
 
-        // 色条：Task 5 会换成带圆角的位图。现在是实色 —— `setBackgroundColor`
-        // 对任何 View 都有效，且不需要位图。
-        v.setInt(
-            R.id.wg_s_bar,
-            "setBackgroundColor",
-            if (today.hasShift) today.color else context.getColor(
-                if (dark) R.color.wg_empty_dark else R.color.wg_empty_light
-            ),
-        )
+        // 色条：6dp 宽、撑满班次区高度。高度要到布局跑完才知道，这里按一个
+        // 足够大的固定值画（180dp 档位下这个区域约 60dp），贴上去时 ImageView
+        // 会按自己的 scaleType 处理 —— 位图比控件大只会被裁，不会糊。
+        if (today.hasShift) {
+            v.setImageViewBitmap(
+                R.id.wg_s_bar,
+                WidgetChip.bar(today.color, dpToPx(context, 6), dpToPx(context, 72)),
+            )
+        } else {
+            v.setInt(
+                R.id.wg_s_bar,
+                "setBackgroundColor",
+                context.getColor(if (dark) R.color.wg_empty_dark else R.color.wg_empty_light),
+            )
+        }
 
         v.setInt(R.id.wg_s_divider, "setBackgroundColor", divider)
 
-        // 明天预告。今天已是窗口最后一天时（不可能 —— 窗口 14 天）留空。
+        // 明天预告。今天已是窗口最后一天时（todayIndex=13，窗口 14 天）没有明天，
+        // 留空 —— **这不是「不可能」**：快照是 14 天，todayIndex 落在 [0,13] 是设计
+        // 明确支持的状态（跨天只右移不重算），13 时这里真的会走到 GONE 这一支。
+        // 把「不可能」写进注释会让下一处真的越界的代码失去戒心（large() 漏闸
+        // 就是这么活到评审的）。
         val nextIndex = todayIndex + 1
         if (nextIndex < snap.days.size) {
             val n = snap.days[nextIndex]
@@ -187,13 +203,16 @@ object WidgetRenderer {
             }
             val d = snap.days[i]
 
-            // 色点：Task 5 换成圆形位图。今天是实心圆点，其余是同样的实心 ——
-            // 「今天」那行靠字重与相对称法区分，不靠点的形状。
-            v.setInt(
-                dots[row],
-                "setBackgroundColor",
-                if (d.hasShift) d.color else empty,
-            )
+            // 色点：今天是实心圆点，其余是同样的实心 —— 「今天」那行靠字重与
+            // 相对称法区分，不靠点的形状。休班不画点，铺一块浅色底。
+            if (d.hasShift) {
+                v.setImageViewBitmap(
+                    dots[row],
+                    WidgetChip.circle(d.color, dpToPx(context, 8)),
+                )
+            } else {
+                v.setInt(dots[row], "setBackgroundColor", empty)
+            }
 
             v.setTextViewText(labels[row], relativeLabel(snap, i, todayIndex))
             v.setTextColor(labels[row], ink)
@@ -289,8 +308,14 @@ object WidgetRenderer {
             v.setTextColor(dates[cell], muted)
 
             if (d.hasShift) {
-                // Task 5 把这里换成带圆角的位图。
-                v.setInt(pills[cell], "setBackgroundColor", d.color)
+                // 胶囊宽度写死：RemoteViews 里量不到文字宽度（排版在宿主进程做）。
+                // 3 个字的简称（中文最多 2 字、英文最多 4 个字母的缩写）在 12sp 下
+                // 约 40dp 就够；给 48dp 留余量，多的部分由 fitXY 拉伸，
+                // 而 TextView 是居中的，视觉上看不出来。
+                v.setImageViewBitmap(
+                    pills[cell],
+                    WidgetChip.pill(d.color, dpToPx(context, 48), dpToPx(context, 22)),
+                )
                 v.setTextViewText(abbrs[cell], d.shiftAbbr)
                 v.setTextColor(abbrs[cell], d.abbrInk)
             } else {

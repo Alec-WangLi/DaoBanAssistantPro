@@ -2,8 +2,8 @@
 <!--
   小档：今天一张牌。尺寸约 2×2（180×180dp）。
   结构从上到下：日期行 → 班次区（色条 + 班次名 + 时间）→ 分隔线 → 明天预告行。
-  色条是 ImageView 而不是 View —— Task 5 要给它换上一张带圆角的位图
-  （setImageViewBitmap 只认 ImageView）。现在先用 setBackgroundColor 铺实色。
+  色条是 ImageView 而不是 View —— 色块按「用户自选的任意 ARGB」运行期画成圆角
+  位图（见 WidgetChip），而 setImageViewBitmap 只认 ImageView。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_s_root"
@@ -57,6 +57,7 @@
             android:id="@+id/wg_s_bar"
             android:layout_width="6dp"
             android:layout_height="match_parent"
+            android:scaleType="fitXY"
             android:contentDescription="@null" />
 
         <LinearLayout

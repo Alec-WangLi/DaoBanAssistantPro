@@ -2,7 +2,8 @@
 <!--
   大档：一周一览。尺寸约 4×4（380×380dp）。
   4 列 × 2 行 = 8 格，前 7 格是今天起连续 7 天，第 8 格由渲染侧隐藏。
-  胶囊里的底色由 Task 5 画成位图（setImageViewBitmap）；现在是实色方块。
+  胶囊里的底色按班次色在运行期画成圆角位图（setImageViewBitmap，见 WidgetChip）；
+  底片是 ImageView，简称是压在上面的 TextView。
 -->
 <GridLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_l_root"
