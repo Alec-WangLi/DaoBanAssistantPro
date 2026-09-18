@@ -46,6 +46,11 @@ String _defaultTimeRange(ShiftClass c) {
 /// [canRestore] 为真时底部出现「恢复轮转」—— 由调用方判断，只有当区间内至少
 /// 有一天已经被覆盖过才有意义。
 /// [currentClass] 是当前值，命中的那一项打勾；传 null 则都不打勾。
+///
+/// **必须传 `schedule.classes` 里的那个实例** —— 也就是 `ShiftSchedule.shiftOn`
+/// 之类从同一份 [schedule] 取出来的对象。判等走 `identical` 而不是 `==`：
+/// 班次定义的内容允许重复（编辑器里完全可以并存两个同名同时段的班次），用 `==`
+/// 会把内容相同的**两行**一起打上勾；这里要表达的是「就是本方案里的这一项」。
 Future<ShiftOverrideChoice?> showShiftOverridePicker(
   BuildContext context, {
   required ShiftSchedule schedule,
@@ -62,9 +67,11 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
   return showModalBottomSheet<ShiftOverrideChoice>(
     context: context,
     backgroundColor: Colors.transparent,
-    // 与 `glass_pickers.dart` 里三个底部弹层同理：不开这个开关，弹层高度会被
-    // 压到屏幕的 9/16（600 高的屏只有 337px），而班次多起来（四班两倒就有 4 行、
-    // 前两行还带时间副标题）必然放不下 —— 最后几行被裁进滚动区，看得见却点不着。
+    // 与 `glass_pickers.dart` 里的时间 / 日期 / 年月三个底部弹层同理 —— 就是设了
+    // `isScrollControlled: true` 的那三个；同文件的 `showGlassOptionPicker` 没设，
+    // 因为它只有一行文字的选项、撑不破 9/16。不开这个开关，弹层高度会被压到屏幕的
+    // 9/16（600 高的屏只有 337px），而班次一多（四班两倒就有 4 行、前两行还带时间
+    // 副标题）必然放不下 —— 最后几行被裁进滚动区，看得见却点不着。
     isScrollControlled: true,
     barrierColor: Colors.black26,
     builder: (sheetContext) => GlassPanel(

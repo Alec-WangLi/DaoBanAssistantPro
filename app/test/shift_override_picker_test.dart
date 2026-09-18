@@ -16,11 +16,15 @@ void main() {
 
   Future<ShiftOverrideChoice?> pumpPicker(
     WidgetTester tester, {
+    ShiftSchedule? schedule,
     ShiftClass? current,
     bool canRestore = false,
   }) async {
     ShiftOverrideChoice? result;
-    final schedule = defaultSchedule();
+    // 打勾走 `identical` 判等，所以想给 `current` 的用例**必须**把自己那份
+    // schedule 一起传进来：默认这份是每次调用新造的，从中取不到「同一实例」的
+    // 班次，`current` 会静默不打勾。
+    final s = schedule ?? defaultSchedule();
     await tester.pumpWidget(MaterialApp(
       home: Builder(
         builder: (context) => Scaffold(
@@ -29,7 +33,7 @@ void main() {
               onPressed: () async {
                 result = await showShiftOverridePicker(
                   context,
-                  schedule: schedule,
+                  schedule: s,
                   from: DateTime(2026, 9, 18),
                   to: DateTime(2026, 9, 20),
                   canRestore: canRestore,
@@ -90,6 +94,36 @@ void main() {
     expect(result, isNotNull);
     expect(result!.restore, isFalse);
     expect(result!.shift!.name, schedule.classes[3].name);
+  });
+
+  testWidgets('当前班次那一行打勾，且只打那一行', (tester) async {
+    final schedule = defaultSchedule();
+    final current = schedule.classes[2];
+    await pumpPicker(tester, schedule: schedule, current: current);
+
+    // 有且只有一处勾 —— 「每行都打」与「一行都不打」这两种实现都在这里红。
+    expect(find.byIcon(Icons.check), findsOneWidget);
+
+    // 勾落在当前班次那一行：承载勾的那个 ListTile 里应当写着这一项的名字 ——
+    // 「打错行」的实现（比如恒打首行 / 恒打末行）在这里红。
+    final currentRow = find.ancestor(
+      of: find.byIcon(Icons.check),
+      matching: find.byType(ListTile),
+    );
+    expect(currentRow, findsOneWidget);
+    expect(find.descendant(of: currentRow, matching: find.text(current.name)),
+        findsOneWidget);
+
+    // 其余每一行都不带勾。
+    for (final c in schedule.classes) {
+      if (identical(c, current)) continue;
+      final otherRow = find.ancestor(
+        of: find.text(c.name),
+        matching: find.byType(ListTile),
+      );
+      expect(find.descendant(of: otherRow, matching: find.byIcon(Icons.check)),
+          findsNothing, reason: '${c.name} 不该打勾');
+    }
   });
 
   testWidgets('canRestore 为假时不出现「恢复轮转」', (tester) async {
