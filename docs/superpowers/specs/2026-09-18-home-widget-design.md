@@ -239,8 +239,8 @@ Dart 侧新增 `WidgetService.widgetLaunchRequested`（`ValueNotifier<DateTime?>
 
 | | 亮 | 暗 |
 |---|---|---|
-| 渐变起（左上） | `surfaceLight` 白 95%（`#F2FFFFFF`） | `surfaceDark` 90%（`#E616161E`） |
-| 渐变止（右下） | 白 88%（`#E0FFFFFF`） | `surfaceDark` 80%（`#CC16161E`） |
+| 渐变起（左上） | `surfaceLight` 白 97%（`#F7FFFFFF`） | `surfaceDark` 97%（`#F716161E`） |
+| 渐变止（右下） | 白 96%（`#F5FFFFFF`） | `surfaceDark` 94%（`#F016161E`） |
 
 做成两张 `<shape>` drawable 静态引用。Android 的 `<gradient android:angle>` 是**逆时针**且 0 = 左→右，所以 Flutter 的 topLeft→bottomRight 对应 `angle=315`。
 
@@ -248,7 +248,9 @@ Dart 侧新增 `WidgetService.widgetLaunchRequested`（`ValueNotifier<DateTime?>
 >
 > 后果在真机上很直接：深色卡（白 16%）叠在浅色壁纸上 ≈ 半透明，配 `inkDark`（近白）文字**几乎读不出来**。2026-09-18 首张真机截图（HyperOS「自定义时段」深色 + 浅色壁纸）确认：结构全对、数据全对，字看不清。
 >
-> 高不透明度让**对比度由卡片自己决定，与壁纸无关** —— 这样 §2 决策 ④ 那个「深浅色跟随 App 主题设置」才真正安全：卡片只是换个底色，不依赖背后是什么。这也符合设计理念第 6 条「**可读性优先于观感**：任何压在色块上的文字必须过 WCAG AA 4.5:1」。
+> 高不透明度让**对比度主要由卡片自己决定** —— 注意是「主要」不是「无关」，那 3~6% 的透光仍在，写「与壁纸无关」是过头话（`RemoteViews` 采不到壁纸，不该再添一条假保证）。这样 §2 决策 ④ 那个「深浅色跟随 App 主题设置」才真正安全：卡片只是换个底色，不依赖背后是什么。这也符合设计理念第 6 条「**可读性优先于观感**：任何压在色块上的文字必须过 WCAG AA 4.5:1」。
+>
+> **第二轮（评审实算，改到最终值）**：先定的「亮 95%→88% / 暗 90%→80%」仍不够 —— 透明那一端还透 10~20% 壁纸，`wg_muted_dark`（`#9A9AB0`）叠在 80% 端 + 纯白壁纸上只有 **3.46:1**，**不过 AA**（踩线的是时间串）。故再提到上表的 **94~97%**（壁纸只透 3~6%），最坏情况两头都过 AA：暗 94% + 纯白壁纸 → muted 5.60:1 ✓；亮 96% + 纯黑壁纸 → muted 4.57:1 ✓。真机逐像素复测：暗卡底部 muted 实测 5.95:1。
 
 ### 8.2 描边 —— 一处**有意偏离** `glassBorder`
 
@@ -365,3 +367,5 @@ adb shell am broadcast -a com.daoban.shiftassistantpro.WIDGET_REFRESH -n com.dao
 | 2026-09-18 | 初稿。四个已定决策来自同日头脑风暴；`RemoteViews` 白名单与 drawable 限制经查证后写入 §1.2 与 §13.1 |
 | 2026-09-18 | 写实施 plan 时改：§6.2 的边界计算从原生搬回 Dart（快照新增 `boundaries` 字段），§11 随之定下「本轮不引入 Kotlin 单测基建」。触发原因是查证到 `src/test/` 源集不存在且 JUnit 不在 Gradle 缓存里 |
 | 2026-09-18 | 同日再改：每日的 `startClock` / `endClock` / `nextDayMark` / `startAtMs` / `endAtMs` 五个字段合并成一个预渲染的 `timeRange`。查证到 `L10n.timeRange` 已存在且其注释明确警告过「拼前缀会在英文界面下露出中文」，初稿那组分字段的写法正踩在那里 |
+| 2026-09-18 | 实做期两轮真机/评审回修 §8.1 卡片底：初稿的 `glassSurface(blurOn:false)`（暗 白 16%→8%）在任意壁纸上几乎透明、字读不清，先改 surface 色 95%→88%（暗 90%→80%），评审实算指出透明端仍不过 AA（muted 3.46:1），最终定在 **94~97%**；同时删掉「对比度与壁纸无关」的过头话、改为「主要由卡片自己决定」并写入最坏情况实算 |
+| 2026-09-18 | 收尾（Task 8）补记实施 plan 自审的一处差异：§4 的「四个原生新文件」实为**五个** —— `WidgetTier.kt` 独立成文件（`enum WidgetTier` + `pick(widthDp, heightDp)` 只干「分档」这一件事），免得 `WidgetRenderer` 同时管分档与排版两件事 |
