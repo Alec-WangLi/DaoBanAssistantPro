@@ -23,17 +23,21 @@ List<int> parseTeamOffsets(String s) {
 
 String joinTeamOffsets(List<int> offsets) => offsets.join(',');
 
-/// 活跃排班方案（当前方案行 + 班次定义 + 周期序列）。
+/// 活跃排班方案（当前方案行 + 班次定义 + 周期序列 + 按天改班覆盖）。
 class ActiveSchedule {
   const ActiveSchedule({
     required this.schedule,
     required this.classes,
     required this.cycle,
+    this.overrideRows = const [],
   });
 
   final ShiftScheduleRow schedule;
   final List<ShiftClassRow> classes;
   final List<ShiftCycleRow> cycle;
+
+  /// 本方案的按天改班覆盖行（存的是 classId）。
+  final List<ShiftDayOverride> overrideRows;
 
   ShiftSchedule toDomain() {
     final domainClasses = classes.map((c) => c.toDomain()).toList();
@@ -45,6 +49,13 @@ class ActiveSchedule {
         .map((r) => indexById[r.classId] ?? -1)
         .where((i) => i >= 0)
         .toList();
+    // 同口径：覆盖行的 classId 也换算成 classes 下标。
+    final dayOverrides = <int, int>{};
+    for (final r in overrideRows) {
+      final idx = indexById[r.classId];
+      // 查不到的（班次被删、历史脏数据）直接忽略 —— 那天回退到轮转。
+      if (idx != null) dayOverrides[r.day] = idx;
+    }
     final n = schedule.teamCount;
     final names = parseTeamNames(schedule.teamNames);
     final offsets = parseTeamOffsets(schedule.teamOffsets);
@@ -66,12 +77,15 @@ class ActiveSchedule {
         n,
         (i) => i < offsets.length ? offsets[i] : (i - schedule.ourTeamIndex),
       ),
+      dayOverrides: dayOverrides,
     );
   }
 }
 
 extension ShiftClassRowX on ShiftClassRow {
   ShiftClass toDomain() => ShiftClass(
+        // id 必须带上：覆盖存的是 classId，丢了它整套覆盖都装配不出来。
+        id: id,
         name: name,
         abbr: abbr,
         startMinute: startMinute,
@@ -84,11 +98,29 @@ extension ShiftClassRowX on ShiftClassRow {
 }
 
 extension AppDatabaseQueries on AppDatabase {
-  /// 监听当前排班方案及其班次（响应式）。
+  /// 监听当前排班方案及其班次、周期、按天覆盖（响应式）。
+  ///
+  /// **必须同时监听覆盖表**：只监听方案行的话，用户改完覆盖落库成功，
+  /// 这个流不会重发，日历上**纹丝不动** —— 不报错、不崩溃，从界面上看不出
+  /// 原因。班次 / 周期是随方案行一起改的（保存方案会 update 那一行），所以
+  /// 它们靠方案行的通知就够了；覆盖是独立的行，得单独挂一条。
   Stream<ActiveSchedule?> watchActiveSchedule() {
     final schedQuery = select(shiftScheduleRows)
       ..where((s) => s.isCurrent.equals(true));
-    return schedQuery.watchSingleOrNull().asyncMap((sched) async {
+    final triggers = <Stream<Object?>>[
+      schedQuery.watchSingleOrNull(),
+      select(shiftDayOverrides).watch(),
+    ];
+    // 不用 rxdart（项目没有这个依赖）：手写一个「任一来源发值就置位」的触发流。
+    return Stream<Object?>.multi((controller) {
+      final subs = [for (final s in triggers) s.listen(controller.add)];
+      controller.onCancel = () {
+        for (final sub in subs) {
+          sub.cancel();
+        }
+      };
+    }).asyncMap((_) async {
+      final sched = await schedQuery.getSingleOrNull();
       if (sched == null) return null;
       return _loadChildren(sched);
     });
@@ -103,7 +135,15 @@ extension AppDatabaseQueries on AppDatabase {
           ..where((t) => t.scheduleId.equals(sched.id))
           ..orderBy([(t) => OrderingTerm.asc(t.order)]))
         .get();
-    return ActiveSchedule(schedule: sched, classes: classes, cycle: cycle);
+    final overrideRows = await (select(shiftDayOverrides)
+          ..where((t) => t.scheduleId.equals(sched.id)))
+        .get();
+    return ActiveSchedule(
+      schedule: sched,
+      classes: classes,
+      cycle: cycle,
+      overrideRows: overrideRows,
+    );
   }
 
   /// 监听全部日程（按日期+时间升序）。
