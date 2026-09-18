@@ -2888,8 +2888,11 @@ GradientDrawable 传不进 RemoteViews。按 (色, 形状, 尺寸) 缓存小位�
 **Files:**
 - Create: `app/android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRefreshScheduler.kt`
 - Modify: `app/android/app/src/main/kotlin/.../ShiftWidgetProvider.kt`
-- Modify: `app/android/app/src/main/kotlin/.../MainActivity.kt`
 - Modify: `app/android/app/src/main/kotlin/.../BootReceiver.kt`
+
+> **不包含 `MainActivity.kt`**（初稿列了它，是错的）。Task 3 的注释里写着「Task 6 会在这两个分支里各补一行排刷新闹钟」，但追查后确认**不需要**：本任务给 `refreshAll` 加了
+> `scheduleNextRefresh`，而 `widgetPushSnapshot` 分支调的正是 `refreshAll`，排程已被覆盖；
+> `getWidgetLaunchDay` 不产生刷新，也不该排。这一条在 Task 6 派发前的冲突扫描里就裁定了。
 
 **Interfaces:**
 - Consumes: `WidgetStore.snapshot`（Task 2）· `ShiftWidgetProvider.ACTION_REFRESH` / `refreshAll`
