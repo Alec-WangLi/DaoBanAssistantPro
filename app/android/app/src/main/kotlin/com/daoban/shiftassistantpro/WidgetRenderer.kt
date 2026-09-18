@@ -163,6 +163,20 @@ object WidgetRenderer {
         // 整卡点击 → 打开 App（落在日历页的今天）。这一步不传 epochDay。
         v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, rootRequestCode(widgetId)))
 
+        // 可见性必须**显式设满**，不能依赖「上次是可见的」：`empty()` 复用同一张布局
+        // `R.layout.widget_small`，会把班次区那几个视图设成 GONE；而宿主在布局 id 不变时
+        // 走 `RemoteViews.reapply`、只重放**新的**动作列表 —— 不显式设回来的话，
+        // 「空表态 → 建好排班」之后小卡会永久丢掉班次名 / 日期 / 色条 / 分隔线，
+        // 只剩「今天」+ 时间串 + 明天预告，直到桌面重新 inflate 才恢复。
+        // 与「休班日不复位位图」同一根因（只重放新动作 → 没被重设的留着旧值），
+        // 同一套修法：让动作列表齐次。`wg_s_time` 的 VISIBLE 由下面按有无时间覆盖。
+        for (id in intArrayOf(
+            R.id.wg_s_weekday, R.id.wg_s_date, R.id.wg_s_bar,
+            R.id.wg_s_shift, R.id.wg_s_divider, R.id.wg_s_next,
+        )) {
+            v.setViewVisibility(id, android.view.View.VISIBLE)
+        }
+
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
@@ -287,6 +301,13 @@ object WidgetRenderer {
                 }
                 continue
             }
+            // 每个分支都要**显式设可见性**（与小卡同一条纪律，只是这条更罕见）：
+            // 今天下标单调递增，所以只有设备日期回退（改钟、跨时区西行）才会让某行
+            // 从「越界 GONE」又回到「在界内」；那时不显式设 VISIBLE 就会一直留着
+            // GONE，整行再不出现。`times[row]` 随后按有无时间覆盖一次。
+            for (idArr in listOf(dots, labels, dates, shifts, times)) {
+                v.setViewVisibility(idArr[row], android.view.View.VISIBLE)
+            }
             val d = snap.days[i]
 
             // 色点：今天是实心圆点，其余是同样的实心 —— 「今天」那行靠字重与
@@ -354,8 +375,9 @@ object WidgetRenderer {
         // 那些没被下面逐格覆盖的地方时走这一条。
         v.setOnClickPendingIntent(R.id.wg_l_root, launchIntent(context, rootRequestCode(widgetId)))
 
-        // 这里**不**声明 ink：大卡的日期走 muted、简称走 abbrInk（Dart 侧按班次色
-        // 算好的白/黑二选一），没有需要纯正文色的地方。声明了会被 analyze 报未使用。
+        // 这里**不**声明 ink：大卡的日期走 muted（今天那格走 accent）、简称走
+        // abbrInk（Dart 侧按班次色算好的白/黑二选一），没有需要纯正文色的地方。
+        // 声明了会被 analyze 报未使用。
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
         val empty = context.getColor(
@@ -405,7 +427,25 @@ object WidgetRenderer {
                 launchIntent(context, cellRequestCode(widgetId, cell), epochDay = d.day.toInt()),
             )
             v.setTextViewText(dates[cell], d.dateShort)
-            v.setTextColor(dates[cell], muted)
+            // 「今天」那格（cell == 0，大卡就是「从今天起连续 7 天」）：日期走**主色**。
+            // 字重由**布局**给出 —— `wg_l_date1` 是 `android:textStyle="bold"`、
+            // 其余 `wg_l_date2..8` 是常规字重 —— 于是「今天」比别的格更重、又带主色，
+            // 4×4 上一眼认得出来。
+            //
+            // 为什么字重放在布局、而不是像 spec 初稿那样现场改：
+            //   · spec 初稿的大卡方案是「被『今天』那格主色描边」。描边要用 `WidgetChip`
+            //     画一张带描边的位图，而 `RemoteViews` 在渲染时**量不到单元格的实际尺寸**，
+            //     只能按固定尺寸画再由 `fitXY` 拉伸 —— 拉伸会把圆角拉成椭圆、把 1dp 描边
+            //     拉成粗细不匀的边（正是小卡色条那处「6×72dp 被压成 0.83×、圆头成微椭圆」
+            //     的同一类问题）。所以改成「今天的日期用主色 + 加粗」——既避开像素级拉伸，
+            //     又正是本项目自己日历格的既有配方（`design_tokens.dart` 里「格子里的
+            //     「今天」加粗」）。
+            //   · 加粗**不能**走 `v.setInt(id, "setTypeface", <int>)`：`TextView` 只有
+            //     `setTypeface(Typeface)` 与 `setTypeface(Typeface, int)` 两个重载，**没有**
+            //     `setTypeface(int)`，`setInt` 反射时找不到方法会在宿主进程抛 `ActionException`、
+            //     整张卡不更新（`javap` 查过 android.jar 确认无 `setTypeface(int)`）。
+            //     所以字重静态写在布局里，渲染侧只设颜色。
+            v.setTextColor(dates[cell], if (cell == 0) snap.accent else muted)
 
             // 胶囊宽度写死：RemoteViews 里量不到文字宽度（排版在宿主进程做）。
             // 3 个字的简称（中文最多 2 字、英文最多 4 个字母的缩写）在 12sp 下

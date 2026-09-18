@@ -32,7 +32,11 @@ class ShiftWidgetProvider : AppWidgetProvider() {
             )
             AlarmLog.info(context, "ShiftWidgetProvider.refreshAll: ${ids.size} 个实例")
             renderAll(context, mgr, ids)
-            scheduleNextRefresh(context)
+            // 桌面上一个实例都没有时不排刷新 —— 否则用户删掉小组件之后，下一次打开
+            // App 又把它排回来（`widgetPushSnapshot` 也无条件调 `refreshAll`），
+            // 于是「删了还在刷」永远循环：14 天窗口内一天 3~5 次，之后一天一次。
+            // `onDeleted` 只盖住「删除那一刻」，盖不住这条 push 路径。
+            if (ids.isNotEmpty()) scheduleNextRefresh(context)
         }
 
         /**

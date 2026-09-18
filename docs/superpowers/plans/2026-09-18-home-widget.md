@@ -2068,7 +2068,6 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -2109,7 +2108,6 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -2150,7 +2148,6 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -2191,7 +2188,6 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -2232,7 +2228,6 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -2273,7 +2268,6 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -2314,7 +2308,6 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -2464,8 +2457,9 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
 
-        // 这里**不**声明 ink：大卡的日期走 muted、简称走 abbrInk（Dart 侧按班次色
-        // 算好的白/黑二选一），没有需要纯正文色的地方。声明了会被 analyze 报未使用。
+        // 这里**不**声明 ink：大卡的日期走 muted（今天那格走 accent）、简称走
+        // abbrInk（Dart 侧按班次色算好的白/黑二选一），没有需要纯正文色的地方。
+        // 声明了会被 analyze 报未使用。
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
         val empty = context.getColor(
@@ -2507,7 +2501,11 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             val d = snap.days[i]
             v.setViewVisibility(cells[cell], android.view.View.VISIBLE)
             v.setTextViewText(dates[cell], d.dateShort)
-            v.setTextColor(dates[cell], muted)
+            // 「今天」那格（cell == 0）的日期走**主色**。字重由布局给出 ——
+            // `wg_l_date1` 是 `textStyle="bold"`、`wg_l_date2..8` 是常规字重。
+            // 加粗**不能**走 `v.setInt(id, "setTypeface", <int>)`：`TextView` 没有
+            // `setTypeface(int)` 重载，反射找不到方法会在宿主进程抛 `ActionException`。
+            v.setTextColor(dates[cell], if (cell == 0) snap.accent else muted)
 
             if (d.hasShift) {
                 // Task 5 把这里换成带圆角的位图。
@@ -3216,8 +3214,9 @@ git commit -m "feat(widget): 跨天与班次边界的自动刷新
 
 这样 `Root(n) = B + 16n`（`B` 的倍数关系不变）与 `Cell(m, c) = B + 16m + 1 + c`
 （`c ∈ 0..6` → 落在 `B+16m+1 .. B+16m+7`）**对任意 `n ≠ m` 都不可能相等**（前者与 `B`
-同余于 16 的倍数，后者不是），单实例内也不会自撞。`widgetId` 要涨到约 1.34 亿才会 `Int`
-溢出，够用到世界末日。整体区间 `100000 .. 100000+16*1.34亿` 与既有区间**不相交**。
+同余于 16 的倍数，后者不是），单实例内也不会自撞。`widgetId` 要涨到约 1.34 亿
+（`(2147483647 − 100000) / 16 = 134211477`）才会 `Int` 溢出，够用到世界末日。
+整体区间是「从 `100000` 起往上、`widgetId` 涨到 `Int` 溢出为止」，与既有区间**不相交**。
 
 整卡这一层不传 `epochDay`（点空白处就是「打开 App」，落在日历页的今天）。
 

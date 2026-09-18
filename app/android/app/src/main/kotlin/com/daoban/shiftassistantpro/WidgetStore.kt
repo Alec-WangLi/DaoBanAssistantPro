@@ -43,6 +43,7 @@ object WidgetStore {
      */
     data class Snapshot(
         val themeMode: String,
+        /** 主色 ARGB。**大卡「今天」那格的日期色** —— 见 `WidgetRenderer.large()`。 */
         val accent: Int,
         val hasSchedule: Boolean,
         val emptyHint: String,

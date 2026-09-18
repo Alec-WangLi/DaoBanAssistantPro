@@ -4,6 +4,11 @@
   4 列 × 2 行 = 8 格，前 7 格是今天起连续 7 天，第 8 格由渲染侧隐藏。
   胶囊里的底色按班次色在运行期画成圆角位图（setImageViewBitmap，见 WidgetChip）；
   底片是 ImageView，简称是压在上面的 TextView。
+
+  字重：「今天」那格（格 1）的日期是 `textStyle="bold"`，其余格是常规字重 —— 渲染侧
+  只改**颜色**（今天 = 主色 accent、其余 = muted）。字重不放在渲染侧现场改，是因为
+  `TextView` 没有 `setTypeface(int)` 重载、`RemoteViews.setInt(id, "setTypeface", …)`
+  反射时会抛 `ActionException`（详见 WidgetRenderer.large() 的注释）。
 -->
 <GridLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_l_root"
@@ -70,7 +75,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -111,7 +115,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -152,7 +155,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -193,7 +195,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -234,7 +235,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -275,7 +275,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout
@@ -316,7 +315,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:maxLines="1" />
 
         <FrameLayout

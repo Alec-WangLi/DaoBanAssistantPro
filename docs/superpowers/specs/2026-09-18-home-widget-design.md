@@ -57,7 +57,7 @@
   "genAtMs": 1758182400000,        // 生成时刻，诊断用
   "lang": "zh",
   "themeMode": "system",           // system | light | dark —— 注意是「模式」不是解析结果
-  "accent": 4284319464,            // 主色 ARGB，大卡「今天」那格描边用
+  "accent": 4284319464,            // 主色 ARGB，大卡「今天」那格**日期的颜色**用
   "hasSchedule": true,
   "emptyHint": "还没有排班，点一下去设置",   // hasSchedule=false 时用
   "labels": { "today": "今天", "tomorrow": "明天", "dayAfter": "后天" },
@@ -173,7 +173,7 @@
 
 **中（未来三天）**：三行，行首 8dp 色点，今天那行班次名加粗。行内 `今天 9月18日 · 白班 · 08:30–20:30`。
 
-**大（一周一览）**：`GridLayout` 4 列 × 2 行，照抄日历页格子配方 —— 上行日期（`cellDateSm` 13/w600），下行班次胶囊（班次色底 + `shiftAbbr`，文字色走 `AppTokens.onSolid`），被「今天」那格主色描边。第八格留空。
+**大（一周一览）**：`GridLayout` 4 列 × 2 行，照抄日历页格子配方 —— 上行日期（`cellDateSm` 13/w600），下行班次胶囊（班次色底 + `shiftAbbr`，文字色走 `AppTokens.onSolid`），**「今天」那格的日期用主色 + 加粗**（其余格 muted、常规字重）。第八格留空。
 
 「一周」是**从今天起连续 7 天**，不是「本周一到周日」。理由有二：快照的结构本来就是 `days[0] = 今天`（§3.1），换成自然周要额外引入「一周从周几开始」的判断，而那个判断在不同文化下还不一样；且三档之间「从今天起」是统一心智 —— 小卡看今天、中卡看今天起三天、大卡看今天起七天。
 
@@ -372,3 +372,4 @@ adb shell am broadcast -a com.daoban.shiftassistantpro.WIDGET_REFRESH -n com.dao
 | 2026-09-18 | 实做期两轮真机/评审回修 §8.1 卡片底：初稿的 `glassSurface(blurOn:false)`（暗 白 16%→8%）在任意壁纸上几乎透明、字读不清，先改 surface 色 95%→88%（暗 90%→80%），评审实算指出透明端仍不过 AA（muted 3.46:1），最终定在 **94~97%**；同时删掉「对比度与壁纸无关」的过头话、改为「主要由卡片自己决定」并写入最坏情况实算 |
 | 2026-09-18 | 收尾（Task 8）补记实施 plan 自审的一处差异：§4 的「四个原生新文件」实为**五个** —— `WidgetTier.kt` 独立成文件（`enum WidgetTier` + `pick(widthDp, heightDp)` 只干「分档」这一件事），免得 `WidgetRenderer` 同时管分档与排版两件事 |
 | 2026-09-18 | 收尾评审回修 §3.2：不变量 A 原写「Kotlin 侧一个中文字符串都不出现」，与原生侧既有的中文 `AlarmLog` 日志串直接冲突（反例就在本功能的 `ShiftWidgetProvider.kt` / `WidgetStore.kt` / `WidgetRenderer.kt` / `WidgetRefreshScheduler.kt` 里），是第四次「假保证」。把范围收到它真正成立的地方：**用户可见**文案一个中文字面量都不许出现，并补一段说明「为什么不禁中文日志」 |
+| 2026-09-18 | 收尾评审回修 §5.2 大卡「今天」标记：初稿写「被「今天」那格主色描边」，而实施计划把它悄悄漏掉了 —— `accent` 一路从 `widget_service.dart` 算好、发到原生、`WidgetStore` 解析进 `Snapshot`，却没有任何消费者（`WidgetRenderer` 全文没有 `snap.accent`），大卡每格只有日期 + 胶囊、4×4 上看不出「今天」。**不实现描边，改成「今天的日期用主色 + 加粗」**。理由：① 描边要用 `WidgetChip` 画一张带描边的位图，而 `RemoteViews` 在渲染时**量不到单元格的实际尺寸**，只能按固定尺寸画再由 `fitXY` 拉伸 —— 拉伸会把圆角拉成椭圆、把 1dp 描边拉成粗细不匀的边（与小卡色条那处「6×72dp 被压成 0.83×、圆头成微椭圆」同一类问题）；② 「主色 + 加粗」既避开像素级问题，又正是本项目自己日历格的既有配方（`design_tokens.dart`「格子里的「今天」加粗」）。实现上渲染侧只设颜色（`WidgetRenderer.large()`），字重静态写在 `widget_large.xml`（`wg_l_date1` 为 `bold`、其余为常规）—— 因为 `TextView` 没有 `setTypeface(int)` 重载，`RemoteViews.setInt(id, "setTypeface", …)` 反射时找不到方法会在宿主进程抛 `ActionException`、整张卡不更新 |

@@ -123,6 +123,92 @@ void main() {
     expect(d0['timeRange'], '20:30 – 08:30 (next day)');
   });
 
+  test('24 小时班（08:00 → 24:00）的结束落在次日零点，不误加一天', () {
+    final s = buildWidgetSnapshot(
+      schedule: ShiftSchedule(
+        name: '测试',
+        anchorDate: DateTime.utc(2026, 9, 18),
+        classes: const [
+          ShiftClass(
+              id: 21,
+              name: '全天班',
+              abbr: '全',
+              startMinute: 8 * 60,
+              endMinute: 24 * 60,
+              color: 0xFF4C8DFF),
+        ],
+        cycle: const [0],
+      ),
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+    );
+    final d0 = (s['days']! as List).first as Map;
+    // `endMinute == 1440` 走的是 `widget_snapshot.dart` 里那条专门注释过的分支：
+    // 「endMinute ≥ 1440 —— 本身就落在次日，加了反而过头」，所以不再 +1 天。
+    // 格式上 1440 印成 24:00，且 `endsNextDay`（e ≥ 1440）为真 → 带「次日」。
+    expect(d0['shiftName'], '全天班');
+    expect(d0['timeRange'], L10n.timeRange('08:00', '24:00', true));
+
+    // 结束「边界」＝次日零点。窗口最后一天（10/1）的同一个 24 小时班结束在
+    // 10/2 00:00；若误按跨午夜那条 +1 天，会跑到 10/3 00:00，`b.last` 会露馅。
+    final b = (s['boundaries']! as List).cast<int>();
+    expect(b.contains(DateTime(2026, 9, 19).millisecondsSinceEpoch), true);
+    expect(b.last, DateTime(2026, 10, 2).millisecondsSinceEpoch,
+        reason: '10/1 的 24 小时班结束在 10/2 00:00；误加一天会变成 10/3');
+  });
+
+  test('按天改班反映到快照里（快照走 shiftOn，不是 teamShift）', () {
+    // 「引擎留在 Dart」的核心理由：快照必须走 `shiftOn`（查按天覆盖），
+    // 而不是 `teamShift`（纯轮转）——否则日历上按天改的班在桌面上看不到。
+    // 这条把它钉住。
+    final withOverride = ShiftSchedule(
+      name: '测试',
+      anchorDate: DateTime.utc(2026, 9, 18),
+      classes: const [
+        ShiftClass(
+            id: 11,
+            name: '白班',
+            abbr: '白',
+            startMinute: 8 * 60 + 30,
+            endMinute: 20 * 60 + 30,
+            color: 0xFF4C8DFF),
+        ShiftClass(
+            id: 12,
+            name: '夜班',
+            abbr: '夜',
+            startMinute: 20 * 60 + 30,
+            endMinute: 8 * 60 + 30,
+            color: 0xFF7A5CFF),
+        ShiftClass(id: 13, name: '休班', abbr: '休', isRest: true, color: 0xFF5A5F73),
+      ],
+      cycle: const [0, 1, 2],
+      // 9/19 本按轮转是夜班，被按天改成休班（覆盖存的是 classes **下标**，2 = 休班）。
+      dayOverrides: {dayNumber(DateTime(2026, 9, 19)): 2},
+    );
+    final s = buildWidgetSnapshot(
+      schedule: withOverride,
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+    );
+    final days = (s['days']! as List).cast<Map>();
+    // days[1] = 9/19：纯轮转视角是夜班，覆盖把它改成了休班。
+    expect(days[1]['shiftName'], '休班');
+    expect(days[1]['isRest'], true);
+    // 未覆盖的 9/18 不受影响（仍是白班）。
+    expect(days[0]['shiftName'], '白班');
+
+    // 反证：不带覆盖的同一方案里 9/19 是夜班 —— 差异确实来自覆盖。
+    final plain = buildWidgetSnapshot(
+      schedule: _schedule(),
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+    );
+    expect(((plain['days']! as List)[1] as Map)['shiftName'], '夜班');
+  });
+
   test('休班行没有时间串', () {
     final s = buildWidgetSnapshot(
       schedule: _schedule(),
@@ -151,8 +237,9 @@ void main() {
     for (final t in b) {
       expect(t > now.millisecondsSinceEpoch, true);
     }
-    // 每天都贡献了一个本地零点：14 天里未来还剩 13 个（今天的那个已过）。
-    expect(b.where((t) => t > now.millisecondsSinceEpoch).length >= 13, true);
+    // 每天都贡献了**次日**的本地零点，所以 14 条全在未来（没有哪一条代表
+    // 「今天零点已过」）。原稿这里的注释写反了，Task 1 实做时发现。
+    expect(b.where((t) => t > now.millisecondsSinceEpoch).length >= 14, true);
   });
 
   test('主题模式原样透传，不在这里解析成 light/dark', () {
