@@ -59,6 +59,12 @@
 冷启动会 push **两次**（首帧回调一次 + `activeScheduleProvider` 首次下发一次），原生据此
 `refreshAll` 两次。幂等、无功能危害，属预期。
 
+> ⚠️ **测「点小组件」时不要用 `am force-stop`，要用 `am kill`。** Task 7 实做时发现：
+> `force-stop` 会把包置为 stopped 态，MIUI 桌面据此发 `MAIN/LAUNCHER` 意图时**丢掉 extras**，
+> 于是点击日期不生效 —— 看起来像功能坏了，其实是测试手段的副作用。真实用户不会
+> force-stop（从最近任务划掉、被 LMK 杀掉都不置 stopped 态），所以这不是产品缺陷。
+> 测推送仍可用 `force-stop`；测点击用 `am kill com.daoban.shiftassistantpro`。
+
 改排班、改主题、改语言之后要刷新小组件，**都是启动一次 App**（`am start` 对已在跑的 Activity 走 `onNewIntent`，同样能触发）。别去折腾 `am broadcast`，那会白花半小时。
 
 ### B. 真机与工具链的杂项
@@ -3163,10 +3169,34 @@ git commit -m "feat(widget): 跨天与班次边界的自动刷新
 
 | 函数 | 加这一行 |
 |---|---|
-| `placeholder` | `v.setOnClickPendingIntent(R.id.wg_ph_root, launchIntent(context, widgetId))` |
-| `small` | `v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, widgetId))` |
-| `medium` | `v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, widgetId))` |
-| `large` | `v.setOnClickPendingIntent(R.id.wg_l_root, launchIntent(context, widgetId))` |
+| `placeholder` | `v.setOnClickPendingIntent(R.id.wg_ph_root, launchIntent(context, rootRequestCode(widgetId)))` |
+| `small` | `v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, rootRequestCode(widgetId)))` |
+| `medium` | `v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, rootRequestCode(widgetId)))` |
+| `large` | `v.setOnClickPendingIntent(R.id.wg_l_root, launchIntent(context, rootRequestCode(widgetId)))` |
+
+**requestCode 必须落在同一个仿射命名空间里** —— 这是 Task 7 的评审算出来的一个真 bug：
+初稿让根视图用**裸 `widgetId`**、每格用 `widgetId * 16 + cell`，而 `PendingIntent` 的身份是
+「requestCode + 意图的 `filterEquals`（**extras 不参与比较**）」配 `FLAG_UPDATE_CURRENT`
+（会覆盖 extras）。于是两个实例 id 只要满足 `A == 16 * B + c`（`c ∈ 0..6`）就撞号 ——
+高的那个落进 `[16B, 16B+6]`。例如实例 2 与实例 34 同时存在时，
+`Cell(2, 2) = 16*2+2 = 34 == Root(34)`，两者共用一个 PendingIntent，一方会把另一方的
+`widget_day` 冲掉，**点一下跳到错的那天**。
+而 widget id 并不是「系统给的小整数」—— 它是设备级单调计数器（本机已经是 34，且不复用），
+差 16 倍的两实例完全够得着。
+
+所以两个辅助函数写死在 `WidgetRenderer` 里，根与格**共用同一套编码**：
+
+```kotlin
+    /** 整卡的 requestCode：实例号占高位，低位 0 留给「不指定日期」。 */
+    private fun rootRequestCode(widgetId: Int): Int = widgetId * 16
+
+    /** 第 cell 格的 requestCode。低位 +1 起，避开 `rootRequestCode` 的 0。 */
+    private fun cellRequestCode(widgetId: Int, cell: Int): Int = widgetId * 16 + 1 + cell
+```
+
+这样 `Root(n) = 16n` 与 `Cell(m, c) = 16m + 1 + c`（`c ∈ 0..6` → 落在 `16m+1 .. 16m+7`）
+**对任意 `n ≠ m` 都不可能相等**（前者是 16 的倍数，后者不是），单实例内也不会自撞。
+`widgetId` 要涨到约 1.34 亿才会 `Int` 溢出，够用到世界末日。
 
 整卡这一层不传 `epochDay`（点空白处就是「打开 App」，落在日历页的今天）。
 
@@ -3178,11 +3208,12 @@ git commit -m "feat(widget): 跨天与班次边界的自动刷新
 
 ```kotlin
             v.setViewVisibility(cells[cell], android.view.View.VISIBLE)
-            // 点某一格 → 打开 App 并跳到那天。requestCode 用 `widgetId * 16 + cell`
-            // 错开（widget id 是系统给的小整数，格子最多 8 个），避免实例之间撞号。
+            // 点某一格 → 打开 App 并跳到那天。requestCode 走 `cellRequestCode`，
+            // 与整卡的 `rootRequestCode` 落在同一个命名空间里 —— 初稿写的是
+            // `widgetId * 16 + cell` 而整卡用裸 `widgetId`，那两个空间会撞（见上）。
             v.setOnClickPendingIntent(
                 cells[cell],
-                launchIntent(context, widgetId * 16 + cell, epochDay = d.day.toInt()),
+                launchIntent(context, cellRequestCode(widgetId, cell), epochDay = d.day.toInt()),
             )
 ```
 
