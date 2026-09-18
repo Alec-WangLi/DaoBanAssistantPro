@@ -139,8 +139,9 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
 ///   会和它失衡；
 /// - 信息卡里那个 12dp 是行内元素，本来就该小一档。
 ///
-/// 两个尺寸都在设计令牌上，不是随手写的数 —— 这是**有据可查的决定**，
-/// 不是遗漏（spec §7.4）。
+/// 20dp 取的是令牌 `AppTokens.iconMd`；信息卡那个 12dp 是**字面量**（恰好落在
+/// 4px 栅格上，**不在**令牌上，也就不受 `design_tokens_test` 的字面量守门覆盖）。
+/// 两者尺寸不同是**有据可查的决定**，不是遗漏（spec §7.4）。
 class _ClassDot extends StatelessWidget {
   const _ClassDot({required this.color});
 

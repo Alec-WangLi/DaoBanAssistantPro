@@ -1499,8 +1499,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           // `GlassPressable` **没有 `onTap`** —— 它只是个按压缩放的视觉包装
           // （`Listener` + `QScale`），点击一律由子 widget 承载。这里用
           // `GestureDetector` 只拿点击：全 app 的按压反馈就是玻璃的 Q 弹缩放，
-          // **没有任何玻璃面带过 Material 水波纹**；套 `InkWell` 会凭空多出
-          // 一圈水波纹，在这张玻璃卡上显得最扎眼（spec §7.2）。
+          // 水波纹只该出现在弹层的 `ListTile` 里（那里 `GlassPressable` 垫的
+          // `Material` 让波纹浮在玻璃之上，是有意的）；这张玻璃卡套 `InkWell`
+          // 会凭空多出一圈水波纹，最扎眼（spec §7.2）。
           //
           // `opaque`：行内元素之间有空隙（圆点、间距、`Expanded` 文字），不加这个
           // 点在空隙上不响应。
