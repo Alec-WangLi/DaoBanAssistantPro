@@ -502,6 +502,62 @@ class AppRepository {
     return {for (final r in rows) r.day: r.enabled};
   }
 
+  /// 当前方案的行 id；没有当前方案时返回 null。
+  Future<int?> currentScheduleId() async {
+    final row = await (db.select(db.shiftScheduleRows)
+          ..where((s) => s.isCurrent.equals(true)))
+        .getSingleOrNull();
+    return row?.id;
+  }
+
+  /// 把 [dates] 这些天改成 [classId] 指定的班次（当前方案）。
+  ///
+  /// 一次写多天为什么不做成范围：底层就是一天一行（复合主键 `{scheduleId, day}`），
+  /// 存范围反而要在读写两头各拆一次。连休三天就是三行，天然支持。
+  ///
+  /// 重复设置同一天走 `insertOnConflictUpdate`，是更新不是报错。
+  Future<void> setDayOverrides(List<DateTime> dates,
+      {required int classId}) async {
+    final scheduleId = await currentScheduleId();
+    if (scheduleId == null) return;
+    await db.transaction(() async {
+      for (final date in dates) {
+        await db.into(db.shiftDayOverrides).insertOnConflictUpdate(
+              ShiftDayOverridesCompanion.insert(
+                scheduleId: scheduleId,
+                day: dayNumber(date),
+                classId: classId,
+              ),
+            );
+      }
+    });
+  }
+
+  /// 清掉 [dates] 这些天的覆盖，让它们回到按轮转算（当前方案）。
+  Future<void> clearDayOverrides(List<DateTime> dates) async {
+    final scheduleId = await currentScheduleId();
+    if (scheduleId == null) return;
+    await db.transaction(() async {
+      for (final date in dates) {
+        await (db.delete(db.shiftDayOverrides)
+              ..where((t) =>
+                  t.scheduleId.equals(scheduleId) &
+                  t.day.equals(dayNumber(date))))
+            .go();
+      }
+    });
+  }
+
+  /// 当前方案已设置的覆盖天数（编辑器顶部提示用）。
+  Future<int> dayOverrideCount() async {
+    final scheduleId = await currentScheduleId();
+    if (scheduleId == null) return 0;
+    final rows = await (db.select(db.shiftDayOverrides)
+          ..where((t) => t.scheduleId.equals(scheduleId)))
+        .get();
+    return rows.length;
+  }
+
   /// 删除已响过的一次性自定义闹钟（fireAt 已过去）。
   Future<void> deleteExpiredOnceAlarms() async {
     final now = DateTime.now();

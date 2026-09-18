@@ -308,4 +308,42 @@ void main() {
     expect(bAfter.map((c) => c.id), contains(bRestId),
         reason: 'stale 查询若没按 scheduleId 过滤，会把 B 的班次行一起删掉');
   });
+
+  test('setDayOverrides 一次写多天，clearDayOverrides 只清给定那几天', () async {
+    final (_, restId) = await seed();
+    final days = [
+      DateTime(2026, 9, 18),
+      DateTime(2026, 9, 19),
+      DateTime(2026, 9, 20),
+    ];
+    await repo.setDayOverrides(days, classId: restId);
+
+    final d = (await repo.getActiveSchedule())!;
+    for (final day in days) {
+      expect(d.dayOverrides.containsKey(dayNumber(day)), isTrue,
+          reason: '${day.day} 号应当被覆盖');
+    }
+    expect(await repo.dayOverrideCount(), 3);
+
+    await repo.clearDayOverrides([days.first]);
+    expect(await repo.dayOverrideCount(), 2);
+    final d2 = (await repo.getActiveSchedule())!;
+    expect(d2.dayOverrides.containsKey(dayNumber(days.first)), isFalse);
+    expect(d2.dayOverrides.containsKey(dayNumber(days[1])), isTrue,
+        reason: '不在清理列表里的那天要保持原样');
+  });
+
+  test('setDayOverrides 覆盖已有的同一天（幂等更新，不报主键冲突）', () async {
+    final (_, restId) = await seed();
+    final day = DateTime(2026, 9, 18);
+    await repo.setDayOverrides([day], classId: restId);
+    await repo.setDayOverrides([day], classId: restId);
+    expect(await repo.dayOverrideCount(), 1);
+  });
+
+  test('没有当前方案时 setDayOverrides 静默返回，不抛异常', () async {
+    // 不 seed，库里空空如也
+    await repo.setDayOverrides([DateTime(2026, 9, 18)], classId: 1);
+    expect(await repo.dayOverrideCount(), 0);
+  });
 }
