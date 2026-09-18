@@ -777,7 +777,12 @@ object WidgetStore {
                 shiftAbbr = d.optString("shiftAbbr", ""),
                 color = d.optInt("color", 0),
                 abbrInk = d.optInt("abbrInk", 0),
-                timeRange = d.optString("timeRange", "").ifEmpty { null },
+                // ⚠️ 不能写 `d.optString("timeRange", "").ifEmpty { null }`：
+                // `optString(name, fallback)` 只在**键不存在**时才给 fallback；
+                // 键存在而值是 JSON `null` 时，它走 `JSON.toString(JSONObject.NULL)`
+                // 返回**四字符串 `"null"`**，`.ifEmpty` 不会触发。而 Dart 侧每个
+                // 休班日发的正是 JSON null —— 那样卡片上会印出字面的 `null`。
+                timeRange = if (d.isNull("timeRange")) null else d.optString("timeRange"),
             )
         }
         if (days.isEmpty()) return null
@@ -827,7 +832,7 @@ enum class WidgetTier {
     /** 未来三天。 */
     MEDIUM,
 
-    /** 一周一览（4×2 网格）。 */
+    /** 一周一览（4×4 网格）。 */
     LARGE;
 
     companion object {
