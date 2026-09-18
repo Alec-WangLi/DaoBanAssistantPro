@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -1134,6 +1135,105 @@ void main() {
     expect(_blockScale(tester), 1.0);
     expect(await db.select(db.shiftDayOverrides).get(), isEmpty,
         reason: '取消不是「松手」，不该落库');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── spec §4.3：日历手势的触觉 ──
+  //
+  // 用户 v0.8.1 的原话：「长按这个滑块的时候，它不是会触发这个连选吗？那它触发
+  // 的时候能不能加个震动反馈啊，这样区分更明显一点」。长按因此分两级：进入多选态
+  // 那一下要「更明显」（`modeEnter`），之后每进一格再轻震一下（`select`）——
+  // 用户在两档里选了「进入时震 + 每进一格再轻震」。
+  //
+  // 拦截平台通道来断言：三档触觉都走 `SystemChannels.platform` 的
+  // `HapticFeedback.vibrate`，只是参数字符串不同（与 `haptics_test.dart` 同一招）。
+
+  testWidgets('长按进入多选态震一次，每进一格再震一次', (tester) async {
+    final fired = <Object?>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+      return null;
+    });
+    addTearDown(() => messenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+    fired.clear(); // 建树过程本身不该有触觉
+
+    final start =
+        tester.getCenter(find.byKey(const ValueKey('day-card-8')));
+    final gesture = await tester.startGesture(start);
+    await tester.pump(const Duration(milliseconds: 600)); // 过长按判定
+    await gesture.moveBy(const Offset(0, 60));            // 往下拖一格
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(fired, contains('HapticFeedbackType.mediumImpact'),
+        reason: '进入多选态那一下是 modeEnter');
+    expect(fired, contains('HapticFeedbackType.selectionClick'),
+        reason: '每进一格要有 select');
+    expect(fired.where((f) => f == 'HapticFeedbackType.mediumImpact'),
+        hasLength(1), reason: '进入只该震一次');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('单格滑块拖到新的一格时震，没换格不震', (tester) async {
+    final fired = <Object?>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+      return null;
+    });
+    addTearDown(() => messenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+    fired.clear();
+
+    final cellH =
+        tester.getSize(find.byKey(const ValueKey('day-card-8'))).height;
+    final start = tester.getCenter(find.byKey(const ValueKey('day-card-8')));
+
+    // 先把滑块钉在 8 日再动它。拖拽的基准是**滑块**、不是手指按下的地方
+    // （`onPanStart` 读的是 `_selectedRect`）—— 不先钉住的话，「往下拖一格」落到
+    // 的是「今天 + 7」，而今天落在月末那几天就掉出本月、`_nearestDateFromVisual`
+    // 返回 null，选中其实一步没动，这条用例会在每个月的某些日子随机转红。
+    // 钉在 8 日则是 8 日（第 2 行）→ 15 日（第 3 行），任何月份都成立（见文件头）。
+    await tester.tapAt(start);
+    await tester.pumpAndSettle();
+
+    // 原地轻点（还是 8 日，没有换格）→ 不震
+    fired.clear();
+    await tester.tapAt(start);
+    await tester.pumpAndSettle();
+    expect(fired, isEmpty, reason: '选中没变不该震');
+
+    // 拖一格 → 选中变了 → 震
+    var gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(0, 20)); // 过 slop
+    await tester.pump();
+    await gesture.moveBy(Offset(0, cellH)); // 落到下一行
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(fired, isNotEmpty, reason: '选中换了格该震');
+
+    // 拖出去又拖回来（松手还落回原来那格）→ 同样「没换格」，不震
+    fired.clear();
+    gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(0, 20)); // 过 slop，Pan 赢下竞技场
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -20)); // 拖回原格
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(fired, isEmpty, reason: '拖回原来那格不该震');
 
     await _disposeCalendar(tester);
   });

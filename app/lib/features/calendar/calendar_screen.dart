@@ -176,7 +176,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 手指位置 → 选中日期（2D 拖拽/点按）。
   void _selectFromPosition(Offset pos, double cellW, double cellH) {
     final date = _dateFromPosition(pos, cellW, cellH);
-    if (date != null && date != _selected) setState(() => _selected = date);
+    if (date != null && date != _selected) {
+      // 与长按拖选同一口径：**吸附到的格子真的变了**才震。原地按一下不震。
+      Haptics.select();
+      setState(() => _selected = date);
+    }
   }
 
   /// [date] 是否落在长按拖选的范围里（闭区间，两端谁前谁后都算）。
@@ -763,11 +767,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           },
           onPanEnd: (_) {
             final date = _nearestDateFromVisual();
+            // 与 `_selectFromPosition` 同一口径：**吸附到的格子真的变了**才震。
+            // 快甩（100ms 内就超过 slop）这一路 `onTapDown` 从来没响过 ——
+            // 竞技场里 Pan 先赢、Tap 直接被判负，所以「拖到新的一格」的触觉
+            // 只有这儿发得出来；慢按起手那一下则由 `_selectFromPosition` 负责。
+            // `changed` 要先取：下面 `setState` 会把 `_selected` 改成 `date`。
+            final changed = date != null && date != _selected;
             setState(() {
               _pressed = false;
               _dragActive = false;
               if (date != null) _selected = date;
             });
+            if (changed) Haptics.select();
           },
           // 长按拖选：按住不动约 500ms 长按赢，立刻滑动仍然是上面的 Pan 赢 ——
           // 两套手势在竞技场里天然分流，互不顶掉（`_pressed` / `_dragActive` 是
@@ -790,11 +801,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               _rangeAnchor = date;
               _rangeFocus = date;
             });
+            // 进入多选态那一下**更明显**，好跟后面每进一格的轻震分开（spec §4.3）。
+            // 放在 `setState` 之外：它的回调必须同步且无副作用，触觉是副作用。
+            Haptics.modeEnter();
           },
           onLongPressMoveUpdate: (d) {
             if (_rangeAnchor == null) return;
             final date = _dateFromPosition(d.localPosition, cellW, cellH);
             if (date == null || date == _rangeFocus) return;
+            // 吸附到的格子真的变了才震 —— 原地抖一下不响；范围往回缩时同样会响，
+            // 两个方向一致（spec §4.3）。
+            Haptics.select();
             setState(() => _rangeFocus = date);
           },
           onLongPressEnd: (_) {
