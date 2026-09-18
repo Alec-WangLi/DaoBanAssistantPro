@@ -41,7 +41,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.4\n'
+const String _changelogZh = 'v0.8.5\n'
+    '· 修好大卡上「今天」那格没有标记：它的日期现在用主色 + 加粗，跟 App 日历里今天那格的做法一样（此前计划里要做的标记没落地，那格和别的格子看着一样）\n'
+    '· 修好删掉小组件之后它还在后台每天自动刷新一次 —— 桌面上没有小组件时，不再排下一次刷新\n'
+    '· 修好小卡在「还没有排班」变成「已排班」之后，班次名、日期、色条和分隔线一直不显示 —— 现在会正常出现\n'
+    '· 内部：补了 2 条测试（跨天的 24 小时班、按天改班反映到小组件快照），给一处过长的文字补上省略\n\n'
+    'v0.8.4\n'
     '· 新增桌面小组件：小/中/大三档尺寸，一眼看到今天、未来三天或一周的班次\n'
     '· 跨天自动翻页；在 App 里改了排班，桌面立刻跟着变\n'
     '· 点小组件上的某一天，直接跳到那天的日历\n'
@@ -91,18 +96,13 @@ const String _changelogZh = 'v0.8.4\n'
     '· 修好「编辑待办事项」弹窗里的提醒：此前点它只会在「不设 / 15 分钟」两档之间跳、弹不出选择界面（同一个弹窗在「添加待办事项」里是好的）\n'
     '· 待办新增联动闹钟开关：打开后到点像班次闹钟一样全屏响铃，关掉则只弹一条通知（二选一）；响铃界面会显示这条待办的日期与时间，不用猜是什么事\n'
     '· 待办列表里开了联动闹钟的那条带一个小铃铛图标，不用点进去就知道哪条会响\n'
-    '· 内部：两个待办弹窗的字段合成一份实现（v0.7.1 就是两处各写一遍，才漏改了编辑那个）\n\n'
-    'v0.7.1\n'
-    '· 日历格子重做：班次变成带底色的胶囊，一眼就能扫出哪天是什么班；日期收成左上角的小字，农历留在底部。格子里的字现在跟着格子高度一起放大（此前格子会长高、字不变，格子里空着一大块、字显得小）\n'
-    '· 选中那天的班次胶囊变成实心，滑块落在哪格一眼就能锁定\n'
-    '· 「跟随法定节假日（无班次）」那套方案保持原来的居中排布，不受上面两条影响\n'
-    '· 闹钟铃声现在可以从手机里挑自己的音频了（此前只能选内置与系统的）。选中后会把文件复制到应用内部保存，换回内置或系统铃声时自动清掉，不会留下占地方的副本；自选文件万一损坏或丢失，会自动回落到内置铃声接着响，而不是一声不出\n'
-    '· 修好待办提醒一直没生效的问题：此前「提前提醒」设了也只是在列表里显示一行字，到点什么都不会发生。现在会真的在通知栏弹出提醒（标题是待办名，点开直接进待办页）；增删改待办后立刻重排，不必等下次开 App\n'
-    '· 提醒档位新增「准时」，并可以选提前 5 分钟 / 15 分钟 / 30 分钟 / 1 小时 / 1 天（此前只有「提前 15 分钟」和「不设」两档）\n'
-    '· 日历当天信息卡上会显示「N 项待办」，不用翻到待办页就知道今天有事\n'
-    '· 顺带修好一个一直存在的问题：日历格子里「今天」的日期从来没加粗过\n'
-    '· 铃声选择器标出当前用的是哪一个，不用再靠记忆\n\n';
-const String _changelogEn = 'v0.8.4\n'
+    '· 内部：两个待办弹窗的字段合成一份实现（v0.7.1 就是两处各写一遍，才漏改了编辑那个）\n\n';
+const String _changelogEn = 'v0.8.5\n'
+    '· Fixed the missing marker on the large widget\'s "today" cell: its date now uses the accent colour and bold, matching how the app\'s own calendar marks today (the marker was dropped along the way, so the cell looked like every other one)\n'
+    '· Fixed the widget still scheduling its once-a-day refresh in the background after you removed it — with no widget on the home screen, the next refresh is no longer scheduled\n'
+    '· Fixed the small widget losing its shift name, date, colour bar and dividers for good once "no schedule yet" turned into a real schedule — they show up again now\n'
+    '· Internal: two more tests (a 24-hour shift spanning midnight, and a per-day override reaching the widget snapshot), plus an ellipsis for one overlong label\n\n'
+    'v0.8.4\n'
     '· New home screen widget: small / medium / large, showing today, the next three days or a whole week of shifts at a glance\n'
     '· It flips over the day automatically, and follows any change you make to your schedule in the app right away\n'
     '· Tap a day on the widget to jump straight to that date in the calendar\n'
@@ -152,17 +152,7 @@ const String _changelogEn = 'v0.8.4\n'
     '· Fixed the reminder row in the Edit todo dialog: it only toggled between "none" and "15 min ahead" instead of opening the picker (the same row works in Add todo)\n'
     '· Todos gained a Ring as alarm switch: when on, the todo rings full-screen like a shift alarm at its time; when off it posts a notification only (either/or). The ringing screen shows the todo\'s date and time, so you know what it is about\n'
     '· Todos that ring as an alarm carry a small bell icon in the list, so you can tell which ones will ring without opening them\n'
-    '· Internal: the two todo dialogs now share one implementation (v0.7.1 had them written twice, which is how the edit dialog got missed)\n\n'
-    'v0.7.1\n'
-    '· Calendar cells reworked: each shift is now a filled chip, so you can see at a glance which shift a day is; the date shrinks into the top-left corner and the lunar date stays at the bottom. Cell text now scales with the cell height (previously cells grew taller while the text stayed put, leaving a large empty area and making the text look small)\n'
-    '· The selected day\'s shift chip turns solid, so it is obvious where the selection block landed\n'
-    '· Schedules set to "follow legal holidays (no shifts)" keep their centred layout, unaffected by the two changes above\n'
-    '· The alarm ringtone can now be your own audio file (previously only built-in and system ringtones). The file is copied into the app; switching back to a built-in or system ringtone removes that copy, so no space is wasted. If the file is ever damaged or lost, the alarm falls back to the built-in ringtone instead of ringing silently\n'
-    '· Fixed todo reminders never firing: "remind ahead" was only shown as a line of text and did nothing at the time. It now posts a real notification (titled with the todo, tapping it opens the todo list), and reminders are rescheduled the moment you add, edit, complete or delete a todo instead of waiting for the next app launch\n'
-    '· New "on time" reminder option, plus 5 / 15 / 30 minutes, 1 hour and 1 day ahead (previously only "15 min ahead" and "none")\n'
-    '· The calendar\'s info card now shows "N todos" for the selected day, so you know there is something today without opening the todo list\n'
-    '· Also fixed a long-standing issue: today\'s date in the calendar grid was never bolded\n'
-    '· The ringtone picker marks which one is currently in use\n\n';
+    '· Internal: the two todo dialogs now share one implementation (v0.7.1 had them written twice, which is how the edit dialog got missed)\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
