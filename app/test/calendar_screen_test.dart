@@ -782,4 +782,36 @@ void main() {
 
     await _disposeCalendar(tester);
   });
+
+  testWidgets('信息卡那行班次可点，弹层选中后日历跟着变', (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+    final today = dateOnly(DateTime.now());
+
+    // 点开入口
+    await tester.tap(find.byKey(const Key('info-card-shift-line')));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.adjustShift), findsNothing,
+        reason: '标题是日期区间，不是「调整班次」四个字');
+
+    // 挑一个与当前不同的班次
+    final before = _shiftLine(tester);
+    final classes = await db.select(db.shiftClassRows).get();
+    final target = classes.firstWhere((c) => !before.contains(c.name));
+
+    await tester.tap(find.text(target.name).last);
+    await tester.pumpAndSettle();
+
+    // 落库了
+    final rows = await db.select(db.shiftDayOverrides).get();
+    expect(rows, hasLength(1));
+    expect(rows.single.day, dayNumber(today));
+    expect(rows.single.classId, target.id);
+
+    // 界面上那天换了班
+    expect(_shiftLine(tester), contains(target.name));
+    // 并且带上「已调整」标记
+    expect(find.text(L10n.adjusted), findsWidgets);
+
+    await _disposeCalendar(tester);
+  });
 }

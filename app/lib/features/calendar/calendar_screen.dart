@@ -17,6 +17,7 @@ import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import 'info_card_metrics.dart';
 import 'schedule_editor_screen.dart';
+import 'shift_override_picker.dart';
 import 'shift_template_picker_screen.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
@@ -494,6 +495,54 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 重排读的是库里**刚设成当前**的那套方案（`rescheduleAll` 自己读），
     // 所以这里不用先把领域模型取出来。
     if (mounted) await AlarmService.rescheduleAll(repo);
+  }
+
+  /// 弹「调整班次」选择层，把 [from]..[to] 这段日子改掉（或恢复轮转）。
+  ///
+  /// 改完必须重排闹钟：这天可能从工作班变成休班（不该响），或从休班变成夜班
+  /// （要响）—— 不重排的话闹钟跟日历就对不上了。
+  Future<void> adjustDays(DateTime from, DateTime to) async {
+    final schedule = ref.read(activeScheduleProvider).valueOrNull?.toDomain();
+    if (schedule == null || schedule.isBlank || schedule.classes.isEmpty) {
+      // 空白表（跟随法定节假日）没有班次定义可挑，入口本来就不该出现；
+      // 这里再兜一次，免得别处误调。
+      return;
+    }
+    final days = <DateTime>[];
+    final span = daysBetween(from, to);
+    for (var i = 0; i <= span; i++) {
+      days.add(dateOnly(DateTime(from.year, from.month, from.day + i)));
+    }
+
+    final hasOverride =
+        days.any((d) => schedule.dayOverrides.containsKey(dayNumber(d)));
+    final current =
+        days.length == 1 ? schedule.shiftOn(days.single) : null;
+
+    final choice = await showShiftOverridePicker(
+      context,
+      schedule: schedule,
+      from: from,
+      to: to,
+      currentClass: hasOverride ? current : null,
+      canRestore: hasOverride,
+    );
+    if (choice == null || !mounted) return;
+
+    final repo = ref.read(appRepositoryProvider);
+    if (choice.restore) {
+      await repo.clearDayOverrides(days);
+    } else {
+      await repo.setDayOverrides(days, classId: choice.shift!.id!);
+    }
+    await AlarmService.rescheduleAll(repo);
+    if (!mounted) return;
+    showGlassSnack(
+      context,
+      choice.restore
+          ? L10n.restoredRotation(days.length)
+          : L10n.adjustedDays(days.length, choice.shift!.name),
+    );
   }
 
   Future<void> _showScheduleSwitcher() async {
@@ -1120,39 +1169,48 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               : null;
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 76),
-        child: GlassTile(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceMd),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                ),
+        // 与完整信息卡那行班次同源：套 `GlassPressable` 承载点击（它自己没
+        // `onTap`），内层 `InkWell` 负责手势 —— 见上面完整卡那段的说明。
+        child: GlassPressable(
+          child: InkWell(
+            onTap: (schedule == null || schedule.classes.isEmpty)
+                ? null
+                : () => adjustDays(_selected, _selected),
+            child: GlassTile(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceMd),
+              child: Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                    ),
+                  ),
+                  const SizedBox(width: AppTokens.gapIconTextLg),
+                  Expanded(
+                    child: Text(
+                      [
+                        L10n.monthDayWeekday(_selected),
+                        if (shift != null) shift.name,
+                        if (timeText != null) timeText,
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTokens.labelSecondary,
+                    ),
+                  ),
+                  if (shift != null && shift.alarmEnabled)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: AppIcon(Icons.alarm_outlined,
+                          size: AppTokens.iconSm, color: muted),
+                    ),
+                ],
               ),
-              const SizedBox(width: AppTokens.gapIconTextLg),
-              Expanded(
-                child: Text(
-                  [
-                    L10n.monthDayWeekday(_selected),
-                    if (shift != null) shift.name,
-                    if (timeText != null) timeText,
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTokens.labelSecondary,
-                ),
-              ),
-              if (shift != null && shift.alarmEnabled)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: AppIcon(Icons.alarm_outlined,
-                      size: AppTokens.iconSm, color: muted),
-                ),
-            ],
+            ),
           ),
         ),
       );
@@ -1247,44 +1305,79 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         // 剩余宽度会被三等分，最长的时间串（「20:30 – 次日08:30」）反而先
         // 被截掉。并成一段后按「班次名 → 时间 → 闹钟」的顺序从尾部省略，
         // 优先级正好反过来。
-        if (shift != null)
-          Row(
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                    color: Color(shift.color), shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text.rich(
-                  key: const Key('info-card-shift-line'),
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: shift.name,
-                        style: AppTokens.titleStrong.copyWith(
-                          color: AppTokens.inkFor(Color(shift.color),
-                              Theme.of(context).colorScheme.surface),
-                        ),
-                      ),
-                      if (shift.startMinute != null && shift.endMinute != null)
-                        TextSpan(
-                          text: '  ${_timeRange(shift)}',
-                          style: AppTokens.rowPrimary,
-                        ),
-                      TextSpan(
-                        text: '   ${_alarmText(shift)}',
-                        style: AppTokens.rowSecondary.copyWith(color: muted),
-                      ),
-                    ],
+        if (shift != null && schedule != null)
+          // `GlassPressable` **没有 `onTap`** —— 它只是个按压缩放的视觉包装
+          // （`Listener` + `QScale`），点击一律由子 widget 承载。所以这里套
+          // `InkWell`（`GlassPressable` 内部已经给了 `Material`，水波纹拿得到），
+          // 与 `glass_pickers.dart` 里 `GlassPressable(child: ListTile(onTap: …))`
+          // 是同一套做法。
+          //
+          // 空白表方案没有班次定义可挑，入口不给（spec §7.3）—— 传 null 禁用它。
+          // 已知小瑕疵：`GlassPressable` 的按压缩放挡不住，空白表下按这行仍会
+          // 缩一下。不值得为它再加一层条件包装。
+          GlassPressable(
+            key: const Key('info-card-shift-entry'),
+            child: InkWell(
+              onTap: schedule.classes.isEmpty
+                  ? null
+                  : () => adjustDays(_selected, _selected),
+              child: Row(
+                children: [
+                  Container(
+                    // 保持原来的 12 不动 —— 这个色点的尺寸不是本任务要改的东西，
+                    // 换成 `AppTokens.iconSm`（16）会白白把点撑大一圈。
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                        color: Color(shift.color), shape: BoxShape.circle),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text.rich(
+                      key: const Key('info-card-shift-line'),
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: shift.name,
+                            style: AppTokens.titleStrong.copyWith(
+                              color: AppTokens.inkFor(Color(shift.color),
+                                  Theme.of(context).colorScheme.surface),
+                            ),
+                          ),
+                          if (shift.startMinute != null &&
+                              shift.endMinute != null)
+                            TextSpan(
+                              text: '  ${_timeRange(shift)}',
+                              style: AppTokens.rowPrimary,
+                            ),
+                          TextSpan(
+                            text: '   ${_alarmText(shift)}',
+                            style:
+                                AppTokens.rowSecondary.copyWith(color: muted),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  // 这天被单独调整过（spec §7.4）：给一句文字说明，让用户第一眼
+                  // 看见日历上那个小圆点时能对上号。
+                  if (schedule.dayOverrides
+                      .containsKey(dayNumber(_selected)))
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(left: AppTokens.spaceSm),
+                      child: Text(
+                        L10n.adjusted,
+                        key: const Key('info-card-adjusted'),
+                        style: AppTokens.microStrong.copyWith(
+                            color: Theme.of(context).colorScheme.primary),
+                      ),
+                    ),
+                ],
               ),
-            ],
+            ),
           )
         else if (schedule != null && schedule.isBlank)
           Text(
