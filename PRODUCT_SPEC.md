@@ -1,6 +1,6 @@
-# 倒班助手Pro · 产品与技术规格（现状规格 · v0.8.1）
+# 倒班助手Pro · 产品与技术规格（现状规格 · v0.8.2）
 
-> 本文档是**唯一权威规格**，反映当前实现现状（v0.8.1）。早期「MVP 确认稿」的功能已随 0.2~0.6 各版演进并入正文，不再单列历史章节。
+> 本文档是**唯一权威规格**，反映当前实现现状（v0.8.2）。早期「MVP 确认稿」的功能已随 0.2~0.6 各版演进并入正文，不再单列历史章节。
 
 ---
 
@@ -18,7 +18,7 @@
 | 冻结 / 未交付 | iOS（无 Mac，冻结，仅保持跨端干净）、鸿蒙（无设备）、Windows（按需插队） |
 | 数据迁移 | 手动重录，不做导入脚本 |
 
-## 2. 功能范围（现状 v0.8.1）
+## 2. 功能范围（现状 v0.8.2）
 
 ### 排班日历
 1. **两层轮换模型**：**班次定义**（一个班次只定义一次）+ **周期序列**（长度即周期，元素引用班次定义），周期长度 1–60 天；班组相位由「每班组一个周期起始日」表达。轮换算法为纯函数，某天班次由（日期 − 周期起始日）对周期取模得出，天数差用 UTC 日期整数，避免时区问题。
@@ -47,6 +47,7 @@
 18. **权限检测卡**（3 组：基础提醒 / 弹出响铃界面 / 后台与开机）：通知、闹钟和提醒（精确闹钟）、显示悬浮窗、全屏通知、自启动、电池优化；**小米机型另加两项** ——「后台弹出界面（小米）」与「锁屏显示（小米）」，分成两行是因为症状不同（退后台不弹 vs 锁屏不弹）。每行副标题写「**不开会怎样**」而不是「要不要开」；自启动与小米那两项系统不提供状态查询，恒显示「去查看」（分别跳 App 信息页 / MIUI 权限页），其余未开启项一键跳转系统设置。
 19. **日志查看**：只记录错误/崩溃（普通信息走 Logcat），`AlarmLog.kt` 按 256KB 自动裁剪；可查看 / 复制 / 清空。
 20. 主题跟随系统 / 浅色 / 深色三档；5 种主色调；中 / English 双语；首次使用引导 + 每次更新弹更新说明。
+21. **触觉反馈**（默认开，「我的 → 外观」里一键关）：**只有三档语义** —— 切换开关 / 胶囊段切换 / 选项胶囊选中 / 选择器提交 / 日历滑块换格 / 长按拖选每进入新的一格（`select()`，「选中变了」）、删除清空类确认 / 应用改班与恢复轮转 / 切换排班方案（`commit()`，「动作落实」）、长按进入日历多选态（`modeEnter()`，「进入一个模式」）。**挂动作不挂按压** —— 普通点击、列表行点击、滚动与选择器滚轮一律不震（信息量一旦稀释到背景噪音里就归零）。没有强度档位，只有开 / 关；关掉即全 app 不震（见 §6「触觉反馈」）。
 
 **明确不做（现状仍成立）**：2-2-3 Pitman 型「固定日班组/夜班组」模式、**周期中间插入删除某一天**、桌面小组件、云同步/备份/数据导入导出、工资/补贴记账、广告、商店上架、IM/天气/组织/好友。
 
@@ -105,6 +106,7 @@
 - 共享组件（`core/widgets/`）：GlassSegment（胶囊滑块）、GlassSwitch（Q弹开关）、GlassDialog、GlassButton（主色实心 + 玻璃描边）、GlassActionButton（primary / secondary / danger）、GlassPressable（统一玻璃触摸反馈）、GlassDeleteButton + `dangerButtonStyle`、玻璃弹层选择器（`showGlassTimePicker` / `showGlassDatePicker` / `showGlassMonthPicker` / `showGlassOptionPicker`，底部 `solid` 近实心）、`glassInputDecoration`、`showGlassSnack`（提示条玻璃化）。
 - 主题 token：**深空蓝紫渐变**；跟随系统深浅双套；5 种主色调（`AppColors.accentPalette`）；中英双语（L10n）。
 - **设计令牌（单一来源）**：`core/design_tokens.dart` 的 `AppTokens` 按**角色**命名 —— 排版（页面标题 / 卡片标题 / 行内主文字 / 次要说明 / 微标签）、文字明度两档（`inkMuted` 0.62 / `inkFaint` 0.35）、间距（4px 栅格节奏 + 一组「光学」微距）、图标三档（16 / 20 / 24）、圆角 / 时长 / 玻璃配方。**其中 `inkMuted` 0.62 是在浅色底上过 WCAG AA 4.5:1 的最低值（最坏浅底 `#F5F6FA` 上 0.62 为 4.70:1；0.55 / 0.60 分别只有 3.72:1 / 4.33:1，均不达标 —— 数字按主题真实的 `onSurface` `#1A1B20` 实算，不是 `#111118`）；`inkFaint` 0.35 则是有意低于 AA 的豁免档** —— 它服务禁用态 / 占位 / 待办已完成，低对比正是它的用途（已完成的语义由删除线承载）。界面层只引用角色名，**不许写下列字面量** —— 字号（`fontSize:`）、字重（`fontWeight:`）、`onSurface` 系的文字明度（`.withValues(alpha: …)`）、圆角（`circular(…)`）、`Duration(milliseconds: …)`、`Color(0x…)`、图标尺寸（`Icon` / `IconThemeData` 的 `size:`）—— 这条由 `app/test/design_tokens_test.dart` 强制（整文件级扫描，写死即测试失败；本轮收口：扫描前先剥离注释与字符串，覆盖带子 widget 的调用与间距类常量，并支持 `// design-tokens-ignore: <理由>` 具名豁免）。**有意不强制**（别把这条测试的拦截面看大了）：装饰 / 玻璃配方里的 alpha（`Colors.white.withValues(alpha: …)` 这类）、`Color.fromARGB(…)`、`Duration(seconds:)` 目前都不在规则内 —— 它只覆盖上面逐项点到的那几类。
+- **触觉反馈（单一词汇表）**：`core/haptics.dart` 是全 app 唯一的触觉来源 —— **三档语义**：`Haptics.select()`（选中变了）、`Haptics.commit()`（动作落实 / 这一步不可逆）、`Haptics.modeEnter()`（进入一个模式）。**挂动作不挂按压**：普通点击、列表行点击、滚动与选择器滚轮一律不震（`GlassPressable` 故意不挂 —— 它包的是每一次按压），触觉只出现在「状态真的变了」或「这一步不可逆」的时刻。调用为 fire-and-forget：不 await、异常吞掉，震不震不影响功能。开关是「我的 → 外观」那一个（默认开），走模块级 `hapticsDisabled`（与 `advancedMaterialDisabled` 同一条路，一处赋值全 app 生效，调用点不必各自查设置）。**除 `core/haptics.dart` 外任何文件不许直接调 `HapticFeedback.*`，由 `app/test/haptics_guard_test.dart` 扫源码强制** —— 绕过的那一行不受用户开关控制。**只有三档，没有「危险」第四档，也没有强度设置。**
 - **应用图标**：`scripts/icon_gen.py` 是图形唯一来源（符号 = 白日历卡 + 环绕换班箭头；预览落 `work/icon-preview.png`），`scripts/icon_land.py` 落地到 Android / iOS / Web。Android 侧出货**自适应图标**三层 —— background（满幅渐变）/ foreground（安全区内的符号）/ monochrome（白剪影 + alpha 镂空，供 Android 13+「主题图标」上色）。**自适应安全区是直径 66dp 的圆（画布 108dp），方形符号须按内接圆缩，边长上限 ≈ 画布 43%** —— 按外接正方形画会被圆形蒙版削角。minSdk 26，真机永远走自适应那套，`mipmap-*/ic_launcher.png` 只是兜底。**产物都是生成物，改图形只改 `icon_gen.py`**。
 - 性能策略：API 31+ 真实时模糊，26–30 假玻璃降级（半透明 + 饱和 + 高光）；弹窗遮罩统一 `barrierColor: Colors.black26`；底部弹层 `GlassPanel(solid: true)`。
 
