@@ -66,6 +66,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 数据库往返只会让它在保存后有机会跟界面上的方案对不上。
   int _overrideDays = 0;
 
+  /// 每个班次定义被多少天单独覆盖过：`classId → 覆盖天数`。
+  ///
+  /// `ShiftSchedule.dayOverrides` 存的是 classes **下标**，而删班次会挪动下标 ——
+  /// 所以加载时就把下标换算成 classId（覆盖行在库里引用的也是它），之后无论
+  /// 编辑器里怎么增删班次，这份计数都不会错位。
+  ///
+  /// 用途：删班次 / 打开「跟随法定节假日」这两条路都会让 `saveSchedule` 的
+  /// 悬空清理连带删掉覆盖行，得先告诉用户会丢几天。
+  Map<int, int> _overridesByClassId = const {};
+
   /// 周期序列：长度即周期，元素是 [_classes] 的下标。
   List<int> _cycle = [];
 
@@ -123,6 +133,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         _anchor = dd.anchorDate;
         _classes = List.of(dd.classes);
         _overrideDays = dd.dayOverrides.length;
+        _overridesByClassId = _countOverridesByClassId(dd);
         _cycle = List.of(dd.cycle);
         _teamCount = dd.teamCount;
         _teamNames = List.of(dd.teamNames);
@@ -140,6 +151,23 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         _syncTeamNameCtrls();
       });
     }
+  }
+
+  /// 把领域层的「day → classes 下标」换算成「classId → 天数」。
+  ///
+  /// 换算是必要的：`dayOverrides` 存下标，而下标会随编辑器里删班次而变动；
+  /// 库里的覆盖行引用的却是 classId。换算一次之后这份计数就与编辑器的增删
+  /// 无关了。查不到下标的脏数据本来就无效（`saveSchedule` 也不会为它删任何
+  /// 东西），直接跳过。
+  static Map<int, int> _countOverridesByClassId(ShiftSchedule d) {
+    final counts = <int, int>{};
+    for (final idx in d.dayOverrides.values) {
+      if (idx < 0 || idx >= d.classes.length) continue;
+      final id = d.classes[idx].id;
+      if (id == null) continue; // 还没落库的班次，不会有覆盖行指着它
+      counts.update(id, (n) => n + 1, ifAbsent: () => 1);
+    }
+    return counts;
   }
 
   // ---------------------------------------------------------------------------
@@ -1119,36 +1147,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               ),
               GlassSwitch(
                 value: _followHoliday,
-                onChanged: (v) => setState(() {
-                  _followHoliday = v;
-                  if (v) {
-                    // 切到空白表：清空班次与周期，班组收敛为「我」
-                    _classes = [];
-                    _cycle = [];
-                    _syncClassCtrls();
-                    _teamCount = 1;
-                    _teamNames = [L10n.isEn ? 'Me' : '我'];
-                    _ourTeamIndex = 0;
-                    _teamOffsets = [];
-                    _syncTeamNameCtrls();
-                    if (_name.trim().isEmpty ||
-                        _name.trim() == L10n.newSchedule) {
-                      _name = L10n.holidayScheduleName;
-                      _scheduleNameCtrl.text = _name;
-                    }
-                  } else if (_classes.isEmpty) {
-                    // 从空白表切回普通表：恢复默认四班两倒
-                    final d = defaultSchedule();
-                    _classes = List.of(d.classes);
-                    _cycle = List.of(d.cycle);
-                    _teamCount = d.teamCount;
-                    _teamNames = List.of(d.teamNames);
-                    _ourTeamIndex = d.ourTeamIndex;
-                    _teamOffsets = List.of(d.teamOffsets);
-                    _syncClassCtrls();
-                    _syncTeamNameCtrls();
-                  }
-                }),
+                onChanged: _setFollowHoliday,
               ),
             ],
           ),
@@ -1160,6 +1159,72 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         ],
       ),
     );
+  }
+
+  /// 翻「跟随法定节假日」这个开关。
+  ///
+  /// **打开它会把 `_classes` 清空**，而保存时 `saveSchedule` 的悬空清理会连带
+  /// 删掉**全部**按天覆盖（spec §4.2）；切回来恢复的默认四班两倒又是全新的 id，
+  /// 那些覆盖再也接不回去。所以真会丢东西（本来有班次、且有覆盖）时必须先问
+  /// 一次，问清楚是几天。
+  ///
+  /// **先确认再翻开关**，不做「乐观翻开、取消再翻回」：`GlassSwitch` 的 `value`
+  /// 完全由外部给定（它自己不存状态），所以不确认就直接返回、不调 `setState`，
+  /// 开关的视觉状态从头到尾没动过 —— 不会出现「翻过去又弹回来」那一下抖动。
+  Future<void> _setFollowHoliday(bool v) async {
+    if (v && _classes.isNotEmpty && _overridesByClassId.isNotEmpty) {
+      final lost = _overridesByClassId.values.fold<int>(0, (a, b) => a + b);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierColor: Colors.black26,
+        builder: (dialogContext) => GlassDialog(
+          title: L10n.followHolidayConfirmTitle,
+          content: Text(L10n.followHolidayDropsOverrides(lost)),
+          actions: [
+            GlassActionButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              label: L10n.cancel,
+            ),
+            const SizedBox(width: AppTokens.spaceSm),
+            GlassActionButton(
+              variant: GlassActionVariant.danger,
+              onPressed: () => Navigator.pop(dialogContext, true),
+              label: L10n.confirm,
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() {
+      _followHoliday = v;
+      if (v) {
+        // 切到空白表：清空班次与周期，班组收敛为「我」
+        _classes = [];
+        _cycle = [];
+        _syncClassCtrls();
+        _teamCount = 1;
+        _teamNames = [L10n.isEn ? 'Me' : '我'];
+        _ourTeamIndex = 0;
+        _teamOffsets = [];
+        _syncTeamNameCtrls();
+        if (_name.trim().isEmpty || _name.trim() == L10n.newSchedule) {
+          _name = L10n.holidayScheduleName;
+          _scheduleNameCtrl.text = _name;
+        }
+      } else if (_classes.isEmpty) {
+        // 从空白表切回普通表：恢复默认四班两倒
+        final d = defaultSchedule();
+        _classes = List.of(d.classes);
+        _cycle = List.of(d.cycle);
+        _teamCount = d.teamCount;
+        _teamNames = List.of(d.teamNames);
+        _ourTeamIndex = d.ourTeamIndex;
+        _teamOffsets = List.of(d.teamOffsets);
+        _syncClassCtrls();
+        _syncTeamNameCtrls();
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -1251,13 +1316,28 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
     // 删除会把周期里比它大的下标整体前移，而时间 / 颜色 / 闹钟配置都不在
     // 周期里，重加一个班次也复原不回来 —— 所以先确认一次。
+    //
+    // 还有一样复原不回来的东西：**按天覆盖**。引用这个班次的覆盖行会在保存时
+    // 被 `saveSchedule` 的悬空清理连带删掉（spec §4.2），而覆盖没有「重加」这条
+    // 路 —— 所以天数必须写进确认框，不能只提时间 / 颜色 / 闹钟。
     final name = _classes[index].name;
+    final lostOverrides = _overridesByClassId[_classes[index].id] ?? 0;
     final confirmed = await showDialog<bool>(
       context: context,
       barrierColor: Colors.black26,
       builder: (dialogContext) => GlassDialog(
         title: L10n.deleteShiftClassTitle,
-        content: Text(L10n.deleteShiftClassContent(name)),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(L10n.deleteShiftClassContent(name)),
+            if (lostOverrides > 0) ...[
+              const SizedBox(height: AppTokens.spaceMd),
+              Text(L10n.deleteShiftClassOverridesLost(lostOverrides)),
+            ],
+          ],
+        ),
         actions: [
           GlassActionButton(
             onPressed: () => Navigator.pop(dialogContext, false),

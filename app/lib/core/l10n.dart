@@ -278,6 +278,15 @@ class L10n {
   static String get followHoliday => t('跟随法定节假日（无班次）', 'Follow legal holidays (no shifts)');
   static String get followHolidayHint => t('法定节假日休息，其余按上班', 'Rest on legal holidays, work otherwise');
   static String get holidayScheduleName => t('法定班次', 'Legal-holiday schedule');
+
+  /// 打开「跟随法定节假日」会清空班次定义，保存时连带丢掉引用它们的按天覆盖
+  /// （`saveSchedule` 的悬空清理）。会真的丢东西时先问一次 —— 切回来恢复的默认
+  /// 班次是**全新的 id**，那些覆盖接不回去。
+  static String get followHolidayConfirmTitle =>
+      t('清空班次定义？', 'Clear shift definitions?');
+  static String followHolidayDropsOverrides(int n) => t(
+      '本方案有 $n 天单独调整过。切到「跟随法定节假日」会清空班次定义，保存后这些天的调整会一并消失，且无法恢复。',
+      'This schedule has $n individually adjusted day(s). Switching to "follow legal holidays" clears every shift definition, so after saving those adjustments are gone for good.');
   static String get shiftName => t('班次名称', 'Shift name');
   static String get start => t('开始', 'Start');
   static String get end => t('结束', 'End');
@@ -317,6 +326,15 @@ class L10n {
   static String deleteShiftClassContent(String name) => isEn
       ? 'Delete "$name"? This cannot be undone.'
       : '将删除「$name」，此操作不可撤销。';
+
+  /// 删班次定义时的追加警告：这个班次还被 [n] 天单独覆盖着。
+  ///
+  /// `saveSchedule` 的悬空清理会连带删掉引用它的覆盖行（spec §4.2），而重加
+  /// 一个班次是**新 id**，那些覆盖接不回来 —— 所以删之前必须把天数说清楚，
+  /// 不能只提时间 / 颜色 / 闹钟。
+  static String deleteShiftClassOverridesLost(int n) => t(
+      '还有 $n 天单独改成了这个班次，删除后这些天的调整也会一并消失。',
+      'It is also the shift for $n individually adjusted day(s); those adjustments will be removed too.');
   static String get cycleSection => t('周期设置', 'Cycle');
   static String get cycleLengthUnit => t('天', 'days');
   static String get myCycleStart => t('我这组从这个周期开始', 'My crew starts this cycle on');

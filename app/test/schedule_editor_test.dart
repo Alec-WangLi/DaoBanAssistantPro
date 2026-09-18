@@ -1178,4 +1178,120 @@ void main() {
     expect(find.descendant(of: _strip(), matching: find.text('乙')),
         findsNothing);
   });
+
+  // ---------------------------------------------------------------------------
+  // 两条「会静默毁掉按天覆盖」的编辑器动作
+  //
+  // `saveSchedule` 的悬空清理会连带删掉引用被删班次的覆盖行（spec §4.2），
+  // 而覆盖没有「重加回去」这条路 —— 删班次是 removeAt、切空白表恢复的是
+  // 全新 id 的默认四班两倒。所以这两条路都必须先把天数说清楚。
+  // ---------------------------------------------------------------------------
+
+  testWidgets('删班次时确认框点名会连带丢掉多少天的按天调整', (tester) async {
+    final d1 = DateTime(2026, 9, 20);
+    final d2 = DateTime(2026, 9, 21);
+    await _pumpEditor(
+      tester,
+      _domain(
+        // 带 id：覆盖的计数按 classId 走（没落库的班次不会有覆盖指着它）。
+        classes: const [
+          ShiftClass(id: 11, name: 'A班', abbr: 'A'),
+          ShiftClass(id: 12, name: 'B班', abbr: 'B'),
+          ShiftClass(id: 13, name: 'C班', abbr: 'C'),
+        ],
+        cycle: const [0, 2],
+        // 有两天单独改成了 B 班（下标 1）
+        dayOverrides: {dayNumber(d1): 1, dayNumber(d2): 1},
+      ),
+    );
+
+    // 删 B（下标 1，周期没引用它 → 会走确认框那条路）
+    await tester.tap(find.byType(GlassDeleteButton).at(1));
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.deleteShiftClassTitle), findsOneWidget);
+    expect(find.text(L10n.deleteShiftClassOverridesLost(2)), findsOneWidget,
+        reason: '引用它的那 2 天覆盖会随定义一起消失，确认框必须说出来');
+
+    // 这条确认框只提时间 / 颜色 / 闹钟，一个字没提覆盖 —— 加这一句正是 I1。
+    expect(find.text(L10n.deleteShiftClassContent('B班')), findsOneWidget);
+
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+    expect(find.byType(GlassDeleteButton), findsNWidgets(3));
+  });
+
+  testWidgets('删没被覆盖过的班次：确认框不提按天调整', (tester) async {
+    final d1 = DateTime(2026, 9, 20);
+    await _pumpEditor(
+      tester,
+      _domain(
+        classes: const [
+          ShiftClass(id: 11, name: 'A班', abbr: 'A'),
+          ShiftClass(id: 12, name: 'B班', abbr: 'B'),
+          ShiftClass(id: 13, name: 'C班', abbr: 'C'),
+        ],
+        cycle: const [0, 1], // A、B 被周期引用，C 空着
+        dayOverrides: {dayNumber(d1): 0}, // 那一天改成的是 A，不是 C
+      ),
+    );
+
+    // 删 C（下标 2，没被周期引用，也没有任何覆盖指着它）
+    await tester.tap(find.byType(GlassDeleteButton).at(2));
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.deleteShiftClassTitle), findsOneWidget);
+    expect(find.textContaining('还有'), findsNothing,
+        reason: '警告只该给「真会丢覆盖」的那个班次，不能见谁都报一句');
+
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('打开「跟随法定节假日」会丢掉按天调整：先确认；取消则开关不动',
+      (tester) async {
+    final d1 = DateTime(2026, 9, 20);
+    final d2 = DateTime(2026, 9, 21);
+    await _pumpEditor(
+      tester,
+      _domain(
+        classes: const [
+          ShiftClass(id: 11, name: 'A班', abbr: 'A'),
+          ShiftClass(id: 12, name: 'B班', abbr: 'B'),
+          ShiftClass(id: 13, name: 'C班', abbr: 'C'),
+        ],
+        dayOverrides: {dayNumber(d1): 0, dayNumber(d2): 1},
+      ),
+    );
+
+    final sw = find.descendant(
+      of: find.widgetWithText(GlassTile, L10n.followHoliday),
+      matching: find.byType(GlassSwitch),
+    );
+
+    await tester.tap(sw);
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.followHolidayConfirmTitle), findsOneWidget,
+        reason: '打开它会把全部班次定义清空，连带丢掉这几天，必须先问一次');
+    expect(find.text(L10n.followHolidayDropsOverrides(2)), findsOneWidget,
+        reason: '要说清楚会丢几天');
+
+    // 取消：什么都不变，而且开关**没有**先乐观地翻过去
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+    expect(tester.widget<GlassSwitch>(sw).value, isFalse,
+        reason: '先确认再翻开关：取消时开关的视觉状态不该动过');
+    expect(find.byType(GlassDeleteButton), findsNWidgets(3),
+        reason: '取消后班次定义要还在');
+
+    // 确认：真的切到空白表
+    await tester.tap(sw);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+    expect(tester.widget<GlassSwitch>(sw).value, isTrue);
+    expect(find.byType(GlassDeleteButton), findsNothing,
+        reason: '确认后班次设置整段收起');
+  });
 }
