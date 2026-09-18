@@ -944,13 +944,14 @@ void main() {
   // `_todoHintBadge` 的配方（14% 淡染底 + 45% 同色描边 + `radiusL` + `inkFor`），
   // 只是不带图标。
   //
-  // 但胶囊比裸文字高，而信息卡是**定高**的（`info_card_metrics.dart`）：只改形状
-  // 不改模型的话，有标记的那天卡片内容会顶出定高、被底边裁掉（卡内滚动兜底，
-  // 用户看不见）。这条用例同时钉住形状与定高契约。
-  testWidgets('「已调整」是胶囊而不是裸文字，且信息卡高度不因它变化', (tester) async {
+  // ⚠️ 这条用例**只**钉形状，**不**钉「卡片高度不因标记而变」—— 那个说法是错的：
+  // 高度按**月**预留（`hasOverrideHint`，与 `hasTodoHint` 同一条路），所以「本月
+  // 一天覆盖也没有」与「本月有被调过的日子」两个月份之间高度**本来就该不一样**。
+  // 写成「加覆盖前后高度相同」等于断言那条按月闸门的反面，而且它还会绿 ——
+  // 只因测试字体下胶囊（21.8）比班次行（22.88）矮；等哪天有人把胶囊做高一点，
+  // 它会红，下一个人就会去「修」掉按月预留下来。形状与模型分开钉，各钉各的。
+  testWidgets('「已调整」是胶囊而不是裸文字', (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
-    final hBefore =
-        tester.getSize(find.byKey(const Key('info-card-box'))).height;
 
     final classes = await db.select(db.shiftClassRows).get();
     final repo = AppRepository(db);
@@ -971,32 +972,25 @@ void main() {
         reason: '「已调整」要与同一行另外两个徽章一样是胶囊');
     expect(deco?.border, isNotNull, reason: '信息胶囊是「淡染底 + 同色描边」两件套');
 
-    // 定高契约：有标记与没标记，卡片高度必须一样。
-    //
-    // 诚实记一笔 —— 在**测试字体**下这条断言抓不到「胶囊高度没进模型」：
-    // `DefaultTextStyle` 来自 Material 的排版表（行高 1.43），班次行是 16px 的
-    // 一行字 → 22.88，而胶囊是 12px×1.15 + 上下内边距 6 + 描边 2 = 21.8 ——
-    // 胶囊**比班次行还矮**，顶不动行高，所以加不加入模型都是 210.0。
-    // （真机上字体与行高的比例不保证如此，所以模型那一步照做不误。）
-    // 它仍能抓住的是**重复计算**这一类错：把 `_adjustedBadgeH` 加进 `content`
-    // 而不是并进班次行的取大，高度就会多出一截，这条立刻红。
-    // 「胶囊高度真的进了取大」由下面那条直接量模型的用例钉住。
-    expect(
-      tester.getSize(find.byKey(const Key('info-card-box'))).height,
-      hBefore,
-      reason: '定高契约：有标记与没标记，卡片高度必须一样',
-    );
-
     await _disposeCalendar(tester);
   });
 
-  // 上一条用例量不到的东西在这里量：**胶囊高度真的进了定高模型**。
+  // 「胶囊高度真的进了定高模型」这件事在这里量 —— 界面侧量不到它。
   //
-  // 直接调 `measureBottomInfoCardHeight`（而不是量界面），是因为界面侧看不见
-  // 它：如上面的注释，测试字体下胶囊（21.8）比班次行（22.88）矮，加不加入模型
-  // 对渲染高度都是零影响。模型是这一步的**全部**意义所在（真机上字体行高比例
-  // 一变，胶囊就会顶起班次行），所以换个紧行高的 `DefaultTextStyle` 把它单拎
-  // 出来量：行高压到 1.0 后班次行只有 16.0，胶囊 21.8 成了行里的最高件。
+  // 界面侧量不到的原因是个字体巧合：`DefaultTextStyle` 走的 Material 排版表行高
+  // 1.43，班次行是 16px 的一行字 → 22.88，而胶囊是 12px×1.15 + 上下内边距 6 +
+  // 描边 2 = 21.8 —— 胶囊**比班次行还矮**，顶不动行高，所以界面高度对「模型有
+  // 没有算它」逐像素不敏感。（真机上字体行高比例一变，胶囊就会成为行里的最高件，
+  // 那时它必须已经被算进取大。）
+  //
+  // 所以这里直接调 `measureBottomInfoCardHeight`，并换一个**紧行高**的
+  // `DefaultTextStyle` 把差别放大出来：行高压到 1.0 后班次行只有 16.0，胶囊 21.8
+  // 成了行里最高件 —— `hasOverrideHint` 的取舍立刻可见、也确实能失败（把
+  // `_adjustedBadgeH` 从取大列表里拿掉，这条即红）。
+  //
+  // **残留缺口**（控制器已知并记在账上）：它证明的是「模型的这一项是通的」，
+  // 而**不**证明「同一个月里换选中哪天高度不变」—— 后者在本夹具里被同一个字体
+  // 巧合遮住（高度对逐日差异不敏感），本套件不钉。
   testWidgets('定高模型：「本月有被调整的日子」要为「已调整」胶囊多留高度', (tester) async {
     late BuildContext ctx;
     await tester.pumpWidget(MaterialApp(
