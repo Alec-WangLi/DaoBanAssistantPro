@@ -2522,11 +2522,15 @@ void main() {
       if (!f.path.endsWith('.xml')) continue;
       if (!f.path.contains('widget')) continue; // 只管小组件的布局
 
-      // **先剥 XML 注释再扫**。注释里会提到 `<View>`（那正是解释为什么不用它的
-      // 地方），不剥的话朴素扫描必然假阳性 —— Task 3 的修复轮就在这上面绕过一次。
-      final src = f
-          .readAsStringSync()
-          .replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '');
+      // **先剥 XML 注释再扫，但必须「等长替换」**：所有规则都靠「命中偏移 → 行号」
+      // 定位，把注释**删掉**会让后面所有偏移一起前移、报出来的行号偏小。换成等长
+      // 空格则偏移与行号纹丝不动 —— 这正是 `test/support/source_scan.dart` 给 Dart
+      // 源码那套做法讲的道理，XML 这边照抄。
+      final raw = f.readAsStringSync();
+      final src = raw.replaceAllMapped(
+        RegExp(r'<!--.*?-->', dotAll: true),
+        (m) => m[0]!.replaceAll(RegExp(r'[^\n]'), ' '),
+      );
 
       for (final m in RegExp(r'<([A-Za-z][A-Za-z0-9_.]*)').allMatches(src)) {
         final name = m.group(1)!;
