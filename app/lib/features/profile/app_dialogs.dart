@@ -41,7 +41,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.0\n'
+const String _changelogZh = 'v0.8.1\n'
+    '· 日历上可以单独改某一天的班次了：点底栏那行班次，或长按格子拖选一段日子，就能给这几天单独指定班次（请假、跟同事调班都行），不改整套排班\n'
+    '· 被单独改过的那天，格子上有个小圆点，信息卡上写着「已调整」；选择层里可以一键「恢复轮转」\n'
+    '· 编辑排班不再重建班次定义，改方案名不会影响已设置的按天调整\n\n'
+    'v0.8.0\n'
     '· 正式稳定版，归纳 0.7.1 到 0.7.5 的全部更新\n'
     '· 小米机型锁屏 / 后台弹出响铃界面 —— 现在真的可以了：真因是 MIUI 把「后台弹出界面」单独设成一项权限，不开时系统会静默拒绝从后台拉起界面（连通知那条全屏通道也一起拒），表现就是闹钟只响、不弹。实测两项都开之后：退到后台会自动拉回前台，锁屏会点亮屏幕并顶掉锁屏\n'
     '· 重启手机后闹钟与待办提醒都不再丢：排定时落盘一份清单，开机后自动排回去（重复的顺延到下一次；关机期间已经错过的不补响、也不补发提醒）\n'
@@ -104,14 +108,12 @@ const String _changelogZh = 'v0.8.0\n'
     '· 内部整理：通知小图标改回正确的 drawable（此前指向启动器图标，不是通知该用的资源）\n\n'
     'v0.6.12\n'
     '· 底部导航的四个图标调大一档，在胶囊里更醒目、与文字的比例更接近常见底栏\n'
-    '· 内部整理：把设计规范里几处说法与实际不符的地方改正（导航图标的尺寸档位、小尺寸元素的圆角规则）\n\n'
-    'v0.6.11\n'
-    '· 全 App 的排版、间距与图标收敛到一套统一的设计规范：同一个用途的字号、字重、行高、透明度、间距从此只有一个来源，不会再各自跑偏\n'
-    '· 次要文字的透明度此前散着 0.45 / 0.5 / 0.55 / 0.6 四种，现在统一到两档（常规 0.62、更淡的 0.35），同一个层级在哪个页面看都一样\n'
-    '· 图标尺寸统一到三档（16 / 20 / 24），不再各处写 14 / 18 / 22 / 28\n'
-    '· 卡片圆角由 20 归到 22，与列表行、提示条同档\n'
-    '· 外观上的变化很轻：14 处字号、约 12 处字重各只动了一档，其余都只是内部换了写法\n';
-const String _changelogEn = 'v0.8.0\n'
+    '· 内部整理：把设计规范里几处说法与实际不符的地方改正（导航图标的尺寸档位、小尺寸元素的圆角规则）\n';
+const String _changelogEn = 'v0.8.1\n'
+    '· You can now override a single day\'s shift on the calendar: tap the shift row in the bottom bar, or long-press a cell and drag to select a range of days, to give just those days a shift of their own (a day off, or swapping with a colleague) without changing the whole schedule\n'
+    '· A day you have overridden carries a small dot in the grid and reads "Adjusted" on the info card; the picker sheet offers a one-tap "Restore rotation"\n'
+    '· Editing a schedule no longer rebuilds its shift definitions, so renaming a schedule leaves your per-day overrides intact\n\n'
+    'v0.8.0\n'
     '· Stable release — merges everything from 0.7.1 through 0.7.5\n'
     '· Xiaomi devices can now genuinely pop up the alarm screen over the lock screen: the real cause turned out to be a Xiaomi-private permission ("Open new windows while running in the background"). With it off, MIUI silently refuses to launch the UI from the background — the notification\'s full-screen channel is blocked along with it — so the alarm rings with nothing to show. With that toggle and "Show on Lock screen" both on, the app pulls itself back to the front from the background, and lights up and dismisses the lock screen\n'
     '· Alarms and todo reminders now survive a reboot: a persisted list lets them be re-scheduled right after boot (repeating alarms roll forward to their next occurrence; anything missed while the phone was off is neither replayed nor re-sent)\n'
@@ -174,13 +176,7 @@ const String _changelogEn = 'v0.8.0\n'
     '· Internal: the notification small icon now points at a proper drawable instead of the launcher icon\n\n'
     'v0.6.12\n'
     '· The four bottom-nav icons are one step larger — more present in the capsule, and closer to the usual tab-bar ratio against their labels\n'
-    '· Internal cleanup: corrected a few mismatches between the design spec and the actual code (the nav icon\'s size tier, and the rule for small elements\' corner radius)\n\n'
-    'v0.6.11\n'
-    '· Typography, spacing and icons across the app now come from one shared design system: a single source per role for size, weight, line height, opacity and spacing, so they can no longer drift apart\n'
-    '· Secondary text opacity used to be scattered across four values (0.45 / 0.5 / 0.55 / 0.6). It is now two tiers — 0.62 regular and 0.35 for the faintest — so the same level looks the same on every screen\n'
-    '· Icon sizes are down to three steps (16 / 20 / 24) instead of ad-hoc 14 / 18 / 22 / 28\n'
-    '· Card corners moved from 20 to 22, matching list rows and the snackbar\n'
-    '· The visible change is subtle: 14 text sizes and about 12 font weights each moved one step, and the rest is only a change in how it is written internally\n';
+    '· Internal cleanup: corrected a few mismatches between the design spec and the actual code (the nav icon\'s size tier, and the rule for small elements\' corner radius)\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
