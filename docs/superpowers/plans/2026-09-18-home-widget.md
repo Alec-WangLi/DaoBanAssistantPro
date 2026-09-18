@@ -25,9 +25,14 @@
   export PATH=/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin:$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH
   ```
   `adb` 不在 PATH 里，用绝对路径 `/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/android-sdk/platform-tools/adb.exe`，下称 `$ADB`。
+- **装到真机一律用 `flutter build apk --release`，不能用 `--debug`。** 目标机上那个
+  App 是 **release 密钥**签的（证书 SHA-256 `26:5D:09:B2:8F:D0:6B:19:85:B7:A0:91:AD:EB:D7:AE:97:8E:E5:76:3E:77:08:B5:AF:AC:71:EF:CE:DC:E8:93`，与 `app/android/keystore/release.jks` 一致），
+  debug APK 是自动生成的 debug 密钥，`adb install -r` 会报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。
+  卸载重装会**丢掉用户的真实排班数据**，所以只能走 release 构建。实测约 70 秒一次。
+  附带好处：release 开了 `isMinifyEnabled = true`，顺带真的验一遍 R8 没把 `ShiftWidgetProvider` 裁掉。
 - **`RemoteViews` 视图白名单**：布局只用 `FrameLayout` / `LinearLayout` / `RelativeLayout` / `GridLayout`；控件只用 `TextView` / `ImageView` / `Button` / `ProgressBar` / `Chronometer` / `TextClock`。**没有 `ConstraintLayout`**，且**不能用这些类的子类**。
 - **包名** `com.daoban.shiftassistantpro`；`minSdk = 26`、`targetSdk = 36`（`flutter.targetSdkVersion`）。`release` 构建 `isMinifyEnabled = true`，新增的 `AppWidgetProvider` **必须**在 `AndroidManifest.xml` 里显式声明，否则会被 R8 裁掉。
-- **测试只增不减**（当前 170 条）。
+- **测试只增不减**（本分支起点 `e503b78` 实测 `241` 条 —— 计划初稿写的 170 是抄自更早那份 spec 的旧值，Task 1 的评审指出后已改正）。
 - **文案一律走 `L10n`**（`app/lib/core/l10n.dart`），不要在任何地方硬编码中文字符串。Kotlin 侧一个中文字面量都不许出现。
 - **设计数值一律引用令牌**（`app/lib/core/design_tokens.dart` / `app/lib/core/theme/app_colors.dart`），不要在 Dart 里内联 magic number。
 
@@ -1036,11 +1041,11 @@ class ShiftWidgetProvider : AppWidgetProvider() {
 
 ```bash
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
-/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --debug
-"$ADB" install -r build/app/outputs/flutter-apk/app-debug.apk
+/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
+"$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
-Expected: `Built build/app/outputs/flutter-apk/app-debug.apk`，`Success`。
+Expected: `Built build/app/outputs/flutter-apk/app-release.apk (21.9MB)`（约 70 秒），`Success`。
 
 若报 `ClassNotFoundException` 或 `aapt` 找不到 `@xml/shift_widget_info`，说明上一步的 meta-data 名字或文件名拼错了。
 
@@ -1590,8 +1595,8 @@ import '../widget/widget_service.dart';
 ```bash
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter analyze lib/features/widget lib/features/home lib/features/alarm
-/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --debug
-"$ADB" install -r build/app/outputs/flutter-apk/app-debug.apk
+/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
+"$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
 "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
 sleep 4
 "$ADB" exec-out screencap -p > /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/work/wg_t3.png
@@ -2358,8 +2363,8 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
 
 ```bash
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
-/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --debug
-"$ADB" install -r build/app/outputs/flutter-apk/app-debug.apk
+/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
+"$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
 在手机上把小组件分别拉到**最小、4×2、4×4** 三种尺寸，每拉一次跑：
@@ -2562,8 +2567,8 @@ object WidgetChip {
 ```bash
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter analyze lib
-/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --debug
-"$ADB" install -r build/app/outputs/flutter-apk/app-debug.apk
+/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
+"$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
 "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
 sleep 3
 "$ADB" exec-out screencap -p > /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/work/wg_t5.png
@@ -2767,8 +2772,8 @@ object WidgetRefreshScheduler {
 
 ```bash
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
-/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --debug
-"$ADB" install -r build/app/outputs/flutter-apk/app-debug.apk
+/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
+"$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
 "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
 sleep 4
 "$ADB" shell dumpsys alarm | grep -B4 -A4 shiftassistantpro
@@ -2951,8 +2956,8 @@ git commit -m "feat(widget): 跨天与班次边界的自动刷新
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter analyze lib
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter test
-/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --debug
-"$ADB" install -r build/app/outputs/flutter-apk/app-debug.apk
+/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
+"$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
 **冷启动路径**：先 `"$ADB" shell am force-stop com.daoban.shiftassistantpro`，再在桌面上点大卡的**某一格**。
