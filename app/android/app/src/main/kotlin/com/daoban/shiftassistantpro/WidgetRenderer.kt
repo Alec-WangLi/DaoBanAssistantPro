@@ -278,6 +278,7 @@ object WidgetRenderer {
             // `ShiftWidgetProvider.renderAll` 的 try/catch 吞掉 —— 结果不是崩，而是
             // `updateAppWidget` 被跳过、卡片**继续显示上一次渲染的旧日期**，正是
             // `widget_snapshot.dart` 开头警告的「理直气壮写错」。
+            // （Task 4 的评审算过：medium() 有这道闸、large() 漏了，6/14 的窗口都会中招。）
             if (i >= snap.days.size) {
                 v.setViewVisibility(cells[cell], android.view.View.GONE)
                 continue
