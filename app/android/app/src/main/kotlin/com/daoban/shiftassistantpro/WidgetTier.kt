@@ -19,7 +19,7 @@ enum class WidgetTier {
     /** 未来三天。 */
     MEDIUM,
 
-    /** 一周一览（4×2 网格）。 */
+    /** 一周一览（4×4 网格）。 */
     LARGE;
 
     companion object {

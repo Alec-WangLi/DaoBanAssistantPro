@@ -109,7 +109,14 @@ object WidgetStore {
                 shiftAbbr = d.optString("shiftAbbr", ""),
                 color = d.optInt("color", 0),
                 abbrInk = d.optInt("abbrInk", 0),
-                timeRange = d.optString("timeRange", "").ifEmpty { null },
+                // ⚠️ 不能写 `d.optString("timeRange", "").ifEmpty { null }`：
+                // `optString(name, fallback)` 只在**键不存在**时才给 fallback；
+                // 键存在而值是 JSON `null` 时，它走 `JSON.toString(JSONObject.NULL)`
+                // 返回**四字符串 `"null"`**，`.ifEmpty` 不会触发。而 Dart 侧每个
+                // 休班日发的正是 JSON null —— 那样卡片上会印出字面的 `null`。
+                // AOSP 是刻意与参考实现逐 bug 兼容的（issue 13830），别改成
+                // 「更干净」的 fallback 写法。
+                timeRange = if (d.isNull("timeRange")) null else d.optString("timeRange"),
             )
         }
         if (days.isEmpty()) return null

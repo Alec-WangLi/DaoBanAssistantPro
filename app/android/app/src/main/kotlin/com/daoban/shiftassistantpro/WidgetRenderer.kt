@@ -37,7 +37,7 @@ object WidgetRenderer {
         snap: WidgetStore.Snapshot?,
         tier: WidgetTier,
     ): RemoteViews {
-        if (snap == null) return placeholder(context, dark = systemDark(context))
+        if (snap == null) return placeholder(context, dark = isDark(context, "system"))
         val todayIndex = snap.indexOfToday()
         if (todayIndex < 0) {
             // 快照过期：App 超过 14 天没打开，这份 days 里已经没有今天了。
@@ -46,10 +46,6 @@ object WidgetRenderer {
         }
         TODO("Task 3 起，这里按 tier 分派到小/中/大三档")
     }
-
-    private fun systemDark(context: Context): Boolean =
-        (context.resources.configuration.uiMode and
-                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
     private fun placeholder(context: Context, dark: Boolean): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_placeholder)
