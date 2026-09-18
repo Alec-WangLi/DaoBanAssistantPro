@@ -3370,6 +3370,19 @@ Expected: PASS。**这条必须绿** —— 历史上漏改过四轮，代价是
      否则跨天之后 days[1] 会自称「明天」。刷新粒度＝跨天 + 班次边界，不逐分钟。
    ```
 3. 版本史末尾：`→ 0.8.3(+94) 测试版` 之后加 `→ 0.8.4(+95) 测试版`。
+4. 「关键决策与坑」再加一条 **requestCode 保留区间**（Task 7 的复审算出来的）：
+   ```
+   - **给 `MainActivity` 造 `getActivity` 的 PendingIntent，requestCode 别用 ≥ 100000。**
+     这个池里已有的：班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒 20000..21000、
+     `AlarmRingService` 的 0/1、闹钟自检测试的 99998/99999。桌面小组件的点击码**整段占了
+     100000 起**（`WidgetRenderer.WIDGET_REQ_BASE`，`Root(n)=B+16n`、`Cell(m,c)=B+16m+1+c`）。
+     `Intent.filterEquals` **不比 extras 也不比 flags**，所以这个池里只要 requestCode 撞上，
+     两个毫不相干的点击就会共用一枚 PendingIntent、配 `FLAG_UPDATE_CURRENT` 互相抹掉对方的
+     extras —— 症状是「小组件点错天」或「闹钟通知点开的响铃界面失效」，都不报错。
+     注意目标是**别的组件**的 `getBroadcast`（`AlarmReceiver` / `ShiftWidgetProvider` /
+     `ScheduledNotificationReceiver`）不在这个池里，它们的 requestCode 与这里无关。
+     ——这条只差 1 的余量（既有最高 99999）是复核时算出来的，所以写下来，别让它再被踩。
+   ```
 
 - [ ] **Step 4: `README.md` 与 `PRODUCT_SPEC.md`**
 
