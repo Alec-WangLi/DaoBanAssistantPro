@@ -497,4 +497,13 @@ class L10n {
   static String yearMonthDay(DateTime d) => isEn
       ? DateFormat('MMM d, yyyy', 'en').format(d)
       : DateFormat('yyyy年 M月 d日', 'zh').format(d);
+
+  // 桌面小组件。只有「今天/明天/后天」与空表提示是本轮新文案 ——
+  // 时间串复用既有的 [timeRange]，日期串复用 [monthDay]，周几复用 [weekday]，
+  // 一个都不新造（`timeRange` 的注释写明了中英语序不同、整串必须过 `t()`）。
+  static String get widgetToday => t('今天', 'Today');
+  static String get widgetTomorrow => t('明天', 'Tomorrow');
+  static String get widgetDayAfter => t('后天', 'Day after');
+  static String get widgetEmptyHint =>
+      t('还没有排班，点一下去设置', 'No schedule yet — tap to set up');
 }
