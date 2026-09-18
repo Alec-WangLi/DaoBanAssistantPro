@@ -176,7 +176,10 @@ object WidgetRenderer {
         for (row in 0 until 3) {
             val i = todayIndex + row
             if (i >= snap.days.size) {
-                // 窗口耗尽（不可能 —— 14 天窗口，只会显示前 3 天）。防御性隐藏整行。
+                // 窗口耗尽：今天已经排到 days[12] / days[13]（App 十来天没打开，
+                // 跨天只右移不重算）。整行隐藏。
+                // ⚠️ 这**不是**「不可能」—— 原注释那么写是错的，Task 4 的评审算过：
+                // todayIndex ∈ [0,13] 是设计明确支持的状态，12/13 时这里真的会走到。
                 for (idArr in listOf(dots, labels, dates, shifts, times)) {
                     v.setViewVisibility(idArr[row], android.view.View.GONE)
                 }
@@ -211,11 +214,17 @@ object WidgetRenderer {
                 v.setTextColor(times[row], muted)
             }
         }
-        // 最后一行下面不画分隔线。
-        v.setViewVisibility(divs[0], android.view.View.VISIBLE)
-        v.setViewVisibility(divs[1], android.view.View.VISIBLE)
-        v.setInt(divs[0], "setBackgroundColor", divider)
-        v.setInt(divs[1], "setBackgroundColor", divider)
+        // 分隔线只画在「上面那一行可见、且下面也还有一行」的地方 —— 否则行被隐藏后
+        // 会在空白区域留一条悬空的线（窗口将耗尽时真的会发生）。
+        for (k in divs.indices) {
+            val above = todayIndex + k < snap.days.size
+            val below = todayIndex + k + 1 < snap.days.size
+            v.setViewVisibility(
+                divs[k],
+                if (above && below) android.view.View.VISIBLE else android.view.View.GONE,
+            )
+            v.setInt(divs[k], "setBackgroundColor", divider)
+        }
 
         return v
     }
@@ -263,6 +272,16 @@ object WidgetRenderer {
 
         for (cell in 0 until 7) {
             val i = todayIndex + cell
+            // ⚠️ 边界保护必须有，而且**这不是「防御性代码」**：快照是 14 天，`todayIndex`
+            // 落在 [0,13] 是设计明确支持的状态（跨天只右移不重算，App 八天以上没打开就
+            // 会走到 8 以后）。越界抛的 `IndexOutOfBoundsException` 会被
+            // `ShiftWidgetProvider.renderAll` 的 try/catch 吞掉 —— 结果不是崩，而是
+            // `updateAppWidget` 被跳过、卡片**继续显示上一次渲染的旧日期**，正是
+            // `widget_snapshot.dart` 开头警告的「理直气壮写错」。
+            if (i >= snap.days.size) {
+                v.setViewVisibility(cells[cell], android.view.View.GONE)
+                continue
+            }
             val d = snap.days[i]
             v.setViewVisibility(cells[cell], android.view.View.VISIBLE)
             v.setTextViewText(dates[cell], d.dateShort)
