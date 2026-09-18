@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
+import '../../core/haptics.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/glass/glass.dart';
@@ -120,6 +121,12 @@ class ScheduleScreen extends ConsumerWidget {
             value: e.isCompleted,
             onChanged: (v) async {
               await ref.read(appRepositoryProvider).setEventCompleted(e, v);
+              // 「待办勾选完成」是词汇表里点名的 commit 语义（见 `haptics.dart`
+              // 的 `commit()` 文档），所以它**有意**与上面那个 `GlassSwitch`
+              // 自带的 `select()` 并存：`select` 说「开关动了」，`commit` 说
+              // 「这条待办真的落了库」。放在 `setEventCompleted` **之后** ——
+              // 写失败就不该报「落实了」。
+              Haptics.commit();
               await _rescheduleReminders(ref);
             },
           ),

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
+import '../../core/haptics.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
@@ -530,6 +531,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Future<void> _switchSchedule(int id) async {
     final repo = ref.read(appRepositoryProvider);
     await repo.setCurrentSchedule(id);
+    // 方案真的换过去了 —— 这是「动作落实」，不是「选中变了」，所以是 `commit`
+    // 而不是 `select`。放在写库**之后**：写失败就不该报「落实了」。
+    Haptics.commit();
     // 重排读的是库里**刚设成当前**的那套方案（`rescheduleAll` 自己读），
     // 所以这里不用先把领域模型取出来。
     if (mounted) await AlarmService.rescheduleAll(repo);
@@ -573,6 +577,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     } else {
       await repo.setDayOverrides(days, classId: choice.shift!.id!);
     }
+    // 「应用改班 / 恢复轮转」落在写库之后 ——「改班」是词汇表里点名的 commit
+    // 语义（`haptics.dart` 的 `commit()` 文档）。写失败就走不到这一步。
+    Haptics.commit();
     await AlarmService.rescheduleAll(repo);
     if (!mounted) return;
     showGlassSnack(

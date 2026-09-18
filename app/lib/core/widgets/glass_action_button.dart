@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import '../haptics.dart';
 import '../motion.dart';
 import '../glass/glass.dart';
 
@@ -123,7 +124,18 @@ class _GlassActionButtonState extends State<GlassActionButton> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: widget.onPressed,
+              // `onPressed` 是可空的（为 null 时按钮本就禁用），所以整段要门住 ——
+              // 直接 `widget.onPressed()` 会在禁用态崩掉。
+              onTap: widget.onPressed == null
+                  ? null
+                  : () {
+                      // 危险变体 = 破坏性确认（全 app 四处，全是删除/清空类）。
+                      // `commit` 表达的是「这一步不可逆」，与普通点击区分开。
+                      if (widget.variant == GlassActionVariant.danger) {
+                        Haptics.commit();
+                      }
+                      widget.onPressed!();
+                    },
               borderRadius: BorderRadius.circular(AppTokens.radiusM),
               child: Listener(
                 onPointerDown: (_) => setState(() => _pressed = true),
