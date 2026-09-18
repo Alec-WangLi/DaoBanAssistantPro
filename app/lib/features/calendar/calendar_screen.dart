@@ -291,7 +291,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ),
                 )
               else ...[
-                gridArea,
+                // **小窗（高 < 480dp）不画网格，只留今日信息卡。**
+                //
+                // 这个尺寸下两者都想要的结果是两者都看不清：200×400 的窗口里
+                // 网格只塞得下两三行格子、还被压扁，而「哪天被调过」这个标记
+                // 本来就在信息卡上 —— 卡留下、信息就齐了。
+                // 各机型小窗的默认尺寸 400×640 高 640 > 480，**不受影响**。
+                if (!layout.isShort) gridArea,
                 _infoCard(context, schedule, compact: layout.isShort),
               ],
             ],
@@ -1193,6 +1199,55 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
+  /// 「今天」徽章：实心主色 + 白字。
+  ///
+  /// 完整信息卡与小窗那张精简卡**共用** —— 两处各写一份的话，迟早长成两个样。
+  Widget _todayBadge(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppTokens.spaceSm, vertical: AppTokens.padChipV),
+        decoration: BoxDecoration(
+          // 实心主色 + 白字。原来是「主色 14% 淡底 + 主色字」，
+          // 实测对比度 3.84:1（深色下 2.93:1），低于 AA 的 4.5:1。
+          color: Theme.of(context).colorScheme.primary,
+          borderRadius: BorderRadius.circular(AppTokens.radiusL),
+        ),
+        child: Text(
+          L10n.today,
+          style: AppTokens.microStrong.copyWith(color: Colors.white),
+        ),
+      );
+
+  /// 「已调班」徽章：这天被单独调动过。
+  ///
+  /// 形状抄同一行的邻居 —— **「N 项待办」徽章那套配方**（14% 淡染底 + 45% 同色
+  /// 描边 + `radiusL` + `inkFor` 文字，见 `_todoHintBadge`），只是不带图标。
+  /// 原来这里是一句**裸 `Text`**，而同一行另外两个徽章（「今天」「N 项待办」）
+  /// 都是胶囊 —— 三种形状并排看着就散。
+  ///
+  /// 完整卡与小窗的精简卡**共用**。小窗那张尤其需要它：那里格子窄到画不出胶囊、
+  /// 圆点根本不会出现，信息卡是唯一还能承载这个标记的地方。
+  ///
+  /// 胶囊比裸文字高，所以它在**完整卡**里的高度必须进定高模型：见
+  /// `info_card_metrics.dart` 的 `_adjustedBadgeH` 与 `hasOverrideHint`。
+  Widget _adjustedBadge(BuildContext context, Color primary) => Container(
+        key: const Key('info-card-adjusted'),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppTokens.spaceSm, vertical: AppTokens.padChipV),
+        decoration: BoxDecoration(
+          color: primary.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(AppTokens.radiusL),
+          border: Border.all(color: primary.withValues(alpha: 0.45)),
+        ),
+        child: Text(
+          L10n.adjusted,
+          style: AppTokens.microStrong.copyWith(
+              color: AppTokens.inkFor(
+                  primary,
+                  Color.alphaBlend(primary.withValues(alpha: 0.14),
+                      Theme.of(context).colorScheme.surface))),
+        ),
+      );
+
   /// 信息卡日期行上的「N 项待办」提示。
   ///
   /// 形状与同一行的「今天」徽章对齐（同内边距、同圆角），颜色走「信息胶囊」那套
@@ -1357,6 +1412,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           (shift != null && shift.startMinute != null && shift.endMinute != null)
               ? _timeRange(shift)
               : null;
+      final isAdjusted =
+          schedule?.dayOverrides.containsKey(dayNumber(_selected)) ?? false;
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 76),
         // 与完整信息卡那行班次同源：套 `GlassPressable` 承载点击（它自己没
@@ -1367,37 +1424,117 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ? null
                 : () => adjustDays(_selected, _selected),
             child: GlassTile(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceMd),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
+                  AppTokens.spaceMd, AppTokens.spaceMd, AppTokens.spaceMd),
+              // 小窗这一档**同时**意味着「不画网格」（见 build 里那条 `isShort`），
+              // 所以这张卡就是屏幕上唯一的内容 —— 它得把该说的都说清楚，而不是
+              // 像从前那样只挤一行「日期 · 班次 · 时间」。
+              //
+              // **「已调班」徽章必须在这里。** 小窗下格子里那个圆点根本画不出来
+              // （格子窄到画不出胶囊），信息卡是唯一还能承载标记的地方；不给它，
+              // 小窗里被调过的日子在界面上就完全没有痕迹了。
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 4,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: accent,
-                      borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                  Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          borderRadius:
+                              BorderRadius.circular(AppTokens.radiusS),
+                        ),
+                      ),
+                      const SizedBox(width: AppTokens.gapIconTextLg),
+                      Flexible(
+                        child: Text(
+                          // 200dp 宽下带星期那份（「9月18日 星期五」）会被截成
+                          // 「9月18…」，读不出日期；今天与否由旁边的徽章说。
+                          // 完整卡仍然带星期。
+                          L10n.monthDay(_selected),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTokens.sectionTitle,
+                        ),
+                      ),
+                      if (isToday) ...[
+                        const SizedBox(width: AppTokens.spaceSm),
+                        _todayBadge(context),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: AppTokens.spaceSm),
+                  Text(
+                    // 用格子用的那个短农历（「初八」），不用 `fullDescription`
+                    // —— 后者在 200dp 宽下要三行、截出来是「九…」这种半截字。
+                    // 窄窗里要的是「哪天、什么班、调没调过」，农历是点缀。
+                    lunar.shortLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTokens.rowSecondary.copyWith(
+                      color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
                     ),
                   ),
-                  const SizedBox(width: AppTokens.gapIconTextLg),
-                  Expanded(
-                    child: Text(
-                      [
-                        L10n.monthDayWeekday(_selected),
-                        if (shift != null) shift.name,
-                        if (timeText != null) timeText,
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTokens.labelSecondary,
+                  if (shift != null) ...[
+                    const SizedBox(height: AppTokens.spaceSm),
+                    Row(
+                      // 顶上对齐：左边色点、右边「名 + 徽章」一行、时间再一行。
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(top: AppTokens.padChipV),
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                                color: Color(shift.color),
+                                shape: BoxShape.circle),
+                          ),
+                        ),
+                        const SizedBox(width: AppTokens.gapIconText),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      shift.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTokens.rowPrimary,
+                                    ),
+                                  ),
+                                  if (isAdjusted) ...[
+                                    const SizedBox(
+                                        width: AppTokens.gapIconText),
+                                    _adjustedBadge(context, accent),
+                                  ],
+                                ],
+                              ),
+                              // 时间另起一行而不是与班次名挤同一行：200dp 宽下
+                              // 挤一起的结果是「白班 0…」—— 时间全被截掉。
+                              if (timeText != null) ...[
+                                const SizedBox(height: AppTokens.gapHair),
+                                Text(
+                                  timeText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTokens.labelSecondary,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  if (shift != null && shift.alarmEnabled)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: AppIcon(Icons.alarm_outlined,
-                          size: AppTokens.iconSm, color: muted),
-                    ),
+                  ],
                 ],
               ),
             ),
@@ -1431,20 +1568,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
             if (isToday) ...[
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppTokens.spaceSm, vertical: AppTokens.padChipV),
-                decoration: BoxDecoration(
-                  // 实心主色 + 白字。原来是「主色 14% 淡底 + 主色字」，
-                  // 实测对比度 3.84:1（深色下 2.93:1），低于 AA 的 4.5:1。
-                  color: Theme.of(context).colorScheme.primary,
-                  borderRadius: BorderRadius.circular(AppTokens.radiusL),
-                ),
-                child: Text(
-                  L10n.today,
-                  style: AppTokens.microStrong.copyWith(color: Colors.white),
-                ),
-              ),
+              _todayBadge(context),
             ],
             // 待办提示塞在**这一行**里，不新占一行：这一行本来就有个和它一样高的
             // 「今天」徽章，所以卡片高度（进而格子高度）一像素都不动 —— 信息卡是
@@ -1556,46 +1680,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  // 这天被单独调整过（spec §7.4）：给一句文字说明，让用户第一眼
-                  // 看见日历上那个小圆点时能对上号。
-                  //
-                  // 形状抄同一行的邻居：**「N 项待办」徽章那套配方**（14% 淡染底 +
-                  // 45% 同色描边 + `radiusL` + `inkFor` 文字，见 `_todoHintBadge`），
-                  // 只是不带图标。原来这里是一句**裸 `Text`** —— 同一行/同一页的
-                  // 另外两个徽章（「今天」「N 项待办」）都是胶囊，三种形状并排
-                  // 看着就散。
-                  //
-                  // 胶囊比裸文字高，所以它的高度也必须进定高模型：见
-                  // `info_card_metrics.dart` 的 `_adjustedBadgeH` 与 `hasOverrideHint`。
+                  // 这天被单独调动过：形状抄同一行的邻居，理由见 `_adjustedBadge`。
                   if (schedule.dayOverrides
                       .containsKey(dayNumber(_selected)))
                     Padding(
-                      padding:
-                          const EdgeInsets.only(left: AppTokens.spaceSm),
-                      child: Container(
-                        key: const Key('info-card-adjusted'),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppTokens.spaceSm,
-                            vertical: AppTokens.padChipV),
-                        decoration: BoxDecoration(
-                          color: primary.withValues(alpha: 0.14),
-                          borderRadius:
-                              BorderRadius.circular(AppTokens.radiusL),
-                          border: Border.all(
-                              color: primary.withValues(alpha: 0.45)),
-                        ),
-                        child: Text(
-                          L10n.adjusted,
-                          style: AppTokens.microStrong.copyWith(
-                              color: AppTokens.inkFor(
-                                  primary,
-                                  Color.alphaBlend(
-                                      primary.withValues(alpha: 0.14),
-                                      Theme.of(context)
-                                          .colorScheme
-                                          .surface))),
-                        ),
-                      ),
+                      padding: const EdgeInsets.only(left: AppTokens.spaceSm),
+                      child: _adjustedBadge(context, primary),
                     ),
                 ],
               ),

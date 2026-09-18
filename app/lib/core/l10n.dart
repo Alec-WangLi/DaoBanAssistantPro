@@ -46,7 +46,14 @@ class L10n {
 
   // 按天改班（换班 / 请假覆盖）
   static String get adjustShift => t('调整班次', 'Adjust shift');
-  static String get adjusted => t('已调整', 'Adjusted');
+  /// 信息卡上那个「这天被单独调过」的徽章。
+  ///
+  /// 用「已调班」而不是「已调整」：「调整」太泛 —— 调整什么？用户看不出这是
+  /// 「这天跟轮转表不一样」。「调班」是倒班的人真会说的词，而且**同时覆盖请假
+  /// 与换班**两个场景（请假那天也是「把班调走了」）。换成「已换班」会把请假排除
+  /// 掉，换成「手动设置」又太长、塞不进那个小胶囊。字数与原「已调整」一样，
+  /// 所以信息卡那一行的排布一像素都不用动。
+  static String get adjusted => t('已调班', 'Shift changed');
   static String get restoreRotation => t('恢复轮转', 'Restore rotation');
 
   /// 应用后的提示：「已把 3 天改为大休」。

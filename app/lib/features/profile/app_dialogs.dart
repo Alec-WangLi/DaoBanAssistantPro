@@ -41,7 +41,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.2\n'
+const String _changelogZh = 'v0.8.3\n'
+    '· 「调整班次」那个选择层重排了一遍：标题不再居中、行距收紧、色点与信息卡统一成 12dp、底部「恢复轮转」用一条分隔线单独隔开（不再看着像第五个班次）\n'
+    '· 小窗（高 < 480dp）里改成只显示今日信息卡、不再画日历网格 —— 那个尺寸下两者都看不清；信息卡同时补上「已调班」标记，所以小窗里也看得出哪天被调过\n'
+    '· 「已调整」改叫「已调班」（请假和换班都说得通）\n'
+    '· 修好窄弹层里班次名被挤成一行一个字，以及横屏下色点被裁成半圆\n\n'
+    'v0.8.2\n'
     '· 加了触觉反馈：切换开关、选中、删除确认时会轻微震动，长按拖选日子时还会逐格轻震一下。可在「我的 → 外观」里关掉\n'
     '· 修好了几处界面对不齐：信息卡上「已调整」现在与同一行的徽章是同一款胶囊；信息卡那行按下去的反馈改回与全 app 一致的玻璃缩放（不再是水波纹）\n\n'
     'v0.8.1\n'
@@ -103,13 +108,13 @@ const String _changelogZh = 'v0.8.2\n'
     '· 排班编辑器的周期设置改为行内直接点选班次（不再弹下拉），编辑界面的字号与全 App 统一\n'
     '· 响铃界面：「上滑关闭」滑块加宽（轨道 56→72，手指真正能拖中的范围放宽到 112），并修好横屏与小窗下会溢出画面的问题\n'
     '· 修好「我的 → 关于」里的版本号（从 v0.6.5 起就没再更新过），以及「检查更新」给已装版本挂「下载」按钮\n'
-    '· 内部：新增设计守门测试（界面层写死字号 / 字重 / 圆角 / 图标尺寸等即测试失败）；应用图标改为全脚本生成\n\n'
-    'v0.6.13\n'
-    '· 应用图标重画：变成「日历 + 换班箭头」。此前只有一张方图，在会统一图标形状的启动器上会被缩到一块白底上，显得又小又淡；现在补上了 Android 自适应图标（含 Android 13+「主题图标」用的单色层），图标能跟着系统的形状与配色走\n'
-    '· 响铃界面的「上滑关闭」滑块加宽：轨道 56→72，手指真正能拖中的范围放宽到 112，不用再瞄着戳\n'
-    '· 修好响铃界面在手机横屏、以及 200×400 小窗下会溢出画面的问题（小窗里时钟会折成两行，把整列顶出屏幕）\n'
-    '· 内部整理：通知小图标改回正确的 drawable（此前指向启动器图标，不是通知该用的资源）\n';
-const String _changelogEn = 'v0.8.2\n'
+    '· 内部：新增设计守门测试（界面层写死字号 / 字重 / 圆角 / 图标尺寸等即测试失败）；应用图标改为全脚本生成\n';
+const String _changelogEn = 'v0.8.3\n'
+    '· Reworked the "Adjust shift" sheet: the title is no longer centred, the rows are tighter, the colour dot now matches the info card at 12dp, and "Restore rotation" sits below a divider instead of looking like a fifth shift\n'
+    '· In a small window (under 480dp tall) the calendar now shows only today\'s info card and no grid — at that size you cannot really read both. The card gained the "Shift changed" badge, so an overridden day stays visible there too\n'
+    '· "Adjusted" is now "Shift changed" (it reads right for both a day off and a swap)\n'
+    '· Fixed shift names wrapping one character per line in a narrow sheet, and the colour dot being clipped to a half-circle in landscape\n\n'
+    'v0.8.2\n'
     '· Added haptic feedback: a light buzz when you flip a switch, make a selection or confirm a delete, and a tick per day as you long-press and drag to select a range. Turn it off under Me → Appearance\n'
     '· Fixed a couple of alignment details: "Adjusted" on the info card now uses the same capsule as the badges on its row, and the info card\'s row taps use the app-wide glass scale again (no longer a ripple)\n\n'
     'v0.8.1\n'
@@ -171,12 +176,7 @@ const String _changelogEn = 'v0.8.2\n'
     '· The schedule editor\'s cycle section now lets you pick a shift inline instead of opening a dropdown, and its typography matches the rest of the app\n'
     '· Ringing screen: the "swipe up to dismiss" slider is wider (track 56 → 72, and the area your finger can grab is 112), and it no longer overflows in landscape or in a small window\n'
     '· Fixed the version number in Me → About (it had not been updated since v0.6.5) and the "Download" button that Check for updates offered for a version you already had\n'
-    '· Internal: a design guard test now fails the build when UI code hard-codes sizes, weights, radii or icon sizes; the app icon is generated entirely from a script\n\n'
-    'v0.6.13\n'
-    '· The app icon is redrawn: a calendar with shift-cycle arrows. It used to be a single square bitmap, which launchers that unify icon shapes would shrink onto a white plate, leaving it small and washed out. It now ships an Android adaptive icon (with a monochrome layer for Android 13+ themed icons), so it follows the system\'s shape and tint\n'
-    '· The "swipe up to dismiss" slider on the ringing screen is wider: the visible track goes 56 → 72 and the area your finger can actually grab is 112, so there is nothing to aim at\n'
-    '· Fixed the ringing screen overflowing on landscape phones and in 200×400 small windows, where the clock wrapped to two lines and pushed the column off screen\n'
-    '· Internal: the notification small icon now points at a proper drawable instead of the launcher icon\n';
+    '· Internal: a design guard test now fails the build when UI code hard-codes sizes, weights, radii or icon sizes; the app icon is generated entirely from a script\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

@@ -1404,4 +1404,44 @@ void main() {
 
     await _disposeCalendar(tester);
   });
+
+  testWidgets('小窗（高 < 480dp）：网格让位，只留信息卡；「已调班」还在', (tester) async {
+    // 200×400 是各机型小窗的默认尺寸（也是我们真机上量到的那档）。
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest',
+        width: 200, height: 400);
+
+    // 先确认这个尺寸确实落进了小窗那一档：网格不画了。
+    expect(find.byKey(const ValueKey('day-card-8')), findsNothing,
+        reason: '小窗下两者都想要的结果是两者都看不清 —— 格子让位给信息卡');
+
+    // 给「今天」上一条按天调整，标记必须出现在信息卡上。
+    final classes = await db.select(db.shiftClassRows).get();
+    await AppRepository(db)
+        .setDayOverrides([dateOnly(DateTime.now())], classId: classes.first.id);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('info-card-adjusted')), findsOneWidget,
+        reason: '小窗里格子窄到画不出胶囊、圆点根本不会出现，'
+            '信息卡是唯一还能承载这个标记的地方');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('400×640 那档小窗不受影响：网格与「已调班」都还在', (tester) async {
+    // 各机型小窗的默认尺寸，高 640 > 480，**不该**被上面那条规则收走网格。
+    final today = dateOnly(DateTime.now());
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest',
+        width: 400, height: 640);
+
+    expect(find.byKey(ValueKey('day-card-${today.day}')), findsWidgets,
+        reason: '这档是主流小窗尺寸，必须保持网格 + 完整信息卡');
+
+    final classes = await db.select(db.shiftClassRows).get();
+    await AppRepository(db).setDayOverrides([today], classId: classes.first.id);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('info-card-adjusted')), findsOneWidget);
+
+    await _disposeCalendar(tester);
+  });
 }
