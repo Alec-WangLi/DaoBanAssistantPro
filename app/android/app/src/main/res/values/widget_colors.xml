@@ -5,7 +5,7 @@
   本来就走的是 `glassSurface(isDark, blurOn: false)` 那一档（「高级材质」关闭时的配方）。
 -->
 <resources>
-    <!-- 卡片底：**不透明到能自保证对比度**。 -->
+    <!-- 卡片底：**接近不透明，好让对比度主要由卡片自己决定**。 -->
     <!--
       原稿照抄 glassSurface(isDark, blurOn: false)（亮 白82%→60%、暗 白16%→8%）。
       那套配方是为「垫在 App 自己的中性底色 bgLight(#F5F6FA) / bgDark(#0B0B10) 上」
@@ -14,14 +14,23 @@
       真机实测确认（2026-09-18，HyperOS「自定义时段」深色 + 浅色壁纸：结构全对、
       数据全对，字几乎看不清）。
 
-      所以改成**用 App 自己的 surface 色、高不透明度**：亮面几乎白、暗面几乎
-      surfaceDark。这样对比度由卡片自己决定，与壁纸无关 —— 而「跟随 App 主题」
-      这个已定决策才真正安全。
+      先改成 App 自己的 surface 色（亮 95%→88%、暗 90%→80%）仍不够：透明那一端还
+      透 10~20% 壁纸，对比度随壁纸漂。按 WCAG 逐户实算，旧暗值 80% 端叠纯白壁纸时
+      `wg_muted_dark #9A9AB0` 只有 3.46:1，**不过 AA 4.5:1**（踩线的是时间串）。
+
+      故再提到 94~97%：壁纸只透 3~6%，对比度**主要由卡片自己决定** —— 注意是「主要」
+      不是「无关」，那点透光仍在。最坏情况（透明那一端 + 极端壁纸）两头都过 AA：
+        · 暗 #F016161E(94% surfaceDark) + 纯白壁纸：
+            muted #9A9AB0 → 5.60:1 ✓；ink #F2F2F7 → 13.8:1
+        · 亮 #F5FFFFFF(96% 白) + 纯黑壁纸：
+            muted #6E6E82 → 4.57:1 ✓；ink #111118 → 17.2:1
+      代价：玻璃感更弱，那层透壁纸基本只剩一丝。但小组件没有真背景模糊，玻璃感靠描边/
+      圆角/渐变撑着，不靠这层透明度 —— 项目理念第 6 条「可读性优先于观感」。
     -->
-    <color name="wg_card_from_light">#F2FFFFFF</color>   <!-- surfaceLight 白 95% -->
-    <color name="wg_card_to_light">#E0FFFFFF</color>     <!-- 白 88% -->
-    <color name="wg_card_from_dark">#E616161E</color>    <!-- surfaceDark 90% -->
-    <color name="wg_card_to_dark">#CC16161E</color>      <!-- surfaceDark 80% -->
+    <color name="wg_card_from_light">#F7FFFFFF</color>   <!-- 白 97% -->
+    <color name="wg_card_to_light">#F5FFFFFF</color>     <!-- 白 96% -->
+    <color name="wg_card_from_dark">#F716161E</color>    <!-- surfaceDark 97% -->
+    <color name="wg_card_to_dark">#F016161E</color>      <!-- surfaceDark 94% -->
 
     <!-- 描边：走 navBorder 那条路（inkLight 14% / 白 16%），不走 glassBorder。 -->
     <!-- glassBorder 亮色是白 90%，它在 App 里成立是因为底下垫着 bgLight(#F5F6FA)； -->
