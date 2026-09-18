@@ -68,6 +68,23 @@
 - 截图：`"$ADB" exec-out screencap -p > work/wg.png`（`work/` 已 gitignore）。
 - 日志：`AlarmLog.info` 只写 Logcat（`adb logcat -s ShiftAssistant`），`AlarmLog.error` 另写 `filesDir/app_log.txt`。
 
+### C. 小米/ HyperOS 上小组件的入口（Task 5 实做期间查实，**属产品问题，Task 8 要处理**）
+
+在 HyperOS 上，**标准 Android 小组件不会出现在小米原生小部件那一栏里**。它们被单独收在
+**「支持小部件的应用」→「安卓小部件」** 这个二级分类下；选择器本身是小米**服务端下发**的
+「在线内容」，原生那一栏有内部白名单，第三方标准小组件进不去。因此：
+
+- 长按**应用图标**不会弹出「小部件」入口（那个入口只对白名单里的原生小部件开放）；
+- 长按桌面空白 → 添加小部件 → 默认停在原生分类，**要再点进「支持小部件的应用」**才看得到我们。
+
+排障佐证（都查过，全绿，说明不是我们的问题）：`dumpsys appwidget` 里 provider 已登记
+（`min=(28161x28161)` = 110.0dp、`updatePeriodMillis=0`、`resizeMode=3`、`widgetCategory=1`、
+`zombie=false`）；`dumpsys package` 里 receiver 在；拉下已装 APK 解 dex，
+`ShiftWidgetProvider` 与 `WidgetRenderer` 都在（R8 没裁）。
+
+**这要变成 Task 8 的一条交付**：README / 更新日志 / 应用内说明里必须写清楚
+「在小米/HyperOS 上怎么找到它」。否则用户会像我们一样，以为功能没生效。
+
 ---
 
 ## 文件结构
@@ -3278,7 +3295,12 @@ Expected: PASS。**这条必须绿** —— 历史上漏改过四轮，代价是
 - `README.md` 功能清单加一条：
   ```
   - 桌面小组件：小/中/大三档，一眼看到今天、未来三天或一周的班次
+    （小米/HyperOS：添加小部件时要进「支持小部件的应用」→「安卓小部件」才找得到，
+    见计划 §C）
   ```
+- **更新日志也要带一句怎么找。** 在 `app_dialogs.dart` 的 0.8.4 条目里，除功能本身外补一行
+  指向添加入口 —— 这条不是客套：Task 5 实做期间，作者本人在自己的小米机上都没找到它，
+  一度以为功能没生效（见 §C 的排障佐证）。用户遇到的会是同一件事。
 - `PRODUCT_SPEC.md`：§2 功能清单补「桌面小组件（三档尺寸自适应）」；抬头版本号跟着走。**不放配图**（配图管线留给正式版 `0.9.0` 时统一重跑）。
 
 - [ ] **Step 5: 全量测试与静态检查**
