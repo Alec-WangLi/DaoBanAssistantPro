@@ -173,7 +173,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return DateTime(_month.year, _month.month, day);
   }
 
-  /// 手指位置 → 选中日期（2D 拖拽/点按）。
+  /// 点按位置 → 选中日期。**只接点按**（唯一调用点是 `onTapDown`）。
+  ///
+  /// 滑块「拖到新的一格」不经过这里：拖拽那一路由 `onPanEnd` 吸附
+  /// （走 `_nearestDateFromVisual`），触觉也在那边发。旧注释写成「2D 拖拽/点按」，
+  /// 正是这种「看着也管拖拽」的措辞把触觉引到了错的落点。
   void _selectFromPosition(Offset pos, double cellW, double cellH) {
     final date = _dateFromPosition(pos, cellW, cellH);
     if (date != null && date != _selected) {
@@ -803,7 +807,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             });
             // 进入多选态那一下**更明显**，好跟后面每进一格的轻震分开（spec §4.3）。
             // 放在 `setState` 之外：它的回调必须同步且无副作用，触觉是副作用。
-            Haptics.modeEnter();
+            //
+            // 但**没进入多选态就不许响**：长按落在空白格 / 周标题上，或整张空白表
+            // 方案（`canPick` 为假，spec §7.3）时 `date` 是 null、`_rangeAnchor`
+            // 也没设上 —— 那一下什么也没发生，却发一记「进入多选态」的强震，
+            // 正是这套设计要避免的「震了却不携带信息」。
+            if (date != null) Haptics.modeEnter();
           },
           onLongPressMoveUpdate: (d) {
             if (_rangeAnchor == null) return;

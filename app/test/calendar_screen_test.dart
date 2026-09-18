@@ -1071,10 +1071,29 @@ void main() {
   testWidgets('空白表方案：长按不进入范围态，也不落覆盖', (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest', blank: true);
 
+    // 触觉一起钉：`onLongPressStart` 里的 `modeEnter()` 挂在 `if (date != null)`
+    // 之下 —— 这一下压根没进入多选态，就不许发那记「进入多选态」的强震。
+    // 少了这条，「闸门」没人看着，下次谁把条件删掉都不会有人知道。
+    // （`fired` 里会有一次 selectionClick：长按起手满 100ms 时 Tap 的 deadline
+    // 到点，`onTapDown` → `_selectFromPosition` 把选中挪到了按下的那格 ——
+    // 那是真的变了，该响。所以这里断的是「不含 mediumImpact」，不是「空」。）
+    final fired = <Object?>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+      return null;
+    });
+    addTearDown(() => messenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+
     await longPressDragCell(tester, _rangeFirstDay, 1, midDrag: () async {
       expect(_rangeTintCount(tester), 0, reason: '空白表下长按不该画范围淡染');
       expect(_blockScale(tester), 1.0, reason: '空白表下这一下也不该点亮玻璃块');
     });
+
+    expect(fired, isNot(contains('HapticFeedbackType.mediumImpact')),
+        reason: '空白表下压根没进入多选态，不该发 modeEnter 那记强震');
 
     expect(find.textContaining('$_rangeSpan 天'), findsNothing,
         reason: '空白表下不该弹改班层');
