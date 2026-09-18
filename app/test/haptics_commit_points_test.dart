@@ -6,7 +6,9 @@
 //   1. 危险确认按钮按下时震一次（全 app 四处 `GlassActionVariant.danger`
 //      都是破坏性确认，所以触觉挂在按钮里、按变体门住，一处覆盖四处）
 //   2. 非危险的同类按钮不震（决策①：普通点击一律不震）—— 这条是**护栏**：
-//      若哪天有人把 `commit()` 提到变体判断之外，它立刻红
+//      若哪天有人把 `commit()` 提到变体判断之外，它立刻红。`secondary` 与
+//      `primary` 各一条：选择器的确认按钮正是 `primary`，只测 `secondary`
+//      的话「非 secondary 就震」这种回归会让**每个弹层**双震而护栏照样绿。
 //   3. 待办勾选完成**只震 `select` 一次**，`commit()` 不许出现 —— 这条钉的是
 //      一条**裁决**，不是一条实现（见下）
 //
@@ -153,6 +155,25 @@ void main() {
     await tester.tap(find.byType(GlassActionButton));
     await tester.pumpAndSettle();
     expect(fired, isEmpty, reason: '决策①：普通点击一律不震');
+  });
+
+  testWidgets('primary 按钮也不震：弹层确认按钮正是这个变体', (tester) async {
+    // 四个 glass picker 的确定按钮用的是 `primary`。若触觉哪天被写宽成
+    // 「不是 secondary 就震」，这里会红 —— 而真机上的表现是：每个弹层按下
+    // 「确定」都会 `select` + `commit` 双震，正是本轮要消灭的那种噪音。
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: GlassActionButton(
+          label: '确定',
+          onPressed: () {},
+          variant: GlassActionVariant.primary,
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(GlassActionButton));
+    await tester.pumpAndSettle();
+    expect(fired, isEmpty,
+        reason: '决策①：primary 的确认按钮也是普通点击，不该震');
   });
 
   testWidgets('待办勾选完成只震 select 一次：素材是 GlassSwitch，commit 不许再叠一次',

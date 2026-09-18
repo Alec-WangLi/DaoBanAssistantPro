@@ -118,7 +118,15 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
   }
 
   Future<void> setHapticsEnabled(bool value) async {
+    // **先落标志，再震动。** 打开时：`GlassSwitch.onTap` 发的那一记 `select()`
+    // 跑在这一行**之前**，此刻 `hapticsDisabled` 还是 true，于是它被自己要打开的
+    // 那个标志吞掉了 —— 用户测试这个新开关的那一刻反而什么也摸不到。所以标志先
+    // 翻成 false，再补发一记确认震。
+    //
+    // 关闭时**不补**：开关自己那记 `select()` 在标志翻成 true 之前就落了地，
+    // 用户感到的正是「最后一下」—— 那是对的，不必也不该再响一次。
     hapticsDisabled = !value;
+    if (value) Haptics.select();
     state = state.copyWith(hapticsEnabled: value);
     final sp = await SharedPreferences.getInstance();
     await sp.setBool('hapticsEnabled', value);

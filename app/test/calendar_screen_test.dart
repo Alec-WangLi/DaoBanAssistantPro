@@ -1160,9 +1160,11 @@ void main() {
     // 触觉一起钉：`onLongPressStart` 里的 `modeEnter()` 挂在 `if (date != null)`
     // 之下 —— 这一下压根没进入多选态，就不许发那记「进入多选态」的强震。
     // 少了这条，「闸门」没人看着，下次谁把条件删掉都不会有人知道。
-    // （`fired` 里会有一次 selectionClick：长按起手满 100ms 时 Tap 的 deadline
-    // 到点，`onTapDown` → `_selectFromPosition` 把选中挪到了按下的那格 ——
-    // 那是真的变了，该响。所以这里断的是「不含 mediumImpact」，不是「空」。）
+    // （起手那一下**可能**会有一次 selectionClick：长按满 100ms 时 Tap 的 deadline
+    // 到点，`onTapDown` → `_selectFromPosition` 把选中挪到按下的那格 —— 那是
+    // 真的变了，该响。但若按下的那格**本来就是当前选中**（本月 8 号恰是今天时），
+    // 那一下是无变化的 no-op，一条也没有。所以下面的断言是「不含 mediumImpact」
+    // 而不是「为空」—— 它不依赖起手有没有那一记。）
     final fired = <Object?>[];
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -1270,19 +1272,39 @@ void main() {
 
     final start =
         tester.getCenter(find.byKey(const ValueKey('day-card-8')));
+    // 格子节距 = 卡片高 + 上下各一条发丝间隙（与上面那条滑块用例同一算式）。
+    // 用节距而不是写死 60：一次 move 正好跨一行，落点是确定的。
+    final cellH =
+        tester.getSize(find.byKey(const ValueKey('day-card-8'))).height +
+            AppTokens.gapHair * 2;
+
     final gesture = await tester.startGesture(start);
     await tester.pump(const Duration(milliseconds: 600)); // 过长按判定
-    await gesture.moveBy(const Offset(0, 60));            // 往下拖一格
+
+    // 起手那一下的账先单独记：Tap 的 deadline 到点会走一次 `_selectFromPosition`
+    // （把选中挪到按下的那格，真的变了、该响），紧接着是 `modeEnter`。此后
+    // **只数 move 的贡献**，断言就不依赖「今天是不是正好 8 号」这种日期脸色。
+    final selBefore =
+        fired.where((f) => f == 'HapticFeedbackType.selectionClick').length;
+    expect(fired.where((f) => f == 'HapticFeedbackType.mediumImpact'), hasLength(1),
+        reason: '进入多选态在起手那一刻发一记 modeEnter');
+
+    await gesture.moveBy(Offset(0, cellH)); // 8 → 15
+    await tester.pump();
+    await gesture.moveBy(Offset(0, cellH)); // 15 → 22
     await tester.pump();
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(fired, contains('HapticFeedbackType.mediumImpact'),
-        reason: '进入多选态那一下是 modeEnter');
-    expect(fired, contains('HapticFeedbackType.selectionClick'),
-        reason: '每进一格要有 select');
-    expect(fired.where((f) => f == 'HapticFeedbackType.mediumImpact'),
-        hasLength(1), reason: '进入只该震一次');
+    // **精确计数**，不是 `contains`：后者在 `onLongPressMoveUpdate` 那一行被删掉
+    // 时依然由起手那记 select 满足 —— 于是「长按拖选每进一格」这个落点没有任何
+    // 东西看着（正是 spec 警告过的「两个落点别只改一个」的镜像）。
+    final selAfter =
+        fired.where((f) => f == 'HapticFeedbackType.selectionClick').length;
+    expect(selAfter - selBefore, 2,
+        reason: '长按拖过两格 → 恰好两记 select：每进一格一记，多一下少一下都说明落点不对');
+    expect(fired.where((f) => f == 'HapticFeedbackType.mediumImpact'), hasLength(1),
+        reason: '整场手势只该进入一次多选态');
 
     await _disposeCalendar(tester);
   });
@@ -1339,6 +1361,18 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(fired, isEmpty, reason: '拖回原来那格不该震');
+
+    // 点按**另一格** → 恰好一记 select。
+    //
+    // 用**精确列表**而不是 `isNotEmpty`：上面每一条都由旁边的拖拽（`onPanEnd`）
+    // 一路满足，所以 `_selectFromPosition` 里那行 `Haptics.select()` 被删掉时
+    // 套件照样全绿 —— 点选这个落点没有任何东西看着。这条会红。
+    fired.clear();
+    await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('day-card-9'))));
+    await tester.pumpAndSettle();
+    expect(fired, ['HapticFeedbackType.selectionClick'],
+        reason: '点按换了格：恰好一记 select（多一记少一记都说明点选落点不对）');
 
     await _disposeCalendar(tester);
   });

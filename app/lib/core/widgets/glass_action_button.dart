@@ -124,8 +124,11 @@ class _GlassActionButtonState extends State<GlassActionButton> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              // `onPressed` 是可空的（为 null 时按钮本就禁用），所以整段要门住 ——
-              // 直接 `widget.onPressed()` 会在禁用态崩掉。
+              // `onPressed` 的类型是可空的（`VoidCallback?`），所以整段门住 ——
+              // 直接 `widget.onPressed()` 在 null 时会崩。这是**纯防御**，不是
+              // 在挡一条活路径：全仓现存调用点都传非空闭包。（`schedule_editor_
+              // screen.dart` 里那句 `onPressed: _saving ? null : _save` 是
+              // `FilledButton.icon`，不是本组件 —— 曾有人把它记成这里。）
               onTap: widget.onPressed == null
                   ? null
                   : () {

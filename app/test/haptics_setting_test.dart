@@ -3,10 +3,12 @@
 // 「触觉反馈」这个开关的三件事：
 //   1. 持久化 —— 关掉再重建 notifier，仍然是关的（跟「高级材质」同一套）
 //   2. 反灌 —— 它真的会去改 `hapticsDisabled`，否则词汇表根本不知道用户关过
-//   3. 界面 —— 「外观」分区里真有这一行，且拨动它真的落到上面那个标志上
+//   3. 界面 —— 页面上真有这一行，且拨动它真的落到上面那个标志上
+//   4. 打开的那一刻**补一记确认震** —— 开关自己那记被它正要打开的标志吞掉了
 // 第 2、3 条是重点：少了哪一处赋值，开关在界面上看着能拨、实际一点作用都没有。
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,10 +19,6 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 
-/// 「外观」分区里我们那一个开关：标题文字往上找到最近的 `Row`，开关就在里面。
-///
-/// 不能直接 `find.byType(GlassSwitch)` —— 同一分区里「高级材质」也是一个，
-/// 数出来两个，分不出哪个是哪个。
 /// 有界推进若干帧。
 ///
 /// **不能用 `pumpAndSettle`**：`ProfileScreen` 里的权限卡在 `initState` 会去调
@@ -34,6 +32,10 @@ Future<void> _pumpFrames(WidgetTester tester, {int frames = 20}) async {
   }
 }
 
+/// 「外观」分区里我们那一个开关：标题文字往上找到最近的 `Row`，开关就在里面。
+///
+/// 不能直接 `find.byType(GlassSwitch)` —— 同一分区里「高级材质」也是一个，
+/// 数出来两个，分不出哪个是哪个。
 Finder _hapticsSwitch() => find.descendant(
       of: find
           .ancestor(
@@ -45,6 +47,9 @@ Finder _hapticsSwitch() => find.descendant(
     );
 
 void main() {
+  // 第 4 条要在平台通道上拦触觉，所以需要 binding。
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     hapticsDisabled = false;
@@ -79,8 +84,36 @@ void main() {
     n2.dispose();
   });
 
-  testWidgets('设置页「外观」分区里真有这一行；拨一下，模块标志跟着翻',
-      (tester) async {
+  test('重新打开时补一记确认震：开关自己那记会被「正要打开的标志」吞掉', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final fired = <Object?>[];
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+      return null;
+    });
+    addTearDown(() => messenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+
+    // 先处于「关着」的状态 —— 真实路径正是从关到开。
+    hapticsDisabled = true;
+    final n = AppSettingsNotifier();
+    await pumpEventQueue();
+    fired.clear();
+
+    await n.setHapticsEnabled(true);
+    await pumpEventQueue();
+
+    // 打开的那一刻必须补一记：`GlassSwitch.onTap` 那记 `select()` 跑在这一行
+    // **之前**，此刻标志还是「关」—— 用户在唯一一次「试这个新开关」的时刻什么
+    // 也摸不到。这条断言就是那记补震的执行证据。
+    expect(fired, ['HapticFeedbackType.selectionClick'],
+        reason: '打开时补一记确认震（关闭时不补：那一记由开关自己在标志翻面前发出）');
+    expect(hapticsDisabled, isFalse, reason: '补震之后标志要真的落到「开」');
+    n.dispose();
+  });
+
+  testWidgets('设置页上真有这一行；拨一下，模块标志跟着翻', (tester) async {
     // 页面会读排班（数据区 / 权限卡），所以照 `calendar_screen_test.dart` 的
     // 夹具换掉数据库本身。
     tester.view.physicalSize = const Size(420, 1200);

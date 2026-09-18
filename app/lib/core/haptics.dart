@@ -26,7 +26,12 @@ abstract final class Haptics {
   /// **选中变了**：开关翻转、胶囊段切换、选项胶囊选中、选择器提交、拖到新格。
   static void select() => _fire(HapticFeedback.selectionClick);
 
-  /// **动作落实**：删除类确认、待办勾选完成、应用改班 / 恢复轮转、切换排班方案。
+  /// **动作落实**：删除类确认、应用改班 / 恢复轮转、切换排班方案。
+  ///
+  /// 待办勾选**不在**此列：它的载体是 `GlassSwitch`，已经自震一次
+  /// `select()`（§4.1），再补一记 `commit()` 就是每拨一下震两下 —— 两下比
+  /// 一下信息量更少。`schedule_screen.dart` 那行 `onChanged` 里写着同样的
+  /// 理由，别照旧把 `commit()` 加回去。
   static void commit() => _fire(HapticFeedback.lightImpact);
 
   /// **进入一个模式**：长按进入日历的多选态。
