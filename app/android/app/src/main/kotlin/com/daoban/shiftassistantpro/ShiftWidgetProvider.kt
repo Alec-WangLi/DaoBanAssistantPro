@@ -32,6 +32,27 @@ class ShiftWidgetProvider : AppWidgetProvider() {
             )
             AlarmLog.info(context, "ShiftWidgetProvider.refreshAll: ${ids.size} 个实例")
             renderAll(context, mgr, ids)
+            scheduleNextRefresh(context)
+        }
+
+        /**
+         * 排下一次刷新。
+         *
+         * 快照里 `boundaries` 是生成时刻起、14 天窗口内所有「该刷新了」的时刻
+         * （每天的本地零点 + 各工作班次的开始/结束），升序。取第一个大于现在的即可。
+         * 窗口耗尽（App 两周没打开）就退化为「下一个本地零点」—— 那时卡片本来就已经
+         * 是占位态了，零点这一刷只是给它一个自愈的机会。
+         */
+        fun scheduleNextRefresh(context: Context) {
+            val now = System.currentTimeMillis()
+            val snap = WidgetStore.snapshot(context)
+            val next = snap?.boundaries?.firstOrNull { it > now }
+                ?: run {
+                    val d = java.time.LocalDate.now().plusDays(1)
+                    AlarmLog.info(context, "ShiftWidgetProvider: 边界窗口耗尽，退化为下一个零点")
+                    d.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                }
+            WidgetRefreshScheduler.schedule(context, next)
         }
 
         private fun renderAll(context: Context, mgr: AppWidgetManager, ids: IntArray) {
@@ -59,6 +80,7 @@ class ShiftWidgetProvider : AppWidgetProvider() {
         appWidgetIds: IntArray,
     ) {
         renderAll(context, appWidgetManager, appWidgetIds)
+        scheduleNextRefresh(context)
     }
 
     override fun onAppWidgetOptionsChanged(

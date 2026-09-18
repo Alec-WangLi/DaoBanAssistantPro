@@ -95,5 +95,14 @@ class BootReceiver : BroadcastReceiver() {
             }
         }
         AlarmLog.info(context, "BootReceiver: 提醒重排完成，$quiets 条")
+
+        // 小组件的刷新闹钟也重启即清空，同样要排回去。与上面两条链路的区别是：
+        // 它没有「清单」可读 —— 边界时刻就在快照里，`scheduleNextRefresh` 自己
+        // 会挑第一个未来的。所以这里只是「叫醒它一次」。
+        try {
+            ShiftWidgetProvider.scheduleNextRefresh(context)
+        } catch (e: Exception) {
+            AlarmLog.error(context, "BootReceiver: 小组件刷新重排失败: ${e.message}")
+        }
     }
 }
