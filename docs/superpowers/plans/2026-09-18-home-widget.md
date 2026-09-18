@@ -148,8 +148,10 @@
 // （Kotlin 里一个中文字符串都没有），所以「今天/明天对不对」「跨午夜班次的时间串
 // 对不对」「14 天窗口够不够」这些判断一旦错了，真机上表现为「卡片显示别的班的
 // 时间」，而且不报错。
-import 'package:flutter/material.dart';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/widget/widget_snapshot.dart';
@@ -179,6 +181,14 @@ ShiftSchedule _schedule() => ShiftSchedule(
     );
 
 void main() {
+  // `L10n.monthDay` 走 `DateFormat('M月d日', 'zh')`，**必须先装 locale 数据**，
+  // 否则 9 条用例全抛 `LocaleDataException`。中英两套都要装 —— 「英文界面下跨午夜
+  // 不露出中文」那条会切到 en。这是本仓既有约定，照抄即可。
+  setUpAll(() async {
+    await initializeDateFormatting('zh');
+    await initializeDateFormatting('en');
+  });
+
   setUp(() => L10n.locale = 'zh');
 
   test('days 恒 14 条，day 逐日递增', () {
@@ -284,8 +294,9 @@ void main() {
     for (final t in b) {
       expect(t > now.millisecondsSinceEpoch, true);
     }
-    // 每天都贡献了一个本地零点：14 天里未来还剩 13 个（今天的那个已过）。
-    expect(b.where((t) => t > now.millisecondsSinceEpoch).length >= 13, true);
+    // 每天都贡献了**次日**的本地零点，所以 14 条全在未来（没有哪一条代表
+    // 「今天零点已过」）。原稿这里的注释写反了，Task 1 实做时发现。
+    expect(b.where((t) => t > now.millisecondsSinceEpoch).length >= 14, true);
   });
 
   test('主题模式原样透传，不在这里解析成 light/dark', () {
@@ -319,7 +330,7 @@ void main() {
 }
 ```
 
-在文件顶部补上 `import 'dart:convert';`。
+在文件顶部补上 `import 'dart:convert';`（`jsonDecode` / `jsonEncode`）。
 
 - [ ] **Step 3: 跑测试，确认它失败**
 
@@ -349,8 +360,10 @@ Expected: 编译失败 —— `Error: Couldn't resolve the package 'shiftassista
 // 相对的三个词（今天/明天/后天）放在顶层 `labels` 里，由原生按**渲染时的偏移**取。
 library;
 
-import '../core/design_tokens.dart';
-import '../core/l10n.dart';
+import 'package:flutter/material.dart';
+
+import '../../core/design_tokens.dart';
+import '../../core/l10n.dart';
 import '../../domain/shift_rotation.dart';
 
 /// 快照格式版本。原生按它判断能不能解析 —— 对不上就按「无快照」走降级态。
@@ -453,7 +466,7 @@ Map<String, Object?> buildWidgetSnapshot({
 }
 ```
 
-顶部还缺 `import 'package:flutter/material.dart';` —— `AppTokens.onSolid` 与 `Color` 都要它。加在 `library;` 之后的 import 区第一行。
+`package:flutter/material.dart` 是给 `AppTokens.onSolid` 与 `Color` 用的，import 区见上。
 
 - [ ] **Step 5: 跑测试，确认通过**
 
