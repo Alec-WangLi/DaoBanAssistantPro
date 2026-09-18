@@ -165,11 +165,13 @@ class AppRepository {
 
   Future<void> ensureSeeded() => seedIfEmpty(db);
 
-  /// 清空全部数据（排班方案 + 班次 + 日程 + 按天闹钟覆盖），并恢复默认「四班两倒」。
+  /// 清空全部数据（排班方案 + 班次 + 日程 + 按天闹钟覆盖 + 按天改班覆盖），并恢复默认「四班两倒」。
   Future<void> clearAll() async {
     await db.transaction(() async {
       await db.delete(db.scheduleEvents).go();
       await db.delete(db.shiftAlarmOverrides).go();
+      // 按天改班覆盖引用班次定义的 id，是班次的子表：与周期一样先于班次删。
+      await db.delete(db.shiftDayOverrides).go();
       // 先删子表（周期）再删父表（班次定义）。
       await db.delete(db.shiftCycleRows).go();
       await db.delete(db.shiftClassRows).go();
@@ -218,6 +220,9 @@ class AppRepository {
   Future<void> deleteSchedule(int id) async {
     await db.transaction(() async {
       await (db.delete(db.shiftCycleRows)
+            ..where((t) => t.scheduleId.equals(id)))
+          .go();
+      await (db.delete(db.shiftDayOverrides)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
       await (db.delete(db.shiftClassRows)
@@ -291,27 +296,66 @@ class AppRepository {
       await (db.delete(db.shiftCycleRows)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
-      await (db.delete(db.shiftClassRows)
-            ..where((t) => t.scheduleId.equals(id)))
-          .go();
 
+      // 班次定义走**增量更新**，不再「删光重建」。
+      //
+      // 从前这里是把该方案的班次行全部删掉再逐条 insert，于是每次保存都拿到
+      // 全新的自增 id —— 用户哪怕只是把方案名从「四班两倒」改成「我们组」，
+      // 所有班次 id 也一起变。而 `shift_day_overrides.classId` 引用正是这个 id，
+      // 一保存覆盖就全部指飞。
+      //
+      // 顺带这一改也贴回了两层模型的本意（`PRODUCT_SPEC.md` §3：「一个班次只
+      // 定义一次」）—— 从前的实现每次保存都把班次当新的重新定义一遍。
       final classIds = <int>[];
       for (var i = 0; i < classes.length; i++) {
         final c = classes[i];
-        classIds.add(await db.into(db.shiftClassRows).insert(
-              ShiftClassRowsCompanion.insert(
-                scheduleId: id,
-                order: i,
-                name: c.name,
-                abbr: Value(c.abbr),
-                startMinute: Value(c.startMinute),
-                endMinute: Value(c.endMinute),
-                isRest: Value(c.isRest),
-                color: Value(c.color),
-                alarmEnabled: Value(c.alarmEnabled),
-                alarmMinute: Value(c.alarmMinute),
-              ),
-            ));
+        if (c.id != null) {
+          await (db.update(db.shiftClassRows)
+                ..where((t) => t.id.equals(c.id!)))
+              .write(ShiftClassRowsCompanion(
+            scheduleId: Value(id),
+            order: Value(i),
+            name: Value(c.name),
+            abbr: Value(c.abbr),
+            startMinute: Value(c.startMinute),
+            endMinute: Value(c.endMinute),
+            isRest: Value(c.isRest),
+            color: Value(c.color),
+            alarmEnabled: Value(c.alarmEnabled),
+            alarmMinute: Value(c.alarmMinute),
+          ));
+          classIds.add(c.id!);
+        } else {
+          classIds.add(await db.into(db.shiftClassRows).insert(
+                ShiftClassRowsCompanion.insert(
+                  scheduleId: id,
+                  order: i,
+                  name: c.name,
+                  abbr: Value(c.abbr),
+                  startMinute: Value(c.startMinute),
+                  endMinute: Value(c.endMinute),
+                  isRest: Value(c.isRest),
+                  color: Value(c.color),
+                  alarmEnabled: Value(c.alarmEnabled),
+                  alarmMinute: Value(c.alarmMinute),
+                ),
+              ));
+        }
+      }
+
+      // 库里不在新列表里的班次定义：删掉，并**连带删掉引用它的覆盖行**
+      // （悬空引用留着只会在表里攒垃圾，渲染时还得再兜一次底）。
+      final keptClassIds = classIds.toSet();
+      final staleClasses = await (db.select(db.shiftClassRows)
+            ..where((t) => t.scheduleId.equals(id)))
+          .get();
+      for (final row in staleClasses) {
+        if (keptClassIds.contains(row.id)) continue;
+        await (db.delete(db.shiftDayOverrides)
+              ..where((t) => t.classId.equals(row.id)))
+            .go();
+        await (db.delete(db.shiftClassRows)..where((t) => t.id.equals(row.id)))
+            .go();
       }
 
       for (var i = 0; i < cycle.length; i++) {

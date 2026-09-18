@@ -118,4 +118,103 @@ void main() {
     expect(seen.last, 1,
         reason: '覆盖落库后流必须重发 —— 不重发的话日历纹丝不动，且不报错');
   });
+
+  test('改方案名不动班次 id（从前会全变）', () async {
+    final (scheduleId, _) = await seed();
+    Future<List<int>> ids() async => (await (db.select(db.shiftClassRows)
+              ..where((t) => t.scheduleId.equals(scheduleId))
+              ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+            .get())
+        .map((c) => c.id)
+        .toList();
+
+    final before = await ids();
+    final d = (await repo.getActiveSchedule())!;
+    await repo.saveSchedule(
+      scheduleId: scheduleId,
+      name: '我们组', // 只改名字
+      anchorDate: d.anchorDate,
+      classes: d.classes,
+      cycle: d.cycle,
+      teamCount: d.teamCount,
+      teamNames: d.teamNames,
+      ourTeamIndex: d.ourTeamIndex,
+      teamOffsets: d.teamOffsets,
+    );
+    expect(await ids(), before,
+        reason: '只改方案名却换了班次 id 的话，已设置的覆盖会全部指飞');
+  });
+
+  test('改班次时间也不动 id', () async {
+    final (scheduleId, _) = await seed();
+    final d = (await repo.getActiveSchedule())!;
+    final edited = [...d.classes];
+    edited[0] = edited[0].copyWith(startMinute: 9 * 60);
+    await repo.saveSchedule(
+      scheduleId: scheduleId,
+      name: d.name,
+      anchorDate: d.anchorDate,
+      classes: edited,
+      cycle: d.cycle,
+      teamCount: d.teamCount,
+      teamNames: d.teamNames,
+      ourTeamIndex: d.ourTeamIndex,
+      teamOffsets: d.teamOffsets,
+    );
+    final after = (await repo.getActiveSchedule())!;
+    expect(after.classes[0].id, d.classes[0].id);
+    expect(after.classes[0].startMinute, 9 * 60, reason: '改动本身要落库');
+  });
+
+  test('删掉一个班次时，引用它的覆盖连带被清掉', () async {
+    final (scheduleId, restId) = await seed();
+    final day = DateTime(2026, 9, 20);
+    await db.into(db.shiftDayOverrides).insert(
+          ShiftDayOverridesCompanion.insert(
+            scheduleId: scheduleId,
+            day: dayNumber(day),
+            classId: restId,
+          ),
+        );
+
+    final d = (await repo.getActiveSchedule())!;
+    final kept = d.classes.where((c) => c.id != restId).toList();
+    // 周期里指向被删班次的下标要跟着重映射，否则这次保存本身就坏了
+    final keptIndex = {for (var i = 0; i < kept.length; i++) kept[i].id!: i};
+    final cycle = d.cycle
+        .map((ci) => keptIndex[d.classes[ci].id])
+        .whereType<int>()
+        .toList();
+    await repo.saveSchedule(
+      scheduleId: scheduleId,
+      name: d.name,
+      anchorDate: d.anchorDate,
+      classes: kept,
+      cycle: cycle,
+      teamCount: d.teamCount,
+      teamNames: d.teamNames,
+      ourTeamIndex: d.ourTeamIndex,
+      teamOffsets: d.teamOffsets,
+    );
+
+    expect(await db.select(db.shiftDayOverrides).get(), isEmpty,
+        reason: '悬空的覆盖行要清掉，否则表里攒一堆指着空气的记录');
+  });
+
+  test('删方案 / 清空数据时连带删覆盖', () async {
+    final (scheduleId, restId) = await seed();
+    await db.into(db.shiftDayOverrides).insert(
+          ShiftDayOverridesCompanion.insert(
+            scheduleId: scheduleId,
+            day: dayNumber(DateTime(2026, 9, 20)),
+            classId: restId,
+          ),
+        );
+    await repo.deleteSchedule(scheduleId);
+    expect(await db.select(db.shiftDayOverrides).get(), isEmpty);
+
+    // clearAll 这条路也走一遍
+    await repo.clearAll();
+    expect(await db.select(db.shiftDayOverrides).get(), isEmpty);
+  });
 }
