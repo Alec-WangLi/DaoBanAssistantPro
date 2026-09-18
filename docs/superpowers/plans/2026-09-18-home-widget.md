@@ -46,11 +46,17 @@
 
 ```bash
 # 触发一次 Dart 侧 push（走 App 启动 → watchActiveSchedule → WidgetService.push）
-"$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
+# **必须先 force-stop**：App 已在前台时 `am start` 只走 onNewIntent、不重跑
+# initState，那条推送路径根本不会发生（Task 3 实做时踩到）。force-stop 只杀进程，
+# 不动数据 —— 不要用卸载或 pm clear。
+"$ADB" shell am force-stop com.daoban.shiftassistantpro; "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
 
 # 看「下一次刷新排在了几点」—— 不用真的等到那一刻
 "$ADB" shell dumpsys alarm | grep -A3 shiftassistantpro
 ```
+
+冷启动会 push **两次**（首帧回调一次 + `activeScheduleProvider` 首次下发一次），原生据此
+`refreshAll` 两次。幂等、无功能危害，属预期。
 
 改排班、改主题、改语言之后要刷新小组件，**都是启动一次 App**（`am start` 对已在跑的 Activity 走 `onNewIntent`，同样能触发）。别去折腾 `am broadcast`，那会白花半小时。
 
@@ -1602,7 +1608,7 @@ cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter analyze lib/features/widget lib/features/home lib/features/alarm
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
 "$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
-"$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
+"$ADB" shell am force-stop com.daoban.shiftassistantpro; "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
 sleep 4
 "$ADB" exec-out screencap -p > /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/work/wg_t3.png
 ```
@@ -2392,7 +2398,7 @@ Expected: 三行形如 `id=… , WxHdp → TIER`。
 
 ```bash
 for i in 1 2 3; do
-  "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity; sleep 3
+  "$ADB" shell am force-stop com.daoban.shiftassistantpro; "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity; sleep 3
   "$ADB" exec-out screencap -p > /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/work/wg_t4_$i.png
 done
 ```
@@ -2574,7 +2580,7 @@ cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter analyze lib
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
 "$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
-"$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
+"$ADB" shell am force-stop com.daoban.shiftassistantpro; "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
 sleep 3
 "$ADB" exec-out screencap -p > /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/work/wg_t5.png
 ```
@@ -2779,7 +2785,7 @@ object WidgetRefreshScheduler {
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
 /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
 "$ADB" install -r build/app/outputs/flutter-apk/app-release.apk
-"$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
+"$ADB" shell am force-stop com.daoban.shiftassistantpro; "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
 sleep 4
 "$ADB" shell dumpsys alarm | grep -B4 -A4 shiftassistantpro
 "$ADB" logcat -d -s ShiftAssistant | grep "WidgetRefreshScheduler"
@@ -2796,7 +2802,7 @@ Expected:
 把手机的系统时间往**今天班次开始之后**拨（设置 → 日期与时间关掉自动、手改），然后：
 
 ```bash
-"$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
+"$ADB" shell am force-stop com.daoban.shiftassistantpro; "$ADB" shell am start -n com.daoban.shiftassistantpro/.MainActivity
 sleep 4
 "$ADB" shell dumpsys alarm | grep -A4 shiftassistantpro
 ```
