@@ -83,10 +83,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         e.date.month == _month.month);
   }
 
+  /// 本月里有没有被**按天调整过**的日子。
+  ///
+  /// 与 `_monthHasPendingTodos` 同一个道理：班次行尾巴上的「已调整」胶囊只在被
+  /// 改过的那天画，而信息卡是定高的 —— 高度必须按**月**预留（这个月有被调过就
+  /// 留），按天算的话点一天高度变一次，上面的网格跟着抖。
+  bool _monthHasOverrideHint(ShiftSchedule? schedule) {
+    final keys = schedule?.dayOverrides.keys;
+    if (keys == null || keys.isEmpty) return false;
+    // `dayNumber` 是自 epoch 的天数，单调，所以比一个左闭右开区间就够。
+    final firstOfMonth = dayNumber(DateTime(_month.year, _month.month, 1));
+    final firstOfNext = dayNumber(DateTime(_month.year, _month.month + 1, 1));
+    return keys.any((d) => d >= firstOfMonth && d < firstOfNext);
+  }
+
   /// 底栏信息卡该多高：取本月最满的一天（见 `info_card_metrics.dart`）。
   double _bottomCardHeight(BuildContext context, ShiftSchedule? schedule,
       double cardOuterWidth) {
     final hasTodoHint = _monthHasPendingTodos;
+    final hasOverrideHint = _monthHasOverrideHint(schedule);
     final key = [
       _month.year,
       _month.month,
@@ -103,6 +118,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       schedule?.classes.map((c) => c.shortLabel).join('/'),
       // 有待办的那天日期行要多留一点（徽章比日期字高），按月参与。
       hasTodoHint,
+      // 这个月有被按天调过的日子时，班次行要给「已调整」胶囊留高度，也按月。
+      hasOverrideHint,
     ].join('|');
     if (key == _cardHeightKey && _cardHeight != null) return _cardHeight!;
     final h = measureBottomInfoCardHeight(
@@ -111,6 +128,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       schedule: schedule,
       month: _month,
       hasTodoHint: hasTodoHint,
+      hasOverrideHint: hasOverrideHint,
     );
     _cardHeightKey = key;
     _cardHeight = h;
@@ -1324,6 +1342,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final accent = shift != null
         ? Color(shift.color)
         : Theme.of(context).colorScheme.primary;
+    // 「信息胶囊」那套配方一律走主色（「今天」「N 项待办」「已调整」同一族），
+    // 与上面的 `accent`（跟着当天班次色走）不是一回事。
+    final primary = Theme.of(context).colorScheme.primary;
 
     // 短屏（手机横屏 / 小窗）走单行紧凑版：360×360 这类窗口里网格才是主角，
     // 完整信息卡（约 340 高）会把网格挤到只剩一条缝。这里保留
@@ -1530,16 +1551,43 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ),
                   // 这天被单独调整过（spec §7.4）：给一句文字说明，让用户第一眼
                   // 看见日历上那个小圆点时能对上号。
+                  //
+                  // 形状抄同一行的邻居：**「N 项待办」徽章那套配方**（14% 淡染底 +
+                  // 45% 同色描边 + `radiusL` + `inkFor` 文字，见 `_todoHintBadge`），
+                  // 只是不带图标。原来这里是一句**裸 `Text`** —— 同一行/同一页的
+                  // 另外两个徽章（「今天」「N 项待办」）都是胶囊，三种形状并排
+                  // 看着就散。
+                  //
+                  // 胶囊比裸文字高，所以它的高度也必须进定高模型：见
+                  // `info_card_metrics.dart` 的 `_adjustedBadgeH` 与 `hasOverrideHint`。
                   if (schedule.dayOverrides
                       .containsKey(dayNumber(_selected)))
                     Padding(
                       padding:
                           const EdgeInsets.only(left: AppTokens.spaceSm),
-                      child: Text(
-                        L10n.adjusted,
+                      child: Container(
                         key: const Key('info-card-adjusted'),
-                        style: AppTokens.microStrong.copyWith(
-                            color: Theme.of(context).colorScheme.primary),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppTokens.spaceSm,
+                            vertical: AppTokens.padChipV),
+                        decoration: BoxDecoration(
+                          color: primary.withValues(alpha: 0.14),
+                          borderRadius:
+                              BorderRadius.circular(AppTokens.radiusL),
+                          border: Border.all(
+                              color: primary.withValues(alpha: 0.45)),
+                        ),
+                        child: Text(
+                          L10n.adjusted,
+                          style: AppTokens.microStrong.copyWith(
+                              color: AppTokens.inkFor(
+                                  primary,
+                                  Color.alphaBlend(
+                                      primary.withValues(alpha: 0.14),
+                                      Theme.of(context)
+                                          .colorScheme
+                                          .surface))),
+                        ),
                       ),
                     ),
                 ],

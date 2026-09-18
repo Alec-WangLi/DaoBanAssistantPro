@@ -74,12 +74,16 @@ const double _otherCrewsLabelTop = AppTokens.spaceXs; // 4
 /// [hasTodoHint] 表示这个月里存在待办 —— 有的话日期行要按「今天/待办徽章」的
 /// 高度预留（见 [_todoHintH]）。按月而不是按天：按天算的话，点一天卡片高度就
 /// 变一次，上面的网格跟着抖 —— 那正是这个文件要消灭的东西。
+///
+/// [hasOverrideHint] 同理，管的是班次行尾巴上那颗「已调整」胶囊（见
+/// [_adjustedBadgeH]）：这个月里有被按天调整过的日子才要预留。也按月。
 double measureBottomInfoCardHeight({
   required BuildContext context,
   required double cardOuterWidth,
   required ShiftSchedule? schedule,
   required DateTime month,
   required bool hasTodoHint,
+  required bool hasOverrideHint,
 }) {
   final measure = _Measure(
     // 卡片里的 `Text` 用的都是 `AppTokens` 的角色令牌，字体族与其它属性来自
@@ -127,8 +131,19 @@ double measureBottomInfoCardHeight({
     AppTokens.labelStrong,
     maxWidth: contentW,
   ).height;
-  final shiftRowH = [shiftLineH, noShiftH, blankH, _shiftDot]
-      .reduce((a, b) => a > b ? a : b);
+  // 「已调整」胶囊也塞在**这一行**里（班次行尾巴上），就不新占一行。它是这一行
+  // 的一个元素，高度就得一起取大 —— 少了它，有标记的那天行高只按班次那行字算，
+  // 内容会顶出定高。它是不是行里最高的那个取决于字体行高与系统字号：紧凑的字体
+  // 下（16px 那行字 ≈ 19）胶囊的 21.8 就是最高件，而本仓库测试字体走的 Material
+  // 行高 1.43（≈ 22.9）反而比它高 —— 界面侧因此看不见差别，那一步由
+  // `calendar_screen_test.dart` 里直接量模型的用例钉住。
+  final shiftRowH = [
+    shiftLineH,
+    noShiftH,
+    blankH,
+    _shiftDot,
+    if (hasOverrideHint) _adjustedBadgeH(measure),
+  ].reduce((a, b) => a > b ? a : b);
 
   final showChips = schedule != null && schedule.teamCount > 1;
 
@@ -201,6 +216,19 @@ double _chipLineH(_Measure m) =>
 double _todoHintH(_Measure m) =>
     math.max(m.text(L10n.todoCount(1), AppTokens.microStrong).height,
         AppTokens.iconSm) +
+    AppTokens.padChipV * 2 +
+    2;
+
+/// 班次行尾巴上那颗「已调整」胶囊的高度。
+///
+/// 与 `calendar_screen.dart` 里那颗胶囊一一对应（改那边要改这里）：**同一套
+/// 信息胶囊配方**（14% 淡染底 + 45% 描边 + `radiusL`），只是不带图标 —— 所以
+/// 取高那一项是纯文字，没有 [_todoHintH] 里那个 `AppTokens.iconSm`。
+///
+/// 与 [_todoHintH] 一样**真量一个同款胶囊**（`padChipV × 2 + 描边 2`），不手算
+/// 那个数：胶囊高是「文字行高 + 内边距 + 描边」的和，手算的值换个字体就飘了。
+double _adjustedBadgeH(_Measure m) =>
+    m.text(L10n.adjusted, AppTokens.microStrong).height +
     AppTokens.padChipV * 2 +
     2;
 

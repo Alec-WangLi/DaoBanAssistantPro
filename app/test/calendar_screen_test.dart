@@ -24,6 +24,7 @@ import 'package:shiftassistantpro/domain/lunar_info.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/features/calendar/info_card_metrics.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -932,6 +933,96 @@ void main() {
         tester.getSize(find.byKey(ValueKey('day-adjusted-${today.day}')));
     expect(dot.width, inInclusiveRange(3, 4));
     expect(dot.height, inInclusiveRange(3, 4));
+
+    await _disposeCalendar(tester);
+  });
+
+  // 设计语言：新加的东西要抄**最近的同类件配方**。
+  //
+  // 「已调整」原先是班次行里唯一的**裸文字** —— 而同一页的两个邻居（日期行上的
+  // 「今天」「N 项待办」徽章）都是胶囊。三种形状并排，看着就散。所以它改抄
+  // `_todoHintBadge` 的配方（14% 淡染底 + 45% 同色描边 + `radiusL` + `inkFor`），
+  // 只是不带图标。
+  //
+  // 但胶囊比裸文字高，而信息卡是**定高**的（`info_card_metrics.dart`）：只改形状
+  // 不改模型的话，有标记的那天卡片内容会顶出定高、被底边裁掉（卡内滚动兜底，
+  // 用户看不见）。这条用例同时钉住形状与定高契约。
+  testWidgets('「已调整」是胶囊而不是裸文字，且信息卡高度不因它变化', (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+    final hBefore =
+        tester.getSize(find.byKey(const Key('info-card-box'))).height;
+
+    final classes = await db.select(db.shiftClassRows).get();
+    final repo = AppRepository(db);
+    final today = dateOnly(DateTime.now());
+    await repo.setDayOverrides([today], classId: classes.first.id);
+    await tester.pumpAndSettle();
+
+    // 标记还在，而且**它自己**就是一颗胶囊（不是裸 Text）。
+    //
+    // 注意 key 就挂在那个 Container 上，所以要用 `tester.widget<Container>` 直接
+    // 看它自己 —— `find.ancestor(of: marker, …)` 找的是它的**祖先**，不含它本身，
+    // 那样写会恒为空、用例假失败。
+    final marker = find.byKey(const Key('info-card-adjusted'));
+    expect(marker, findsOneWidget);
+    final deco =
+        tester.widget<Container>(marker).decoration as BoxDecoration?;
+    expect(deco?.borderRadius, isNotNull,
+        reason: '「已调整」要与同一行另外两个徽章一样是胶囊');
+    expect(deco?.border, isNotNull, reason: '信息胶囊是「淡染底 + 同色描边」两件套');
+
+    // 定高契约：有标记与没标记，卡片高度必须一样。
+    //
+    // 诚实记一笔 —— 在**测试字体**下这条断言抓不到「胶囊高度没进模型」：
+    // `DefaultTextStyle` 来自 Material 的排版表（行高 1.43），班次行是 16px 的
+    // 一行字 → 22.88，而胶囊是 12px×1.15 + 上下内边距 6 + 描边 2 = 21.8 ——
+    // 胶囊**比班次行还矮**，顶不动行高，所以加不加入模型都是 210.0。
+    // （真机上字体与行高的比例不保证如此，所以模型那一步照做不误。）
+    // 它仍能抓住的是**重复计算**这一类错：把 `_adjustedBadgeH` 加进 `content`
+    // 而不是并进班次行的取大，高度就会多出一截，这条立刻红。
+    // 「胶囊高度真的进了取大」由下面那条直接量模型的用例钉住。
+    expect(
+      tester.getSize(find.byKey(const Key('info-card-box'))).height,
+      hBefore,
+      reason: '定高契约：有标记与没标记，卡片高度必须一样',
+    );
+
+    await _disposeCalendar(tester);
+  });
+
+  // 上一条用例量不到的东西在这里量：**胶囊高度真的进了定高模型**。
+  //
+  // 直接调 `measureBottomInfoCardHeight`（而不是量界面），是因为界面侧看不见
+  // 它：如上面的注释，测试字体下胶囊（21.8）比班次行（22.88）矮，加不加入模型
+  // 对渲染高度都是零影响。模型是这一步的**全部**意义所在（真机上字体行高比例
+  // 一变，胶囊就会顶起班次行），所以换个紧行高的 `DefaultTextStyle` 把它单拎
+  // 出来量：行高压到 1.0 后班次行只有 16.0，胶囊 21.8 成了行里的最高件。
+  testWidgets('定高模型：「本月有被调整的日子」要为「已调整」胶囊多留高度', (tester) async {
+    late BuildContext ctx;
+    await tester.pumpWidget(MaterialApp(
+      home: DefaultTextStyle(
+        // 只压行高，字号/字重照旧走角色令牌（模型内部自带）。
+        style: const TextStyle(height: 1.0),
+        child: Builder(builder: (c) {
+          ctx = c;
+          return const SizedBox.shrink();
+        }),
+      ),
+    ));
+
+    double cardH({required bool hasOverrideHint}) => measureBottomInfoCardHeight(
+          context: ctx,
+          cardOuterWidth: 420,
+          // 这一条只盯班次行：不挂排班就没有色块那一段的干扰。
+          schedule: null,
+          month: DateTime(2026, 9, 1),
+          hasTodoHint: false,
+          hasOverrideHint: hasOverrideHint,
+        );
+
+    expect(cardH(hasOverrideHint: true), greaterThan(cardH(hasOverrideHint: false)),
+        reason: '这个月有被按天调过的日子时，班次行要按「已调整」胶囊的高度预留 —— '
+            '少了这一步，真机上有标记的那天卡片内容会顶出定高');
 
     await _disposeCalendar(tester);
   });
