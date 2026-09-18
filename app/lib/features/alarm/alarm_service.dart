@@ -44,6 +44,61 @@ class AlarmRing {
   }
 }
 
+/// 「某天要排一条班次联动闹钟」的一条决策结果。
+///
+/// [offset] 是距起点日的天数偏移（`0` = 起点当天），原生 id 由它算出
+/// （`AlarmService._shiftBaseId + offset`）—— 这个映射必须保持不变，否则
+/// 每次重排都会把闹钟换个号，用户设过的响铃记录会跟着错位。
+class ShiftAlarmPlan {
+  const ShiftAlarmPlan({
+    required this.offset,
+    required this.shift,
+    required this.fireAt,
+  });
+
+  final int offset;
+  final ShiftClass shift;
+  final DateTime fireAt;
+}
+
+/// 决定「未来 [days] 天里哪些天要排班次联动闹钟、各排在几点」。
+///
+/// 从 [AlarmService.reschedule] 的排定循环里抽出来的**纯**决策：不碰通知插件、
+/// 不读 `DateTime.now()`（当前时刻由 [from] 传入）。抽出来是因为那段逻辑原本
+/// 和 `scheduleNativeAlarm` 缠在一起，而项目没有可运行的原生插件目标，于是
+/// 三条规格（spec §11：覆盖成休班不排 / 覆盖成别的班按那个班的时间排 /
+/// 与「按天关闹钟」正交）**从来没有被任何测试盖到**。
+///
+/// 跳过条件与从前的循环逐条一致：
+/// 那天没有班次 / 是休班 / 班次没开闹钟 / 班次没设闹钟时间 /
+/// 那天被「按天关闹钟」显式关过（[overrides] 里值为 `false`）/
+/// 算出来的触发时刻不晚于 [from]（今天这个点已经过去了）。
+List<ShiftAlarmPlan> planShiftAlarms(
+  ShiftSchedule schedule, {
+  required DateTime from,
+  required int days,
+  Map<int, bool> overrides = const {},
+}) {
+  final today = dateOnly(from);
+  final plans = <ShiftAlarmPlan>[];
+  for (var d = 0; d < days; d++) {
+    final date = today.add(Duration(days: d));
+    final t = schedule.shiftOn(date);
+    if (t == null || t.isRest || !t.alarmEnabled || t.alarmMinute == null) {
+      continue;
+    }
+    // 按天覆盖：该天被单独关闭则跳过
+    if (overrides[dayNumber(date)] == false) continue;
+
+    final fireAt = DateTime(date.year, date.month, date.day)
+        .add(Duration(minutes: t.alarmMinute!));
+    if (!fireAt.isAfter(from)) continue;
+
+    plans.add(ShiftAlarmPlan(offset: d, shift: t, fireAt: fireAt));
+  }
+  return plans;
+}
+
 /// 联动班次闹钟 + 自定义闹钟服务。
 ///
 /// 排班闹钟排定未来 365 天；每次打开 App 自动续排，跟着排班走、不过期。
@@ -648,24 +703,15 @@ class AlarmService {
     await cancelAllNativeAlarms();
     await cancelAllTodoReminders();
 
-    final today = dateOnly(DateTime.now());
-
     // 1) 排班联动闹钟：未来 days 天
-    for (var d = 0; d < days; d++) {
-      final date = today.add(Duration(days: d));
-      final t = schedule.shiftOn(date);
-      if (t == null || t.isRest || !t.alarmEnabled || t.alarmMinute == null) {
-        continue;
-      }
-      // 按天覆盖：该天被单独关闭则跳过
-      if (overrides[dayNumber(date)] == false) continue;
-
-      final fireAt = DateTime(date.year, date.month, date.day)
-          .add(Duration(minutes: t.alarmMinute!));
-      if (!fireAt.isAfter(DateTime.now())) continue;
-
+    //
+    // 「哪些天要排、各排几点」由 [planShiftAlarms] 这个纯函数决定（可单测）；
+    // 这里只负责把决策落成原生闹钟。id 仍是 `_shiftBaseId + 天数偏移`。
+    for (final plan in planShiftAlarms(schedule,
+        from: DateTime.now(), days: days, overrides: overrides)) {
       try {
-        await scheduleNativeAlarm(_shiftBaseId + d, fireAt, '${t.name}提醒');
+        await scheduleNativeAlarm(
+            _shiftBaseId + plan.offset, plan.fireAt, '${plan.shift.name}提醒');
       } catch (e) {
         await appendLog('reschedule: 排班闹钟排定失败: $e');
       }
