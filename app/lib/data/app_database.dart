@@ -93,6 +93,26 @@ class ShiftAlarmOverrides extends Table {
   Set<Column> get primaryKey => {day};
 }
 
+/// 按天改班表：用户对某一天单独指定班次（换班 / 请假覆盖）。
+///
+/// 复合主键 `{scheduleId, day}`，覆盖**跟着方案走** —— 切到别的方案时这套覆盖
+/// 不生效（「这天是什么班」整个都变了），删方案时连带删掉。
+///
+/// [day] 与 [ShiftAlarmOverrides.day] 同一个口径：纯日期自 epoch 的天数，
+/// 由 `dayNumber()` 计算。[classId] 指向 `shift_class_rows.id`。
+///
+/// **与 [ShiftAlarmOverrides] 有意不一致**：那张表是全局的（只有 `day` 一个主键），
+/// 因为它表达的是「那天别响」，跨方案也说得通；本表表达的是「那天上哪个班」，
+/// 必然依附于某套方案的班次定义。别顺手把两者统一。
+class ShiftDayOverrides extends Table {
+  IntColumn get scheduleId => integer()();
+  IntColumn get day => integer()();
+  IntColumn get classId => integer()();
+
+  @override
+  Set<Column> get primaryKey => {scheduleId, day};
+}
+
 @DriftDatabase(tables: [
   ShiftScheduleRows,
   ShiftClassRows,
@@ -100,6 +120,7 @@ class ShiftAlarmOverrides extends Table {
   ScheduleEvents,
   CustomAlarms,
   ShiftAlarmOverrides,
+  ShiftDayOverrides,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'shiftassistantpro'));
@@ -108,12 +129,16 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 8) {
+            // 按天改班（换班 / 请假覆盖）。纯新增一张表，不碰任何既有数据。
+            await m.createTable(shiftDayOverrides);
+          }
           if (from < 7) {
             // 待办的「联动闹钟」开关。默认关 = 保持旧行为（只弹通知）。
             await m.addColumn(scheduleEvents, scheduleEvents.alarmEnabled);

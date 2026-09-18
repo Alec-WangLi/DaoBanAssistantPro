@@ -2241,6 +2241,240 @@ class ShiftAlarmOverridesCompanion extends UpdateCompanion<ShiftAlarmOverride> {
   }
 }
 
+class $ShiftDayOverridesTable extends ShiftDayOverrides
+    with TableInfo<$ShiftDayOverridesTable, ShiftDayOverride> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ShiftDayOverridesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _scheduleIdMeta =
+      const VerificationMeta('scheduleId');
+  @override
+  late final GeneratedColumn<int> scheduleId = GeneratedColumn<int>(
+      'schedule_id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<int> day = GeneratedColumn<int>(
+      'day', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _classIdMeta =
+      const VerificationMeta('classId');
+  @override
+  late final GeneratedColumn<int> classId = GeneratedColumn<int>(
+      'class_id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [scheduleId, day, classId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shift_day_overrides';
+  @override
+  VerificationContext validateIntegrity(Insertable<ShiftDayOverride> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('schedule_id')) {
+      context.handle(
+          _scheduleIdMeta,
+          scheduleId.isAcceptableOrUnknown(
+              data['schedule_id']!, _scheduleIdMeta));
+    } else if (isInserting) {
+      context.missing(_scheduleIdMeta);
+    }
+    if (data.containsKey('day')) {
+      context.handle(
+          _dayMeta, day.isAcceptableOrUnknown(data['day']!, _dayMeta));
+    } else if (isInserting) {
+      context.missing(_dayMeta);
+    }
+    if (data.containsKey('class_id')) {
+      context.handle(_classIdMeta,
+          classId.isAcceptableOrUnknown(data['class_id']!, _classIdMeta));
+    } else if (isInserting) {
+      context.missing(_classIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {scheduleId, day};
+  @override
+  ShiftDayOverride map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ShiftDayOverride(
+      scheduleId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}schedule_id'])!,
+      day: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}day'])!,
+      classId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}class_id'])!,
+    );
+  }
+
+  @override
+  $ShiftDayOverridesTable createAlias(String alias) {
+    return $ShiftDayOverridesTable(attachedDatabase, alias);
+  }
+}
+
+class ShiftDayOverride extends DataClass
+    implements Insertable<ShiftDayOverride> {
+  final int scheduleId;
+  final int day;
+  final int classId;
+  const ShiftDayOverride(
+      {required this.scheduleId, required this.day, required this.classId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['schedule_id'] = Variable<int>(scheduleId);
+    map['day'] = Variable<int>(day);
+    map['class_id'] = Variable<int>(classId);
+    return map;
+  }
+
+  ShiftDayOverridesCompanion toCompanion(bool nullToAbsent) {
+    return ShiftDayOverridesCompanion(
+      scheduleId: Value(scheduleId),
+      day: Value(day),
+      classId: Value(classId),
+    );
+  }
+
+  factory ShiftDayOverride.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ShiftDayOverride(
+      scheduleId: serializer.fromJson<int>(json['scheduleId']),
+      day: serializer.fromJson<int>(json['day']),
+      classId: serializer.fromJson<int>(json['classId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'scheduleId': serializer.toJson<int>(scheduleId),
+      'day': serializer.toJson<int>(day),
+      'classId': serializer.toJson<int>(classId),
+    };
+  }
+
+  ShiftDayOverride copyWith({int? scheduleId, int? day, int? classId}) =>
+      ShiftDayOverride(
+        scheduleId: scheduleId ?? this.scheduleId,
+        day: day ?? this.day,
+        classId: classId ?? this.classId,
+      );
+  ShiftDayOverride copyWithCompanion(ShiftDayOverridesCompanion data) {
+    return ShiftDayOverride(
+      scheduleId:
+          data.scheduleId.present ? data.scheduleId.value : this.scheduleId,
+      day: data.day.present ? data.day.value : this.day,
+      classId: data.classId.present ? data.classId.value : this.classId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftDayOverride(')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('day: $day, ')
+          ..write('classId: $classId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(scheduleId, day, classId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ShiftDayOverride &&
+          other.scheduleId == this.scheduleId &&
+          other.day == this.day &&
+          other.classId == this.classId);
+}
+
+class ShiftDayOverridesCompanion extends UpdateCompanion<ShiftDayOverride> {
+  final Value<int> scheduleId;
+  final Value<int> day;
+  final Value<int> classId;
+  final Value<int> rowid;
+  const ShiftDayOverridesCompanion({
+    this.scheduleId = const Value.absent(),
+    this.day = const Value.absent(),
+    this.classId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ShiftDayOverridesCompanion.insert({
+    required int scheduleId,
+    required int day,
+    required int classId,
+    this.rowid = const Value.absent(),
+  })  : scheduleId = Value(scheduleId),
+        day = Value(day),
+        classId = Value(classId);
+  static Insertable<ShiftDayOverride> custom({
+    Expression<int>? scheduleId,
+    Expression<int>? day,
+    Expression<int>? classId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (scheduleId != null) 'schedule_id': scheduleId,
+      if (day != null) 'day': day,
+      if (classId != null) 'class_id': classId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ShiftDayOverridesCompanion copyWith(
+      {Value<int>? scheduleId,
+      Value<int>? day,
+      Value<int>? classId,
+      Value<int>? rowid}) {
+    return ShiftDayOverridesCompanion(
+      scheduleId: scheduleId ?? this.scheduleId,
+      day: day ?? this.day,
+      classId: classId ?? this.classId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (scheduleId.present) {
+      map['schedule_id'] = Variable<int>(scheduleId.value);
+    }
+    if (day.present) {
+      map['day'] = Variable<int>(day.value);
+    }
+    if (classId.present) {
+      map['class_id'] = Variable<int>(classId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftDayOverridesCompanion(')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('day: $day, ')
+          ..write('classId: $classId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2252,6 +2486,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CustomAlarmsTable customAlarms = $CustomAlarmsTable(this);
   late final $ShiftAlarmOverridesTable shiftAlarmOverrides =
       $ShiftAlarmOverridesTable(this);
+  late final $ShiftDayOverridesTable shiftDayOverrides =
+      $ShiftDayOverridesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2262,7 +2498,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         shiftCycleRows,
         scheduleEvents,
         customAlarms,
-        shiftAlarmOverrides
+        shiftAlarmOverrides,
+        shiftDayOverrides
       ];
 }
 
@@ -3433,6 +3670,151 @@ typedef $$ShiftAlarmOverridesTableProcessedTableManager = ProcessedTableManager<
     ),
     ShiftAlarmOverride,
     PrefetchHooks Function()>;
+typedef $$ShiftDayOverridesTableCreateCompanionBuilder
+    = ShiftDayOverridesCompanion Function({
+  required int scheduleId,
+  required int day,
+  required int classId,
+  Value<int> rowid,
+});
+typedef $$ShiftDayOverridesTableUpdateCompanionBuilder
+    = ShiftDayOverridesCompanion Function({
+  Value<int> scheduleId,
+  Value<int> day,
+  Value<int> classId,
+  Value<int> rowid,
+});
+
+class $$ShiftDayOverridesTableFilterComposer
+    extends Composer<_$AppDatabase, $ShiftDayOverridesTable> {
+  $$ShiftDayOverridesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get classId => $composableBuilder(
+      column: $table.classId, builder: (column) => ColumnFilters(column));
+}
+
+class $$ShiftDayOverridesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShiftDayOverridesTable> {
+  $$ShiftDayOverridesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get classId => $composableBuilder(
+      column: $table.classId, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ShiftDayOverridesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShiftDayOverridesTable> {
+  $$ShiftDayOverridesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => column);
+
+  GeneratedColumn<int> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
+
+  GeneratedColumn<int> get classId =>
+      $composableBuilder(column: $table.classId, builder: (column) => column);
+}
+
+class $$ShiftDayOverridesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ShiftDayOverridesTable,
+    ShiftDayOverride,
+    $$ShiftDayOverridesTableFilterComposer,
+    $$ShiftDayOverridesTableOrderingComposer,
+    $$ShiftDayOverridesTableAnnotationComposer,
+    $$ShiftDayOverridesTableCreateCompanionBuilder,
+    $$ShiftDayOverridesTableUpdateCompanionBuilder,
+    (
+      ShiftDayOverride,
+      BaseReferences<_$AppDatabase, $ShiftDayOverridesTable, ShiftDayOverride>
+    ),
+    ShiftDayOverride,
+    PrefetchHooks Function()> {
+  $$ShiftDayOverridesTableTableManager(
+      _$AppDatabase db, $ShiftDayOverridesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ShiftDayOverridesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ShiftDayOverridesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ShiftDayOverridesTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> scheduleId = const Value.absent(),
+            Value<int> day = const Value.absent(),
+            Value<int> classId = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ShiftDayOverridesCompanion(
+            scheduleId: scheduleId,
+            day: day,
+            classId: classId,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required int scheduleId,
+            required int day,
+            required int classId,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ShiftDayOverridesCompanion.insert(
+            scheduleId: scheduleId,
+            day: day,
+            classId: classId,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ShiftDayOverridesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ShiftDayOverridesTable,
+    ShiftDayOverride,
+    $$ShiftDayOverridesTableFilterComposer,
+    $$ShiftDayOverridesTableOrderingComposer,
+    $$ShiftDayOverridesTableAnnotationComposer,
+    $$ShiftDayOverridesTableCreateCompanionBuilder,
+    $$ShiftDayOverridesTableUpdateCompanionBuilder,
+    (
+      ShiftDayOverride,
+      BaseReferences<_$AppDatabase, $ShiftDayOverridesTable, ShiftDayOverride>
+    ),
+    ShiftDayOverride,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3449,4 +3831,6 @@ class $AppDatabaseManager {
       $$CustomAlarmsTableTableManager(_db, _db.customAlarms);
   $$ShiftAlarmOverridesTableTableManager get shiftAlarmOverrides =>
       $$ShiftAlarmOverridesTableTableManager(_db, _db.shiftAlarmOverrides);
+  $$ShiftDayOverridesTableTableManager get shiftDayOverrides =>
+      $$ShiftDayOverridesTableTableManager(_db, _db.shiftDayOverrides);
 }
