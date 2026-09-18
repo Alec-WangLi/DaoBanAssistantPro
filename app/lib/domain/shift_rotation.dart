@@ -54,6 +54,7 @@ String formatClock(int minutes) {
 /// 班次定义：一个班次只定义一次，周期里的每一天引用它。
 class ShiftClass {
   const ShiftClass({
+    this.id,
     required this.name,
     this.abbr,
     this.startMinute,
@@ -63,6 +64,13 @@ class ShiftClass {
     this.alarmEnabled = false,
     this.alarmMinute,
   });
+
+  /// 库里的行 id；null = 还没落库的新班次。
+  ///
+  /// **这个字段是「按天改班」能成立的前提**：覆盖表引用的是班次定义，而
+  /// `saveSchedule` 从前每次保存都把班次行删光重建、id 全变 —— 有了稳定 id，
+  /// 覆盖才指得住（spec §4）。
+  final int? id;
 
   /// 班次名（自由文本），如 白班 / 上夜班 / 下夜班 / 大休。
   final String name;
@@ -120,6 +128,7 @@ class ShiftClass {
   }
 
   ShiftClass copyWith({
+    int? id,
     String? name,
     String? abbr,
     int? startMinute,
@@ -130,6 +139,7 @@ class ShiftClass {
     int? alarmMinute,
   }) {
     return ShiftClass(
+      id: id ?? this.id,
       name: name ?? this.name,
       abbr: abbr ?? this.abbr,
       startMinute: startMinute ?? this.startMinute,
@@ -144,6 +154,7 @@ class ShiftClass {
   @override
   bool operator ==(Object other) =>
       other is ShiftClass &&
+      other.id == id &&
       other.name == name &&
       other.abbr == abbr &&
       other.startMinute == startMinute &&
@@ -154,8 +165,8 @@ class ShiftClass {
       other.alarmMinute == alarmMinute;
 
   @override
-  int get hashCode => Object.hash(name, abbr, startMinute, endMinute, isRest,
-      color, alarmEnabled, alarmMinute);
+  int get hashCode => Object.hash(id, name, abbr, startMinute, endMinute,
+      isRest, color, alarmEnabled, alarmMinute);
 
   @override
   String toString() => 'ShiftClass($name, rest=$isRest)';
@@ -172,6 +183,7 @@ class ShiftSchedule {
     this.teamNames = const ['一班', '二班', '三班', '四班'],
     this.ourTeamIndex = 0,
     this.teamOffsets = const [],
+    this.dayOverrides = const {},
   });
 
   /// 空白表（跟随法定节假日）：周期为空。
@@ -201,10 +213,30 @@ class ShiftSchedule {
   /// 为空时回退到旧的「按 ourTeamIndex 错开」逻辑。
   final List<int> teamOffsets;
 
+  /// 按天改班覆盖：`dayNumber(日期) → classes 下标`。
+  ///
+  /// 与其他班次查询**同口径**（存的是下标，不是 classId）—— 库里存 classId，
+  /// 由 `ActiveSchedule.toDomain()` 转换过来。
+  ///
+  /// 只作用于**我们班组**：[teamShift] 不查它。
+  final Map<int, int> dayOverrides;
+
   int get cycleLength => cycle.length;
 
-  /// 我们班组的班次；空白表（无周期）返回 null。
-  ShiftClass? shiftOn(DateTime date) => teamShift(ourTeamIndex, date);
+  /// 我们班组的班次：先查按天覆盖，没有覆盖才按轮转算。
+  ///
+  /// **覆盖只在 `shiftOn` 这一层生效**，所以四个消费者 —— 日历格子、底栏
+  /// 信息卡、闹钟重排（`AlarmService.reschedule`）、闹钟页「未来 30 天」 ——
+  /// 全都自动跟着走。而 [teamShift] 不查覆盖，「查看其他班组」看到的仍是纯
+  /// 轮转，别人的班不会被我的调整改掉。
+  ///
+  /// 覆盖下标越界（班次被删、历史脏数据）时**回退到轮转**，不抛异常。
+  /// 空白表（无周期）仍返回 null，覆盖不改变这一点。
+  ShiftClass? shiftOn(DateTime date) {
+    final ov = dayOverrides[dayNumber(date)];
+    if (ov != null && ov >= 0 && ov < classes.length) return classes[ov];
+    return teamShift(ourTeamIndex, date);
+  }
 
   /// 指定班组在某天的班次；空白表（无周期）返回 null。
   ShiftClass? teamShift(int teamIndex, DateTime date) {

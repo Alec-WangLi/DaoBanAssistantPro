@@ -137,4 +137,74 @@ void main() {
     expect(rest.endClockMinute, isNull);
     expect(rest.endsNextDay, isFalse);
   });
+
+  group('按天改班覆盖', () {
+    /// 拿默认「四班两倒」当底，只换 dayOverrides。
+    ShiftSchedule withOverrides(Map<int, int> overrides) {
+      final base = defaultSchedule();
+      return ShiftSchedule(
+        name: base.name,
+        anchorDate: base.anchorDate,
+        classes: base.classes,
+        cycle: base.cycle,
+        teamCount: base.teamCount,
+        teamNames: base.teamNames,
+        ourTeamIndex: base.ourTeamIndex,
+        teamOffsets: base.teamOffsets,
+        dayOverrides: overrides,
+      );
+    }
+
+    final day = DateTime(2026, 9, 20);
+
+    test('覆盖命中：那天返回覆盖的班次', () {
+      final s = withOverrides({dayNumber(day): 3});
+      final bare = withOverrides(const {});
+      expect(s.shiftOn(day)!.name, isNot(bare.shiftOn(day)!.name),
+          reason: '这天应当换成了别的班');
+      expect(s.shiftOn(day)!.name, bare.classes[3].name);
+    });
+
+    test('没被覆盖的日子仍是轮转结果', () {
+      final s = withOverrides({dayNumber(day): 3});
+      final bare = withOverrides(const {});
+      final next = day.add(const Duration(days: 1));
+      expect(s.shiftOn(next)!.name, bare.shiftOn(next)!.name);
+    });
+
+    test('下标越界回退到轮转，不抛异常', () {
+      final s = withOverrides({dayNumber(day): 99});
+      final bare = withOverrides(const {});
+      expect(s.shiftOn(day)!.name, bare.shiftOn(day)!.name);
+    });
+
+    test('teamShift 不受覆盖影响（其他班组仍是纯轮转）', () {
+      final s = withOverrides({dayNumber(day): 3});
+      final bare = withOverrides(const {});
+      for (var t = 0; t < 4; t++) {
+        expect(s.teamShift(t, day)!.name, bare.teamShift(t, day)!.name,
+            reason: '第 $t 组不该被「我」的覆盖改掉');
+      }
+    });
+
+    test('空白表方案忽略覆盖（无周期 → 仍是 null）', () {
+      final blank = ShiftSchedule(
+        name: '跟随法定节假日',
+        anchorDate: DateTime.utc(2025, 1, 6),
+        classes: const [],
+        cycle: const [],
+        dayOverrides: {dayNumber(day): 0},
+      );
+      expect(blank.shiftOn(day), isNull);
+    });
+
+    test('ShiftClass 带 id 时按 id 区分身份', () {
+      const a = ShiftClass(id: 1, name: '白班');
+      const b = ShiftClass(id: 2, name: '白班');
+      const noId = ShiftClass(name: '白班');
+      expect(a, isNot(b), reason: '内容相同但 id 不同 = 两个不同实体');
+      expect(a, isNot(noId));
+      expect(a.copyWith(abbr: '白').id, 1, reason: 'copyWith 必须保住 id');
+    });
+  });
 }
