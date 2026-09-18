@@ -31,6 +31,7 @@
   卸载重装会**丢掉用户的真实排班数据**，所以只能走 release 构建。实测约 70 秒一次。
   附带好处：release 开了 `isMinifyEnabled = true`，顺带真的验一遍 R8 没把 `ShiftWidgetProvider` 裁掉。
 - **`RemoteViews` 视图白名单**：布局只用 `FrameLayout` / `LinearLayout` / `RelativeLayout` / `GridLayout`；控件只用 `TextView` / `ImageView` / `Button` / `ProgressBar` / `Chronometer` / `TextClock`。**没有 `ConstraintLayout`**，且**不能用这些类的子类**。
+  - ⚠️ **白名单是靠 `@RemoteView` 注解过滤的，所以 `android.view.View` 与 `android.widget.Space` 都不行**（两者都没这个注解）。实测本仓 `android-36/android.jar`：`View`/`ViewGroup`/`Space` 为 0，`TextView`/`ImageView`/`LinearLayout`/`FrameLayout`/`GridLayout` 为 7（`javap -v` 数 `RemoteView` 出现次数）。**想要一条 1dp 分隔线或一个占位弹簧，要用 `ImageView`** —— 用 `<View>` 的后果是宿主在 `apply()` 阶段抛 `InflateException: Class not allowed to be inflated android.view.View`，**整张卡片渲染不出来**，而不是只丢那一条线。Task 3 实做时踩中，评审用 `javap` 实测发现。`setViewVisibility(id, android.view.View.GONE)` 里引用 `View.GONE` 这个**常量**没问题 —— 受限的是被 inflate 的类，不是常量。
 - **包名** `com.daoban.shiftassistantpro`；`minSdk = 26`、`targetSdk = 36`（`flutter.targetSdkVersion`）。`release` 构建 `isMinifyEnabled = true`，新增的 `AppWidgetProvider` **必须**在 `AndroidManifest.xml` 里显式声明，否则会被 R8 裁掉。
 - **测试只增不减**（本分支起点 `e503b78` 实测 `241` 条 —— 计划初稿写的 170 是抄自更早那份 spec 的旧值，Task 1 的评审指出后已改正）。
 - **文案一律走 `L10n`**（`app/lib/core/l10n.dart`），不要在任何地方硬编码中文字符串。Kotlin 侧一个中文字面量都不许出现。
@@ -1150,6 +1151,37 @@ Task 2 是一棵没人浇水的树。这一步把 Dart 的快照送到它手上�
 
 在文件顶部加 `import 'package:shiftassistantpro/features/widget/widget_service.dart';`。
 
+**同一步再加一条**（Task 1 的评审指出：本设计的核心不变量 B「相对文案按偏移索引、不按日期烘焙」原本零测试覆盖，而 `labels` 正是本任务 `relativeLabel` 要消费的接口）：
+
+```dart
+  test('labels 按偏移提供相对文案 —— 不变量 B 的契约', () {
+    final s = buildWidgetSnapshot(
+      schedule: _schedule(),
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+    );
+    final labels = s['labels']! as Map;
+    expect(labels['today'], L10n.widgetToday);
+    expect(labels['tomorrow'], L10n.widgetTomorrow);
+    expect(labels['dayAfter'], L10n.widgetDayAfter);
+    // 关键：这**三个**词都不在 days[] 里 —— 若有人把它们烘进 days[i]，
+    // 跨天之后 days[i] 会自称「明天」。三个都要循环断言：只钉「明天」的话，
+    // 「今天」或「后天」被烘进去时这条测试不会红。
+    for (final word in [
+      L10n.widgetToday,
+      L10n.widgetTomorrow,
+      L10n.widgetDayAfter,
+    ]) {
+      for (final d in s['days']! as List) {
+        expect((d as Map).values, isNot(contains(word)));
+      }
+    }
+  });
+```
+
+所以本任务结束时 `widget_snapshot_test.dart` 是 **11 条**（原 9 + epochDay + labels）。
+
 - [ ] **Step 2: 跑测试，确认它失败**
 
 Run: `cd app && /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter test test/widget_snapshot_test.dart`
@@ -1208,9 +1240,19 @@ class WidgetService {
         accent: settings.accentColor.toARGB32(),
       ));
       await _channel.invokeMethod<bool>('widgetPushSnapshot', {'json': json});
-    } catch (_) {
-      // 小组件是锦上添花：没有它 App 一切照常。推失败不打扰用户、也不中断调用方
+    } catch (e) {
+      // 小组件是锦上添花：没有它 App 一切照常，推失败不打扰用户、也不中断调用方
       // （它多半跑在 build 之后的后帧回调里）。
+      //
+      // 但**要留痕**：「桌面怎么没变」这类问题只能靠日志排查，而这一层恰好是唯一
+      // 知道 push 发生过的地方 —— 静默吞掉等于把唯一线索也扔了。
+      // 直接走 channel 而不 import `alarm_service.dart`：那两个文件互相 import 会
+      // 成环，而 `logInfo` 本来就是同一条 channel 上的一个方法名。
+      try {
+        await _channel.invokeMethod('logInfo', {'msg': 'widgetPushSnapshot 失败: $e'});
+      } catch (_) {
+        // 连日志都发不出去（引擎已经没了）—— 到这一步没什么可做的了。
+      }
     }
   }
 
@@ -1414,11 +1456,20 @@ Expected: `All tests passed!`（10 条）
         </LinearLayout>
     </LinearLayout>
 
-    <View
+    <!-- 分隔线用 ImageView 而不是 <View>：白名单是靠 `@RemoteView` 注解
+         过滤的，而 `android.view.View` **没有**这个注解（`Space` 也没有）——
+         实测本仓 android-36 的 android.jar：View/ViewGroup/Space 均为 0，
+         TextView/ImageView/LinearLayout/FrameLayout/GridLayout 均为 7。
+         用 <View> 的后果是宿主在 apply() 阶段抛
+         `InflateException: Class not allowed to be inflated android.view.View`，
+         **整张卡片渲染不出来**（不是只丢这条线）。Task 3 实做后由评审用
+         javap 实测发现。 -->
+    <ImageView
         android:id="@+id/wg_s_divider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="8dp"
+        android:contentDescription="@null" />
 
     <TextView
         android:id="@+id/wg_s_next"
@@ -1436,11 +1487,50 @@ Expected: `All tests passed!`（10 条）
 把 `WidgetRenderer.kt` 里的 `TODO(...)` 那行换成：
 
 ```kotlin
+        // 空表（没建过排班 / 选了「跟随法定节假日」那种空白表方案）：整张卡只留
+        // 一句来自快照的提示。这一支必须在分档**之前** —— 三档尺寸在空表下长得
+        // 一致，不必各写一套。
+        if (!snap.hasSchedule) return empty(context, snap)
+
         return when (tier) {
             WidgetTier.SMALL -> small(context, snap, todayIndex)
             WidgetTier.MEDIUM -> small(context, snap, todayIndex) // Task 4 换成 medium(...)
             WidgetTier.LARGE -> small(context, snap, todayIndex)  // Task 4 换成 large(...)
         }
+```
+
+并在 `object WidgetRenderer` 里加 `empty`（放在 `placeholder` 之前）：
+
+```kotlin
+    /**
+     * 空表态：没有排班（`snap.hasSchedule == false`）。
+     *
+     * 为什么不复用 `small()` 加几个 if：那条路要隐藏六七个视图，且班上「今天周四 /
+     * 周四 / 后天 周五」那种看着像正常班次卡的东西会让用户以为排班已经生效了。
+     * 这里清空重设，语义上就是「还没排班」这一件事。
+     *
+     * 文案来自快照的 `emptyHint`（Dart 侧 `L10n.widgetEmptyHint` 产出）——
+     * Kotlin 侧仍然一个字面量都没有。
+     */
+    private fun empty(context: Context, snap: WidgetStore.Snapshot): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_small)
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            R.id.wg_s_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
+        v.setTextViewText(R.id.wg_s_relative, snap.emptyHint)
+        v.setTextColor(R.id.wg_s_relative, ink)
+        for (id in intArrayOf(
+            R.id.wg_s_weekday, R.id.wg_s_date, R.id.wg_s_bar,
+            R.id.wg_s_shift, R.id.wg_s_time, R.id.wg_s_divider, R.id.wg_s_next,
+        )) {
+            v.setViewVisibility(id, android.view.View.GONE)
+        }
+        return v
+    }
 ```
 
 > 中/大档暂时复用小卡：这样 Task 3 结束时**所有尺寸都显示得出来**，Task 4 只是把内容换得更丰富，不引入「某档还是空白」的中间态。
@@ -1725,11 +1815,13 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:maxLines="1" />
     </LinearLayout>
 
-    <View
+    <!-- 同 widget_small：分隔线必须是 ImageView，不能用 <View>（无 @RemoteView）。 -->
+    <ImageView
         android:id="@+id/wg_m_div1"
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="4dp" />
+        android:layout_marginTop="4dp"
+        android:contentDescription="@null" />
 
     <!-- ===== 第 2 行 ===== -->
     <LinearLayout
@@ -1784,11 +1876,13 @@ Dart 侧 push 快照、原生落盘并渲染小卡。中/大档暂时复用小�
             android:maxLines="1" />
     </LinearLayout>
 
-    <View
+    <!-- 同 widget_small：分隔线必须是 ImageView，不能用 <View>（无 @RemoteView）。 -->
+    <ImageView
         android:id="@+id/wg_m_div2"
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="4dp" />
+        android:layout_marginTop="4dp"
+        android:contentDescription="@null" />
 
     <!-- ===== 第 3 行（底下不再接分隔线） ===== -->
     <LinearLayout
