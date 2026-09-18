@@ -19,7 +19,13 @@
 /SKILLS_PLAYBOOK.md
 /cross-platform-harmonyos-research.md
 /liquid-glass-open-source-research.md
-/docs/superpowers/
+
+# 注：`/docs/superpowers/`（每个功能的 spec 与实施 plan）**有意入库** ——
+# 2026-09-18 用户定，理由：它是本项目自己的设计文档，对一个 MIT 开源仓库是
+# 有用的资料，且已逐份扫描过 —— 不含凭据 / keystore / 逆向与来源相关内容。
+# 它与上面那几份「分析笔记」不是一类东西，别把两者一起重新忽略掉。
+# 本轮之前它是被 -f 单独加进来两份的（那也是「spec 入库、plan 不入库」那个
+# 混合状态的由来）；现在整目录正常跟踪。
 
 # ---- 密钥：Android 正式签名（release keystore + 口令，不入库，务必本地备份）----
 /app/android/key.properties
