@@ -112,7 +112,7 @@ await (db.delete(db.shiftClassRows)..where((t) => t.scheduleId.equals(id))).go()
 
 ### 4.3 这条改动的成本
 
-要动 `schedule_editor_screen.dart`：`_classes` 是 `List<ShiftClass>`，只要它带着 id 走就行（`_editClass` 走 `copyWith`，id 自然保留；`_deleteClass` 走 `removeAt`，其余班次的对象不变、id 跟着对象走）。**`_deleteClass` 里那段「周期下标整体前移」的逻辑不受 id 影响**，不用改。
+要动 `schedule_editor_screen.dart`：`_classes` 是 `List<ShiftClass>`，只要它带着 id 走就行（`_editClass` 是一个**显式构造 `ShiftClass` 的专用函数，并不是 `copyWith`** —— 它必须把 `id: c.id` 带上；之所以不用 `copyWith`，是因为 `copyWith` 没有把可空字段**清成 null** 的通道，切休班时时间 / 闹钟清不掉；`_deleteClass` 走 `removeAt`，其余班次的对象不变、id 跟着对象走）。**`_deleteClass` 里那段「周期下标整体前移」的逻辑不受 id 影响**，不用改。
 
 **一处容易搅混的地方**：`_deleteClass` 的注释（[schedule_editor_screen.dart:1232](app/lib/features/calendar/schedule_editor_screen.dart:1232)）说「删除会把周期里比它大的下标整体前移」。那是 **`_cycle` 里的下标**，与 `ShiftClass.id` 是两码事 —— 别把两者搅在一起。本轮不碰 `_cycle` 的这套下标语义。
 
