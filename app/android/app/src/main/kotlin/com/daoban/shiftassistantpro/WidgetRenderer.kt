@@ -30,14 +30,39 @@ object WidgetRenderer {
         (dp * context.resources.displayMetrics.density).toInt()
 
     /**
-     * 整卡的 requestCode：实例号占高位，低位 0 留给「不指定日期」。
+     * 小组件点击用的 requestCode 基址。
+     *
+     * **必须远离项目里所有既有的 requestCode 区间。** 理由：这些 PendingIntent 的意图
+     * 都是「无 action、无 data 的 `MainActivity`」，而 `PendingIntent` 的身份是
+     * 「requestCode + 意图的 `filterEquals`」—— `filterEquals` **只比 action/data/
+     * category/component，不比 extras，也不比 flags**。所以只要 requestCode 撞上，两个
+     * 逻辑上毫不相干的点击就会共用同一个 PendingIntent，配 `FLAG_UPDATE_CURRENT`
+     * 互相覆盖 extras。
+     *
+     * 既有区间（`AlarmScheduler` / `TodoReminderReceiver` 都用 `requestCode = 各自的 id`）：
+     * 班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒 20000..21000，另有
+     * `AlarmRingService` 的通知点击 0 / 1（同样带着 `alarm_label` 打向 `MainActivity`）
+     * 与 `MainActivity.REQ_PICK_RINGTONE = 40071`。取 100000 起，全部避开。
+     *
+     * `WidgetRefreshScheduler.REQ = 40081` **不在此列**：它是 `getBroadcast` 给
+     * `ShiftWidgetProvider` 且 `setAction` 过，目标组件与 `filterEquals` 都不同，
+     * 本来就与这里不是同一个 PendingIntent。（`MainActivity.nativePendingIntent`
+     * 同理，打向 `AlarmReceiver`。）
+     *
+     * 这条是 Task 7 的复审在 diff 之外发现的：初稿用 `widgetId * 16`，而 widget id 是
+     * **设备级全局单调计数器**（新设备上第一个小组件拿到的就是 1 左右），于是
+     * `Root(1) = 16` 正好落进班次闹钟的 id 区间里（那个区间从 0 起）。后果比「点错天」
+     * 更糟 —— 小组件每次渲染都会把那枚 PendingIntent 上的 `alarm_label` /
+     * `alarm_detail` 抹成空，闹钟通知点开的响铃界面因此失效。
      */
-    private fun rootRequestCode(widgetId: Int): Int = widgetId * 16
+    private const val WIDGET_REQ_BASE = 100_000
 
-    /**
-     * 第 cell 格的 requestCode。低位 +1 起，避开 `rootRequestCode` 的 0。
-     */
-    private fun cellRequestCode(widgetId: Int, cell: Int): Int = widgetId * 16 + 1 + cell
+    /** 整卡的 requestCode：低位 0 留给「不指定日期」。 */
+    private fun rootRequestCode(widgetId: Int): Int = WIDGET_REQ_BASE + widgetId * 16
+
+    /** 第 cell 格的 requestCode。低位 +1 起，避开 `rootRequestCode` 的 0。 */
+    private fun cellRequestCode(widgetId: Int, cell: Int): Int =
+        WIDGET_REQ_BASE + widgetId * 16 + 1 + cell
 
     /**
      * 打开 App 的 PendingIntent。
@@ -55,9 +80,10 @@ object WidgetRenderer {
      * 初稿让整卡用**裸 `widgetId`**，正是踩了这个坑；单实例时 `16w + c ≠ w` 不自撞，
      * 所以在只有 id 34 的桌面上测全过、藏得住。而 widget id 也**不是**「系统给的小
      * 整数」——它是设备级单调计数器（本机已到 34，且不复用），差 16 倍的两实例够得着。
-     * 现在 `Root(n) = 16n`（16 的倍数）与 `Cell(m, c) = 16m + 1 + c`（落在
-     * `16m+1..16m+7`，永远不是 16 的倍数）对任意 `n ≠ m` 都不相等，单实例内也不自撞；
-     * `widgetId` 涨到约 1.34 亿才会 `Int` 溢出。
+     * 现在 `Root(n) = WIDGET_REQ_BASE + 16n`（16 的倍数）与
+     * `Cell(m, c) = WIDGET_REQ_BASE + 16m + 1 + c`（落在 `16m+1..16m+7`，永远不是 16 的
+     * 倍数）对任意 `n ≠ m` 都不相等，单实例内也不自撞；基址再把它们整体抬离所有既有
+     * 区间（见 `WIDGET_REQ_BASE`）。`widgetId` 涨到约 1.34 亿才会 `Int` 溢出。
      */
     private fun launchIntent(context: Context, requestCode: Int, epochDay: Int? = null): PendingIntent {
         val i = Intent(context, MainActivity::class.java).apply {
