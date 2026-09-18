@@ -1037,7 +1037,7 @@ class ShiftWidgetProvider : AppWidgetProvider() {
         </receiver>
 ```
 
-- [ ] **Step 10: 构建并安装 debug APK**
+- [ ] **Step 10: 构建并安装 release APK**
 
 ```bash
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
