@@ -110,9 +110,11 @@ bool hapticsDisabled = false;
 
 | 手势 | 位置 | 档位 |
 |---|---|---|
-| 已有的单格滑块拖到**新的一格** | `_selectFromPosition` 里 `_selected` 真的变了时 | `select()` |
+| 已有的单格滑块：点选与拖动落点 | `_selectFromPosition`（点选）**与** `onPanEnd`（拖动落点）里，`_selected` 真的变了时 | `select()` |
 | 长按进入多选态 | `onLongPressStart` 判定成功（吸附到有效日期）时 | `modeEnter()` |
 | 长按拖选每进一格 | `onLongPressMoveUpdate` 里 `_rangeFocus` 真的变了时 | `select()` |
+
+> **单格滑块那行有两个落点，别只改一个。** 本表初稿只写了 `_selectFromPosition` —— 但那一路只从 `onTapDown` 走到；**拖动是 Pan**，一越过 slop 就把 Tap 识别器挤掉，落点走的是 `onPanEnd` → `_nearestDateFromVisual()`，**根本不经过 `_selectFromPosition`**。只改前者的话，滑块拖一次都不会震（实机一试就露）。两处都要，判据相同：吸附到的日期真的变了。
 
 第三行是用户最初提的那条。范围**往回缩**时同样会响 —— 只要吸附到的格子变了就响，两个方向一致。
 
