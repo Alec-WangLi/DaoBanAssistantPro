@@ -30,11 +30,34 @@ object WidgetRenderer {
         (dp * context.resources.displayMetrics.density).toInt()
 
     /**
+     * 整卡的 requestCode：实例号占高位，低位 0 留给「不指定日期」。
+     */
+    private fun rootRequestCode(widgetId: Int): Int = widgetId * 16
+
+    /**
+     * 第 cell 格的 requestCode。低位 +1 起，避开 `rootRequestCode` 的 0。
+     */
+    private fun cellRequestCode(widgetId: Int, cell: Int): Int = widgetId * 16 + 1 + cell
+
+    /**
      * 打开 App 的 PendingIntent。
      *
      * 用 `getActivity` + 显式组件：隐式 LAUNCHER intent 在某些 ROM 上会被解析到
-     * 「选择启动器」之类的东西上。requestCode 用 widget id 区分 —— 同一个
-     * PendingIntent 被不同实例共用时，extras 会互相覆盖。
+     * 「选择启动器」之类的东西上。
+     *
+     * ⚠️ requestCode 走上面那两个函数，**整卡与格子必须落在同一个仿射命名空间里**。
+     * `PendingIntent` 的身份是「requestCode + 意图的 `filterEquals`」——而 `filterEquals`
+     * **不比较 extras**，配上 `FLAG_UPDATE_CURRENT`（会覆盖 extras），两个实例只要
+     * 满足 `A == 16 * B + c`（`c ∈ 0..6`）就会共用一个 PendingIntent、互相冲掉
+     * `widget_day`，点一下跳到错的那天。比如同时存在实例 2 与实例 34 时，
+     * `Cell(2, 2) = 16*2 + 2 = 34`，正好撞上 `Root(34)`。
+     *
+     * 初稿让整卡用**裸 `widgetId`**，正是踩了这个坑；单实例时 `16w + c ≠ w` 不自撞，
+     * 所以在只有 id 34 的桌面上测全过、藏得住。而 widget id 也**不是**「系统给的小
+     * 整数」——它是设备级单调计数器（本机已到 34，且不复用），差 16 倍的两实例够得着。
+     * 现在 `Root(n) = 16n`（16 的倍数）与 `Cell(m, c) = 16m + 1 + c`（落在
+     * `16m+1..16m+7`，永远不是 16 的倍数）对任意 `n ≠ m` 都不相等，单实例内也不自撞；
+     * `widgetId` 涨到约 1.34 亿才会 `Int` 溢出。
      */
     private fun launchIntent(context: Context, requestCode: Int, epochDay: Int? = null): PendingIntent {
         val i = Intent(context, MainActivity::class.java).apply {
@@ -112,7 +135,7 @@ object WidgetRenderer {
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
         // 整卡点击 → 打开 App（落在日历页的今天）。这一步不传 epochDay。
-        v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, widgetId))
+        v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, rootRequestCode(widgetId)))
 
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         val muted =
@@ -207,7 +230,7 @@ object WidgetRenderer {
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
         // 整卡点击 → 打开 App（落在日历页的今天）。
-        v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, widgetId))
+        v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, rootRequestCode(widgetId)))
 
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         val muted =
@@ -303,7 +326,7 @@ object WidgetRenderer {
         )
         // 整卡点击 → 打开 App（落在日历页的今天）：点在格子之间的空隙 / 第 8 格
         // 那些没被下面逐格覆盖的地方时走这一条。
-        v.setOnClickPendingIntent(R.id.wg_l_root, launchIntent(context, widgetId))
+        v.setOnClickPendingIntent(R.id.wg_l_root, launchIntent(context, rootRequestCode(widgetId)))
 
         // 这里**不**声明 ink：大卡的日期走 muted、简称走 abbrInk（Dart 侧按班次色
         // 算好的白/黑二选一），没有需要纯正文色的地方。声明了会被 analyze 报未使用。
@@ -347,11 +370,13 @@ object WidgetRenderer {
             }
             val d = snap.days[i]
             v.setViewVisibility(cells[cell], android.view.View.VISIBLE)
-            // 点某一格 → 打开 App 并跳到那天。requestCode 用 `widgetId * 16 + cell`
-            // 错开（widget id 是系统给的小整数，格子最多 8 个），避免实例之间撞号。
+            // 点某一格 → 打开 App 并跳到那天。requestCode 走 `cellRequestCode`，
+            // 与整卡的 `rootRequestCode` 落在同一个命名空间里 —— 初稿写的是
+            // `widgetId * 16 + cell` 而整卡用裸 `widgetId`，那两个空间会撞（见
+            // `launchIntent` 的注释）。
             v.setOnClickPendingIntent(
                 cells[cell],
-                launchIntent(context, widgetId * 16 + cell, epochDay = d.day.toInt()),
+                launchIntent(context, cellRequestCode(widgetId, cell), epochDay = d.day.toInt()),
             )
             v.setTextViewText(dates[cell], d.dateShort)
             v.setTextColor(dates[cell], muted)
@@ -403,7 +428,7 @@ object WidgetRenderer {
         )
         // 空表态也要能点开 App —— 用的是同一个 widget_small 布局，根 id 同为
         // `wg_s_root`。用户看到「还没排班」时点一下应该进 App 去建排班。
-        v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, widgetId))
+        v.setOnClickPendingIntent(R.id.wg_s_root, launchIntent(context, rootRequestCode(widgetId)))
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         v.setTextViewText(R.id.wg_s_relative, snap.emptyHint)
         v.setTextColor(R.id.wg_s_relative, ink)
@@ -425,7 +450,7 @@ object WidgetRenderer {
         )
         // 占位态也要能点开 App —— 它多半是「还没有快照」，点进去最该做的是打开
         // App 让它推一份下来。
-        v.setOnClickPendingIntent(R.id.wg_ph_root, launchIntent(context, widgetId))
+        v.setOnClickPendingIntent(R.id.wg_ph_root, launchIntent(context, rootRequestCode(widgetId)))
         v.setImageViewResource(R.id.wg_ph_icon, R.mipmap.ic_launcher)
         v.setTextViewText(
             R.id.wg_ph_label,
