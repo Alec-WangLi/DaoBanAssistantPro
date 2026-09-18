@@ -187,6 +187,26 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return daysBetween(lo, date) >= 0 && daysBetween(date, hi) >= 0;
   }
 
+  /// 长按被取消时的统一收尾：滑块那套与范围态一起熄掉。
+  ///
+  /// 走到这儿的都是真·取消（切前台、来电）。长按赢下竞技场之后框架只把
+  /// `PointerUp` 送进 `onLongPressEnd`，取消那一支只发 `onLongPressCancel` ——
+  /// 不接它，那片范围淡染会一直挂在屏幕上，直到下一次长按。
+  void _clearGestureState() {
+    if (!_pressed &&
+        !_dragActive &&
+        _rangeAnchor == null &&
+        _rangeFocus == null) {
+      return; // 没有状态可清：不为一次无关的取消白白重建整棵网格
+    }
+    setState(() {
+      _pressed = false;
+      _dragActive = false;
+      _rangeAnchor = null;
+      _rangeFocus = null;
+    });
+  }
+
   /// 松手时：由选中块的连续视觉位置吸附到最近一格，返回该格日期（越界/空格返回 null）。
   DateTime? _nearestDateFromVisual() {
     final col = _visualCol.round();
@@ -746,9 +766,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           // 两套手势在竞技场里天然分流，互不顶掉（`_pressed` / `_dragActive` 是
           // 两套状态，长按起手时要把滑块那套先熄掉，免得玻璃块跟长按同时亮）。
           onLongPressStart: (d) {
-            final date = _dateFromPosition(d.localPosition, cellW, cellH);
-            if (date == null) return;
+            // 空白表方案（跟随法定节假日）没有班次定义可挑，长按不该进入范围态
+            // （spec §7.3）—— 否则用户拖出一片淡染、松手却什么也不发生。判据
+            // 与信息卡入口、`adjustDays` 内部那一处同源。
+            final canPick = schedule != null && schedule.classes.isNotEmpty;
+            final date =
+                canPick ? _dateFromPosition(d.localPosition, cellW, cellH) : null;
             setState(() {
+              // 长按赢下竞技场之后 `onTapUp` / `onPanEnd` 都不会再来，滑块那套
+              // 状态必须在这儿熄掉 —— 不然玻璃块停在按下的放大态，或者跟范围
+              // 淡染一起亮。落在本月之外的空白格时 `date` 是 null，范围态因此
+              // 保持为空（后续 moveUpdate / end 都空转），但这一下同样要把上面
+              // 那两个标志清掉。
               _pressed = false;
               _dragActive = false;
               _rangeAnchor = date;
@@ -775,6 +804,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             final b = daysBetween(from, to) >= 0 ? to : from;
             adjustDays(a, b);
           },
+          // 手指被系统取消（切前台、来电 —— 网格外面就是滚动容器）：
+          // `onLongPressEnd` 只在 `PointerUp` 时发，取消只有这一条回调。
+          // 注意长按赢下竞技场之后它**照样**会发：`GestureRecognizerState`
+          // 只有 ready/possible/defunct 三档，accept 不改 state，所以
+          // `_checkLongPressCancel` 的 `state == possible` 仍然成立。
+          onLongPressCancel: _clearGestureState,
           child: ClipRect(
             child: Stack(
               children: [
@@ -967,10 +1002,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       top: -2,
                       child: Container(
                         key: ValueKey('day-adjusted-${date.day}'),
-                        // 尺寸用光学微距令牌而不是跟着 `s` 缩放：小窗里
-                        // 1–2px 的点等于没有（spec §7.4）。
-                        width: AppTokens.gapHair,
-                        height: AppTokens.gapHair,
+                        // spec §7.4：**固定在 3–4dp、不跟格子高度缩放** ——
+                        // 格子里的字是按格子高等比缩放的，小窗里缩到 1–2px 就
+                        // 等于没有。这里借间距刻度上的 4dp 一档（`spaceXs`）：
+                        // 光学刻度（`gapHair` / `padChipV` …）最高的 3dp 也在
+                        // 区间内，但它们表达的是"控件内部两个元素贴合的微距"，
+                        // 用在标记的**尺寸**上语义不对。
+                        width: AppTokens.spaceXs,
+                        height: AppTokens.spaceXs,
                         decoration: BoxDecoration(
                           color: Color(shift.color),
                           shape: BoxShape.circle,
@@ -1010,6 +1049,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             if (inRange)
               Positioned.fill(
                 child: DecoratedBox(
+                  // 有 key 是为了让「圈住了哪几格」可断言 —— 淡染本身没有文字，
+                  // 只能靠 key 找（`_rangeSpan` 那几条用例）。
+                  key: ValueKey('day-range-${date.day}'),
                   decoration: BoxDecoration(
                     color: primary.withValues(alpha: 0.18),
                     borderRadius: _cellRadius,

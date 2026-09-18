@@ -43,6 +43,27 @@ const int _rangeFirstDay = 8;
 const int _rangeLastDay = 15;
 const int _rangeSpan = _rangeLastDay - _rangeFirstDay + 1;
 
+/// 玻璃块（选中滑块）当前的缩放：按住/拖拽时 1.22，松手后回到 1.0。
+///
+/// 用「块的祖先里的 `AnimatedScale`」定位，而不是 `find.byType(AnimatedScale)`：
+/// 整页里不止这一处 `AnimatedScale`。
+double _blockScale(WidgetTester tester) => tester
+    .widget<AnimatedScale>(find.ancestor(
+      of: find.byKey(const Key('calendar-selection-block')),
+      matching: find.byType(AnimatedScale),
+    ))
+    .scale;
+
+/// 屏幕上还剩几格范围淡染 —— 只数 8…15 这 8 格，所以 `_rangeSpan` 既表示
+/// 「8 格都在」也表示「没有多画」。
+int _rangeTintCount(WidgetTester tester) {
+  var n = 0;
+  for (var d = _rangeFirstDay; d <= _rangeLastDay; d++) {
+    if (tester.any(find.byKey(ValueKey('day-range-$d')))) n++;
+  }
+  return n;
+}
+
 List<String> _chipTexts(WidgetTester tester) => tester
     .widgetList<Text>(find.byType(Text))
     .map((t) => t.data ?? '')
@@ -72,8 +93,11 @@ String _shiftLine(WidgetTester tester) => tester
 /// 时间串的场景要给宽一点：测试字体每个字符都占满一个字身，英文的
 /// `08:00 – 08:00 (next day)` 在测试里比真机宽得多，窄屏会被那个等宽字体
 /// 挤出假溢出。
+///
+/// [blank] 造「跟随法定节假日（无班次）」那种空白表：形状照抄编辑器的
+/// `_followHolidayCard`（周期为空 → `isBlank`，班组收敛成「我」一个人）。
 Future<AppDatabase> _pumpCalendar(WidgetTester tester, String templateId,
-    {double width = 420, double height = 1600}) async {
+    {double width = 420, double height = 1600, bool blank = false}) async {
   final template = _template(templateId);
 
   tester.view.physicalSize = Size(width, height);
@@ -86,15 +110,17 @@ Future<AppDatabase> _pumpCalendar(WidgetTester tester, String templateId,
   addTearDown(db.close);
 
   await AppRepository(db).saveSchedule(
-    name: template.subtitle,
+    name: blank ? L10n.holidayScheduleName : template.subtitle,
     anchorDate: dateOnly(DateTime.now()),
-    classes: template.classes,
-    cycle: template.cycle,
+    classes: blank ? const [] : template.classes,
+    cycle: blank ? const [] : template.cycle,
     makeCurrent: true,
-    teamCount: template.teamCount,
-    teamNames: L10n.defaultTeamNames(template.teamCount),
+    teamCount: blank ? 1 : template.teamCount,
+    teamNames: blank
+        ? [L10n.isEn ? 'Me' : '我']
+        : L10n.defaultTeamNames(template.teamCount),
     ourTeamIndex: 0,
-    teamOffsets: template.teamOffsets,
+    teamOffsets: blank ? const [] : template.teamOffsets,
   );
 
   // 日历页的数据源是 databaseProvider（activeScheduleProvider 直接 watch 它），
@@ -840,6 +866,14 @@ void main() {
     expect(find.byKey(ValueKey('day-adjusted-${today.day}')), findsOneWidget,
         reason: '被调整过的那天要有可辨认的标记');
 
+    // spec §7.4：小圆点**固定在 3–4dp、不跟格子高度缩放**。这里断的是规格
+    // 区间而不是复述令牌 —— 上一版用的 `gapHair`（2）正好落在规格点名的
+    // 「小窗里缩到 1–2px 就等于没有」那一段里，这条断言能把它拦下来。
+    final dot =
+        tester.getSize(find.byKey(ValueKey('day-adjusted-${today.day}')));
+    expect(dot.width, inInclusiveRange(3, 4));
+    expect(dot.height, inInclusiveRange(3, 4));
+
     await _disposeCalendar(tester);
   });
 
@@ -850,13 +884,18 @@ void main() {
   // 「半格 < 60 < 一格半」之间 —— 从格子中心往下拖必落到下一行，且只落一行。
 
   /// 长按 [fromDay] 那一格，松开时停在 `fromDay + stepRows * 7` 那一格。
+  ///
+  /// [midDrag] 在**手指还没抬起**时调用：范围淡染是瞬时的（松手就收），要断言
+  /// 「圈住了哪几格 / 有没有进范围态」只能卡在这个时刻看。
   Future<void> longPressDragCell(
-      WidgetTester tester, int fromDay, int stepRows) async {
+      WidgetTester tester, int fromDay, int stepRows,
+      {Future<void> Function()? midDrag}) async {
     final start = tester.getCenter(find.byKey(ValueKey('day-card-$fromDay')));
     final gesture = await tester.startGesture(start);
     await tester.pump(const Duration(milliseconds: 600)); // 过长按判定
     await gesture.moveBy(Offset(0, 60.0 * stepRows));      // 每 60 ≈ 一行
     await tester.pump();
+    if (midDrag != null) await midDrag();
     await gesture.up();
     await tester.pumpAndSettle();
   }
@@ -957,6 +996,86 @@ void main() {
     // 而且这一下**不是**长按拖选：没弹改班层，也就没落任何覆盖。
     expect(await db.select(db.shiftDayOverrides).get(), isEmpty,
         reason: '立刻滑动不该被当成长按拖选');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── spec §7.3：空白表方案（跟随法定节假日）下长按不进入范围态 ──
+  //
+  // 空白表没有班次定义可挑：让用户拖出一片淡染、松手却什么也不发生，是死的
+  // 交互。信息卡那个入口（Task 8）已经按同一条判据灰掉了，这条钉住长按这一路
+  // 也跟上 —— 两处判据必须同源。
+  //
+  // 断言写在**拖动中**（`midDrag`）：范围淡染松手就收，等 `longPressDragCell`
+  // 跑完再看是看不到它的，那条断言会变成一句永远为真的空话（我第一版就是
+  // 这么写的，靠"把闸门拆掉跑一遍"才照出来）。
+  testWidgets('空白表方案：长按不进入范围态，也不落覆盖', (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest', blank: true);
+
+    await longPressDragCell(tester, _rangeFirstDay, 1, midDrag: () async {
+      expect(_rangeTintCount(tester), 0, reason: '空白表下长按不该画范围淡染');
+      expect(_blockScale(tester), 1.0, reason: '空白表下这一下也不该点亮玻璃块');
+    });
+
+    expect(find.textContaining('$_rangeSpan 天'), findsNothing,
+        reason: '空白表下不该弹改班层');
+    expect(await db.select(db.shiftDayOverrides).get(), isEmpty,
+        reason: '空白表下不该落任何覆盖');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 长按落在本月之外的空白格 ──
+  //
+  // 选星期表头那一条：`_dateFromPosition` 的 `row < 0` 分支（表头中心 y ≈ 13，
+  // 减掉 `_weekdayH` 26 之后是负行）。这一下不是范围选择，但它是**被长按赢下**
+  // 的手势 —— `onTapUp` / `onPanEnd` 都不会再来，不在这儿把 `_pressed` 熄掉，
+  // 玻璃块会一直停在按下的放大态（1.22）直到下一次触点。
+  testWidgets('长按落在本月之外的空白格：不画范围，玻璃块也不能卡在放大态', (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    final gesture = await tester.startGesture(
+        tester.getCenter(find.text(L10n.weekdays.first)));
+    await tester.pump(const Duration(milliseconds: 600)); // 过长按判定
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(_rangeTintCount(tester), 0);
+    expect(_blockScale(tester), 1.0,
+        reason: '长按在空白格上也要把玻璃块收回去');
+    expect(await db.select(db.shiftDayOverrides).get(), isEmpty);
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 长按拖到一半，手指被系统取消 ──
+  //
+  // 长按赢下竞技场之后框架只把 `PointerUp` 送进 `onLongPressEnd`；取消走的是
+  // 另一条回调 `onLongPressCancel`（长按已经 accept 也照样会发 ——
+  // `GestureRecognizerState` 只有 ready/possible/defunct 三档，accept 不改
+  // state，所以 `_checkLongPressCancel` 那道 `state == possible` 的闸门仍然
+  // 放行）。两条回调缺一条，那片淡染就会一直挂在屏幕上。
+  testWidgets('长按拖到一半被系统取消：范围淡染要收干净', (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('day-card-$_rangeFirstDay'))));
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveBy(const Offset(0, 60));
+    await tester.pump();
+
+    // 拖动中就圈住 8…15 这 8 格：逐格画，所以正好 8 个 —— 画成外接矩形的话
+    // 会多出整整一行（14 个）。
+    expect(_rangeTintCount(tester), _rangeSpan,
+        reason: '拖选中：8…15 逐格淡染，一个不多一个不少');
+
+    await gesture.cancel(); // 切前台、来电之类的系统取消
+    await tester.pumpAndSettle();
+
+    expect(_rangeTintCount(tester), 0, reason: '取消之后不该留下任何范围淡染');
+    expect(_blockScale(tester), 1.0);
+    expect(await db.select(db.shiftDayOverrides).get(), isEmpty,
+        reason: '取消不是「松手」，不该落库');
 
     await _disposeCalendar(tester);
   });
