@@ -136,6 +136,30 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(L10n.hapticFeedback,
+                                style: AppTokens.labelStrong),
+                            const SizedBox(height: AppTokens.gapHair),
+                            Text(L10n.hapticFeedbackHint,
+                                style: AppTokens.microText
+                                    .copyWith(color: AppTokens.inkMuted(context))),
+                          ],
+                        ),
+                      ),
+                      GlassSwitch(
+                        value: settings.hapticsEnabled,
+                        onChanged: (v) => ref
+                            .read(appSettingsProvider.notifier)
+                            .setHapticsEnabled(v),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

@@ -464,6 +464,10 @@ class L10n {
   static String get advancedMaterial => t('高级材质', 'Advanced material');
   static String get advancedMaterialHint => t(
       '关闭后去除真实背景模糊，模拟低端机效果', 'Turn off to remove real blur and preview the low-end effect');
+  static String get hapticFeedback => t('触觉反馈', 'Haptic feedback');
+  static String get hapticFeedbackHint => t(
+      '切换开关、选中、删除确认时轻微震动',
+      'Subtle vibration on toggles, selections and delete confirmations');
 
   // 日期格式
   // 英文下月份要带出来：`yyyy M` 会渲染成「2026 9」，读不出是哪个月。

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/glass/glass.dart';
+import '../core/haptics.dart';
 import '../core/l10n.dart';
 import '../core/theme/app_colors.dart';
 
@@ -15,6 +16,7 @@ class AppSettings {
     this.accentIndex = 0,
     this.language = 'zh',
     this.advancedMaterial = true,
+    this.hapticsEnabled = true,
   });
 
   final AppThemeMode themeMode;
@@ -28,6 +30,9 @@ class AppSettings {
   /// 高级材质：true=真实背景模糊（默认），false=模拟低端机（去模糊）。
   final bool advancedMaterial;
 
+  /// 触觉反馈：true=状态改变与不可逆动作时轻微震动（默认），false=完全不震。
+  final bool hapticsEnabled;
+
   Color get accentColor => AppColors.accentPalette[accentIndex];
 
   AppSettings copyWith({
@@ -35,12 +40,14 @@ class AppSettings {
     int? accentIndex,
     String? language,
     bool? advancedMaterial,
+    bool? hapticsEnabled,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
       accentIndex: accentIndex ?? this.accentIndex,
       language: language ?? this.language,
       advancedMaterial: advancedMaterial ?? this.advancedMaterial,
+      hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
     );
   }
 }
@@ -62,8 +69,10 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       final accentIndex = sp.getInt('accentIndex');
       final language = sp.getString('language') ?? 'zh';
       final advancedMaterial = sp.getBool('advancedMaterial') ?? true;
+      final hapticsEnabled = sp.getBool('hapticsEnabled') ?? true;
       L10n.locale = language;
       advancedMaterialDisabled = !advancedMaterial;
+      hapticsDisabled = !hapticsEnabled;
       recomputeGlassBlur();
       state = AppSettings(
         themeMode: AppThemeMode.values.firstWhere(
@@ -73,6 +82,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
         accentIndex: accentIndex ?? 0,
         language: language,
         advancedMaterial: advancedMaterial,
+        hapticsEnabled: hapticsEnabled,
       );
     } catch (_) {
       // 忽略读取失败，使用默认值
@@ -105,5 +115,12 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     state = state.copyWith(advancedMaterial: value);
     final sp = await SharedPreferences.getInstance();
     await sp.setBool('advancedMaterial', value);
+  }
+
+  Future<void> setHapticsEnabled(bool value) async {
+    hapticsDisabled = !value;
+    state = state.copyWith(hapticsEnabled: value);
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool('hapticsEnabled', value);
   }
 }
