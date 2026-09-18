@@ -37,7 +37,7 @@ v0.8.1 实测反馈里有一句「长按触发连选时加个震动，这样区�
 | 名字 | 何时 | 底层 |
 |---|---|---|
 | `Haptics.select()` | 选中变了：开关翻转、胶囊段切换、选项胶囊选中、选择器提交、拖到新格 | `HapticFeedback.selectionClick()` |
-| `Haptics.commit()` | 动作落实：删除类确认、待办勾选完成、应用改班 / 恢复轮转、切换排班方案 | `HapticFeedback.lightImpact()` |
+| `Haptics.commit()` | 动作落实：删除类确认、应用改班 / 恢复轮转、切换排班方案 | `HapticFeedback.lightImpact()` |
 | `Haptics.modeEnter()` | 进入一个模式：长按进入多选态 | `HapticFeedback.mediumImpact()` |
 
 **只有三档。** 特意**不做**「危险」那一档：危险动作（删除）本来就有一层模态确认，用户在那里已经做过一次明确决定；再加一个第四档，真机上几乎分不出与 `commit` 的差别，却多一份要维护的词汇。若实机装上去觉得删除该更重，加回来是一行。
@@ -85,11 +85,26 @@ bool hapticsDisabled = false;
 | 动作 | 位置 | 档位 |
 |---|---|---|
 | 删除类确认 | `GlassDialog`（[glass_dialog.dart:11](app/lib/core/widgets/glass_dialog.dart:11)）里 `GlassActionVariant.danger` 那个按钮按下时 | `commit()` |
-| 待办勾选完成 | [schedule_screen.dart:121](app/lib/features/schedule/schedule_screen.dart:121) 的 `onChanged` | `commit()` |
+| 待办勾选完成 | [schedule_screen.dart:121](app/lib/features/schedule/schedule_screen.dart:121) | **不加** —— 见下方「一条自我纠正」 |
 | 选择层应用「改成某班次」/「恢复轮转」 | `calendar_screen.dart` 的 `adjustDays` 里，落库之后 | `commit()` |
 | 切换排班方案 | [calendar_screen.dart:532](app/lib/features/calendar/calendar_screen.dart:532) 的 `setCurrentSchedule` 之后 | `commit()` |
 
 > ⚠️ **不要给闹钟页那条单条开关再加一次。** [alarm_screen.dart:234](app/lib/features/alarm/alarm_screen.dart:234) 与 `:277` 用的就是 `GlassSwitch`，§4.1 已经让它自动震了 —— 在那里再写一次就是**每拨一下震两下**。这类重复是本设计最容易犯的错：**先确认那个控件是不是已经在 §4.1 的名单里**。
+
+#### 一条自我纠正：待办勾选那行原本是错的
+
+上面那张表的第一版把「待办勾选完成」列为一个 `commit()` 点，位置指到 [schedule_screen.dart:121](app/lib/features/schedule/schedule_screen.dart:121)。**那是写这张表时的疏忽**：我照着「提交点」的思路列调用点，没有回头确认那个控件是什么 —— 而它（`:119`）就是一个 `GlassSwitch`，§4.1 已经让它自动震了。
+
+照原样实现的话，拨一下待办会**连着震两下**（`select` 紧跟一个 `commit`），正是上面那条警告说的同一个错。**已裁定：不加。**
+
+**为什么是「不加」而不是「保留 commit」**：
+
+1. **spec 自己的立意就排除了它。** §1 说这些震动的价值在于「每个震动都携带信息」，§2 决策① 说只给状态改变与不可逆动作。一个动作震两下，携带的信息比一下**更少**，不是更多。
+2. **待办勾选是可撤销的。** 取消勾选就回去了 —— 它不属于 `commit()` 文案里写的「这一步不可逆」，用 `select()`（选中变了）描述它更准。
+3. **一致性。** 全 app 每一个 `GlassSwitch`（静音某条闹钟、高级材质、以及本轮新加的触觉开关本身）都只发一次 `select()`。单独让待办那个发两次，就成了项目一直在避免的「一处特例」。
+4. §4.1 的通用规则（`GlassSwitch` → `select()`）是**有原则**的那条；§4.2 这张表是**枚举**，枚举漏看了一个事实。
+
+**由此得到的通用规则**（写进计划与 `AGENTS.md`）：**§4.1 覆盖的控件（`GlassSwitch` / `GlassSegment` / `GlassChoiceChip` / 四个选择器提交点）绝不能再出现在 §4.2 的提交点表里。** 加任何一处之前，先确认它不在 §4.1 的名单里。
 
 ### 4.3 日历手势
 
