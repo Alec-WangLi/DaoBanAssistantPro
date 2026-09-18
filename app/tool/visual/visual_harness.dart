@@ -346,6 +346,25 @@ Future<void> makeLongCycleCurrent(AppDatabase db) async {
   await AppRepository(db).setCurrentSchedule(longCycle.id);
 }
 
+/// 给「今天」预置一条按天覆盖（改成当前方案里的第一个班次）。
+///
+/// 出这张图的理由：日历上「今天」被单独调过时，格子上会多一个 4dp 小圆点、
+/// 信息卡班次行尾巴上会多一颗「已调整」胶囊 —— 而这两处正是 v0.8.1 里
+/// 设计语言偏差（裸文字 vs 胶囊）活过三道评审的画面，根因就是**它们从没进过
+/// 屏单、没人真正看过**。补进来，下次改这两处至少有一张图摆在那里。
+///
+/// 走 `setDayOverrides` 而不是直接插 `shiftDayOverrides` 行：那是应用真正的写
+/// 入口（classId → 当前方案 + `dayNumber` 换算都在它里面），照抄它才不会因为
+/// 存储层换了形状而让这张图悄悄变空。
+Future<void> seedTodayOverride(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final schedule = await repo.getActiveSchedule();
+  if (schedule == null || schedule.classes.isEmpty) return;
+  final classId = schedule.classes.first.id;
+  if (classId == null) return;
+  await repo.setDayOverrides([dateOnly(DateTime.now())], classId: classId);
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});

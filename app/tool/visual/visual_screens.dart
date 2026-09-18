@@ -5,11 +5,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
+import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
@@ -85,7 +87,93 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const AlarmRingingScreen(label: '早班'),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 「今天带一条按天覆盖」的日历：格子上该有 4dp 小圆点、信息卡班次行该多一颗
+    // 「已调整」胶囊。这两处 v0.8.1 出过设计语言偏差（裸文字 vs 胶囊），三道评审
+    // 都没拦住 —— 根因就是它们**从没进过屏单，没人真正看过**。这一条补上那个眼睛。
+    slug: '10_calendar_adjusted',
+    title: '日历 · 已调整',
+    build: (db) async {
+      await seedTodayOverride(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「调整班次」是**弹层**不是页面：`showShiftOverridePicker` 命令式弹出、没有
+    // 可渲染的 widget，所以要一层薄壳把它弹出来（见 `_OverridePickerHost`）。
+    slug: '11_override_picker',
+    title: '调整班次',
+    build: (db) async {
+      await seedTodayOverride(db);
+      final schedule = await AppRepository(db).getActiveSchedule();
+      if (schedule == null) {
+        throw StateError('工装种子库里没有当前方案，「调整班次」弹层无从渲染。');
+      }
+      final today = dateOnly(DateTime.now());
+      // 判据照抄 `calendar_screen.dart` 的 `adjustDays`（单日区间那一支）：
+      // 这一天被覆盖过 → 命中的那行打勾，底部多一条「恢复轮转」。
+      final hasOverride =
+          schedule.dayOverrides.containsKey(dayNumber(today));
+      return _OverridePickerHost(
+        schedule: schedule,
+        from: today,
+        to: today,
+        currentClass: hasOverride ? schedule.shiftOn(today) : null,
+        canRestore: hasOverride,
+      );
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
+
+/// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// `showShiftOverridePicker` 是命令式的：调一下就弹、返回一个 Future，没有可以
+/// 直接放进 `home:` 的 widget。所以这层薄壳在首帧后把弹层弹出来，`build` 只交一个
+/// 空的 `Scaffold` 让弹层浮在它上面。参数原样透传，判据的算法留在调用处（照
+/// `adjustDays`），壳本身不做决定。
+class _OverridePickerHost extends StatefulWidget {
+  const _OverridePickerHost({
+    required this.schedule,
+    required this.from,
+    required this.to,
+    this.currentClass,
+    this.canRestore = false,
+  });
+
+  final ShiftSchedule schedule;
+  final DateTime from;
+  final DateTime to;
+  final ShiftClass? currentClass;
+  final bool canRestore;
+
+  @override
+  State<_OverridePickerHost> createState() => _OverridePickerHostState();
+}
+
+class _OverridePickerHostState extends State<_OverridePickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showModalBottomSheet` 要用 `context` 的 `Overlay`，而
+    // `initState` 里 context 还没挂进树。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showShiftOverridePicker(
+        context,
+        schedule: widget.schedule,
+        from: widget.from,
+        to: widget.to,
+        currentClass: widget.currentClass,
+        canRestore: widget.canRestore,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
 
 /// 每个界面要出的变体。
 ///
