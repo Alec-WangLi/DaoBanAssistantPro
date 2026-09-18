@@ -66,6 +66,21 @@
         </receiver>
         <!-- 待办提醒：到点弹普通通知（与响铃闹钟那条链路分开，见 TodoReminderReceiver）。 -->
         <receiver android:name=".TodoReminderReceiver" android:exported="false" />
+        <!-- 桌面小组件。label 沿用 <application> 那份写死的文案（本项目没有
+             res/values/strings.xml，全仓只有这一处 App 名称来源，不新开一张表）。
+             必须在这里显式声明：release 构建 isMinifyEnabled = true，只靠代码
+             引用的类会被 R8 裁掉。 -->
+        <receiver
+            android:name=".ShiftWidgetProvider"
+            android:exported="false"
+            android:label="倒班助手Pro">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/shift_widget_info" />
+        </receiver>
         <service
             android:name=".AlarmRingService"
             android:exported="false"

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 卡片底。angle=315 对应 Flutter 的 Alignment.topLeft→bottomRight —— -->
+<!-- Android 的 <gradient android:angle> 是逆时针、0 = 左→右，所以右下方向是 -45 ≡ 315。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="22dp" />
+    <gradient
+        android:angle="315"
+        android:startColor="@color/wg_card_from_light"
+        android:endColor="@color/wg_card_to_light" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/wg_border_light" />
+</shape>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  小组件配色。逐项翻译自 app/lib/core/design_tokens.dart 与 core/theme/app_colors.dart。
+  改令牌时这里要跟着改 —— 但**不**要求数值恰好相等：桌面小组件没有真实背景模糊，
+  本来就走的是 `glassSurface(isDark, blurOn: false)` 那一档（「高级材质」关闭时的配方）。
+-->
+<resources>
+    <!-- 卡片底：glassSurface(isDark, blurOn: false) 的渐变两端。 -->
+    <!-- 亮：白 82% → 白 60%。 -->
+    <color name="wg_card_from_light">#D1FFFFFF</color>
+    <color name="wg_card_to_light">#99FFFFFF</color>
+    <!-- 暗：白 16% → 白 8%。 -->
+    <color name="wg_card_from_dark">#29FFFFFF</color>
+    <color name="wg_card_to_dark">#14FFFFFF</color>
+
+    <!-- 描边：走 navBorder 那条路（inkLight 14% / 白 16%），不走 glassBorder。 -->
+    <!-- glassBorder 亮色是白 90%，它在 App 里成立是因为底下垫着 bgLight(#F5F6FA)； -->
+    <!-- 在壁纸上那就是白底描白边，直接隐身。见 navBorder 的注释原话「白底上白描边会隐身」。 -->
+    <color name="wg_border_light">#24111118</color>
+    <color name="wg_border_dark">#29FFFFFF</color>
+
+    <!-- 分隔线：inkMuted 12%。层级只靠明度（设计理念 §3），所以是浅一档的线，不是另一种颜色。 -->
+    <color name="wg_divider_light">#1F6E6E82</color>
+    <color name="wg_divider_dark">#1F9A9AB0</color>
+
+    <!-- 正文 / 次要文字。 -->
+    <color name="wg_ink_light">#111118</color>
+    <color name="wg_ink_dark">#F2F2F7</color>
+    <color name="wg_muted_light">#6E6E82</color>
+    <color name="wg_muted_dark">#9A9AB0</color>
+
+    <!-- 无班次那格的底色（空白天 / 占位胶囊）。 -->
+    <color name="wg_empty_light">#14000000</color>
+    <color name="wg_empty_dark">#1AFFFFFF</color>
+</resources>

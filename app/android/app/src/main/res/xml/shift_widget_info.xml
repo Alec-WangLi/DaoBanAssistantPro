@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  updatePeriodMillis 设 0：不要系统轮询（它最快 30 分钟一次、还被限流，纯浪费电）。
+  刷新全靠 WidgetRefreshScheduler 自排的边界闹钟。若真机上发现 MIUI 把自排闹钟
+  吃掉，再改成 1800000 加一层兜底 —— 这是留给实测的开关，不预先加。
+
+  默认给 4×2（中档），可横竖自由拉：拉小到 2×2 变「今天一张牌」，拉大到 4×4 变
+  「一周一览」。三档的内容与阈值见 WidgetTier。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="60dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_placeholder"
+    android:previewLayout="@layout/widget_placeholder" />

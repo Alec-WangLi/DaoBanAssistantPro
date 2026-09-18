@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  降级态：App 图标 + 应用名，**不含任何句子**。
+  这是唯一允许出现文字的地方 —— 文字取自 `applicationInfo.loadLabel()`（系统按
+  locale 给的），所以 Kotlin 里仍然一个中文字面量都没有。
+  什么情况下会走到这里：装了 App 但没打开过（还没有快照）；或者 App 超过 14 天
+  没打开（快照里对不上今天）。点它会打开 App，一打开就自愈。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_ph_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@drawable/widget_card_light"
+    android:padding="12dp">
+
+    <ImageView
+        android:id="@+id/wg_ph_icon"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:contentDescription="@null"
+        android:src="@mipmap/ic_launcher" />
+
+    <TextView
+        android:id="@+id/wg_ph_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/wg_muted_light"
+        android:textSize="12sp" />
+</LinearLayout>
