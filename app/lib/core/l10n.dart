@@ -44,6 +44,34 @@ class L10n {
   static String get sectionPermission => t('权限', 'Permissions');
   static String get sectionAbout => t('关于', 'About');
 
+  // 按天改班（换班 / 请假覆盖）
+  static String get adjustShift => t('调整班次', 'Adjust shift');
+  static String get adjusted => t('已调整', 'Adjusted');
+  static String get restoreRotation => t('恢复轮转', 'Restore rotation');
+
+  /// 应用后的提示：「已把 3 天改为大休」。
+  static String adjustedDays(int n, String shift) =>
+      t('已把 $n 天改为$shift', 'Changed $n day(s) to $shift');
+
+  /// 清除覆盖后的提示。
+  static String restoredRotation(int n) =>
+      t('已把 $n 天恢复为轮转', 'Restored $n day(s) to rotation');
+
+  /// 选择层标题：单日只写日期，多日写「起 – 止 · N 天」。
+  ///
+  /// 「N 天」由调用方算（本文件不能依赖 `domain/shift_rotation.dart` 的
+  /// `daysBetween` —— 那边 import 了本文件，会成环）。
+  static String overrideRangeTitle(String fromLabel, String toLabel, int days) =>
+      days <= 1
+          ? fromLabel
+          : t('$fromLabel – $toLabel · $days 天',
+              '$fromLabel – $toLabel · $days days');
+
+  /// 编辑器顶部提示：预览不叠覆盖。
+  static String previewHasOverrides(int n) => t(
+      '本方案有 $n 天单独调整，预览只显示轮转规则',
+      'This schedule has $n adjusted day(s); the preview shows rotation only');
+
   // 权限卡
   static String get permChecking => t('正在检测权限…', 'Checking permissions…');
   static String get permGroupBasic => t('基础提醒', 'Core alerts');
