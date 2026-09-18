@@ -3187,16 +3187,37 @@ git commit -m "feat(widget): 跨天与班次边界的自动刷新
 所以两个辅助函数写死在 `WidgetRenderer` 里，根与格**共用同一套编码**：
 
 ```kotlin
-    /** 整卡的 requestCode：实例号占高位，低位 0 留给「不指定日期」。 */
-    private fun rootRequestCode(widgetId: Int): Int = widgetId * 16
+    /**
+     * 小组件点击用的 requestCode 基址。
+     *
+     * **必须远离项目里所有既有的 requestCode 区间。** 理由：这些 PendingIntent 的意图
+     * 都是「无 action、无 data 的 `MainActivity`」，而 `PendingIntent` 的身份是
+     * 「requestCode + 意图的 `filterEquals`」—— `filterEquals` **只比 action/data/
+     * category/component，不比 extras**。所以只要 requestCode 撞上，两个逻辑上毫不相干的
+     * 点击就会共用同一个 PendingIntent，配 `FLAG_UPDATE_CURRENT` 互相覆盖 extras。
+     *
+     * 既有区间（`AlarmScheduler` / `TodoReminderReceiver` 都用 `requestCode = 各自的 id`）：
+     * 班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒 20000..21000，
+     * 外加 `MainActivity.REQ_PICK_RINGTONE = 40071`。取 100000 起，全部避开。
+     *
+     * 这条是 Task 7 的复审在 diff 之外发现的：初稿用 `widgetId * 16`，而 widget id 是
+     * **设备级全局单调计数器**（新设备上第一个小组件拿到的就是 1 左右），于是
+     * `Root(1) = 16` 正好撞上「闹钟 id 16」—— 班次闹钟 id 就是 0..59，够得着。
+     */
+    private const val WIDGET_REQ_BASE = 100_000
+
+    /** 整卡的 requestCode：低位 0 留给「不指定日期」。 */
+    private fun rootRequestCode(widgetId: Int): Int = WIDGET_REQ_BASE + widgetId * 16
 
     /** 第 cell 格的 requestCode。低位 +1 起，避开 `rootRequestCode` 的 0。 */
-    private fun cellRequestCode(widgetId: Int, cell: Int): Int = widgetId * 16 + 1 + cell
+    private fun cellRequestCode(widgetId: Int, cell: Int): Int =
+        WIDGET_REQ_BASE + widgetId * 16 + 1 + cell
 ```
 
-这样 `Root(n) = 16n` 与 `Cell(m, c) = 16m + 1 + c`（`c ∈ 0..6` → 落在 `16m+1 .. 16m+7`）
-**对任意 `n ≠ m` 都不可能相等**（前者是 16 的倍数，后者不是），单实例内也不会自撞。
-`widgetId` 要涨到约 1.34 亿才会 `Int` 溢出，够用到世界末日。
+这样 `Root(n) = B + 16n`（`B` 的倍数关系不变）与 `Cell(m, c) = B + 16m + 1 + c`
+（`c ∈ 0..6` → 落在 `B+16m+1 .. B+16m+7`）**对任意 `n ≠ m` 都不可能相等**（前者与 `B`
+同余于 16 的倍数，后者不是），单实例内也不会自撞。`widgetId` 要涨到约 1.34 亿才会 `Int`
+溢出，够用到世界末日。整体区间 `100000 .. 100000+16*1.34亿` 与既有区间**不相交**。
 
 整卡这一层不传 `epochDay`（点空白处就是「打开 App」，落在日历页的今天）。
 
