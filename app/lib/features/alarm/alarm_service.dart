@@ -7,6 +7,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import '../../core/l10n.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
+import '../widget/widget_service.dart';
 
 /// 没设时间的待办，提醒以当天这个整点为基准（「全天」那类待办没有更准的时点）。
 const int allDayReminderHour = 9;
@@ -136,6 +137,10 @@ class AlarmService {
       } else if (call.method == 'onTodoTapped') {
         await logInfo('Dart 收到 onTodoTapped');
         openTodoRequested.value = true;
+      }
+      // 小组件某一天被点击（热启动路径）。
+      if (call.method == 'onWidgetDayTapped') {
+        WidgetService.onNativeDayTapped(call.arguments as int);
       }
     });
 

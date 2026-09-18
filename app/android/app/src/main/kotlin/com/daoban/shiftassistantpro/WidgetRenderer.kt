@@ -44,7 +44,96 @@ object WidgetRenderer {
             AlarmLog.info(context, "WidgetRenderer: 快照已过期，走占位态")
             return placeholder(context, isDark(context, snap.themeMode))
         }
-        TODO("Task 3 起，这里按 tier 分派到小/中/大三档")
+        return when (tier) {
+            WidgetTier.SMALL -> small(context, snap, todayIndex)
+            WidgetTier.MEDIUM -> small(context, snap, todayIndex) // Task 4 换成 medium(...)
+            WidgetTier.LARGE -> small(context, snap, todayIndex)  // Task 4 换成 large(...)
+        }
+    }
+
+    /** 档位偏移 → 该显示哪个相对称法。≥3 直接用那天的周几（它不会腐坏）。 */
+    private fun relativeLabel(snap: WidgetStore.Snapshot, index: Int, todayIndex: Int): String =
+        when (index - todayIndex) {
+            0 -> snap.today
+            1 -> snap.tomorrow
+            2 -> snap.dayAfter
+            else -> snap.days[index].weekday
+        }
+
+    private fun small(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+    ): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_small)
+        val dark = isDark(context, snap.themeMode)
+        val today = snap.days[todayIndex]
+
+        v.setInt(
+            R.id.wg_s_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
+        val muted =
+            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val divider =
+            context.getColor(if (dark) R.color.wg_divider_dark else R.color.wg_divider_light)
+
+        v.setTextViewText(R.id.wg_s_relative, relativeLabel(snap, todayIndex, todayIndex))
+        v.setTextColor(R.id.wg_s_relative, ink)
+        v.setTextViewText(R.id.wg_s_weekday, today.weekday)
+        v.setTextColor(R.id.wg_s_weekday, muted)
+        v.setTextViewText(R.id.wg_s_date, today.dateShort)
+        v.setTextColor(R.id.wg_s_date, muted)
+
+        // 没有班次（空表 / 休班）时，班次名那行显示周几兜底 —— 快照里 shiftName 是
+        // 空串，直接设空会让整行塌掉、时间行往上跳。
+        v.setTextViewText(
+            R.id.wg_s_shift,
+            if (today.hasShift) today.shiftName else today.weekday,
+        )
+        v.setTextColor(R.id.wg_s_shift, ink)
+
+        if (today.timeRange == null) {
+            v.setViewVisibility(R.id.wg_s_time, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_s_time, android.view.View.VISIBLE)
+            v.setTextViewText(R.id.wg_s_time, today.timeRange)
+            v.setTextColor(R.id.wg_s_time, muted)
+        }
+
+        // 色条：Task 5 会换成带圆角的位图。现在是实色 —— `setBackgroundColor`
+        // 对任何 View 都有效，且不需要位图。
+        v.setInt(
+            R.id.wg_s_bar,
+            "setBackgroundColor",
+            if (today.hasShift) today.color else context.getColor(
+                if (dark) R.color.wg_empty_dark else R.color.wg_empty_light
+            ),
+        )
+
+        v.setInt(R.id.wg_s_divider, "setBackgroundColor", divider)
+
+        // 明天预告。今天已是窗口最后一天时（不可能 —— 窗口 14 天）留空。
+        val nextIndex = todayIndex + 1
+        if (nextIndex < snap.days.size) {
+            val n = snap.days[nextIndex]
+            val label = relativeLabel(snap, nextIndex, todayIndex)
+            val tail = if (n.hasShift) {
+                if (n.timeRange == null) n.shiftName else "${n.shiftName} ${n.timeRange}"
+            } else {
+                n.weekday
+            }
+            v.setTextViewText(R.id.wg_s_next, "$label  $tail")
+            v.setViewVisibility(R.id.wg_s_next, android.view.View.VISIBLE)
+        } else {
+            v.setViewVisibility(R.id.wg_s_next, android.view.View.GONE)
+        }
+        v.setTextColor(R.id.wg_s_next, muted)
+
+        return v
     }
 
     private fun placeholder(context: Context, dark: Boolean): RemoteViews {

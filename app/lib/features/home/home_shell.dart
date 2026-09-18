@@ -19,6 +19,7 @@ import '../calendar/calendar_screen.dart';
 import '../profile/app_dialogs.dart';
 import '../profile/profile_screen.dart';
 import '../schedule/schedule_screen.dart';
+import '../widget/widget_service.dart';
 
 /// 底部导航壳：悬浮液态玻璃胶囊（点击切整数 tab，拖拽松手停在手指位置）。
 class HomeShell extends ConsumerStatefulWidget {
@@ -59,9 +60,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       if (AlarmService.openTodoRequested.value) _openTodoPage();
       _maybeShowLaunchDialogs();
       _maybeAutoCheckUpdate();
+      // 冷启动由桌面小组件拉起：读一次「要跳到哪天」。
+      WidgetService.consumeLaunchDay();
+      // 首帧推一次快照，桌面上的卡片立刻与 App 对齐。
+      _pushWidgetSnapshot();
     });
     AlarmService.ringingAlarm.addListener(_onRingingChanged);
     AlarmService.openTodoRequested.addListener(_onTodoRequested);
+    // 排班数据与外观设置任一变化就重推快照 —— 这是「改完排班桌面立刻变」的那条路。
+    ref.listenManual(activeScheduleProvider, (_, __) => _pushWidgetSnapshot());
+    ref.listenManual(appSettingsProvider, (_, __) => _pushWidgetSnapshot());
+    WidgetService.widgetLaunchRequested.addListener(_onWidgetDayRequested);
   }
 
   /// 首次使用弹「使用帮助」；每次更新后弹「版本更新」简介。
@@ -101,6 +110,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void dispose() {
     AlarmService.ringingAlarm.removeListener(_onRingingChanged);
     AlarmService.openTodoRequested.removeListener(_onTodoRequested);
+    WidgetService.widgetLaunchRequested.removeListener(_onWidgetDayRequested);
     _controller.dispose();
     super.dispose();
   }
@@ -123,6 +133,29 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     AlarmService.openTodoRequested.value = false;
     if (!mounted || !_controller.hasClients) return;
     _controller.jumpToPage(2);
+  }
+
+  /// 用户在桌面小组件上点了某一天：切到日历页，再让 CalendarScreen 跳到那天。
+  ///
+  /// **不在这里把 notifier 置回 null** —— CalendarScreen 还要读它。由那边收尾。
+  void _onWidgetDayRequested() {
+    if (WidgetService.widgetLaunchRequested.value == null) return;
+    if (!mounted || !_controller.hasClients) return;
+    _controller.jumpToPage(0); // 0 = 日历，与 _items/_screens 的顺序绑定
+  }
+
+  /// 把当前排班与外观算成快照推给原生。
+  ///
+  /// `hasValue` 那道闸门是必需的：`activeScheduleProvider` 是 StreamProvider，
+  /// 首帧还没读到库时 `.value` 是 null，此时推会把「有一定有排班」误报成
+  /// 「没有排班」，桌面上闪一下空表提示。等它真下发（哪怕下发的就是 null）再推。
+  Future<void> _pushWidgetSnapshot() async {
+    final async = ref.read(activeScheduleProvider);
+    if (!async.hasValue) return;
+    await WidgetService.push(
+      schedule: async.value?.toDomain(),
+      settings: ref.read(appSettingsProvider),
+    );
   }
 
   void _showRinging() {

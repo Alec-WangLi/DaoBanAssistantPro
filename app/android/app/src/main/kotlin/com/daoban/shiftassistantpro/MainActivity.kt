@@ -41,6 +41,13 @@ class MainActivity : FlutterActivity() {
          */
         var pendingTodoId: Int = -1
 
+        /**
+         * 冷启动由小组件拉起时待处理的「要跳到哪天」（`LocalDate.toEpochDay()`）。
+         * -1 = 没有。热启动不走这里，直接推 `onWidgetDayTapped` 给已经在跑的 Dart
+         * —— 与上面 `pendingTodoId` 完全同一套分界，理由见 `handleAlarmIntent`。
+         */
+        var pendingWidgetDay: Int = -1
+
         /** 自选铃声请求码 —— 与插件占用的请求码区分开。 */
         private const val REQ_PICK_RINGTONE = 40071
 
@@ -68,6 +75,7 @@ class MainActivity : FlutterActivity() {
         applyShowWhenLocked(intent)
         super.onCreate(savedInstanceState)
         handleAlarmIntent(intent)
+        handleWidgetIntent(intent)
         // 捕获原生未处理异常（含闹钟 receiver 触发时的崩溃），写入日志文件
         val default = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -85,6 +93,7 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleAlarmIntent(intent)
+        handleWidgetIntent(intent)
     }
 
     private fun applyShowWhenLocked(intent: Intent?) {
@@ -182,6 +191,19 @@ class MainActivity : FlutterActivity() {
             } else {
                 flutterChannel?.invokeMethod("onTodoTapped", todoId)
             }
+        }
+    }
+
+    private fun handleWidgetIntent(intent: Intent?) {
+        // 小组件某一天那一格带过来的日期。单元是「自 epoch 的天数」，与 Dart 的
+        // `dayNumber()` 同口径 —— 不传毫秒，省得两边为时区各算一遍。
+        val day = intent?.getIntExtra("widget_day", -1) ?: -1
+        if (day < 0) return
+        AlarmLog.info(this, "MainActivity: 小组件点击 day=$day")
+        if (flutterChannel == null) {
+            pendingWidgetDay = day
+        } else {
+            flutterChannel?.invokeMethod("onWidgetDayTapped", day)
         }
     }
 
@@ -565,6 +587,21 @@ class MainActivity : FlutterActivity() {
                         val id = pendingTodoId
                         pendingTodoId = -1
                         result.success(if (id >= 0) id else null)
+                    }
+                    "widgetPushSnapshot" -> {
+                        val json = call.argument<String>("json") ?: ""
+                        if (json.isEmpty()) {
+                            result.error("BAD_ARGS", "json 缺失", null)
+                        } else {
+                            WidgetStore.write(this, json)
+                            ShiftWidgetProvider.refreshAll(this)
+                            result.success(true)
+                        }
+                    }
+                    "getWidgetLaunchDay" -> {
+                        val d = pendingWidgetDay
+                        pendingWidgetDay = -1
+                        result.success(if (d >= 0) d else null)
                     }
                     "scheduleTodoReminder" -> {
                         try {

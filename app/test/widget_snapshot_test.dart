@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/features/widget/widget_snapshot.dart';
 
 /// 与 `shift_alarm_decision_test.dart` 同款：班次名写死，用例断言**结构**不论文案。
@@ -181,5 +182,34 @@ void main() {
     expect(d0['day'], isA<int>());
     expect(d0['hasShift'], isA<bool>());
     expect(d0['color'], isA<int>());
+  });
+
+  test('epochDay ↔ DateTime 换算：与 dayNumber 互为逆运算', () {
+    for (final d in [
+      DateTime(2026, 9, 18),
+      DateTime(2026, 1, 1),
+      DateTime(2026, 12, 31),
+      DateTime(2027, 2, 28),
+    ]) {
+      expect(dayNumber(WidgetService.dateFromEpochDay(dayNumber(d))), dayNumber(d));
+    }
+  });
+
+  test('labels 按偏移提供相对文案 —— 不变量 B 的契约', () {
+    final s = buildWidgetSnapshot(
+      schedule: _schedule(),
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+    );
+    final labels = s['labels']! as Map;
+    expect(labels['today'], L10n.widgetToday);
+    expect(labels['tomorrow'], L10n.widgetTomorrow);
+    expect(labels['dayAfter'], L10n.widgetDayAfter);
+    // 关键：这三个词**不在** days[] 里 —— 若有人把它们烘进 days[i]，
+    // 跨天之后 days[i] 会自称「明天」。这条断言把「相对文案只在顶层」钉住。
+    for (final d in s['days']! as List) {
+      expect((d as Map).values, isNot(contains(L10n.widgetTomorrow)));
+    }
   });
 }
