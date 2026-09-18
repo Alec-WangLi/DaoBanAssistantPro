@@ -61,6 +61,9 @@
   "hasSchedule": true,
   "emptyHint": "还没有排班，点一下去设置",   // hasSchedule=false 时用
   "labels": { "today": "今天", "tomorrow": "明天", "dayAfter": "后天" },
+  "boundaries": [                  // 未来所有「该刷新了」的绝对时刻，升序；见 §6.2
+    1758182400000, 1758198600000, 1758268800000
+  ],
   "days": [                        // **恒 14 条**，按日期升序，缺的填空行
     {
       "day": 20345,                // LocalDate.toEpochDay()，与 Dart 的 dayNumber() 同口径
@@ -71,15 +74,18 @@
       "shiftName": "白班",
       "shiftAbbr": "白",
       "color": 4283208703,         // 班次色 ARGB；hasShift=false 时为 0
-      "startClock": "08:30",       // 已是显示串；无时间时为 null
-      "endClock": "20:30",
-      "startAtMs": 1758155400000,  // 绝对时刻，原生排刷新闹钟用；无时间时为 null
-      "endAtMs": 1758198600000,
-      "nextDayMark": false         // 结束落在次日，显示时补「次日」前缀
+      "timeRange": "08:30 – 20:30" // 已是完整显示串；跨午夜时为「20:30 – 次日08:30」；
+                                   // 无时间时为 null。见下方说明
     }
   ]
 }
 ```
+
+`timeRange` 走**既有的** `L10n.timeRange(start, end, crossesMidnight)`，不新造。那个 helper 的注释写得很清楚为什么整串必须交给 `t()` 而不是拼前缀：
+
+> 中英两种语序不同，所以整串交给 [t] 而不是拼接前缀 —— 直接拼 `'次日'` 会在英文界面下露出中文。
+
+初稿曾把 `startClock` / `endClock` / `nextDayMark` 三个字段分开传给原生、让 Kotlin 去拼「次日」前缀 —— 那正是这条注释警告的坑（英文会拼成 `20:30 – next day 08:30` 而不是 `20:30 – 08:30 (next day)`），且把一条 i18n 规则漏进了不变量 A 说要保持零 i18n 的那一侧。同理砍掉了 `startAtMs` / `endAtMs`：它们当初只为原生算边界而存在，边界改走 `boundaries` 之后就没有消费者了。
 
 ### 3.2 两条不变量（这份设计的地基）
 
@@ -188,13 +194,15 @@
 
 ### 6.2 下一个边界怎么算
 
-原生手上只有快照，所以边界要从快照里取。`WidgetRefreshScheduler.nextBoundary(snapshot, now)` 取三者最小：
+**日期算术留在 Dart，原生只做一次线性扫描。**
 
-1. 下一个本地零点
-2. 今天那条的 `startAtMs`（若 > now）
-3. 今天那条的 `endAtMs`（若 > now）
+快照里带 `boundaries` —— 生成时刻起、14 天窗口内所有「该刷新了」的绝对时刻（每天的本地零点 + 各工作班次的 `startAtMs` / `endAtMs`），升序排好。原生：
 
-候选都取不到（空白天、休班）就只剩零点，仍然有刷新。
+```
+下一个边界 = boundaries 里第一个 > now 的值；都没有就用「下一个本地零点」
+```
+
+这样 `nextBoundary` 在原生侧只剩一个 `for` 循环加一行 `LocalDate.now().plusDays(1).atStartOfDay(zone)` 兜底（窗口耗尽时用，`java.time` 一行就够）。**为什么值得这么绕一下**：这几个时刻的算法（本地零点怎么跨时区、跨午夜班次的结束落在次日、休班不产生边界）正是 §11 里那类「算错了不报错」的逻辑 —— 把它放在有 170 条测试的 Dart 侧，比在 Kotlin 里新起一套单测基建划算得多（见 §11 关于原生单测的决定）。
 
 ### 6.3 权限退化
 
@@ -268,8 +276,8 @@ Dart 侧新增 `WidgetService.widgetLaunchRequested`（`ValueNotifier<DateTime?>
 | 快照不存在（装了 App 但没打开过） | 降级态：App 图标 + `applicationInfo.loadLabel(packageManager)`。**只有图标与系统给的名称，不含任何句子**，所以不变量 A 不为它破例 |
 | 快照过期（`LocalDate.now().toEpochDay()` 不在 `days` 里，即 App 超过 14 天没打开） | 同上降级态 |
 | `hasSchedule == false`（空白表方案） | 渲染快照里的 `emptyHint`，点击仍开 App |
-| 休班 / 无时间的班次 | `startClock` / `endClock` / `startAtMs` / `endAtMs` 为 null，布局按「无时间行」收缩，不显示空白破折号 |
-| 跨午夜班次 | `nextDayMark = true`，时间行显示 `20:30 – 次日 08:30` |
+| 休班 / 无时间的班次 | `timeRange` 为 null，布局按「无时间行」收缩，不显示空白破折号 |
+| 跨午夜班次 | `timeRange` 由 `L10n.timeRange` 产出 `20:30 – 次日08:30`（英文 `20:30 – 08:30 (next day)`），原生原样贴 |
 | 快照 JSON 解析失败 | 按「无快照」处理 + `AlarmLog.error`（`AlarmStore.all` 的同款作风） |
 | 多个小组件实例 | 每次刷新遍历 `getAppWidgetIds`，逐实例按各自 options 分档渲染 |
 
@@ -297,9 +305,13 @@ Dart 侧新增 `WidgetService.widgetLaunchRequested`（`ValueNotifier<DateTime?>
 |---|---|
 | `widget_snapshot_test.dart`（新建，纯 Dart） | `days` 恒 14 条 · 空白表产 `hasSchedule:false` 且 14 条空行 · 休班行 `startAtMs` 为 null · **跨午夜班次 `endAtMs` 落在次日**（`endMinute < startMinute` 与 `endMinute ≥ 1440` 两种表示都要盖到）· 双语 · 按天改班那天反映到快照里 · `themeMode` 原样透传 |
 | JSON 往返 | 生成的快照 decode 回来字段齐全、类型正确（原生按 `optXxx` 取，类型错了会静默变默认值） |
-| 原生纯函数 | `WidgetTier.pick` 的六个边界（300/260 的「且」关系、220/130）· `WidgetRefreshScheduler.nextBoundary` 在「今天还没上班 / 正在班上 / 已下班 / 今天休班」四种状态下取到的时刻 |
+| `boundaries`（纯 Dart） | 升序且无重复 · 每天的本地零点都在 · 跨午夜班次的结束落在次日 · 休班不产生 start/end 边界 · 14 天窗口耗尽时只剩零点 · 窗口之外不出现 |
 
-**原生纯函数要不要引入 Kotlin 单测基建**：本项目目前没有 `android/app/src/test/`，引入 JUnit 只需在 Gradle 加一行 `testImplementation`。上表那两组逻辑属于「算错了不报错、只显示错」的那一类（`info_card_metrics.dart` 的教训），**建议引入**；这一条连同阈值标定一起在实施 plan 里作为独立任务确认。
+**原生侧不引入 Kotlin 单测基建（本轮的决定，取代初稿的「建议引入」）。**
+
+依据是两条查证：`android/app/src/test/` 源集不存在，且 Gradle 缓存里没有 JUnit —— 引入要走一次网络解析，为一个新子系统铺测试基建的成本不成比例。
+
+更关键的是，原本想盖的两组逻辑已经被 §6.2 分摊掉了：日期算术搬回 Dart，由现成 170 条测试兜底；剩下的 `WidgetTier.pick` 是四次整数比较，**判错了会立刻在真机上表现为「档位不对」**，属于肉眼可见而非静默错误，由本节的阈值标定覆盖。若将来原生逻辑长到「算错看不出来」的量级，再引入不迟。
 
 **真机验证手段**（用户已连 ADB，`adb.exe` 在 `toolchain/android-sdk/platform-tools/`）：
 
@@ -345,3 +357,5 @@ adb shell am broadcast -a com.daoban.shiftassistantpro.WIDGET_REFRESH -n com.dao
 | 日期 | 变更 |
 |---|---|
 | 2026-09-18 | 初稿。四个已定决策来自同日头脑风暴；`RemoteViews` 白名单与 drawable 限制经查证后写入 §1.2 与 §13.1 |
+| 2026-09-18 | 写实施 plan 时改：§6.2 的边界计算从原生搬回 Dart（快照新增 `boundaries` 字段），§11 随之定下「本轮不引入 Kotlin 单测基建」。触发原因是查证到 `src/test/` 源集不存在且 JUnit 不在 Gradle 缓存里 |
+| 2026-09-18 | 同日再改：每日的 `startClock` / `endClock` / `nextDayMark` / `startAtMs` / `endAtMs` 五个字段合并成一个预渲染的 `timeRange`。查证到 `L10n.timeRange` 已存在且其注释明确警告过「拼前缀会在英文界面下露出中文」，初稿那组分字段的写法正踩在那里 |
