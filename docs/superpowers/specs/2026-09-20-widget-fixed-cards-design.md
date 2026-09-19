@@ -433,14 +433,37 @@ JSON 从约 4KB 涨到约 20KB（68 天 × 每行 ~10 个短字段 + 边界表�
 
 ## 14. 风险与坑
 
-1. **42 格的胶囊位图是本轮唯一未验证的技术假设**（全新的量级：现状最多 16 格）。
-   粗算：单张胶囊 40×18dp 在 480dpi 下约 26KB，42 张 ≈ **1.1MB**。`WidgetChip` 的
-   `LruCache` 能让同一班次共用**同一个 Bitmap 对象**，但 `RemoteViews` 把它序列化进
-   parcel 时**是否去重、走不走 ashmem**，本仓没验过。
-   **实施第一步就做探针**（照 `work/probe_addview.png` 那次的套路：先只放一张月历卡、
-   真机渲染、看 logcat 与画面），验不过的降级梯子按顺序试：
-   ① 静态 `<shape>` + `setBackgroundTintList`（两层：外描边 / 内填充；先确认
-   `View.setBackgroundTintList` 确实是 `@RemotableViewMethod`）
+1. ~~42 格的胶囊位图是本轮唯一未验证的技术假设~~ **已真机探针验证（2026-09-20，Task 1，
+   Redmi 25102RKBEC / HyperOS）**。探针 = 42 槽 `GridLayout`（7 列 × 6 行）+ 每格一张
+   40×18dp 胶囊位图，跑了两档：
+
+   - **42 张颜色各不相同**（最坏情况，无任何去重可能）：parcel **17780 字节**；
+     `dumpsys appwidget` 里 `views_bitmap_memory = 1088640`（= 42 × 120 × 54 × 4，
+     即 42 张**全数送达宿主**）；logcat **无 `TransactionTooLargeException` /
+     `BadParcelableException` / RemoteViews 报错**。**位图是走 ashmem 出带的，不占 binder
+     事务** —— 1.09MB 像素数据只换来约 164 字节/张的动作头。
+     **但画面只画出 42 格里的 23 格**（`work/probe_month42.png`：格子 1~19 只有数字、
+     没有胶囊；20~42 有）。宿主侧对应的是 `[REUSE-PROBE] cache HIT->clone`，
+     复用键 `com.daoban.shiftassistantpro:2131427407:-1`（cell 布局 2131427407，
+     根布局 2131427406）。
+   - **只有 6 张不同颜色**（对齐真卡片的 5~6 种班次色）：parcel **11876 字节**；
+     `views_bitmap_memory = 155520`（= 6 × 120 × 54 × 4）；**42 格全画出来**
+     （`work/p6.png`：7 列 × 6 行、42 个胶囊一个不缺）。
+   - **`GridLayout` 排 42 格在两档里都是干净的 PASS**：7 列 × 6 行，
+     顺序与 1..42 的数字全部正确。
+
+   **结论：月历按淡染胶囊做。** 硬约束是「**同一班次色必须共用同一个 Bitmap 对象**」——
+   `WidgetChip` 的 `LruCache` 已按 `color:w:h:radiusPx` 保证这一点，同色只会在宿主里留一份；
+   于是**每张卡的不同颜色数要压在个位数**。上面那条残缺渲染**只在「不同颜色数很多」时出现，
+   而且它是宿主侧的渲染限制，不是 payload 发不出去**。Task 9 的采图清单里**加一条**：
+   「6 行月 + 用户全部班次色」整屏截图并逐格核对 —— 自定义班次多的用户颜色种类会变多。
+
+   降级梯子保留在下面备查（**本轮没有**走梯子）：
+   ① 静态 `<shape>` + `setBackgroundTintList`（两层：外描边 / 内填充）。
+   ⚠️ 本轮想顺带核 `View.setBackgroundTintList` 是不是 `@RemotableViewMethod`，**没核成**：
+   SDK 的 `android.jar` 只有 stub（方法体是 `throw new RuntimeException("Stub!")`），
+   而 `platforms/android-36/data/annotations.zip` 里**根本没有 `RemotableViewMethod` 这一条**
+   （它是 `@hide` 注解，不进外部注解包）。**要用这条梯子必须自己真机验一次。**
    ② 月历格子退回**彩色文字**（不画胶囊）—— App 自己在窄格时就是这么降级的（v0.7.1 有先例），
    代价是浅色主题下对比度要靠卡片底兜
 2. **4×1 只有 5dp 余量** —— 上一版「63dp 那档第二行被裁」是同一类病，别靠估算放行。
