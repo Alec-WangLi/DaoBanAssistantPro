@@ -11,6 +11,7 @@ import '../../core/motion.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../data/app_repository.dart';
+import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_ringing_screen.dart';
 import '../alarm/alarm_screen.dart';
@@ -152,9 +153,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Future<void> _pushWidgetSnapshot() async {
     final async = ref.read(activeScheduleProvider);
     if (!async.hasValue) return;
+    // 今日未完成待办数：与日历信息卡上那个「N 项待办」徽章同一个口径
+    // （同一天、`completed == false`）。
+    final today = DateTime.now();
+    final events = await ref.read(appRepositoryProvider).listEvents();
+    final todoCount = events
+        .where((e) => !e.isCompleted && isSameDay(e.date, today))
+        .length;
     await WidgetService.push(
       schedule: async.value?.toDomain(),
       settings: ref.read(appSettingsProvider),
+      todayTodoCount: todoCount,
     );
   }
 

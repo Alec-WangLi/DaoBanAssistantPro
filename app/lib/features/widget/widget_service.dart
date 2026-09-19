@@ -39,6 +39,7 @@ class WidgetService {
   static Future<void> push({
     required ShiftSchedule? schedule,
     required AppSettings settings,
+    required int todayTodoCount,
   }) async {
     try {
       final json = jsonEncode(buildWidgetSnapshot(
@@ -46,6 +47,7 @@ class WidgetService {
         now: DateTime.now(),
         themeMode: settings.themeMode.name,
         accent: settings.accentColor.toARGB32(),
+        todayTodoCount: todayTodoCount,
       ));
       await _channel.invokeMethod<bool>('widgetPushSnapshot', {'json': json});
     } catch (e) {

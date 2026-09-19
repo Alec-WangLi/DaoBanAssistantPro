@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
+import '../../domain/lunar_info.dart';
 import '../../domain/shift_rotation.dart';
 
 /// 快照格式版本。原生按它判断能不能解析 —— 对不上就按「无快照」走降级态。
@@ -41,6 +42,9 @@ Map<String, Object?> buildWidgetSnapshot({
   required DateTime now,
   required String themeMode,
   required int accent,
+  /// 今日**未完成**待办数。今日卡片上那个「N 项待办」徽章用它。
+  /// 快照拿不到待办数据（那是 Drift 里的事），所以由调用方数好传进来。
+  required int todayTodoCount,
 }) {
   final today = dateOnly(now);
   final nowMs = now.millisecondsSinceEpoch;
@@ -102,6 +106,35 @@ Map<String, Object?> buildWidgetSnapshot({
 
   final sorted = boundaries.toList()..sort();
 
+  // 今日卡片的数据。它**按日期烘焙**（农历、待办数、其他班组都是「今天」这一天的），
+  // 所以带上自己的 `day` —— 跨天之后原生对表发现对不上，就走降级态而不是把旧数据
+  // 当成今天显示（见 spec §6 的 ⚠️）。
+  final todayDate = DateTime(today.year, today.month, today.day);
+  final lunar = lunarOf(todayDate);
+  final crews = <Map<String, Object?>>[];
+  if (schedule != null && !schedule.isBlank) {
+    for (var i = 0; i < schedule.teamCount; i++) {
+      if (i == schedule.ourTeamIndex) continue; // 只看别人
+      final t = schedule.teamShift(i, todayDate);
+      if (t == null) continue;
+      final name = i < schedule.teamNames.length
+          ? schedule.teamNames[i]
+          : (L10n.isEn ? 'Team ${i + 1}' : '${i + 1}班');
+      crews.add({'name': name, 'abbr': t.shortLabel, 'color': t.color});
+    }
+  }
+  final todayCard = {
+    'day': dayNumber(todayDate),
+    'lunarShort': lunar.shortLabel,
+    'lunarIsHoliday': lunar.isLegalHoliday,
+    'adjusted': schedule?.dayOverrides.containsKey(dayNumber(todayDate)) ?? false,
+    'todoCount': todayTodoCount,
+    // 徽章上的**文字**也在这里给全 —— 原生不许有中文字面量，而
+    // `'$n 项待办'` / `'$n todos'` 是双语的。没有待办时给 null，原生据此隐藏徽章。
+    'todoBadge': todayTodoCount > 0 ? L10n.todoCount(todayTodoCount) : null,
+    'crews': crews,
+  };
+
   return {
     'v': kWidgetSnapshotVersion,
     'genAtMs': nowMs,
@@ -114,8 +147,10 @@ Map<String, Object?> buildWidgetSnapshot({
       'today': L10n.widgetToday,
       'tomorrow': L10n.widgetTomorrow,
       'dayAfter': L10n.widgetDayAfter,
+      'adjusted': L10n.adjusted,
     },
     'boundaries': sorted,
     'days': days,
+    'todayCard': todayCard,
   };
 }

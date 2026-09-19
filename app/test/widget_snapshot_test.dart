@@ -14,7 +14,7 @@ import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/features/widget/widget_snapshot.dart';
 
 /// 与 `shift_alarm_decision_test.dart` 同款：班次名写死，用例断言**结构**不论文案。
-ShiftSchedule _schedule() => ShiftSchedule(
+ShiftSchedule _schedule({Map<int, int> overrides = const {}}) => ShiftSchedule(
       name: '测试',
       anchorDate: DateTime.utc(2026, 9, 18),
       classes: const [
@@ -35,6 +35,7 @@ ShiftSchedule _schedule() => ShiftSchedule(
         ShiftClass(id: 13, name: '休班', abbr: '休', isRest: true, color: 0xFF5A5F73),
       ],
       cycle: const [0, 1, 2],
+      dayOverrides: overrides,
     );
 
 void main() {
@@ -54,6 +55,7 @@ void main() {
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final days = s['days']! as List;
     expect(days.length, 14);
@@ -68,6 +70,7 @@ void main() {
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'light',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     expect(s['hasSchedule'], false);
     expect(s['emptyHint'], L10n.widgetEmptyHint);
@@ -93,6 +96,7 @@ void main() {
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     expect(s['hasSchedule'], false);
   });
@@ -104,6 +108,7 @@ void main() {
       now: DateTime(2026, 9, 19, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final d0 = (s['days']! as List).first as Map;
     expect(d0['shiftName'], '夜班');
@@ -117,6 +122,7 @@ void main() {
       now: DateTime(2026, 9, 19, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final d0 = (s['days']! as List).first as Map;
     expect((d0['timeRange']! as String).contains('次日'), false);
@@ -142,6 +148,7 @@ void main() {
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final d0 = (s['days']! as List).first as Map;
     // `endMinute == 1440` 走的是 `widget_snapshot.dart` 里那条专门注释过的分支：
@@ -191,6 +198,7 @@ void main() {
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final days = (s['days']! as List).cast<Map>();
     // days[1] = 9/19：纯轮转视角是夜班，覆盖把它改成了休班。
@@ -205,6 +213,7 @@ void main() {
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     expect(((plain['days']! as List)[1] as Map)['shiftName'], '夜班');
   });
@@ -215,6 +224,7 @@ void main() {
       now: DateTime(2026, 9, 20, 10), // 周期第 2 天 → 休班
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final d0 = (s['days']! as List).first as Map;
     expect(d0['isRest'], true);
@@ -228,6 +238,7 @@ void main() {
       now: now,
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final b = (s['boundaries']! as List).cast<int>();
     expect(b, isNotEmpty);
@@ -249,6 +260,7 @@ void main() {
         now: DateTime(2026, 9, 18, 10),
         themeMode: mode,
         accent: 0xFF4F5BE8,
+        todayTodoCount: 0,
       );
       expect(s['themeMode'], mode);
     }
@@ -260,6 +272,7 @@ void main() {
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final back = jsonDecode(jsonEncode(s)) as Map<String, dynamic>;
     expect(back['v'], kWidgetSnapshotVersion);
@@ -288,6 +301,7 @@ void main() {
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
     );
     final labels = s['labels']! as Map;
     expect(labels['today'], L10n.widgetToday);
@@ -304,5 +318,69 @@ void main() {
         expect((d as Map).values, isNot(contains(word)));
       }
     }
+  });
+
+  test('todayCard 带出农历、其他班组、待办数，且不含我们班组', () {
+    final s = buildWidgetSnapshot(
+      schedule: _schedule(),
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 3,
+    );
+    final tc = s['todayCard']! as Map;
+    expect(tc['day'], dayNumber(DateTime(2026, 9, 18)));
+    expect(tc['todoCount'], 3);
+    expect(tc['lunarShort'], isA<String>());
+    expect(tc['lunarShort'], isNotEmpty);
+    expect(tc['lunarIsHoliday'], isA<bool>());
+    expect(tc['adjusted'], false);
+
+    // 其他班组：`_schedule()` 没设 teamCount/teamOffsets，走默认的 4 个班组、
+    // ourTeamIndex=0，所以「其他班组」应当是 3 个，且名字里不含我们那个。
+    final crews = (tc['crews']! as List).cast<Map>();
+    expect(crews.length, 3);
+    for (final c in crews) {
+      expect(c['name'], isA<String>());
+      expect(c['name'], isNotEmpty);
+      expect(c['abbr'], isA<String>());
+      expect(c['color'], isA<int>());
+      expect(c['name'], isNot(crews.isEmpty ? '' : '一班'));
+    }
+  });
+
+  test('班组数为 1 时 crews 是空数组（今日卡片会整块隐藏）', () {
+    final solo = ShiftSchedule(
+      name: '单人',
+      anchorDate: DateTime.utc(2026, 9, 18),
+      classes: const [
+        ShiftClass(id: 11, name: '白班', abbr: '白', startMinute: 480, endMinute: 1200),
+      ],
+      cycle: const [0],
+      teamCount: 1,
+      teamNames: const ['我自己'],
+      ourTeamIndex: 0,
+      teamOffsets: const [0],
+    );
+    final s = buildWidgetSnapshot(
+      schedule: solo,
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+    expect((s['todayCard']! as Map)['crews'], isEmpty);
+  });
+
+  test('今天被按天改班覆盖时 adjusted 为 true', () {
+    final s = buildWidgetSnapshot(
+      // 9/18 在 3 天周期里是第 0 天 → 白班；覆盖成 classes[2]（休班）
+      schedule: _schedule(overrides: {dayNumber(DateTime(2026, 9, 18)): 2}),
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+    expect((s['todayCard']! as Map)['adjusted'], true);
   });
 }
