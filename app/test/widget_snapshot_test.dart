@@ -331,6 +331,7 @@ void main() {
     final tc = s['todayCard']! as Map;
     expect(tc['day'], dayNumber(DateTime(2026, 9, 18)));
     expect(tc['todoCount'], 3);
+    expect(tc['todoBadge'], L10n.todoCount(3)); // todayTodoCount: 3 时
     expect(tc['lunarShort'], isA<String>());
     expect(tc['lunarShort'], isNotEmpty);
     expect(tc['lunarIsHoliday'], isA<bool>());
@@ -382,5 +383,16 @@ void main() {
       todayTodoCount: 0,
     );
     expect((s['todayCard']! as Map)['adjusted'], true);
+  });
+
+  test('没有待办时 todoBadge 为 null（原生据此隐藏徽章）', () {
+    final s = buildWidgetSnapshot(
+      schedule: _schedule(),
+      now: DateTime(2026, 9, 18, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+    expect((s['todayCard']! as Map)['todoBadge'], isNull);
   });
 }

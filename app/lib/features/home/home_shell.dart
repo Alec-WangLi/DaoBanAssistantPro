@@ -157,6 +157,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // （同一天、`completed == false`）。
     final today = DateTime.now();
     final events = await ref.read(appRepositoryProvider).listEvents();
+    if (!mounted) return;
     final todoCount = events
         .where((e) => !e.isCompleted && isSameDay(e.date, today))
         .length;
