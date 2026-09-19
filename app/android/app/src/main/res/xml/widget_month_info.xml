@@ -15,4 +15,5 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_placeholder"
-    android:previewLayout="@layout/widget_preview_month" />
+    android:previewLayout="@layout/widget_preview_month"
+    android:previewImage="@drawable/widget_preview_month_img" />

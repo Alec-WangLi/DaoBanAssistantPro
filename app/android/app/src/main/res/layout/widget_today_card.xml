@@ -12,15 +12,23 @@
   `widget_today_standalone` 的槽位里，外壳根已经铺了一层同一张卡片底
   （`renderTodayCard` 也不再设）。两层同图叠放会多出一圈圆角描边、悬在外壳边框内侧。
 
-  ⚠️ 这是 **4×3 独立卡**的排版（根 padding 18dp、日期 20sp、班次 17sp、行距 12dp、
-  农历两行）—— 不再跟着网格装配壳走。字号按 4×3 定，**不要**为了填满高度再放大。
+  ⚠️ 这是 **4×3 独立卡**的排版（根 padding 22dp、日期 22sp、班次 18sp、行距 16dp、
+  农历两行）—— 不再跟着网格装配壳走。字号与间距在 2026-09-20 的真机反馈后整体提了一档：
+  原先 18dp padding / 20sp / 12dp 时上下会各留一截空白（用户原话「上下留了好大的空白」），
+  提一档把内容从约 202dp 撑到 **实测约 232dp**。**行高与结构没动**（仍只有一个日期行 +
+  农历两行 + 班次行 + 时间行 + 班组行），改的只有字号、间距与徽章/色条这几处尺子上的一档。
+
+  ⚠️ **没到裁决时定的「余量 ≤ 25dp」**：4×3 外壳实测 266dp，232dp 内容留出约 34dp 余量
+  （改前约 65dp，确实收了一半）。短的那 9dp 出在这一档自己身上 —— 表里各处的 +Δ 加起来
+  约 +29dp，而「245dp」这个目标数隐含的是 +43dp。要么再提一档字号，要么承认这版就到这里。
 -->
+
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_tc_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="18dp">
+    android:padding="22dp">
 
     <!-- 1. 日期行：色条 + 日期 + 今日徽章 + 待办徽章 -->
     <LinearLayout
@@ -32,7 +40,7 @@
         <ImageView
             android:id="@+id/wg_tc_bar"
             android:layout_width="4dp"
-            android:layout_height="22dp"
+            android:layout_height="24dp"
             android:scaleType="fitXY"
             android:contentDescription="@null" />
 
@@ -41,7 +49,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
-            android:textSize="20sp"
+            android:textSize="22sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -49,7 +57,7 @@
         <FrameLayout
             android:id="@+id/wg_tc_today_wrap"
             android:layout_width="52dp"
-            android:layout_height="22dp"
+            android:layout_height="24dp"
             android:layout_marginStart="8dp">
 
             <ImageView
@@ -72,7 +80,7 @@
         <FrameLayout
             android:id="@+id/wg_tc_todo_wrap"
             android:layout_width="84dp"
-            android:layout_height="22dp"
+            android:layout_height="24dp"
             android:layout_marginStart="6dp">
 
             <ImageView
@@ -94,13 +102,13 @@
     </LinearLayout>
 
     <!-- 2. 农历。4×3 放的是**完整描述**（快照的 `lunarFull`，App 完整版信息卡同源），
-         所以两行、13sp；法定节假日走 holiday 红由渲染侧给色。 -->
+         所以两行、14sp；法定节假日走 holiday 红由渲染侧给色。 -->
     <TextView
         android:id="@+id/wg_tc_lunar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:textSize="13sp"
+        android:layout_marginTop="16dp"
+        android:textSize="14sp"
         android:maxLines="2"
         android:ellipsize="end" />
 
@@ -108,7 +116,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="16dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
@@ -124,7 +132,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
-            android:textSize="17sp"
+            android:textSize="18sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -132,7 +140,7 @@
         <FrameLayout
             android:id="@+id/wg_tc_adj_wrap"
             android:layout_width="96dp"
-            android:layout_height="22dp"
+            android:layout_height="24dp"
             android:layout_marginStart="6dp">
 
             <ImageView
@@ -159,7 +167,7 @@
         android:id="@+id/wg_tc_time"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="8dp"
         android:layout_marginStart="18dp"
         android:textSize="13sp"
         android:maxLines="1"
@@ -174,7 +182,7 @@
         android:id="@+id/wg_tc_crew_row"
         android:layout_width="match_parent"
         android:layout_height="22dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="16dp"
         android:orientation="horizontal">
 
         <FrameLayout

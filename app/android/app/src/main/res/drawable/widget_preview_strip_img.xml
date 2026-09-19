@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  picker 缩略图（`previewImage`）：4×1 本周条。**结构示意、无文字、无假数据**。
+
+  为什么是 `<vector>` 而不是 PNG：分辨率无关、不需要额外的配图管线，也不含任何文字
+  （写中文撞双语、写英文中文用户看不懂）。配色取自现有两张 drawable：卡底 `#F7FFFFFF`
+  （`widget_card_light` 的 `wg_card_from_light`）、块 `#556E6E82`（`widget_preview_block`）。
+
+  形状按真卡比例：viewport 400×100 = 4:1 的扁条；里面七列，每列「细块（周几/日数字）+ 胶囊块（班次）」。
+  改版式时这张要与 `widget_preview_strip.xml` 一起改。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="100dp"
+    android:viewportWidth="400"
+    android:viewportHeight="100">
+
+    <!-- 卡底（圆角 18，1dp 描边同色系） -->
+    <path
+        android:pathData="M18,0 H382 A18,18 0 0 1 400,18 V82 A18,18 0 0 1 382,100 H18 A18,18 0 0 1 0,82 V18 A18,18 0 0 1 18,0 Z"
+        android:fillColor="#F7FFFFFF"
+        android:strokeColor="#24111118"
+        android:strokeWidth="2" />
+
+    <!-- 七列的「细块」 -->
+    <path android:pathData="M31,28 h26 v9 h-26 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M83,28 h26 v9 h-26 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M135,28 h26 v9 h-26 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M187,28 h26 v9 h-26 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M239,28 h26 v9 h-26 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M291,28 h26 v9 h-26 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M343,28 h26 v9 h-26 Z" android:fillColor="#556E6E82" />
+
+    <!-- 七列的「胶囊块」（34×20，两端各 10 半径） -->
+    <path android:pathData="M37,46 H51 A10,10 0 0 1 61,56 A10,10 0 0 1 51,66 H37 A10,10 0 0 1 27,56 A10,10 0 0 1 37,46 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M89,46 H103 A10,10 0 0 1 113,56 A10,10 0 0 1 103,66 H89 A10,10 0 0 1 79,56 A10,10 0 0 1 89,46 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M141,46 H155 A10,10 0 0 1 165,56 A10,10 0 0 1 155,66 H141 A10,10 0 0 1 131,56 A10,10 0 0 1 141,46 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M193,46 H207 A10,10 0 0 1 217,56 A10,10 0 0 1 207,66 H193 A10,10 0 0 1 183,56 A10,10 0 0 1 193,46 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M245,46 H259 A10,10 0 0 1 269,56 A10,10 0 0 1 259,66 H245 A10,10 0 0 1 235,56 A10,10 0 0 1 245,46 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M297,46 H311 A10,10 0 0 1 321,56 A10,10 0 0 1 311,66 H297 A10,10 0 0 1 287,56 A10,10 0 0 1 297,46 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M349,46 H363 A10,10 0 0 1 373,56 A10,10 0 0 1 363,66 H349 A10,10 0 0 1 339,56 A10,10 0 0 1 349,46 Z" android:fillColor="#556E6E82" />
+</vector>

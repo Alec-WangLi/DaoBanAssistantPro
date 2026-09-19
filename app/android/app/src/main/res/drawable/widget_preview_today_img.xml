@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  picker 缩略图（`previewImage`）：4×3 今日卡。**结构示意、无文字、无假数据**。
+
+  为什么是 `<vector>` 而不是 PNG、以及配色来源，见 `widget_preview_strip_img.xml` 的头注。
+
+  形状按真卡比例：viewport 400×300 = 4:3。左侧一条竖色条（对齐 App 信息卡日期行那根），
+  右侧三行**递减**的块。改版式时这张要与 `widget_preview_today.xml` 一起改。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="300dp"
+    android:viewportWidth="400"
+    android:viewportHeight="300">
+
+    <!-- 卡底（圆角 24） -->
+    <path
+        android:pathData="M24,0 H376 A24,24 0 0 1 400,24 V276 A24,24 0 0 1 376,300 H24 A24,24 0 0 1 0,276 V24 A24,24 0 0 1 24,0 Z"
+        android:fillColor="#F7FFFFFF"
+        android:strokeColor="#24111118"
+        android:strokeWidth="2" />
+
+    <!-- 左侧竖色条（10×138，两端半圆头） -->
+    <path
+        android:pathData="M37,78 A5,5 0 0 1 42,83 V211 A5,5 0 0 1 37,216 A5,5 0 0 1 32,211 V83 A5,5 0 0 1 37,78 Z"
+        android:fillColor="#556E6E82" />
+
+    <!-- 右侧三行递减的块（圆角 8） -->
+    <path
+        android:pathData="M70,78 H360 A8,8 0 0 1 368,86 V116 A8,8 0 0 1 360,124 H70 A8,8 0 0 1 62,116 V86 A8,8 0 0 1 70,78 Z"
+        android:fillColor="#556E6E82" />
+    <path
+        android:pathData="M70,142 H250 A8,8 0 0 1 258,150 V164 A8,8 0 0 1 250,172 H70 A8,8 0 0 1 62,164 V150 A8,8 0 0 1 70,142 Z"
+        android:fillColor="#556E6E82" />
+    <path
+        android:pathData="M70,186 H186 A8,8 0 0 1 194,194 V208 A8,8 0 0 1 186,216 H70 A8,8 0 0 1 62,208 V194 A8,8 0 0 1 70,186 Z"
+        android:fillColor="#556E6E82" />
+</vector>

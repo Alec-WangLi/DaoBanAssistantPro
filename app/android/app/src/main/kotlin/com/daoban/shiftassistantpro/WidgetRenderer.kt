@@ -461,25 +461,25 @@ object WidgetRenderer {
         val stale = tc == null || tc.day != LocalDate.now().toEpochDay()
 
         // ── 1. 日期行 ──
-        // 位图高**必须等于布局里视图的高**（色条 22dp）：ImageView 是 `fitXY`，
+        // 位图高**必须等于布局里视图的高**（色条 24dp）：ImageView 是 `fitXY`，
         // 两者不等就是非等比拉伸，而 `bar()` 的圆头半径是按位图宽/高算的。
         v.setImageViewBitmap(
             R.id.wg_tc_bar,
             WidgetChip.bar(
                 if (d.hasShift) d.color else snap.accent,
                 dpToPx(context, 4),
-                dpToPx(context, 22),
+                dpToPx(context, 24),
             ),
         )
         v.setTextViewText(R.id.wg_tc_date, d.dateShort)
         v.setTextColor(R.id.wg_tc_date, ink)
 
         // 「今天」徽章。宽度写死在布局里 —— RemoteViews 量不到文字宽度。
-        // 高同样要与布局的 `wg_tc_today_wrap`（22dp）一致：`tintedChip` 的 radius 与
+        // 高同样要与布局的 `wg_tc_today_wrap`（24dp）一致：`tintedChip` 的 radius 与
         // strokeWidth 都按**位图**高算，拉了 fitXY 会让两端的半圆变椭圆、上下描边偏重。
         v.setImageViewBitmap(
             R.id.wg_tc_today_bg,
-            WidgetChip.tintedChip(snap.accent, dpToPx(context, 52), dpToPx(context, 22)),
+            WidgetChip.tintedChip(snap.accent, dpToPx(context, 52), dpToPx(context, 24)),
         )
         v.setTextViewText(R.id.wg_tc_today_text, snap.today)
         v.setTextColor(R.id.wg_tc_today_text, snap.accent)
@@ -492,7 +492,7 @@ object WidgetRenderer {
             v.setViewVisibility(R.id.wg_tc_todo_wrap, android.view.View.VISIBLE)
             v.setImageViewBitmap(
                 R.id.wg_tc_todo_bg,
-                WidgetChip.tintedChip(snap.accent, dpToPx(context, 84), dpToPx(context, 22)),
+                WidgetChip.tintedChip(snap.accent, dpToPx(context, 84), dpToPx(context, 24)),
             )
             v.setTextViewText(R.id.wg_tc_todo_text, todoText)
             v.setTextColor(R.id.wg_tc_todo_text, snap.accent)
@@ -544,7 +544,7 @@ object WidgetRenderer {
                 WidgetChip.tintedChip(
                     if (d.hasShift) d.color else snap.accent,
                     dpToPx(context, 96),
-                    dpToPx(context, 22),
+                    dpToPx(context, 24),
                 ),
             )
             v.setTextViewText(R.id.wg_tc_adj_text, snap.adjustedBadge)

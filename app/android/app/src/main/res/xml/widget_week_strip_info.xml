@@ -15,6 +15,12 @@
   真实版式是渲染期 addView 出来的，映不出来。示意图只画形状、不放假文字
   （那种布局要写死示例文案，而本项目是中英双语的）。
 
+  ⚠️ **2026-09-20：这台启动器（HyperOS / Android 16）不认 `previewLayout`** —— picker 里
+  三条缩略图全显示成应用图标（`initialLayout="@layout/widget_placeholder"` 那张），
+  而竞品的条目能显示内容。故 **A + C 两条一起上**：`previewLayout` 保留（换一台启动器
+  可能就认），另补一张 `previewImage` —— 三张 `widget_preview_*_img.xml` 的 `<vector>`
+  结构示意图（分辨率无关、无需 PNG 管线、无任何文字）。两条同时给，由启动器自己挑。
+
   ⚠️ 小米/HyperOS 会按**资源 id** 缓存 drawable：改了这里的资源色之后，
   验证前必须 `am force-stop com.miui.home`。
 -->
@@ -27,4 +33,5 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_placeholder"
-    android:previewLayout="@layout/widget_preview_strip" />
+    android:previewLayout="@layout/widget_preview_strip"
+    android:previewImage="@drawable/widget_preview_strip_img" />

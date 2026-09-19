@@ -4,9 +4,12 @@
   卡片内容自己**不画底**（widget_today_card.xml 的根没有 background）——
   两层同图叠放会多出一圈圆角描边、悬在外壳边框内侧（v0.8.6 踩过）。
 
-  gravity="center_vertical"：内容约 200dp、4×3 可用约 268dp，余下约 68dp
-  成为上下均匀留白。**不靠继续放大字号去填满** —— 字号要能被真机图判定为「舒展」，
-  而不是「被撑大」。
+  gravity="center_vertical"：字号与间距在 2026-09-20 的真机反馈后整体提了一档（内层
+  widget_today_card.xml），内容从约 202dp 撑到实测约 232dp、4×3 外壳实测 266dp —— 余量
+  约 34dp（改前约 65dp）。**没到裁决时定的 ≤ 25dp**，差的那 9dp 见 widget_today_card.xml
+  的头注（这一档自己的 +Δ 只有约 +29dp，撑不到 245dp）。余量由这里居中平分到上下。
+  原先的 18dp/20sp/12dp 版在真机上上下各留一截空白（用户原话「上下留了好大的空白」），
+  这一档就是那份裁决的结果；**行高与结构仍然没动**，改的只有字号、间距与徽章/色条。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_ts_root"

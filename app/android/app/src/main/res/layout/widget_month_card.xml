@@ -9,16 +9,18 @@
   ⚠️ 月份标题**查不到就隐藏**（原生从快照的 months 里按「年-月」查）：
   绝不借相邻月份的标题顶上 —— 那是「不让卡片理直气壮地写错」这条纪律的又一入口。
 
-  ⚠️ 网格高 wrap_content + 根 gravity="center_vertical"：5 行的月份（多数月份）
-  让网格整体居中、上下均匀留白，不为凑满 6 行而拉高格子。
-  高度预算见 spec §5.3：可用约 442dp − 标题 18 − 周几 15 − 间距 8 ≈ 401dp，6 行 × 65.5dp。
+  ⚠️ 网格**铺满可用高度**（2026-09-20 真机反馈后改的，原先是 wrap_content + 根
+  gravity="center_vertical"，5 行月会在卡下半部堆一坨空白，用户看到的约 87dp）。
+  做法：42 个槽位 `layout_height="0dp"` + `android:layout_rowWeight="1"`，GridLayout
+  自己 `layout_height="0dp"` + `layout_weight="1"` 吃掉标题/周几行剩下的全部高度，
+  `rowWeight` 再把它按**可见**行数（前导/尾随空格是 GONE，不参与布局）均分下去。
+  于是 5 行月每行 ≈ 77dp、6 行月每行 ≈ 65dp，两种月份都铺满。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_m_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center_vertical"
     android:background="@drawable/widget_card_light"
     android:padding="8dp">
 
@@ -104,260 +106,303 @@
     <GridLayout
         android:id="@+id/wg_m_grid"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:layout_marginTop="4dp"
         android:columnCount="7">
 
     <FrameLayout
         android:id="@+id/wg_m_slot1"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot2"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot3"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot4"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot5"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot6"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot7"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot8"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot9"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot10"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot11"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot12"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot13"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot14"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot15"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot16"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot17"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot18"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot19"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot20"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot21"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot22"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot23"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot24"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot25"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot26"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot27"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot28"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot29"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot30"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot31"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot32"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot33"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot34"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot35"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot36"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot37"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot38"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot39"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot40"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot41"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
 
     <FrameLayout
         android:id="@+id/wg_m_slot42"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
         android:layout_columnWeight="1" />
     </GridLayout>
 </LinearLayout>

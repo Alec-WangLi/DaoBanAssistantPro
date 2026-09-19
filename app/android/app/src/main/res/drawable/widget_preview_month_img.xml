@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  picker 缩略图（`previewImage`）：4×5 整月。**结构示意、无文字、无假数据**。
+
+  为什么是 `<vector>` 而不是 PNG、以及配色来源，见 `widget_preview_strip_img.xml` 的头注。
+
+  形状按真卡比例：viewport 400×500 = 4:5。顶上一条居中的标题块，下面是 7×6 的方格
+  （真卡是周几行 + 42 格）。改版式时这张要与 `widget_preview_month.xml` 一起改。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="500dp"
+    android:viewportWidth="400"
+    android:viewportHeight="500">
+
+    <!-- 卡底（圆角 26） -->
+    <path
+        android:pathData="M26,0 H374 A26,26 0 0 1 400,26 V474 A26,26 0 0 1 374,500 H26 A26,26 0 0 1 0,474 V26 A26,26 0 0 1 26,0 Z"
+        android:fillColor="#F7FFFFFF"
+        android:strokeColor="#24111118"
+        android:strokeWidth="2" />
+
+    <!-- 月份标题块（居中，120×16） -->
+    <path
+        android:pathData="M148,32 H252 A8,8 0 0 1 260,40 V40 A8,8 0 0 1 252,48 H148 A8,8 0 0 1 140,40 V40 A8,8 0 0 1 148,32 Z"
+        android:fillColor="#556E6E82" />
+
+    <!-- 7 列 × 6 行的方格（40×54，每行一条 path 的 7 个子路径） -->
+    <path android:pathData="M31,79 h40 v54 h-40 Z M81,79 h40 v54 h-40 Z M130,79 h40 v54 h-40 Z M180,79 h40 v54 h-40 Z M230,79 h40 v54 h-40 Z M279,79 h40 v54 h-40 Z M329,79 h40 v54 h-40 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M31,147 h40 v54 h-40 Z M81,147 h40 v54 h-40 Z M130,147 h40 v54 h-40 Z M180,147 h40 v54 h-40 Z M230,147 h40 v54 h-40 Z M279,147 h40 v54 h-40 Z M329,147 h40 v54 h-40 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M31,214 h40 v54 h-40 Z M81,214 h40 v54 h-40 Z M130,214 h40 v54 h-40 Z M180,214 h40 v54 h-40 Z M230,214 h40 v54 h-40 Z M279,214 h40 v54 h-40 Z M329,214 h40 v54 h-40 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M31,282 h40 v54 h-40 Z M81,282 h40 v54 h-40 Z M130,282 h40 v54 h-40 Z M180,282 h40 v54 h-40 Z M230,282 h40 v54 h-40 Z M279,282 h40 v54 h-40 Z M329,282 h40 v54 h-40 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M31,350 h40 v54 h-40 Z M81,350 h40 v54 h-40 Z M130,350 h40 v54 h-40 Z M180,350 h40 v54 h-40 Z M230,350 h40 v54 h-40 Z M279,350 h40 v54 h-40 Z M329,350 h40 v54 h-40 Z" android:fillColor="#556E6E82" />
+    <path android:pathData="M31,417 h40 v54 h-40 Z M81,417 h40 v54 h-40 Z M130,417 h40 v54 h-40 Z M180,417 h40 v54 h-40 Z M230,417 h40 v54 h-40 Z M279,417 h40 v54 h-40 Z M329,417 h40 v54 h-40 Z" android:fillColor="#556E6E82" />
+</vector>
