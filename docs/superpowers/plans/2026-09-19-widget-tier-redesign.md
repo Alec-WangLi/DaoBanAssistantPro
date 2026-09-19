@@ -1151,22 +1151,51 @@ git commit -m "feat(widget): 列表三档（行槽位 + 共用行布局），行
         android:layout_height="56dp"
         android:layout_columnWeight="1" />
 
-    <!-- 同构再写 7 个：wg_gw_slot2 .. wg_gw_slot8，每个都
-         layout_width="0dp" layout_height="56dp" layout_columnWeight="1" -->
-</GridLayout>
-```
-
-> **`GridLayout` 的根用 `wrap_content` 高**（内容定高），外层若需要它撑满再由容器给。**八个槽位逐个写出来，不要用 `<include>`**（它在 RemoteViews 里的行为不保证）。
-
-八个槽位全部照抄下面这 5 行、只把 `wg_gw_slot1` 的下标依次改成 2…8：
-
-```xml
     <FrameLayout
-        android:id="@+id/wg_gw_slot1"
+        android:id="@+id/wg_gw_slot2"
         android:layout_width="0dp"
         android:layout_height="56dp"
         android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot3"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot4"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot5"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot6"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot7"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot8"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+</GridLayout>
 ```
+
+> **`GridLayout` 的根用 `wrap_content` 高**（内容定高），外层若需要它撑满再由容器给。**不要用 `<include>`** —— 它在 RemoteViews 里的行为不保证。
 
 创建 `app/android/app/src/main/res/layout/widget_grid_fortnight.xml`：
 
