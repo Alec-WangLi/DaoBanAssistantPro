@@ -11,7 +11,6 @@ import '../../core/motion.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../data/app_repository.dart';
-import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_ringing_screen.dart';
 import '../alarm/alarm_screen.dart';
@@ -71,6 +70,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // 排班数据与外观设置任一变化就重推快照 —— 这是「改完排班桌面立刻变」的那条路。
     ref.listenManual(activeScheduleProvider, (_, __) => _pushWidgetSnapshot());
     ref.listenManual(appSettingsProvider, (_, __) => _pushWidgetSnapshot());
+    // 待办变化也要重推：徽章上的「N 项待办」是快照里的一个数，而这条流
+    // （eventsProvider）此前**没有任何推送触发** —— 勾掉一条待办之后桌面上的
+    // 数字会一整天不动，直到改排班/改外观/下次冷启动。（冷启动那次重复推送无害。）
+    ref.listenManual(eventsProvider, (_, __) => _pushWidgetSnapshot());
     WidgetService.widgetLaunchRequested.addListener(_onWidgetDayRequested);
   }
 
@@ -156,11 +159,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // 今日未完成待办数：与日历信息卡上那个「N 项待办」徽章同一个口径
     // （同一天、`completed == false`）。
     final today = DateTime.now();
-    final events = await ref.read(appRepositoryProvider).listEvents();
+    // 待办数读失败不能让整次推送中断 —— `WidgetService.push` 自己的错误处理
+    // 在下面，读失败就根本走不到那儿。读不到就按 0 计（徽章不显示），
+    // 并留一条痕（「桌面怎么没变」只能靠日志查）。
+    var todoCount = 0;
+    try {
+      final events = await ref.read(appRepositoryProvider).listEvents();
+      todoCount = events.where((e) => isPendingTodoOn(e, today)).length;
+    } catch (e) {
+      await WidgetService.logInfo('widget push: 待办数读取失败，按 0 计: $e');
+    }
     if (!mounted) return;
-    final todoCount = events
-        .where((e) => !e.isCompleted && isSameDay(e.date, today))
-        .length;
     await WidgetService.push(
       schedule: async.value?.toDomain(),
       settings: ref.read(appSettingsProvider),

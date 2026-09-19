@@ -2,9 +2,10 @@
 <!--
   列表里的**一行**。被 widget_list_compact / widget_list 共用。
 
-  ⚠️ 根布局的 layout_height 必须是 match_parent 而不是 wrap_content：它被塞进一个
-  FrameLayout 槽位，拿的是 FrameLayout 的默认 LayoutParams（MATCH_PARENT × MATCH_PARENT），
-  自己再声明 match_parent 才与外层一致。
+  ⚠️ 根布局的 layout_width/height 必须是 match_parent，不能省、也不能改成 wrap_content：
+  真机探针坐实的是**嵌套根自己显式声明的 match_parent** 能穿过宿主进程的 inflate 被
+  FrameLayout 槽位尊重（spec §5.4）—— **不是**「槽位拿默认 LayoutParams 补齐」那条路。
+  删掉这行显式 match_parent，行就会缩成一小团（且不报错）。
 
   字号**不在布局里写死** —— 紧凑档 12sp、普通档 13sp，由渲染侧
   `setTextViewTextSize` 按档位设（一张布局供两档用）。

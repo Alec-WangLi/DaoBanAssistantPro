@@ -38,10 +38,6 @@
     <color name="wg_border_light">#24111118</color>
     <color name="wg_border_dark">#29FFFFFF</color>
 
-    <!-- 分隔线：inkMuted 12%。层级只靠明度（设计理念 §3），所以是浅一档的线，不是另一种颜色。 -->
-    <color name="wg_divider_light">#1F6E6E82</color>
-    <color name="wg_divider_dark">#1F9A9AB0</color>
-
     <!-- 正文 / 次要文字。 -->
     <color name="wg_ink_light">#111118</color>
     <color name="wg_ink_dark">#F2F2F7</color>

@@ -54,6 +54,11 @@ object WidgetStore {
         val lunarShort: String,
         val lunarIsHoliday: Boolean,
         val adjusted: Boolean,
+        /**
+         * 今日未完成待办数。**仅供线上协议 / 诊断，界面不用它** —— 徽章画的是
+         * [todoBadge]（Dart 侧给的完整文字）。解析它是为了协议字段对齐与日志排查，
+         * 不要以为它驱动着什么。
+         */
         val todoCount: Int,
         /**
          * 「N 项待办」徽章上的**文字**，由 Dart 侧 `L10n.todoCount` 产出；没有待办时

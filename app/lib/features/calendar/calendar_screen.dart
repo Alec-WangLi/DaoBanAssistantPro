@@ -1579,12 +1579,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
 
     // 选中那天还没完成的待办条数。只说数量，不列内容（用户要的只是「今天有
-    // 待办」这一眼）。`e.date` 是 `dateOnly` 存的 UTC 日期，比「同一天」要走
-    // `isSameDay`，不能直接用 `==`。
+    // 待办」这一眼）。口径抽在 `isPendingTodoOn`（`app_repository.dart`）里 ——
+    // 桌面小组件快照的今日待办数与这里必须是同一个判定。
     final pendingTodos = ref
             .watch(eventsProvider)
             .valueOrNull
-            ?.where((e) => !e.isCompleted && isSameDay(e.date, _selected))
+            ?.where((e) => isPendingTodoOn(e, _selected))
             .length ??
         0;
 

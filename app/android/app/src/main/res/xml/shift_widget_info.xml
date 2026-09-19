@@ -8,7 +8,9 @@
   5 天），高且够宽走网格 + 今日卡片（一周 / 两周）。五档的内容与阈值见 WidgetTier。
 
   previewLayout 指向占位布局：五档的真实版式都要在渲染期把行 / 格 addView 进槽位才有
-  内容，静态布局映出来是个空壳，不如占位态（图标 + 应用名）有信息量。
+  内容，静态布局映出来是个空壳，不如占位态有信息量。注意预览**只有图标、没有应用名** ——
+  previewLayout 是**静态 inflate**、不跑 RemoteViews 的动作，`wg_ph_label` 那句应用名
+  （渲染期 `applicationInfo.loadLabel()` 设的）拿不到，所以预览里它是空的。
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"

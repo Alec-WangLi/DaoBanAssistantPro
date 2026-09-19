@@ -454,7 +454,7 @@ Map<String, Object?> buildWidgetSnapshot({
     'todoCount': todayTodoCount,
     // 徽章上的**文字**也在这里给全 —— 原生不许有中文字面量，而
     // `'$n 项待办'` / `'$n todos'` 是双语的。没有待办时给 null，原生据此隐藏徽章。
-    'todoBadge': todayTodoCount > 0 ? L10n.pendingTodos(todayTodoCount) : null,
+    'todoBadge': todayTodoCount > 0 ? L10n.todoCount(todayTodoCount) : null,
     'crews': crews,
   };
 ```
@@ -2145,7 +2145,7 @@ Expected: `All tests passed!`（2 条）。**若它红了，说明 Task 2 的 `t
 4. **`import java.time.LocalDate`**（`WidgetStore.kt` 里已有，`WidgetRenderer.kt` 里可能要补）。
 
   > ⚠️ **徽章的文字必须在 Dart 侧生成。** 快照的 `todayCard.todoCount` 是个**数字**，而原生不许有中文字面量（`"$n 项待办"` / `"$n todos"` 是双语）。所以 **Task 2 要补两个字段**：
-  > 1. `todayCard.todoBadge`（`String?`）—— `todayTodoCount > 0 ? L10n.pendingTodos(todayTodoCount) : null`，为空时原生整块隐藏徽章。
+  > 1. `todayCard.todoBadge`（`String?`）—— `todayTodoCount > 0 ? L10n.todoCount(todayTodoCount) : null`，为空时原生整块隐藏徽章。
   > 2. 顶层 `labels` 里加 `'adjusted': L10n.adjusted`（`L10n.adjusted` 已存在，就是「已调班」/「Shift changed」）—— 原生读成 `snap.adjustedBadge`。
   >
   > 「今天」徽章的文字**不用新加**：复用顶层 `labels.today`（原生侧的 `snap.today`）即可。

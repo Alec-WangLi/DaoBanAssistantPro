@@ -66,6 +66,19 @@ class WidgetService {
     }
   }
 
+  /// 走 channel 的 `logInfo` 留一条痕（原生落盘到 `ShiftAssistant` 日志）。
+  ///
+  /// 与 [push] 的 catch 同一个 channel、同一个方法名。**不 import `alarm_service.dart`**：
+  /// 那两个文件互相 import 会成环（见文件头），而 `logInfo` 本来就是同一条 channel
+  /// 上的一个方法名 —— 各持一份常量比互相 import 干净。
+  static Future<void> logInfo(String msg) async {
+    try {
+      await _channel.invokeMethod('logInfo', {'msg': msg});
+    } catch (_) {
+      // 连日志都发不出去（引擎已经没了）—— 到这一步没什么可做的了。
+    }
+  }
+
   /// 冷启动由小组件拉起时，读一次原生存下的「要跳到哪天」。
   ///
   /// 热启动**不走这里** —— 那时 Dart 已经在跑，原生直接推 `onWidgetDayTapped`。

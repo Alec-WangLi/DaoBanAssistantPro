@@ -605,6 +605,18 @@ final eventsProvider = StreamProvider<List<ScheduleEvent>>((ref) {
   return db.watchEvents();
 });
 
+/// 一条日程是不是「属于 [day] 且未完成」。
+///
+/// 日历信息卡的「N 项待办」徽章（`calendar_screen.dart`）与桌面小组件快照里的
+/// 今日待办数（`home_shell.dart` 的 `_pushWidgetSnapshot`）共用这一个口径 ——
+/// 桌面上的数与日历上的数必须一致，而这个判定此前在两处各写了一份。抽成一处是
+/// 为了让「同一个口径」由结构保证，而不是靠两处各自自觉。
+///
+/// [ScheduleEvent.date] 是 `dateOnly` 存的 UTC 纯日期，比「同一天」必须走
+/// [isSameDay]（不能用 `==`，它连 `isUtc` 一起比，同一天也会判成不等）。
+bool isPendingTodoOn(ScheduleEvent e, DateTime day) =>
+    !e.isCompleted && isSameDay(e.date, day);
+
 final customAlarmsProvider = StreamProvider<List<CustomAlarm>>((ref) {
   final db = ref.watch(databaseProvider);
   final q = db.select(db.customAlarms)

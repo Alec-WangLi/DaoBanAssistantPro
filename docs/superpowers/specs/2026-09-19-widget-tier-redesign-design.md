@@ -316,3 +316,7 @@ Map<String, Object?> buildWidgetSnapshot({
 | 日期 | 变更 |
 |---|---|
 | 2026-09-19 | 初稿。六个已定决策来自同日头脑风暴；七档实测高度与步长来自用户当天的拖动演示 |
+| 2026-09-19 | **§6 补两个快照字段**：`todayCard.todoBadge`（`String?`，即「N 项待办」徽章上的**文字**）与顶层 `labels.adjusted`（「已调班」徽章文字）。原稿只列了数字 `todayCard.todoCount`，漏了「原生零中文字面量 ⇒ 徽章文字必须由 Dart 侧给全」这一层 —— 写 Task 6（渲染徽章）时才暴露，`todoCount` 这个数字最终没有界面消费者。 |
+| 2026-09-19 | **§5.3 / §6 补 `wg_holiday` 色**：`res/values/widget_colors.xml` 增加 `<color name="wg_holiday">#E53935</color>`（照抄 `AppTokens.holiday`）。§7 表格写了「农历在法定节假日走 holiday 红」，但 §6 的新增清单没点出这个色要用新资源；实施时必须补才发现。 |
+| 2026-09-19 | **§3 更正「两把尺」**：`pick` 收到的报告尺寸（`OPTION_APPWIDGET_MIN_WIDTH/HEIGHT`）与卡片实际排版出来的**渲染尺寸**不是同一把尺（Task 1 实测 id=34：报 328×158dp，渲染 342.7×173.3dp，每轴约大 15dp）。**阈值只许对报告尺标定**；渲染尺只用来核「内容放不放得下」（固定行高与居中的决策按它核）。 |
+| 2026-09-19 | **§7 一处有意偏离**：今日卡片里「其他班组」胶囊的文字色**没有**走 `AppTokens.inkFor`，改用固定的 `wg_muted_*`。理由：`inkFor` 的「按底色算可读色」要 luminance 计算，为一行 11sp 小字在原生复刻一份不值当，而快照里也没有现成的对比色可拿（详见 `WidgetRenderer.kt` 该处注释）。 |
