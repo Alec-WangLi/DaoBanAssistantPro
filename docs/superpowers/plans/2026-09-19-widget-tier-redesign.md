@@ -438,7 +438,11 @@ Map<String, Object?> buildWidgetSnapshot({
       if (t == null) continue;
       final name = i < schedule.teamNames.length
           ? schedule.teamNames[i]
-          : (L10n.isEn ? 'Team ${i + 1}' : '${i + 1}班');
+          // 兜底走既有的 [L10n.defaultTeamName] —— 它自己的注释写着「唯一来源…
+          // 免得两处各写一份、英文界面下漏出中文」。**不要**像 App 的信息卡那样
+          // 内联写 `i + 1` + 中英三元（那是既有的疤，别再抄一份；两者输出还不一样，
+          // 助手给「五班」、内联给「5班」）。
+          : L10n.defaultTeamName(i);
       crews.add({'name': name, 'abbr': t.shortLabel, 'color': t.color});
     }
   }
