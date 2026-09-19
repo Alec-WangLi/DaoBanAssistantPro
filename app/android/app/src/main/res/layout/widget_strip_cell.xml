@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  本周条的**一格**。七格共用这一张（每格一个独立的 RemoteViews 实例，id 重复没关系）。
+
+  ⚠️ 根布局的 layout_height 必须是 match_parent 而不是 wrap_content：它被塞进
+  FrameLayout 槽位，拿的是槽位的 LayoutParams，自己再声明 match_parent 才与外层一致
+  （v0.8.6 Task 1 真机验过这条链）。
+
+  三行：周几 / 日数字 / 班次胶囊。高度预算见 spec §5.1：卡内可用约 62dp，
+  三行 15+20+18 + 间距 4 ≈ 57dp —— **余量只有 5dp**，真机出图若被裁，
+  退到「周几与日期同行」的两行备选（`一 19`），不要靠缩字号硬塞。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_sc_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center">
+
+    <TextView
+        android:id="@+id/wg_sc_weekday"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/wg_sc_day"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textSize="15sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <FrameLayout
+        android:layout_width="36dp"
+        android:layout_height="18dp"
+        android:layout_marginTop="3dp">
+
+        <ImageView
+            android:id="@+id/wg_sc_pill"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/wg_sc_abbr"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textSize="10sp"
+            android:maxLines="1" />
+    </FrameLayout>
+</LinearLayout>

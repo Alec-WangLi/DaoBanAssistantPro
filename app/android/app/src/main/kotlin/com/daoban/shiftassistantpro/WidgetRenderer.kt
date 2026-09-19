@@ -130,8 +130,9 @@ object WidgetRenderer {
     /**
      * 三张卡的分派。**纯渲染**：不写盘、不排闹钟、不读除宿主配置之外的任何系统状态。
      *
-     * ⚠️ Task 4~7 之间三个分支是**临时的**（先全都走旧版式的渲染函数，保证每一步都编得过、
-     * 桌面上也都看得见一张卡）。Task 5 / 6 / 7 逐个换成 `weekStrip` / `todayCard` / `monthCard`。
+     * ⚠️ `TODAY` / `MONTH` 两个分支**暂时是旧的**（先走旧版式的渲染函数，保证每一步都编得过、
+     * 桌面上也都看得见一张卡），Task 6 / 7 逐个换成 `renderTodayCard` / `monthCard`。
+     * `WEEK_STRIP` 已在 Task 5 换成真的 `weekStrip`。
      */
     fun render(
         context: Context,
@@ -150,11 +151,101 @@ object WidgetRenderer {
         }
         if (!snap.hasSchedule) return empty(context, snap, widgetId)
         return when (variant) {
-            // ⚠️ TASK4 临时：全部走旧版式的网格档，Task 5/6/7 逐个替换。
-            WidgetVariant.WEEK_STRIP -> gridWithCard(context, snap, todayIndex, widgetId, 8)
+            WidgetVariant.WEEK_STRIP -> weekStrip(context, snap, todayIndex, widgetId)
+            // ⚠️ TASK4 临时：TODAY / MONTH 仍走旧版式的网格档，Task 6/7 逐个替换。
             WidgetVariant.TODAY -> gridWithCard(context, snap, todayIndex, widgetId, 8)
             WidgetVariant.MONTH -> gridWithCard(context, snap, todayIndex, widgetId, 16)
         }
+    }
+
+    /**
+     * 4×1 本周条：**今天所在的那一周**（周一~周日），与 App 日历的一行同构。
+     *
+     * 列的位置由**日期**定，不由 `todayIndex` 定：先算本周一，再逐列拿 epochDay 去
+     * `days[]` 里找。窗口是绝对日期的（spec §7.1），所以本周一即使是上个月的最后几天
+     * 也在窗口里 —— 这正是换窗口换来的能力。
+     *
+     * 「今天」那列：周几与日数字走**主色**。**不许加粗** —— `TextView` 没有
+     * `setTypeface(int)` 重载，`setInt(id, "setTypeface", …)` 会在宿主进程抛 `ActionException`。
+     *
+     * 胶囊走**淡染配方**（14% 底 + 45% 描边）而不是实心：那是 App 日历格里班次胶囊的
+     * 同一套长相（spec §4.1），文字因此走中性 ink —— 淡染底混合后≈卡片底，
+     * `wg_ink_*` 必然过 AA，而 `onSolid` 那套黑/白字在淡染底上是错的。
+     */
+    private fun weekStrip(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+        widgetId: Int,
+    ): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_week_strip)
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            R.id.wg_ws_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+        v.setOnClickPendingIntent(R.id.wg_ws_root, launchIntent(context, rootRequestCode(widgetId)))
+
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
+        val muted = context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val empty = context.getColor(if (dark) R.color.wg_empty_dark else R.color.wg_empty_light)
+
+        val todayEpoch = snap.days[todayIndex].day
+        val today = LocalDate.ofEpochDay(todayEpoch)
+        val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+
+        val columns = intArrayOf(
+            R.id.wg_ws_col1, R.id.wg_ws_col2, R.id.wg_ws_col3, R.id.wg_ws_col4,
+            R.id.wg_ws_col5, R.id.wg_ws_col6, R.id.wg_ws_col7,
+        )
+
+        for (col in columns.indices) {
+            val epoch = monday.plusDays(col.toLong()).toEpochDay()
+            val i = snap.days.indexOfFirst { it.day == epoch }
+            if (i < 0) {
+                // 窗口里没有这天（理论上不会发生 —— 窗口恒含本周一与本周日）。
+                // 不当成「没有班次」画：那会理直气壮地显示一张空卡。
+                v.setViewVisibility(columns[col], android.view.View.GONE)
+                continue
+            }
+            v.setViewVisibility(columns[col], android.view.View.VISIBLE)
+
+            val d = snap.days[i]
+            val isToday = epoch == todayEpoch
+
+            // 点某一列 → 打开 App 并跳到那天。格子占槽位 1..7。
+            v.setOnClickPendingIntent(
+                columns[col],
+                launchIntent(context, cellRequestCode(widgetId, col), epochDay = epoch.toInt()),
+            )
+
+            val c = RemoteViews(context.packageName, R.layout.widget_strip_cell)
+            for (id in intArrayOf(R.id.wg_sc_weekday, R.id.wg_sc_day, R.id.wg_sc_pill, R.id.wg_sc_abbr)) {
+                // 可见性无条件设满：宿主 reapply 时只重放新动作，漏设会保持上一次的状态。
+                c.setViewVisibility(id, android.view.View.VISIBLE)
+            }
+
+            c.setTextViewText(R.id.wg_sc_weekday, d.weekday)
+            c.setTextColor(R.id.wg_sc_weekday, if (isToday) snap.accent else muted)
+            // 日数字：与 App 的格子一样只印「日」，整串「9月19日」在 46dp 宽的列里排不下。
+            c.setTextViewText(R.id.wg_sc_day, LocalDate.ofEpochDay(epoch).dayOfMonth.toString())
+            c.setTextColor(R.id.wg_sc_day, if (isToday) snap.accent else ink)
+
+            c.setImageViewBitmap(
+                R.id.wg_sc_pill,
+                WidgetChip.tintedChip(
+                    if (d.hasShift) d.color else empty,
+                    dpToPx(context, 36),
+                    dpToPx(context, 18),
+                ),
+            )
+            c.setTextViewText(R.id.wg_sc_abbr, if (d.hasShift) d.shiftAbbr else "")
+            c.setTextColor(R.id.wg_sc_abbr, ink)
+
+            v.addView(columns[col], c)
+        }
+        return v
     }
 
     /** 档位偏移 → 该显示哪个相对称法。≥3 直接用那天的周几（它不会腐坏）。 */
