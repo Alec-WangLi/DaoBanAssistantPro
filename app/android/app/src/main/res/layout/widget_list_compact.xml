@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  紧凑列表：2 行，每行 22dp（1 行那档，实测高 63dp）。
+  槽位一律用 FrameLayout —— 它的默认 LayoutParams 是 MATCH_PARENT×MATCH_PARENT，
+  `RemoteViews.addView` 塞进去的内容才会填满槽位。换 LinearLayout 会缩成一小团且不报错。
+  行高写死、不给 weight：上一版就是让行去分掉全部高度，所以高度一变行高就变，
+  用户看到的是「每行被拉长」。多出来的高度现在是留白（见根布局的 gravity）。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_lc_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:background="@drawable/widget_card_light"
+    android:padding="8dp">
+
+    <FrameLayout
+        android:id="@+id/wg_lc_slot1"
+        android:layout_width="match_parent"
+        android:layout_height="22dp" />
+
+    <FrameLayout
+        android:id="@+id/wg_lc_slot2"
+        android:layout_width="match_parent"
+        android:layout_height="22dp" />
+</LinearLayout>

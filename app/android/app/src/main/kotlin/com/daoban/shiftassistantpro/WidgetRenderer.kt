@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.util.TypedValue
 import android.widget.RemoteViews
 
 /**
@@ -126,16 +127,13 @@ object WidgetRenderer {
         // 一句来自快照的提示。这一支必须在分档**之前** —— 三档尺寸在空表下长得
         // 一致，不必各写一套。
         if (!snap.hasSchedule) return empty(context, snap, widgetId)
-        val dark = isDark(context, snap.themeMode)
         return when (tier) {
-            // ⚠️ TASK3/TASK4 之间的临时映射：五档先落到既有的三张布局上，
-            // 保证工程始终编得过。Task 4 换真列表档、Task 5 换真网格档、
-            // Task 7 做最终分派。
-            WidgetTier.LIST_COMPACT, WidgetTier.LIST_3, WidgetTier.LIST_5 ->
-                small(context, snap, todayIndex, widgetId)
-
-            WidgetTier.GRID_WEEK, WidgetTier.GRID_FORTNIGHT ->
-                large(context, snap, todayIndex, widgetId)
+            WidgetTier.LIST_COMPACT -> listRows(context, snap, todayIndex, widgetId, 2, 12f)
+            WidgetTier.LIST_3 -> listRows(context, snap, todayIndex, widgetId, 3, 13f)
+            WidgetTier.LIST_5 -> listRows(context, snap, todayIndex, widgetId, 5, 13f)
+            // 网格两档与今日卡片还没做（Task 5/6），暂时也走列表，别留下编译不过的洞。
+            WidgetTier.GRID_WEEK -> listRows(context, snap, todayIndex, widgetId, 5, 13f)
+            WidgetTier.GRID_FORTNIGHT -> listRows(context, snap, todayIndex, widgetId, 5, 13f)
         }
     }
 
@@ -256,6 +254,114 @@ object WidgetRenderer {
         }
         v.setTextColor(R.id.wg_s_next, muted)
 
+        return v
+    }
+
+    /**
+     * 列表档（LIST_COMPACT / LIST_3 / LIST_5 共用）。
+     *
+     * [rowCount] 决定用哪张槽位布局：2 → `widget_list_compact`（22dp 行高），
+     * 3 或 5 → `widget_list`（40dp 行高）。
+     * [textSizeSp] 由档位给（紧凑 12、普通 13）—— 行布局里不写死字号，
+     * 靠 `setTextViewTextSize` 按档设，一张布局供两档用。
+     *
+     * 槽位是**固定高度**、根布局 `gravity="center_vertical"`：多出来的高度成为上下
+     * 均匀的留白，而不是把行拉长 —— 那是上一版被用户点名的问题。
+     */
+    private fun listRows(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+        widgetId: Int,
+        rowCount: Int,
+        textSizeSp: Float,
+    ): RemoteViews {
+        val compact = rowCount <= 2
+        val v = RemoteViews(
+            context.packageName,
+            if (compact) R.layout.widget_list_compact else R.layout.widget_list,
+        )
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            if (compact) R.id.wg_lc_root else R.id.wg_l5_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+        v.setOnClickPendingIntent(
+            if (compact) R.id.wg_lc_root else R.id.wg_l5_root,
+            launchIntent(context, rootRequestCode(widgetId)),
+        )
+
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
+        val muted =
+            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val empty = context.getColor(
+            if (dark) R.color.wg_empty_dark else R.color.wg_empty_light
+        )
+
+        val slots = if (compact) {
+            intArrayOf(R.id.wg_lc_slot1, R.id.wg_lc_slot2)
+        } else {
+            intArrayOf(
+                R.id.wg_l5_slot1, R.id.wg_l5_slot2, R.id.wg_l5_slot3,
+                R.id.wg_l5_slot4, R.id.wg_l5_slot5,
+            )
+        }
+
+        for (row in slots.indices) {
+            val i = todayIndex + row
+            // 两个都要挡：快照窗口耗尽（todayIndex 靠后），以及这一档要的行数
+            // 比槽位数多。越界读会被 ShiftWidgetProvider 的 try/catch 吞掉，
+            // 后果不是崩而是**卡片继续显示上一次渲染的旧内容**。
+            if (row >= rowCount || i >= snap.days.size) {
+                v.setViewVisibility(slots[row], android.view.View.GONE)
+                continue
+            }
+            v.setViewVisibility(slots[row], android.view.View.VISIBLE)
+
+            val d = snap.days[i]
+            val r = RemoteViews(context.packageName, R.layout.widget_row)
+            // 可见性无条件设满：同一张布局被两种档位复用，宿主走 `reapply` 时
+            // 只重放新的动作列表 —— 不显式设回来的视图会保持上一次的状态。
+            for (id in intArrayOf(
+                R.id.wg_r_dot, R.id.wg_r_label, R.id.wg_r_date, R.id.wg_r_shift,
+            )) {
+                r.setViewVisibility(id, android.view.View.VISIBLE)
+            }
+
+            r.setImageViewBitmap(
+                R.id.wg_r_dot,
+                WidgetChip.circle(
+                    if (d.hasShift) d.color else empty,
+                    dpToPx(context, 8),
+                ),
+            )
+            r.setTextViewText(R.id.wg_r_label, relativeLabel(snap, i, todayIndex))
+            r.setTextColor(R.id.wg_r_label, ink)
+            r.setTextViewText(R.id.wg_r_date, d.dateShort)
+            r.setTextColor(R.id.wg_r_date, muted)
+            r.setTextViewText(
+                R.id.wg_r_shift,
+                if (d.hasShift) d.shiftName else d.weekday,
+            )
+            r.setTextColor(R.id.wg_r_shift, ink)
+
+            if (d.timeRange == null) {
+                r.setViewVisibility(R.id.wg_r_time, android.view.View.GONE)
+            } else {
+                r.setViewVisibility(R.id.wg_r_time, android.view.View.VISIBLE)
+                r.setTextViewText(R.id.wg_r_time, d.timeRange)
+                r.setTextColor(R.id.wg_r_time, muted)
+            }
+
+            for (id in intArrayOf(
+                R.id.wg_r_label, R.id.wg_r_date, R.id.wg_r_shift, R.id.wg_r_time,
+            )) {
+                r.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+            }
+
+            v.addView(slots[row], r)
+        }
         return v
     }
 

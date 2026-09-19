@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  列表里的**一行**。被 widget_list_compact / widget_list 共用。
+
+  ⚠️ 根布局的 layout_height 必须是 match_parent 而不是 wrap_content：它被塞进一个
+  FrameLayout 槽位，拿的是 FrameLayout 的默认 LayoutParams（MATCH_PARENT × MATCH_PARENT），
+  自己再声明 match_parent 才与外层一致。
+
+  字号**不在布局里写死** —— 紧凑档 12sp、普通档 13sp，由渲染侧
+  `setTextViewTextSize` 按档位设（一张布局供两档用）。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_r_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
+
+    <ImageView
+        android:id="@+id/wg_r_dot"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:scaleType="fitXY"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:id="@+id/wg_r_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/wg_r_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/wg_r_shift"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="10dp"
+        android:textStyle="bold"
+        android:gravity="end"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/wg_r_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+</LinearLayout>
