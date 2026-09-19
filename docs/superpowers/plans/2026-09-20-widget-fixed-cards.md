@@ -397,7 +397,7 @@ git commit -m "docs(spec): 42 格月历的位图与 GridLayout 已真机验证"
     }
   });
 
-  test('窗口含过去的天：9/20 那天窗口起点在 8 月（本周一 8/31）', () {
+  test('窗口含过去的天：9/20 的窗口起点是 9/1（本月 1 日比本周一 9/14 更早）', () {
     final s = buildWidgetSnapshot(
       schedule: null, now: DateTime(2026, 9, 20, 10), themeMode: 'system',
       accent: 0xFF4F5BE8, todayTodoCount: 0,
@@ -621,7 +621,26 @@ Task 2 之后，Dart 发的是 v2、Kotlin 只认 v1 → 小组件会一直显�
                 lunarIsHoliday = d.optBoolean("lunarIsHoliday", false),
 ```
 
-**(d)** 新增 `MonthTitle` 与 `Snapshot` 的两个字段：
+**(d)** `TodayCard` 加一个字段（Task 6 的 4×3 配方要显示它 —— `lunarShort` 只是「初八」，
+4×3 用的是 App 完整信息卡那句：见 spec §5.2）：
+
+```kotlin
+        /**
+         * 完整农历描述（「农历 丙午年 八月初八 · 生肖马 · 日干壬辰 · 国际民主日」）。
+         *
+         * 4×3 比原来的紧凑档高出约 95dp，多出来的地方放**真内容**而不是把行距摊开 ——
+         * 这句就是那份内容（App 的完整版信息卡用的也是它）。
+         */
+        val lunarFull: String,
+```
+
+解析那段（与 `lunarShort` 挨着）：
+
+```kotlin
+                lunarFull = t.optString("lunarFull", ""),
+```
+
+**(e)** 新增 `MonthTitle` 与 `Snapshot` 的两个字段：
 
 ```kotlin
     /** 窗口覆盖到的某个月的标题（「2026年9月」/「September 2026」）。 */
@@ -641,7 +660,7 @@ Task 2 之后，Dart 发的是 v2、Kotlin 只认 v1 → 小组件会一直显�
         val months: List<MonthTitle>,
 ```
 
-**(e)** `parse()` 里解析这两个（照抄 `boundaries` 那种宽容写法）：
+**(f)** `parse()` 里解析这两个（照抄 `boundaries` 那种宽容写法）：
 
 ```kotlin
         val wdArr = o.optJSONArray("weekdays") ?: JSONArray()
