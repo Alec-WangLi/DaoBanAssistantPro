@@ -67,7 +67,7 @@ class ShiftWidgetProvider : AppWidgetProvider() {
                 val w = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
                 val h = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
                 val tier = WidgetTier.pick(w, h)
-                // 真机标定用：对着三档各拉一次，adb logcat -s ShiftAssistant 读回来。
+                // 真机标定用：对着五档各拉一次，adb logcat -s ShiftAssistant 读回来。
                 AlarmLog.info(context, "ShiftWidgetProvider: id=$id, ${w}x${h}dp → $tier")
                 try {
                     mgr.updateAppWidget(id, WidgetRenderer.render(context, snap, tier, id))

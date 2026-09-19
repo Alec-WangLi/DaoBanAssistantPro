@@ -24,4 +24,19 @@
         android:id="@+id/wg_lc_slot2"
         android:layout_width="match_parent"
         android:layout_height="22dp" />
+
+    <!--
+      空表态（没建过排班）的提示文字。**常驻**：正常两行档时由 `listRows` 显式设成 GONE，
+      空表时由 `empty()` 设成 VISIBLE。可见性必须两个方向都设满 —— 宿主在布局 id 不变时走
+      `RemoteViews.reapply`、只重放**新的**动作列表，漏设会让「建好排班」后提示还挂着、
+      或「清空排班」后提示不出现（本仓修过两次的同一类坑）。
+    -->
+    <TextView
+        android:id="@+id/wg_lc_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:visibility="gone" />
 </LinearLayout>

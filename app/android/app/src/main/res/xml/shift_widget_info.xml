@@ -4,8 +4,11 @@
   刷新全靠 WidgetRefreshScheduler 自排的边界闹钟。若真机上发现 MIUI 把自排闹钟
   吃掉，再改成 1800000 加一层兜底 —— 这是留给实测的开关，不预先加。
 
-  默认给 4×2（中档），可横竖自由拉：拉小到 2×2 变「今天一张牌」，拉大到 4×4 变
-  「一周一览」。三档的内容与阈值见 WidgetTier。
+  默认给 4×2，可横竖自由拉：高度从 1 行到 7 行共**五档** —— 矮走列表（紧凑 / 3 天 /
+  5 天），高且够宽走网格 + 今日卡片（一周 / 两周）。五档的内容与阈值见 WidgetTier。
+
+  previewLayout 指向占位布局：五档的真实版式都要在渲染期把行 / 格 addView 进槽位才有
+  内容，静态布局映出来是个空壳，不如占位态（图标 + 应用名）有信息量。
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
@@ -18,4 +21,4 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_placeholder"
-    android:previewLayout="@layout/widget_medium" />
+    android:previewLayout="@layout/widget_placeholder" />
