@@ -41,7 +41,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.7\n'
+const String _changelogZh = 'v0.8.8\n'
+    '· 桌面小组件改成三张固定尺寸的卡，放置之后不能再拉伸：本周条（4×1，今天所在这一周的七天）、今日卡（4×3，App 底栏那张信息卡的完整版）、整月（4×5，月份标题 + 周几行 + 42 格）\n'
+    '· 三张卡的视觉跟着 App 的设计语言走：班次胶囊从实心改成淡染底 + 同色描边（那天没班次就不画），去掉「白卡里再套白卡」的双层\n'
+    '· 升级后桌面上原有的旧小组件会消失，需要在桌面重新添加\n\n'
+    'v0.8.7\n'
     '· 修好桌面小组件上那枚「N 项待办」徽章不跟着变：在 App 里勾掉或新增今天的待办之后，此前要等到下次打开 App 它才更新，现在会跟着一起变\n'
     '· 内部：推送路径上新加的一处数据库读取补上了错误处理 —— 此前读失败一次会中断整次推送刷新\n\n'
     'v0.8.6\n'
@@ -83,15 +87,12 @@ const String _changelogZh = 'v0.8.7\n'
     'v0.7.5\n'
     '· 修好「关掉响铃界面后重新进入 App，响铃界面又弹一次、而且没有声音」：根因是热启动那条路把闹钟标签留在了原生侧没人清，下一次 App 界面重建时被当成一个新闹钟读了出来 —— 界面被一个陈旧的值唤醒，而根本没有闹钟在响\n'
     '· 重启手机后闹钟不再丢：此前重启会清空系统里排定的闹钟，要等你下次打开 App 才会重排。现在多了一份落盘的闹钟清单，开机后自动把闹钟排回去（重复的顺延到下一次；关机期间已经错过的一次性闹钟不会补响）\n'
-    '· 内部：视觉工装新增「向下滚动后」的图 —— 首屏之下的内容（权限卡就是其中之一）此前从来没被拍过，上一版那行名不副实的「后台弹出界面」正是这样活下来的\n\n'
-    'v0.7.4\n'
-    '· 修好一个隐患：关掉响铃界面之后，App 主界面会留在锁屏上（锁屏下能直接看到并操作 App 内容）。原因是「可以盖在锁屏上」这个状态只有打开、从来没撤回过 —— 现在响铃一停就撤销，关掉闹钟回到的就是锁屏\n'
-    '· 修好「日历里选中那天的滑块没把格子盖住」：滑块与格子的圆角差了一档（22 与 16），四个角各露出一条底下的卡片。现在两者同源，并加了一条测试钉着它们相等\n'
-    '· 响铃界面屏蔽系统返回手势：此前响铃时一次返回就会退回主界面（锁屏下等于把 App 内容露出来），现在只保留「上滑关闭」与「再睡一会」两个出口\n'
-    '· 权限页正名：「后台弹出界面」那一行其实是 Android 的「显示悬浮窗」权限，名字套用了小米的说法、名不副实；现在改叫「显示悬浮窗」，与英文界面一致\n'
-    '· 权限页新增「后台弹出界面（小米）」一行（仅小米机型显示），一键跳到系统的应用权限页。这一项不开的话，闹钟到点只会响、不会弹出响铃界面 —— 它是小米私有的权限，此前中文名的误会让人以为已经开过了\n'
-    '· 使用帮助的权限一节同步写清小米机型要额外开的两项\n\n';
-const String _changelogEn = 'v0.8.7\n'
+    '· 内部：视觉工装新增「向下滚动后」的图 —— 首屏之下的内容（权限卡就是其中之一）此前从来没被拍过，上一版那行名不副实的「后台弹出界面」正是这样活下来的\n\n';
+const String _changelogEn = 'v0.8.8\n'
+    '· The home-screen widget is now three fixed-size cards that cannot be resized once placed: a week strip (4×1 — the seven days of the current week), a today card (4×3 — the full version of the info card at the bottom of the app), and a month view (4×5 — month title, day-of-week row and a 6×7 grid)\n'
+    '· Their look now follows the app\'s design language: shift chips went from solid fills to a tinted background with a matching outline (a day with no shift stays blank), and the "white card inside a white card" double container is gone\n'
+    '· After upgrading, the old widget on your home screen will disappear — you will need to add it again\n\n'
+    'v0.8.7\n'
     '· Fixed the "N todos" badge on the home-screen widget not keeping up: after you tick off or add a todo for today in the app, the badge used to stay put until the next time you opened the app — it now follows along\n'
     '· Internal: a database read on the widget-push path gained error handling — one failed read used to abort the whole push refresh\n\n'
     'v0.8.6\n'
@@ -133,14 +134,7 @@ const String _changelogEn = 'v0.8.7\n'
     'v0.7.5\n'
     '· Fixed the ringing screen popping up a second time — and silently — when you reopened the app after dismissing an alarm: the warm-start path left the alarm label behind on the native side with nobody to clear it, so the next time the app\'s UI was recreated it was read back as a brand-new alarm. Nothing was ringing; the screen had just been woken by a stale value\n'
     '· Alarms now survive a reboot: restarting the phone used to wipe every scheduled alarm, and only opening the app put them back. A persisted alarm list now lets the app re-schedule everything right after boot (repeating alarms roll forward to their next occurrence; one-shot alarms missed while the phone was off are not replayed)\n'
-    '· Internal: the visual harness gained a "scrolled down" image — content below the fold (the permissions card among it) had never been photographed, which is how last release\'s mislabelled row survived so long\n\n'
-    'v0.7.4\n'
-    '· Fixed a privacy hole: after you dismissed the ringing screen, the app\'s main UI stayed on top of the lock screen, where anyone could read and operate it. The "show over the lock screen" state was only ever switched on and never released — it is now released the moment the alarm stops, so dismissing an alarm lands you back on the lock screen\n'
-    '· Fixed the calendar selection block not covering the day cell: the block and the cell used different corner radii (22 vs 16), leaving a sliver of the cell showing at each of the four corners. Both now share one source, with a test pinning them together\n'
-    '· The ringing screen now blocks the system back gesture: one back press used to drop you into the main UI (which, on the lock screen, means exposing the app\'s content). Only "slide to dismiss" and "snooze" remain\n'
-    '· Permissions page renamed: the row labelled "后台弹出界面" was actually Android\'s "Display over other apps" — it borrowed MIUI\'s wording, which made it look like the MIUI toggle was already covered. The English label was right all along; the Chinese one now matches it\n'
-    '· New "Background pop-up (MIUI)" row on the permissions page (Xiaomi devices only), jumping straight to the system app-permission page. With that toggle off, an alarm only rings and never pops up its screen — it is a Xiaomi-private permission, and the mislabelled row above is why it looked enabled\n'
-    '· The permissions section of the usage guide now spells out the two extra toggles Xiaomi devices need\n\n';
+    '· Internal: the visual harness gained a "scrolled down" image — content below the fold (the permissions card among it) had never been photographed, which is how last release\'s mislabelled row survived so long\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
