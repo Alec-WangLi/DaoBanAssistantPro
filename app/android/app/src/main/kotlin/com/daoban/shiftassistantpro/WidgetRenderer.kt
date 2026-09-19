@@ -171,6 +171,13 @@ object WidgetRenderer {
      * 胶囊走**淡染配方**（14% 底 + 45% 描边）而不是实心：那是 App 日历格里班次胶囊的
      * 同一套长相（spec §4.1），文字因此走中性 ink —— 淡染底混合后≈卡片底，
      * `wg_ink_*` 必然过 AA，而 `onSolid` 那套黑/白字在淡染底上是错的。
+     *
+     * **没班次（`hasShift == false`）那一列整个不画胶囊**，与 App 日历格一致（`shift == null`
+     * 时那块根本不画）。这里**不能**拿 `wg_empty_*` 去画「淡占位」：`WidgetChip.tintedChip`
+     * 里 fill/stroke 的 alpha 是写死的（36 / 115），`Paint.setAlpha` 会**覆盖**颜色字节自带的
+     * alpha —— `#14000000` 会变成一条 45% 的黑描边环，比兄弟路径（网格档用实心 `pill()`，
+     * 8% 一团）还响，跟 App 的长相也更远。正常排班里「休班」是一个**有颜色的班次定义**
+     * （`hasShift == true`），照常画胶囊 —— 这条只影响空白表方案下的无班次日。
      */
     private fun weekStrip(
         context: Context,
@@ -189,7 +196,6 @@ object WidgetRenderer {
 
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         val muted = context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
-        val empty = context.getColor(if (dark) R.color.wg_empty_dark else R.color.wg_empty_light)
 
         val todayEpoch = snap.days[todayIndex].day
         val today = LocalDate.ofEpochDay(todayEpoch)
@@ -221,10 +227,9 @@ object WidgetRenderer {
             )
 
             val c = RemoteViews(context.packageName, R.layout.widget_strip_cell)
-            for (id in intArrayOf(R.id.wg_sc_weekday, R.id.wg_sc_day, R.id.wg_sc_pill, R.id.wg_sc_abbr)) {
-                // 可见性无条件设满：宿主 reapply 时只重放新动作，漏设会保持上一次的状态。
-                c.setViewVisibility(id, android.view.View.VISIBLE)
-            }
+            // 可见性无条件设满：宿主 reapply 时只重放新动作，漏设会保持上一次的状态。
+            c.setViewVisibility(R.id.wg_sc_weekday, android.view.View.VISIBLE)
+            c.setViewVisibility(R.id.wg_sc_day, android.view.View.VISIBLE)
 
             c.setTextViewText(R.id.wg_sc_weekday, d.weekday)
             c.setTextColor(R.id.wg_sc_weekday, if (isToday) snap.accent else muted)
@@ -232,16 +237,24 @@ object WidgetRenderer {
             c.setTextViewText(R.id.wg_sc_day, LocalDate.ofEpochDay(epoch).dayOfMonth.toString())
             c.setTextColor(R.id.wg_sc_day, if (isToday) snap.accent else ink)
 
-            c.setImageViewBitmap(
-                R.id.wg_sc_pill,
-                WidgetChip.tintedChip(
-                    if (d.hasShift) d.color else empty,
-                    dpToPx(context, 36),
-                    dpToPx(context, 18),
-                ),
-            )
-            c.setTextViewText(R.id.wg_sc_abbr, if (d.hasShift) d.shiftAbbr else "")
-            c.setTextColor(R.id.wg_sc_abbr, ink)
+            // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块不画）。
+            // 不能拿 `wg_empty_*` 顶：`tintedChip` 的 `Paint.setAlpha` 会覆盖颜色字节自带的
+            // alpha（fill 写死 36、stroke 写死 115），`#14000000` 会变成一条 45% 黑描边环。
+            // **两个方向都要设满**：宿主 reapply 只重放新动作，漏设的一边会留着上一次的状态
+            // （同一实例从有班次日切到无班次日时，胶囊会残留在那里）。
+            if (d.hasShift) {
+                c.setViewVisibility(R.id.wg_sc_pill, android.view.View.VISIBLE)
+                c.setViewVisibility(R.id.wg_sc_abbr, android.view.View.VISIBLE)
+                c.setImageViewBitmap(
+                    R.id.wg_sc_pill,
+                    WidgetChip.tintedChip(d.color, dpToPx(context, 36), dpToPx(context, 18)),
+                )
+                c.setTextViewText(R.id.wg_sc_abbr, d.shiftAbbr)
+                c.setTextColor(R.id.wg_sc_abbr, ink)
+            } else {
+                c.setViewVisibility(R.id.wg_sc_pill, android.view.View.GONE)
+                c.setViewVisibility(R.id.wg_sc_abbr, android.view.View.GONE)
+            }
 
             v.addView(columns[col], c)
         }

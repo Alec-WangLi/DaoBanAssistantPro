@@ -9,6 +9,10 @@
   三行：周几 / 日数字 / 班次胶囊。高度预算见 spec §5.1：卡内可用约 62dp，
   三行 15+20+18 + 间距 4 ≈ 57dp —— **余量只有 5dp**，真机出图若被裁，
   退到「周几与日期同行」的两行备选（`一 19`），不要靠缩字号硬塞。
+
+  没班次（空白表方案）时渲染侧把 `wg_sc_pill` 与 `wg_sc_abbr` 都设 GONE（不画胶囊，
+  与 App 日历格一致）。外层那个 36×18dp 的 FrameLayout **没有 id**，因此塌不掉、
+  那 18dp + 3dp 仍然占着 —— 这是有意的：一周七列高度因此恒定，不随有班/没班跳动。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_sc_root"
