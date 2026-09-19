@@ -7,13 +7,16 @@
   胶囊位图 + 上面一个居中 TextView」。**宽度必须写死** —— RemoteViews 在渲染时量不到
   文字宽度，只能按固定宽度画、文字居中、超长省略。宽度按**英文**留余量
   （「Shift changed」比「已调班」长得多）。
+
+  ⚠️ 根上**不画卡片底**（没有 `android:background`）：本布局永远被塞进
+  `widget_grid_with_card` 的装配壳里，外壳根已经铺了一层同一张卡片底
+  （`renderTodayCard` 也不再设）。两层同图叠放会多出一圈圆角描边、悬在外壳边框内侧。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_tc_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@drawable/widget_card_light"
     android:padding="14dp">
 
     <!-- 1. 日期行：色条 + 日期 + 今日徽章 + 待办徽章 -->

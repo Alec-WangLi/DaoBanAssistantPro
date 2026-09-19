@@ -503,6 +503,10 @@ object WidgetRenderer {
      *
      * 命名是 `renderTodayCard` 而不是 `todayCard`：快照里有个属性也叫 `snap.todayCard`，
      * 同一屏里 `val tc = snap.todayCard` 挨着 `todayCard(...)` 读起来太绕（控制方裁定）。
+     *
+     * ⚠️ 本函数渲染的内容**永远在外壳内**（只被 `gridWithCard` 调用），所以自己**不画**
+     * 卡片底 —— 画了就是双层边：外壳根与卡片根铺同一张带 `1dp` stroke / 22dp 圆角的
+     * drawable，成品上会多出一圈圆角描边、悬在外壳边框内侧。卡片底只画一层，在外壳上。
      */
     private fun renderTodayCard(
         context: Context,
@@ -512,11 +516,6 @@ object WidgetRenderer {
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_today_card)
         val dark = isDark(context, snap.themeMode)
-        v.setInt(
-            R.id.wg_tc_root,
-            "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
-        )
         v.setOnClickPendingIntent(
             R.id.wg_tc_root,
             launchIntent(context, rootRequestCode(widgetId)),
@@ -598,16 +597,22 @@ object WidgetRenderer {
         v.setTextColor(R.id.wg_tc_shift, ink)
 
         // 「已调班」徽章：底色跟当天班次色走（与 App 信息卡的 `_adjustedBadge` 同源）。
+        // 与色条/色点一致地**回落**：休班日 `d.color` 是 Dart 侧的 `shift?.color ?? 0`
+        // = 0（全透明），直接用会得到一个占 96dp 却什么也看不见的徽章。
         if (stale || !tc.adjusted) {
             v.setViewVisibility(R.id.wg_tc_adj_wrap, android.view.View.GONE)
         } else {
             v.setViewVisibility(R.id.wg_tc_adj_wrap, android.view.View.VISIBLE)
             v.setImageViewBitmap(
                 R.id.wg_tc_adj_bg,
-                WidgetChip.tintedChip(d.color, dpToPx(context, 96), dpToPx(context, 20)),
+                WidgetChip.tintedChip(
+                    if (d.hasShift) d.color else snap.accent,
+                    dpToPx(context, 96),
+                    dpToPx(context, 20),
+                ),
             )
             v.setTextViewText(R.id.wg_tc_adj_text, snap.adjustedBadge)
-            v.setTextColor(R.id.wg_tc_adj_text, d.color)
+            v.setTextColor(R.id.wg_tc_adj_text, if (d.hasShift) d.color else snap.accent)
         }
 
         // ── 4. 时间 ──
