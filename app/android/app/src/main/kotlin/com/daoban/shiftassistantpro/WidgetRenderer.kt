@@ -131,9 +131,9 @@ object WidgetRenderer {
             WidgetTier.LIST_COMPACT -> listRows(context, snap, todayIndex, widgetId, 2, 12f)
             WidgetTier.LIST_3 -> listRows(context, snap, todayIndex, widgetId, 3, 13f)
             WidgetTier.LIST_5 -> listRows(context, snap, todayIndex, widgetId, 5, 13f)
-            // 网格两档与今日卡片还没做（Task 5/6），暂时也走列表，别留下编译不过的洞。
-            WidgetTier.GRID_WEEK -> listRows(context, snap, todayIndex, widgetId, 5, 13f)
-            WidgetTier.GRID_FORTNIGHT -> listRows(context, snap, todayIndex, widgetId, 5, 13f)
+            // 今日卡片还没做（Task 6），网格两档此刻只出网格本身。
+            WidgetTier.GRID_WEEK -> gridCells(context, snap, todayIndex, widgetId, 8, snap.accent)
+            WidgetTier.GRID_FORTNIGHT -> gridCells(context, snap, todayIndex, widgetId, 16, snap.accent)
         }
     }
 
@@ -361,6 +361,95 @@ object WidgetRenderer {
             }
 
             v.addView(slots[row], r)
+        }
+        return v
+    }
+
+    /**
+     * 网格档（GRID_WEEK / GRID_FORTNIGHT 共用）。
+     *
+     * [cellCount] = 8（一周，用到前 7 格）或 16（两周，用到前 14 格）。
+     * 格高固定 56dp，多出来的高度由**今日卡片**和留白吃（见 `render()` 的装配）。
+     *
+     * 「今天」那格（永远是最前面那一格，因为网格从今天起排）的日期走**主色** ——
+     * 大卡每格只有日期 + 胶囊、没有相对称法，「今天」否则完全认不出来。
+     * **不能用加粗**：`TextView` 没有 `setTypeface(int)` 重载，
+     * `v.setInt(id, "setTypeface", ...)` 会在宿主进程抛 `ActionException`。
+     */
+    private fun gridCells(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+        widgetId: Int,
+        cellCount: Int,
+        accent: Int,
+    ): RemoteViews {
+        val fortnight = cellCount > 8
+        val v = RemoteViews(
+            context.packageName,
+            if (fortnight) R.layout.widget_grid_fortnight else R.layout.widget_grid_week,
+        )
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            if (fortnight) R.id.wg_gf_root else R.id.wg_gw_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+
+        val muted =
+            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val empty = context.getColor(
+            if (dark) R.color.wg_empty_dark else R.color.wg_empty_light
+        )
+
+        val slots = if (fortnight) {
+            intArrayOf(
+                R.id.wg_gf_slot1, R.id.wg_gf_slot2, R.id.wg_gf_slot3, R.id.wg_gf_slot4,
+                R.id.wg_gf_slot5, R.id.wg_gf_slot6, R.id.wg_gf_slot7, R.id.wg_gf_slot8,
+                R.id.wg_gf_slot9, R.id.wg_gf_slot10, R.id.wg_gf_slot11, R.id.wg_gf_slot12,
+                R.id.wg_gf_slot13, R.id.wg_gf_slot14, R.id.wg_gf_slot15, R.id.wg_gf_slot16,
+            )
+        } else {
+            intArrayOf(
+                R.id.wg_gw_slot1, R.id.wg_gw_slot2, R.id.wg_gw_slot3, R.id.wg_gw_slot4,
+                R.id.wg_gw_slot5, R.id.wg_gw_slot6, R.id.wg_gw_slot7, R.id.wg_gw_slot8,
+            )
+        }
+
+        // 用得到的格数：一周 7 天、两周 14 天。剩下的槽位隐藏 —— 但**不 GONE 之外的
+        // 余地**：GridLayout 里 GONE 的子视图不参与布局，所以末行不会留空位。
+        val used = if (fortnight) 14 else 7
+
+        for (cell in slots.indices) {
+            val i = todayIndex + cell
+            if (cell >= used || i >= snap.days.size) {
+                v.setViewVisibility(slots[cell], android.view.View.GONE)
+                continue
+            }
+            v.setViewVisibility(slots[cell], android.view.View.VISIBLE)
+
+            val d = snap.days[i]
+            val c = RemoteViews(context.packageName, R.layout.widget_cell)
+            c.setViewVisibility(R.id.wg_c_date, android.view.View.VISIBLE)
+            c.setViewVisibility(R.id.wg_c_pill, android.view.View.VISIBLE)
+            c.setViewVisibility(R.id.wg_c_abbr, android.view.View.VISIBLE)
+
+            c.setTextViewText(R.id.wg_c_date, d.dateShort)
+            // 「今天」永远是最前面那一格（网格从今天起排）。
+            c.setTextColor(R.id.wg_c_date, if (cell == 0) accent else muted)
+
+            c.setImageViewBitmap(
+                R.id.wg_c_pill,
+                WidgetChip.pill(
+                    if (d.hasShift) d.color else empty,
+                    dpToPx(context, 48),
+                    dpToPx(context, 22),
+                ),
+            )
+            c.setTextViewText(R.id.wg_c_abbr, if (d.hasShift) d.shiftAbbr else "")
+            c.setTextColor(R.id.wg_c_abbr, d.abbrInk)
+
+            v.addView(slots[cell], c)
         }
         return v
     }

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  一周网格：4 列 × 2 行 = 8 格（前 7 格是今天起 7 天，末格隐藏）。
+  格高**固定 56dp**、不给 rowWeight —— 上一版让格去分掉全部高度，七档高度里
+  四档都落在这一套上，格子被拉到 633dp 那么高，用户的原话是「显示有点难看」。
+
+  槽位用 FrameLayout 的理由同列表：它的默认 LayoutParams 是 MATCH_PARENT。
+  宽度还是得吃 columnWeight=1（4 列等分），那个不受 addView 影响。
+-->
+<GridLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_gw_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:columnCount="4"
+    android:padding="12dp">
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot1"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot2"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot3"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot4"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot5"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot6"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot7"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+
+    <FrameLayout
+        android:id="@+id/wg_gw_slot8"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_columnWeight="1" />
+</GridLayout>

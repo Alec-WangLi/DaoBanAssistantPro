@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网格里的**一格**：上行日期、下行班次胶囊。被 widget_grid_week / widget_grid_fortnight
+  共用。日期色由渲染侧给 —— 「今天」那格走主色 + 加粗（`android:textStyle` 在这里写死
+  bold 是不行的，因为要区分今天与其余），所以**日期默认不加粗**，
+  「今天」那格的字重靠……见下方说明。
+
+  ⚠️ 加粗**不能**走 `v.setInt(id, "setTypeface", ...)`：`TextView` 没有
+  `setTypeface(int)` 重载，反射找不到方法会在宿主进程抛 `ActionException`。
+  所以「今天」的日期用**主色**标记（颜色能动态设），字重保持常规。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_c_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center">
+
+    <TextView
+        android:id="@+id/wg_c_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <FrameLayout
+        android:layout_width="48dp"
+        android:layout_height="22dp"
+        android:layout_marginTop="4dp">
+
+        <ImageView
+            android:id="@+id/wg_c_pill"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/wg_c_abbr"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:maxLines="1" />
+    </FrameLayout>
+</LinearLayout>
