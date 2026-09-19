@@ -314,6 +314,7 @@ object WidgetRenderer {
         // （Task 5 评审量到卡只占高度的 37%/44%）就成了全死区，且用户肉眼看不见
         // （可见卡 == 可点区）。**只挪背景不挪点击会得到一张全死的卡。**
 
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
         val empty = context.getColor(
@@ -379,7 +380,7 @@ object WidgetRenderer {
                 ),
             )
             c.setTextViewText(R.id.wg_c_abbr, if (d.hasShift) d.shiftAbbr else "")
-            c.setTextColor(R.id.wg_c_abbr, d.abbrInk)
+            c.setTextColor(R.id.wg_c_abbr, ink)
 
             v.addView(slots[cell], c)
         }

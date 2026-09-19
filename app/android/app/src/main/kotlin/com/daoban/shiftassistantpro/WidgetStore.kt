@@ -29,10 +29,21 @@ object WidgetStore {
         val shiftName: String,
         val shiftAbbr: String,
         val color: Int,
-        val abbrInk: Int,
         /** 已是完整显示串（含「次日」/「(next day)」等语序）；无时间时为 null。 */
         val timeRange: String?,
+        /**
+         * 月历格子的第三行（农历短标签，如「初八」）。
+         *
+         * 原生不查农历（那是 Dart 侧的事），所以它**按日期烘焙** —— 与
+         * [dateShort] / [weekday] 同类，跨天对表右移时跟着那一天走，不会腐坏。
+         */
+        val lunarShort: String,
+        /** 这一天的农历是否落在法定节假日（Dart 侧 `LunarInfo.isLegalHoliday`）。 */
+        val lunarIsHoliday: Boolean,
     )
+
+    /** 窗口覆盖到的某个月的标题（「2026年9月」/「September 2026」）。 */
+    data class MonthTitle(val y: Int, val m: Int, val title: String)
 
     /** 今日卡片里的一条「其他班组」。 */
     data class Crew(
@@ -53,6 +64,13 @@ object WidgetStore {
         val day: Long,
         val lunarShort: String,
         val lunarIsHoliday: Boolean,
+        /**
+         * 完整农历描述（「农历 丙午年 八月初八 · 生肖马 · 日干壬辰 · 国际民主日」）。
+         *
+         * 4×3 比原来的紧凑档高出约 95dp，多出来的地方放**真内容**而不是把行距摊开 ——
+         * 这句就是那份内容（App 的完整版信息卡用的也是它）。
+         */
+        val lunarFull: String,
         val adjusted: Boolean,
         /**
          * 今日未完成待办数。**仅供线上协议 / 诊断，界面不用它** —— 徽章画的是
@@ -88,6 +106,16 @@ object WidgetStore {
         val adjustedBadge: String,
         val boundaries: List<Long>,
         val days: List<Day>,
+        /** 七条周几文案（索引 0 = 周一）。月历表头行用 —— 原生不许有中文字面量。 */
+        val weekdays: List<String>,
+        /**
+         * 窗口覆盖到的月份标题，升序。
+         *
+         * ⚠️ 月历渲染的是**今天所在的月**，而这份快照可能生成于上个月（跨天右移）。
+         * 找不到对应月份时**隐藏标题行**，绝不借相邻月份的标题顶上 ——
+         * 那是本仓「不让卡片理直气壮地写错」那条纪律的又一入口。
+         */
+        val months: List<MonthTitle>,
         val todayCard: TodayCard?,
     ) {
         /** 今天在 [days] 里的下标；快照过期（对不上）时返回 -1。 */
@@ -131,7 +159,7 @@ object WidgetStore {
     internal fun parse(raw: String): Snapshot? {
         val o = JSONObject(raw)
         // 版本对不上就当作看不懂 —— 比按老结构硬解出半份错数据强。
-        if (o.optInt("v", -1) != 1) return null
+        if (o.optInt("v", -1) != 2) return null
 
         val labels = o.optJSONObject("labels") ?: JSONObject()
         val arr = o.optJSONArray("days") ?: JSONArray()
@@ -146,7 +174,6 @@ object WidgetStore {
                 shiftName = d.optString("shiftName", ""),
                 shiftAbbr = d.optString("shiftAbbr", ""),
                 color = d.optInt("color", 0),
-                abbrInk = d.optInt("abbrInk", 0),
                 // ⚠️ 不能写 `d.optString("timeRange", "").ifEmpty { null }`：
                 // `optString(name, fallback)` 只在**键不存在**时才给 fallback；
                 // 键存在而值是 JSON `null` 时，它走 `JSON.toString(JSONObject.NULL)`
@@ -155,6 +182,8 @@ object WidgetStore {
                 // AOSP 是刻意与参考实现逐 bug 兼容的（issue 13830），别改成
                 // 「更干净」的 fallback 写法。
                 timeRange = if (d.isNull("timeRange")) null else d.optString("timeRange"),
+                lunarShort = d.optString("lunarShort", ""),
+                lunarIsHoliday = d.optBoolean("lunarIsHoliday", false),
             )
         }
         if (days.isEmpty()) return null
@@ -162,6 +191,20 @@ object WidgetStore {
         val bArr = o.optJSONArray("boundaries") ?: JSONArray()
         val boundaries = (0 until bArr.length()).map { bArr.optLong(it, 0L) }
             .filter { it > 0L }
+
+        val wdArr = o.optJSONArray("weekdays") ?: JSONArray()
+        val weekdays = (0 until wdArr.length()).map { wdArr.optString(it, "") }
+            .filter { it.isNotEmpty() }
+
+        val mArr = o.optJSONArray("months") ?: JSONArray()
+        val months = (0 until mArr.length()).mapNotNull { i ->
+            val m = mArr.optJSONObject(i) ?: return@mapNotNull null
+            MonthTitle(
+                y = m.optInt("y", 0),
+                m = m.optInt("m", 0),
+                title = m.optString("title", ""),
+            )
+        }
 
         // ⚠️ `optString(name, fallback)` 只在**键不存在**时才给 fallback；键存在而值是
         // JSON `null` 时它返回**四字符串 `"null"`**（Android 的 org.json 刻意与参考实现
@@ -173,6 +216,7 @@ object WidgetStore {
                 day = t.optLong("day", -1L),
                 lunarShort = t.optString("lunarShort", ""),
                 lunarIsHoliday = t.optBoolean("lunarIsHoliday", false),
+                lunarFull = t.optString("lunarFull", ""),
                 adjusted = t.optBoolean("adjusted", false),
                 todoCount = t.optInt("todoCount", 0),
                 // 同 timeRange 那条：Dart 侧没有待办时发的正是 JSON `null`，
@@ -200,6 +244,8 @@ object WidgetStore {
             adjustedBadge = labels.optString("adjusted", ""),
             boundaries = boundaries,
             days = days,
+            weekdays = weekdays,
+            months = months,
             todayCard = todayCard,
         )
     }
