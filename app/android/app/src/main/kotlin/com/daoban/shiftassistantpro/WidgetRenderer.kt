@@ -128,11 +128,14 @@ object WidgetRenderer {
         if (!snap.hasSchedule) return empty(context, snap, widgetId)
         val dark = isDark(context, snap.themeMode)
         return when (tier) {
-            // 小卡与大卡自己算 dark（它们只在这一个地方被调），中卡由外面传进去 ——
-            // 中卡的三行共用一个 dark，传参比在循环里每次重算清楚。
-            WidgetTier.SMALL -> small(context, snap, todayIndex, widgetId)
-            WidgetTier.MEDIUM -> medium(context, snap, todayIndex, dark = dark, widgetId = widgetId)
-            WidgetTier.LARGE -> large(context, snap, todayIndex, widgetId)
+            // ⚠️ TASK3/TASK4 之间的临时映射：五档先落到既有的三张布局上，
+            // 保证工程始终编得过。Task 4 换真列表档、Task 5 换真网格档、
+            // Task 7 做最终分派。
+            WidgetTier.LIST_COMPACT, WidgetTier.LIST_3, WidgetTier.LIST_5 ->
+                small(context, snap, todayIndex, widgetId)
+
+            WidgetTier.GRID_WEEK, WidgetTier.GRID_FORTNIGHT ->
+                large(context, snap, todayIndex, widgetId)
         }
     }
 
