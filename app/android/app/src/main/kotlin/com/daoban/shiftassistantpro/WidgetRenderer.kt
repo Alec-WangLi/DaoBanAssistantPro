@@ -531,21 +531,25 @@ object WidgetRenderer {
         val stale = tc == null || tc.day != LocalDate.now().toEpochDay()
 
         // ── 1. 日期行 ──
+        // 位图高**必须等于布局里视图的高**（色条 22dp）：ImageView 是 `fitXY`，
+        // 两者不等就是非等比拉伸，而 `bar()` 的圆头半径是按位图宽/高算的。
         v.setImageViewBitmap(
             R.id.wg_tc_bar,
             WidgetChip.bar(
                 if (d.hasShift) d.color else snap.accent,
                 dpToPx(context, 4),
-                dpToPx(context, 18),
+                dpToPx(context, 22),
             ),
         )
         v.setTextViewText(R.id.wg_tc_date, d.dateShort)
         v.setTextColor(R.id.wg_tc_date, ink)
 
         // 「今天」徽章。宽度写死在布局里 —— RemoteViews 量不到文字宽度。
+        // 高同样要与布局的 `wg_tc_today_wrap`（22dp）一致：`tintedChip` 的 radius 与
+        // strokeWidth 都按**位图**高算，拉了 fitXY 会让两端的半圆变椭圆、上下描边偏重。
         v.setImageViewBitmap(
             R.id.wg_tc_today_bg,
-            WidgetChip.tintedChip(snap.accent, dpToPx(context, 52), dpToPx(context, 20)),
+            WidgetChip.tintedChip(snap.accent, dpToPx(context, 52), dpToPx(context, 22)),
         )
         v.setTextViewText(R.id.wg_tc_today_text, snap.today)
         v.setTextColor(R.id.wg_tc_today_text, snap.accent)
@@ -558,7 +562,7 @@ object WidgetRenderer {
             v.setViewVisibility(R.id.wg_tc_todo_wrap, android.view.View.VISIBLE)
             v.setImageViewBitmap(
                 R.id.wg_tc_todo_bg,
-                WidgetChip.tintedChip(snap.accent, dpToPx(context, 84), dpToPx(context, 20)),
+                WidgetChip.tintedChip(snap.accent, dpToPx(context, 84), dpToPx(context, 22)),
             )
             v.setTextViewText(R.id.wg_tc_todo_text, todoText)
             v.setTextColor(R.id.wg_tc_todo_text, snap.accent)
@@ -610,7 +614,7 @@ object WidgetRenderer {
                 WidgetChip.tintedChip(
                     if (d.hasShift) d.color else snap.accent,
                     dpToPx(context, 96),
-                    dpToPx(context, 20),
+                    dpToPx(context, 22),
                 ),
             )
             v.setTextViewText(R.id.wg_tc_adj_text, snap.adjustedBadge)
@@ -684,6 +688,11 @@ object WidgetRenderer {
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
+        // 整卡点击设**外壳根**上：外壳铺满整个小组件，而内层卡片是 wrap_content 高、
+        // 被 `gravity="center_vertical"` 居中 —— 卡底画到了上下那两截留白上，只在卡片上设
+        // 点击就有一圈「看得见但不响应」的死区（4×3 下各约 34dp）。这条与
+        // `weekStrip` / `gridWithCard` / `empty` / `placeholder` 一致，见那几处的 KDoc。
+        v.setOnClickPendingIntent(R.id.wg_ts_root, launchIntent(context, rootRequestCode(widgetId)))
         v.addView(R.id.wg_ts_slot, renderTodayCard(context, snap, todayIndex, widgetId))
         return v
     }
