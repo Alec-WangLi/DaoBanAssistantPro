@@ -395,6 +395,14 @@ object WidgetRenderer {
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
+        // 整卡点击 → 打开 App（落在日历页的今天）：点在格子之间的空隙、以及被隐藏的
+        // 末尾槽位上时走这一条。**暂时设在网格自己的根上** —— Task 6 做「网格 + 今日
+        // 卡片」的外壳时，与背景一起挪到外壳（外壳才是一张卡的可视边界）。本轮先让
+        // 网格单独渲染时也可用。
+        v.setOnClickPendingIntent(
+            if (fortnight) R.id.wg_gf_root else R.id.wg_gw_root,
+            launchIntent(context, rootRequestCode(widgetId)),
+        )
 
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
@@ -429,6 +437,18 @@ object WidgetRenderer {
             v.setViewVisibility(slots[cell], android.view.View.VISIBLE)
 
             val d = snap.days[i]
+            // 点某一格 → 打开 App 并跳到那天。与列表档的整卡点击走同一套 requestCode
+            // 命名空间：格子占 0..15，整卡占 0（见 cellRequestCode / rootRequestCode）。
+            // 这条是上一版 large() 就有的功能（用户真机验过），本轮的网格替换了它，
+            // 别把它丢掉。
+            v.setOnClickPendingIntent(
+                slots[cell],
+                launchIntent(
+                    context,
+                    cellRequestCode(widgetId, cell),
+                    epochDay = d.day.toInt(),
+                ),
+            )
             val c = RemoteViews(context.packageName, R.layout.widget_cell)
             c.setViewVisibility(R.id.wg_c_date, android.view.View.VISIBLE)
             c.setViewVisibility(R.id.wg_c_pill, android.view.View.VISIBLE)
