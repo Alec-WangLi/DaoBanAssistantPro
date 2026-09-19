@@ -3,8 +3,15 @@
   降级态：App 图标 + 应用名，**不含任何句子**。
   这是唯一允许出现文字的地方 —— 文字取自 `applicationInfo.loadLabel()`（系统按
   locale 给的），所以 Kotlin 里仍然一个中文字面量都没有。
-  什么情况下会走到这里：装了 App 但没打开过（还没有快照）；或者 App 超过 14 天
-  没打开（快照里对不上今天）。点它会打开 App，一打开就自愈。
+  什么情况下会走到这里：装了 App 但没打开过（还没有快照）；或者快照的绝对窗口
+  里对不上今天 —— 窗口是「本月 + 下月」（最前可到上个周末），最远约 68 天，
+  不是「一次打开管 14 天」。点它会打开 App，一打开就自愈。
+
+  ⚠️ **这套内容要能塞进最小的那张卡（4×1，渲染高约 78dp）。**
+  高度账：上下 padding 8 + 图标 32 + 间距 4 + 应用名一行（12sp ≈ 16） + 8 ≈ 68dp
+  —— 根是 `gravity="center"`，上下各余约 5dp，不裁切。
+  改这里的尺寸前先把这笔账重算一遍（初版是 12 + 40 + 6 + 16 + 12 = 86dp，
+  比 4×1 的 78dp 还高，图标顶部与应用名降部都被切掉）。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_ph_root"
@@ -13,12 +20,12 @@
     android:orientation="vertical"
     android:gravity="center"
     android:background="@drawable/widget_card_light"
-    android:padding="12dp">
+    android:padding="8dp">
 
     <ImageView
         android:id="@+id/wg_ph_icon"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
         android:contentDescription="@null"
         android:src="@mipmap/ic_launcher" />
 
@@ -26,7 +33,7 @@
         android:id="@+id/wg_ph_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="4dp"
         android:maxLines="1"
         android:ellipsize="end"
         android:textColor="@color/wg_muted_light"

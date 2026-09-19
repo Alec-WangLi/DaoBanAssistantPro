@@ -24,31 +24,27 @@
             android:layout_marginStart="12dp"
             android:orientation="vertical">
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="20dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="14dp"
         android:layout_marginTop="12dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="14dp"
         android:layout_marginTop="12dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="14dp"
         android:layout_marginTop="12dp"
         android:scaleType="fitXY"

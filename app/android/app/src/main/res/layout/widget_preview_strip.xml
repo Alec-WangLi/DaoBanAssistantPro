@@ -19,15 +19,13 @@
             android:gravity="center_horizontal"
             android:paddingHorizontal="3dp">
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="8dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="16dp"
         android:layout_marginTop="3dp"
         android:scaleType="fitXY"
@@ -42,15 +40,13 @@
             android:gravity="center_horizontal"
             android:paddingHorizontal="3dp">
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="8dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="16dp"
         android:layout_marginTop="3dp"
         android:scaleType="fitXY"
@@ -65,15 +61,13 @@
             android:gravity="center_horizontal"
             android:paddingHorizontal="3dp">
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="8dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="16dp"
         android:layout_marginTop="3dp"
         android:scaleType="fitXY"
@@ -88,15 +82,13 @@
             android:gravity="center_horizontal"
             android:paddingHorizontal="3dp">
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="8dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="16dp"
         android:layout_marginTop="3dp"
         android:scaleType="fitXY"
@@ -111,15 +103,13 @@
             android:gravity="center_horizontal"
             android:paddingHorizontal="3dp">
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="8dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="16dp"
         android:layout_marginTop="3dp"
         android:scaleType="fitXY"
@@ -134,15 +124,13 @@
             android:gravity="center_horizontal"
             android:paddingHorizontal="3dp">
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="8dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="16dp"
         android:layout_marginTop="3dp"
         android:scaleType="fitXY"
@@ -157,15 +145,13 @@
             android:gravity="center_horizontal"
             android:paddingHorizontal="3dp">
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="8dp"
         android:scaleType="fitXY"
         android:contentDescription="@null"
         android:src="@drawable/widget_preview_block" />
     <ImageView
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="16dp"
         android:layout_marginTop="3dp"
         android:scaleType="fitXY"
