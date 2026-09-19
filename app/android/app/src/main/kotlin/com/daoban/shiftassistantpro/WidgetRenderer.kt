@@ -4,7 +4,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.util.TypedValue
 import android.widget.RemoteViews
 
 import java.time.LocalDate
@@ -66,13 +65,18 @@ object WidgetRenderer {
      * 需要 `Root` + 42 个月历格 = 43，向上取到 64。
      *
      * ⚠️ **这个数不是随便取的，它是编址方案的护栏。** `Cell(w, n) = B + 64w + 1 + n`
-     * （`n` 是 0 起的格子下标，实例共 `k` 格）。只要 **`k ≤ 63`**，`Cell` 就恒落在
-     * `[64w+1, 64w+k]` ⊆ `[64w+1, 64w+63]`、**永不为 64 的倍数** —— 要进位到
-     * `B + 64(w+1)` 需要 `1 + n = 64`，即 `k ≥ 64`。而 `Root` 恒为 64 的倍数，
-     * 两者于是结构性错开。本仓最多用到 42 格（月历），远在护栏之内。
-     * 这个撞车类在本仓**真实发生过**（见 `launchIntent` 的 KDoc）。
-     * 基数从 32 提到 64 之后，`Int` 溢出的 widgetId 上限从约 6710 万降到约 3350 万，
-     * 仍远够用。
+     * （`n` 是 0 起的格子下标，实例共 `k` 格）。只要 **`k ≤ 63`**，格子偏移 `1 + n`
+     * 就恒 `< 64` —— 要进位到 `B + 64(w+1)` 需要 `1 + n = 64`，即 `k ≥ 64`。于是
+     * `Cell(w, n) − Root(w) = 1 + n` 恒落 `[1, 63]`、**恒不为 0**：`Cell` 既不会撞上
+     * 本实例的 `Root`，也不会撞上**别的实例**的 `Root`（`Root(m) = B + 64m` 与 `B` 的差
+     * 恒是 64 的倍数）。本仓最多用到 42 格（月历），远在护栏之内。
+     *
+     * ⚠️ **不要把这条推广成「`Cell` 永不为 64 的倍数」——那在绝对值上是错的**：
+     * `B = 100_000 ≡ 32 (mod 64)`，于是 `Cell(w, 31) = 100_032 = 64 × 1563` 就是 64 的
+     * 倍数。真正起作用的永远是上面那条**偏移**性质（`Cell − Root` 恒不为 0），
+     * 不是「值本身不被 64 整除」。这个撞车类在本仓**真实发生过**（见 `launchIntent`
+     * 的 KDoc）。基数从 32 提到 64 之后，`Int` 溢出的 widgetId 上限从约 6710 万降到
+     * 约 3350 万，仍远够用。
      */
     private const val REQ_SLOTS_PER_WIDGET = 64
 
@@ -91,22 +95,23 @@ object WidgetRenderer {
      *
      * ⚠️ requestCode 走上面那两个函数，**整卡与格子必须落在同一个仿射命名空间里**。
      * `PendingIntent` 的身份是「requestCode + 意图的 `filterEquals`」——而 `filterEquals`
-     * **不比较 extras**，配上 `FLAG_UPDATE_CURRENT`（会覆盖 extras），两个实例只要
-     * 满足 `A == 64 * B + c`（`c ∈ 0..63`）就会共用一个 PendingIntent、互相冲掉
-     * `widget_day`，点一下跳到错的那天。
+     * **不比较 extras**，配上 `FLAG_UPDATE_CURRENT`（会覆盖 extras），两个 requestCode
+     * 只要**数值相等**就会共用一个 PendingIntent、互相冲掉 `widget_day`，点一下跳到错
+     * 的那天。
      *
      * **为什么步长必须与格子数错开**：一个网格实例真正用到 `Cell(w, 0..15)`（16 格）。
      * 若步长仍是 16，末格 `Cell(m, 15) = B + 16m + 16 = B + 16(m+1)` —— **正好等于下一个
      * 实例的 `Root(m+1)`**，撞成同一个 PendingIntent；这个撞车类在本仓**真实发生过**
      * （初稿让整卡用**裸 `widgetId`**，单实例时 `16w + c ≠ w` 不自撞，所以在只有 id 34
      * 的桌面上测全过、藏得住；而 widget id **不是**「系统给的小整数」——它是设备级单调
-     * 计数器，不复用，差 16 倍的两实例够得着）。当时的修法是把步长提到 32：`Cell` 落在
-     * `[32m+1, 32m+31]`、**永不为 32 的倍数**，而 `Root` 恒为 32 的倍数 —— 两者结构性
-     * 错开，对任意 `n ≠ m` 都不相等，单实例内也不自撞。这不是「取个大点的数保险」，
+     * 计数器，不复用，差 16 倍的两实例够得着）。当时的修法是把步长提到 32：格子偏移
+     * `1 + n` ≤ 16、恒小于步长 32，`Cell(m, n) − Root(m) = 1 + n` **恒不为 0** ——
+     * 于是对任意实例都不相等，单实例内也不自撞。这不是「取个大点的数保险」，
      * 而是「格子数必须与步长错开到不产生进位碰撞」的硬约束，见 `REQ_SLOTS_PER_WIDGET`。
      * **Task 7 的月历一格一码、要用满 42 格**：步长 32 已经不够 —— 第 32 格
      * `Cell(m, 31) = B + 32m + 32` 正好又是下一个实例的 `Root(m+1)`（42 > 32，直接撞车）。
-     * 故基数一并提到 64：42 格 ≤ 63，`Cell` 恒落在 `[64m+1, 64m+42]`，仍**永不为 64 的倍数**。
+     * 故基数一并提到 64：42 格 ≤ 63，格子偏移 `1 + n` ≤ 42、恒 `< 64`，`Cell − Root`
+     * 因此仍恒不为 0。
      *
      * 现在 `Root(n) = WIDGET_REQ_BASE + 64n`、`Cell(m, c) = WIDGET_REQ_BASE + 64m + 1 + c`；
      * 基址再把它们整体抬离所有既有区间（见 `WIDGET_REQ_BASE`）。`widgetId` 涨到约
@@ -136,9 +141,10 @@ object WidgetRenderer {
     /**
      * 三张卡的分派。**纯渲染**：不写盘、不排闹钟、不读除宿主配置之外的任何系统状态。
      *
-     * 三张卡自 Task 5 / 6 / 7 起分别走 `weekStrip` / `todayStandalone` / `monthCard`；
-     * 旧版式的 `gridWithCard` 族（`gridCells` / `gridWithCard`）已无人调用，
-     * 等 Task 8 统一清账。
+     * 三张卡各自走自己的渲染函数：`weekStrip` / `todayStandalone` / `monthCard`。
+     * 旧版式的五档渲染族（两行/五行列表、一周/两周网格、网格+今日卡片的装配壳）连同
+     * 尺寸分档枚举已一并删净（Task 8 清账，见那次的提交信息）—— 尺寸在编译期定死
+     * （`resizeMode="none"`），这里不再有分档分支。
      */
     fun render(
         context: Context,
@@ -410,235 +416,6 @@ object WidgetRenderer {
         return v
     }
 
-    /** 档位偏移 → 该显示哪个相对称法。≥3 直接用那天的周几（它不会腐坏）。 */
-    private fun relativeLabel(snap: WidgetStore.Snapshot, index: Int, todayIndex: Int): String =
-        when (index - todayIndex) {
-            0 -> snap.today
-            1 -> snap.tomorrow
-            2 -> snap.dayAfter
-            else -> snap.days[index].weekday
-        }
-
-    /**
-     * 列表档（LIST_COMPACT / LIST_3 / LIST_5 共用）。
-     *
-     * [rowCount] 决定用哪张槽位布局：2 → `widget_list_compact`（22dp 行高），
-     * 3 或 5 → `widget_list`（40dp 行高）。
-     * [textSizeSp] 由档位给（紧凑 12、普通 13）—— 行布局里不写死字号，
-     * 靠 `setTextViewTextSize` 按档设，一张布局供两档用。
-     *
-     * 槽位是**固定高度**、根布局 `gravity="center_vertical"`：多出来的高度成为上下
-     * 均匀的留白，而不是把行拉长 —— 那是上一版被用户点名的问题。
-     */
-    private fun listRows(
-        context: Context,
-        snap: WidgetStore.Snapshot,
-        todayIndex: Int,
-        widgetId: Int,
-        rowCount: Int,
-        textSizeSp: Float,
-    ): RemoteViews {
-        val compact = rowCount <= 2
-        val v = RemoteViews(
-            context.packageName,
-            if (compact) R.layout.widget_list_compact else R.layout.widget_list,
-        )
-        val dark = isDark(context, snap.themeMode)
-        v.setInt(
-            if (compact) R.id.wg_lc_root else R.id.wg_l5_root,
-            "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
-        )
-        v.setOnClickPendingIntent(
-            if (compact) R.id.wg_lc_root else R.id.wg_l5_root,
-            launchIntent(context, rootRequestCode(widgetId)),
-        )
-
-        // 空表提示 `wg_lc_hint` 只长在紧凑档那张布局上。这里显式设 GONE：`empty()`
-        // 会把它设成 VISIBLE，同一实例从空表切到有排班时宿主走 `reapply`、只重放新动作
-        // —— 不显式设回来，提示会一直挂在正常的两行卡上。
-        if (compact) v.setViewVisibility(R.id.wg_lc_hint, android.view.View.GONE)
-
-        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
-        val muted =
-            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
-        val empty = context.getColor(
-            if (dark) R.color.wg_empty_dark else R.color.wg_empty_light
-        )
-
-        val slots = if (compact) {
-            intArrayOf(R.id.wg_lc_slot1, R.id.wg_lc_slot2)
-        } else {
-            intArrayOf(
-                R.id.wg_l5_slot1, R.id.wg_l5_slot2, R.id.wg_l5_slot3,
-                R.id.wg_l5_slot4, R.id.wg_l5_slot5,
-            )
-        }
-
-        for (row in slots.indices) {
-            val i = todayIndex + row
-            // 两个都要挡：快照窗口耗尽（todayIndex 靠后），以及这一档要的行数
-            // 比槽位数多。越界读会被 ShiftWidgets 的 try/catch 吞掉，
-            // 后果不是崩而是**卡片继续显示上一次渲染的旧内容**。
-            if (row >= rowCount || i >= snap.days.size) {
-                v.setViewVisibility(slots[row], android.view.View.GONE)
-                continue
-            }
-            v.setViewVisibility(slots[row], android.view.View.VISIBLE)
-
-            val d = snap.days[i]
-            val r = RemoteViews(context.packageName, R.layout.widget_row)
-            // 可见性无条件设满：同一张布局被两种档位复用，宿主走 `reapply` 时
-            // 只重放新的动作列表 —— 不显式设回来的视图会保持上一次的状态。
-            for (id in intArrayOf(
-                R.id.wg_r_dot, R.id.wg_r_label, R.id.wg_r_date, R.id.wg_r_shift,
-            )) {
-                r.setViewVisibility(id, android.view.View.VISIBLE)
-            }
-
-            r.setImageViewBitmap(
-                R.id.wg_r_dot,
-                WidgetChip.circle(
-                    if (d.hasShift) d.color else empty,
-                    dpToPx(context, 8),
-                ),
-            )
-            r.setTextViewText(R.id.wg_r_label, relativeLabel(snap, i, todayIndex))
-            r.setTextColor(R.id.wg_r_label, ink)
-            r.setTextViewText(R.id.wg_r_date, d.dateShort)
-            r.setTextColor(R.id.wg_r_date, muted)
-            r.setTextViewText(
-                R.id.wg_r_shift,
-                if (d.hasShift) d.shiftName else d.weekday,
-            )
-            r.setTextColor(R.id.wg_r_shift, ink)
-
-            if (d.timeRange == null) {
-                r.setViewVisibility(R.id.wg_r_time, android.view.View.GONE)
-            } else {
-                r.setViewVisibility(R.id.wg_r_time, android.view.View.VISIBLE)
-                r.setTextViewText(R.id.wg_r_time, d.timeRange)
-                r.setTextColor(R.id.wg_r_time, muted)
-            }
-
-            for (id in intArrayOf(
-                R.id.wg_r_label, R.id.wg_r_date, R.id.wg_r_shift, R.id.wg_r_time,
-            )) {
-                r.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
-            }
-
-            v.addView(slots[row], r)
-        }
-        return v
-    }
-
-    /**
-     * 网格档（GRID_WEEK / GRID_FORTNIGHT 共用）。**只出网格本身**，由 `gridWithCard`
-     * 塞进装配壳、与今日卡片拼成一张卡。
-     *
-     * [cellCount] = 8（一周，用到前 7 格）或 16（两周，用到前 14 格）。
-     * 格高固定 56dp，多出来的高度由**今日卡片**和留白吃（见 `gridWithCard`）。
-     * 卡片底色与整卡根点击**不在这里设** —— 已挪到外壳根上，理由见函数体的注释。
-     *
-     * 「今天」那格（永远是最前面那一格，因为网格从今天起排）的日期走**主色** ——
-     * 大卡每格只有日期 + 胶囊、没有相对称法，「今天」否则完全认不出来。
-     * **不能用加粗**：`TextView` 没有 `setTypeface(int)` 重载，
-     * `v.setInt(id, "setTypeface", ...)` 会在宿主进程抛 `ActionException`。
-     */
-    private fun gridCells(
-        context: Context,
-        snap: WidgetStore.Snapshot,
-        todayIndex: Int,
-        widgetId: Int,
-        cellCount: Int,
-        accent: Int,
-    ): RemoteViews {
-        val fortnight = cellCount > 8
-        val v = RemoteViews(
-            context.packageName,
-            if (fortnight) R.layout.widget_grid_fortnight else R.layout.widget_grid_week,
-        )
-        val dark = isDark(context, snap.themeMode)
-        // ⚠️ 卡片底色与**整卡根点击**都**不在这里设** —— 它们已挪到外壳
-        // `widget_grid_with_card` 的根上（`gridWithCard`）。理由：网格现在只是外壳里的
-        // 一个内容块，外壳才是一张卡的可视边界；且外壳根高 `match_parent`、把整块都盖住，
-        // 而网格本身是 `wrap_content` 高 —— 只在网格上设背景与点击，小组件底部那截
-        // （Task 5 评审量到卡只占高度的 37%/44%）就成了全死区，且用户肉眼看不见
-        // （可见卡 == 可点区）。**只挪背景不挪点击会得到一张全死的卡。**
-
-        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
-        val muted =
-            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
-        val empty = context.getColor(
-            if (dark) R.color.wg_empty_dark else R.color.wg_empty_light
-        )
-
-        val slots = if (fortnight) {
-            intArrayOf(
-                R.id.wg_gf_slot1, R.id.wg_gf_slot2, R.id.wg_gf_slot3, R.id.wg_gf_slot4,
-                R.id.wg_gf_slot5, R.id.wg_gf_slot6, R.id.wg_gf_slot7, R.id.wg_gf_slot8,
-                R.id.wg_gf_slot9, R.id.wg_gf_slot10, R.id.wg_gf_slot11, R.id.wg_gf_slot12,
-                R.id.wg_gf_slot13, R.id.wg_gf_slot14, R.id.wg_gf_slot15, R.id.wg_gf_slot16,
-            )
-        } else {
-            intArrayOf(
-                R.id.wg_gw_slot1, R.id.wg_gw_slot2, R.id.wg_gw_slot3, R.id.wg_gw_slot4,
-                R.id.wg_gw_slot5, R.id.wg_gw_slot6, R.id.wg_gw_slot7, R.id.wg_gw_slot8,
-            )
-        }
-
-        // 用得到的格数：一周 7 天、两周 14 天。剩下的槽位隐藏 —— 但**不 GONE 之外的
-        // 余地**：GridLayout 里 GONE 的子视图不参与布局，所以末行不会留空位。
-        val used = if (fortnight) 14 else 7
-
-        for (cell in slots.indices) {
-            val i = todayIndex + cell
-            if (cell >= used || i >= snap.days.size) {
-                v.setViewVisibility(slots[cell], android.view.View.GONE)
-                continue
-            }
-            v.setViewVisibility(slots[cell], android.view.View.VISIBLE)
-
-            val d = snap.days[i]
-            // 点某一格 → 打开 App 并跳到那天。与外壳根点击走同一套 requestCode
-            // 命名空间：一个实例占 32 个槽位，根取偏移 0、格子取偏移 1..16（格 0..15）。
-            // 步长之所以是 32 而不是 16 —— 16 时格 15 会进位撞上下一实例的根，
-            // 见 `REQ_SLOTS_PER_WIDGET` 与 `launchIntent` 的 KDoc。
-            // 这条是上一版 large() 就有的功能（用户真机验过），本轮的网格替换了它，
-            // 别把它丢掉。
-            v.setOnClickPendingIntent(
-                slots[cell],
-                launchIntent(
-                    context,
-                    cellRequestCode(widgetId, cell),
-                    epochDay = d.day.toInt(),
-                ),
-            )
-            val c = RemoteViews(context.packageName, R.layout.widget_cell)
-            c.setViewVisibility(R.id.wg_c_date, android.view.View.VISIBLE)
-            c.setViewVisibility(R.id.wg_c_pill, android.view.View.VISIBLE)
-            c.setViewVisibility(R.id.wg_c_abbr, android.view.View.VISIBLE)
-
-            c.setTextViewText(R.id.wg_c_date, d.dateShort)
-            // 「今天」永远是最前面那一格（网格从今天起排）。
-            c.setTextColor(R.id.wg_c_date, if (cell == 0) accent else muted)
-
-            c.setImageViewBitmap(
-                R.id.wg_c_pill,
-                WidgetChip.pill(
-                    if (d.hasShift) d.color else empty,
-                    dpToPx(context, 48),
-                    dpToPx(context, 22),
-                ),
-            )
-            c.setTextViewText(R.id.wg_c_abbr, if (d.hasShift) d.shiftAbbr else "")
-            c.setTextColor(R.id.wg_c_abbr, ink)
-
-            v.addView(slots[cell], c)
-        }
-        return v
-    }
-
     /**
      * 今日卡片。照搬 App 底栏信息卡的**完整版**（`calendar_screen.dart` 的 `_infoCard`，
      * 不是 `compact` 版），元素与配方逐项对照 spec §7。
@@ -651,10 +428,10 @@ object WidgetRenderer {
      * 命名是 `renderTodayCard` 而不是 `todayCard`：快照里有个属性也叫 `snap.todayCard`，
      * 同一屏里 `val tc = snap.todayCard` 挨着 `todayCard(...)` 读起来太绕（控制方裁定）。
      *
-     * ⚠️ 本函数渲染的内容**永远在外壳内**（Task 6 起是 `todayStandalone` 的槽位，此前是
-     * `gridWithCard` 的卡片槽 —— 两处都调用它），所以自己**不画**
-     * 卡片底 —— 画了就是双层边：外壳根与卡片根铺同一张带 `1dp` stroke / 22dp 圆角的
-     * drawable，成品上会多出一圈圆角描边、悬在外壳边框内侧。卡片底只画一层，在外壳上。
+     * ⚠️ 本函数渲染的内容**永远在外壳内**（唯一的调用方是 `todayStandalone` 的槽位），
+     * 所以自己**不画**卡片底 —— 画了就是双层边：外壳根与卡片根铺同一张带 `1dp`
+     * stroke / 22dp 圆角的 drawable，成品上会多出一圈圆角描边、悬在外壳边框内侧。
+     * 卡片底只画一层，在外壳上。
      */
     private fun renderTodayCard(
         context: Context,
@@ -840,81 +617,33 @@ object WidgetRenderer {
         // 整卡点击设**外壳根**上：外壳铺满整个小组件，而内层卡片是 wrap_content 高、
         // 被 `gravity="center_vertical"` 居中 —— 卡底画到了上下那两截留白上，只在卡片上设
         // 点击就有一圈「看得见但不响应」的死区（4×3 下各约 34dp）。这条与
-        // `weekStrip` / `gridWithCard` / `empty` / `placeholder` 一致，见那几处的 KDoc。
+        // `weekStrip` / `monthCard` / `empty` / `placeholder` 一致，见那几处的 KDoc。
         v.setOnClickPendingIntent(R.id.wg_ts_root, launchIntent(context, rootRequestCode(widgetId)))
         v.addView(R.id.wg_ts_slot, renderTodayCard(context, snap, todayIndex, widgetId))
         return v
     }
 
     /**
-     * 网格 + 今日卡片的**装配壳**。两个纵向槽位各塞一份嵌套 `RemoteViews`。
-     *
-     * 外壳根是 `match_parent` 高、`gravity="center_vertical"`：网格与卡片都定高，
-     * 多出来的竖直空间成为上下均匀留白 —— 不把任何一块拉长。
-     *
-     * **卡片底色与整卡根点击设在外壳根上**（不再设在 `gridCells` 里）：外壳才是一张卡的
-     * 可视边界，而它的根铺满整个小组件；只在 `wrap_content` 高的网格上设，小组件底部
-     * 那截就成死区。两者必须一起挪 —— 只挪背景会得到一张全死的卡。
-     */
-    private fun gridWithCard(
-        context: Context,
-        snap: WidgetStore.Snapshot,
-        todayIndex: Int,
-        widgetId: Int,
-        cellCount: Int,
-    ): RemoteViews {
-        val v = RemoteViews(context.packageName, R.layout.widget_grid_with_card)
-        val dark = isDark(context, snap.themeMode)
-        v.setInt(
-            R.id.wg_gwc_root,
-            "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
-        )
-        // 整卡点击 → 打开 App（落在日历页的今天）：点在网格与卡片之间的空隙、
-        // 以及被隐藏的末尾槽位上时走这一条。逐格点击由 `gridCells` 设在格子上，
-        // 卡片内部由 `renderTodayCard` 设在自己的根上。
-        v.setOnClickPendingIntent(
-            R.id.wg_gwc_root,
-            launchIntent(context, rootRequestCode(widgetId)),
-        )
-        v.addView(
-            R.id.wg_gwc_grid_slot,
-            gridCells(context, snap, todayIndex, widgetId, cellCount, snap.accent),
-        )
-        v.addView(R.id.wg_gwc_card_slot, renderTodayCard(context, snap, todayIndex, widgetId))
-        return v
-    }
-
-    /**
      * 空表态：没有排班（`snap.hasSchedule == false`）。
      *
-     * **复用紧凑列表的壳**（`widget_list_compact`）：它最矮、空表本来也没什么可说的。
-     * 两个行槽位都 GONE，提示挂在槽位**之外**的常驻 `wg_lc_hint` 上 —— 所以那张布局里
-     * 除了两个槽位，还有一个常驻的 `TextView`。反过来，`listRows()` 在正常两行档里必须
-     * 把 `wg_lc_hint` 设回 GONE：可见性两个方向都要设满（宿主 `reapply` 只重放新动作）。
+     * 三张卡共用一张布局（`widget_empty`）—— 空表本来也没什么可说的，三档各写一张
+     * 只会长成三个样。它原先挂在紧凑列表的壳上，那张壳随旧版式一起删了。
      *
      * 文案来自快照的 `emptyHint`（Dart 侧 `L10n.widgetEmptyHint` 产出）——
      * Kotlin 侧仍然一个字面量都没有。
      */
     private fun empty(context: Context, snap: WidgetStore.Snapshot, widgetId: Int): RemoteViews {
-        // 空表提示复用紧凑列表的壳：它最矮、空表本来也没什么可说的。
-        // 两个行槽位都 GONE，提示文字挂在槽位之外 —— 所以 widget_list_compact
-        // 里除了两个槽位，还要有一个常驻的 TextView `wg_lc_hint`。
-        val v = RemoteViews(context.packageName, R.layout.widget_list_compact)
+        val v = RemoteViews(context.packageName, R.layout.widget_empty)
         val dark = isDark(context, snap.themeMode)
         v.setInt(
-            R.id.wg_lc_root,
+            R.id.wg_e_root,
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
-        v.setOnClickPendingIntent(R.id.wg_lc_root, launchIntent(context, rootRequestCode(widgetId)))
-        // 可见性显式设满：这张布局也被正常两行档复用，宿主 reapply 时只重放新动作。
-        v.setViewVisibility(R.id.wg_lc_slot1, android.view.View.GONE)
-        v.setViewVisibility(R.id.wg_lc_slot2, android.view.View.GONE)
-        v.setViewVisibility(R.id.wg_lc_hint, android.view.View.VISIBLE)
-        v.setTextViewText(R.id.wg_lc_hint, snap.emptyHint)
+        v.setOnClickPendingIntent(R.id.wg_e_root, launchIntent(context, rootRequestCode(widgetId)))
+        v.setTextViewText(R.id.wg_e_hint, snap.emptyHint)
         v.setTextColor(
-            R.id.wg_lc_hint,
+            R.id.wg_e_hint,
             context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light),
         )
         return v

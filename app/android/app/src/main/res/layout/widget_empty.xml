@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  空表态：没有排班（`hasSchedule == false`）。**三张卡共用这一张** —— 空表本来
+  也没什么可说的，三档各写一张只会长成三个样。
+
+  提示文字来自快照的 emptyHint（Dart 侧 L10n 产出）：Kotlin 侧仍然一个字面量都没有。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_e_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@drawable/widget_card_light"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/wg_e_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textSize="13sp"
+        android:maxLines="3"
+        android:ellipsize="end" />
+</LinearLayout>
