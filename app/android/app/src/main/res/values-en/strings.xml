@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  English display names for the three widget cards, resolved by the system at install
+  time from the device language (see the default res/values/strings.xml for why this
+  cannot follow the in-app language switch).
+-->
+<resources>
+    <string name="widget_week_strip_name">Shift Assistant Pro · This week</string>
+    <string name="widget_today_name">Shift Assistant Pro · Today</string>
+    <string name="widget_month_name">Shift Assistant Pro · Month</string>
+</resources>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  4×3 今日信息卡。固定尺寸、不可拉伸（本轮重做的核心）。配方与 `widget_week_strip_info`
+  逐条同源，只把高度与预览换成这一张的，理由都在那一份里；这里只记不同点。
+
+  矮于本周条、高于半屏：minHeight 180dp 是三行列表的真机实测格高，`targetCellHeight="3"`
+  给 Android 12+ 的桌面直接按格子摆。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="180dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:resizeMode="none"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_placeholder"
+    android:previewLayout="@layout/widget_preview_today" />

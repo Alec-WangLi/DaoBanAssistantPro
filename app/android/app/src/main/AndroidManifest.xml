@@ -66,21 +66,48 @@
         </receiver>
         <!-- 待办提醒：到点弹普通通知（与响铃闹钟那条链路分开，见 TodoReminderReceiver）。 -->
         <receiver android:name=".TodoReminderReceiver" android:exported="false" />
-        <!-- 桌面小组件。label 沿用 <application> 那份写死的文案（本项目没有
-             res/values/strings.xml，全仓只有这一处 App 名称来源，不新开一张表）。
-             必须在这里显式声明：release 构建 isMinifyEnabled = true，只靠代码
-             引用的类会被 R8 裁掉。 -->
+        <!-- 桌面小组件：三张固定卡 + 一个刷新广播的落点。
+             label 走 res/values/strings.xml（中英各一份），跟随**系统语言**。
+             必须在这里显式声明：release 构建 isMinifyEnabled = true，
+             只靠代码引用的类会被 R8 裁掉。 -->
         <receiver
-            android:name=".ShiftWidgetProvider"
+            android:name=".WeekStripWidgetProvider"
             android:exported="false"
-            android:label="倒班助手Pro">
+            android:label="@string/widget_week_strip_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/shift_widget_info" />
+                android:resource="@xml/widget_week_strip_info" />
         </receiver>
+        <receiver
+            android:name=".TodayCardWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_today_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_today_info" />
+        </receiver>
+        <receiver
+            android:name=".MonthWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_month_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_month_info" />
+        </receiver>
+        <!-- 刷新闹钟的落点。三张卡平级，闹钟不指向其中任何一张（见 WidgetRefreshReceiver）。
+             R8 同样会裁掉只被 PendingIntent 隐式引用的类。 -->
+        <receiver
+            android:name=".WidgetRefreshReceiver"
+            android:exported="false" />
         <service
             android:name=".AlarmRingService"
             android:exported="false"

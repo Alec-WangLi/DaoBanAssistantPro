@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  picker 缩略图里的「一块」。中灰而不是黑/白：系统 picker 的底色深浅随主题，
+  中灰两头都看得见。缩略图**不写任何文字**（写中文撞双语、写英文中文用户看不懂）。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#556E6E82" />
+    <corners android:radius="6dp" />
+</shape>

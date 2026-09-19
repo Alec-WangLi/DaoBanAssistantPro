@@ -594,7 +594,7 @@ class MainActivity : FlutterActivity() {
                             result.error("BAD_ARGS", "json 缺失", null)
                         } else {
                             WidgetStore.write(this, json)
-                            ShiftWidgetProvider.refreshAll(this)
+                            ShiftWidgets.refreshAll(this)
                             result.success(true)
                         }
                     }

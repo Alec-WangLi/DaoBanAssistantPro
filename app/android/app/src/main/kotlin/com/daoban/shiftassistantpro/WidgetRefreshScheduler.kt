@@ -11,8 +11,8 @@ import android.os.Build
  *
  * 与 [AlarmScheduler] 的分工：那条链路排的是**响铃闹钟**（AlarmClock 类型、会出声、
  * 走 AlarmReceiver → 前台服务）；这条排的是**小组件重绘**（静默、走
- * ShiftWidgetProvider 的 ACTION_REFRESH）。两者互不影响，但共享同一个
- * 「自续排」的套路 —— 每次刷新只排下一个边界，不一次排一堆。
+ * [WidgetRefreshReceiver] 的 ACTION_REFRESH → 三张卡一起重画）。两者互不影响，但共享
+ * 同一个「自续排」的套路 —— 每次刷新只排下一个边界，不一次排一堆。
  *
  * 刷新时刻由 Dart 侧算好放在快照的 `boundaries` 里（见 `widget_snapshot.dart`），
  * 原生只做一次线性扫描。为什么不在原生算：那些算法（本地零点怎么跨时区、跨午夜
@@ -20,6 +20,9 @@ import android.os.Build
  * 放在有 170 条测试的 Dart 侧划算得多。
  */
 object WidgetRefreshScheduler {
+
+    /** 自定义刷新 action。注意它**只由本 App 自己发** —— receiver 是 not exported。 */
+    const val ACTION_REFRESH = "com.daoban.shiftassistantpro.WIDGET_REFRESH"
 
     /** 请求码。与 `MainActivity.REQ_PICK_RINGTONE(40071)` 错开。 */
     private const val REQ = 40081
@@ -29,8 +32,7 @@ object WidgetRefreshScheduler {
         val pi = PendingIntent.getBroadcast(
             context,
             REQ,
-            Intent(context, ShiftWidgetProvider::class.java)
-                .setAction(ShiftWidgetProvider.ACTION_REFRESH),
+            Intent(context, WidgetRefreshReceiver::class.java).setAction(ACTION_REFRESH),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         try {
@@ -61,8 +63,7 @@ object WidgetRefreshScheduler {
         val pi = PendingIntent.getBroadcast(
             context,
             REQ,
-            Intent(context, ShiftWidgetProvider::class.java)
-                .setAction(ShiftWidgetProvider.ACTION_REFRESH),
+            Intent(context, WidgetRefreshReceiver::class.java).setAction(ACTION_REFRESH),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         am.cancel(pi)

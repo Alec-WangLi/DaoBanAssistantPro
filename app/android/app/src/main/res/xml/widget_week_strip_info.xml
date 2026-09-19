@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  4×1 本周条。固定尺寸、不可拉伸（本轮重做的核心）。
+
+  `resizeMode="none"` 是正式声明；**部分老版本第三方桌面会忽略它** —— 那是平台边界，
+  与「小米上标准小组件藏在二级分类里」同类，README 的已知边界里写了。
+
+  尺寸两头都声明：Android 12+ 认 `targetCellWidth/Height`，12 以下不认，
+  靠 `minWidth = 70n - 30` 的老公式折算（n = 格数）。
+
+  `updatePeriodMillis="0"`：不要系统轮询（最快 30 分钟一次还被限流），
+  刷新全靠 WidgetRefreshScheduler 自排的边界闹钟。
+
+  `previewLayout` 所指的「结构示意图」是**静态 inflate**、不跑 RemoteViews 动作 ——
+  真实版式是渲染期 addView 出来的，映不出来。示意图只画形状、不放假文字
+  （那种布局要写死示例文案，而本项目是中英双语的）。
+
+  ⚠️ 小米/HyperOS 会按**资源 id** 缓存 drawable：改了这里的资源色之后，
+  验证前必须 `am force-stop com.miui.home`。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
+    android:resizeMode="none"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_placeholder"
+    android:previewLayout="@layout/widget_preview_strip" />

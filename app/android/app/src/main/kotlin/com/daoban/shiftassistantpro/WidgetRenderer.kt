@@ -12,7 +12,7 @@ import java.time.LocalDate
 /**
  * 排版。**纯渲染**：不写盘、不排闹钟、不读除宿主配置之外的任何系统状态。
  *
- * 与 ShiftWidgetProvider 分开是为了能单独读懂它 —— 这个类里没有一行涉及
+ * 与 ShiftWidgetBase 分开是为了能单独读懂它 —— 这个类里没有一行涉及
  * 「什么时候刷新」「刷新排在哪」，只有「给我一份快照，我给你一棵 RemoteViews 树」。
  *
  * 三条纪律：
@@ -48,7 +48,7 @@ object WidgetRenderer {
      * 与 `MainActivity.REQ_PICK_RINGTONE = 40071`。取 100000 起，全部避开。
      *
      * `WidgetRefreshScheduler.REQ = 40081` **不在此列**：它是 `getBroadcast` 给
-     * `ShiftWidgetProvider` 且 `setAction` 过，目标组件与 `filterEquals` 都不同，
+     * `WidgetRefreshReceiver` 且 `setAction` 过，目标组件与 `filterEquals` 都不同，
      * 本来就与这里不是同一个 PendingIntent。（`MainActivity.nativePendingIntent`
      * 同理，打向 `AlarmReceiver`。）
      *
@@ -128,33 +128,32 @@ object WidgetRenderer {
     }
 
     /**
-     * [snap] 为 null（没有快照 / 解析失败 / 版本对不上）或快照已过期时，返回占位态。
+     * 三张卡的分派。**纯渲染**：不写盘、不排闹钟、不读除宿主配置之外的任何系统状态。
+     *
+     * ⚠️ Task 4~7 之间三个分支是**临时的**（先全都走旧版式的渲染函数，保证每一步都编得过、
+     * 桌面上也都看得见一张卡）。Task 5 / 6 / 7 逐个换成 `weekStrip` / `todayCard` / `monthCard`。
      */
     fun render(
         context: Context,
         snap: WidgetStore.Snapshot?,
-        tier: WidgetTier,
+        variant: WidgetVariant,
         widgetId: Int,
     ): RemoteViews {
-        if (snap == null) return placeholder(context, dark = isDark(context, "system"), widgetId = widgetId)
+        if (snap == null) {
+            return placeholder(context, dark = isDark(context, "system"), widgetId = widgetId)
+        }
         val todayIndex = snap.indexOfToday()
         if (todayIndex < 0) {
-            // 快照过期：App 超过 14 天没打开，这份 days 里已经没有今天了。
+            // 快照过期：App 两个多月没打开，这份 days 里已经没有今天了。
             AlarmLog.info(context, "WidgetRenderer: 快照已过期，走占位态")
             return placeholder(context, isDark(context, snap.themeMode), widgetId = widgetId)
         }
-        // 空表（没建过排班 / 选了「跟随法定节假日」那种空白表方案）：整张卡只留
-        // 一句来自快照的提示。这一支必须在分档**之前** —— 五档尺寸在空表下长得
-        // 一致，不必各写一套。
         if (!snap.hasSchedule) return empty(context, snap, widgetId)
-        return when (tier) {
-            WidgetTier.LIST_COMPACT -> listRows(context, snap, todayIndex, widgetId, 2, 12f)
-            WidgetTier.LIST_3 -> listRows(context, snap, todayIndex, widgetId, 3, 13f)
-            WidgetTier.LIST_5 -> listRows(context, snap, todayIndex, widgetId, 5, 13f)
-            // 网格两档 = 网格 + 今日卡片，两张一起装配进 `widget_grid_with_card`。
-            // 网格定高、卡片定高，多出来的高度成上下均匀留白（见 `gridWithCard`）。
-            WidgetTier.GRID_WEEK -> gridWithCard(context, snap, todayIndex, widgetId, 8)
-            WidgetTier.GRID_FORTNIGHT -> gridWithCard(context, snap, todayIndex, widgetId, 16)
+        return when (variant) {
+            // ⚠️ TASK4 临时：全部走旧版式的网格档，Task 5/6/7 逐个替换。
+            WidgetVariant.WEEK_STRIP -> gridWithCard(context, snap, todayIndex, widgetId, 8)
+            WidgetVariant.TODAY -> gridWithCard(context, snap, todayIndex, widgetId, 8)
+            WidgetVariant.MONTH -> gridWithCard(context, snap, todayIndex, widgetId, 16)
         }
     }
 
@@ -226,7 +225,7 @@ object WidgetRenderer {
         for (row in slots.indices) {
             val i = todayIndex + row
             // 两个都要挡：快照窗口耗尽（todayIndex 靠后），以及这一档要的行数
-            // 比槽位数多。越界读会被 ShiftWidgetProvider 的 try/catch 吞掉，
+            // 比槽位数多。越界读会被 ShiftWidgets 的 try/catch 吞掉，
             // 后果不是崩而是**卡片继续显示上一次渲染的旧内容**。
             if (row >= rowCount || i >= snap.days.size) {
                 v.setViewVisibility(slots[row], android.view.View.GONE)

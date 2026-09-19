@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  只有三张卡在系统 picker 里的名字。
+  它们由 manifest 的 `android:label` 引用，**在安装时按系统语言解析** ——
+  跟不了 App 内的语言开关（Android 平台边界：manifest 标签解析得比 Dart 早）。
+  App 名本身仍在 manifest 里写死中文，本轮不动（改英文产品名是另一件事）。
+-->
+<resources>
+    <string name="widget_week_strip_name">倒班助手Pro · 本周</string>
+    <string name="widget_today_name">倒班助手Pro · 今日</string>
+    <string name="widget_month_name">倒班助手Pro · 整月</string>
+</resources>
