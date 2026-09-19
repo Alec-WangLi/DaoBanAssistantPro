@@ -34,6 +34,47 @@ object WidgetChip {
         color, sizePx, sizePx, radiusPx = sizePx / 2f,
     )
 
+    /**
+     * 淡染胶囊：14% 底 + 45% 描边，圆角为高度的一半。
+     *
+     * App 里那三个徽章（「今天」「N 项待办」「已调班」）是同一族配方，见
+     * `calendar_screen.dart` 里 `_todayBadge` 附近的注释。小组件这侧颜色是动态的
+     * （主色用户可选、已调班跟当天班次色走），静态 `<shape>` 做不到，所以画位图。
+     */
+    fun tintedChip(color: Int, wPx: Int, hPx: Int): Bitmap {
+        val width = wPx.coerceAtLeast(1)
+        val height = hPx.coerceAtLeast(1)
+        val key = "tint:$color:$width:$height"
+        cache.get(key)?.let { return it }
+
+        val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val r = height / 2f
+        val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        val radius = r.coerceAtMost(minOf(width, height) / 2f)
+
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            alpha = 36 // 0x24 ≈ 14%
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(rect, radius, radius, fill)
+
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            alpha = 115 // 0x73 ≈ 45%
+            style = Paint.Style.STROKE
+            strokeWidth = height * 0.08f
+        }
+        val inset = stroke.strokeWidth / 2f
+        canvas.drawRoundRect(
+            RectF(inset, inset, width - inset, height - inset),
+            radius, radius, stroke,
+        )
+        cache.put(key, bmp)
+        return bmp
+    }
+
     private fun rounded(color: Int, w: Int, h: Int, radiusPx: Float): Bitmap {
         val width = w.coerceAtLeast(1)
         val height = h.coerceAtLeast(1)

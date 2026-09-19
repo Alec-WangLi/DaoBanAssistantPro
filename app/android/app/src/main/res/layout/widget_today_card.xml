@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  今日卡片。照搬 App 底栏信息卡的**完整版**（calendar_screen.dart 的 _infoCard），
+  元素与配方逐项见 spec §7。
+
+  ⚠️ 三个徽章（今天 / N 项待办 / 已调班）都是「FrameLayout 固定宽高 + 底下铺一张淡染
+  胶囊位图 + 上面一个居中 TextView」。**宽度必须写死** —— RemoteViews 在渲染时量不到
+  文字宽度，只能按固定宽度画、文字居中、超长省略。宽度按**英文**留余量
+  （「Shift changed」比「已调班」长得多）。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_tc_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/widget_card_light"
+    android:padding="14dp">
+
+    <!-- 1. 日期行：色条 + 日期 + 今日徽章 + 待办徽章 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/wg_tc_bar"
+            android:layout_width="4dp"
+            android:layout_height="18dp"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/wg_tc_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <FrameLayout
+            android:id="@+id/wg_tc_today_wrap"
+            android:layout_width="52dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="8dp">
+
+            <ImageView
+                android:id="@+id/wg_tc_today_bg"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/wg_tc_today_text"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/wg_tc_todo_wrap"
+            android:layout_width="84dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="6dp">
+
+            <ImageView
+                android:id="@+id/wg_tc_todo_bg"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/wg_tc_todo_text"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- 2. 农历（法定节假日走 holiday 红由渲染侧给色） -->
+    <TextView
+        android:id="@+id/wg_tc_lunar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <!-- 3. 班次行：色点 + 班次名 + 已调班徽章 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/wg_tc_dot"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/wg_tc_shift"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <FrameLayout
+            android:id="@+id/wg_tc_adj_wrap"
+            android:layout_width="96dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="6dp">
+
+            <ImageView
+                android:id="@+id/wg_tc_adj_bg"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/wg_tc_adj_text"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- 4. 时间。另起一行：挤在班次名那一行会在窄宽下把时间全截掉（App 里踩过）。
+         左边缩进 18dp = 色点 12 + 间距 6，与上一行的班次名对齐。 -->
+    <TextView
+        android:id="@+id/wg_tc_time"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:layout_marginStart="18dp"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <!-- 5. 其他班组：固定 4 个槽位（多于 4 个的丢掉，spec §7 已记这个上限）。
+         槽位是 FrameLayout + 等分权重；嵌套的 chip 拿到 MATCH_PARENT 正好填满。 -->
+    <LinearLayout
+        android:id="@+id/wg_tc_crew_row"
+        android:layout_width="match_parent"
+        android:layout_height="22dp"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:id="@+id/wg_tc_crew_slot1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <FrameLayout
+            android:id="@+id/wg_tc_crew_slot2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <FrameLayout
+            android:id="@+id/wg_tc_crew_slot3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <FrameLayout
+            android:id="@+id/wg_tc_crew_slot4"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+    </LinearLayout>
+</LinearLayout>

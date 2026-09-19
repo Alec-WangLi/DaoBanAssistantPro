@@ -51,4 +51,7 @@
     <!-- 无班次那格的底色（空白天 / 占位胶囊）。 -->
     <color name="wg_empty_light">#14000000</color>
     <color name="wg_empty_dark">#1AFFFFFF</color>
+
+    <!-- 农历落在法定节假日时的红色（照抄 AppTokens.holiday）。 -->
+    <color name="wg_holiday">#E53935</color>
 </resources>

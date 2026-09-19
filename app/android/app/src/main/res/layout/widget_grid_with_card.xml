@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网格 + 今日卡片的**装配壳**：两个纵向槽位，内容由渲染侧 addView 塞进去。
+  根布局 gravity="center_vertical" —— 多出来的高度成为上下均匀留白，
+  而不是把网格或卡片拉长（上一版就是让内容分掉全部高度才「难看」）。
+
+  ⚠️ 根高**必须 match_parent**（本仓其余 8 张布局的根也都是 match_parent）。
+  Task 5 的评审从真机截图里量出来：`widget_grid_week/fortnight.xml` 的根是
+  `wrap_content` 高，卡片被垂直居中悬在小组件里，于是卡只占小组件高度的 37% / 44%，
+  其余区域点下去什么都不会发生 —— 而用户肉眼看不见这个缺口（可见卡 == 可点区），
+  所以真机点击验收容易「过而查不出」。外壳铺满 grid 的前提是它自己 match_parent。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_gwc_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:background="@drawable/widget_card_light"
+    android:padding="4dp">
+
+    <FrameLayout
+        android:id="@+id/wg_gwc_grid_slot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <FrameLayout
+        android:id="@+id/wg_gwc_card_slot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" />
+</LinearLayout>

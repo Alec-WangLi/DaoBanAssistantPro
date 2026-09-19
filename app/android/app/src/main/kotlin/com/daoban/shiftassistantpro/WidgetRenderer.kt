@@ -7,6 +7,8 @@ import android.content.res.Configuration
 import android.util.TypedValue
 import android.widget.RemoteViews
 
+import java.time.LocalDate
+
 /**
  * 排版。**纯渲染**：不写盘、不排闹钟、不读除宿主配置之外的任何系统状态。
  *
@@ -58,12 +60,25 @@ object WidgetRenderer {
      */
     private const val WIDGET_REQ_BASE = 100_000
 
+    /**
+     * 每个小组件实例占用的 requestCode 槽位数。
+     *
+     * 需要 `Root` + 16 个网格格 = 17，向上取到 32。
+     *
+     * ⚠️ **这个数不是随便取的，它是编址方案的护栏。** `Cell(w, n) = B + 16w + 1 + n`，
+     * 当槽位数为 16 时 `n = 15` 会得到 `B + 16(w+1)` —— **正好等于下一个实例的 `Root`**，
+     * 撞成同一个 PendingIntent（`filterEquals` 不比 extras，配 `FLAG_UPDATE_CURRENT`
+     * 会互相冲掉 `widget_day`）。这个撞车类在本仓**真实发生过**（见 `launchIntent` 的 KDoc）。
+     * 步长 32 之后 `Cell` 落在 `[32w+1, 32w+31]`，永不为 32 的倍数 ✓ 结构性根除。
+     */
+    private const val REQ_SLOTS_PER_WIDGET = 32
+
     /** 整卡的 requestCode：低位 0 留给「不指定日期」。 */
-    private fun rootRequestCode(widgetId: Int): Int = WIDGET_REQ_BASE + widgetId * 16
+    private fun rootRequestCode(widgetId: Int): Int = WIDGET_REQ_BASE + widgetId * REQ_SLOTS_PER_WIDGET
 
     /** 第 cell 格的 requestCode。低位 +1 起，避开 `rootRequestCode` 的 0。 */
     private fun cellRequestCode(widgetId: Int, cell: Int): Int =
-        WIDGET_REQ_BASE + widgetId * 16 + 1 + cell
+        WIDGET_REQ_BASE + widgetId * REQ_SLOTS_PER_WIDGET + 1 + cell
 
     /**
      * 打开 App 的 PendingIntent。
@@ -74,17 +89,22 @@ object WidgetRenderer {
      * ⚠️ requestCode 走上面那两个函数，**整卡与格子必须落在同一个仿射命名空间里**。
      * `PendingIntent` 的身份是「requestCode + 意图的 `filterEquals`」——而 `filterEquals`
      * **不比较 extras**，配上 `FLAG_UPDATE_CURRENT`（会覆盖 extras），两个实例只要
-     * 满足 `A == 16 * B + c`（`c ∈ 0..6`）就会共用一个 PendingIntent、互相冲掉
-     * `widget_day`，点一下跳到错的那天。比如同时存在实例 2 与实例 34 时，
-     * `Cell(2, 2) = 16*2 + 2 = 34`，正好撞上 `Root(34)`。
+     * 满足 `A == 32 * B + c`（`c ∈ 0..31`）就会共用一个 PendingIntent、互相冲掉
+     * `widget_day`，点一下跳到错的那天。
      *
-     * 初稿让整卡用**裸 `widgetId`**，正是踩了这个坑；单实例时 `16w + c ≠ w` 不自撞，
-     * 所以在只有 id 34 的桌面上测全过、藏得住。而 widget id 也**不是**「系统给的小
-     * 整数」——它是设备级单调计数器（本机已到 34，且不复用），差 16 倍的两实例够得着。
-     * 现在 `Root(n) = WIDGET_REQ_BASE + 16n`（16 的倍数）与
-     * `Cell(m, c) = WIDGET_REQ_BASE + 16m + 1 + c`（落在 `16m+1..16m+7`，永远不是 16 的
-     * 倍数）对任意 `n ≠ m` 都不相等，单实例内也不自撞；基址再把它们整体抬离所有既有
-     * 区间（见 `WIDGET_REQ_BASE`）。`widgetId` 涨到约 1.34 亿才会 `Int` 溢出。
+     * **为什么步长必须是 32 而不是 16**：一个网格实例真正用到 `Cell(w, 0..15)`（16 格）。
+     * 若步长仍是 16，末格 `Cell(m, 15) = B + 16m + 16 = B + 16(m+1)` —— **正好等于下一个
+     * 实例的 `Root(m+1)`**，撞成同一个 PendingIntent；这个撞车类在本仓**真实发生过**
+     * （初稿让整卡用**裸 `widgetId`**，单实例时 `16w + c ≠ w` 不自撞，所以在只有 id 34
+     * 的桌面上测全过、藏得住；而 widget id **不是**「系统给的小整数」——它是设备级单调
+     * 计数器，不复用，差 16 倍的两实例够得着）。步长提成 32 后 `Cell` 落在
+     * `[32m+1, 32m+31]`、**永不为 32 的倍数**，而 `Root` 恒为 32 的倍数 —— 两者结构性
+     * 错开，对任意 `n ≠ m` 都不相等，单实例内也不自撞。这不是「取个大点的数保险」，
+     * 而是「格子数 16 与步长必须错开到不产生进位碰撞」的硬约束，见 `REQ_SLOTS_PER_WIDGET`。
+     *
+     * 现在 `Root(n) = WIDGET_REQ_BASE + 32n`、`Cell(m, c) = WIDGET_REQ_BASE + 32m + 1 + c`；
+     * 基址再把它们整体抬离所有既有区间（见 `WIDGET_REQ_BASE`）。`widgetId` 涨到约
+     * 6700 万才会 `Int` 溢出。
      */
     private fun launchIntent(context: Context, requestCode: Int, epochDay: Int? = null): PendingIntent {
         val i = Intent(context, MainActivity::class.java).apply {
@@ -131,9 +151,10 @@ object WidgetRenderer {
             WidgetTier.LIST_COMPACT -> listRows(context, snap, todayIndex, widgetId, 2, 12f)
             WidgetTier.LIST_3 -> listRows(context, snap, todayIndex, widgetId, 3, 13f)
             WidgetTier.LIST_5 -> listRows(context, snap, todayIndex, widgetId, 5, 13f)
-            // 今日卡片还没做（Task 6），网格两档此刻只出网格本身。
-            WidgetTier.GRID_WEEK -> gridCells(context, snap, todayIndex, widgetId, 8, snap.accent)
-            WidgetTier.GRID_FORTNIGHT -> gridCells(context, snap, todayIndex, widgetId, 16, snap.accent)
+            // 网格两档 = 网格 + 今日卡片，两张一起装配进 `widget_grid_with_card`。
+            // 网格定高、卡片定高，多出来的高度成上下均匀留白（见 `gridWithCard`）。
+            WidgetTier.GRID_WEEK -> gridWithCard(context, snap, todayIndex, widgetId, 8)
+            WidgetTier.GRID_FORTNIGHT -> gridWithCard(context, snap, todayIndex, widgetId, 16)
         }
     }
 
@@ -366,10 +387,12 @@ object WidgetRenderer {
     }
 
     /**
-     * 网格档（GRID_WEEK / GRID_FORTNIGHT 共用）。
+     * 网格档（GRID_WEEK / GRID_FORTNIGHT 共用）。**只出网格本身**，由 `gridWithCard`
+     * 塞进装配壳、与今日卡片拼成一张卡。
      *
      * [cellCount] = 8（一周，用到前 7 格）或 16（两周，用到前 14 格）。
-     * 格高固定 56dp，多出来的高度由**今日卡片**和留白吃（见 `render()` 的装配）。
+     * 格高固定 56dp，多出来的高度由**今日卡片**和留白吃（见 `gridWithCard`）。
+     * 卡片底色与整卡根点击**不在这里设** —— 已挪到外壳根上，理由见函数体的注释。
      *
      * 「今天」那格（永远是最前面那一格，因为网格从今天起排）的日期走**主色** ——
      * 大卡每格只有日期 + 胶囊、没有相对称法，「今天」否则完全认不出来。
@@ -390,19 +413,12 @@ object WidgetRenderer {
             if (fortnight) R.layout.widget_grid_fortnight else R.layout.widget_grid_week,
         )
         val dark = isDark(context, snap.themeMode)
-        v.setInt(
-            if (fortnight) R.id.wg_gf_root else R.id.wg_gw_root,
-            "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
-        )
-        // 整卡点击 → 打开 App（落在日历页的今天）：点在格子之间的空隙、以及被隐藏的
-        // 末尾槽位上时走这一条。**暂时设在网格自己的根上** —— Task 6 做「网格 + 今日
-        // 卡片」的外壳时，与背景一起挪到外壳（外壳才是一张卡的可视边界）。本轮先让
-        // 网格单独渲染时也可用。
-        v.setOnClickPendingIntent(
-            if (fortnight) R.id.wg_gf_root else R.id.wg_gw_root,
-            launchIntent(context, rootRequestCode(widgetId)),
-        )
+        // ⚠️ 卡片底色与**整卡根点击**都**不在这里设** —— 它们已挪到外壳
+        // `widget_grid_with_card` 的根上（`gridWithCard`）。理由：网格现在只是外壳里的
+        // 一个内容块，外壳才是一张卡的可视边界；且外壳根高 `match_parent`、把整块都盖住，
+        // 而网格本身是 `wrap_content` 高 —— 只在网格上设背景与点击，小组件底部那截
+        // （Task 5 评审量到卡只占高度的 37%/44%）就成了全死区，且用户肉眼看不见
+        // （可见卡 == 可点区）。**只挪背景不挪点击会得到一张全死的卡。**
 
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
@@ -437,8 +453,10 @@ object WidgetRenderer {
             v.setViewVisibility(slots[cell], android.view.View.VISIBLE)
 
             val d = snap.days[i]
-            // 点某一格 → 打开 App 并跳到那天。与列表档的整卡点击走同一套 requestCode
-            // 命名空间：格子占 0..15，整卡占 0（见 cellRequestCode / rootRequestCode）。
+            // 点某一格 → 打开 App 并跳到那天。与外壳根点击走同一套 requestCode
+            // 命名空间：一个实例占 32 个槽位，根取偏移 0、格子取偏移 1..16（格 0..15）。
+            // 步长之所以是 32 而不是 16 —— 16 时格 15 会进位撞上下一实例的根，
+            // 见 `REQ_SLOTS_PER_WIDGET` 与 `launchIntent` 的 KDoc。
             // 这条是上一版 large() 就有的功能（用户真机验过），本轮的网格替换了它，
             // 别把它丢掉。
             v.setOnClickPendingIntent(
@@ -471,6 +489,211 @@ object WidgetRenderer {
 
             v.addView(slots[cell], c)
         }
+        return v
+    }
+
+    /**
+     * 今日卡片。照搬 App 底栏信息卡的**完整版**（`calendar_screen.dart` 的 `_infoCard`，
+     * 不是 `compact` 版），元素与配方逐项对照 spec §7。
+     *
+     * ⚠️ **跨天降级**：`todayCard` 里的农历、待办数、其他班组都是**生成那天**的，
+     * 而跨天刷新时原生只能对表右移、重算不了。所以先拿 `todayCard.day` 跟今天比：
+     * 对不上就把这三样留空，只显示 `days[todayIndex]` 里那份按日期烘焙的数据
+     * （日期、班次、时间）。**绝不把旧数据当成今天显示。**
+     *
+     * 命名是 `renderTodayCard` 而不是 `todayCard`：快照里有个属性也叫 `snap.todayCard`，
+     * 同一屏里 `val tc = snap.todayCard` 挨着 `todayCard(...)` 读起来太绕（控制方裁定）。
+     */
+    private fun renderTodayCard(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+        widgetId: Int,
+    ): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_today_card)
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            R.id.wg_tc_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+        v.setOnClickPendingIntent(
+            R.id.wg_tc_root,
+            launchIntent(context, rootRequestCode(widgetId)),
+        )
+
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
+        val muted =
+            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+
+        // 日期/班次/时间/色点一律取 `days[todayIndex]` 而**不是** `todayCard` ——
+        // `days[]` 会被原生对表右移、永远是对的；`todayCard` 不会。
+        val d = snap.days[todayIndex]
+        val tc = snap.todayCard
+        val stale = tc == null || tc.day != LocalDate.now().toEpochDay()
+
+        // ── 1. 日期行 ──
+        v.setImageViewBitmap(
+            R.id.wg_tc_bar,
+            WidgetChip.bar(
+                if (d.hasShift) d.color else snap.accent,
+                dpToPx(context, 4),
+                dpToPx(context, 18),
+            ),
+        )
+        v.setTextViewText(R.id.wg_tc_date, d.dateShort)
+        v.setTextColor(R.id.wg_tc_date, ink)
+
+        // 「今天」徽章。宽度写死在布局里 —— RemoteViews 量不到文字宽度。
+        v.setImageViewBitmap(
+            R.id.wg_tc_today_bg,
+            WidgetChip.tintedChip(snap.accent, dpToPx(context, 52), dpToPx(context, 20)),
+        )
+        v.setTextViewText(R.id.wg_tc_today_text, snap.today)
+        v.setTextColor(R.id.wg_tc_today_text, snap.accent)
+
+        // 「N 项待办」徽章。`todoBadge` 为空（没有待办）或快照跨天 → 整块隐藏。
+        val todoText = if (stale) null else tc.todoBadge
+        if (todoText == null) {
+            v.setViewVisibility(R.id.wg_tc_todo_wrap, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_todo_wrap, android.view.View.VISIBLE)
+            v.setImageViewBitmap(
+                R.id.wg_tc_todo_bg,
+                WidgetChip.tintedChip(snap.accent, dpToPx(context, 84), dpToPx(context, 20)),
+            )
+            v.setTextViewText(R.id.wg_tc_todo_text, todoText)
+            v.setTextColor(R.id.wg_tc_todo_text, snap.accent)
+        }
+
+        // ── 2. 农历：跨天就隐藏（它是生成那天的） ──
+        if (stale) {
+            v.setViewVisibility(R.id.wg_tc_lunar, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_lunar, android.view.View.VISIBLE)
+            v.setTextViewText(R.id.wg_tc_lunar, tc.lunarShort)
+            v.setTextColor(
+                R.id.wg_tc_lunar,
+                if (tc.lunarIsHoliday) {
+                    context.getColor(R.color.wg_holiday)
+                } else {
+                    muted
+                },
+            )
+        }
+
+        // ── 3. 班次行 ──
+        v.setImageViewBitmap(
+            R.id.wg_tc_dot,
+            WidgetChip.circle(
+                if (d.hasShift) {
+                    d.color
+                } else {
+                    context.getColor(if (dark) R.color.wg_empty_dark else R.color.wg_empty_light)
+                },
+                dpToPx(context, 12),
+            ),
+        )
+        v.setTextViewText(R.id.wg_tc_shift, if (d.hasShift) d.shiftName else d.weekday)
+        v.setTextColor(R.id.wg_tc_shift, ink)
+
+        // 「已调班」徽章：底色跟当天班次色走（与 App 信息卡的 `_adjustedBadge` 同源）。
+        if (stale || !tc.adjusted) {
+            v.setViewVisibility(R.id.wg_tc_adj_wrap, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_adj_wrap, android.view.View.VISIBLE)
+            v.setImageViewBitmap(
+                R.id.wg_tc_adj_bg,
+                WidgetChip.tintedChip(d.color, dpToPx(context, 96), dpToPx(context, 20)),
+            )
+            v.setTextViewText(R.id.wg_tc_adj_text, snap.adjustedBadge)
+            v.setTextColor(R.id.wg_tc_adj_text, d.color)
+        }
+
+        // ── 4. 时间 ──
+        if (d.timeRange == null) {
+            v.setViewVisibility(R.id.wg_tc_time, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_time, android.view.View.VISIBLE)
+            v.setTextViewText(R.id.wg_tc_time, d.timeRange)
+            v.setTextColor(R.id.wg_tc_time, muted)
+        }
+
+        // ── 5. 其他班组：跨天就整行隐藏（那是生成那天的） ──
+        val crews = if (stale) emptyList() else tc.crews.take(4)
+        val crewSlots = intArrayOf(
+            R.id.wg_tc_crew_slot1, R.id.wg_tc_crew_slot2,
+            R.id.wg_tc_crew_slot3, R.id.wg_tc_crew_slot4,
+        )
+        if (crews.isEmpty()) {
+            v.setViewVisibility(R.id.wg_tc_crew_row, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_crew_row, android.view.View.VISIBLE)
+            for (slot in crewSlots.indices) {
+                if (slot >= crews.size) {
+                    v.setViewVisibility(crewSlots[slot], android.view.View.GONE)
+                    continue
+                }
+                v.setViewVisibility(crewSlots[slot], android.view.View.VISIBLE)
+                val crew = crews[slot]
+                val chip = RemoteViews(context.packageName, R.layout.widget_crew_chip)
+                chip.setImageViewBitmap(
+                    R.id.wg_cc_bg,
+                    WidgetChip.tintedChip(crew.color, dpToPx(context, 14), dpToPx(context, 14)),
+                )
+                chip.setImageViewBitmap(
+                    R.id.wg_cc_dot,
+                    WidgetChip.circle(crew.color, dpToPx(context, 8)),
+                )
+                chip.setTextViewText(R.id.wg_cc_text, "${crew.name} ${crew.abbr}")
+                // 文字色固定走 muted：胶囊底是 14% 淡染、卡片底近不透明，两者都够对比度。
+                // 这里**有意偏离** App 的 `AppTokens.inkFor` —— 那套「按底色算可读色」要
+                // luminance 计算，为一行 11sp 的小字在原生复刻一份不值当，而快照里也没有
+                // 现成的对比色可拿。
+                chip.setTextColor(R.id.wg_cc_text, muted)
+                v.addView(crewSlots[slot], chip)
+            }
+        }
+
+        return v
+    }
+
+    /**
+     * 网格 + 今日卡片的**装配壳**。两个纵向槽位各塞一份嵌套 `RemoteViews`。
+     *
+     * 外壳根是 `match_parent` 高、`gravity="center_vertical"`：网格与卡片都定高，
+     * 多出来的竖直空间成为上下均匀留白 —— 不把任何一块拉长。
+     *
+     * **卡片底色与整卡根点击设在外壳根上**（不再设在 `gridCells` 里）：外壳才是一张卡的
+     * 可视边界，而它的根铺满整个小组件；只在 `wrap_content` 高的网格上设，小组件底部
+     * 那截就成死区。两者必须一起挪 —— 只挪背景会得到一张全死的卡。
+     */
+    private fun gridWithCard(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+        widgetId: Int,
+        cellCount: Int,
+    ): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_grid_with_card)
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            R.id.wg_gwc_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+        // 整卡点击 → 打开 App（落在日历页的今天）：点在网格与卡片之间的空隙、
+        // 以及被隐藏的末尾槽位上时走这一条。逐格点击由 `gridCells` 设在格子上，
+        // 卡片内部由 `renderTodayCard` 设在自己的根上。
+        v.setOnClickPendingIntent(
+            R.id.wg_gwc_root,
+            launchIntent(context, rootRequestCode(widgetId)),
+        )
+        v.addView(
+            R.id.wg_gwc_grid_slot,
+            gridCells(context, snap, todayIndex, widgetId, cellCount, snap.accent),
+        )
+        v.addView(R.id.wg_gwc_card_slot, renderTodayCard(context, snap, todayIndex, widgetId))
         return v
     }
 

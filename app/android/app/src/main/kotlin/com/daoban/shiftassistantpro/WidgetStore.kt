@@ -34,6 +34,35 @@ object WidgetStore {
         val timeRange: String?,
     )
 
+    /** 今日卡片里的一条「其他班组」。 */
+    data class Crew(
+        val name: String,
+        val abbr: String,
+        val color: Int,
+    )
+
+    /**
+     * 今日卡片的详情。
+     *
+     * ⚠️ [day] 是**生成那天**的 epochDay。农历、待办数、其他班组都是那天的 ——
+     * 跨天之后这份数据就过期了，渲染前必须拿它跟 `LocalDate.now().toEpochDay()`
+     * 比一下：对不上就走降级态（农历与其他班组留空，只用 `days[todayIndex]` 里
+     * 那份按日期烘焙的数据）。**绝不能把旧数据当成今天显示。**
+     */
+    data class TodayCard(
+        val day: Long,
+        val lunarShort: String,
+        val lunarIsHoliday: Boolean,
+        val adjusted: Boolean,
+        val todoCount: Int,
+        /**
+         * 「N 项待办」徽章上的**文字**，由 Dart 侧 `L10n.todoCount` 产出；没有待办时
+         * 为 null（原生据此整块隐藏徽章）。原生不许有中文字面量，而这个串是双语的。
+         */
+        val todoBadge: String?,
+        val crews: List<Crew>,
+    )
+
     /**
      * 一份完整的快照。
      *
@@ -50,8 +79,11 @@ object WidgetStore {
         val today: String,
         val tomorrow: String,
         val dayAfter: String,
+        /** 「已调班」徽章的文字（顶层 `labels.adjusted`）。原生不许有中文字面量。 */
+        val adjustedBadge: String,
         val boundaries: List<Long>,
         val days: List<Day>,
+        val todayCard: TodayCard?,
     ) {
         /** 今天在 [days] 里的下标；快照过期（对不上）时返回 -1。 */
         fun indexOfToday(): Int {
@@ -126,6 +158,32 @@ object WidgetStore {
         val boundaries = (0 until bArr.length()).map { bArr.optLong(it, 0L) }
             .filter { it > 0L }
 
+        // ⚠️ `optString(name, fallback)` 只在**键不存在**时才给 fallback；键存在而值是
+        // JSON `null` 时它返回**四字符串 `"null"`**（Android 的 org.json 刻意与参考实现
+        // 逐 bug 兼容，见 AOSP issue 13830）。Dart 侧有可空字段时一律先 isNull 判。
+        val tcObj = o.optJSONObject("todayCard")
+        val todayCard = tcObj?.let { t ->
+            val crewArr = t.optJSONArray("crews") ?: JSONArray()
+            TodayCard(
+                day = t.optLong("day", -1L),
+                lunarShort = t.optString("lunarShort", ""),
+                lunarIsHoliday = t.optBoolean("lunarIsHoliday", false),
+                adjusted = t.optBoolean("adjusted", false),
+                todoCount = t.optInt("todoCount", 0),
+                // 同 timeRange 那条：Dart 侧没有待办时发的正是 JSON `null`，
+                // 不先 isNull 判就会印出字面的 `null`。
+                todoBadge = if (t.isNull("todoBadge")) null else t.optString("todoBadge"),
+                crews = (0 until crewArr.length()).mapNotNull { k ->
+                    val c = crewArr.optJSONObject(k) ?: return@mapNotNull null
+                    Crew(
+                        name = c.optString("name", ""),
+                        abbr = c.optString("abbr", ""),
+                        color = c.optInt("color", 0),
+                    )
+                },
+            )
+        }
+
         return Snapshot(
             themeMode = o.optString("themeMode", "system"),
             accent = o.optInt("accent", 0),
@@ -134,8 +192,10 @@ object WidgetStore {
             today = labels.optString("today", ""),
             tomorrow = labels.optString("tomorrow", ""),
             dayAfter = labels.optString("dayAfter", ""),
+            adjustedBadge = labels.optString("adjusted", ""),
             boundaries = boundaries,
             days = days,
+            todayCard = todayCard,
         )
     }
 }
