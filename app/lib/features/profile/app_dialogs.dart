@@ -41,7 +41,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.5\n'
+const String _changelogZh = 'v0.8.6\n'
+    '· 桌面小组件按尺寸重做了版式：矮的时候是一列班次，按高度显示今天起 2 / 3 / 5 天；高的时候是一周或两周的网格，网格下面附一张今日卡片，写着农历、其他班组当天的班次和当天有几项待办\n'
+    '· 改的原因是原来三个版式要摊到七个高度上：拉高或压扁之后行高会被拉长、格子显得又大又空。现在每个高度都有一版对得上的版式\n\n'
+    'v0.8.5\n'
     '· 修好大卡上「今天」那格没有标记：它的日期现在用主色 + 加粗，跟 App 日历里今天那格的做法一样（此前计划里要做的标记没落地，那格和别的格子看着一样）\n'
     '· 修好删掉小组件之后它还在后台每天自动刷新一次 —— 桌面上没有小组件时，不再排下一次刷新\n'
     '· 修好小卡在「还没有排班」变成「已排班」之后，班次名、日期、色条和分隔线一直不显示 —— 现在会正常出现\n'
@@ -89,15 +92,11 @@ const String _changelogZh = 'v0.8.5\n'
     '· 修好「添加待办」「编辑待办」点了没反应：键盘弹起时，弹窗内容把底部的「添加 / 保存」按钮挤出了卡片 —— 按钮还画在屏幕上，却已经点不到了，手指落下去穿到遮罩上，于是弹窗关掉、什么都没存。现在内容多了会在卡片内滚动，底部按钮永远点得到\n'
     '· 日历格子：班次胶囊再收一档（字号小一档、内边距收窄，并给左右各留一点边距），两个字的简称不再贴住格子边缘，也不会碰到选中那格的滑块\n'
     '· 待办与自定义闹钟列表的删除键改成紧凑形态：只剩图标、平时中性色、按下才转红。此前用的是 48pt 大红圆，那是给「一屏的主删除动作」准备的，一屏几行挂满红圈既盖过内容也像一排警报\n'
-    '· 弹窗内容区此前用「猜一个高度上限」的写法给内容留空间，实际根本没生效（在纵向排布里拿到的是无穷高度）—— 这就是上面第一条的根因，现在改成按剩余空间滚动\n\n'
-    'v0.7.2\n'
-    '· 日历格子：班次的字号调小一档；两个字的简称（如「上夜」「下夜」）不再被省略成「上…」，系统字号放大时也不会整串字消失\n'
-    '· 日历格子：日期回到居中。此前它贴在左上角，会蹭到格子的圆角外、看起来像溢出了格子（班组多的方案上最明显）\n'
-    '· 修好「编辑待办事项」弹窗里的提醒：此前点它只会在「不设 / 15 分钟」两档之间跳、弹不出选择界面（同一个弹窗在「添加待办事项」里是好的）\n'
-    '· 待办新增联动闹钟开关：打开后到点像班次闹钟一样全屏响铃，关掉则只弹一条通知（二选一）；响铃界面会显示这条待办的日期与时间，不用猜是什么事\n'
-    '· 待办列表里开了联动闹钟的那条带一个小铃铛图标，不用点进去就知道哪条会响\n'
-    '· 内部：两个待办弹窗的字段合成一份实现（v0.7.1 就是两处各写一遍，才漏改了编辑那个）\n\n';
-const String _changelogEn = 'v0.8.5\n'
+    '· 弹窗内容区此前用「猜一个高度上限」的写法给内容留空间，实际根本没生效（在纵向排布里拿到的是无穷高度）—— 这就是上面第一条的根因，现在改成按剩余空间滚动\n\n';
+const String _changelogEn = 'v0.8.6\n'
+    '· The home-screen widget was rebuilt around size: when it is short it shows a single column of shifts — 2, 3 or 5 days from today, depending on how tall it is; when it is tall it shows a one- or two-week grid with today\'s card below it, listing the lunar date, the other teams\' shifts for the day and how many todos the day has\n'
+    '· The reason: the three old layouts had to stretch across seven possible heights, so raising or squashing the widget stretched the row height and left the cells large and empty. Each height now has a layout that fits it\n\n'
+    'v0.8.5\n'
     '· Fixed the missing marker on the large widget\'s "today" cell: its date now uses the accent colour and bold, matching how the app\'s own calendar marks today (the marker was dropped along the way, so the cell looked like every other one)\n'
     '· Fixed the widget still scheduling its once-a-day refresh in the background after you removed it — with no widget on the home screen, the next refresh is no longer scheduled\n'
     '· Fixed the small widget losing its shift name, date, colour bar and dividers for good once "no schedule yet" turned into a real schedule — they show up again now\n'
@@ -145,14 +144,7 @@ const String _changelogEn = 'v0.8.5\n'
     '· Fixed "Add todo" and "Save" in the edit dialog doing nothing: with the keyboard up, the dialog\'s content pushed the Add / Save buttons out of the panel — they were still drawn on screen but no longer tappable, so your finger landed on the scrim, the dialog closed and nothing was saved. The content now scrolls inside the card and the buttons are always reachable\n'
     '· Calendar cells: the shift chip is one step narrower again (smaller label, tighter padding, plus a small margin on each side), so two-character abbreviations no longer touch the cell edge — nor the selection block\n'
     '· Delete buttons in the todo and custom-alarm lists are now the compact form: icon only, neutral colour, turning red only while pressed. The 48pt red circle is meant for a screen\'s primary delete action; a screenful of them buried the content and read as a row of alarms\n'
-    '· The dialog content area used to guess a height budget that never took effect (it receives an unbounded height in a column) — that was the root cause of the first item above; it now scrolls into whatever space is left\n\n'
-    'v0.7.2\n'
-    '· Calendar cells: the shift label is one step smaller, and two-character abbreviations (like "上夜" / "下夜") are no longer shortened to "上…" — nor do they vanish entirely when the system font is enlarged\n'
-    '· Calendar cells: the date is centred again. It used to sit in the top-left corner, where it collided with the cell\'s rounded corner and looked like it spilled out of the cell (most visible on schedules with many crews)\n'
-    '· Fixed the reminder row in the Edit todo dialog: it only toggled between "none" and "15 min ahead" instead of opening the picker (the same row works in Add todo)\n'
-    '· Todos gained a Ring as alarm switch: when on, the todo rings full-screen like a shift alarm at its time; when off it posts a notification only (either/or). The ringing screen shows the todo\'s date and time, so you know what it is about\n'
-    '· Todos that ring as an alarm carry a small bell icon in the list, so you can tell which ones will ring without opening them\n'
-    '· Internal: the two todo dialogs now share one implementation (v0.7.1 had them written twice, which is how the edit dialog got missed)\n\n';
+    '· The dialog content area used to guess a height budget that never took effect (it receives an unbounded height in a column) — that was the root cause of the first item above; it now scrolls into whatever space is left\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
