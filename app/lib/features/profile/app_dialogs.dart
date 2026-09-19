@@ -41,7 +41,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.6\n'
+const String _changelogZh = 'v0.8.7\n'
+    '· 修好桌面小组件上那枚「N 项待办」徽章不跟着变：在 App 里勾掉或新增今天的待办之后，此前要等到下次打开 App 它才更新，现在会跟着一起变\n'
+    '· 内部：推送路径上新加的一处数据库读取补上了错误处理 —— 此前读失败一次会中断整次推送刷新\n\n'
+    'v0.8.6\n'
     '· 桌面小组件按尺寸重做了版式：矮的时候是一列班次，按高度显示今天起 2 / 3 / 5 天；高的时候是一周或两周的网格，网格下面附一张今日卡片，写着农历、其他班组当天的班次和当天有几项待办\n'
     '· 改的原因是原来三个版式要摊到七个高度上：拉高或压扁之后行高会被拉长、格子显得又大又空。现在每个高度都有一版对得上的版式\n\n'
     'v0.8.5\n'
@@ -87,13 +90,11 @@ const String _changelogZh = 'v0.8.6\n'
     '· 响铃界面屏蔽系统返回手势：此前响铃时一次返回就会退回主界面（锁屏下等于把 App 内容露出来），现在只保留「上滑关闭」与「再睡一会」两个出口\n'
     '· 权限页正名：「后台弹出界面」那一行其实是 Android 的「显示悬浮窗」权限，名字套用了小米的说法、名不副实；现在改叫「显示悬浮窗」，与英文界面一致\n'
     '· 权限页新增「后台弹出界面（小米）」一行（仅小米机型显示），一键跳到系统的应用权限页。这一项不开的话，闹钟到点只会响、不会弹出响铃界面 —— 它是小米私有的权限，此前中文名的误会让人以为已经开过了\n'
-    '· 使用帮助的权限一节同步写清小米机型要额外开的两项\n\n'
-    'v0.7.3\n'
-    '· 修好「添加待办」「编辑待办」点了没反应：键盘弹起时，弹窗内容把底部的「添加 / 保存」按钮挤出了卡片 —— 按钮还画在屏幕上，却已经点不到了，手指落下去穿到遮罩上，于是弹窗关掉、什么都没存。现在内容多了会在卡片内滚动，底部按钮永远点得到\n'
-    '· 日历格子：班次胶囊再收一档（字号小一档、内边距收窄，并给左右各留一点边距），两个字的简称不再贴住格子边缘，也不会碰到选中那格的滑块\n'
-    '· 待办与自定义闹钟列表的删除键改成紧凑形态：只剩图标、平时中性色、按下才转红。此前用的是 48pt 大红圆，那是给「一屏的主删除动作」准备的，一屏几行挂满红圈既盖过内容也像一排警报\n'
-    '· 弹窗内容区此前用「猜一个高度上限」的写法给内容留空间，实际根本没生效（在纵向排布里拿到的是无穷高度）—— 这就是上面第一条的根因，现在改成按剩余空间滚动\n\n';
-const String _changelogEn = 'v0.8.6\n'
+    '· 使用帮助的权限一节同步写清小米机型要额外开的两项\n\n';
+const String _changelogEn = 'v0.8.7\n'
+    '· Fixed the "N todos" badge on the home-screen widget not keeping up: after you tick off or add a todo for today in the app, the badge used to stay put until the next time you opened the app — it now follows along\n'
+    '· Internal: a database read on the widget-push path gained error handling — one failed read used to abort the whole push refresh\n\n'
+    'v0.8.6\n'
     '· The home-screen widget was rebuilt around size: when it is short it shows a single column of shifts — 2, 3 or 5 days from today, depending on how tall it is; when it is tall it shows a one- or two-week grid with today\'s card below it, listing the lunar date, the other teams\' shifts for the day and how many todos the day has\n'
     '· The reason: the three old layouts had to stretch across seven possible heights, so raising or squashing the widget stretched the row height and left the cells large and empty. Each height now has a layout that fits it\n\n'
     'v0.8.5\n'
@@ -139,12 +140,7 @@ const String _changelogEn = 'v0.8.6\n'
     '· The ringing screen now blocks the system back gesture: one back press used to drop you into the main UI (which, on the lock screen, means exposing the app\'s content). Only "slide to dismiss" and "snooze" remain\n'
     '· Permissions page renamed: the row labelled "后台弹出界面" was actually Android\'s "Display over other apps" — it borrowed MIUI\'s wording, which made it look like the MIUI toggle was already covered. The English label was right all along; the Chinese one now matches it\n'
     '· New "Background pop-up (MIUI)" row on the permissions page (Xiaomi devices only), jumping straight to the system app-permission page. With that toggle off, an alarm only rings and never pops up its screen — it is a Xiaomi-private permission, and the mislabelled row above is why it looked enabled\n'
-    '· The permissions section of the usage guide now spells out the two extra toggles Xiaomi devices need\n\n'
-    'v0.7.3\n'
-    '· Fixed "Add todo" and "Save" in the edit dialog doing nothing: with the keyboard up, the dialog\'s content pushed the Add / Save buttons out of the panel — they were still drawn on screen but no longer tappable, so your finger landed on the scrim, the dialog closed and nothing was saved. The content now scrolls inside the card and the buttons are always reachable\n'
-    '· Calendar cells: the shift chip is one step narrower again (smaller label, tighter padding, plus a small margin on each side), so two-character abbreviations no longer touch the cell edge — nor the selection block\n'
-    '· Delete buttons in the todo and custom-alarm lists are now the compact form: icon only, neutral colour, turning red only while pressed. The 48pt red circle is meant for a screen\'s primary delete action; a screenful of them buried the content and read as a row of alarms\n'
-    '· The dialog content area used to guess a height budget that never took effect (it receives an unbounded height in a column) — that was the root cause of the first item above; it now scrolls into whatever space is left\n\n';
+    '· The permissions section of the usage guide now spells out the two extra toggles Xiaomi devices need\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

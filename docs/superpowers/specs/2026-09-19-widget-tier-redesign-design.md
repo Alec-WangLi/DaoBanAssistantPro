@@ -134,13 +134,15 @@ v0.8.5 的分档只有三个阈值（`SMALL` 高 <130、`MEDIUM` 130≤高<260�
 
 ### 5.2 一条必须遵守的规则：槽位用 `FrameLayout`
 
-`RemoteViews.addView(viewId, nested)` 把嵌套视图加到容器里，用**容器的默认 LayoutParams**。而：
+**槽位用 `FrameLayout` 是为了配合 `RemoteViews.addView`** —— 它是承载 `addView` 嵌套内容时
+语义最直观、不按容器另算默认参数的容器（`LinearLayout` / `GridLayout` 的默认 LayoutParams
+按容器推导，语义不直观）。
 
-- `FrameLayout.generateDefaultLayoutParams()` → `MATCH_PARENT × MATCH_PARENT` ✓ **会填满槽位**
-- `LinearLayout.generateDefaultLayoutParams()` → `WRAP_CONTENT × WRAP_CONTENT` ✗ 不会填满
-- `GridLayout` 的默认参数按容器推导，语义不直观 ✗
+**填满槽位靠的是嵌套根自己显式声明的 `match_parent`，不是槽位用默认 LayoutParams 补齐**
+—— 这是 §5.4 真机实测（2026-09-19，Task 1）更正过的结论。因此 `widget_row.xml` /
+`widget_cell.xml` **必须显式写出 `layout_width/height="match_parent"`**，别省。
 
-所以：**所有槽位一律是 `FrameLayout`**，它自带 `MATCH_PARENT` 语义，嵌套内容自动填满。槽位自己的尺寸由外层布局给（列表：`layout_height="40dp"`；网格：`layout_columnWeight="1"` + `layout_height="56dp"`）。
+槽位自己的尺寸由外层布局给（列表：`layout_height="40dp"`；网格：`layout_columnWeight="1"` + `layout_height="56dp"`）。
 
 ### 5.3 文件清单
 
@@ -224,7 +226,7 @@ Map<String, Object?> buildWidgetSnapshot({
 | 左侧色条 | 4×18dp，`radiusS`(12) 圆角，颜色 = 当天班次色（无班次时用主色） |
 | 日期 | `L10n.monthDay`（如「9月19日」），`sectionTitle`(18/w700) |
 | 「今天」徽章 | 主色胶囊（14% 淡染底 + 45% 同色描边） |
-| 「N 项待办」徽章 | 同一族胶囊，`L10n.pendingTodos(n)`；**仅 `n > 0` 时出现** |
+| 「N 项待办」徽章 | 同一族胶囊，`L10n.todoCount(n)`；**仅 `n > 0` 时出现** |
 | 农历 | `shortLabel`，`rowSecondary`；`isLegalHoliday` 时走 `AppTokens.holiday` 红 |
 | 班次 | 12dp 色点 + 班次名（`rowPrimary`）+ 「已调班」徽章 |
 | 时间 | 另起一行（挤在一行会在窄宽下把时间全截掉 —— 那是 App 里踩过的） |

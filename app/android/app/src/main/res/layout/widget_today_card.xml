@@ -162,7 +162,10 @@
         android:ellipsize="end" />
 
     <!-- 5. 其他班组：固定 4 个槽位（多于 4 个的丢掉，spec §7 已记这个上限）。
-         槽位是 FrameLayout + 等分权重；嵌套的 chip 拿到 MATCH_PARENT 正好填满。 -->
+         槽位是 FrameLayout + 等分权重。**chip 填满槽位靠的是嵌套根自己显式声明的
+         match_parent 被槽位尊重** —— 不是槽位用默认 LayoutParams 补齐（spec §5.4
+         真机实测更正过这条口径）。所以 widget_crew_chip.xml 根上那行显式 match_parent
+         **不能删**：删掉它会缩成一小团且不报错。 -->
     <LinearLayout
         android:id="@+id/wg_tc_crew_row"
         android:layout_width="match_parent"
