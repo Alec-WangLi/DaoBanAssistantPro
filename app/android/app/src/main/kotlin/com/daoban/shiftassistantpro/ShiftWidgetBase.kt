@@ -3,7 +3,6 @@ package com.daoban.shiftassistantpro
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
-import android.content.Intent
 
 /**
  * 三张固定卡的公共实现。子类只有一个 `variant`，没有别的。
@@ -16,6 +15,10 @@ import android.content.Intent
  *
  * **没有 `onAppWidgetOptionsChanged`**：本轮三张卡都 `resizeMode="none"`，
  * 尺寸不会变，那个回调不会再来。留着它只会让人以为「尺寸还是会变」。
+ *
+ * **没有 `onReceive`**：刷新广播的落点是 [WidgetRefreshReceiver]（三张卡平级，
+ * 不该把「谁负责刷新」耦合到某一家的组件上）。基类曾经也接同一个 action，
+ * 但 `ACTION_REFRESH` 的**唯一生产者已改成打给那个 receiver**，那一段是死的。
  */
 abstract class ShiftWidgetBase : AppWidgetProvider() {
 
@@ -26,8 +29,15 @@ abstract class ShiftWidgetBase : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        // `javaClass`（不是 `this`）：注册表按类名反查 variant，见 `ShiftWidgets.variantOf`。
-        ShiftWidgets.render(context, appWidgetManager, javaClass, variant, appWidgetIds)
+        // `variant` 直接来自子类（`abstract val variant`）—— 不需要按类名反查。
+        // 那条按类名查表的路只有 `ShiftWidgets.refreshAll` 遍历注册表时用得到。
+        ShiftWidgets.render(
+            context,
+            appWidgetManager,
+            WidgetStore.snapshot(context),
+            variant,
+            appWidgetIds,
+        )
         ShiftWidgets.scheduleNextRefreshIfNeeded(context)
     }
 
@@ -37,17 +47,13 @@ abstract class ShiftWidgetBase : AppWidgetProvider() {
         //
         // 判「一个不剩」而不是「本 provider 不剩」：三张卡共用同一个刷新闹钟，
         // 只看自己会把另外两张卡的刷新一起取消掉。
+        //
+        // 这里是唯一做这件事的地方（原先的 `ShiftWidgets.cancelRefreshIfNone`
+        // 零调用方，已删）：日志行要指名 `onDeleted`，绕一层注册表反而说不清
+        // 是谁取消的。
         if (!ShiftWidgets.hasAnyInstance(context)) {
             WidgetRefreshScheduler.cancel(context)
             AlarmLog.info(context, "ShiftWidgetBase.onDeleted: 三张卡都无实例，已取消刷新闹钟")
         }
-    }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == WidgetRefreshScheduler.ACTION_REFRESH) {
-            ShiftWidgets.refreshAll(context)
-            return // 自定义 action 不走 super（super 只认系统那几个 action）
-        }
-        super.onReceive(context, intent)
     }
 }

@@ -25,10 +25,6 @@ object WidgetChip {
     fun bar(color: Int, wPx: Int, hPx: Int): Bitmap =
         rounded(color, wPx, hPx, radiusPx = wPx / 2f)
 
-    /** 胶囊：圆角为高度的一半。 */
-    fun pill(color: Int, wPx: Int, hPx: Int): Bitmap =
-        rounded(color, wPx, hPx, radiusPx = hPx / 2f)
-
     /** 圆点：中卡行首那个，直径 = 高。 */
     fun circle(color: Int, sizePx: Int): Bitmap = rounded(
         color, sizePx, sizePx, radiusPx = sizePx / 2f,

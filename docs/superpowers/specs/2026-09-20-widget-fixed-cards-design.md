@@ -210,9 +210,9 @@ android:initialLayout="@layout/widget_placeholder"
 
 | 文件 | 作用 |
 |---|---|
-| `ShiftWidgetBase.kt` | 抽象基类：`onUpdate` / `onAppWidgetOptionsChanged` / `onDeleted` / `onReceive` 的公共实现（内容就是现 `ShiftWidgetProvider` 那四件事，去掉分档） |
+| `ShiftWidgetBase.kt` | 抽象基类：`onUpdate` / `onDeleted` 的公共实现，去掉分档。**没有 `onAppWidgetOptionsChanged`**（三张卡 `resizeMode="none"`，尺寸不会变）也**没有 `onReceive`**（刷新广播的落点是 `WidgetRefreshReceiver`，基类再接一遍是死代码） |
 | `WeekStripWidgetProvider.kt` / `TodayCardWidgetProvider.kt` / `MonthWidgetProvider.kt` | 三个空壳子类，各自 `override val variant` |
-| `ShiftWidgets.kt` | 注册表：`ALL`（三个 `ComponentName`）、`refreshAll(ctx)`、`hasAnyInstance(ctx)`、`scheduleNextRefreshIfNeeded(ctx)`、`cancelRefreshIfNone(ctx)` |
+| `ShiftWidgets.kt` | 注册表：`PROVIDERS`（三个 provider 类）、`refreshAll(ctx)`（快照**只解析一次**，三个 provider 共用）、`hasAnyInstance(ctx)`、`scheduleNextRefreshIfNeeded(ctx)`、`render(ctx, mgr, snap, variant, ids)` |
 | `WidgetRefreshReceiver.kt` | 刷新广播的落点（`exported=false`，自定义 action 显式组件广播）。刷新闹钟不再指向某一个具体的 provider |
 
 `MainActivity` 的 `widgetPushSnapshot` → `ShiftWidgets.refreshAll`；`BootReceiver` →

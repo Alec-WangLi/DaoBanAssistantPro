@@ -91,6 +91,23 @@ void main() {
         expect(days[i]['day'], (days[i - 1]['day'] as int) + 1);
       }
       expect(days.length, lessThanOrEqualTo(68));
+
+      // 月份表必须一路滚到窗口终点的那个月 —— 年末那条（now = 2026-12-31）因此
+      // 必须给出 2027-1，而不是停在 12 月。原生日历的月份标题是「查不到就隐藏
+      // 整行」，rolling 一停整条标题就消失了，而不会有任何东西报错。
+      final window = widgetWindow(now);
+      final months = (s['months']! as List).cast<Map>();
+      expect(months.first['y'], window.from.year, reason: '首个标题（now=$now）');
+      expect(months.first['m'], window.from.month);
+      expect(months.last['y'], window.to.year,
+          reason: '末个标题的年份应当是 ${window.to.year}（now=$now）');
+      expect(months.last['m'], window.to.month,
+          reason: '末个标题的月份应当是 ${window.to.month}（now=$now）');
+
+      // 农历完整描述要印在 4×3 今日卡上（`renderTodayCard` 的 wg_tc_lunar），
+      // 空串会让那一行变成一条空白。
+      expect(((s['todayCard']! as Map)['lunarFull'] as String), isNotEmpty,
+          reason: '今日卡的完整农历不能是空串（now=$now）');
     }
   });
 

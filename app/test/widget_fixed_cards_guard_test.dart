@@ -40,6 +40,9 @@ void main() {
 
     final kt = _read(
         'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    // 这条检查**故意**脆：循环变量一改名（i → slot）它就会红，而那是假警报 ——
+    // 拼名规则没变，只是承接它的字面量换了写法。**不要**改成宽容的正则去消这个红：
+    // `"wg_m_slot${i + 1}"` 是它与布局 `wg_m_slot1..42` 逐字对齐的唯一凭据。
     expect(kt.contains(r'"wg_m_slot${i + 1}"'), true,
         reason: 'Kotlin 的槽位名拼法必须与布局里的 id 逐字一致');
 

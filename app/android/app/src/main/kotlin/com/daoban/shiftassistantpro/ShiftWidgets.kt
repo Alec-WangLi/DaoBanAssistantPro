@@ -18,18 +18,17 @@ object ShiftWidgets {
         MonthWidgetProvider::class.java,
     )
 
-    fun allComponents(context: Context): List<ComponentName> =
-        PROVIDERS.map { ComponentName(context, it) }
-
     /** 渲染全部卡的**全部实例**。Dart 侧 push 完快照后调它。 */
     fun refreshAll(context: Context) {
         val mgr = AppWidgetManager.getInstance(context)
+        // 快照**只解析一次**：三张卡共用同一份（约 20KB）JSON，之前每个 provider
+        // 各自读盘 + 解析一遍，一次推送要解析三到五次，全是浪费。
         val snap = WidgetStore.snapshot(context)
         var total = 0
         for (cls in PROVIDERS) {
             val ids = mgr.getAppWidgetIds(ComponentName(context, cls))
             total += ids.size
-            render(context, mgr, cls, variantOf(cls), ids)
+            render(context, mgr, snap, variantOf(cls), ids)
         }
         AlarmLog.info(context, "ShiftWidgets.refreshAll: $total 个实例")
         // 桌面上一个实例都没有时不排刷新 —— 否则用户删掉小组件之后，下一次打开 App
@@ -56,6 +55,9 @@ object ShiftWidgets {
      * 而月历渲染哪个月是原生按 `LocalDate.now()` 现算的，数据早就在窗口里。
      */
     fun scheduleNextRefreshIfNeeded(context: Context) {
+        // 这里**自己读一次**快照，不从调用方穿进来：另外两个调用方
+        // （`ShiftWidgetBase.onUpdate`、`BootReceiver`）手上都没有快照，
+        // 为省这一次解析把签名改成「可空快照」得让三处都先读一遍，不划算。
         val now = System.currentTimeMillis()
         val snap = WidgetStore.snapshot(context)
         val next = snap?.boundaries?.firstOrNull { it > now }
@@ -67,20 +69,20 @@ object ShiftWidgets {
         WidgetRefreshScheduler.schedule(context, next)
     }
 
-    fun cancelRefreshIfNone(context: Context) {
-        if (!hasAnyInstance(context)) WidgetRefreshScheduler.cancel(context)
-    }
-
-    /** 渲染一批实例。按 [variant] 交给 [WidgetRenderer]。 */
+    /**
+     * 渲染一批实例。按 [variant] 交给 [WidgetRenderer]。
+     *
+     * 快照由调用方解析好传进来（[refreshAll] 三张卡共用一份；系统 `onUpdate`
+     * 那条路径自己读一次）—— 这里**不再读盘**。
+     */
     internal fun render(
         context: Context,
         mgr: AppWidgetManager,
-        cls: Class<out AppWidgetProvider>,
+        snap: WidgetStore.Snapshot?,
         variant: WidgetVariant,
         ids: IntArray,
     ) {
         if (ids.isEmpty()) return
-        val snap = WidgetStore.snapshot(context)
         for (id in ids) {
             try {
                 mgr.updateAppWidget(id, WidgetRenderer.render(context, snap, variant, id))

@@ -99,7 +99,9 @@ object WidgetRenderer {
      * 只要**数值相等**就会共用一个 PendingIntent、互相冲掉 `widget_day`，点一下跳到错
      * 的那天。
      *
-     * **为什么步长必须与格子数错开**：一个网格实例真正用到 `Cell(w, 0..15)`（16 格）。
+     * **为什么步长必须与格子数错开**：（**历史注** —— 下面这个 16 格的网格是本轮删掉的
+     * 旧版式，留着只是为了记下这个撞车类当初是怎么来的。）当时一个网格实例真正用到
+     * `Cell(w, 0..15)`（16 格）。
      * 若步长仍是 16，末格 `Cell(m, 15) = B + 16m + 16 = B + 16(m+1)` —— **正好等于下一个
      * 实例的 `Root(m+1)`**，撞成同一个 PendingIntent；这个撞车类在本仓**真实发生过**
      * （初稿让整卡用**裸 `widgetId`**，单实例时 `16w + c ≠ w` 不自撞，所以在只有 id 34
@@ -165,7 +167,7 @@ object WidgetRenderer {
         return when (variant) {
             WidgetVariant.WEEK_STRIP -> weekStrip(context, snap, todayIndex, widgetId)
             WidgetVariant.TODAY -> todayStandalone(context, snap, todayIndex, widgetId)
-            WidgetVariant.MONTH -> monthCard(context, snap, todayIndex, widgetId)
+            WidgetVariant.MONTH -> monthCard(context, snap, widgetId)
         }
     }
 
@@ -186,9 +188,9 @@ object WidgetRenderer {
      * **没班次（`hasShift == false`）那一列整个不画胶囊**，与 App 日历格一致（`shift == null`
      * 时那块根本不画）。这里**不能**拿 `wg_empty_*` 去画「淡占位」：`WidgetChip.tintedChip`
      * 里 fill/stroke 的 alpha 是写死的（36 / 115），`Paint.setAlpha` 会**覆盖**颜色字节自带的
-     * alpha —— `#14000000` 会变成一条 45% 的黑描边环，比兄弟路径（网格档用实心 `pill()`，
-     * 8% 一团）还响，跟 App 的长相也更远。正常排班里「休班」是一个**有颜色的班次定义**
-     * （`hasShift == true`），照常画胶囊 —— 这条只影响空白表方案下的无班次日。
+     * alpha —— `#14000000` 会变成一条 45% 的黑描边环，比 App 的长相响得多。正常排班里
+     * 「休班」是一个**有颜色的班次定义**（`hasShift == true`），照常画胶囊 ——
+     * 这条只影响空白表方案下的无班次日。
      */
     private fun weekStrip(
         context: Context,
@@ -292,11 +294,13 @@ object WidgetRenderer {
      *
      * 没班次（空白表方案）那格不画胶囊，与 App 日历格一致（`shift == null` 时那块
      * 根本不画）—— 完整理由见 [weekStrip] 里那条「不能拿 `wg_empty_*` 顶上」。
+     *
+     * 不收 `todayIndex`：本卡渲染的是 `LocalDate.now()` 那个月，「今天」是按日期现算的
+     * （见上），拿不到快照里那份下标也用不上。
      */
     private fun monthCard(
         context: Context,
         snap: WidgetStore.Snapshot,
-        todayIndex: Int,
         widgetId: Int,
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_month_card)

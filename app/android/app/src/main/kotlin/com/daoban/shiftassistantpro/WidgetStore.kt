@@ -95,10 +95,22 @@ object WidgetStore {
      */
     data class Snapshot(
         val themeMode: String,
-        /** 主色 ARGB。**大卡「今天」那格的日期色** —— 见 `WidgetRenderer.large()`。 */
+        /**
+         * 主色 ARGB。三张卡里「今天」都用它：本周条的周几/日数字、月历的日数字、
+         * 今日卡那个「今天」徽章 —— 见 `WidgetRenderer.weekStrip` / `monthCard` /
+         * `renderTodayCard`。
+         *
+         * （原文指向的 `WidgetRenderer.large()` 是旧版式里的大卡函数，随五档一起删了。）
+         */
         val accent: Int,
         val hasSchedule: Boolean,
         val emptyHint: String,
+        /**
+         * 「今天 / 明天 / 后天」三个相对文案（顶层 `labels`）。
+         *
+         * **本轮三张卡都不消费它们**：本周条用周几、今日卡用绝对日期、月历用日数字。
+         * 保留是有意的 —— Dart 侧仍在发，将来要用不必改协议。别当成漏接的字段。
+         */
         val today: String,
         val tomorrow: String,
         val dayAfter: String,
@@ -193,8 +205,11 @@ object WidgetStore {
             .filter { it > 0L }
 
         val wdArr = o.optJSONArray("weekdays") ?: JSONArray()
+        // ⚠️ **不要 `.filter { it.isNotEmpty() }`**：这份表是**按位置**用的
+        // （`weekdays[i]` = 第 i 列），滤掉一条会让后面七条整体左移一格，
+        // 七列表头**静默错一整列**。空了就让它空着占位 —— 空字符串照样渲染成一格空白，
+        // 位置是对的。
         val weekdays = (0 until wdArr.length()).map { wdArr.optString(it, "") }
-            .filter { it.isNotEmpty() }
 
         val mArr = o.optJSONArray("months") ?: JSONArray()
         val months = (0 until mArr.length()).mapNotNull { i ->
