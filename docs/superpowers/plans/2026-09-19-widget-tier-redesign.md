@@ -726,7 +726,39 @@ Run: `cd app && flutter test test/widget_tier_thresholds_test.dart`
 
 Expected: `All tests passed!`（4 条）
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 5: 临时接上消费者，让整个工程仍然编得过**
+
+⚠️ **改掉枚举会让 `ShiftWidgetProvider` 与 `WidgetRenderer` 里引用 `SMALL/MEDIUM/LARGE`
+的地方直接编译不过** —— 而 `flutter analyze` 与 `flutter test` 都**不检查 Kotlin**，所以
+不构建的话这个错误根本不会暴露，仓库会停在一个编不过的状态（下一个任务一构建就炸，还难归因）。
+
+把 `WidgetRenderer.render()` 的 `when (tier)` 临时映射成**已有的**三个渲染函数
+（那三张旧布局此刻还在）：
+
+```kotlin
+        return when (tier) {
+            // ⚠️ TASK3/TASK4 之间的临时映射：五档先落到既有的三张布局上，
+            // 保证工程始终编得过。Task 4 换真列表档、Task 5 换真网格档、
+            // Task 7 做最终分派。
+            WidgetTier.LIST_COMPACT, WidgetTier.LIST_3, WidgetTier.LIST_5 ->
+                small(context, snap, todayIndex, widgetId)
+
+            WidgetTier.GRID_WEEK, WidgetTier.GRID_FORTNIGHT ->
+                large(context, snap, todayIndex, widgetId)
+        }
+```
+
+然后**必须真的构建一次**：
+
+```bash
+cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app
+/c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/toolchain/flutter/bin/flutter build apk --release
+```
+
+Expected: `√ Built build\app\outputs\flutter-apk\app-release.apk`。
+**这一步不是走过场** —— 它是本任务唯一的 Kotlin 编译检查。
+
+- [ ] **Step 6: 提交**
 
 ```bash
 cd /c/Users/Alec/Documents/DeepSeekHermesData/shiftassistant
