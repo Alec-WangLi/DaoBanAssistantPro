@@ -9,15 +9,18 @@
   （「Shift changed」比「已调班」长得多）。
 
   ⚠️ 根上**不画卡片底**（没有 `android:background`）：本布局永远被塞进
-  `widget_grid_with_card` 的装配壳里，外壳根已经铺了一层同一张卡片底
+  `widget_today_standalone` 的槽位里，外壳根已经铺了一层同一张卡片底
   （`renderTodayCard` 也不再设）。两层同图叠放会多出一圈圆角描边、悬在外壳边框内侧。
+
+  ⚠️ 这是 **4×3 独立卡**的排版（根 padding 18dp、日期 20sp、班次 17sp、行距 12dp、
+  农历两行）—— 不再跟着网格装配壳走。字号按 4×3 定，**不要**为了填满高度再放大。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_tc_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="14dp">
+    android:padding="18dp">
 
     <!-- 1. 日期行：色条 + 日期 + 今日徽章 + 待办徽章 -->
     <LinearLayout
@@ -29,7 +32,7 @@
         <ImageView
             android:id="@+id/wg_tc_bar"
             android:layout_width="4dp"
-            android:layout_height="18dp"
+            android:layout_height="22dp"
             android:scaleType="fitXY"
             android:contentDescription="@null" />
 
@@ -38,7 +41,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
-            android:textSize="18sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -46,7 +49,7 @@
         <FrameLayout
             android:id="@+id/wg_tc_today_wrap"
             android:layout_width="52dp"
-            android:layout_height="20dp"
+            android:layout_height="22dp"
             android:layout_marginStart="8dp">
 
             <ImageView
@@ -69,7 +72,7 @@
         <FrameLayout
             android:id="@+id/wg_tc_todo_wrap"
             android:layout_width="84dp"
-            android:layout_height="20dp"
+            android:layout_height="22dp"
             android:layout_marginStart="6dp">
 
             <ImageView
@@ -90,21 +93,22 @@
         </FrameLayout>
     </LinearLayout>
 
-    <!-- 2. 农历（法定节假日走 holiday 红由渲染侧给色） -->
+    <!-- 2. 农历。4×3 放的是**完整描述**（快照的 `lunarFull`，App 完整版信息卡同源），
+         所以两行、13sp；法定节假日走 holiday 红由渲染侧给色。 -->
     <TextView
         android:id="@+id/wg_tc_lunar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="12dp"
         android:textSize="13sp"
-        android:maxLines="1"
+        android:maxLines="2"
         android:ellipsize="end" />
 
     <!-- 3. 班次行：色点 + 班次名 + 已调班徽章 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="12dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
@@ -120,7 +124,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
-            android:textSize="15sp"
+            android:textSize="17sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -128,7 +132,7 @@
         <FrameLayout
             android:id="@+id/wg_tc_adj_wrap"
             android:layout_width="96dp"
-            android:layout_height="20dp"
+            android:layout_height="22dp"
             android:layout_marginStart="6dp">
 
             <ImageView
@@ -155,7 +159,7 @@
         android:id="@+id/wg_tc_time"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="6dp"
         android:layout_marginStart="18dp"
         android:textSize="13sp"
         android:maxLines="1"
@@ -170,7 +174,7 @@
         android:id="@+id/wg_tc_crew_row"
         android:layout_width="match_parent"
         android:layout_height="22dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="12dp"
         android:orientation="horizontal">
 
         <FrameLayout

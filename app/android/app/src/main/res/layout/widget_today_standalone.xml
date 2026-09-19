@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  4×3 今日卡的**外壳**：只画卡片底 + 一个槽位。
+  卡片内容自己**不画底**（widget_today_card.xml 的根没有 background）——
+  两层同图叠放会多出一圈圆角描边、悬在外壳边框内侧（v0.8.6 踩过）。
+
+  gravity="center_vertical"：内容约 200dp、4×3 可用约 268dp，余下约 68dp
+  成为上下均匀留白。**不靠继续放大字号去填满** —— 字号要能被真机图判定为「舒展」，
+  而不是「被撑大」。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_ts_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:background="@drawable/widget_card_light">
+
+    <FrameLayout
+        android:id="@+id/wg_ts_slot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+</LinearLayout>

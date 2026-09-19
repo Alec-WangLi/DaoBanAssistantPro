@@ -130,9 +130,9 @@ object WidgetRenderer {
     /**
      * 三张卡的分派。**纯渲染**：不写盘、不排闹钟、不读除宿主配置之外的任何系统状态。
      *
-     * ⚠️ `TODAY` / `MONTH` 两个分支**暂时是旧的**（先走旧版式的渲染函数，保证每一步都编得过、
-     * 桌面上也都看得见一张卡），Task 6 / 7 逐个换成 `renderTodayCard` / `monthCard`。
-     * `WEEK_STRIP` 已在 Task 5 换成真的 `weekStrip`。
+     * ⚠️ `MONTH` 分支**暂时是旧的**（先走旧版式的网格档，保证每一步都编得过、
+     * 桌面上也都看得见一张卡），Task 7 换成 `monthCard`。
+     * `WEEK_STRIP` / `TODAY` 已分别在 Task 5 / 6 换成真的 `weekStrip` / `todayStandalone`。
      */
     fun render(
         context: Context,
@@ -152,8 +152,8 @@ object WidgetRenderer {
         if (!snap.hasSchedule) return empty(context, snap, widgetId)
         return when (variant) {
             WidgetVariant.WEEK_STRIP -> weekStrip(context, snap, todayIndex, widgetId)
-            // ⚠️ TASK4 临时：TODAY / MONTH 仍走旧版式的网格档，Task 6/7 逐个替换。
-            WidgetVariant.TODAY -> gridWithCard(context, snap, todayIndex, widgetId, 8)
+            WidgetVariant.TODAY -> todayStandalone(context, snap, todayIndex, widgetId)
+            // ⚠️ TASK7 临时：MONTH 仍走旧版式的网格档（网格 + 嵌套今日卡片），Task 7 替换。
             WidgetVariant.MONTH -> gridWithCard(context, snap, todayIndex, widgetId, 16)
         }
     }
@@ -502,7 +502,8 @@ object WidgetRenderer {
      * 命名是 `renderTodayCard` 而不是 `todayCard`：快照里有个属性也叫 `snap.todayCard`，
      * 同一屏里 `val tc = snap.todayCard` 挨着 `todayCard(...)` 读起来太绕（控制方裁定）。
      *
-     * ⚠️ 本函数渲染的内容**永远在外壳内**（只被 `gridWithCard` 调用），所以自己**不画**
+     * ⚠️ 本函数渲染的内容**永远在外壳内**（Task 6 起是 `todayStandalone` 的槽位，此前是
+     * `gridWithCard` 的卡片槽 —— 两处都调用它），所以自己**不画**
      * 卡片底 —— 画了就是双层边：外壳根与卡片根铺同一张带 `1dp` stroke / 22dp 圆角的
      * drawable，成品上会多出一圈圆角描边、悬在外壳边框内侧。卡片底只画一层，在外壳上。
      */
@@ -564,11 +565,14 @@ object WidgetRenderer {
         }
 
         // ── 2. 农历：跨天就隐藏（它是生成那天的） ──
+        // 4×3 比原来的紧凑档高出约 95dp，多出来的地方要放**真内容**：
+        // 换用 `LunarInfo.fullDescription`（App 完整版信息卡用的就是它），
+        // 因此布局里那行是 maxLines="2"。
         if (stale) {
             v.setViewVisibility(R.id.wg_tc_lunar, android.view.View.GONE)
         } else {
             v.setViewVisibility(R.id.wg_tc_lunar, android.view.View.VISIBLE)
-            v.setTextViewText(R.id.wg_tc_lunar, tc.lunarShort)
+            v.setTextViewText(R.id.wg_tc_lunar, tc.lunarFull)
             v.setTextColor(
                 R.id.wg_tc_lunar,
                 if (tc.lunarIsHoliday) {
@@ -658,6 +662,29 @@ object WidgetRenderer {
             }
         }
 
+        return v
+    }
+
+    /**
+     * 4×3 今日卡：外壳（画卡底）+ 嵌套 [renderTodayCard]。
+     *
+     * 与旧版最大的差别是**不再套在网格下面** —— 它是独立的一张卡，
+     * 尺寸固定，所以内容按 4×3 排版（大一号的字、`lunarFull` 两行）。
+     */
+    private fun todayStandalone(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+        widgetId: Int,
+    ): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_today_standalone)
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            R.id.wg_ts_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+        v.addView(R.id.wg_ts_slot, renderTodayCard(context, snap, todayIndex, widgetId))
         return v
     }
 
