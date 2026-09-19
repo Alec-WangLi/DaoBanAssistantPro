@@ -783,9 +783,13 @@ git commit -m "feat(widget): 分档改五档、阈值按真机实测的七档高
   ```kotlin
   private fun listRows(
       context: Context, snap: WidgetStore.Snapshot, todayIndex: Int,
-      widgetId: Int, rowCount: Int, rowHeightDp: Int, textSizeSp: Float,
+      widgetId: Int, rowCount: Int, textSizeSp: Float,
   ): RemoteViews
   ```
+  **没有 `rowHeightDp` 参数** —— 行高是**槽位布局自己带的**（`widget_list_compact` 的槽位 22dp、
+  `widget_list` 的槽位 40dp），由 `rowCount` 选出哪张布局就够了，再传一个高度反而是第二处真相。
+  （初稿的 Interfaces 块里混进了这个参数，而同一任务的 Step 3/4 代码里没有它 —— Task 4 实做时
+  发现并纠正。）
   它内部按 `rowCount` 选 `widget_list_compact`（2 行）或 `widget_list`（5 行），把 `rowCount` 行塞进前 `rowCount` 个槽位。
 
 - [ ] **Step 1: 写共用行布局**
