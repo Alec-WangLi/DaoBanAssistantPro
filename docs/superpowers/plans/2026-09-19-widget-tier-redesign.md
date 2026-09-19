@@ -66,6 +66,31 @@ Redmi 25102RKBEC，400dp 宽屏 / 480dpi，横向 4 列。小组件拉满 4 列�
 
 `id=34`、4 列宽。所以每一档都能真机出图 —— **这是本设计的核心验收手段**。
 
+**但它不在首页，在桌面第 9 页（最后一页）。** Task 1 实做时首页扑空、扫了九页才找到。
+出图前先翻页：
+
+```bash
+"$ADB" shell input keyevent KEYCODE_HOME; sleep 2
+# 从左往右滑，每次翻一页；翻到你看到小组件为止
+"$ADB" shell input swipe 1000 1300 200 1300 200; sleep 1
+```
+
+另外**那一页的 a11y 层级读不到节点**（`uiautomator dump` 拿不到内容），只能靠截图认。
+
+### D. 两把尺：报告尺 ≠ 渲染尺
+
+`WidgetTier.pick` 吃的是 `OPTION_APPWIDGET_MIN_WIDTH/HEIGHT`（启动器**报**的值），
+而卡片**渲染**出来的像素尺寸比它每轴大约 15dp（Task 1 实测：报 `328x158dp`，渲染 `342.7x173.3dp`）。
+
+- **阈值只许对报告尺标定**（``§A`` 那张七档表就是报告尺）。
+- **渲染尺只用来算内容放不放得下**（报 158dp 的实例，布局里实际有约 173dp 可用）。
+
+### E. `addView` 已验证的边界（Task 1）
+
+验过的父子链是「竖向 `LinearLayout` → 直接子 `FrameLayout` 槽位 → `addView` 嵌套内容」。
+**`GridLayout` 里放槽位再 `addView` 是另一条链，没验过** —— Task 5 动网格前要复验一次
+（把它当 Task 5 的第一步）。
+
 ---
 
 ## 文件结构
