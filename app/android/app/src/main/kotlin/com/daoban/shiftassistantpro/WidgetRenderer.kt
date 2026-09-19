@@ -63,15 +63,18 @@ object WidgetRenderer {
     /**
      * 每个小组件实例占用的 requestCode 槽位数。
      *
-     * 需要 `Root` + 16 个网格格 = 17，向上取到 32。
+     * 需要 `Root` + 42 个月历格 = 43，向上取到 64。
      *
-     * ⚠️ **这个数不是随便取的，它是编址方案的护栏。** `Cell(w, n) = B + 16w + 1 + n`，
-     * 当槽位数为 16 时 `n = 15` 会得到 `B + 16(w+1)` —— **正好等于下一个实例的 `Root`**，
-     * 撞成同一个 PendingIntent（`filterEquals` 不比 extras，配 `FLAG_UPDATE_CURRENT`
-     * 会互相冲掉 `widget_day`）。这个撞车类在本仓**真实发生过**（见 `launchIntent` 的 KDoc）。
-     * 步长 32 之后 `Cell` 落在 `[32w+1, 32w+31]`，永不为 32 的倍数 ✓ 结构性根除。
+     * ⚠️ **这个数不是随便取的，它是编址方案的护栏。** `Cell(w, n) = B + 64w + 1 + n`
+     * （`n` 是 0 起的格子下标，实例共 `k` 格）。只要 **`k ≤ 63`**，`Cell` 就恒落在
+     * `[64w+1, 64w+k]` ⊆ `[64w+1, 64w+63]`、**永不为 64 的倍数** —— 要进位到
+     * `B + 64(w+1)` 需要 `1 + n = 64`，即 `k ≥ 64`。而 `Root` 恒为 64 的倍数，
+     * 两者于是结构性错开。本仓最多用到 42 格（月历），远在护栏之内。
+     * 这个撞车类在本仓**真实发生过**（见 `launchIntent` 的 KDoc）。
+     * 基数从 32 提到 64 之后，`Int` 溢出的 widgetId 上限从约 6710 万降到约 3350 万，
+     * 仍远够用。
      */
-    private const val REQ_SLOTS_PER_WIDGET = 32
+    private const val REQ_SLOTS_PER_WIDGET = 64
 
     /** 整卡的 requestCode：低位 0 留给「不指定日期」。 */
     private fun rootRequestCode(widgetId: Int): Int = WIDGET_REQ_BASE + widgetId * REQ_SLOTS_PER_WIDGET
@@ -89,22 +92,25 @@ object WidgetRenderer {
      * ⚠️ requestCode 走上面那两个函数，**整卡与格子必须落在同一个仿射命名空间里**。
      * `PendingIntent` 的身份是「requestCode + 意图的 `filterEquals`」——而 `filterEquals`
      * **不比较 extras**，配上 `FLAG_UPDATE_CURRENT`（会覆盖 extras），两个实例只要
-     * 满足 `A == 32 * B + c`（`c ∈ 0..31`）就会共用一个 PendingIntent、互相冲掉
+     * 满足 `A == 64 * B + c`（`c ∈ 0..63`）就会共用一个 PendingIntent、互相冲掉
      * `widget_day`，点一下跳到错的那天。
      *
-     * **为什么步长必须是 32 而不是 16**：一个网格实例真正用到 `Cell(w, 0..15)`（16 格）。
+     * **为什么步长必须与格子数错开**：一个网格实例真正用到 `Cell(w, 0..15)`（16 格）。
      * 若步长仍是 16，末格 `Cell(m, 15) = B + 16m + 16 = B + 16(m+1)` —— **正好等于下一个
      * 实例的 `Root(m+1)`**，撞成同一个 PendingIntent；这个撞车类在本仓**真实发生过**
      * （初稿让整卡用**裸 `widgetId`**，单实例时 `16w + c ≠ w` 不自撞，所以在只有 id 34
      * 的桌面上测全过、藏得住；而 widget id **不是**「系统给的小整数」——它是设备级单调
-     * 计数器，不复用，差 16 倍的两实例够得着）。步长提成 32 后 `Cell` 落在
+     * 计数器，不复用，差 16 倍的两实例够得着）。当时的修法是把步长提到 32：`Cell` 落在
      * `[32m+1, 32m+31]`、**永不为 32 的倍数**，而 `Root` 恒为 32 的倍数 —— 两者结构性
      * 错开，对任意 `n ≠ m` 都不相等，单实例内也不自撞。这不是「取个大点的数保险」，
-     * 而是「格子数 16 与步长必须错开到不产生进位碰撞」的硬约束，见 `REQ_SLOTS_PER_WIDGET`。
+     * 而是「格子数必须与步长错开到不产生进位碰撞」的硬约束，见 `REQ_SLOTS_PER_WIDGET`。
+     * **Task 7 的月历一格一码、要用满 42 格**：步长 32 已经不够 —— 第 32 格
+     * `Cell(m, 31) = B + 32m + 32` 正好又是下一个实例的 `Root(m+1)`（42 > 32，直接撞车）。
+     * 故基数一并提到 64：42 格 ≤ 63，`Cell` 恒落在 `[64m+1, 64m+42]`，仍**永不为 64 的倍数**。
      *
-     * 现在 `Root(n) = WIDGET_REQ_BASE + 32n`、`Cell(m, c) = WIDGET_REQ_BASE + 32m + 1 + c`；
+     * 现在 `Root(n) = WIDGET_REQ_BASE + 64n`、`Cell(m, c) = WIDGET_REQ_BASE + 64m + 1 + c`；
      * 基址再把它们整体抬离所有既有区间（见 `WIDGET_REQ_BASE`）。`widgetId` 涨到约
-     * 6700 万才会 `Int` 溢出。
+     * 3350 万才会 `Int` 溢出。
      */
     private fun launchIntent(context: Context, requestCode: Int, epochDay: Int? = null): PendingIntent {
         val i = Intent(context, MainActivity::class.java).apply {
@@ -130,9 +136,9 @@ object WidgetRenderer {
     /**
      * 三张卡的分派。**纯渲染**：不写盘、不排闹钟、不读除宿主配置之外的任何系统状态。
      *
-     * ⚠️ `MONTH` 分支**暂时是旧的**（先走旧版式的网格档，保证每一步都编得过、
-     * 桌面上也都看得见一张卡），Task 7 换成 `monthCard`。
-     * `WEEK_STRIP` / `TODAY` 已分别在 Task 5 / 6 换成真的 `weekStrip` / `todayStandalone`。
+     * 三张卡自 Task 5 / 6 / 7 起分别走 `weekStrip` / `todayStandalone` / `monthCard`；
+     * 旧版式的 `gridWithCard` 族（`gridCells` / `gridWithCard`）已无人调用，
+     * 等 Task 8 统一清账。
      */
     fun render(
         context: Context,
@@ -153,8 +159,7 @@ object WidgetRenderer {
         return when (variant) {
             WidgetVariant.WEEK_STRIP -> weekStrip(context, snap, todayIndex, widgetId)
             WidgetVariant.TODAY -> todayStandalone(context, snap, todayIndex, widgetId)
-            // ⚠️ TASK7 临时：MONTH 仍走旧版式的网格档（网格 + 嵌套今日卡片），Task 7 替换。
-            WidgetVariant.MONTH -> gridWithCard(context, snap, todayIndex, widgetId, 16)
+            WidgetVariant.MONTH -> monthCard(context, snap, todayIndex, widgetId)
         }
     }
 
@@ -257,6 +262,150 @@ object WidgetRenderer {
             }
 
             v.addView(columns[col], c)
+        }
+        return v
+    }
+
+    /**
+     * 4×5 整月：月份标题 + 周几行 + 6×7 格。
+     *
+     * **渲染哪个月由 `LocalDate.now()` 定**，不由快照的生成月定：快照窗口覆盖
+     * 「本月 + 下月」（spec §7.1），跨月那一刻零点那次刷新会重渲染，此时今天已经
+     * 落在新的一个月里 —— 数据早就在窗口里，不需要 App 活着。
+     *
+     * **前导空格**由本月 1 日的星期几现算（周一 = 1）—— 纯日期算术，不是 i18n，
+     * 与不变量 (A) 不冲突。
+     *
+     * 月份标题从 `snap.months` 里按「年-月」查；**查不到就隐藏标题行**，
+     * 绝不借相邻月份的标题顶上。
+     *
+     * 42 格共用 `widget_month_cell` 一张布局、每格一个 `RemoteViews` 实例；胶囊是
+     * **定尺 40×18dp** 的 `tintedChip` 位图，靠 `WidgetChip` 的 LruCache 按 (颜色, 尺寸)
+     * 复用 —— 同尺寸 + 同色共一张，42 格实际只画得出屈指可数的几张。**别在这条路上
+     * 按格子改尺寸或按格子造唯一颜色**，那会把这套复用打掉（Task 1 的探针结论）。
+     *
+     * 没班次（空白表方案）那格不画胶囊，与 App 日历格一致（`shift == null` 时那块
+     * 根本不画）—— 完整理由见 [weekStrip] 里那条「不能拿 `wg_empty_*` 顶上」。
+     */
+    private fun monthCard(
+        context: Context,
+        snap: WidgetStore.Snapshot,
+        todayIndex: Int,
+        widgetId: Int,
+    ): RemoteViews {
+        val v = RemoteViews(context.packageName, R.layout.widget_month_card)
+        val dark = isDark(context, snap.themeMode)
+        v.setInt(
+            R.id.wg_m_root,
+            "setBackgroundResource",
+            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+        )
+        v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, rootRequestCode(widgetId)))
+
+        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
+        val muted = context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val holiday = context.getColor(R.color.wg_holiday)
+
+        val today = LocalDate.now()
+        val todayEpoch = today.toEpochDay()
+
+        // ── 月份标题 ──
+        val title = snap.months.firstOrNull { it.y == today.year && it.m == today.monthValue }
+        if (title == null) {
+            v.setViewVisibility(R.id.wg_m_title, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_m_title, android.view.View.VISIBLE)
+            v.setTextViewText(R.id.wg_m_title, title.title)
+            v.setTextColor(R.id.wg_m_title, muted)
+        }
+
+        // ── 周几行（7 条文案来自快照，原生不做 i18n） ──
+        val wdIds = intArrayOf(
+            R.id.wg_m_wd1, R.id.wg_m_wd2, R.id.wg_m_wd3, R.id.wg_m_wd4,
+            R.id.wg_m_wd5, R.id.wg_m_wd6, R.id.wg_m_wd7,
+        )
+        for (i in wdIds.indices) {
+            val text = snap.weekdays.getOrNull(i)
+            if (text == null) {
+                // 快照只有 7 条文案时不会走到这里；真缺了就隐藏，不拿别的顶上。
+                v.setViewVisibility(wdIds[i], android.view.View.GONE)
+            } else {
+                v.setViewVisibility(wdIds[i], android.view.View.VISIBLE)
+                v.setTextViewText(wdIds[i], text)
+                v.setTextColor(wdIds[i], muted)
+            }
+        }
+
+        // ── 42 格 ──
+        val firstOfMonth = today.withDayOfMonth(1)
+        val leading = firstOfMonth.dayOfWeek.value - 1   // 周一 = 1 → 前导空格数
+        val daysInMonth = firstOfMonth.lengthOfMonth()
+        val slotIds = IntArray(42) { i ->
+            context.resources.getIdentifier("wg_m_slot${i + 1}", "id", context.packageName)
+        }
+
+        for (slot in 0 until 42) {
+            val dayOfMonth = slot - leading + 1
+            if (dayOfMonth < 1 || dayOfMonth > daysInMonth) {
+                // 前导/尾随空格：GONE —— GridLayout 里 GONE 的子视图不参与布局。
+                v.setViewVisibility(slotIds[slot], android.view.View.GONE)
+                continue
+            }
+            val date = firstOfMonth.withDayOfMonth(dayOfMonth)
+            val epoch = date.toEpochDay()
+            val i = snap.days.indexOfFirst { it.day == epoch }
+            if (i < 0) {
+                // 窗口里没有这天（理论上不会发生）。当成空格而不是「没班次」——
+                // 后者会画出一张理直气壮的空格。
+                v.setViewVisibility(slotIds[slot], android.view.View.GONE)
+                continue
+            }
+            v.setViewVisibility(slotIds[slot], android.view.View.VISIBLE)
+
+            // 点某一格 → 打开 App 并跳到那天。格子占槽位 1..42（一个实例 64 个槽位）。
+            v.setOnClickPendingIntent(
+                slotIds[slot],
+                launchIntent(context, cellRequestCode(widgetId, slot), epochDay = epoch.toInt()),
+            )
+
+            val d = snap.days[i]
+            val isToday = epoch == todayEpoch
+            val c = RemoteViews(context.packageName, R.layout.widget_month_cell)
+
+            // 可见性两个方向都要设满：宿主 `reapply` 只重放新动作，漏设的一边会留着
+            // 上一次的状态。
+            c.setViewVisibility(R.id.wg_mc_day, android.view.View.VISIBLE)
+            c.setTextViewText(R.id.wg_mc_day, dayOfMonth.toString())
+            // 「今天」只走主色，**不许加粗**（`TextView` 没有 `setTypeface(int)`，
+            // 反射会在宿主进程抛 `ActionException`）。
+            c.setTextColor(R.id.wg_mc_day, if (isToday) snap.accent else ink)
+
+            // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块根本不画）。
+            // **不能**拿 `wg_empty_*` 顶上：`tintedChip` 里 `Paint.setAlpha` 会**覆盖**颜色
+            // 字节自带的 alpha（fill 写死 36、stroke 写死 115），`#14000000` 会变成一条 45%
+            // 的黑描边环，比 App 的长相响得多。正常排班里「休班」是一个**有颜色的班次定义**
+            // （`hasShift == true`），照常画胶囊 —— 这条只影响空白表方案下的无班次日。
+            if (d.hasShift) {
+                c.setViewVisibility(R.id.wg_mc_pill, android.view.View.VISIBLE)
+                c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.VISIBLE)
+                // 尺寸恒定 40×18dp：一格一尺寸会让 `WidgetChip` 的位图缓存失效
+                // （key 含尺寸），42 格就把缓存冲爆。见本函数的 KDoc。
+                c.setImageViewBitmap(
+                    R.id.wg_mc_pill,
+                    WidgetChip.tintedChip(d.color, dpToPx(context, 40), dpToPx(context, 18)),
+                )
+                c.setTextViewText(R.id.wg_mc_abbr, d.shiftAbbr)
+                c.setTextColor(R.id.wg_mc_abbr, ink)
+            } else {
+                c.setViewVisibility(R.id.wg_mc_pill, android.view.View.GONE)
+                c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.GONE)
+            }
+
+            c.setViewVisibility(R.id.wg_mc_lunar, android.view.View.VISIBLE)
+            c.setTextViewText(R.id.wg_mc_lunar, d.lunarShort)
+            c.setTextColor(R.id.wg_mc_lunar, if (d.lunarIsHoliday) holiday else muted)
+
+            v.addView(slotIds[slot], c)
         }
         return v
     }
