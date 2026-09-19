@@ -6,7 +6,8 @@
 // （农历与其他班组留空），而不是把旧数据当成今天显示。
 //
 // 这条测试保证那个判定所依赖的前提成立：`todayCard.day` **恒等于生成那天的
-// epochDay**，且与 `days[0].day` 一致。
+// epochDay**，且与 `days` 里那一天的那一项一致（v2 起窗口含过去的天，
+// `days[0]` 不再是今天，所以只能按日期找行）。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
@@ -20,7 +21,7 @@ void main() {
   });
   setUp(() => L10n.locale = 'zh');
 
-  test('todayCard.day 恒等于生成那天，且与 days[0] 同天', () {
+  test('todayCard.day 恒等于生成那天，且与 days 里同一天的那项一致', () {
     for (final d in [
       DateTime(2026, 9, 19, 0, 5),
       DateTime(2026, 9, 19, 23, 55),
@@ -36,8 +37,10 @@ void main() {
       );
       final tc = s['todayCard']! as Map;
       final days = s['days']! as List;
-      expect(tc['day'], dayNumber(d), reason: '生成于 $d 时应当带那天的 epochDay');
-      expect(tc['day'], (days.first as Map)['day']);
+      final today = dayNumber(d);
+      final row = days.cast<Map>().firstWhere((r) => r['day'] == today);
+      expect(tc['day'], today, reason: '生成于 $d 时应当带那天的 epochDay');
+      expect(tc['day'], row['day']);
     }
   });
 

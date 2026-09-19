@@ -15,22 +15,37 @@
 // 相对的三个词（今天/明天/后天）放在顶层 `labels` 里，由原生按**渲染时的偏移**取。
 library;
 
-import 'package:flutter/material.dart';
-
-import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/shift_rotation.dart';
 
 /// 快照格式版本。原生按它判断能不能解析 —— 对不上就按「无快照」走降级态。
-const int kWidgetSnapshotVersion = 1;
-
-/// 快照里带的天数。
 ///
-/// 14 而不是 7，是因为跨天时小组件**不能**重算（它手上只有这份快照），只能拿
-/// `LocalDate.now().toEpochDay()` 去 `days` 里对表、整体右移一格。给「App 两周
-/// 没打开」留余量；真耗尽了原生退化成占位态。大卡只用到其中 7 天。
-const int kWidgetSnapshotDays = 14;
+/// v2（2026-09-20）：窗口从「今天起 14 天」改成「按月对齐的绝对窗口」；
+/// `days[]` 删 `abbrInk`、增 `lunarShort` / `lunarIsHoliday`；顶层增 `weekdays` / `months`。
+/// 换版本号是有意的：升级时旧快照一律解不开 → 渲染占位态，直到第一次 push。
+const int kWidgetSnapshotVersion = 2;
+
+/// 窗口的**最大**天数。真正用多少由 [widgetWindow] 算：
+/// 「本月 + 下月」最多 62 天，再加本周一到月末最多 6 天补齐 → 68。
+const int kWidgetSnapshotMaxDays = 68;
+
+/// 快照窗口：`[min(本月 1 日, 今天所在周的周一), 下月最后一天]`。
+///
+/// 为什么不是「今天起 N 天」：月历要本月完整 + 前后补齐格，且**跨月那一刻**
+/// （10 月 1 日零点）原生手上必须有 10 月的数据 —— 跨天刷新只能对表右移，
+/// 变不出新月份，窗口里不预装下月的话桌面就是一张空月。
+/// 起点取「本周一」是为了 4×1 本周条（今天可能是周日，本周一在 6 天前）。
+({DateTime from, DateTime to}) widgetWindow(DateTime now) {
+  final today = dateOnly(now); // UTC 纯日期，年月日即本地日历日
+  final monthStart = DateTime(today.year, today.month, 1);
+  final weekMonday =
+      DateTime(today.year, today.month, today.day - (today.weekday - 1));
+  final from = monthStart.isBefore(weekMonday) ? monthStart : weekMonday;
+  // `DateTime(y, m + 2, 0)` = 下个月的最后一天（Dart 会把 day=0 归一成上月末）。
+  final to = DateTime(today.year, today.month + 2, 0);
+  return (from: from, to: to);
+}
 
 /// 生成快照。纯函数：当前时刻由 [now] 传入，不读 `DateTime.now()`。
 ///
@@ -51,10 +66,14 @@ Map<String, Object?> buildWidgetSnapshot({
   final days = <Map<String, Object?>>[];
   final boundaries = <int>{};
 
-  for (var i = 0; i < kWidgetSnapshotDays; i++) {
-    // 本地日历日。`today` 是 UTC 的纯日期，只取它的年月日再重建成**本地**时刻，
+  final window = widgetWindow(now);
+  final dayCount = dayNumber(window.to) - dayNumber(window.from) + 1;
+  assert(dayCount <= kWidgetSnapshotMaxDays, '窗口算出来 $dayCount 天，超出上限');
+
+  for (var i = 0; i < dayCount; i++) {
+    // 本地日历日。`window.from` 是 UTC 纯日期取年月日重建成**本地**零点，
     // 这样下面减出来的毫秒数才落在用户所在时区的正确钟点上。
-    final date = DateTime(today.year, today.month, today.day + i);
+    final date = DateTime(window.from.year, window.from.month, window.from.day + i);
     final dayStart = date;
     final shift = schedule?.shiftOn(date);
 
@@ -86,6 +105,7 @@ Map<String, Object?> buildWidgetSnapshot({
       }
     }
 
+    final lunar = lunarOf(date);
     days.add({
       'day': dayNumber(date),
       'weekday': L10n.weekday(date.weekday - 1),
@@ -95,12 +115,13 @@ Map<String, Object?> buildWidgetSnapshot({
       'shiftName': shift?.name ?? '',
       'shiftAbbr': shift?.shortLabel ?? '',
       'color': shift?.color ?? 0,
-      // 胶囊上的字色：底色已定、白黑二选一，交给既有的 [AppTokens.onSolid]
-      // （它的注释说明了为什么不能让 `inkFor` 代劳）。
-      'abbrInk': shift == null
-          ? 0
-          : AppTokens.onSolid(Color(shift.color)).toARGB32(),
       'timeRange': timeRange,
+      // 月历格子的第三行。原生不查农历（那是 Dart 侧的事），所以按日期烘焙。
+      'lunarShort': lunar.shortLabel,
+      'lunarIsHoliday': lunar.isLegalHoliday,
+      // v1 的 `abbrInk`（`AppTokens.onSolid` 算出的胶囊字色）在本版**删掉**：
+      // 胶囊底从实心班次色改成 14% 淡染后，`onSolid` 给的黑/白字在淡染底上是错的
+      // （深色班次的淡染底接近白，它却会给白字）。字色改走原生 `wg_ink_*`。
     });
   }
 
@@ -130,6 +151,7 @@ Map<String, Object?> buildWidgetSnapshot({
     'day': dayNumber(todayDate),
     'lunarShort': lunar.shortLabel,
     'lunarIsHoliday': lunar.isLegalHoliday,
+    'lunarFull': lunar.fullDescription,
     'adjusted': schedule?.dayOverrides.containsKey(dayNumber(todayDate)) ?? false,
     'todoCount': todayTodoCount,
     // 徽章上的**文字**也在这里给全 —— 原生不许有中文字面量，而
@@ -154,6 +176,22 @@ Map<String, Object?> buildWidgetSnapshot({
     },
     'boundaries': sorted,
     'days': days,
+    'weekdays': List.generate(7, L10n.weekday),
+    'months': _monthsInWindow(window.from, window.to),
     'todayCard': todayCard,
   };
+}
+
+/// 窗口覆盖到的月份（含起止月），升序。月历标题行按「年-月」查它。
+List<Map<String, Object?>> _monthsInWindow(DateTime from, DateTime to) {
+  final out = <Map<String, Object?>>[];
+  var y = from.year, m = from.month;
+  while (y < to.year || (y == to.year && m <= to.month)) {
+    out.add({'y': y, 'm': m, 'title': L10n.yearMonth(DateTime(y, m))});
+    if (++m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return out;
 }

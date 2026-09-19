@@ -2,7 +2,7 @@
 //
 // 为什么这一层值得单独测：整个小组件的正确性都压在它身上。原生侧只是个排版器
 // （Kotlin 里一个中文字符串都没有），所以「今天/明天对不对」「跨午夜班次的时间串
-// 对不对」「14 天窗口够不够」这些判断一旦错了，真机上表现为「卡片显示别的班的
+// 对不对」「按月窗口够不够」这些判断一旦错了，真机上表现为「卡片显示别的班的
 // 时间」，而且不报错。
 import 'dart:convert';
 
@@ -38,6 +38,14 @@ ShiftSchedule _schedule({Map<int, int> overrides = const {}}) => ShiftSchedule(
       dayOverrides: overrides,
     );
 
+/// 取快照里某一天的那一行。
+///
+/// v2 起窗口是「按月对齐的绝对窗口」，含**过去**的天 —— `days[0]` 不再是今天，
+/// 所以凡是指名某一天的用例都得按日期找行，不能再拿下标当日期用。
+Map _rowOf(Map snapshot, DateTime date) => (snapshot['days']! as List)
+    .cast<Map>()
+    .firstWhere((r) => r['day'] == dayNumber(date));
+
 void main() {
   // `L10n.monthDay` 走 `DateFormat(..., 'zh'|'en')`，两种语言的 locale 数据都
   // 要先装好（英文那条用例会在 locale='en' 下生成快照）—— 与
@@ -49,33 +57,107 @@ void main() {
 
   setUp(() => L10n.locale = 'zh');
 
-  test('days 恒 14 条，day 逐日递增', () {
+  test('窗口 = [min(本月1日, 本周一), 下月最后一天]，且恒包含今天', () {
+    for (final now in [
+      DateTime(2026, 9, 20, 10),
+      DateTime(2026, 10, 1, 0, 5), // 跨月当天
+      DateTime(2026, 12, 31, 23, 55), // 年末
+      DateTime(2027, 2, 14, 12),
+    ]) {
+      final s = buildWidgetSnapshot(
+        schedule: null,
+        now: now,
+        themeMode: 'system',
+        accent: 0xFF4F5BE8,
+        todayTodoCount: 0,
+      );
+      final days = (s['days']! as List).cast<Map>();
+      final first = days.first['day'] as int;
+      final last = days.last['day'] as int;
+
+      final monthStart = dayNumber(DateTime(now.year, now.month, 1));
+      final weekMonday =
+          dayNumber(DateTime(now.year, now.month, now.day - (now.weekday - 1)));
+      expect(first, monthStart < weekMonday ? monthStart : weekMonday,
+          reason: '窗口起点应当是「本月1日」与「本周一」里更早的那个（now=$now）');
+      expect(last, dayNumber(DateTime(now.year, now.month + 2, 0)),
+          reason: '窗口终点应当是本月的下一个月最后一天（now=$now）');
+
+      // 恒包含今天，且 day 逐日递增
+      final today = dayNumber(now);
+      expect(days.any((d) => d['day'] == today), true,
+          reason: '窗口必须包含今天（now=$now）');
+      for (var i = 1; i < days.length; i++) {
+        expect(days[i]['day'], (days[i - 1]['day'] as int) + 1);
+      }
+      expect(days.length, lessThanOrEqualTo(68));
+    }
+  });
+
+  test('窗口含过去的天：9/20 的窗口起点是 9/1（本月 1 日比本周一 9/14 更早）', () {
     final s = buildWidgetSnapshot(
-      schedule: _schedule(),
-      now: DateTime(2026, 9, 18, 10),
+      schedule: null,
+      now: DateTime(2026, 9, 20, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
-    final days = s['days']! as List;
-    expect(days.length, 14);
-    for (var i = 0; i < 14; i++) {
-      expect((days[i] as Map)['day'], dayNumber(DateTime(2026, 9, 18 + i)));
-    }
+    final days = (s['days']! as List).cast<Map>();
+    final todayIndex =
+        days.indexWhere((d) => d['day'] == dayNumber(DateTime(2026, 9, 20)));
+    expect(todayIndex, greaterThan(0), reason: '今天不在第一项 —— 窗口里应当有更早的天');
   });
 
-  test('空白表（schedule=null）仍产出 14 条空行，并带上空表提示', () {
+  test('days 每条都带农历；weekdays 七条、months 覆盖窗口的月', () {
     final s = buildWidgetSnapshot(
       schedule: null,
-      now: DateTime(2026, 9, 18, 10),
+      now: DateTime(2026, 10, 1, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+    final days = (s['days']! as List).cast<Map>();
+    for (final d in days) {
+      expect(d['lunarShort'], isA<String>());
+      expect((d['lunarShort'] as String), isNotEmpty);
+      expect(d['lunarIsHoliday'], isA<bool>());
+      expect(d.containsKey('abbrInk'), false, reason: 'abbrInk 已删 —— 胶囊文字改走 wg_ink_*');
+    }
+    expect((s['weekdays']! as List).length, 7);
+    expect((s['weekdays']! as List).first, L10n.weekday(0));
+
+    // 2026-10-01 是周四 → 窗口从 9/28（周一）起、到 11/30 止，覆盖 9/10/11 三个月
+    final months = (s['months']! as List).cast<Map>();
+    expect(months.map((m) => '${m['y']}-${m['m']}').toList(),
+        ['2026-9', '2026-10', '2026-11']);
+    expect(months.first['title'], L10n.yearMonth(DateTime(2026, 9)));
+  });
+
+  test('协议版本是 2', () {
+    final s = buildWidgetSnapshot(
+      schedule: null,
+      now: DateTime(2026, 9, 20, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+    expect(s['v'], 2);
+  });
+
+  test('空白表（schedule=null）仍按窗口天数产出空行，并带上空表提示', () {
+    final now = DateTime(2026, 9, 18, 10);
+    final s = buildWidgetSnapshot(
+      schedule: null,
+      now: now,
       themeMode: 'light',
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
     expect(s['hasSchedule'], false);
     expect(s['emptyHint'], L10n.widgetEmptyHint);
+    final window = widgetWindow(now);
     final days = s['days']! as List;
-    expect(days.length, 14);
+    expect(days.length, dayNumber(window.to) - dayNumber(window.from) + 1);
     for (final d in days) {
       final m = d as Map;
       expect(m['hasShift'], false);
@@ -110,7 +192,7 @@ void main() {
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
-    final d0 = (s['days']! as List).first as Map;
+    final d0 = _rowOf(s, DateTime(2026, 9, 19));
     expect(d0['shiftName'], '夜班');
     expect(d0['timeRange'], L10n.timeRange('20:30', '08:30', true));
   });
@@ -124,7 +206,7 @@ void main() {
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
-    final d0 = (s['days']! as List).first as Map;
+    final d0 = _rowOf(s, DateTime(2026, 9, 19));
     expect((d0['timeRange']! as String).contains('次日'), false);
     expect(d0['timeRange'], '20:30 – 08:30 (next day)');
   });
@@ -150,19 +232,19 @@ void main() {
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
-    final d0 = (s['days']! as List).first as Map;
+    final d0 = _rowOf(s, DateTime(2026, 9, 18));
     // `endMinute == 1440` 走的是 `widget_snapshot.dart` 里那条专门注释过的分支：
     // 「endMinute ≥ 1440 —— 本身就落在次日，加了反而过头」，所以不再 +1 天。
     // 格式上 1440 印成 24:00，且 `endsNextDay`（e ≥ 1440）为真 → 带「次日」。
     expect(d0['shiftName'], '全天班');
     expect(d0['timeRange'], L10n.timeRange('08:00', '24:00', true));
 
-    // 结束「边界」＝次日零点。窗口最后一天（10/1）的同一个 24 小时班结束在
-    // 10/2 00:00；若误按跨午夜那条 +1 天，会跑到 10/3 00:00，`b.last` 会露馅。
+    // 结束「边界」＝次日零点。窗口最后一天（10/31）的同一个 24 小时班结束在
+    // 11/1 00:00；若误按跨午夜那条 +1 天，会跑到 11/2 00:00，`b.last` 会露馅。
     final b = (s['boundaries']! as List).cast<int>();
     expect(b.contains(DateTime(2026, 9, 19).millisecondsSinceEpoch), true);
-    expect(b.last, DateTime(2026, 10, 2).millisecondsSinceEpoch,
-        reason: '10/1 的 24 小时班结束在 10/2 00:00；误加一天会变成 10/3');
+    expect(b.last, DateTime(2026, 11, 1).millisecondsSinceEpoch,
+        reason: '10/31 的 24 小时班结束在 11/1 00:00；误加一天会变成 11/2');
   });
 
   test('按天改班反映到快照里（快照走 shiftOn，不是 teamShift）', () {
@@ -200,12 +282,12 @@ void main() {
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
-    final days = (s['days']! as List).cast<Map>();
-    // days[1] = 9/19：纯轮转视角是夜班，覆盖把它改成了休班。
-    expect(days[1]['shiftName'], '休班');
-    expect(days[1]['isRest'], true);
+    // 9/19：纯轮转视角是夜班，覆盖把它改成了休班。
+    final overridden = _rowOf(s, DateTime(2026, 9, 19));
+    expect(overridden['shiftName'], '休班');
+    expect(overridden['isRest'], true);
     // 未覆盖的 9/18 不受影响（仍是白班）。
-    expect(days[0]['shiftName'], '白班');
+    expect(_rowOf(s, DateTime(2026, 9, 18))['shiftName'], '白班');
 
     // 反证：不带覆盖的同一方案里 9/19 是夜班 —— 差异确实来自覆盖。
     final plain = buildWidgetSnapshot(
@@ -215,18 +297,19 @@ void main() {
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
-    expect(((plain['days']! as List)[1] as Map)['shiftName'], '夜班');
+    expect(_rowOf(plain, DateTime(2026, 9, 19))['shiftName'], '夜班');
   });
 
   test('休班行没有时间串', () {
+    final restDay = DateTime(2026, 9, 20); // 周期第 2 天 → 休班
     final s = buildWidgetSnapshot(
       schedule: _schedule(),
-      now: DateTime(2026, 9, 20, 10), // 周期第 2 天 → 休班
+      now: restDay,
       themeMode: 'system',
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
-    final d0 = (s['days']! as List).first as Map;
+    final d0 = _rowOf(s, restDay);
     expect(d0['isRest'], true);
     expect(d0['timeRange'], isNull);
   });
@@ -248,8 +331,9 @@ void main() {
     for (final t in b) {
       expect(t > now.millisecondsSinceEpoch, true);
     }
-    // 每天都贡献了**次日**的本地零点，所以 14 条全在未来（没有哪一条代表
-    // 「今天零点已过」）。原稿这里的注释写反了，Task 1 实做时发现。
+    // 窗口里每一天都贡献了**次日**的本地零点；过去那几天的零点已经来过、不进
+    // boundaries，所以留下的这些全在未来（至少还有旧版 14 天窗口那么多条）。
+    // 原稿这里的注释写反了，Task 1 实做时发现。
     expect(b.where((t) => t > now.millisecondsSinceEpoch).length >= 14, true);
   });
 
@@ -276,7 +360,7 @@ void main() {
     );
     final back = jsonDecode(jsonEncode(s)) as Map<String, dynamic>;
     expect(back['v'], kWidgetSnapshotVersion);
-    expect(back['days'], hasLength(14));
+    expect(back['days'], hasLength((s['days']! as List).length));
     expect(back['boundaries'], isA<List>());
     final d0 = (back['days'] as List).first as Map<String, dynamic>;
     expect(d0['day'], isA<int>());
