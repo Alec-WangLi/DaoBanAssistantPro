@@ -1411,6 +1411,13 @@ git commit -m "feat(widget): 列表三档（行槽位 + 共用行布局），行
             "setBackgroundResource",
             if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
         )
+        // 整卡点击先设在网格自己的根上（此刻还没有「网格 + 今日卡片」的外壳，
+        // 网格是单独渲染的）。**Task 6 做外壳时，把它与上面那行背景一起挪到外壳上** ——
+        // 外壳才是一张卡的可视边界。
+        v.setOnClickPendingIntent(
+            if (fortnight) R.id.wg_gf_root else R.id.wg_gw_root,
+            launchIntent(context, rootRequestCode(widgetId)),
+        )
 
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
@@ -1443,6 +1450,19 @@ git commit -m "feat(widget): 列表三档（行槽位 + 共用行布局），行
                 continue
             }
             v.setViewVisibility(slots[cell], android.view.View.VISIBLE)
+
+            // 点某一格 → 打开 App 并跳到那天。**这一条不能丢** —— 它替换掉的
+            // `GRID_WEEK`/`GRID_FORTNIGHT` 就是上一版的 `large()`，而 `large()`
+            // 当时逐格都有点击（用户真机验过「点某一天跳到那天」）。
+            // 格子占 0..15 的槽位，整卡占 0（见 `cellRequestCode` / `rootRequestCode`）。
+            v.setOnClickPendingIntent(
+                slots[cell],
+                launchIntent(
+                    context,
+                    cellRequestCode(widgetId, cell),
+                    epochDay = snap.days[i].day.toInt(),
+                ),
+            )
 
             val d = snap.days[i]
             val c = RemoteViews(context.packageName, R.layout.widget_cell)
