@@ -41,7 +41,18 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.12\n'
+const String _changelogZh = 'v0.9.0\n'
+    '· 正式稳定版，归纳 0.8.1 到 0.8.12 的全部更新\n'
+    '· 桌面小组件：三张固定尺寸的卡 —— 本周条（4×1，今天所在这一周）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历）。放置后不能拉伸，在 App 里改了排班桌面立刻跟着变，点某一天直接跳到那天的日历。升级后桌面上原有的旧小组件会消失，需要在桌面重新添加一次（小米 / HyperOS 在「支持小部件的应用 → 安卓小部件」里找）\n'
+    '· 日历上可以单独改某几天的班了：点底栏那行班次、或长按格子拖选一段（可跨周、不跨月），就能给这几天单独指定班次（请假、跟同事换班都行），不动整套排班。被改过的那天格子上有个小圆点、信息卡写着「已调班」，选择层里可一键「恢复轮转」\n'
+    '· 新增「我的模板」：调好一套排班之后，在编辑器右上角点「存为模板」，下次新建排班时直接在「我的模板」里选它，不用每次从头搭\n'
+    '· 新增「五班三倒 · 10 天一轮」模板；触觉反馈（切换开关、选中、拖选与改班时轻微震动，可在「我的 → 外观」里关掉）\n'
+    '· 修好两个用户反馈的问题：① 零点班（00:00 上班）的联动闹钟从前排在班次当天 —— 那会儿班已经结束 15 小时了，现在排在上班前 1 小时（前一天晚上），界面上写明「前一天」；② 把 5 天一轮的排班改成 10 天之后，同一天会出现两个班组上同一个班 —— 现在编辑器的「周期设置」里会点出相撞的两个班组，并给一个按钮按周期长度均分各组的起始日\n'
+    '· 修好「存了模板在新建排班时看不到」：如果这一趟先打开过「新建排班」，之后存的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
+    '· 一批小组件与界面的修复：大卡上「今天」的标记、待办数徽章跟着变、删掉小组件后不再后台刷新；小窗（高 < 480dp）改为只显示今日信息卡；横竖屏与宽屏布局收口；调整班次的选择层重排、色点与信息卡统一成 12dp\n'
+    '· 内置倒班方式模板共 20 种；数据库版本 8 → 9（新增「我的模板」一张表，原有排班与待办一条不丢）\n\n'
+
+    'v0.8.12\n'
     '· 修好「存了模板却在新建排班时看不到」：如果这一趟开 App 时先打开过一次「新建排班」（那时还没有模板），之后存下的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
     '· 存完模板的提示补了一句去哪儿找：「新建排班时可选」\n\n'
     'v0.8.11\n'
@@ -72,13 +83,19 @@ const String _changelogZh = 'v0.8.12\n'
     '· 新增桌面小组件：小/中/大三档尺寸，一眼看到今天、未来三天或一周的班次\n'
     '· 跨天自动翻页；在 App 里改了排班，桌面立刻跟着变\n'
     '· 点小组件上的某一天，直接跳到那天的日历\n'
-    '· 小米 / HyperOS 机型上，小部件要进「支持小部件的应用」→「安卓小部件」才找得到（长按桌面空白处 → 添加小部件）；添加后没看到它，不代表功能没生效\n\n'
-    'v0.8.3\n'
-    '· 「调整班次」那个选择层重排了一遍：标题不再居中、行距收紧、色点与信息卡统一成 12dp、底部「恢复轮转」用一条分隔线单独隔开（不再看着像第五个班次）\n'
-    '· 小窗（高 < 480dp）里改成只显示今日信息卡、不再画日历网格 —— 那个尺寸下两者都看不清；信息卡同时补上「已调班」标记，所以小窗里也看得出哪天被调过\n'
-    '· 「已调整」改叫「已调班」（请假和换班都说得通）\n'
-    '· 修好窄弹层里班次名被挤成一行一个字，以及横屏下色点被裁成半圆\\n';
-const String _changelogEn = 'v0.8.12\n'
+    '· 小米 / HyperOS 机型上，小部件要进「支持小部件的应用」→「安卓小部件」才找得到（长按桌面空白处 → 添加小部件）；添加后没看到它，不代表功能没生效\n';
+const String _changelogEn = 'v0.9.0\n'
+    '· Stable release — merges everything from 0.8.1 through 0.8.12\n'
+    '· Home-screen widgets: three fixed-size cards — a week strip (4×1, the current week), a today card (4×3, the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar). They cannot be resized once placed, follow any schedule change you make in the app, and tapping a day jumps to that date in the calendar. After upgrading, the old widget disappears from your home screen — add it again (on Xiaomi / HyperOS it lives under "Apps that support widgets → Android widgets")\n'
+    '· Override individual days on the calendar: tap the shift row in the bottom bar, or long-press a cell and drag to pick a range (across weeks, not months), to give just those days a shift of their own — a day off, or swapping with a colleague — without touching the rest of the rotation. An overridden day carries a small dot in the grid and reads "Shift changed" on the info card, and the picker offers a one-tap "Restore rotation"\n'
+    '· New "My templates": once a schedule looks right, tap "Save as template" in the editor and pick it next time you create one — no more rebuilding your own roster from scratch\n'
+    '· New "5-crew 3-shift · 10-day cycle" template; haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change — turn it off under Me → Appearance)\n'
+    '· Fixed two issues reported by users: (1) shift alarms for midnight shifts (00:00 start) used to be scheduled on the shift\'s own day — by then that shift had been over for 15 hours; they now ring one hour before the shift starts, the evening before, and the UI says so; (2) after changing a 5-day cycle into a 10-day one, two crews ended up on the same shift on the same day — the editor\'s cycle section now names the colliding crews and offers a button that spreads their start dates evenly\n'
+    '· Fixed "saved templates not showing up when creating a schedule": if you had opened "New schedule" earlier in the same session, a template saved afterwards only appeared after restarting the app — the list is now re-read every time\n'
+    '· A batch of widget and UI fixes: the "today" marker on the large card, the todo-count badge keeping up, no more background refresh after you remove the widget; small windows (under 480dp tall) now show only today\'s info card; landscape and wide-screen layouts tightened up; the adjust-shift sheet reworked with the colour dot unified to 12dp\n'
+    '· 20 built-in shift-pattern templates; database version 8 → 9 (one new table for "My templates" — no existing schedules or todos are lost)\n\n'
+
+    'v0.8.12\n'
     '· Fixed saved templates not showing up in the picker: if you had opened "New schedule" once earlier in the same app session (back when you had no templates yet), a template saved afterwards only appeared after restarting the app. The list is now re-read every time you open it\n'
     '· The confirmation shown after saving now says where to find it ("pick it when creating a schedule")\n\n'
     'v0.8.11\n'
@@ -109,12 +126,7 @@ const String _changelogEn = 'v0.8.12\n'
     '· New home screen widget: small / medium / large, showing today, the next three days or a whole week of shifts at a glance\n'
     '· It flips over the day automatically, and follows any change you make to your schedule in the app right away\n'
     '· Tap a day on the widget to jump straight to that date in the calendar\n'
-    '· On Xiaomi / HyperOS devices the widget lives under "Apps that support widgets" → "Android widgets" (long-press an empty spot on the home screen → Add widgets); not seeing it there does not mean the feature failed\n\n'
-    'v0.8.3\n'
-    '· Reworked the "Adjust shift" sheet: the title is no longer centred, the rows are tighter, the colour dot now matches the info card at 12dp, and "Restore rotation" sits below a divider instead of looking like a fifth shift\n'
-    '· In a small window (under 480dp tall) the calendar now shows only today\'s info card and no grid — at that size you cannot really read both. The card gained the "Shift changed" badge, so an overridden day stays visible there too\n'
-    '· "Adjusted" is now "Shift changed" (it reads right for both a day off and a swap)\n'
-    '· Fixed shift names wrapping one character per line in a narrow sheet, and the colour dot being clipped to a half-circle in landscape\\n';
+    '· On Xiaomi / HyperOS devices the widget lives under "Apps that support widgets" → "Android widgets" (long-press an empty spot on the home screen → Add widgets); not seeing it there does not mean the feature failed\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
@@ -202,6 +214,7 @@ void showUsageGuideDialog(BuildContext context) {
     (Icons.tune_outlined, L10n.guideSchedTitle, L10n.guideSchedDesc),
     (Icons.alarm_outlined, L10n.guideAlarmTitle, L10n.guideAlarmDesc),
     (Icons.event_note_outlined, L10n.guideTodoTitle, L10n.guideTodoDesc),
+    (Icons.widgets_outlined, L10n.guideWidgetTitle, L10n.guideWidgetDesc),
     (Icons.palette_outlined, L10n.guideAppearanceTitle,
         L10n.guideAppearanceDesc),
     (Icons.aspect_ratio_outlined, L10n.guideLayoutTitle, L10n.guideLayoutDesc),

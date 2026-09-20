@@ -4,8 +4,8 @@
 
 | 文件 | 大小 | 说明 |
 |---|---|---|
-| `app/build/app/outputs/flutter-apk/app-debug.apk` | 153.7 MB | 调试版（全 ABI + 调试符号） |
-| `app/build/app/outputs/flutter-apk/app-release.apk` | 21.7 MB | 发布版（arm64-v8a 单 ABI + AOT + tree-shake，**推荐分发用**） |
+| `app/build/app/outputs/flutter-apk/app-debug.apk` | 85.2 MB | 调试版（全 ABI + 调试符号） |
+| `app/build/app/outputs/flutter-apk/app-release.apk` | 22.0 MB | 发布版（arm64-v8a 单 ABI + AOT + tree-shake，**推荐分发用**） |
 
 ## 技术栈
 
@@ -34,7 +34,7 @@ flutter build apk --release                                  # 或 --debug
 
 ## 首次运行注意
 
-App 内置 19 种常见倒班方式模板，**新建排班时选一个最接近你的倒班方式即可**（如「白夜休休」「白白夜夜休休」「四班三倒」「上 24 休 24」……）。
+App 内置 20 种常见倒班方式模板，**新建排班时选一个最接近你的倒班方式即可**（如「白夜休休」「白白夜夜休休」「四班三倒」「五班三倒（10 天一轮）」「上 24 休 24」……）；自己调好的那套还能「存为模板」，下次新建时从「我的模板」里直接选。
 
 请进入「我的 → 排班管理 → 新增排班」，先选择你的倒班方式，再按需要微调班次时间、周期表与你的班组起始日；保存后自动重排未来 60 天闹钟。
 
@@ -65,7 +65,7 @@ app/lib/
   domain/shift_rotation.dart  轮换引擎（纯 Dart，可单测）
   data/                   Drift 表 + 仓库 + Riverpod providers + 种子数据
   features/calendar/      月历 + 排班方案编辑器
-  features/alarm/         联动班次闹钟（精确通知 + 提前N + 贪睡）
+  features/alarm/         联动班次闹钟（每个班次一个绝对响铃钟点 + 贪睡 5 分钟）
   features/schedule/      日程（增删改 + 完成 + 提前提醒）
   features/home/          底部导航壳
 ```

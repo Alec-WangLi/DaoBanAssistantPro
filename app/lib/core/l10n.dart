@@ -90,8 +90,8 @@ class L10n {
   static String get permExactOff => t('未开启时闹钟可能不准时', 'Alarms may be delayed when off');
   static String get permAutoStart => t('自启动', 'Auto-start');
   static String get permAutoStartHint => t(
-      '小米/华为等机型：不开则重启后闹钟要等下次打开 App 才恢复',
-      'MIUI/HyperOS: off means alarms return only after the next app launch');
+      '小米 / HyperOS 等机型：不开则重启后闹钟要等下次打开 App 才恢复',
+      'MIUI/HyperOS and similar: off means alarms return only after the next app launch');
   static String get goCheck => t('去查看', 'Check');
   static String get permOverlay => t('显示悬浮窗', 'Display over other apps');
   static String get permOverlayHint => t(
@@ -485,29 +485,33 @@ class L10n {
   // 使用帮助（图标化条目）
   static String get guideCalTitle => t('日历', 'Calendar');
   static String get guideCalDesc => t(
-      '查看每日班次（日期/班次/农历/星期）；法定节假日整段标红、调休上班日带「班」标记；顶栏可切换排班、跳转年月；点某天看详情。',
-      'View daily shifts (date/shift/lunar/weekday); statutory holidays marked red, makeup workdays tagged "班"; switch schedules and jump year/month from the toolbar; tap a day for details.');
+      '查看每日班次（日期/班次/农历/星期）；法定节假日整段标红、调休上班日带「班」标记；顶栏可切换排班、跳转年月；点某天看详情。要单独改某几天的班（请假、跟同事换班），点底栏信息卡上那行班次、或长按格子拖选一段 —— 被改过的那天有小圆点、信息卡写「已调班」，选择层里可一键「恢复轮转」。',
+      'View daily shifts (date/shift/lunar/weekday); statutory holidays marked red, makeup workdays tagged "班"; switch schedules and jump year/month from the toolbar; tap a day for details. To change just a few days (a day off, or swapping with a colleague), tap the shift row on the info card or long-press a cell and drag to pick a range — an overridden day carries a small dot and reads "Shift changed", and the picker offers "Restore rotation".');
   static String get guideSchedTitle => t('排班管理', 'Schedule management');
   static String get guideSchedDesc => t(
-      '「我的 → 排班管理」可新建 / 编辑 / 删除多套排班；新建时先选一个内置倒班方式模板（20 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日；调好之后可以「存为模板」留着自己下次用（存下的会出现在选择页最上面的「我的模板」里）。打开「跟随法定节假日（无班次）」可得到一张只随节假日休班的空白表。要换成哪一套上场，走日历顶栏的「切换排班」。',
-      'Me → Schedule management: create / edit / delete multiple schedules; start from a built-in shift-pattern template (20 common patterns, searchable), then tweak shift times, the cycle table and each team\'s cycle start date. Once it looks right you can "save as template" to reuse it later (saved ones appear under "My templates" at the top of the picker). Turn on "Follow legal holidays (no shifts)" for a blank schedule that simply rests on legal holidays. To change which schedule is active, use "Switch schedule" in the calendar toolbar.');
+      '「我的 → 排班管理」可新建 / 编辑 / 删除多套排班；新建时先选一个内置倒班方式模板（20 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日（各组起始日与周期长度对不上时会提示「撞班」，可一键按周期长度均分）；调好之后可以「存为模板」留着自己下次用（存下的会出现在选择页最上面的「我的模板」里）。打开「跟随法定节假日（无班次）」可得到一张只随节假日休班的空白表。要换成哪一套上场，走日历顶栏的「切换排班」。',
+      'Me → Schedule management: create / edit / delete multiple schedules; start from a built-in shift-pattern template (20 common patterns, searchable), then tweak shift times, the cycle table and each team\'s cycle start date (if those start dates stop matching the cycle length the app flags it and can spread them evenly in one tap). Once it looks right you can "save as template" to reuse it later (saved ones appear under "My templates" at the top of the picker). Turn on "Follow legal holidays (no shifts)" for a blank schedule that simply rests on legal holidays. To change which schedule is active, use "Switch schedule" in the calendar toolbar.');
   static String get guideAlarmTitle => t('闹钟', 'Alarms');
   static String get guideAlarmDesc => t(
-      '白班/上夜班自动响铃（时间在排班编辑里改）；闹钟页显示未来 30 天、每天可单独开关；也可加自定义闹钟（一次性/每天/每周）。',
-      'Day/night shifts ring automatically (set the time in schedule editing); the alarm page lists the next 30 days with per-day toggles; add custom alarms (once/daily/weekly).');
+      '白班/上夜班自动响铃（时间在排班编辑里改）；闹钟页显示未来 30 天、每天可单独开关；也可加自定义闹钟（一次性/每天/每周）。零点班（00:00 上班）的响铃排在上班前 1 小时、也就是前一天晚上，列表里会写明「前一天」。铃声可用内置、系统铃声，或从手机里自选。',
+      'Day/night shifts ring automatically (set the time in schedule editing); the alarm page lists the next 30 days with per-day toggles; add custom alarms (once/daily/weekly). A midnight shift (00:00 start) rings an hour before work starts — the evening before, marked "day before" in the list. Pick a built-in, system or your own ringtone.');
   static String get guideTodoTitle => t('待办', 'Todo');
   static String get guideTodoDesc => t(
-      '记录交班/开会等事件，可设时间与提醒档位（准时 / 提前若干时间），到点会在通知栏弹出提醒；完成后勾选（变暗 + 删除线）。当天有待办时，日历底栏的信息卡上也会显示「N 项待办」。',
-      'Log handover/meeting events with an optional time and a reminder (on time, or some time ahead); a notification appears at that moment. Tick an item when done (dims + strikethrough). When the selected day has todos, the calendar\'s info card also shows "N todos".');
+      '记录交班/开会等事件，可设时间与提醒档位（准时 / 提前若干时间），到点会在通知栏弹出提醒，也可以给某条待办开「联动闹钟」，到点像班次闹钟一样全屏响铃；完成后勾选（变暗 + 删除线）。当天有待办时，日历底栏的信息卡上也会显示「N 项待办」。',
+      'Log handover/meeting events with an optional time and a reminder (on time, or some time ahead); a notification appears at that moment; a todo can also ring as a full-screen alarm like a shift does. Tick an item when done (dims + strikethrough). When the selected day has todos, the calendar\'s info card also shows "N todos".');
   static String get guideAppearanceTitle => t('外观', 'Appearance');
   static String get guideAppearanceDesc => t(
-      '「我的 → 外观」可切跟随系统/浅色/深色，选 5 种主色调，中英文切换；「高级材质」关掉后全 App 取消背景模糊，省电、低端机更流畅。',
-      'Me → Appearance: follow the system / light / dark, pick one of 5 accent colours, and switch between Chinese and English. Turning "Advanced material" off removes background blur app-wide — lighter on battery and smoother on low-end devices.');
+      '「我的 → 外观」可切跟随系统/浅色/深色，选 5 种主色调，中英文切换；「高级材质」关掉后全 App 取消背景模糊，省电、低端机更流畅。这里还能关掉「触觉反馈」（切换开关、选中、拖选与改班时的轻微震动，默认开）。',
+      'Me → Appearance: follow the system / light / dark, pick one of 5 accent colours, and switch between Chinese and English. Turning "Advanced material" off removes background blur app-wide — lighter on battery and smoother on low-end devices. Haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change — on by default) can be turned off here too.');
   static String get guideLayoutTitle =>
       t('横屏 · 宽屏 · 小窗', 'Landscape · wide screens · small windows');
   static String get guideLayoutDesc => t(
-      '手机横屏、平板与车机等宽屏上，日历改为左右分栏：左边日期网格、右边当天信息；正文限宽居中，不再横向拉满。小米小窗 / 分屏下各页同样可用。',
-      'On phone landscape and wide screens (tablets, car head units) the calendar becomes two panes — month grid on the left, day details on the right — and content is centred with a maximum width instead of stretching across. All pages also work in a Xiaomi floating window or split screen.');
+      '手机横屏、平板与车机等宽屏上，日历改为左右分栏：左边日期网格、右边当天信息；正文限宽居中，不再横向拉满。小米小窗 / 分屏下各页同样可用；窗口很矮（高 < 480dp）时日历只显示今日信息卡 —— 那个尺寸下网格看不清，卡片上仍带「已调班」标记。',
+      'On phone landscape and wide screens (tablets, car head units) the calendar becomes two panes — month grid on the left, day details on the right — and content is centred with a maximum width instead of stretching across. All pages also work in a Xiaomi floating window or split screen; in a very short window (under 480dp tall) the calendar shows only today\'s info card — the grid is unreadable at that size — and the card still carries the "Shift changed" marker.');
+  static String get guideWidgetTitle => t('桌面小组件', 'Home-screen widgets');
+  static String get guideWidgetDesc => t(
+      '三张固定尺寸的卡：本周条（4×1）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历）。放置后不能拉伸，在 App 里改了排班桌面立刻跟着变，点某一天直接跳到那天的日历。小米 / HyperOS 上要进「支持小部件的应用 → 安卓小部件」才找得到（长按桌面空白处 → 添加小部件）。',
+      'Three fixed-size cards: a week strip (4×1), a today card (4×3 — the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar). They cannot be resized once placed, follow any schedule change you make in the app, and tapping a day jumps to that date in the calendar. On Xiaomi / HyperOS they live under "Apps that support widgets → Android widgets" (long-press an empty spot on the home screen → Add widgets).');
   static String get guidePermTitle => t('权限', 'Permissions');
   static String get guidePermDesc => t(
       '首次使用务必到「我的 → 权限」开齐：通知、闹钟和提醒（精确闹钟）、显示悬浮窗、全屏通知、自启动、电池优化。小米机型还要在系统的「应用 → 权限 → 其他权限」里额外开「后台弹出界面」和「锁屏显示」——这两项不开，闹钟到点只会响、不会弹出响铃界面；「自启动」不开，重启手机后闹钟要等下次打开 App 才恢复。',
@@ -527,8 +531,8 @@ class L10n {
       '关闭后去除真实背景模糊，模拟低端机效果', 'Turn off to remove real blur and preview the low-end effect');
   static String get hapticFeedback => t('触觉反馈', 'Haptic feedback');
   static String get hapticFeedbackHint => t(
-      '切换开关、选中、删除确认时轻微震动',
-      'Subtle vibration on toggles, selections and delete confirmations');
+      '切换开关、选中、拖选与改班等状态变化时轻微震动',
+      'A light buzz on state changes — switches, selection, drag-selecting and applying day changes');
 
   // 日期格式
   // 英文下月份要带出来：`yyyy M` 会渲染成「2026 9」，读不出是哪个月。

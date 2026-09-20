@@ -4,6 +4,7 @@ import '../../core/glass/glass.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/centered_content.dart';
+import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
@@ -299,38 +300,42 @@ class _ShiftTemplatePickerScreenState
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 行配方与排班管理页逐字一致（GlassTile + GlassPressable + ListTile
+            // + 紧凑删除钮 + 点行进编辑），只是装在弹窗里。
             for (final t in saved)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(t.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.titleStrong),
-                subtitle: Text(
-                  L10n.savedTemplateSubtitle(t.cycleLength, t.teamCount),
-                  style: AppTokens.rowSecondary
-                      .copyWith(color: AppTokens.inkMuted(context)),
+              GlassTile(
+                enableBlur: false,
+                margin: const EdgeInsets.only(bottom: AppTokens.spaceSm),
+                padding: EdgeInsets.zero,
+                child: GlassPressable(
+                  child: ListTile(
+                    title: Text(t.name,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                      L10n.savedTemplateSubtitle(t.cycleLength, t.teamCount),
+                    ),
+                    trailing: GlassDeleteButton(
+                      compact: true,
+                      onPressed: () {
+                        // 先关掉管理弹窗再弹确认：嵌套两层弹窗时，
+                        // 底下那层的按钮位置会随上面那层开合而跳。
+                        Navigator.of(dialogContext).pop();
+                        _deleteTemplate(context, t);
+                      },
+                    ),
+                    onTap: () {
+                      Navigator.of(dialogContext).pop();
+                      _renameTemplate(context, t);
+                    },
+                  ),
                 ),
-                trailing: GlassDeleteButton(
-                  compact: true,
-                  onPressed: () {
-                    // 先关掉管理弹窗再弹确认：嵌套两层弹窗时，
-                    // 底下那层的按钮位置会随上面那层开合而跳。
-                    Navigator.of(dialogContext).pop();
-                    _deleteTemplate(context, t);
-                  },
-                ),
-                onTap: () {
-                  Navigator.of(dialogContext).pop();
-                  _renameTemplate(context, t);
-                },
               ),
           ],
         ),
         actions: [
-          TextButton(
+          GlassActionButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(L10n.close),
+            label: L10n.close,
           ),
         ],
       ),
@@ -354,14 +359,16 @@ class _ShiftTemplatePickerScreenState
           decoration: glassInputDecoration(context, L10n.templateName),
         ),
         actions: [
-          TextButton(
+          GlassActionButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(L10n.cancel),
+            label: L10n.cancel,
           ),
-          TextButton(
+          const SizedBox(width: 8),
+          GlassActionButton(
+            variant: GlassActionVariant.primary,
             onPressed: () =>
                 Navigator.of(dialogContext).pop(ctrl.text.trim()),
-            child: Text(L10n.save),
+            label: L10n.save,
           ),
         ],
       ),
@@ -383,13 +390,15 @@ class _ShiftTemplatePickerScreenState
         title: L10n.deleteTemplateTitle,
         content: Text(L10n.deleteTemplateContent(t.name)),
         actions: [
-          TextButton(
+          GlassActionButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(L10n.cancel),
+            label: L10n.cancel,
           ),
-          TextButton(
+          const SizedBox(width: 8),
+          GlassActionButton(
+            variant: GlassActionVariant.danger,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(L10n.delete),
+            label: L10n.delete,
           ),
         ],
       ),
@@ -507,7 +516,8 @@ Widget _cycleStrip(BuildContext context,
             height: dot,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: muted.withValues(alpha: 0.15),
+              // 14% 是全 app 的淡染约定值（见 calendar_screen 的说明）
+              color: muted.withValues(alpha: 0.14),
               borderRadius: AppTokens.pillOf(dot),
             ),
             child: Text('…',

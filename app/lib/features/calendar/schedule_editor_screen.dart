@@ -1431,14 +1431,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           decoration: glassInputDecoration(context, L10n.templateName),
         ),
         actions: [
-          TextButton(
+          GlassActionButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(L10n.cancel),
+            label: L10n.cancel,
           ),
-          TextButton(
+          const SizedBox(width: 8),
+          GlassActionButton(
+            variant: GlassActionVariant.primary,
             onPressed: () =>
                 Navigator.of(dialogContext).pop(ctrl.text.trim()),
-            child: Text(L10n.save),
+            label: L10n.save,
           ),
         ],
       ),

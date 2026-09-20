@@ -1,4 +1,4 @@
-# 把真机截图合成 v0.8.0 的**更新说明配图**。
+# 把截图合成**更新说明配图**（v0.8.0 与 v0.9.0 两组）。
 #
 #   python scripts/make_update_images.py
 #
@@ -19,7 +19,12 @@
 #   cal-before.png 0.7.3：滑块与格子圆角差一档，四个角露出底下的卡片
 #   cal-after.png  v0.8.0：两者同源，齐平
 #
-# 换素材就换 raw/ 里的图再跑一次；**别改 docs/images/v080-*.png**，那是生成物。
+# 换素材就换 raw/ 里的图再跑一次；**别改生成物**（docs/images/v080-*.png、v090-*.png）。
+#
+# v0.9.0 那一组（见文件末尾）：四张用**应用自己渲染**的界面（app/build/visual/，与
+# 回归工装同源）—— 它们要么在真机上要点很多步才到得了（撞班提示、零点班的
+# 「前一天」），要么本身就是给用户看的浅色界面；只有桌面小组件那三张卡是例外，
+# 它走原生 RemoteViews，工装画不出来，只能用**真机桌面截图**（raw/v090-widgets.png）。
 import os
 
 import numpy as np
@@ -61,9 +66,12 @@ def _gradient(W, H, c1=ACCENT, c2=ACCENT_D):
     return Image.fromarray(arr.astype(np.uint8), 'RGB').convert('RGBA')
 
 
-def _device(path, width):
-    """截图 → 深色机身 + 圆角，返回 RGBA（与宣传图的 `framed` 同一套比例）。"""
-    shot = Image.open(os.path.join(RAW, path)).convert('RGB')
+def _device(path, width, base=None):
+    """截图 → 深色机身 + 圆角，返回 RGBA（与宣传图的 `framed` 同一套比例）。
+
+    [base] 换素材根目录：v0.9.0 那组有一部分用应用自己渲染的界面（见文件头）。
+    """
+    shot = Image.open(os.path.join(base or RAW, path)).convert('RGB')
     shot = shot.resize((width, round(shot.height * width / shot.width)),
                        Image.LANCZOS)
     bezel = max(8, round(width * 0.035))
@@ -361,3 +369,192 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 那一组
+# ---------------------------------------------------------------------------
+
+VIS = os.path.join(ROOT, 'app', 'build', 'visual')
+
+
+def _single(title, sub, src, notes, dev_w=430, base=None, W=1400):
+    """标题 + 一张界面 + 下面几行说明。"""
+    dev = _device(src, dev_w, base)
+    H = 250 + dev.height + 40 + 46 * len(notes) + 40
+    img = _gradient(W, H)
+    _title(img, title, sub)
+    img.alpha_composite(dev, ((W - dev.width) // 2, 250))
+    d = ImageDraw.Draw(img)
+    y = 250 + dev.height + 40
+    for line in notes:
+        d.text((W / 2, y), line, font=_font('msyh.ttc', 26), fill=INK_SUB,
+               anchor='ma')
+        y += 46
+    return img.convert('RGB')
+
+
+def _pair(title, sub, left, right, lcap, rcap, notes=(), dev_w=372, base=None,
+          W=1400):
+    """左右两台机器 + 各自**短**标签 + 中间箭头（「在哪儿改 → 看到什么」）。
+
+    [lcap] / [rcap] 必须短（**≤ 12 个字**）：它们是按每台机器的宽度居中画的，
+    句子一长左右两行就会在中间撞上（第一版就是这么出的两行糊在一起）。长解释
+    放 [notes]，那是整幅居中排的。
+    """
+    assert len(lcap) <= 12 and len(rcap) <= 12, '副标题太长，会撞在一起'
+    a, b = _device(left, dev_w, base), _device(right, dev_w, base)
+    gap = 130
+    x0 = (W - (a.width + b.width + gap)) // 2
+    y = 250
+    H = y + max(a.height, b.height) + 90 + 44 * len(notes) + 30
+    img = _gradient(W, H)
+    _title(img, title, sub)
+    img.alpha_composite(a, (x0, y))
+    img.alpha_composite(b, (x0 + a.width + gap, y))
+    d = ImageDraw.Draw(img)
+    # 箭头用 →，勾/叉用 × / √：微软雅黑没有 ✕/✓ 的码位，会渲染成豆腐块
+    d.text((x0 + a.width + gap / 2, y + 320), '→', font=_font('msyhbd.ttc', 56),
+           fill=INK, anchor='mm')
+    for i, (dev, cap) in enumerate(((a, lcap), (b, rcap))):
+        x = x0 + (0 if i == 0 else a.width + gap)
+        d.text((x + dev.width / 2, y + dev.height + 22), cap,
+               font=_font('msyhbd.ttc', 28), fill=INK, anchor='ma')
+    yy = y + max(a.height, b.height) + 90
+    for line in notes:
+        d.text((W / 2, yy), line, font=_font('msyh.ttc', 26), fill=INK_SUB,
+               anchor='ma')
+        yy += 44
+    return img.convert('RGB')
+
+
+def cover_090():
+    """更新说明首图：这一版最重要的四件事。"""
+    W, H = 1400, 1000
+    img = _gradient(W, H)
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 96), '倒班助手 Pro', font=_font('msyhbd.ttc', 60),
+           fill=INK_SUB, anchor='ma')
+    d.text((W / 2, 178), 'v0.9.0　正式稳定版', font=_font('msyhbd.ttc', 96),
+           fill=INK, anchor='ma')
+    d.text((W / 2, 312), '归纳 v0.8.1 ~ v0.8.12 十二个测试版的全部更新',
+           font=_font('msyh.ttc', 34), fill=INK_SUB, anchor='ma')
+
+    items = [
+        ('桌面小组件：三张固定尺寸的卡',
+         '本周条 4×1 / 今日卡 4×3 / 整月 4×5，改了排班桌面跟着变'),
+        ('日历上可以单独改某几天的班',
+         '点信息卡那行班次、或长按拖选一段 —— 请假、换班不用动整套排班'),
+        ('「我的模板」：自己调好的班表存下来',
+         '下次新建排班直接从最上面那组里选，不用每次从头搭'),
+        ('两处用户反馈的修正',
+         '零点班的闹钟改排到上班前一天；班组撞班会点名并一键均分'),
+    ]
+    y = 414
+    for i, (head, tail) in enumerate(items):
+        _panel(img, (180, y, W - 180, y + 116))
+        d.ellipse((216, y + 40, 252, y + 76), fill=ACCENT)
+        d.text((234, y + 58), str(i + 1), font=_font('msyhbd.ttc', 26),
+               fill=INK, anchor='mm')
+        d.text((286, y + 22), head, font=_font('msyhbd.ttc', 36), fill=INK)
+        d.text((286, y + 70), tail, font=_font('msyh.ttc', 27), fill=INK_SUB)
+        y += 140
+    return img.convert('RGB')
+
+
+def widgets_090():
+    """桌面小组件：真机桌面截图 + 三处标注。"""
+    W, H = 1500, 1180
+    img = _gradient(W, H)
+    _title(img, '桌面小组件：三张固定尺寸的卡',
+           '放置后不能拉伸；在 App 里改了排班，桌面立刻跟着变')
+    dev = _device('v090-widgets.png', 470)
+    sx, sy = 120, 236
+    img.alpha_composite(dev, (sx, sy))
+    d = ImageDraw.Draw(img)
+    marks = [
+        ((0.50, 0.235), '本周条 4×1', '今天所在这一周的七天'),
+        ((0.50, 0.430), '今日卡 4×3', '底栏那张信息卡的完整版'),
+        ((0.50, 0.700), '整月 4×5', '月份标题 + 42 格月历'),
+    ]
+    for i, ((rx, ry), head, tail) in enumerate(marks):
+        cx, cy = sx + dev.width * rx, sy + dev.height * ry
+        d.ellipse((cx - 21, cy - 21, cx + 21, cy + 21), fill=ACCENT,
+                  outline=(255, 255, 255), width=3)
+        d.text((cx, cy + 1), str(i + 1), font=_font('msyhbd.ttc', 26),
+               fill=INK, anchor='mm')
+        ly = 430 + i * 200
+        d.ellipse((800, ly - 24, 848, ly + 24), fill=ACCENT)
+        d.text((824, ly + 1), str(i + 1), font=_font('msyhbd.ttc', 28),
+               fill=INK, anchor='mm')
+        d.text((876, ly - 14), head, font=_font('msyhbd.ttc', 36), fill=INK)
+        d.text((876, ly + 42), tail, font=_font('msyh.ttc', 27), fill=INK_SUB)
+    return img.convert('RGB')
+
+
+def override_090():
+    return _pair(
+        '日历上可以单独改某几天的班（请假 / 换班）',
+        '长按格子拖选一段（可跨周、不跨月），或点信息卡上那行班次',
+        '10_calendar_adjusted_light.png', '11_override_picker_light.png',
+        '① 被改过的那天', '② 选择层',
+        ['① 被改过的那天：格子上带小圆点、信息卡写「已调班」。',
+         '② 选择层里挑班次；范围里已有调整时，多一条「恢复轮转」。',
+         '只作用于我们班组（其他班组视图仍是纯轮转）；改了之后联动闹钟自动跟着变。'],
+        base=VIS)
+
+
+def templates_090():
+    return _pair(
+        '「我的模板」：把调好的班表存下来',
+        '编辑器右上角「存为模板」→ 下次新建排班时直接选它',
+        '13_editor_midnight_light.png', '16_template_picker_mine_light.png',
+        '① 编辑器右上角', '② 新建排班时',
+        ['① 排班编辑器右上角点「存为模板」—— 存的就是眼下这套（含还没保存的改动）。',
+         '② 下次新建排班时，它排在选择页最上面的「我的模板」一组里，一键建出同样的结构。',
+         '存的是班表结构：班次定义、周期表、各班组错开的天数。标题旁的「管理」里可改名、删除。'],
+        base=VIS)
+
+
+def midnight_090():
+    return _pair(
+        '零点班（00:00 上班）的闹钟改排到上班前一天',
+        '用户反馈：从前排在班次当天 23:00 —— 那会儿这个班已经结束 15 小时了',
+        '13_editor_midnight_light_scrolled.png', '14_alarm_midnight_light.png',
+        '① 班次设置里', '② 闹钟列表里',
+        ['① 班次设置里响铃那一块直接写成「前一天 23:00」，下面还有一行说明。',
+         '② 闹钟页的列表行同样标「前一天」，一眼看得出是哪天响。',
+         '新规则：响铃时刻取「不晚于上班时刻的最近一次该钟点」，也就是上班前 1 小时；',
+         '早班、中班这些响铃本来就排在上班之前的班次不受影响。'],
+        base=VIS)
+
+
+def clash_090():
+    return _single(
+        '班组撞班：点名 + 一键按周期长度均分',
+        '用户反馈：把 5 天一轮改成 10 天之后，同一天有两个班组上同一个班',
+        '15_editor_crew_clash_light_scrolled.png',
+        ['① 编辑器的「周期设置」里直接点出相撞的两个班组、以及有几天相撞',
+         '② 下面那个按钮把各组起始日按周期长度均分（你自己那一组不动）',
+         '③ 起因是周期长度变了、各组的「周期起始日」还按老的间隔错开'],
+        dev_w=470, base=VIS)
+
+
+JOBS_090 = [
+    ('v090-cover.png', cover_090),
+    ('v090-widgets.png', widgets_090),
+    ('v090-override.png', override_090),
+    ('v090-templates.png', templates_090),
+    ('v090-midnight.png', midnight_090),
+    ('v090-clash.png', clash_090),
+]
+
+
+def main_v090():
+    """只出 v0.9.0 那一组（v0.8.0 那组的素材若不在，也不该拦着这一组）。"""
+    for name, fn in JOBS_090:
+        p = os.path.join(OUT, name)
+        img = fn()
+        img.save(p, optimize=True)
+        print(f'docs/images/{name}  {img.size[0]}x{img.size[1]}'
+              f'  {os.path.getsize(p) // 1024} KB')

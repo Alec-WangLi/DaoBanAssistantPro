@@ -46,7 +46,8 @@ class ScheduleScreen extends ConsumerWidget {
                         child: Text(
                           L10n.noEvents,
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: AppTokens.inkMuted(context)),
+                          style: AppTokens.rowSecondary
+                              .copyWith(color: AppTokens.inkMuted(context)),
                         ),
                       ),
                     )

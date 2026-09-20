@@ -1402,7 +1402,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       margin: const EdgeInsets.all(_cellInset),
       decoration: BoxDecoration(
         borderRadius: _cellRadius,
-        color: accent.withValues(alpha: 0.13),
+        // 14% 是全 app 的淡染约定值。这里从前是 13% —— 拖动选范围时
+        // 范围底色（14%）会紧贴这一块，两个值同屏只显得脏。
+        color: accent.withValues(alpha: 0.14),
         border: Border.all(color: accent, width: 2),
         // **没有 boxShadow**，这是有意的，别加回来。
         //
