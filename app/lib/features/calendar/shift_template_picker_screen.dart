@@ -4,9 +4,12 @@ import '../../core/glass/glass.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/centered_content.dart';
+import '../../core/widgets/glass_delete_button.dart';
+import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../data/app_repository.dart';
+import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../../domain/shift_templates.dart';
 
@@ -15,13 +18,22 @@ import '../../domain/shift_templates.dart';
 /// 不能只用 `ShiftTemplate?`：那样「我自己排」（null）与「按返回键放弃」
 /// （push 也返回 null）无法区分，用户一按返回就会凭空多出一套排班。
 class ShiftTemplateChoice {
-  const ShiftTemplateChoice.template(ShiftTemplate this.template) : custom = false;
+  const ShiftTemplateChoice.template(ShiftTemplate this.template)
+      : savedTemplate = null,
+        custom = false;
+  const ShiftTemplateChoice.saved(ScheduleTemplate this.savedTemplate)
+      : template = null,
+        custom = false;
   const ShiftTemplateChoice.custom()
       : template = null,
+        savedTemplate = null,
         custom = true;
 
-  /// 选中的模板；[custom] 为 true 时为 null。
+  /// 选中的内置模板；其余两种情形为 null。
   final ShiftTemplate? template;
+
+  /// 选中的「我的模板」；其余两种情形为 null。
+  final ScheduleTemplate? savedTemplate;
 
   /// 用户选了「我自己排」。
   final bool custom;
@@ -30,16 +42,16 @@ class ShiftTemplateChoice {
 /// 「选择你的倒班方式」：卡片网格 + 搜索，选中后返回该模板。
 ///
 /// 返回 null 表示用户按返回键放弃，调用方应直接 return。
-class ShiftTemplatePickerScreen extends StatefulWidget {
+class ShiftTemplatePickerScreen extends ConsumerStatefulWidget {
   const ShiftTemplatePickerScreen({super.key});
 
   @override
-  State<ShiftTemplatePickerScreen> createState() =>
+  ConsumerState<ShiftTemplatePickerScreen> createState() =>
       _ShiftTemplatePickerScreenState();
 }
 
 class _ShiftTemplatePickerScreenState
-    extends State<ShiftTemplatePickerScreen> {
+    extends ConsumerState<ShiftTemplatePickerScreen> {
   String _query = '';
 
   /// 搜索：当前语言的标题/副标题/分组名 + id + 别名（中英混收）。
@@ -59,10 +71,20 @@ class _ShiftTemplatePickerScreenState
         t.aliases.any((a) => a.toLowerCase().contains(q));
   }
 
+  /// 「我的模板」的搜索口径：模板名 + 分组名（搜「我的」能搜到自己存的那些）。
+  bool _matchesSaved(ScheduleTemplate t) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return t.name.toLowerCase().contains(q) ||
+        L10n.myTemplates.toLowerCase().contains(q);
+  }
+
   @override
   Widget build(BuildContext context) {
     final matched =
         shiftTemplates.where(_matches).toList(growable: false);
+    final saved =
+        ref.watch(savedTemplatesProvider).valueOrNull ?? const <ScheduleTemplate>[];
 
     return Scaffold(
       appBar: AppBar(title: Text(L10n.pickShiftPattern)),
@@ -81,32 +103,39 @@ class _ShiftTemplatePickerScreenState
               decoration: glassInputDecoration(context, L10n.searchPattern),
             ),
             const SizedBox(height: 16),
-            ..._buildGrouped(context, matched),
+            ..._buildGrouped(context, matched, saved),
           ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildGrouped(BuildContext context, List<ShiftTemplate> matched) {
+  List<Widget> _buildGrouped(BuildContext context, List<ShiftTemplate> matched,
+      List<ScheduleTemplate> saved) {
     final out = <Widget>[];
+
+    // 「我的模板」排在最前：自己存的那套多半比内置的更贴近你的班表。
+    // 一条都没有时整组不出现（首启的用户看不到一个空分组）。
+    final mine = saved.where(_matchesSaved).toList(growable: false);
+    if (mine.isNotEmpty) {
+      out.add(_groupHeader(context, L10n.myTemplates,
+          onManage: () => _manageTemplates(context, saved)));
+      for (final t in mine) {
+        out.add(_savedCard(context, t));
+      }
+      out.add(const SizedBox(height: 8));
+    }
+
     for (final group in shiftTemplateGroups) {
       final inGroup = matched.where((t) => t.groupKey == group).toList();
       if (inGroup.isEmpty) continue;
-      out.add(Padding(
-        padding: const EdgeInsets.only(bottom: 8, top: 4),
-        child: Text(L10n.templateGroup(group),
-            // 分组标题：下面每张卡片的副标题是 w400，标题原本就是 w700 用来压住
-            // 一组卡片，13 档最重只到 w600，按 spec 的 copyWith 保住 w700。
-            style: AppTokens.labelSecondary
-                .copyWith(fontWeight: FontWeight.w700)),
-      ));
+      out.add(_groupHeader(context, L10n.templateGroup(group)));
       for (final t in inGroup) {
         out.add(_templateCard(context, t));
       }
       out.add(const SizedBox(height: 8));
     }
-    if (matched.isEmpty) {
+    if (matched.isEmpty && mine.isEmpty) {
       out.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 32),
         child: Center(
@@ -122,19 +151,55 @@ class _ShiftTemplatePickerScreenState
     return out;
   }
 
-  Widget _templateCard(BuildContext context, ShiftTemplate t) {
+  /// 分组标题行；「我的模板」那组右边多一个「管理」（改名 / 删）。
+  Widget _groupHeader(BuildContext context, String title,
+      {VoidCallback? onManage}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(title,
+                // 分组标题：下面每张卡片的副标题是 w400，标题原本就是 w700 用来压住
+                // 一组卡片，13 档最重只到 w600，按 spec 的 copyWith 保住 w700。
+                style: AppTokens.labelSecondary
+                    .copyWith(fontWeight: FontWeight.w700)),
+          ),
+          if (onManage != null)
+            TextButton(
+              onPressed: onManage,
+              child: Text(L10n.manageTemplates),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 模板卡片的**统一配方**：色条 + 标题 + 副标题 + 每天在岗数。
+  ///
+  /// 内置模板与「我的模板」共用它 —— 两边只有数据来源不同，卡片长得不一样的话
+  /// 用户会以为「我的模板」是另一种东西。
+  Widget _patternCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required List<ShiftClass> classes,
+    required List<int> cycle,
+    required int workingTeamsPerDay,
+    required VoidCallback onTap,
+  }) {
     final muted = AppTokens.inkMuted(context);
     final texts = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(t.title, style: AppTokens.titleStrong),
+        Text(title, style: AppTokens.titleStrong),
         const SizedBox(height: 4),
-        Text(t.subtitle,
+        Text(subtitle,
             style: AppTokens.rowSecondary.copyWith(color: muted)),
-        if (t.teamCount > 1) ...[
+        if (workingTeamsPerDay > 1) ...[
           const SizedBox(height: 4),
           Text(
-            L10n.crewsOnDutyCount(t.workingTeamsPerDay),
+            L10n.crewsOnDutyCount(workingTeamsPerDay),
             // 基线是 12/**w400**（跟上面 13/w400 的副标题同重），microText 精确匹配；
             // 写成 microLabel 会让这行比副标题还重，把层次弄反。
             style: AppTokens.microText.copyWith(color: muted),
@@ -149,8 +214,7 @@ class _ShiftTemplatePickerScreenState
       padding: EdgeInsets.zero,
       child: GlassPressable(
         child: InkWell(
-          onTap: () =>
-              Navigator.of(context).pop(ShiftTemplateChoice.template(t)),
+          onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(AppTokens.spaceMd),
             child: LayoutBuilder(builder: (context, c) {
@@ -174,7 +238,7 @@ class _ShiftTemplatePickerScreenState
                   children: [
                     texts,
                     const SizedBox(height: AppTokens.spaceMd),
-                    _cycleStrip(context, t),
+                    _cycleStrip(context, classes: classes, cycle: cycle),
                   ],
                 );
               }
@@ -182,7 +246,7 @@ class _ShiftTemplatePickerScreenState
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _cycleStrip(context, t),
+                  _cycleStrip(context, classes: classes, cycle: cycle),
                   const SizedBox(width: 12),
                   Expanded(child: texts),
                   Icon(Icons.chevron_right_outlined, color: muted),
@@ -193,6 +257,146 @@ class _ShiftTemplatePickerScreenState
         ),
       ),
     );
+  }
+
+  Widget _templateCard(BuildContext context, ShiftTemplate t) => _patternCard(
+        context,
+        title: t.title,
+        subtitle: t.subtitle,
+        classes: t.classes,
+        cycle: t.cycle,
+        workingTeamsPerDay: t.workingTeamsPerDay,
+        onTap: () =>
+            Navigator.of(context).pop(ShiftTemplateChoice.template(t)),
+      );
+
+  Widget _savedCard(BuildContext context, ScheduleTemplate t) => _patternCard(
+        context,
+        title: t.name,
+        subtitle: L10n.savedTemplateSubtitle(t.cycleLength, t.teamCount),
+        classes: t.classes,
+        cycle: t.cycle,
+        workingTeamsPerDay: t.workingTeamsPerDay,
+        onTap: () => Navigator.of(context).pop(ShiftTemplateChoice.saved(t)),
+      );
+
+  // ---------------------------------------------------------------------------
+  // 「我的模板」的管理：改名 / 删除
+  // ---------------------------------------------------------------------------
+
+  /// 管理弹窗：一列自己的模板，点行进改名、尾部按钮删。
+  ///
+  /// 行配方照抄排班管理页（`GlassTile` 行 + 紧凑删除钮 + 点行进编辑），只是
+  /// 装在弹窗里 —— 模板没有自己的详情页，为它单开一页不值得。
+  Future<void> _manageTemplates(
+      BuildContext context, List<ScheduleTemplate> saved) async {
+    if (saved.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => GlassDialog(
+        title: L10n.myTemplates,
+        showClose: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final t in saved)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(t.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTokens.titleStrong),
+                subtitle: Text(
+                  L10n.savedTemplateSubtitle(t.cycleLength, t.teamCount),
+                  style: AppTokens.rowSecondary
+                      .copyWith(color: AppTokens.inkMuted(context)),
+                ),
+                trailing: GlassDeleteButton(
+                  compact: true,
+                  onPressed: () {
+                    // 先关掉管理弹窗再弹确认：嵌套两层弹窗时，
+                    // 底下那层的按钮位置会随上面那层开合而跳。
+                    Navigator.of(dialogContext).pop();
+                    _deleteTemplate(context, t);
+                  },
+                ),
+                onTap: () {
+                  Navigator.of(dialogContext).pop();
+                  _renameTemplate(context, t);
+                },
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(L10n.close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _renameTemplate(
+      BuildContext context, ScheduleTemplate t) async {
+    final id = t.id;
+    if (id == null) return;
+    // 控制器不 dispose（与待办弹窗同一套写法）：提前 dispose 会在弹窗退场
+    // 动画里被 TextField 再读一次，直接抛「used after being disposed」。
+    final ctrl = TextEditingController(text: t.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => GlassDialog(
+        title: L10n.renameTemplate,
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: glassInputDecoration(context, L10n.templateName),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(L10n.cancel),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(ctrl.text.trim()),
+            child: Text(L10n.save),
+          ),
+        ],
+      ),
+    );
+    // 空名字当没改：模板名是卡片上唯一的识别信息，留空比不改更糟。
+    if (name == null || name.isEmpty || !context.mounted) return;
+    await ref.read(appRepositoryProvider).renameTemplate(id, name);
+    // 卡片上的名字跟着变（provider 是一次性读，见 savedTemplatesProvider）
+    ref.invalidate(savedTemplatesProvider);
+  }
+
+  Future<void> _deleteTemplate(
+      BuildContext context, ScheduleTemplate t) async {
+    final id = t.id;
+    if (id == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => GlassDialog(
+        title: L10n.deleteTemplateTitle,
+        content: Text(L10n.deleteTemplateContent(t.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(L10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(L10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await ref.read(appRepositoryProvider).deleteTemplate(id);
+    ref.invalidate(savedTemplatesProvider);
   }
 
   Widget _customCard(BuildContext context) {
@@ -242,13 +446,18 @@ class _ShiftTemplatePickerScreenState
 /// 为什么留最后一格做省略标记、而不是把整条周期画完：周期上限 60 天，
 /// 卡片高度会随模板剧烈起伏，且 60 个色块在手机宽度下每个不到 5px，
 /// 认不出任何东西。7×2 是「够认出是哪一种」的尺寸。
-({List<int> colors, bool truncated}) cycleStripPlan(ShiftTemplate t) {
+({List<int> colors, bool truncated}) cycleStripPlan(ShiftTemplate t) =>
+    cycleStripPlanOf(t.classes, t.cycle);
+
+/// 同上，但收班次定义与周期本身 —— 「我的模板」（`ScheduleTemplate`）也走它，
+/// 免得同一套画法为两种数据各写一遍。
+({List<int> colors, bool truncated}) cycleStripPlanOf(
+    List<ShiftClass> classes, List<int> cycle) {
   const maxSlots = 14; // 7 列 × 2 行
-  final truncated = t.cycleLength > maxSlots;
-  final visible = truncated ? maxSlots - 1 : t.cycleLength;
-  final classes = t.classes; // 只解析一次：它是现算的列表，别在循环里反复取
+  final truncated = cycle.length > maxSlots;
+  final visible = truncated ? maxSlots - 1 : cycle.length;
   return (
-    colors: [for (var i = 0; i < visible; i++) classes[t.cycle[i]].color],
+    colors: [for (var i = 0; i < visible; i++) classes[cycle[i]].color],
     truncated: truncated,
   );
 }
@@ -270,11 +479,12 @@ const double _cycleStripWidth =
 /// 卡片右侧箭头的占位宽（`Icon` 默认 24）。
 const double _chevronWidth = 24;
 
-Widget _cycleStrip(BuildContext context, ShiftTemplate t) {
+Widget _cycleStrip(BuildContext context,
+    {required List<ShiftClass> classes, required List<int> cycle}) {
   const dot = _stripDot;
   const spacing = _stripSpacing;
   final muted = AppTokens.inkMuted(context);
-  final plan = cycleStripPlan(t);
+  final plan = cycleStripPlanOf(classes, cycle);
   return SizedBox(
     width: _cycleStripWidth,
     child: Wrap(
@@ -328,19 +538,25 @@ Future<int?> createScheduleFromTemplatePicker(
   if (choice == null || !context.mounted) return null;
 
   final d = defaultSchedule();
+  // 三选一：内置模板 / 我的模板 / 我自己排（后者缺省到默认四班两倒）。
   final picked = choice.template;
-  final teamCount = picked?.teamCount ?? d.teamCount;
+  final mine = choice.savedTemplate;
+  final teamCount = picked?.teamCount ?? mine?.teamCount ?? d.teamCount;
   return ref.read(appRepositoryProvider).saveSchedule(
-        name: picked?.subtitle ?? L10n.newSchedule,
+        name: mine?.name ?? picked?.subtitle ?? L10n.newSchedule,
         anchorDate: dateOnly(DateTime.now()),
-        classes: picked?.classes ?? d.classes,
-        cycle: picked?.cycle ?? d.cycle,
+        classes: picked?.classes ?? mine?.classes ?? d.classes,
+        cycle: picked?.cycle ?? mine?.cycle ?? d.cycle,
         makeCurrent: makeCurrent,
         teamCount: teamCount,
         // 必须给满 teamCount 个名字：模板只带 4 个默认名，多班组模板
         // （五班三倒 5 组、六班三倒 6 组…）靠数据库出口补位就会漏出中文。
         teamNames: L10n.defaultTeamNames(teamCount),
+        // 「我的模板」在保存时已把「我们班组」归一化到第 0 位、错位归零
+        // （见 `ScheduleTemplate.fromSchedule`），所以与内置模板同一条约定：
+        // 新方案的「我们班组」从周期第 1 天开始。相位要改，在编辑器里点
+        // 「我这组从这个周期开始」即可。
         ourTeamIndex: 0,
-        teamOffsets: picked?.teamOffsets ?? d.teamOffsets,
+        teamOffsets: picked?.teamOffsets ?? mine?.teamOffsets ?? d.teamOffsets,
       );
 }

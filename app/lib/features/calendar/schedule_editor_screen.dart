@@ -17,6 +17,7 @@ import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
+import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
 
@@ -256,7 +257,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(L10n.editSchedule)),
+      appBar: AppBar(
+        title: Text(L10n.editSchedule),
+        actions: [
+          IconButton(
+            tooltip: L10n.saveAsTemplate,
+            icon: const Icon(Icons.bookmark_add_outlined),
+            onPressed: _saving ? null : _saveAsTemplate,
+          ),
+        ],
+      ),
       body: _notFound
           ? Center(
               child: Column(
@@ -1395,8 +1405,57 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     }
   }
 
-  void _addClass() {
-    setState(() {
+  /// 把当前这套存成「我的模板」（新建排班时可以再选它）。
+  ///
+  /// 取的是 [_draftSchedule] —— 也就是**编辑器眼下的草稿状态**，与预览条同一个
+  /// 来源：用户可以把一套还没保存的改动直接存成模板，不必先保存成方案。
+  Future<void> _saveAsTemplate() async {
+    if (_followHoliday || _classes.isEmpty || _cycle.isEmpty) {
+      // 空白表（跟随法定节假日）没有班次与周期，存下来是一张空卡
+      // （读回时也会被跳过），不如当场说清楚。
+      showGlassSnack(context, L10n.templateNeedsPattern,
+          icon: Icons.info_outline);
+      return;
+    }
+    // 控制器**不 dispose**：与待办弹窗（`schedule_screen.dart` 的 `_showAddDialog`）
+    // 同一套写法 —— 提前 dispose 会在弹窗退场动画里被 TextField 再读一次，
+    // 直接抛「A TextEditingController was used after being disposed」。
+    final ctrl = TextEditingController(text: _name.trim());
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => GlassDialog(
+        title: L10n.saveAsTemplate,
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: glassInputDecoration(context, L10n.templateName),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(L10n.cancel),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(ctrl.text.trim()),
+            child: Text(L10n.save),
+          ),
+        ],
+      ),
+    );
+    // 空名字当没存：模板名是选择页卡片上唯一的识别信息，留空比不存更糟。
+    if (name == null || name.isEmpty || !mounted) return;
+
+    await ref
+        .read(appRepositoryProvider)
+        .saveTemplate(ScheduleTemplate.fromSchedule(_draftSchedule(),
+            name: name));
+    if (!mounted) return;
+    showGlassSnack(context, L10n.templateSaved(name),
+        icon: Icons.bookmark_added_outlined);
+  }
+
+  void _addClass() {    setState(() {
       final idx = _classes.length;
       final c = ShiftClass(
         name: L10n.newShiftName,

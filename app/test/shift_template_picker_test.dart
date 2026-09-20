@@ -48,19 +48,29 @@ class _RecordingRepository extends AppRepository {
 }
 
 /// 从一个宿主页 push 选择页，并把 pop 的返回值收进 [results]。
+///
+/// 必须挂 ProviderScope + 一个内存库：选择页要读「我的模板」那条流
+/// （`savedTemplatesProvider`），没有覆盖的话它会去开**真库**、整条用例挂死。
 Future<void> _openPicker(WidgetTester tester, List<Object?> results) async {
-  await tester.pumpWidget(MaterialApp(
-    home: Builder(
-      builder: (context) => Scaffold(
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () async {
-              results.add(await Navigator.of(context).push<ShiftTemplateChoice>(
-                MaterialPageRoute(
-                    builder: (_) => const ShiftTemplatePickerScreen()),
-              ));
-            },
-            child: const Text('open'),
+  final raw = sqlite3.sqlite3.openInMemory();
+  final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+  addTearDown(db.close);
+  await tester.pumpWidget(ProviderScope(
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () async {
+                results.add(
+                    await Navigator.of(context).push<ShiftTemplateChoice>(
+                  MaterialPageRoute(
+                      builder: (_) => const ShiftTemplatePickerScreen()),
+                ));
+              },
+              child: const Text('open'),
+            ),
           ),
         ),
       ),

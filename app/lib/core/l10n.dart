@@ -441,6 +441,28 @@ class L10n {
   static String crewsOnDutyCount(int n) =>
       isEn ? '$n crews on duty' : '每天在岗 $n 个班组';
 
+  // 「我的模板」（用户自己存的模板）
+  static String get myTemplates => t('我的模板', 'My templates');
+  static String get manageTemplates => t('管理', 'Manage');
+  static String get saveAsTemplate => t('存为模板', 'Save as template');
+  static String get templateName => t('模板名称', 'Template name');
+  static String get renameTemplate => t('重命名模板', 'Rename template');
+  static String get deleteTemplateTitle => t('删除模板？', 'Delete template?');
+  static String deleteTemplateContent(String name) => isEn
+      ? 'Delete "$name"? This cannot be undone.'
+      : '将删除「$name」，此操作不可撤销。';
+  static String templateSaved(String name) =>
+      t('已存为模板「$name」', 'Saved as template "$name"');
+  /// 空白表（跟随法定节假日）没有班次与周期，没东西可存。
+  static String get templateNeedsPattern =>
+      t('这套是空白表（跟随法定节假日），没有班次可存', 'Nothing to save — this schedule has no shifts');
+  /// 「我的模板」卡片上的副标题：周期天数 + 班组数。
+  ///
+  /// 内置模板的副标题（「五班三倒 · 10 天一轮」）是作者手写的，用户存的那些
+  /// 没有这句文案，只能按结构现算 —— 所以中英语序同样整串交给 [t]。
+  static String savedTemplateSubtitle(int days, int teams) => t(
+      '$days 天一轮 · $teams 个班组', '$days-day cycle · $teams teams');
+
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');
   static String get nextMonth => t('下个月', 'Next month');
@@ -465,8 +487,8 @@ class L10n {
       'View daily shifts (date/shift/lunar/weekday); statutory holidays marked red, makeup workdays tagged "班"; switch schedules and jump year/month from the toolbar; tap a day for details.');
   static String get guideSchedTitle => t('排班管理', 'Schedule management');
   static String get guideSchedDesc => t(
-      '「我的 → 排班管理」可新建 / 编辑 / 删除多套排班；新建时先选一个内置倒班方式模板（20 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日；打开「跟随法定节假日（无班次）」可得到一张只随节假日休班的空白表。要换成哪一套上场，走日历顶栏的「切换排班」。',
-      'Me → Schedule management: create / edit / delete multiple schedules; start from a built-in shift-pattern template (19 common patterns, searchable), then tweak shift times, the cycle table and each team\'s cycle start date; turn on "Follow legal holidays (no shifts)" for a blank schedule that simply rests on legal holidays. To change which schedule is active, use "Switch schedule" in the calendar toolbar.');
+      '「我的 → 排班管理」可新建 / 编辑 / 删除多套排班；新建时先选一个内置倒班方式模板（20 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日；调好之后可以「存为模板」留着自己下次用（存下的会出现在选择页最上面的「我的模板」里）。打开「跟随法定节假日（无班次）」可得到一张只随节假日休班的空白表。要换成哪一套上场，走日历顶栏的「切换排班」。',
+      'Me → Schedule management: create / edit / delete multiple schedules; start from a built-in shift-pattern template (20 common patterns, searchable), then tweak shift times, the cycle table and each team\'s cycle start date. Once it looks right you can "save as template" to reuse it later (saved ones appear under "My templates" at the top of the picker). Turn on "Follow legal holidays (no shifts)" for a blank schedule that simply rests on legal holidays. To change which schedule is active, use "Switch schedule" in the calendar toolbar.');
   static String get guideAlarmTitle => t('闹钟', 'Alarms');
   static String get guideAlarmDesc => t(
       '白班/上夜班自动响铃（时间在排班编辑里改）；闹钟页显示未来 30 天、每天可单独开关；也可加自定义闹钟（一次性/每天/每周）。',

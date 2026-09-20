@@ -166,6 +166,18 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 「我的模板」那一组只在库里有模板时才出现（首启的用户看不到空分组），
+    // 所以要预置两条才拍得到：分组标题旁的「管理」、卡片上现算出来的
+    // 「N 天一轮 · N 个班组」副标题。见 `seedMyTemplates`。
+    slug: '16_template_picker_mine',
+    title: '倒班方式选择 · 我的模板',
+    build: (db) async {
+      await seedMyTemplates(db);
+      return const ShiftTemplatePickerScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。

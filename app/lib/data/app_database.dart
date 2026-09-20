@@ -113,6 +113,31 @@ class ShiftDayOverrides extends Table {
   Set<Column> get primaryKey => {scheduleId, day};
 }
 
+/// 「我的模板」表：把一套方案的**结构**（班次定义 + 周期 + 班组错位）存成快照，
+/// 新建排班时可以再选它。见 `domain/schedule_template.dart`（那边的值类型与
+/// 编解码是纯函数，可直接单测）。
+///
+/// 为什么整块存进一列而不是像方案那样拆成三张表：模板是只读快照 —— 没有按字段
+/// 查询、没有跨表引用、也不与任何行共享身份，拆表只会多两张表和一套装配代码。
+/// （方案那边拆表是因为**按天改班的覆盖要引用稳定的 classId**，模板没有这个需求。）
+class CustomTemplates extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+
+  /// 班次定义数组（JSON；见 `encodeTemplateClasses`）。**不含班次 id**。
+  TextColumn get classes => text()();
+
+  /// 周期下标序列（逗号分隔；见 `encodeTemplateCycle`）。
+  TextColumn get cycle => text()();
+
+  IntColumn get teamCount => integer()();
+
+  /// 班组错位（逗号分隔）。保存时已归一化成「我们班组在第 0 位、错位 0」。
+  TextColumn get teamOffsets => text()();
+
+  DateTimeColumn get createdAt => dateTime()();
+}
+
 @DriftDatabase(tables: [
   ShiftScheduleRows,
   ShiftClassRows,
@@ -121,6 +146,7 @@ class ShiftDayOverrides extends Table {
   CustomAlarms,
   ShiftAlarmOverrides,
   ShiftDayOverrides,
+  CustomTemplates,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'shiftassistantpro'));
@@ -129,12 +155,16 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 9) {
+            // 「我的模板」（自定义模板）。纯新增一张表，不碰任何既有数据。
+            await m.createTable(customTemplates);
+          }
           if (from < 8) {
             // 按天改班（换班 / 请假覆盖）。纯新增一张表，不碰任何既有数据。
             await m.createTable(shiftDayOverrides);

@@ -35,6 +35,7 @@ import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/app_theme.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -451,6 +452,52 @@ Future<void> makeCrewClashCurrent(AppDatabase db) async {
     ourTeamIndex: 0,
     teamOffsets: const [0, 1, 2, 3, 4],
   );
+}
+
+/// 给「选择你的倒班方式」预置两条**「我的模板」**，让那一组画得出来。
+///
+/// 那一组只在库里有模板时才出现（首启的用户看不到空分组），不预置就没图可看 ——
+/// 而它正好是本轮唯一新增的界面元素（分组标题旁边的「管理」、卡片上的
+/// 「N 天一轮 · N 个班组」副标题）。两条故意不同长：一条 4 天、一条 10 天，
+/// 好看出副标题与色条不是写死的。
+Future<void> seedMyTemplates(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final domain = await repo.getActiveSchedule();
+  if (domain != null) {
+    await repo.saveTemplate(
+        ScheduleTemplate.fromSchedule(domain, name: '我现在的班表'));
+  }
+  await repo.saveTemplate(const ScheduleTemplate(
+    name: '五班三倒 · 10 天一轮',
+    classes: [
+      ShiftClass(
+          name: '早班',
+          abbr: '早',
+          startMinute: 8 * 60,
+          endMinute: 16 * 60,
+          color: 0xFF4C8DFF,
+          alarmEnabled: true,
+          alarmMinute: 7 * 60),
+      ShiftClass(
+          name: '中班',
+          abbr: '中',
+          startMinute: 16 * 60,
+          endMinute: 24 * 60,
+          color: 0xFFFF9F0A),
+      ShiftClass(
+          name: '夜班',
+          abbr: '夜',
+          startMinute: 0,
+          endMinute: 8 * 60,
+          color: 0xFF7A5CFF,
+          alarmEnabled: true,
+          alarmMinute: 23 * 60),
+      ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+    ],
+    cycle: [0, 0, 1, 1, 3, 2, 2, 3, 3, 3],
+    teamCount: 5,
+    teamOffsets: [0, 2, 4, 6, 8],
+  ));
 }
 
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。

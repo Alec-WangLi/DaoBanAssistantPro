@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/schedule_template.dart';
 import '../domain/shift_rotation.dart';
 import 'app_database.dart';
 import 'seed.dart';
@@ -237,6 +238,73 @@ class AppRepository {
     } else if (!remaining.any((s) => s.isCurrent)) {
       await setCurrentSchedule(remaining.first.id);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 我的模板（自定义模板）
+  //
+  // 存的是一套方案的**结构**（班次定义 + 周期 + 班组错位），新建排班时可以再选。
+  // 与内置模板的区别只在来源：内置那些是编译期常量，这些是用户自己存下来的。
+  // ---------------------------------------------------------------------------
+
+  /// 全部自定义模板，**新存的在前**（最近用过的多半最相关）。
+  ///
+  /// 一次性读取而不是流：选择页是短命页面，进来读一次就够 —— 页内的改名 / 删除
+  /// 由调用方 `ref.invalidate` 重新读（见 `savedTemplatesProvider`）。**刻意不用
+  /// `watch()`**：drift 的查询流在取消时会排一个零时长定时器清理缓存，而 widget
+  /// 测试在测试体结束时立刻校验「没有待处理的定时器」—— 用流的话每条挂这个页面
+  /// 的用例都要额外拆一次树（见 `calendar_screen_test.dart` 的 `_disposeCalendar`），
+  /// 这里不必付这个代价。
+  Future<List<ScheduleTemplate>> listTemplates() async {
+    final q = db.select(db.customTemplates)
+      ..orderBy([
+        (t) => OrderingTerm.desc(t.createdAt),
+        (t) => OrderingTerm.desc(t.id),
+      ]);
+    return _decodeTemplates(await q.get());
+  }
+
+  /// 存一份模板。[ScheduleTemplate.id] 会被忽略（永远是新增一条）——
+  /// 同名再存一次就是两条，用户想合并自己在选择页删。
+  Future<int> saveTemplate(ScheduleTemplate t) {
+    return db.into(db.customTemplates).insert(
+          CustomTemplatesCompanion.insert(
+            name: t.name,
+            classes: encodeTemplateClasses(t.classes),
+            cycle: encodeTemplateCycle(t.cycle),
+            teamCount: t.teamCount,
+            teamOffsets: encodeTemplateOffsets(t.teamOffsets),
+            createdAt: DateTime.now(),
+          ),
+        );
+  }
+
+  Future<void> renameTemplate(int id, String name) async {
+    await (db.update(db.customTemplates)..where((t) => t.id.equals(id)))
+        .write(CustomTemplatesCompanion(name: Value(name)));
+  }
+
+  Future<void> deleteTemplate(int id) async {
+    await (db.delete(db.customTemplates)..where((t) => t.id.equals(id))).go();
+  }
+
+  /// 逐行解码，坏数据（班次定义解不出来）**跳过这一条**而不是抛 ——
+  /// 一格坏 JSON 不该让整个模板库消失。
+  List<ScheduleTemplate> _decodeTemplates(List<CustomTemplate> rows) {
+    final out = <ScheduleTemplate>[];
+    for (final r in rows) {
+      final classes = decodeTemplateClasses(r.classes);
+      if (classes.isEmpty) continue;
+      out.add(ScheduleTemplate(
+        id: r.id,
+        name: r.name,
+        classes: classes,
+        cycle: decodeTemplateCycle(r.cycle),
+        teamCount: r.teamCount,
+        teamOffsets: decodeTemplateOffsets(r.teamOffsets),
+      ));
+    }
+    return out;
   }
 
   /// 保存（新建或更新）一套排班方案并替换其班次。
@@ -598,6 +666,14 @@ final schedulesProvider = StreamProvider<List<ShiftScheduleRow>>((ref) {
   return (db.select(db.shiftScheduleRows)
         ..orderBy([(t) => OrderingTerm.asc(t.id)]))
       .watch();
+});
+
+/// 「我的模板」列表 —— 新建排班的选择页用它多渲染一组卡片。
+///
+/// 一次性读（不是流）：页内改名 / 删除之后由那两处 `ref.invalidate` 重新读，
+/// 用流的代价见 `AppRepository.listTemplates` 的说明。
+final savedTemplatesProvider = FutureProvider<List<ScheduleTemplate>>((ref) {
+  return ref.watch(appRepositoryProvider).listTemplates();
 });
 
 final eventsProvider = StreamProvider<List<ScheduleEvent>>((ref) {

@@ -41,7 +41,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.10\n'
+const String _changelogZh = 'v0.8.11\n'
+    '· 新增「我的模板」：调好一套排班之后，在编辑器右上角点「存为模板」，下次新建排班时直接在「我的模板」里选它 —— 自己厂里的班表不用每次从头搭\n'
+    '· 存下的模板可以在选择页点「管理」改名或删除；每张卡片上写着几天一轮、几个班组\n\n'
+    'v0.8.10\n'
     '· 新增「五班三倒 · 10 天一轮」模板：早班两天、中班两天、休一天、夜班两天，然后休三天。此前只有 5 天一轮的那套，10 天一轮得自己搭 —— 内置模板现在共 20 种\n'
     '· 修好「把 5 天一轮的排班改成 10 天之后，同一天有两个班组上同一个班」：各组的周期起始日此前不跟着周期长度走。现在编辑器的「周期设置」里会直接点出撞班的两个班组，并给一个按钮把各组起始日按周期长度一键均分（你自己那一组不动）\n\n'
     'v0.8.9\n'
@@ -74,12 +77,11 @@ const String _changelogZh = 'v0.8.10\n'
     '· 修好窄弹层里班次名被挤成一行一个字，以及横屏下色点被裁成半圆\n\n'
     'v0.8.2\n'
     '· 加了触觉反馈：切换开关、选中、删除确认时会轻微震动，长按拖选日子时还会逐格轻震一下。可在「我的 → 外观」里关掉\n'
-    '· 修好了几处界面对不齐：信息卡上「已调整」现在与同一行的徽章是同一款胶囊；信息卡那行按下去的反馈改回与全 app 一致的玻璃缩放（不再是水波纹）\n\n'
-    'v0.8.1\n'
-    '· 日历上可以单独改某一天的班次了：点底栏那行班次，或长按格子拖选一段日子，就能给这几天单独指定班次（请假、跟同事调班都行），不改整套排班\n'
-    '· 被单独改过的那天，格子上有个小圆点，信息卡上写着「已调整」；选择层里可以一键「恢复轮转」\n'
-    '· 编辑排班不再重建班次定义，改方案名不会影响已设置的按天调整\n';
-const String _changelogEn = 'v0.8.10\n'
+    '· 修好了几处界面对不齐：信息卡上「已调整」现在与同一行的徽章是同一款胶囊；信息卡那行按下去的反馈改回与全 app 一致的玻璃缩放（不再是水波纹）\\n';
+const String _changelogEn = 'v0.8.11\n'
+    '· New "My templates": once a schedule looks right, tap "Save as template" in the editor\'s top-right corner and pick it the next time you create a schedule — no more rebuilding your own roster from scratch\n'
+    '· Saved templates can be renamed or deleted from "Manage" on the picker; each card shows the cycle length and team count\n\n'
+    'v0.8.10\n'
     '· New "5-crew 3-shift · 10-day cycle" template: two mornings, two afternoons, one off, two nights, then three off. Until now only the 5-day version existed, so a 10-day roster had to be built by hand — there are now 20 built-in templates\n'
     '· Fixed two crews landing on the same shift on the same day after changing a 5-day cycle into a 10-day one: the crew start dates never followed the cycle length. The editor\'s cycle section now names the two crews that collide and offers a button that spreads every crew start date evenly across the cycle (your own crew stays put)\n\n'
     'v0.8.9\n'
@@ -112,11 +114,7 @@ const String _changelogEn = 'v0.8.10\n'
     '· Fixed shift names wrapping one character per line in a narrow sheet, and the colour dot being clipped to a half-circle in landscape\n\n'
     'v0.8.2\n'
     '· Added haptic feedback: a light buzz when you flip a switch, make a selection or confirm a delete, and a tick per day as you long-press and drag to select a range. Turn it off under Me → Appearance\n'
-    '· Fixed a couple of alignment details: "Adjusted" on the info card now uses the same capsule as the badges on its row, and the info card\'s row taps use the app-wide glass scale again (no longer a ripple)\n\n'
-    'v0.8.1\n'
-    '· You can now override a single day\'s shift on the calendar: tap the shift row in the bottom bar, or long-press a cell and drag to select a range of days, to give just those days a shift of their own (a day off, or swapping with a colleague) without changing the whole schedule\n'
-    '· A day you have overridden carries a small dot in the grid and reads "Adjusted" on the info card; the picker sheet offers a one-tap "Restore rotation"\n'
-    '· Editing a schedule no longer rebuilds its shift definitions, so renaming a schedule leaves your per-day overrides intact\n';
+    '· Fixed a couple of alignment details: "Adjusted" on the info card now uses the same capsule as the badges on its row, and the info card\'s row taps use the app-wide glass scale again (no longer a ripple)\\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

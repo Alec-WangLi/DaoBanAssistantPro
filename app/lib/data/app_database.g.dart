@@ -2475,6 +2475,387 @@ class ShiftDayOverridesCompanion extends UpdateCompanion<ShiftDayOverride> {
   }
 }
 
+class $CustomTemplatesTable extends CustomTemplates
+    with TableInfo<$CustomTemplatesTable, CustomTemplate> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CustomTemplatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _classesMeta =
+      const VerificationMeta('classes');
+  @override
+  late final GeneratedColumn<String> classes = GeneratedColumn<String>(
+      'classes', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _cycleMeta = const VerificationMeta('cycle');
+  @override
+  late final GeneratedColumn<String> cycle = GeneratedColumn<String>(
+      'cycle', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _teamCountMeta =
+      const VerificationMeta('teamCount');
+  @override
+  late final GeneratedColumn<int> teamCount = GeneratedColumn<int>(
+      'team_count', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _teamOffsetsMeta =
+      const VerificationMeta('teamOffsets');
+  @override
+  late final GeneratedColumn<String> teamOffsets = GeneratedColumn<String>(
+      'team_offsets', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, name, classes, cycle, teamCount, teamOffsets, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'custom_templates';
+  @override
+  VerificationContext validateIntegrity(Insertable<CustomTemplate> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('classes')) {
+      context.handle(_classesMeta,
+          classes.isAcceptableOrUnknown(data['classes']!, _classesMeta));
+    } else if (isInserting) {
+      context.missing(_classesMeta);
+    }
+    if (data.containsKey('cycle')) {
+      context.handle(
+          _cycleMeta, cycle.isAcceptableOrUnknown(data['cycle']!, _cycleMeta));
+    } else if (isInserting) {
+      context.missing(_cycleMeta);
+    }
+    if (data.containsKey('team_count')) {
+      context.handle(_teamCountMeta,
+          teamCount.isAcceptableOrUnknown(data['team_count']!, _teamCountMeta));
+    } else if (isInserting) {
+      context.missing(_teamCountMeta);
+    }
+    if (data.containsKey('team_offsets')) {
+      context.handle(
+          _teamOffsetsMeta,
+          teamOffsets.isAcceptableOrUnknown(
+              data['team_offsets']!, _teamOffsetsMeta));
+    } else if (isInserting) {
+      context.missing(_teamOffsetsMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CustomTemplate map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CustomTemplate(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      classes: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}classes'])!,
+      cycle: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}cycle'])!,
+      teamCount: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}team_count'])!,
+      teamOffsets: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}team_offsets'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $CustomTemplatesTable createAlias(String alias) {
+    return $CustomTemplatesTable(attachedDatabase, alias);
+  }
+}
+
+class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
+  final int id;
+  final String name;
+
+  /// 班次定义数组（JSON；见 `encodeTemplateClasses`）。**不含班次 id**。
+  final String classes;
+
+  /// 周期下标序列（逗号分隔；见 `encodeTemplateCycle`）。
+  final String cycle;
+  final int teamCount;
+
+  /// 班组错位（逗号分隔）。保存时已归一化成「我们班组在第 0 位、错位 0」。
+  final String teamOffsets;
+  final DateTime createdAt;
+  const CustomTemplate(
+      {required this.id,
+      required this.name,
+      required this.classes,
+      required this.cycle,
+      required this.teamCount,
+      required this.teamOffsets,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['classes'] = Variable<String>(classes);
+    map['cycle'] = Variable<String>(cycle);
+    map['team_count'] = Variable<int>(teamCount);
+    map['team_offsets'] = Variable<String>(teamOffsets);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  CustomTemplatesCompanion toCompanion(bool nullToAbsent) {
+    return CustomTemplatesCompanion(
+      id: Value(id),
+      name: Value(name),
+      classes: Value(classes),
+      cycle: Value(cycle),
+      teamCount: Value(teamCount),
+      teamOffsets: Value(teamOffsets),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory CustomTemplate.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CustomTemplate(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      classes: serializer.fromJson<String>(json['classes']),
+      cycle: serializer.fromJson<String>(json['cycle']),
+      teamCount: serializer.fromJson<int>(json['teamCount']),
+      teamOffsets: serializer.fromJson<String>(json['teamOffsets']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'classes': serializer.toJson<String>(classes),
+      'cycle': serializer.toJson<String>(cycle),
+      'teamCount': serializer.toJson<int>(teamCount),
+      'teamOffsets': serializer.toJson<String>(teamOffsets),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  CustomTemplate copyWith(
+          {int? id,
+          String? name,
+          String? classes,
+          String? cycle,
+          int? teamCount,
+          String? teamOffsets,
+          DateTime? createdAt}) =>
+      CustomTemplate(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        classes: classes ?? this.classes,
+        cycle: cycle ?? this.cycle,
+        teamCount: teamCount ?? this.teamCount,
+        teamOffsets: teamOffsets ?? this.teamOffsets,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  CustomTemplate copyWithCompanion(CustomTemplatesCompanion data) {
+    return CustomTemplate(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      classes: data.classes.present ? data.classes.value : this.classes,
+      cycle: data.cycle.present ? data.cycle.value : this.cycle,
+      teamCount: data.teamCount.present ? data.teamCount.value : this.teamCount,
+      teamOffsets:
+          data.teamOffsets.present ? data.teamOffsets.value : this.teamOffsets,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomTemplate(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('classes: $classes, ')
+          ..write('cycle: $cycle, ')
+          ..write('teamCount: $teamCount, ')
+          ..write('teamOffsets: $teamOffsets, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, classes, cycle, teamCount, teamOffsets, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomTemplate &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.classes == this.classes &&
+          other.cycle == this.cycle &&
+          other.teamCount == this.teamCount &&
+          other.teamOffsets == this.teamOffsets &&
+          other.createdAt == this.createdAt);
+}
+
+class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<String> classes;
+  final Value<String> cycle;
+  final Value<int> teamCount;
+  final Value<String> teamOffsets;
+  final Value<DateTime> createdAt;
+  const CustomTemplatesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.classes = const Value.absent(),
+    this.cycle = const Value.absent(),
+    this.teamCount = const Value.absent(),
+    this.teamOffsets = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  CustomTemplatesCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required String classes,
+    required String cycle,
+    required int teamCount,
+    required String teamOffsets,
+    required DateTime createdAt,
+  })  : name = Value(name),
+        classes = Value(classes),
+        cycle = Value(cycle),
+        teamCount = Value(teamCount),
+        teamOffsets = Value(teamOffsets),
+        createdAt = Value(createdAt);
+  static Insertable<CustomTemplate> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<String>? classes,
+    Expression<String>? cycle,
+    Expression<int>? teamCount,
+    Expression<String>? teamOffsets,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (classes != null) 'classes': classes,
+      if (cycle != null) 'cycle': cycle,
+      if (teamCount != null) 'team_count': teamCount,
+      if (teamOffsets != null) 'team_offsets': teamOffsets,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  CustomTemplatesCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? name,
+      Value<String>? classes,
+      Value<String>? cycle,
+      Value<int>? teamCount,
+      Value<String>? teamOffsets,
+      Value<DateTime>? createdAt}) {
+    return CustomTemplatesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      classes: classes ?? this.classes,
+      cycle: cycle ?? this.cycle,
+      teamCount: teamCount ?? this.teamCount,
+      teamOffsets: teamOffsets ?? this.teamOffsets,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (classes.present) {
+      map['classes'] = Variable<String>(classes.value);
+    }
+    if (cycle.present) {
+      map['cycle'] = Variable<String>(cycle.value);
+    }
+    if (teamCount.present) {
+      map['team_count'] = Variable<int>(teamCount.value);
+    }
+    if (teamOffsets.present) {
+      map['team_offsets'] = Variable<String>(teamOffsets.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomTemplatesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('classes: $classes, ')
+          ..write('cycle: $cycle, ')
+          ..write('teamCount: $teamCount, ')
+          ..write('teamOffsets: $teamOffsets, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2488,6 +2869,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ShiftAlarmOverridesTable(this);
   late final $ShiftDayOverridesTable shiftDayOverrides =
       $ShiftDayOverridesTable(this);
+  late final $CustomTemplatesTable customTemplates =
+      $CustomTemplatesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2499,7 +2882,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         scheduleEvents,
         customAlarms,
         shiftAlarmOverrides,
-        shiftDayOverrides
+        shiftDayOverrides,
+        customTemplates
       ];
 }
 
@@ -3815,6 +4199,204 @@ typedef $$ShiftDayOverridesTableProcessedTableManager = ProcessedTableManager<
     ),
     ShiftDayOverride,
     PrefetchHooks Function()>;
+typedef $$CustomTemplatesTableCreateCompanionBuilder = CustomTemplatesCompanion
+    Function({
+  Value<int> id,
+  required String name,
+  required String classes,
+  required String cycle,
+  required int teamCount,
+  required String teamOffsets,
+  required DateTime createdAt,
+});
+typedef $$CustomTemplatesTableUpdateCompanionBuilder = CustomTemplatesCompanion
+    Function({
+  Value<int> id,
+  Value<String> name,
+  Value<String> classes,
+  Value<String> cycle,
+  Value<int> teamCount,
+  Value<String> teamOffsets,
+  Value<DateTime> createdAt,
+});
+
+class $$CustomTemplatesTableFilterComposer
+    extends Composer<_$AppDatabase, $CustomTemplatesTable> {
+  $$CustomTemplatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get classes => $composableBuilder(
+      column: $table.classes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get cycle => $composableBuilder(
+      column: $table.cycle, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get teamCount => $composableBuilder(
+      column: $table.teamCount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get teamOffsets => $composableBuilder(
+      column: $table.teamOffsets, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$CustomTemplatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $CustomTemplatesTable> {
+  $$CustomTemplatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get classes => $composableBuilder(
+      column: $table.classes, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get cycle => $composableBuilder(
+      column: $table.cycle, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get teamCount => $composableBuilder(
+      column: $table.teamCount, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get teamOffsets => $composableBuilder(
+      column: $table.teamOffsets, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$CustomTemplatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CustomTemplatesTable> {
+  $$CustomTemplatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get classes =>
+      $composableBuilder(column: $table.classes, builder: (column) => column);
+
+  GeneratedColumn<String> get cycle =>
+      $composableBuilder(column: $table.cycle, builder: (column) => column);
+
+  GeneratedColumn<int> get teamCount =>
+      $composableBuilder(column: $table.teamCount, builder: (column) => column);
+
+  GeneratedColumn<String> get teamOffsets => $composableBuilder(
+      column: $table.teamOffsets, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$CustomTemplatesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $CustomTemplatesTable,
+    CustomTemplate,
+    $$CustomTemplatesTableFilterComposer,
+    $$CustomTemplatesTableOrderingComposer,
+    $$CustomTemplatesTableAnnotationComposer,
+    $$CustomTemplatesTableCreateCompanionBuilder,
+    $$CustomTemplatesTableUpdateCompanionBuilder,
+    (
+      CustomTemplate,
+      BaseReferences<_$AppDatabase, $CustomTemplatesTable, CustomTemplate>
+    ),
+    CustomTemplate,
+    PrefetchHooks Function()> {
+  $$CustomTemplatesTableTableManager(
+      _$AppDatabase db, $CustomTemplatesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CustomTemplatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CustomTemplatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CustomTemplatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<String> classes = const Value.absent(),
+            Value<String> cycle = const Value.absent(),
+            Value<int> teamCount = const Value.absent(),
+            Value<String> teamOffsets = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              CustomTemplatesCompanion(
+            id: id,
+            name: name,
+            classes: classes,
+            cycle: cycle,
+            teamCount: teamCount,
+            teamOffsets: teamOffsets,
+            createdAt: createdAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String name,
+            required String classes,
+            required String cycle,
+            required int teamCount,
+            required String teamOffsets,
+            required DateTime createdAt,
+          }) =>
+              CustomTemplatesCompanion.insert(
+            id: id,
+            name: name,
+            classes: classes,
+            cycle: cycle,
+            teamCount: teamCount,
+            teamOffsets: teamOffsets,
+            createdAt: createdAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$CustomTemplatesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $CustomTemplatesTable,
+    CustomTemplate,
+    $$CustomTemplatesTableFilterComposer,
+    $$CustomTemplatesTableOrderingComposer,
+    $$CustomTemplatesTableAnnotationComposer,
+    $$CustomTemplatesTableCreateCompanionBuilder,
+    $$CustomTemplatesTableUpdateCompanionBuilder,
+    (
+      CustomTemplate,
+      BaseReferences<_$AppDatabase, $CustomTemplatesTable, CustomTemplate>
+    ),
+    CustomTemplate,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3833,4 +4415,6 @@ class $AppDatabaseManager {
       $$ShiftAlarmOverridesTableTableManager(_db, _db.shiftAlarmOverrides);
   $$ShiftDayOverridesTableTableManager get shiftDayOverrides =>
       $$ShiftDayOverridesTableTableManager(_db, _db.shiftDayOverrides);
+  $$CustomTemplatesTableTableManager get customTemplates =>
+      $$CustomTemplatesTableTableManager(_db, _db.customTemplates);
 }
