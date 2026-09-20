@@ -125,6 +125,36 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 「响铃排在上班前一天」的三处标记（班次编辑的钟点块、闹钟列表行、日历
+    // 信息卡）只在零点班这类班次上画得出来，而种子库里的夜班是 20:30 上班
+    // （当天）—— 不换一套方案，这三处改了也拍不到。见 `makeMidnightShiftCurrent`。
+    slug: '12_calendar_midnight',
+    title: '日历 · 零点班（响铃在前一天）',
+    build: (db) async {
+      await makeMidnightShiftCurrent(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    slug: '13_editor_midnight',
+    title: '排班编辑器 · 零点班',
+    build: (db) async {
+      await makeMidnightShiftCurrent(db);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    slug: '14_alarm_midnight',
+    title: '闹钟 · 零点班',
+    build: (db) async {
+      await makeMidnightShiftCurrent(db);
+      return const AlarmScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -251,4 +281,5 @@ const Map<String, double> visualScrollDown = {
   '07_profile': 620, // 权限卡 + 关于
   '06_alarm': 360, // 自定义闹钟那一段
   '03_management': 280, // 排班列表
+  '13_editor_midnight': 900, // 零点班那张班次卡（响铃时间块与它的说明在这下面）
 };

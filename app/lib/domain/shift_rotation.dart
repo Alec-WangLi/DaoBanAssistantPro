@@ -95,6 +95,9 @@ class ShiftClass {
   final bool alarmEnabled;
 
   /// 联动闹钟响铃时间（分钟自午夜）；null 表示未设。
+  ///
+  /// **钟面值晚于 [startMinute] 时，这个钟点落在上班的前一天**（见
+  /// [alarmPreviousDay]）—— 00:00 上班、23:00 响铃的夜班就是它。
   final int? alarmMinute;
 
   /// 工作窗口是否跨过午夜。
@@ -112,6 +115,20 @@ class ShiftClass {
     final s = startMinute, e = endMinute;
     if (s == null || e == null) return false;
     return e >= 1440 || e < s;
+  }
+
+  /// 联动闹钟是否落在上班的**前一天**。
+  ///
+  /// 判据只有一条：响铃的钟面值晚于上班的钟面值。这个钟点在同一天里只可能排在
+  /// 上班**之后**（00:00 上班、23:00 响铃 → 当天 23:00 时这个班已经结束 15 小时），
+  /// 所以它指的必然是前一天晚上那个钟点。
+  ///
+  /// 上班时间没填（或钟点相同）时返回 false：前者无从判断，后者「不晚于上班时刻
+  /// 的最近一次该钟点」就是上班那一刻本身。
+  bool get alarmPreviousDay {
+    final s = startMinute, a = alarmMinute;
+    if (s == null || a == null) return false;
+    return a > s;
   }
 
   /// 日历格子显示的简称：优先用 [abbr]，为空时按名称推断。

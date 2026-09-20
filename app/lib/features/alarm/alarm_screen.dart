@@ -85,8 +85,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
         if (t == null || t.isRest || !t.alarmEnabled || t.alarmMinute == null) {
           continue;
         }
-        final fireAt = DateTime(date.year, date.month, date.day)
-            .add(Duration(minutes: t.alarmMinute!));
+        final fireAt = shiftAlarmFireAt(date, t);
         if (!fireAt.isAfter(now)) continue; // 响过的自动隐藏
         shiftAlarms.add(_ShiftAlarmEntry(date, t, overrides[dayNumber(date)] ?? true));
       }
@@ -257,9 +256,23 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ],
             ),
           ),
-          Text(
-            _fmt(e.shift.alarmMinute!),
-            style: AppTokens.titleStrong,
+          // 响铃落在上班前一天时（00:00 上班的夜班）把「前一天」写在钟点下面：
+          // 左边那列本来就是「班次名 + 日期」两行，右边跟着长成两行不占新高度，
+          // 也不会再让人把 23:00 读成班次**当天**的 23:00。
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _fmt(e.shift.alarmMinute!),
+                style: AppTokens.titleStrong,
+              ),
+              if (e.shift.alarmPreviousDay)
+                Text(
+                  L10n.prevDay,
+                  style: AppTokens.microText.copyWith(color: muted),
+                ),
+            ],
           ),
         ],
       ),

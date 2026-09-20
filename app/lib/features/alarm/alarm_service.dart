@@ -62,6 +62,23 @@ class ShiftAlarmPlan {
   final DateTime fireAt;
 }
 
+/// 某天某个班次的响铃时刻。
+///
+/// 钟点取 [ShiftClass.alarmMinute]；[ShiftClass.alarmPreviousDay] 为真时整体前移
+/// 一天 —— 规则是「**不晚于上班时刻的最近一次该钟点**」，所以 00:00 上班、
+/// 23:00 响铃排的是前一天 23:00（排在班次当天就已经是班后 15 小时了）。
+///
+/// 日期用 `DateTime(y, m, d - 1)` 重建而不是 `subtract(Duration(days: 1))`：
+/// 后者减的是绝对 24 小时，碰上夏令时切换会把钟点也挪掉一小时。
+DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift) {
+  final alarm = shift.alarmMinute!;
+  return shift.alarmPreviousDay
+      ? DateTime(date.year, date.month, date.day - 1)
+          .add(Duration(minutes: alarm))
+      : DateTime(date.year, date.month, date.day)
+          .add(Duration(minutes: alarm));
+}
+
 /// 决定「未来 [days] 天里哪些天要排班次联动闹钟、各排在几点」。
 ///
 /// 从 [AlarmService.reschedule] 的排定循环里抽出来的**纯**决策：不碰通知插件、
@@ -74,6 +91,10 @@ class ShiftAlarmPlan {
 /// 那天没有班次 / 是休班 / 班次没开闹钟 / 班次没设闹钟时间 /
 /// 那天被「按天关闹钟」显式关过（[overrides] 里值为 `false`）/
 /// 算出来的触发时刻不晚于 [from]（今天这个点已经过去了）。
+///
+/// 触发时刻由 [shiftAlarmFireAt] 算（可能是**前一天**晚上），但 `offset` 与原生
+/// id 始终按**班次那一天**算 —— id 是 `_shiftBaseId + 天数偏移`，跟着触发时刻走
+/// 的话，每个午夜班的闹钟都会换号。
 List<ShiftAlarmPlan> planShiftAlarms(
   ShiftSchedule schedule, {
   required DateTime from,
@@ -91,8 +112,7 @@ List<ShiftAlarmPlan> planShiftAlarms(
     // 按天覆盖：该天被单独关闭则跳过
     if (overrides[dayNumber(date)] == false) continue;
 
-    final fireAt = DateTime(date.year, date.month, date.day)
-        .add(Duration(minutes: t.alarmMinute!));
+    final fireAt = shiftAlarmFireAt(date, t);
     if (!fireAt.isAfter(from)) continue;
 
     plans.add(ShiftAlarmPlan(offset: d, shift: t, fireAt: fireAt));

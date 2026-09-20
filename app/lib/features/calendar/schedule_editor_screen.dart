@@ -526,6 +526,15 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final primary = Theme.of(context).colorScheme.primary;
     final outline = Theme.of(context).colorScheme.outlineVariant;
     final muted = AppTokens.inkMuted(context);
+    // 响铃落在哪天是「算」出来的、看不出来（00:00 上班 + 23:00 响铃 = **前一天**
+    // 晚上，见 `ShiftClass.alarmPreviousDay`），所以下面既改钟点的写法、又补一行
+    // 小字：用户反馈里问的正是「这 23:00 到底是哪天」。
+    final alarmPrevDay =
+        c.alarmEnabled && c.alarmMinute != null && c.alarmPreviousDay;
+    final alarmNoStart = c.alarmEnabled &&
+        c.alarmMinute != null &&
+        !c.alarmPreviousDay &&
+        c.startMinute == null;
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.all(AppTokens.spaceMd),
@@ -644,9 +653,25 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 context,
                 label: L10n.alarmTime,
                 minutes: c.alarmMinute,
+                // 落在上班前一天的写成「前一天 23:00」：只写钟点会让人读成班次
+                // 当天，而那正是用户反馈里说的「看不到有这个选项」。
+                valueText: alarmPrevDay
+                    ? L10n.clockPrevDay(formatClock(c.alarmMinute!))
+                    : null,
                 onPick: (m) => setState(() => _classes[index] =
                     _editClass(_classes[index], alarmMinute: m)),
               ),
+              if (alarmPrevDay || alarmNoStart)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+                  child: Text(
+                    alarmPrevDay
+                        ? L10n.alarmPrevDayHint(formatClock(c.startMinute!),
+                            formatClock(c.alarmMinute!))
+                        : L10n.alarmNoStartHint,
+                    style: AppTokens.microText.copyWith(color: muted),
+                  ),
+                ),
             ],
           ],
         ],
@@ -697,16 +722,21 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   /// 开始/结束/闹钟时间都用这个块。
+  ///
+  /// [valueText] 覆盖默认的钟点显示 —— 响铃时间落在上班前一天时要写成
+  /// 「前一天 23:00」（见 `ShiftClass.alarmPreviousDay`），钟点本身还是 [minutes]。
   Widget _timeChip(
     BuildContext context, {
     required String label,
     required int? minutes,
     required ValueChanged<int?> onPick,
+    String? valueText,
   }) {
     return _chipBody(
       context,
       label: label,
-      value: minutes == null ? L10n.notSet : formatClock(minutes),
+      value: valueText ??
+          (minutes == null ? L10n.notSet : formatClock(minutes)),
       onTap: () async {
         final now = minutes ?? toMinutes(8, 0);
         final picked = await showGlassTimePicker(

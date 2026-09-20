@@ -365,6 +365,49 @@ Future<void> seedTodayOverride(AppDatabase db) async {
   await repo.setDayOverrides([dateOnly(DateTime.now())], classId: classId);
 }
 
+/// 把一套「零点班」设为当前方案：夜班 00:00 上班、23:00 响铃。
+///
+/// 出这组图的理由：响铃钟点晚于上班钟点时，闹钟排的是**前一天**晚上
+/// （`ShiftClass.alarmPreviousDay`）—— 班次编辑的钟点块、闹钟列表行、日历信息卡
+/// 三处都要多一个「前一天」标记。种子库里原本那套四班三倒的夜班是 20:30 上班
+/// （当天），这三处**一处都拍不出来**，等于改了也没有眼睛看着。
+///
+/// 锚点往前挪两天：周期是「白白零零休」，于是**今天**正好落在零点班上，信息卡
+/// 那一行有东西可看。锚点跟着 `today` 算，换一天跑照样落在同一格。
+Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final today = dateOnly(DateTime.now());
+  await repo.saveSchedule(
+    name: '三班倒 · 零点班',
+    anchorDate: today.subtract(const Duration(days: 2)),
+    classes: const [
+      ShiftClass(
+          name: '白班',
+          abbr: '白',
+          startMinute: 480,
+          endMinute: 960,
+          color: 0xFF4C8DFF,
+          alarmEnabled: true,
+          alarmMinute: 420),
+      ShiftClass(
+          name: '零点班',
+          abbr: '零',
+          startMinute: 0,
+          endMinute: 480,
+          color: 0xFF7A5CFF,
+          alarmEnabled: true,
+          alarmMinute: 23 * 60),
+      ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+    ],
+    cycle: const [0, 0, 1, 1, 2],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: L10n.defaultTeamNames(1),
+    ourTeamIndex: 0,
+    teamOffsets: const [0],
+  );
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});

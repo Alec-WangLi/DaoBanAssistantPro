@@ -52,6 +52,32 @@ ShiftSchedule _schedule({Map<int, int> overrides = const {}}) => ShiftSchedule(
       dayOverrides: overrides,
     );
 
+/// 只排一个「夜班」的方案（每天都上班）。
+///
+/// 默认就是用户报的那个配置（00:00 上班、23:00 响铃）—— 响铃钟点**晚于**上班
+/// 钟点，意味着它指的是前一天晚上：排在班次当天 23:00 的话，响铃那一刻这个班
+/// 已经结束 15 小时了。
+ShiftSchedule _nightOnlySchedule(
+        {int? startMinute = 0, int? alarmMinute = 23 * 60}) =>
+    ShiftSchedule(
+      name: '测试',
+      anchorDate: DateTime.utc(2026, 9, 20),
+      classes: [
+        ShiftClass(
+            id: 21,
+            name: '夜班',
+            abbr: '夜',
+            startMinute: startMinute,
+            endMinute: startMinute == null ? null : startMinute + 8 * 60,
+            alarmEnabled: true,
+            alarmMinute: alarmMinute),
+      ],
+      cycle: const [0],
+      teamCount: 1,
+      teamNames: const ['我'],
+      teamOffsets: const [0],
+    );
+
 void main() {
   test('基线：工作班那天排一条、休班那天不排', () {
     final plans =
@@ -134,5 +160,44 @@ void main() {
     expect(
         planShiftAlarms(blank, from: DateTime(2026, 9, 20, 6), days: 30),
         isEmpty);
+  });
+
+  // 响铃钟点晚于上班钟点时，那个钟点只可能是**前一天晚上**的 —— 见
+  // `ShiftClass.alarmPreviousDay`。用户报的「夜班 24 点上班、响铃 23:00」
+  // 就是这一档：排到当天的话，响铃时这个班已经结束 15 小时。
+  group('响铃钟点晚于上班钟点：排在上班前一天', () {
+    test('00:00 上班 + 23:00 响铃 → 前一天 23:00', () {
+      // 起点日 9/19 12:00：9/19 那天的闹钟（9/18 23:00）已经过去，只剩 9/20 的。
+      final plans = planShiftAlarms(_nightOnlySchedule(),
+          from: DateTime(2026, 9, 19, 12), days: 2);
+      expect(plans, hasLength(1));
+      expect(plans.single.fireAt, DateTime(2026, 9, 19, 23),
+          reason: '班次在 9/20 凌晨上班，闹钟要排在 9/19 晚上 23:00');
+      expect(plans.single.offset, 1,
+          reason: '排定时刻前移一天，但 offset / 原生 id 仍按班次那一天算');
+    });
+
+    test('早于上班钟点的响铃不受影响：仍是班次当天', () {
+      // 20:30 上班、19:30 响铃（内置 12 小时制夜班那档）：钟点早于上班钟点，
+      // 没有「前一天」的歧义，排的还是班次当天。
+      final plans = planShiftAlarms(
+          _nightOnlySchedule(startMinute: 20 * 60 + 30, alarmMinute: 19 * 60 + 30),
+          from: DateTime(2026, 9, 20, 6),
+          days: 1);
+      expect(plans.single.fireAt, DateTime(2026, 9, 20, 19, 30));
+    });
+
+    test('钟点相同：算当天', () {
+      final plans = planShiftAlarms(_nightOnlySchedule(alarmMinute: 0),
+          from: DateTime(2026, 9, 19, 12), days: 2);
+      expect(plans.single.fireAt, DateTime(2026, 9, 20),
+          reason: '「不晚于上班时刻的最近一次该钟点」就是上班那一刻本身');
+    });
+
+    test('没填上班时间：无从判断，仍按当天（不瞎挪一天）', () {
+      final plans = planShiftAlarms(_nightOnlySchedule(startMinute: null),
+          from: DateTime(2026, 9, 20, 6), days: 1);
+      expect(plans.single.fireAt, DateTime(2026, 9, 20, 23));
+    });
   });
 }

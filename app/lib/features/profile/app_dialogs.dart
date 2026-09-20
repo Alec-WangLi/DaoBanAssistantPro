@@ -41,7 +41,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.8\n'
+const String _changelogZh = 'v0.8.9\n'
+    '· 修好零点班（00:00 上班）的联动闹钟排晚了整整一天：响铃设成 23:00 时，以前排在班次当天晚上 23:00 —— 那时这个班已经结束 15 个小时；现在排在「前一天」晚上 23:00，也就是上班前 1 小时。早班、中班这些上班前设响铃的班次不受影响\n'
+    '· 闹钟落在上班前一天的，界面上会写明「前一天」：班次设置里响铃那一块写成「前一天 23:00」并附一行说明，闹钟页的列表和日历信息卡同样标出来 —— 以前只写「23:00」，看不出是哪一天\n\n'
+    'v0.8.8\n'
     '· 桌面小组件改成三张固定尺寸的卡，放置之后不能再拉伸：本周条（4×1，今天所在这一周的七天）、今日卡（4×3，App 底栏那张信息卡的完整版）、整月（4×5，月份标题 + 周几行 + 42 格）\n'
     '· 三张卡的视觉跟着 App 的设计语言走：班次胶囊从实心改成淡染底 + 同色描边（那天没班次就不画），去掉「白卡里再套白卡」的双层\n'
     '· 升级后桌面上原有的旧小组件会消失，需要在桌面重新添加\n\n'
@@ -83,12 +86,11 @@ const String _changelogZh = 'v0.8.8\n'
     '· 待办：提醒真正生效（此前设了提前提醒也不会有任何反应）；新增「联动闹钟」，到点像班次闹钟一样全屏响铃；日历信息卡上显示当天有几项待办\n'
     '· 修好「添加 / 编辑待办」点了没反应：键盘弹起时弹窗按钮被挤出卡片，现在内容多了会在卡片内滚动\n'
     '· 闹钟铃声可从手机里自选（内置 / 系统 / 自己的音频文件），自选文件损坏或丢失时自动回落到内置铃声，而不是一声不出\n'
-    '· 修好「关掉闹钟后重新进入 App，响铃界面又弹一次、而且没有声音」：界面被一个陈旧的暂存值唤醒，实际上根本没有闹钟在响\n\n'
-    'v0.7.5\n'
-    '· 修好「关掉响铃界面后重新进入 App，响铃界面又弹一次、而且没有声音」：根因是热启动那条路把闹钟标签留在了原生侧没人清，下一次 App 界面重建时被当成一个新闹钟读了出来 —— 界面被一个陈旧的值唤醒，而根本没有闹钟在响\n'
-    '· 重启手机后闹钟不再丢：此前重启会清空系统里排定的闹钟，要等你下次打开 App 才会重排。现在多了一份落盘的闹钟清单，开机后自动把闹钟排回去（重复的顺延到下一次；关机期间已经错过的一次性闹钟不会补响）\n'
-    '· 内部：视觉工装新增「向下滚动后」的图 —— 首屏之下的内容（权限卡就是其中之一）此前从来没被拍过，上一版那行名不副实的「后台弹出界面」正是这样活下来的\n\n';
-const String _changelogEn = 'v0.8.8\n'
+    '· 修好「关掉闹钟后重新进入 App，响铃界面又弹一次、而且没有声音」：界面被一个陈旧的暂存值唤醒，实际上根本没有闹钟在响\n';
+const String _changelogEn = 'v0.8.9\n'
+    '· Fixed shift alarms for midnight shifts (00:00 start) landing a full day late: an alarm set to 23:00 used to be scheduled for 23:00 on the shift\'s own day — by then that shift had been over for 15 hours. It now rings at 23:00 the day before, one hour before the shift starts. Morning and afternoon shifts, whose alarm already sits before the start, are unaffected\n'
+    '· When an alarm falls the day before a shift the app now says so: the shift editor shows "23:00 (day before)" with a line explaining why, and the alarm list and the calendar info card are tagged the same way — a bare "23:00" never told you which day it was\n\n'
+    'v0.8.8\n'
     '· The home-screen widget is now three fixed-size cards that cannot be resized once placed: a week strip (4×1 — the seven days of the current week), a today card (4×3 — the full version of the info card at the bottom of the app), and a month view (4×5 — month title, day-of-week row and a 6×7 grid)\n'
     '· Their look now follows the app\'s design language: shift chips went from solid fills to a tinted background with a matching outline (a day with no shift stays blank), and the "white card inside a white card" double container is gone\n'
     '· After upgrading, the old widget on your home screen will disappear — you will need to add it again\n\n'
@@ -130,11 +132,7 @@ const String _changelogEn = 'v0.8.8\n'
     '· Todos: reminders actually fire now (setting one previously did nothing at all); a todo can ring as an alarm like a shift does; the calendar\'s info card shows how many todos the day has\n'
     '· Fixed "Add / Save" doing nothing in the todo dialogs: with the keyboard up the buttons were pushed out of the card; the content now scrolls inside it\n'
     '· Alarm sounds can be picked from your phone (built-in / system / your own audio file), falling back to the built-in one if the file is damaged or missing instead of going silent\n'
-    '· Fixed the ringing screen popping up a second time — and silently — when you reopened the app after dismissing an alarm: the screen had been woken by a stale value while nothing was actually ringing\n\n'
-    'v0.7.5\n'
-    '· Fixed the ringing screen popping up a second time — and silently — when you reopened the app after dismissing an alarm: the warm-start path left the alarm label behind on the native side with nobody to clear it, so the next time the app\'s UI was recreated it was read back as a brand-new alarm. Nothing was ringing; the screen had just been woken by a stale value\n'
-    '· Alarms now survive a reboot: restarting the phone used to wipe every scheduled alarm, and only opening the app put them back. A persisted alarm list now lets the app re-schedule everything right after boot (repeating alarms roll forward to their next occurrence; one-shot alarms missed while the phone was off are not replayed)\n'
-    '· Internal: the visual harness gained a "scrolled down" image — content below the fold (the permissions card among it) had never been photographed, which is how last release\'s mislabelled row survived so long\n\n';
+    '· Fixed the ringing screen popping up a second time — and silently — when you reopened the app after dismissing an alarm: the screen had been woken by a stale value while nothing was actually ringing\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

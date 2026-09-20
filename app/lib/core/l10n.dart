@@ -300,6 +300,26 @@ class L10n {
   static String get crossesMidnight => t('（结束早于开始，或晚于 24:00 = 跨午夜）', '(ends before start, or past 24:00 = crosses midnight)');
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
   static String get alarmTime => t('响铃时间', 'Alarm time');
+
+  /// 响铃时间落在上班**前一天**时的钟点写法（班次编辑的选择块 / 日历信息卡）。
+  ///
+  /// 中英语序不同（中文把「前一天」放前面、英文放括号里），所以整串交给 [t]
+  /// 而不是拼接前缀 —— 直接拼会在英文界面下露出中文语序。
+  static String clockPrevDay(String time) =>
+      t('前一天 $time', '$time (day before)');
+
+  /// 响铃落在上班前一天时的标记（闹钟列表行的时间下面那行小字）。
+  static String get prevDay => t('前一天', 'day before');
+
+  /// 班次编辑里响铃时间下面那行小字：为什么闹钟排在前一天、落在哪个钟点。
+  static String alarmPrevDayHint(String start, String alarm) => t(
+      '上班 $start，闹钟排在前一天 $alarm',
+      'Shift starts $start — the alarm rings the day before at $alarm');
+
+  /// 没填上班时间时的那行小字：判断不了，闹钟按当天算。
+  static String get alarmNoStartHint =>
+      t('未填上班时间，闹钟按当天算', 'No start time — the alarm rings that day');
+
   static String get notSet => t('未设置', 'Not set');
   static String get schedule => t('排班', 'Schedule');
   static String dayN(int n) => isEn ? 'Day $n' : '第 $n 天';

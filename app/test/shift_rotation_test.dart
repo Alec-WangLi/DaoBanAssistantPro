@@ -46,6 +46,30 @@ void main() {
     expect(s.shiftOn(DateTime(2025, 1, 6))!.isRest, isFalse); // 白班
   });
 
+  // 响铃落在上班前一天：判据是「响铃钟点晚于上班钟点」。00:00 上班的夜班配
+  // 23:00 响铃就是它（排到班次当天的话，响铃时这个班已经结束 15 小时）。
+  test('alarmPreviousDay：钟点晚于上班钟点才算前一天', () {
+    const midnight =
+        ShiftClass(name: '夜班', startMinute: 0, endMinute: 480, alarmMinute: 1380);
+    expect(midnight.alarmPreviousDay, isTrue);
+
+    // 内置 12 小时制夜班：20:30 上班、19:30 响铃 —— 当天，没有歧义。
+    const evening = ShiftClass(
+        name: '夜班', startMinute: 1230, endMinute: 510, alarmMinute: 1170);
+    expect(evening.alarmPreviousDay, isFalse);
+
+    // 钟点相同：就是上班那一刻本身，算当天。
+    const same =
+        ShiftClass(name: '白班', startMinute: 480, endMinute: 1020, alarmMinute: 480);
+    expect(same.alarmPreviousDay, isFalse);
+
+    // 判断不了的两种：缺上班时间 / 缺响铃时间。
+    expect(
+        const ShiftClass(name: '夜班', alarmMinute: 1380).alarmPreviousDay, isFalse);
+    expect(
+        const ShiftClass(name: '夜班', startMinute: 0).alarmPreviousDay, isFalse);
+  });
+
   test('多班组错开（四班两倒 4 个班）', () {
     final s = defaultSchedule();
     expect(s.teamCount, 4);
