@@ -463,32 +463,50 @@ def cover_090():
 
 
 def widgets_090():
-    """桌面小组件：真机桌面截图 + 三处标注。"""
-    W, H = 1500, 1180
+    """桌面小组件：两屏真机桌面截图 + 三处标注（三张卡在相邻两屏）。
+
+    两屏是**用户手机上的真实排布**：本周条与今日卡同屏、整月在隔壁那一屏。
+    素材来自 `raw/v090-widgets-a.png` / `-b.png`（真机截图裁到卡片区域，
+    半尺寸入库）。
+    """
+    W = 1500
+    dev_w = 330
+    a = _device('v090-widgets-a.png', dev_w)
+    b = _device('v090-widgets-b.png', dev_w)
+    y = 236
+    # 底部那两行说明要落在图例下方，别和图例的最后一行撞上（第一版就是撞了）
+    H = y + max(a.height, b.height) + 280
     img = _gradient(W, H)
     _title(img, '桌面小组件：三张固定尺寸的卡',
            '放置后不能拉伸；在 App 里改了排班，桌面立刻跟着变')
-    dev = _device('v090-widgets.png', 470)
-    sx, sy = 120, 236
-    img.alpha_composite(dev, (sx, sy))
+    xa, xb = 150, 540
+    img.alpha_composite(a, (xa, y))
+    img.alpha_composite(b, (xb, y))
     d = ImageDraw.Draw(img)
+
+    # 圈号贴在卡片旁边（不压住内容），右侧一列说明
     marks = [
-        ((0.50, 0.235), '本周条 4×1', '今天所在这一周的七天'),
-        ((0.50, 0.430), '今日卡 4×3', '底栏那张信息卡的完整版'),
-        ((0.50, 0.700), '整月 4×5', '月份标题 + 42 格月历'),
+        (xa + a.width * 0.5, y + a.height * 0.20, '本周条 4×1', '今天所在这一周的七天'),
+        (xa + a.width * 0.5, y + a.height * 0.62, '今日卡 4×3', '底栏那张信息卡的完整版'),
+        (xb + b.width * 0.5, y + b.height * 0.46, '整月 4×5', '月份标题 + 42 格月历'),
     ]
-    for i, ((rx, ry), head, tail) in enumerate(marks):
-        cx, cy = sx + dev.width * rx, sy + dev.height * ry
+    for i, (cx, cy, head, tail) in enumerate(marks):
         d.ellipse((cx - 21, cy - 21, cx + 21, cy + 21), fill=ACCENT,
                   outline=(255, 255, 255), width=3)
         d.text((cx, cy + 1), str(i + 1), font=_font('msyhbd.ttc', 26),
                fill=INK, anchor='mm')
-        ly = 430 + i * 200
-        d.ellipse((800, ly - 24, 848, ly + 24), fill=ACCENT)
-        d.text((824, ly + 1), str(i + 1), font=_font('msyhbd.ttc', 28),
+        ly = 330 + i * 190
+        d.ellipse((960, ly - 24, 1008, ly + 24), fill=ACCENT)
+        d.text((984, ly + 1), str(i + 1), font=_font('msyhbd.ttc', 28),
                fill=INK, anchor='mm')
-        d.text((876, ly - 14), head, font=_font('msyhbd.ttc', 36), fill=INK)
-        d.text((876, ly + 42), tail, font=_font('msyh.ttc', 27), fill=INK_SUB)
+        d.text((1036, ly - 14), head, font=_font('msyhbd.ttc', 34), fill=INK)
+        d.text((1036, ly + 40), tail, font=_font('msyh.ttc', 25), fill=INK_SUB)
+    d.text((W / 2, H - 96),
+           '两张卡同屏放不下时，第三张会自动排到相邻那一屏 —— 三张都是「添加一次、各自独立」的卡。',
+           font=_font('msyh.ttc', 25), fill=INK_SUB, anchor='ma')
+    d.text((W / 2, H - 56),
+           '点整卡开 App，点某一天跳到那天的日历；小米 / HyperOS：长按桌面 → 添加小部件 → 支持小部件的应用 → 安卓小部件。',
+           font=_font('msyh.ttc', 25), fill=(170, 178, 220), anchor='ma')
     return img.convert('RGB')
 
 
