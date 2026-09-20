@@ -155,6 +155,17 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 撞班提示与「按周期长度均分各组起始日」只在这个状态下画得出来
+    // （周期 10 天、各班组仍按 1 天错开），见 `makeCrewClashCurrent`。
+    slug: '15_editor_crew_clash',
+    title: '排班编辑器 · 班组撞班',
+    build: (db) async {
+      await makeCrewClashCurrent(db);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -282,4 +293,7 @@ const Map<String, double> visualScrollDown = {
   '06_alarm': 360, // 自定义闹钟那一段
   '03_management': 280, // 排班列表
   '13_editor_midnight': 900, // 零点班那张班次卡（响铃时间块与它的说明在这下面）
+  // 撞班提示挂在「周期设置」卡的末尾，10 行周期表的下面；给足量让它滚到底，
+  // 靠到底后的钳位保证那张卡的下半段（提示 + 均分按钮）在画面里。
+  '15_editor_crew_clash': 2400,
 };

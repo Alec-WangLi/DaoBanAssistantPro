@@ -103,6 +103,8 @@ ShiftSchedule _domain({
   DateTime? anchor,
   List<int>? teamOffsets,
   Map<int, int>? dayOverrides,
+  int teamCount = 4,
+  List<String>? teamNames,
 }) {
   return ShiftSchedule(
     dayOverrides: dayOverrides ?? const {},
@@ -125,8 +127,8 @@ ShiftSchedule _domain({
           ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
         ],
     cycle: cycle ?? const [0, 0, 1, 1, 2, 2],
-    teamCount: 4,
-    teamNames: const ['一班', '二班', '三班', '四班'],
+    teamCount: teamCount,
+    teamNames: teamNames ?? L10n.defaultTeamNames(teamCount),
     ourTeamIndex: 0,
     teamOffsets: teamOffsets ?? const [0, 1, 2, 3],
   );
@@ -1293,5 +1295,70 @@ void main() {
     expect(tester.widget<GlassSwitch>(sw).value, isTrue);
     expect(find.byType(GlassDeleteButton), findsNothing,
         reason: '确认后班次设置整段收起');
+  });
+
+  // ---------------------------------------------------------------------------
+  // 撞班：周期长度与各班组起始日的间隔对不上时，同一天会出现两个班组上同一个班
+  //
+  // 2026-09-21 用户反馈：五班三倒改成 10 天一轮（每个班连排两天）之后，各班组
+  // 还按 1 天错开 —— 信息卡上「三班 中 / 四班 中」同天同班。起因是
+  // `_setCycleLength` 只管周期、不碰班组的周期起始日。
+  // ---------------------------------------------------------------------------
+
+  /// 用户那套：白白中中休夜夜休休休，5 个班组。
+  ShiftSchedule tenDayFiveCrews({List<int> teamOffsets = const [0, 1, 2, 3, 4]}) =>
+      _domain(
+        classes: const [
+          ShiftClass(
+              name: '白班',
+              abbr: '白',
+              startMinute: 8 * 60 + 30,
+              endMinute: 20 * 60 + 30,
+              color: 0xFF4C8DFF),
+          ShiftClass(
+              name: '中班',
+              abbr: '中',
+              startMinute: 16 * 60,
+              endMinute: 24 * 60,
+              color: 0xFFFF9F0A),
+          ShiftClass(
+              name: '夜班',
+              abbr: '夜',
+              startMinute: 0,
+              endMinute: 8 * 60,
+              color: 0xFF7A5CFF),
+          ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+        ],
+        cycle: const [0, 0, 1, 1, 3, 2, 2, 3, 3, 3],
+        teamCount: 5,
+        teamOffsets: teamOffsets,
+      );
+
+  testWidgets('撞班：提示点名相撞的班组，一键均分后提示消失、我组起始日不动',
+      (tester) async {
+    final repo = await _pumpEditor(tester, tenDayFiveCrews());
+
+    final hint = find.byKey(const Key('editor-crew-clash-hint'));
+    expect(hint, findsOneWidget, reason: '1 天错开在 10 天周期上必然撞班');
+    final text = tester.widget<Text>(hint).data!;
+    expect(text.contains('一班'), isTrue, reason: '要点名相撞的两个班组：$text');
+    expect(text.contains('二班'), isTrue, reason: text);
+
+    await tester.tap(find.text(L10n.evenCrewStarts));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editor-crew-clash-hint')), findsNothing,
+        reason: '均分之后一对都不该撞');
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+    expect(repo.saved!.teamOffsets, [0, 2, 4, 6, 8]);
+    expect(repo.saved!.anchorDate, DateTime.utc(2025, 6, 1),
+        reason: '我们班组的周期起始日不能被这条修复顺手挪走');
+  });
+
+  testWidgets('不撞班的方案不出现这行提示', (tester) async {
+    await _pumpEditor(tester, tenDayFiveCrews(teamOffsets: const [0, 2, 4, 6, 8]));
+    expect(find.byKey(const Key('editor-crew-clash-hint')), findsNothing);
+    expect(find.text(L10n.evenCrewStarts), findsNothing);
   });
 }

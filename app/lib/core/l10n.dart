@@ -279,6 +279,16 @@ class L10n {
   static String get myTeam => t('我的班', 'My team');
   static String get setAsMine => t('设为我', 'Set as mine');
   static String get teamHint => t('为每个班组选一个「周期起始日」——那天它从周期第 1 天开始；「设为我」选中你所在的班。', 'Give each team a "cycle start date" — on that day it begins at cycle day 1; "Set as mine" marks your team.');
+
+  /// 撞班提示：周期长度与各组起始日的间隔对不上时，同一天会出现两个班组上同一个班
+  /// （见 `crewClashes`）。天数与班组名由调用方算好 —— 这里只负责语序。
+  static String crewClashHint(int days, String teamA, String teamB) => t(
+      '有 $days 天两个班组上同一个班（$teamA与$teamB）—— 各组的周期起始日与周期长度对不上',
+      'Two teams share the same shift on $days day(s) — $teamA and $teamB');
+
+  /// 撞班提示下面那个动作：按「均分」规则重排各组的周期起始日。
+  static String get evenCrewStarts =>
+      t('按周期长度均分各组起始日', 'Spread team start dates evenly');
   static String get rest => t('休息', 'Rest');
   static String get work => t('工作', 'Work');
   static String get workday => t('上班', 'Workday');
@@ -455,7 +465,7 @@ class L10n {
       'View daily shifts (date/shift/lunar/weekday); statutory holidays marked red, makeup workdays tagged "班"; switch schedules and jump year/month from the toolbar; tap a day for details.');
   static String get guideSchedTitle => t('排班管理', 'Schedule management');
   static String get guideSchedDesc => t(
-      '「我的 → 排班管理」可新建 / 编辑 / 删除多套排班；新建时先选一个内置倒班方式模板（19 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日；打开「跟随法定节假日（无班次）」可得到一张只随节假日休班的空白表。要换成哪一套上场，走日历顶栏的「切换排班」。',
+      '「我的 → 排班管理」可新建 / 编辑 / 删除多套排班；新建时先选一个内置倒班方式模板（20 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日；打开「跟随法定节假日（无班次）」可得到一张只随节假日休班的空白表。要换成哪一套上场，走日历顶栏的「切换排班」。',
       'Me → Schedule management: create / edit / delete multiple schedules; start from a built-in shift-pattern template (19 common patterns, searchable), then tweak shift times, the cycle table and each team\'s cycle start date; turn on "Follow legal holidays (no shifts)" for a blank schedule that simply rests on legal holidays. To change which schedule is active, use "Switch schedule" in the calendar toolbar.');
   static String get guideAlarmTitle => t('闹钟', 'Alarms');
   static String get guideAlarmDesc => t(

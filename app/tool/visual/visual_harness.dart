@@ -408,6 +408,51 @@ Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
   );
 }
 
+/// 把一套「五班三倒 · 10 天一轮」设为当前方案，但**各班组仍按 1 天错开** ——
+/// 也就是「撞班」那个状态（白白中中休夜夜休休休，5 个班组天天撞）。
+///
+/// 2026-09-21 用户反馈的原样复刻：周期从 5 天改成 10 天之后，`_setCycleLength`
+/// 只管周期、不碰各组的周期起始日，于是同一天两个班组上同一个班。编辑器里新加的
+/// 撞班提示 + 一键均分只在这个状态下才画得出来，不预置它就没图可看。
+Future<void> makeCrewClashCurrent(AppDatabase db) async {
+  final repo = AppRepository(db);
+  await repo.saveSchedule(
+    name: '五班三倒 · 10 天一轮',
+    anchorDate: dateOnly(DateTime.now()),
+    classes: const [
+      ShiftClass(
+          name: '白班',
+          abbr: '白',
+          startMinute: 8 * 60 + 30,
+          endMinute: 20 * 60 + 30,
+          color: 0xFF4C8DFF,
+          alarmEnabled: true,
+          alarmMinute: 7 * 60),
+      ShiftClass(
+          name: '中班',
+          abbr: '中',
+          startMinute: 16 * 60,
+          endMinute: 24 * 60,
+          color: 0xFFFF9F0A),
+      ShiftClass(
+          name: '夜班',
+          abbr: '夜',
+          startMinute: 0,
+          endMinute: 8 * 60,
+          color: 0xFF7A5CFF,
+          alarmEnabled: true,
+          alarmMinute: 23 * 60),
+      ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+    ],
+    cycle: const [0, 0, 1, 1, 3, 2, 2, 3, 3, 3],
+    makeCurrent: true,
+    teamCount: 5,
+    teamNames: L10n.defaultTeamNames(5),
+    ourTeamIndex: 0,
+    teamOffsets: const [0, 1, 2, 3, 4],
+  );
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});

@@ -41,7 +41,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.9\n'
+const String _changelogZh = 'v0.8.10\n'
+    '· 新增「五班三倒 · 10 天一轮」模板：早班两天、中班两天、休一天、夜班两天，然后休三天。此前只有 5 天一轮的那套，10 天一轮得自己搭 —— 内置模板现在共 20 种\n'
+    '· 修好「把 5 天一轮的排班改成 10 天之后，同一天有两个班组上同一个班」：各组的周期起始日此前不跟着周期长度走。现在编辑器的「周期设置」里会直接点出撞班的两个班组，并给一个按钮把各组起始日按周期长度一键均分（你自己那一组不动）\n\n'
+    'v0.8.9\n'
     '· 修好零点班（00:00 上班）的联动闹钟排晚了整整一天：响铃设成 23:00 时，以前排在班次当天晚上 23:00 —— 那时这个班已经结束 15 个小时；现在排在「前一天」晚上 23:00，也就是上班前 1 小时。早班、中班这些上班前设响铃的班次不受影响\n'
     '· 闹钟落在上班前一天的，界面上会写明「前一天」：班次设置里响铃那一块写成「前一天 23:00」并附一行说明，闹钟页的列表和日历信息卡同样标出来 —— 以前只写「23:00」，看不出是哪一天\n\n'
     'v0.8.8\n'
@@ -75,19 +78,11 @@ const String _changelogZh = 'v0.8.9\n'
     'v0.8.1\n'
     '· 日历上可以单独改某一天的班次了：点底栏那行班次，或长按格子拖选一段日子，就能给这几天单独指定班次（请假、跟同事调班都行），不改整套排班\n'
     '· 被单独改过的那天，格子上有个小圆点，信息卡上写着「已调整」；选择层里可以一键「恢复轮转」\n'
-    '· 编辑排班不再重建班次定义，改方案名不会影响已设置的按天调整\n\n'
-    'v0.8.0\n'
-    '· 正式稳定版，归纳 0.7.1 到 0.7.5 的全部更新\n'
-    '· 小米机型锁屏 / 后台弹出响铃界面 —— 现在真的可以了：真因是 MIUI 把「后台弹出界面」单独设成一项权限，不开时系统会静默拒绝从后台拉起界面（连通知那条全屏通道也一起拒），表现就是闹钟只响、不弹。实测两项都开之后：退到后台会自动拉回前台，锁屏会点亮屏幕并顶掉锁屏\n'
-    '· 重启手机后闹钟与待办提醒都不再丢：排定时落盘一份清单，开机后自动排回去（重复的顺延到下一次；关机期间已经错过的不补响、也不补发提醒）\n'
-    '· 修掉一个隐私隐患：关掉响铃界面后，App 主界面会留在锁屏上（锁屏下能直接看到并操作）；现在响铃一停就把锁屏盖回来，响铃期间也屏蔽了系统返回手势\n'
-    '· 权限页重做：分组改成「基础提醒 / 弹出响铃界面 / 后台与开机」，每行说明改成「不开会怎样」；原来那行「后台弹出界面」其实是 Android 的「显示悬浮窗」（中文名套错了小米的说法），已正名；小米机型新增「后台弹出界面（小米）」与「锁屏显示（小米）」两行引导\n'
-    '· 日历：格子改成带底色的班次胶囊；选中那天的滑块与格子圆角对齐（此前差一档，四个角会露出底下的卡片）；两个字的简称不再被省略、日期回到居中\n'
-    '· 待办：提醒真正生效（此前设了提前提醒也不会有任何反应）；新增「联动闹钟」，到点像班次闹钟一样全屏响铃；日历信息卡上显示当天有几项待办\n'
-    '· 修好「添加 / 编辑待办」点了没反应：键盘弹起时弹窗按钮被挤出卡片，现在内容多了会在卡片内滚动\n'
-    '· 闹钟铃声可从手机里自选（内置 / 系统 / 自己的音频文件），自选文件损坏或丢失时自动回落到内置铃声，而不是一声不出\n'
-    '· 修好「关掉闹钟后重新进入 App，响铃界面又弹一次、而且没有声音」：界面被一个陈旧的暂存值唤醒，实际上根本没有闹钟在响\n';
-const String _changelogEn = 'v0.8.9\n'
+    '· 编辑排班不再重建班次定义，改方案名不会影响已设置的按天调整\n';
+const String _changelogEn = 'v0.8.10\n'
+    '· New "5-crew 3-shift · 10-day cycle" template: two mornings, two afternoons, one off, two nights, then three off. Until now only the 5-day version existed, so a 10-day roster had to be built by hand — there are now 20 built-in templates\n'
+    '· Fixed two crews landing on the same shift on the same day after changing a 5-day cycle into a 10-day one: the crew start dates never followed the cycle length. The editor\'s cycle section now names the two crews that collide and offers a button that spreads every crew start date evenly across the cycle (your own crew stays put)\n\n'
+    'v0.8.9\n'
     '· Fixed shift alarms for midnight shifts (00:00 start) landing a full day late: an alarm set to 23:00 used to be scheduled for 23:00 on the shift\'s own day — by then that shift had been over for 15 hours. It now rings at 23:00 the day before, one hour before the shift starts. Morning and afternoon shifts, whose alarm already sits before the start, are unaffected\n'
     '· When an alarm falls the day before a shift the app now says so: the shift editor shows "23:00 (day before)" with a line explaining why, and the alarm list and the calendar info card are tagged the same way — a bare "23:00" never told you which day it was\n\n'
     'v0.8.8\n'
@@ -121,18 +116,7 @@ const String _changelogEn = 'v0.8.9\n'
     'v0.8.1\n'
     '· You can now override a single day\'s shift on the calendar: tap the shift row in the bottom bar, or long-press a cell and drag to select a range of days, to give just those days a shift of their own (a day off, or swapping with a colleague) without changing the whole schedule\n'
     '· A day you have overridden carries a small dot in the grid and reads "Adjusted" on the info card; the picker sheet offers a one-tap "Restore rotation"\n'
-    '· Editing a schedule no longer rebuilds its shift definitions, so renaming a schedule leaves your per-day overrides intact\n\n'
-    'v0.8.0\n'
-    '· Stable release — merges everything from 0.7.1 through 0.7.5\n'
-    '· Xiaomi devices can now genuinely pop up the alarm screen over the lock screen: the real cause turned out to be a Xiaomi-private permission ("Open new windows while running in the background"). With it off, MIUI silently refuses to launch the UI from the background — the notification\'s full-screen channel is blocked along with it — so the alarm rings with nothing to show. With that toggle and "Show on Lock screen" both on, the app pulls itself back to the front from the background, and lights up and dismisses the lock screen\n'
-    '· Alarms and todo reminders now survive a reboot: a persisted list lets them be re-scheduled right after boot (repeating alarms roll forward to their next occurrence; anything missed while the phone was off is neither replayed nor re-sent)\n'
-    '· Fixed a privacy hole: after dismissing an alarm the app\'s main UI stayed on top of the lock screen, where it could be read and operated. It now hands the lock screen back, and the ringing screen blocks the system back gesture\n'
-    '· Permissions page reworked: grouped into "Core alerts / Pop up the alarm screen / Background & boot", each row now says what breaks without it, the mislabelled "Display over other apps" row was renamed, and Xiaomi devices get two extra guided rows\n'
-    '· Calendar: cells became tinted shift chips; the selection block now matches the cell\'s corner radius (they differed by one step, letting the cell show through at all four corners); two-character abbreviations are no longer truncated and the date is centred again\n'
-    '· Todos: reminders actually fire now (setting one previously did nothing at all); a todo can ring as an alarm like a shift does; the calendar\'s info card shows how many todos the day has\n'
-    '· Fixed "Add / Save" doing nothing in the todo dialogs: with the keyboard up the buttons were pushed out of the card; the content now scrolls inside it\n'
-    '· Alarm sounds can be picked from your phone (built-in / system / your own audio file), falling back to the built-in one if the file is damaged or missing instead of going silent\n'
-    '· Fixed the ringing screen popping up a second time — and silently — when you reopened the app after dismissing an alarm: the screen had been woken by a stale value while nothing was actually ringing\n';
+    '· Editing a schedule no longer rebuilds its shift definitions, so renaming a schedule leaves your per-day overrides intact\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

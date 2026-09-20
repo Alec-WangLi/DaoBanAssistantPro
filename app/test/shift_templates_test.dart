@@ -1,8 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 
 import 'support/cjk.dart';
+
+/// 模板 → 一份可跑的 [ShiftSchedule]（基准日随便钉一天）。
+///
+/// 只为了能拿 `crewClashes` 去扫 —— 撞班与基准日无关（错位是常数偏移）。
+ShiftSchedule _asSchedule(ShiftTemplate t) => ShiftSchedule(
+      name: t.title,
+      anchorDate: DateTime.utc(2026, 9, 21),
+      classes: t.classes,
+      cycle: t.cycle,
+      teamCount: t.teamCount,
+      teamOffsets: t.teamOffsets,
+    );
 
 /// 中文文案基线：重构前的实际取值，逐条抄自源码。
 ///
@@ -17,6 +30,7 @@ const _zhBaseline = <String, (String, String)>{
   'dupont': ('四夜三休、三白一休、三夜三休、四白，再连休七天', 'DuPont · 28 天周期'),
   'four_crew_three_shift': ('早班两天、中班两天、夜班两天，然后休两天', '四班三倒 · 四班三运转'),
   'five_crew_three_shift': ('早班、中班、夜班各一天，然后休两天', '五班三倒'),
+  'five_crew_three_shift_10d': ('早班两天、中班两天、休一天、夜班两天，然后休三天', '五班三倒 · 10 天一轮'),
   'six_crew_three_shift': ('上一天班休两天，早中夜轮着来', '六班三倒'),
   'five_crew_four_shift': ('早中晚夜各一天，然后休一天', '五班四倒'),
   'six_crew_four_shift': ('早中晚夜各一天，然后休两天', '六班四倒'),
@@ -40,6 +54,7 @@ const _zhClassBaseline = <String, List<String>>{
   'dupont': ['白班/白', '夜班/夜', '休班/休'],
   'four_crew_three_shift': ['早班/早', '中班/中', '夜班/夜', '休班/休'],
   'five_crew_three_shift': ['早班/早', '中班/中', '夜班/夜', '休班/休'],
+  'five_crew_three_shift_10d': ['早班/早', '中班/中', '夜班/夜', '休班/休'],
   'six_crew_three_shift': ['早班/早', '中班/中', '夜班/夜', '休班/休'],
   'five_crew_four_shift': ['早班/早', '中班/中', '晚班/晚', '夜班/夜', '休班/休'],
   'six_crew_four_shift': ['早班/早', '中班/中', '晚班/晚', '夜班/夜', '休班/休'],
@@ -97,6 +112,7 @@ void main() {
       'dupont': 2,
       'four_crew_three_shift': 3,
       'five_crew_three_shift': 3,
+      'five_crew_three_shift_10d': 3,
       'six_crew_three_shift': 3,
       'five_crew_four_shift': 4,
       'six_crew_four_shift': 4,
@@ -108,6 +124,19 @@ void main() {
       final want = expected[t.id];
       expect(want, isNotNull, reason: '模板 ${t.id} 缺预期上班组数');
       expect(t.workingTeamsPerDay, want, reason: '模板 ${t.id} 上班组数不符');
+    }
+  });
+
+  test('每个多班组模板：错位按周期均分、且没有两个班组撞班', () {
+    // 这两条是**用户可见**的：错位没铺开（或铺开了但周期里有连排三天的班）
+    // 就会出现「同一天两个班组上同一个班」——2026-09-21 有人把五班三倒改成
+    // 10 天一轮之后正是这么撞的。「均分」这条规则就是从现有模板反推出来的，
+    // 拿它反查模板，手抄错的错位当场就能发现。
+    for (final t in shiftTemplates.where((t) => t.teamCount > 1)) {
+      final why = '模板 ${t.id}';
+      expect(evenTeamOffsets(t.cycleLength, t.teamCount), t.teamOffsets,
+          reason: '$why 的错位不是按周期长度均分出来的');
+      expect(crewClashes(_asSchedule(t)), isEmpty, reason: '$why 有班组撞班');
     }
   });
 

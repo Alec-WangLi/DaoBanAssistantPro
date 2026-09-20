@@ -162,7 +162,85 @@ void main() {
     expect(rest.endsNextDay, isFalse);
   });
 
+  group('班组错位：撞班检测与均分', () {
+    // 用户报的那套：五班三倒的 10 天一轮（白白中中休夜夜休休休），
+    // 但各班组仍按 5 天一轮时的 1 天错开 —— 每个班连排两天，于是天天撞。
+    final anchor = DateTime.utc(2026, 9, 21);
+    ShiftSchedule tenDay({required List<int> offsets}) => ShiftSchedule(
+          name: '测试',
+          anchorDate: anchor,
+          classes: const [
+            ShiftClass(id: 1, name: '白班', abbr: '白', startMinute: 510, endMinute: 1230),
+            ShiftClass(id: 2, name: '中班', abbr: '中', startMinute: 990, endMinute: 1440),
+            ShiftClass(id: 3, name: '夜班', abbr: '夜', startMinute: 0, endMinute: 480),
+            ShiftClass(id: 4, name: '休班', abbr: '休', isRest: true),
+          ],
+          cycle: const [0, 0, 1, 1, 3, 2, 2, 3, 3, 3],
+          teamCount: 5,
+          teamNames: const ['一班', '二班', '三班', '四班', '五班'],
+          ourTeamIndex: 0,
+          teamOffsets: offsets,
+        );
+
+    test('1 天错开的五个班组在 10 天周期上天天撞', () {
+      final clashes = crewClashes(tenDay(offsets: const [0, 1, 2, 3, 4]));
+      expect(clashes, hasLength(12), reason: '10 天里 9 天有撞班，共 12 对');
+      expect(clashes.map((c) => c.cycleDay).toSet(),
+          {1, 2, 3, 4, 5, 6, 8, 9, 10});
+      // 用户截图里那张信息卡：一班二班同白、三班四班同中 —— 正是第 1 天。
+      final day1 = clashes.where((c) => c.cycleDay == 1).toList();
+      expect(day1.map((c) => (c.teamA, c.teamB, c.shift.name)).toSet(),
+          {(0, 1, '白班'), (2, 3, '中班')});
+    });
+
+    test('按均分规则重排之后一对都不撞', () {
+      expect(crewClashes(tenDay(offsets: evenTeamOffsets(10, 5))), isEmpty);
+      expect(evenTeamOffsets(10, 5), [0, 2, 4, 6, 8]);
+    });
+
+    test('均分时「我们班组」的周期起始日不动', () {
+      // 我们班组是第 2 个（下标 1），原错位是 1：均分后它还得是 1，
+      // 否则用户自己的排班会被这条修复顺手改掉。整组一起平移，
+      // 所以别的班组可能出现负错位 —— 域里与界面都按「基准日 − 错位」算，负值合法。
+      final even = evenTeamOffsets(10, 5, keepIndex: 1, keepOffset: 1);
+      expect(even[1], 1);
+      expect(crewClashes(tenDay(offsets: even)), isEmpty);
+      expect(even, [-1, 1, 3, 5, 7]);
+    });
+
+    test('休息班不算撞班，空白表返回空', () {
+      final two = ShiftSchedule(
+        name: '测试',
+        anchorDate: anchor,
+        classes: const [
+          ShiftClass(id: 1, name: '白班', startMinute: 480, endMinute: 1080),
+          ShiftClass(id: 2, name: '休班', isRest: true),
+        ],
+        cycle: const [0, 1],
+        teamCount: 2,
+        teamNames: const ['一班', '二班'],
+        ourTeamIndex: 0,
+        teamOffsets: const [0, 0], // 完全重叠：只该在白班那天报一次
+      );
+      expect(crewClashes(two), hasLength(1));
+      expect(crewClashes(two).single.shift.name, '白班');
+
+      final blank = ShiftSchedule(
+        name: '跟随法定节假日',
+        anchorDate: anchor,
+        classes: const [],
+        cycle: const [],
+      );
+      expect(crewClashes(blank), isEmpty);
+    });
+
+    test('正常的四班两倒不误报', () {
+      expect(crewClashes(defaultSchedule()), isEmpty);
+    });
+  });
+
   group('按天改班覆盖', () {
+
     /// 拿默认「四班两倒」当底，只换 dayOverrides。
     ShiftSchedule withOverrides(Map<int, int> overrides) {
       final base = defaultSchedule();

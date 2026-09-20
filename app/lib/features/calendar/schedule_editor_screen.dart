@@ -323,6 +323,22 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     );
   }
 
+  /// 用编辑器**当前**（还没保存的）状态拼一份方案。
+  ///
+  /// 预览条与撞班检查都要它：两者问的都是「照现在这套设置排出来是什么样」，
+  /// 各拼一份迟早会有一处漏改。**有意不带 dayOverrides**（按天覆盖）—— 理由
+  /// 见 [_previewStrip]。
+  ShiftSchedule _draftSchedule() => ShiftSchedule(
+        name: _name,
+        anchorDate: dateOnly(_anchor),
+        classes: _classes,
+        cycle: _cycle,
+        teamCount: _teamCount,
+        teamNames: _teamNames,
+        ourTeamIndex: _ourTeamIndex,
+        teamOffsets: _teamOffsets,
+      );
+
   /// 0) 未来 14 天预览：改任何设置都能立刻看出对不对。
   ///
   /// 用 [_anchor] 而不是 [_myCrewStart]：`anchorDate` 才是真正持久化的字段，
@@ -331,16 +347,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     // **有意不传 dayOverrides**：预览要回答的是「按这套规则未来 14 天是什么班」。
     // 叠上按天覆盖之后，用户改周期就看不出规则本身的变化了，预览会失去意义。
     // 代价是它跟日历上看到的不一致 —— 所以下面在有覆盖时给一行提示。
-    final schedule = ShiftSchedule(
-      name: _name,
-      anchorDate: dateOnly(_anchor),
-      classes: _classes,
-      cycle: _cycle,
-      teamCount: _teamCount,
-      teamNames: _teamNames,
-      ourTeamIndex: _ourTeamIndex,
-      teamOffsets: _teamOffsets,
-    );
+    final schedule = _draftSchedule();
     final today = dateOnly(DateTime.now());
     final muted = AppTokens.inkMuted(context);
 
@@ -861,6 +868,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           _cycleStepper(context),
           const SizedBox(height: AppTokens.spaceSm),
           ...List.generate(_cycle.length, (i) => _cycleRow(context, i)),
+          ..._crewClashNotice(context),
         ],
       ),
     );
@@ -900,6 +908,76 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         }
       } else {
         _cycle.removeRange(n, _cycle.length);
+      }
+    });
+  }
+
+  /// 撞班提示 + 一键均分；没有撞班就什么都不出现。
+  ///
+  /// 挂在**周期设置**这张卡里、而不是「班组设置」那张：撞班的起因是周期长度，
+  /// 用户改完长度人就在这儿；而班组设置默认是**折叠**的，提示跟着一起藏起来
+  /// 就等于没有（2026-09-21 那位用户就是这么撞了才发现，还以为是 App 的 bug）。
+  ///
+  /// 只举撞得最多的一对做例子：全部都列出来在卡片里放不下，也没必要。
+  List<Widget> _crewClashNotice(BuildContext context) {
+    final clashes = crewClashes(_draftSchedule());
+    if (clashes.isEmpty) return const [];
+
+    final days = clashes.map((c) => c.cycleDay).toSet().length;
+    final perPair = <(int, int), int>{};
+    for (final c in clashes) {
+      perPair[(c.teamA, c.teamB)] = (perPair[(c.teamA, c.teamB)] ?? 0) + 1;
+    }
+    final top = perPair.entries.reduce((a, b) => b.value > a.value ? b : a).key;
+    final muted = AppTokens.inkMuted(context);
+    // 动作文字走 inkFor 而不是裸主色：主色压在这张卡上实测 4.61:1，只是刚好过线，
+    // 换个主色调就可能掉下去（全 app 的彩色文字都走这条）。
+    final action = AppTokens.inkFor(
+        Theme.of(context).colorScheme.primary,
+        Theme.of(context).colorScheme.surface);
+
+    return [
+      const SizedBox(height: AppTokens.spaceSm),
+      Text(
+        L10n.crewClashHint(days, _teamNames[top.$1], _teamNames[top.$2]),
+        key: const Key('editor-crew-clash-hint'),
+        style: AppTokens.rowSecondary.copyWith(color: muted),
+      ),
+      const SizedBox(height: AppTokens.spaceXs),
+      const Divider(height: 1),
+      GlassPressable(
+        child: ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          horizontalTitleGap: AppTokens.gapIconText,
+          leading: AppIcon(Icons.restart_alt,
+              size: AppTokens.iconMd, color: action),
+          title: Text(
+            L10n.evenCrewStarts,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTokens.rowSecondary.copyWith(color: action),
+          ),
+          onTap: _evenCrewStarts,
+        ),
+      ),
+    ];
+  }
+
+  /// 把各组的错位按周期长度均分 —— **我们班组原地不动**。
+  ///
+  /// 均分是为了让别人不再和自己撞班，顺手把用户自己的周期起始日挪走是不可接受的
+  /// （他的班次会跟着整体平移）。所以整组一起平移，保持「我」那一项不变。
+  void _evenCrewStarts() {
+    final ours = _ourTeamIndex < _teamOffsets.length
+        ? _teamOffsets[_ourTeamIndex]
+        : 0;
+    final even = evenTeamOffsets(_cycle.length, _teamCount,
+        keepIndex: _ourTeamIndex, keepOffset: ours);
+    if (even.length != _teamOffsets.length) return; // 理论上不会发生
+    setState(() {
+      for (var i = 0; i < even.length; i++) {
+        _teamOffsets[i] = even[i];
       }
     });
   }

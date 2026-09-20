@@ -320,6 +320,23 @@ const List<ShiftTemplateSpec> shiftTemplateSpecs = [
     teamCount: 6,
     teamOffsets: [0, 1, 2, 3, 4, 5],
   ),
+  ShiftTemplateSpec(
+    // 与 5 天一轮的五班三倒同一套班次时间，只是每个班连上两天、并把一天休
+    // 放在中班与夜班之间（这一档的中→夜是连着的，留一天缓冲更常见）。
+    // 出这张模板的直接原因：2026-09-21 用户反馈「五班三倒没有 10 天一轮的模式」，
+    // 他自己改成 10 天之后各班组还按 1 天错开，于是天天撞班。
+    id: 'five_crew_three_shift_10d',
+    title: L10nText('早班两天、中班两天、休一天、夜班两天，然后休三天',
+        'Two mornings, two afternoons, one off, two nights, then three off'),
+    subtitle: L10nText('五班三倒 · 10 天一轮', '5-crew 3-shift · 10-day cycle'),
+    aliases: ['五班三倒', '5班3倒', '10天', '白白中中休夜夜休休休', '5-crew 3-shift', '10-day'],
+    groupKey: 'h8',
+    classes: [_e8, _m8, _n8, _rest],
+    cycle: [0, 0, 1, 1, 3, 2, 2, 3, 3, 3],
+    teamCount: 5,
+    // 均分出来的错位（每班差两天）：这是 10 天周期里唯一每天都不撞的组合。
+    teamOffsets: [0, 2, 4, 6, 8],
+  ),
 
   // -------- 6 小时制 --------
   ShiftTemplateSpec(

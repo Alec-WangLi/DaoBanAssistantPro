@@ -270,6 +270,94 @@ class ShiftSchedule {
   }
 }
 
+/// 两个班组在周期上的**同一天**被排到同一个工作班次。
+///
+/// 「撞班」是班组错位（[ShiftSchedule.teamOffsets]）与周期长度不匹配的症状。
+/// 2026-09-21 的用户反馈就是它：把五班三倒从 5 天一轮改成 10 天一轮（每个班连排
+/// 两天），而各班组仍按 1 天错开 —— 于是同一天有两个班组上同样的班。
+class CrewClash {
+  const CrewClash({
+    required this.cycleDay,
+    required this.teamA,
+    required this.teamB,
+    required this.shift,
+  });
+
+  /// 周期内第几天（**1 起**，与界面上的「第 N 天」同一口径）。
+  final int cycleDay;
+
+  /// 相撞的两个班组下标，[teamA] 恒小于 [teamB]。
+  final int teamA;
+  final int teamB;
+
+  /// 撞在一起的那个班次。
+  final ShiftClass shift;
+}
+
+/// 扫**一个完整周期**，列出「两个班组同一天上同一个班」的日子。
+///
+/// 只扫一个周期就够：班组错位是常数偏移，整张表以周期长度重复。
+/// 判等用 `identical` —— 同一份 [ShiftSchedule] 里 `teamShift` 返回的是
+/// `classes` 里同一个实例，用 `==` 会把内容相同的两个**不同班次定义**也认成撞班。
+///
+/// 休息班次不算撞（两个班组同时休是正常的），空白表（无周期 / 无班次定义）返回空表。
+List<CrewClash> crewClashes(ShiftSchedule s) {
+  if (s.cycle.isEmpty || s.classes.isEmpty) return const [];
+  final out = <CrewClash>[];
+  for (var k = 0; k < s.cycleLength; k++) {
+    final date = s.anchorDate.add(Duration(days: k));
+    final working = <int, ShiftClass>{};
+    for (var t = 0; t < s.teamCount; t++) {
+      final sc = s.teamShift(t, date);
+      if (sc == null || sc.isRest) continue;
+      working[t] = sc;
+    }
+    final teams = working.keys.toList()..sort();
+    for (var i = 0; i < teams.length; i++) {
+      for (var j = i + 1; j < teams.length; j++) {
+        if (identical(working[teams[i]], working[teams[j]])) {
+          out.add(CrewClash(
+            cycleDay: k + 1,
+            teamA: teams[i],
+            teamB: teams[j],
+            shift: working[teams[i]]!,
+          ));
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/// 班组错位的**均分**规则：第 i 个班组落在周期的 `i × 周期长度 ÷ 班组数` 天处
+/// （四舍五入）。
+///
+/// 这不是新发明的规则 —— **全部内置多班组模板的 `teamOffsets` 都是它算出来的**
+/// （四班两倒 4/4 → 0/1/2/3、两班倒 14/2 → 0/7、DuPont 28/4 → 0/7/14/21、
+/// 五班四倒 5/5 → 0/1/2/3/4……），由 `shift_templates_test.dart` 逐条守着。
+/// 用它把「周期长度改了、各班组还按老间隔错开」造成的撞班一次抹平。
+///
+/// [keepIndex] / [keepOffset] 指定一个**保持不动**的班组（通常是「我们班组」）：
+/// 均分是为了让别人不再和自己撞班，不该顺手把用户自己的周期起始日挪走。
+///
+/// 班组数多于周期天数时，整数错位必然有重复（抽屉原理）—— 那是配置本身的问题，
+/// 不是这条规则能救的。
+List<int> evenTeamOffsets(
+  int cycleLength,
+  int teamCount, {
+  int keepIndex = 0,
+  int keepOffset = 0,
+}) {
+  if (cycleLength <= 0 || teamCount <= 0) return const [];
+  final evenly = <int>[
+    for (var i = 0; i < teamCount; i++) (i * cycleLength / teamCount).round(),
+  ];
+  final shift = (keepIndex >= 0 && keepIndex < teamCount)
+      ? keepOffset - evenly[keepIndex]
+      : 0;
+  return <int>[for (final e in evenly) e + shift];
+}
+
 /// 默认「四班两倒」配置：白班 → 上夜班 → 下夜班 → 大休（4 天周期），4 个班组错开。
 ///
 /// 名称与班次名按**当前语言**生成：返回值有三条落库/入界面路径 ——
