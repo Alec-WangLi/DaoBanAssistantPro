@@ -437,26 +437,28 @@ def cover_090():
            fill=INK_SUB, anchor='ma')
     d.text((W / 2, 178), 'v0.9.0　正式稳定版', font=_font('msyhbd.ttc', 96),
            fill=INK, anchor='ma')
-    d.text((W / 2, 312), '对比上一个正式版 v0.8.0',
+    d.text((W / 2, 312), '归纳 v0.8.1 ~ v0.8.12 十二个测试版的全部更新',
            font=_font('msyh.ttc', 34), fill=INK_SUB, anchor='ma')
 
-    # 评论区回复用：一行一件事，不写副标题
     items = [
-        '桌面小组件：三张固定尺寸的卡',
-        '日历上按天改班（请假 / 换班）',
-        '我的模板：自己的班表存下来',
-        '零点班闹钟：改排上班前一天',
-        '班组撞班：一键按周期均分',
+        ('桌面小组件：三张固定尺寸的卡',
+         '本周条 4×1 / 今日卡 4×3 / 整月 4×5，改了排班桌面跟着变'),
+        ('日历上可以单独改某几天的班',
+         '点信息卡那行班次、或长按拖选一段 —— 请假、换班不用动整套排班'),
+        ('「我的模板」：自己调好的班表存下来',
+         '下次新建排班直接从最上面那组里选，不用每次从头搭'),
+        ('两处用户反馈的修正',
+         '零点班的闹钟改排到上班前一天；班组撞班会点名并一键均分'),
     ]
     y = 414
-    for i, head in enumerate(items):
-        _panel(img, (180, y, W - 180, y + 88))
-        d.ellipse((214, y + 26, 250, y + 62), fill=ACCENT)
-        d.text((232, y + 44), str(i + 1), font=_font('msyhbd.ttc', 26),
+    for i, (head, tail) in enumerate(items):
+        _panel(img, (180, y, W - 180, y + 116))
+        d.ellipse((216, y + 40, 252, y + 76), fill=ACCENT)
+        d.text((234, y + 58), str(i + 1), font=_font('msyhbd.ttc', 26),
                fill=INK, anchor='mm')
-        d.text((284, y + 44), head, font=_font('msyhbd.ttc', 38), fill=INK,
-               anchor='lm')
-        y += 106
+        d.text((286, y + 22), head, font=_font('msyhbd.ttc', 36), fill=INK)
+        d.text((286, y + 70), tail, font=_font('msyh.ttc', 27), fill=INK_SUB)
+        y += 140
     return img.convert('RGB')
 
 
@@ -484,9 +486,9 @@ def widgets_090():
 
     # 圈号贴在卡片旁边（不压住内容），右侧一列说明
     marks = [
-        (xa + a.width * 0.5, y + a.height * 0.20, '本周条 4×1', '今天这一周'),
-        (xa + a.width * 0.5, y + a.height * 0.62, '今日卡 4×3', '今日详情'),
-        (xb + b.width * 0.5, y + b.height * 0.46, '整月 4×5', '整月网格'),
+        (xa + a.width * 0.5, y + a.height * 0.20, '本周条 4×1', '今天所在这一周的七天'),
+        (xa + a.width * 0.5, y + a.height * 0.62, '今日卡 4×3', '底栏那张信息卡的完整版'),
+        (xb + b.width * 0.5, y + b.height * 0.46, '整月 4×5', '月份标题 + 42 格月历'),
     ]
     for i, (cx, cy, head, tail) in enumerate(marks):
         d.ellipse((cx - 21, cy - 21, cx + 21, cy + 21), fill=ACCENT,
@@ -499,47 +501,60 @@ def widgets_090():
                fill=INK, anchor='mm')
         d.text((1036, ly - 14), head, font=_font('msyhbd.ttc', 34), fill=INK)
         d.text((1036, ly + 40), tail, font=_font('msyh.ttc', 25), fill=INK_SUB)
-    d.text((W / 2, H - 76), '点某一天直接跳到那天的日历',
-           font=_font('msyh.ttc', 26), fill=INK_SUB, anchor='ma')
+    d.text((W / 2, H - 96),
+           '两张卡同屏放不下时，第三张会自动排到相邻那一屏 —— 三张都是「添加一次、各自独立」的卡。',
+           font=_font('msyh.ttc', 25), fill=INK_SUB, anchor='ma')
+    d.text((W / 2, H - 56),
+           '点整卡开 App，点某一天跳到那天的日历；小米 / HyperOS：长按桌面 → 添加小部件 → 支持小部件的应用 → 安卓小部件。',
+           font=_font('msyh.ttc', 25), fill=(170, 178, 220), anchor='ma')
     return img.convert('RGB')
 
 
 def override_090():
     return _pair(
-        '日历上按天改班',
-        '长按格子拖选一段，或点信息卡上那行班次',
+        '日历上可以单独改某几天的班（请假 / 换班）',
+        '长按格子拖选一段（可跨周、不跨月），或点信息卡上那行班次',
         '10_calendar_adjusted_light.png', '11_override_picker_light.png',
-        '① 改过的那天', '② 选择层',
-        ['只作用于我们班组；改了之后联动闹钟自动跟着变。'],
+        '① 被改过的那天', '② 选择层',
+        ['① 被改过的那天：格子上带小圆点、信息卡写「已调班」。',
+         '② 选择层里挑班次；范围里已有调整时，多一条「恢复轮转」。',
+         '只作用于我们班组（其他班组视图仍是纯轮转）；改了之后联动闹钟自动跟着变。'],
         base=VIS)
 
 
 def templates_090():
     return _pair(
-        '我的模板：自己的班表存下来',
-        '下次新建排班直接从最上面那组里选',
+        '「我的模板」：把调好的班表存下来',
+        '编辑器右上角「存为模板」→ 下次新建排班时直接选它',
         '13_editor_midnight_light.png', '16_template_picker_mine_light.png',
         '① 编辑器右上角', '② 新建排班时',
-        [],
+        ['① 排班编辑器右上角点「存为模板」—— 存的就是眼下这套（含还没保存的改动）。',
+         '② 下次新建排班时，它排在选择页最上面的「我的模板」一组里，一键建出同样的结构。',
+         '存的是班表结构：班次定义、周期表、各班组错开的天数。标题旁的「管理」里可改名、删除。'],
         base=VIS)
 
 
 def midnight_090():
     return _pair(
-        '零点班闹钟：改排上班前一天',
-        '00:00 上班、响铃 23:00 —— 从前排在班后，现在排在上班前 1 小时',
+        '零点班（00:00 上班）的闹钟改排到上班前一天',
+        '用户反馈：从前排在班次当天 23:00 —— 那会儿这个班已经结束 15 小时了',
         '13_editor_midnight_light_scrolled.png', '14_alarm_midnight_light.png',
-        '① 班次设置', '② 闹钟列表',
-        [],
+        '① 班次设置里', '② 闹钟列表里',
+        ['① 班次设置里响铃那一块直接写成「前一天 23:00」，下面还有一行说明。',
+         '② 闹钟页的列表行同样标「前一天」，一眼看得出是哪天响。',
+         '新规则：响铃时刻取「不晚于上班时刻的最近一次该钟点」，也就是上班前 1 小时；',
+         '早班、中班这些响铃本来就排在上班之前的班次不受影响。'],
         base=VIS)
 
 
 def clash_090():
     return _single(
-        '班组撞班：点名 + 一键均分',
-        '把 5 天一轮改成 10 天之后，同一天有两个班组上同一个班',
+        '班组撞班：点名 + 一键按周期长度均分',
+        '用户反馈：把 5 天一轮改成 10 天之后，同一天有两个班组上同一个班',
         '15_editor_crew_clash_light_scrolled.png',
-        ['编辑器的「周期设置」里点出相撞的班组，一键按周期长度均分'],
+        ['① 编辑器的「周期设置」里直接点出相撞的两个班组、以及有几天相撞',
+         '② 下面那个按钮把各组起始日按周期长度均分（你自己那一组不动）',
+         '③ 起因是周期长度变了、各组的「周期起始日」还按老的间隔错开'],
         dev_w=470, base=VIS)
 
 
