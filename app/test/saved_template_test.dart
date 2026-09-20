@@ -258,4 +258,38 @@ void main() {
     expect(find.text('新名字'), findsNothing);
     expect(find.text(L10n.myTemplates), findsNothing, reason: '一条不剩时整组收起');
   });
+
+  testWidgets('回归：先开过选择页（那时还没有模板），存完再回来必须看得到', (tester) async {
+    // 2026-09-21 用户反馈「我保存模板后，没看到呀」：第一次读的结果被
+    // FutureProvider 缓存了一整个会话，之后存下的模板要重启 App 才出现。
+    // savedTemplatesProvider 因此改成 autoDispose（见它的说明）。
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final repo = _FakeRepo(db, domain: _domain());
+
+    Widget picker() => ProviderScope(
+          overrides: [appRepositoryProvider.overrideWithValue(repo)],
+          child: const MaterialApp(home: ShiftTemplatePickerScreen()),
+        );
+    Widget elsewhere() => ProviderScope(
+          overrides: [appRepositoryProvider.overrideWithValue(repo)],
+          child: const MaterialApp(home: Scaffold()),
+        );
+
+    await tester.pumpWidget(picker());
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.myTemplates), findsNothing, reason: '这时还没有模板');
+
+    // 离开选择页，期间存下一份（等价于在编辑器里点「存为模板」）
+    await tester.pumpWidget(elsewhere());
+    await tester.pumpAndSettle();
+    await repo.saveTemplate(_template(id: 9, name: '刚存的模板'));
+
+    await tester.pumpWidget(picker());
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.myTemplates), findsOneWidget,
+        reason: '回到选择页必须重新读，不能拿上一次的缓存');
+    expect(find.text('刚存的模板'), findsOneWidget);
+  });
 }

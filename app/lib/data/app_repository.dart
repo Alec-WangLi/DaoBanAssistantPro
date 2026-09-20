@@ -670,9 +670,15 @@ final schedulesProvider = StreamProvider<List<ShiftScheduleRow>>((ref) {
 
 /// 「我的模板」列表 —— 新建排班的选择页用它多渲染一组卡片。
 ///
-/// 一次性读（不是流）：页内改名 / 删除之后由那两处 `ref.invalidate` 重新读，
-/// 用流的代价见 `AppRepository.listTemplates` 的说明。
-final savedTemplatesProvider = FutureProvider<List<ScheduleTemplate>>((ref) {
+/// 一次性读（不是流，理由见 `AppRepository.listTemplates`），但**必须
+/// `autoDispose`**：不带它的 FutureProvider 会把第一次读到的结果缓存一整个
+/// 会话 —— 用户先开过一次「新建排班」（那时还没有模板），之后在编辑器里存下
+/// 一份，再回来**看不到**那一组，直到重启 App。2026-09-21 用户反馈的
+/// 「我保存模板后，没看到呀」就是它（当时先开过选择页）。
+/// autoDispose 之后离开页面即丢缓存，下次进来重新读；页内的改名 / 删除仍由
+/// `ref.invalidate` 即时刷新。
+final savedTemplatesProvider =
+    FutureProvider.autoDispose<List<ScheduleTemplate>>((ref) {
   return ref.watch(appRepositoryProvider).listTemplates();
 });
 

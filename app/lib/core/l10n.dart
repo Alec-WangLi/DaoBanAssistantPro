@@ -451,8 +451,10 @@ class L10n {
   static String deleteTemplateContent(String name) => isEn
       ? 'Delete "$name"? This cannot be undone.'
       : '将删除「$name」，此操作不可撤销。';
-  static String templateSaved(String name) =>
-      t('已存为模板「$name」', 'Saved as template "$name"');
+  /// 存完模板的提示条。**要写上哪儿找**：用户存完的第一反应就是去找它，
+  /// 而「我的模板」那一组在新建排班的选择页里，不在「我的」页。
+  static String templateSaved(String name) => t(
+      '已存为模板「$name」—— 新建排班时可选', 'Saved as template "$name" — pick it when creating a schedule');
   /// 空白表（跟随法定节假日）没有班次与周期，没东西可存。
   static String get templateNeedsPattern =>
       t('这套是空白表（跟随法定节假日），没有班次可存', 'Nothing to save — this schedule has no shifts');

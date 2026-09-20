@@ -41,7 +41,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.8.11\n'
+const String _changelogZh = 'v0.8.12\n'
+    '· 修好「存了模板却在新建排班时看不到」：如果这一趟开 App 时先打开过一次「新建排班」（那时还没有模板），之后存下的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
+    '· 存完模板的提示补了一句去哪儿找：「新建排班时可选」\n\n'
+    'v0.8.11\n'
     '· 新增「我的模板」：调好一套排班之后，在编辑器右上角点「存为模板」，下次新建排班时直接在「我的模板」里选它 —— 自己厂里的班表不用每次从头搭\n'
     '· 存下的模板可以在选择页点「管理」改名或删除；每张卡片上写着几天一轮、几个班组\n\n'
     'v0.8.10\n'
@@ -74,11 +77,11 @@ const String _changelogZh = 'v0.8.11\n'
     '· 「调整班次」那个选择层重排了一遍：标题不再居中、行距收紧、色点与信息卡统一成 12dp、底部「恢复轮转」用一条分隔线单独隔开（不再看着像第五个班次）\n'
     '· 小窗（高 < 480dp）里改成只显示今日信息卡、不再画日历网格 —— 那个尺寸下两者都看不清；信息卡同时补上「已调班」标记，所以小窗里也看得出哪天被调过\n'
     '· 「已调整」改叫「已调班」（请假和换班都说得通）\n'
-    '· 修好窄弹层里班次名被挤成一行一个字，以及横屏下色点被裁成半圆\n\n'
-    'v0.8.2\n'
-    '· 加了触觉反馈：切换开关、选中、删除确认时会轻微震动，长按拖选日子时还会逐格轻震一下。可在「我的 → 外观」里关掉\n'
-    '· 修好了几处界面对不齐：信息卡上「已调整」现在与同一行的徽章是同一款胶囊；信息卡那行按下去的反馈改回与全 app 一致的玻璃缩放（不再是水波纹）\\n';
-const String _changelogEn = 'v0.8.11\n'
+    '· 修好窄弹层里班次名被挤成一行一个字，以及横屏下色点被裁成半圆\\n';
+const String _changelogEn = 'v0.8.12\n'
+    '· Fixed saved templates not showing up in the picker: if you had opened "New schedule" once earlier in the same app session (back when you had no templates yet), a template saved afterwards only appeared after restarting the app. The list is now re-read every time you open it\n'
+    '· The confirmation shown after saving now says where to find it ("pick it when creating a schedule")\n\n'
+    'v0.8.11\n'
     '· New "My templates": once a schedule looks right, tap "Save as template" in the editor\'s top-right corner and pick it the next time you create a schedule — no more rebuilding your own roster from scratch\n'
     '· Saved templates can be renamed or deleted from "Manage" on the picker; each card shows the cycle length and team count\n\n'
     'v0.8.10\n'
@@ -111,10 +114,7 @@ const String _changelogEn = 'v0.8.11\n'
     '· Reworked the "Adjust shift" sheet: the title is no longer centred, the rows are tighter, the colour dot now matches the info card at 12dp, and "Restore rotation" sits below a divider instead of looking like a fifth shift\n'
     '· In a small window (under 480dp tall) the calendar now shows only today\'s info card and no grid — at that size you cannot really read both. The card gained the "Shift changed" badge, so an overridden day stays visible there too\n'
     '· "Adjusted" is now "Shift changed" (it reads right for both a day off and a swap)\n'
-    '· Fixed shift names wrapping one character per line in a narrow sheet, and the colour dot being clipped to a half-circle in landscape\n\n'
-    'v0.8.2\n'
-    '· Added haptic feedback: a light buzz when you flip a switch, make a selection or confirm a delete, and a tick per day as you long-press and drag to select a range. Turn it off under Me → Appearance\n'
-    '· Fixed a couple of alignment details: "Adjusted" on the info card now uses the same capsule as the badges on its row, and the info card\'s row taps use the app-wide glass scale again (no longer a ripple)\\n';
+    '· Fixed shift names wrapping one character per line in a narrow sheet, and the colour dot being clipped to a half-circle in landscape\\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

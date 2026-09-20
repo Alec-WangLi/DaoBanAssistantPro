@@ -1450,6 +1450,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         .read(appRepositoryProvider)
         .saveTemplate(ScheduleTemplate.fromSchedule(_draftSchedule(),
             name: name));
+    // 存完立刻作废选择页那份缓存：用户很可能在这一趟里先开过「新建排班」，
+    // 不作废的话他回去看不到刚存的那条（见 savedTemplatesProvider 的说明）。
+    ref.invalidate(savedTemplatesProvider);
     if (!mounted) return;
     showGlassSnack(context, L10n.templateSaved(name),
         icon: Icons.bookmark_added_outlined);
