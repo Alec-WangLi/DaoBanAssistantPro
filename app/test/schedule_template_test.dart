@@ -160,6 +160,49 @@ void main() {
       expect(decodeTemplateClasses('123'), isEmpty);
     });
   });
+
+  // 班次闹钟从「一个钟点」换成一组之后，模板里也换成 alarms 数组。
+  // **老模板（用户升级前存下来的）必须照常打得开** —— 它只有旧的两个字段。
+  test('编解码往返：多条闹钟连名字一起存回来', () {
+    final classes = [
+      const ShiftClass(
+        name: '白班',
+        abbr: '白',
+        startMinute: 8 * 60,
+        endMinute: 20 * 60,
+        alarmEnabled: true,
+        alarms: [
+          ShiftAlarm(minute: 6 * 60 + 30, label: '起床'),
+          ShiftAlarm(minute: 12 * 60 + 30, label: '午休'),
+        ],
+      ),
+    ];
+    final raw = encodeTemplateClasses(classes);
+    expect(raw, contains('alarms'));
+    expect(raw, isNot(contains('alarmMinute')),
+        reason: '只许有一个来源：新字段写出去之后旧字段不能再写');
+
+    final back = decodeTemplateClasses(raw);
+    expect(back.single.alarms, hasLength(2));
+    expect(back.single.alarms.first.label, '起床');
+    expect(back.single.alarms[1].minute, 12 * 60 + 30);
+    expect(back.single.alarmEnabled, isTrue);
+  });
+
+  test('老模板 JSON（只有 alarmEnabled / alarmMinute）：回退成一个闹钟', () {
+    const legacy = '[{"name":"白班","abbr":"白","startMinute":480,'
+        '"endMinute":1200,"isRest":false,"color":4284186623,'
+        '"alarmEnabled":true,"alarmMinute":420}]';
+    final back = decodeTemplateClasses(legacy);
+    expect(back.single.alarms.single.minute, 420);
+    expect(back.single.alarms.single.label, isNull);
+    expect(back.single.alarmEnabled, isTrue);
+  });
+
+  test('老模板里 alarmEnabled 开、钟点为 null：空表（不是一条 0 点的闹钟）', () {
+    const legacy = '[{"name":"白班","alarmEnabled":true,"alarmMinute":null}]';
+    expect(decodeTemplateClasses(legacy).single.alarms, isEmpty);
+  });
 }
 
 /// 方案里第 [i] 组的错位（含 `teamShift` 那条回退规则）。

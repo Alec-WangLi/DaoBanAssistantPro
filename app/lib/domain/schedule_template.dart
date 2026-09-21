@@ -116,8 +116,9 @@ String encodeTemplateClasses(List<ShiftClass> classes) => jsonEncode([
           'isRest': c.isRest,
           'color': c.color,
           'alarmEnabled': c.alarmEnabled,
-          // 本轮只换形状：格式仍是旧的两个字段（取第一条），Task 4 才换成 alarms。
-          'alarmMinute': c.alarms.isEmpty ? null : c.alarms.first.minute,
+          'alarms': [
+            for (final a in c.alarms) {'minute': a.minute, 'label': a.label},
+          ],
         }
     ]);
 
@@ -138,12 +139,32 @@ List<ShiftClass> decodeTemplateClasses(String raw) {
             isRest: e['isRest'] == true,
             color: (e['color'] as num?)?.toInt() ?? 0xFF5B7FFF,
             alarmEnabled: e['alarmEnabled'] == true,
-            alarms: (e['alarmMinute'] as num?) == null
-                ? const []
-                : [ShiftAlarm(minute: (e['alarmMinute'] as num).toInt())],
+            alarms: _decodeAlarms(e),
           ),
     ];
   } catch (_) {
     return const [];
   }
+}
+
+/// 班次对象 → 闹钟列表。
+///
+/// 新格式读 `alarms`；**没有就回退**读旧的两个字段 —— 用户升级前存下的「我的
+/// 模板」还在硬盘上，只有 `alarmEnabled` + `alarmMinute`。旧格式里
+/// `alarmMinute` 为空 → 空表，**不能退化成「一条 0 点的闹钟」**。
+List<ShiftAlarm> _decodeAlarms(Map e) {
+  final list = e['alarms'];
+  if (list is List) {
+    return [
+      for (final a in list)
+        if (a is Map && a['minute'] is num)
+          ShiftAlarm(
+            minute: (a['minute'] as num).toInt(),
+            label: a['label'] is String ? a['label'] as String : null,
+          ),
+    ];
+  }
+  final legacy = e['alarmMinute'];
+  if (legacy is num) return [ShiftAlarm(minute: legacy.toInt())];
+  return const [];
 }
