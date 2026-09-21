@@ -362,4 +362,55 @@ void main() {
       expect(other == shift, isFalse, reason: '少一个闹钟就不是同一个班次定义');
     });
   });
+
+  group('闹钟落在哪天：窗口内算当天（spec §4）', () {
+    bool prev(int? start, int? end, int alarm) => alarmFallsOnPreviousDay(
+          ShiftClass(name: '班', startMinute: start, endMinute: end),
+          ShiftAlarm(minute: alarm),
+        );
+
+    test('白班 08:00–20:00：起床当天、午休也当天（旧规则会把午休排到前一天）', () {
+      expect(prev(8 * 60, 20 * 60, 6 * 60 + 30), isFalse,
+          reason: '窗外早于上班 → 当天');
+      expect(prev(8 * 60, 20 * 60, 12 * 60 + 30), isFalse, reason: '窗内 → 当天');
+    });
+
+    test('零点班 00:00–08:00：23:00 前一天，班中 03:00 当天', () {
+      // 用户 2026-09-21 点名问的就是这一条。
+      expect(prev(0, 8 * 60, 23 * 60), isTrue, reason: '窗外晚于上班 → 前一天');
+      expect(prev(0, 8 * 60, 3 * 60), isFalse, reason: '班中补觉 → 当天');
+      expect(prev(0, 8 * 60, 7 * 60 + 30), isFalse, reason: '窗内 → 当天');
+    });
+
+    test('20:00–次日 08:00 的夜班：19:00 与 02:00 都当天', () {
+      expect(prev(20 * 60, 8 * 60 + 1440, 19 * 60), isFalse);
+      expect(prev(20 * 60, 8 * 60 + 1440, 2 * 60), isFalse);
+    });
+
+    test('边界：正好等于上班时刻 → 当天', () {
+      expect(prev(8 * 60, 20 * 60, 8 * 60), isFalse);
+    });
+
+    test('边界：正好等于下班时刻 / 下班之后 —— 与旧规则逐字相同', () {
+      // 00:00 班的 08:00：窗外且晚于上班钟点 → 前一天（旧规则同）
+      expect(prev(0, 8 * 60, 8 * 60), isTrue);
+      // 20:00 班的 08:00：窗外、早于上班钟点 → 当天（旧规则同）
+      expect(prev(20 * 60, 8 * 60 + 1440, 8 * 60), isFalse);
+      expect(prev(0, 8 * 60, 22 * 60), isTrue, reason: '下班之后的钟点仍是前一天');
+    });
+
+    test('24 小时值班：全天都算当天', () {
+      expect(prev(8 * 60, 8 * 60 + 1440, 7 * 60), isFalse);
+      expect(prev(8 * 60, 8 * 60 + 1440, 12 * 60), isFalse);
+      expect(prev(8 * 60, 8 * 60 + 1440, 22 * 60), isFalse);
+    });
+
+    test('没填时间：判不了，一律当天', () {
+      expect(prev(null, null, 23 * 60), isFalse, reason: '上班时间没填 —— 不瞎挪一天');
+      expect(prev(8 * 60, null, 12 * 60 + 30), isTrue,
+          reason: '下班时间没填 → 窗口算不出，退回旧规则：12:30 晚于 08:00 → 前一天');
+      expect(prev(8 * 60, null, 6 * 60 + 30), isFalse, reason: '退回旧规则：早于上班 → 当天');
+      expect(prev(8 * 60, null, 21 * 60), isTrue, reason: '退回旧规则：21:00 晚于 08:00 → 前一天');
+    });
+  });
 }
