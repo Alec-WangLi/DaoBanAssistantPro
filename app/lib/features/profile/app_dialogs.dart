@@ -41,7 +41,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.1\n'
+const String _changelogZh = 'v0.9.2\n'
+    '· 新增：每个班次最多可以配 6 个联动闹钟，每条还能起个名字（「起床」「午休」）。响铃标题会写明是哪一条（「白班 · 午休」）；不填名字就还是「白班提醒」\n'
+    '· 修好一个会把闹钟排错天的问题：钟点落在值班时间之内的闹钟（白班的午休、零点班班中那次）从前被排到前一天同一钟点 —— 等于提前二十来小时响。现在这类算班次当天；起床闹钟那种（早于上班、或零点班的前一晚）照旧\n'
+    '· 班次编辑页的闹钟区跟着改了：一条一行（时间 + 名字 + 删除），下面有「添加闹钟」；到 6 个上限时收掉按钮、给一行说明\n'
+    '· 闹钟页「未来 30 天」一个班次当天有几条就列几行，「前一天」那条各自标；日历信息卡写「闹钟 06:30 等 2 个」\n'
+    '· 数据库版本 9 → 10（班次闹钟单独一张表），老数据自动搬过去，配过的闹钟一条不丢（开关关着但时间还留着的也搬）\n\n'
+
+    'v0.9.1\n'
     '· 修好一个用户反馈的问题：添加待办时快速连点「添加」，整个界面会变黑 —— App 本身没死也没卡住（状态栏还在、也能切走），只是界面被「关到底」了，只能杀掉重开。原因是这类保存要过一小会儿才落定，这段窗口里再点一次就会多存一条待办、并且多关一层 —— 多关掉的那一层正是 App 唯一剩下的主界面。现在连点只存一条，界面也不会再被关空\n'
     '· 同一道护栏也盖住了另外两条能把界面点黑的路径：「点完添加马上点取消」、以及闹钟弹窗里的「添加 / 保存」\n\n'
 
@@ -77,13 +84,15 @@ const String _changelogZh = 'v0.9.1\n'
     '· 内部：推送路径上新加的一处数据库读取补上了错误处理 —— 此前读失败一次会中断整次推送刷新\n\n'
     'v0.8.6\n'
     '· 桌面小组件按尺寸重做了版式：矮的时候是一列班次，按高度显示今天起 2 / 3 / 5 天；高的时候是一周或两周的网格，网格下面附一张今日卡片，写着农历、其他班组当天的班次和当天有几项待办\n'
-    '· 改的原因是原来三个版式要摊到七个高度上：拉高或压扁之后行高会被拉长、格子显得又大又空。现在每个高度都有一版对得上的版式\n\n'
-    'v0.8.5\n'
-    '· 修好大卡上「今天」那格没有标记：它的日期现在用主色 + 加粗，跟 App 日历里今天那格的做法一样（此前计划里要做的标记没落地，那格和别的格子看着一样）\n'
-    '· 修好删掉小组件之后它还在后台每天自动刷新一次 —— 桌面上没有小组件时，不再排下一次刷新\n'
-    '· 修好小卡在「还没有排班」变成「已排班」之后，班次名、日期、色条和分隔线一直不显示 —— 现在会正常出现\n'
-    '· 内部：补了 2 条测试（跨天的 24 小时班、按天改班反映到小组件快照），给一处过长的文字补上省略\n';
-const String _changelogEn = 'v0.9.1\n'
+    '· 改的原因是原来三个版式要摊到七个高度上：拉高或压扁之后行高会被拉长、格子显得又大又空。现在每个高度都有一版对得上的版式\n';
+const String _changelogEn = 'v0.9.2\n'
+    '· New: each shift can carry up to 6 linked alarms, and each one can have a name ("Wake up", "Nap"). The ringing screen says which one it is ("Day shift · Nap"); leave the name empty and it stays "Day shift alarm"\n'
+    '· Fixed alarms landing on the wrong day: an alarm whose clock time falls inside the shift (a lunch nap on a day shift, a break during a midnight shift) used to be scheduled on the previous day at the same time — some 20 hours early. Those now ring on the shift\'s own day; wake-up alarms (before the shift, or the night-before case for midnight shifts) are unchanged\n'
+    '· The shift editor\'s alarm section follows: one row per alarm (time + name + delete) with an "Add alarm" button; at the 6-alarm limit the button goes away and a line explains why\n'
+    '· The alarm page lists every alarm a shift has that day, each carrying its own "day before" tag where it applies; the calendar info card reads "Alarm 06:30 (+1)"\n'
+    '· Database version 9 → 10 (alarms get their own table); existing data moves over automatically and no alarm is lost — including times kept on shifts whose alarm switch is off\n\n'
+
+    'v0.9.1\n'
     '· Fixed an issue reported by users: tapping "Add" twice in a row while adding a todo turned the whole screen black — the app itself was neither dead nor frozen (the status bar was still there, you could still switch apps), the UI had simply been dismissed one screen too far, and only killing the app brought it back. The save takes a moment to land, and a second tap inside that window stored a duplicate todo and dismissed an extra screen — that extra one being the app\'s only remaining screen. A rapid double-tap now stores a single todo and leaves the UI alone\n'
     '· The same guard covers two other ways to black out the screen: tapping "Add" and then "Cancel" right away, and the "Add / Save" buttons in the alarm dialog\n\n'
 
@@ -119,12 +128,7 @@ const String _changelogEn = 'v0.9.1\n'
     '· Internal: a database read on the widget-push path gained error handling — one failed read used to abort the whole push refresh\n\n'
     'v0.8.6\n'
     '· The home-screen widget was rebuilt around size: when it is short it shows a single column of shifts — 2, 3 or 5 days from today, depending on how tall it is; when it is tall it shows a one- or two-week grid with today\'s card below it, listing the lunar date, the other teams\' shifts for the day and how many todos the day has\n'
-    '· The reason: the three old layouts had to stretch across seven possible heights, so raising or squashing the widget stretched the row height and left the cells large and empty. Each height now has a layout that fits it\n\n'
-    'v0.8.5\n'
-    '· Fixed the missing marker on the large widget\'s "today" cell: its date now uses the accent colour and bold, matching how the app\'s own calendar marks today (the marker was dropped along the way, so the cell looked like every other one)\n'
-    '· Fixed the widget still scheduling its once-a-day refresh in the background after you removed it — with no widget on the home screen, the next refresh is no longer scheduled\n'
-    '· Fixed the small widget losing its shift name, date, colour bar and dividers for good once "no schedule yet" turned into a real schedule — they show up again now\n'
-    '· Internal: two more tests (a 24-hour shift spanning midnight, and a per-day override reaching the widget snapshot), plus an ellipsis for one overlong label\n';
+    '· The reason: the three old layouts had to stretch across seven possible heights, so raising or squashing the widget stretched the row height and left the cells large and empty. Each height now has a layout that fits it\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
