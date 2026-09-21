@@ -203,4 +203,118 @@ void main() {
       expect(plans.single.fireAt, DateTime(2026, 9, 20, 23));
     });
   });
+
+  group('一条班次挂多个闹钟（spec §6）', () {
+    ShiftSchedule twoAlarms() => ShiftSchedule(
+          name: '测试',
+          anchorDate: DateTime.utc(2026, 9, 20),
+          classes: const [
+            ShiftClass(
+              id: 31,
+              name: '白班',
+              abbr: '白',
+              startMinute: 8 * 60,
+              endMinute: 20 * 60,
+              alarmEnabled: true,
+              alarms: [
+                ShiftAlarm(minute: 6 * 60 + 30, label: '起床'),
+                ShiftAlarm(minute: 12 * 60 + 30, label: '午休'),
+              ],
+            ),
+          ],
+          cycle: const [0],
+          teamCount: 1,
+          teamNames: const ['我'],
+          teamOffsets: const [0],
+        );
+
+    test('两个闹钟各一条 plan，序号 0/1，都落在班次当天', () {
+      final plans = planShiftAlarms(twoAlarms(),
+          from: DateTime(2026, 9, 20, 5), days: 1);
+      expect(plans, hasLength(2));
+      expect(plans[0].alarmIndex, 0);
+      expect(plans[0].fireAt, DateTime(2026, 9, 20, 6, 30));
+      expect(plans[1].alarmIndex, 1);
+      expect(plans[1].fireAt, DateTime(2026, 9, 20, 12, 30),
+          reason: '午休落在值班窗口内 → 班次当天（旧规则会排到前一天中午）');
+      expect(plans[0].alarm.label, '起床');
+    });
+
+    test('零点班：起床在前一天、班中补觉在当天，两条各归各的', () {
+      final s = ShiftSchedule(
+        name: '测试',
+        anchorDate: DateTime.utc(2026, 9, 20),
+        classes: const [
+          ShiftClass(
+            id: 32,
+            name: '夜班',
+            abbr: '夜',
+            startMinute: 0,
+            endMinute: 8 * 60,
+            alarmEnabled: true,
+            alarms: [
+              ShiftAlarm(minute: 23 * 60, label: '起床'),
+              ShiftAlarm(minute: 3 * 60, label: '补觉'),
+            ],
+          ),
+        ],
+        cycle: const [0],
+        teamCount: 1,
+        teamNames: const ['我'],
+        teamOffsets: const [0],
+      );
+      final plans =
+          planShiftAlarms(s, from: DateTime(2026, 9, 19, 12), days: 2);
+      // 9/19 那天的班：起床 9/18 23:00（已过去，跳过）、补觉 9/19 03:00（已过去）
+      // 9/20 那天的班：起床 9/19 23:00、补觉 9/20 03:00
+      expect(plans.map((p) => p.fireAt).toList(),
+          [DateTime(2026, 9, 19, 23), DateTime(2026, 9, 20, 3)]);
+      expect(plans.map((p) => p.offset).toList(), [1, 1],
+          reason: 'offset 仍按班次那一天算');
+      expect(plans.map((p) => p.alarmIndex).toList(), [0, 1]);
+    });
+
+    test('按天关闹钟：那天这个班次的闹钟一个都不排', () {
+      expect(
+          planShiftAlarms(twoAlarms(),
+              from: DateTime(2026, 9, 20, 5),
+              days: 1,
+              overrides: {dayNumber(DateTime(2026, 9, 20)): false}),
+          isEmpty);
+    });
+
+    test('原生 id 的算式：序号 × 天窗口 + 天数偏移，且落在 0..400 里', () {
+      // 这条把 `reschedule` 的 id 算式抄成纯断言 —— 它是「上限 6」的由来。
+      final horizon =
+          maxAlarmsPerShift * AlarmService.shiftDaysHorizonForTesting;
+      expect(horizon, lessThanOrEqualTo(400),
+          reason: 'Kotlin 侧 cancelAllNativeAlarms 只扫 0..400（MainActivity.kt:550）');
+      final plans = planShiftAlarms(twoAlarms(),
+          from: DateTime(2026, 9, 20, 5), days: 3);
+      for (final p in plans) {
+        final id = p.alarmIndex * AlarmService.shiftDaysHorizonForTesting +
+            p.offset;
+        expect(id, inInclusiveRange(0, 400));
+      }
+      // 同一天两个闹钟必须拿到不同的 id（序号把它们分开）
+      final ids = plans
+          .where((p) => p.offset == 0)
+          .map((p) =>
+              p.alarmIndex * AlarmService.shiftDaysHorizonForTesting + p.offset)
+          .toSet();
+      expect(ids, hasLength(2));
+    });
+
+    test('重排两次得到同一批 id（序号不能自己变）', () {
+      final a = planShiftAlarms(twoAlarms(),
+              from: DateTime(2026, 9, 20, 5), days: 5)
+          .map((p) => p.alarmIndex * 1000 + p.offset)
+          .toList();
+      final b = planShiftAlarms(twoAlarms(),
+              from: DateTime(2026, 9, 20, 5), days: 5)
+          .map((p) => p.alarmIndex * 1000 + p.offset)
+          .toList();
+      expect(a, b, reason: '同一份数据重排两次必须一致，否则用户设过的响铃记录会错位');
+    });
+  });
 }

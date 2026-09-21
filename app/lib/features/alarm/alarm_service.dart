@@ -104,8 +104,10 @@ DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
 /// **一个班次挂了几个闹钟就出几条 plan**，各自算各自的触发时刻与落点。
 ///
 /// 触发时刻由 [shiftAlarmFireAt] 算（可能是**前一天**晚上），但 `offset` 与原生
-/// id 始终按**班次那一天**算 —— id 是 `_shiftBaseId + 天数偏移`，跟着触发时刻走
-/// 的话，每个午夜班的闹钟都会换号。
+/// id 始终按**班次那一天**算 —— id 是 `序号 × 天数窗口 + 天数偏移`，跟着触发时刻走
+/// 的话，每个午夜班的闹钟都会换号。**「序号」是闹钟在 `shift.alarms` 里的下标**：
+/// 用户在编辑页里调整顺序会让闹钟换号（可接受 —— 编辑之后必然重排、`cancelAll`
+/// 先跑），但**重排本身绝不能重新编号**，否则每次打开 App 都换一批。
 List<ShiftAlarmPlan> planShiftAlarms(
   ShiftSchedule schedule, {
   required DateTime from,
@@ -150,6 +152,18 @@ class AlarmService {
       FlutterLocalNotificationsPlugin();
 
   static const _shiftBaseId = 0;
+
+  /// 班次闹钟排定的天数窗口（`reschedule` 的 [days] 缺省值）。
+  ///
+  /// **它就是原生 id 里的那个 60**：id = `序号 × 本值 + 天数偏移`。所以它与
+  /// `maxAlarmsPerShift`（6，见 `domain/shift_rotation.dart`）是一对：
+  /// 6 × 60 = 360 ≤ 400，而 Kotlin 侧 `cancelAllNativeAlarms` 扫的是 0..400
+  /// （`MainActivity.kt:550`）。**改这个值必须同时改那个上限与 Kotlin 的扫描范围。**
+  static const int _shiftDaysHorizon = 60;
+
+  /// 测试用只读出口：id 算式是「上限 6」的由来，得能在纯测试里断言。
+  static int get shiftDaysHorizonForTesting => _shiftDaysHorizon;
+
   static const _customBaseId = 10000;
 
   /// 待办提醒的原生 id 基址。三段互不重叠：班次 0..400、自定义 10000..11000、
@@ -724,7 +738,7 @@ class AlarmService {
   static Future<void> reschedule(
     ShiftSchedule schedule,
     List<CustomAlarm> customAlarms, {
-    int days = 60,
+    int days = _shiftDaysHorizon,
     Map<int, bool> overrides = const {},
     List<ScheduleEvent> events = const [],
   }) async {
@@ -755,7 +769,7 @@ class AlarmService {
         from: DateTime.now(), days: days, overrides: overrides)) {
       try {
         await scheduleNativeAlarm(
-            _shiftBaseId + plan.offset,
+            _shiftBaseId + plan.alarmIndex * _shiftDaysHorizon + plan.offset,
             plan.fireAt,
             L10n.shiftAlarmTitle(plan.shift.name, plan.alarm.label));
       } catch (e) {

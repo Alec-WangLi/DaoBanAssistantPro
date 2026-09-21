@@ -15,7 +15,7 @@ import java.util.Calendar
  */
 object AlarmScheduler {
 
-    /** 自定义闹钟的原生 id 基址（id = 10000 + 数据库自增 id），与排班闹钟 0..59 隔离。 */
+    /** 自定义闹钟的原生 id 基址（id = 10000 + 数据库自增 id），与排班闹钟 0..359 隔离。 */
     const val CUSTOM_BASE_ID = 10000
 
     /**
