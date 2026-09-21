@@ -10,7 +10,10 @@
       4. 生成发布说明（默认模板含 SHA256；可用 -NotesFile 指定）
       5. 人工确认后创建 GitHub Release 并上传 APK（资产名自动为 ASCII：<仓库名>-v<版本>.apk）
       6. 通过 GitHub API 验证并打印下载地址
-      7. 更新仓库根目录 latest.json 发布清单（App「检查更新」限流兜底）并提交推送
+      7. 更新仓库根目录 latest.json 发布清单（App「检查更新」限流兜底）并提交推送；
+         **若当前分支不是 main，再把这份清单同步一份到 main** —— App 的兜底通道读的
+         是 main 上那份（`raw.githubusercontent.com/<owner>/<repo>/main/latest.json`），
+         而测试版是在 beta 之类分支上发的。这一步失败只告警、不影响已完成的发布
 
 .PARAMETER Version
     手动指定版本号（如 0.3.0）。缺省时从 pubspec.yaml 读取。
@@ -260,5 +263,41 @@ if ($repo) {
         Write-Host "      ✅ latest.json 已提交并推送"
     } else {
         Write-Host "      latest.json 无变化，跳过提交"
+    }
+
+    # ---- 8b. 非 main 分支时：把这份清单也同步到 main ----
+    #
+    # App 的**兜底**更新通道读的是 raw.githubusercontent.com/<owner>/<repo>/main/latest.json
+    # （主通道走 Releases API，与分支无关）。所以测试版在 beta 之类分支上发完之后，
+    # 这份清单必须也落到 main —— 否则 GitHub API 被限流（403）时，App 读到的清单会
+    # 停在旧版本，表现是「明明有更新的测试版，App 却说已是最新」。
+    $branchNow = git rev-parse --abbrev-ref HEAD
+    if ($branchNow -ne 'main') {
+        Write-Host "      同步 latest.json 到 main（兜底通道读的是 main 上那份）..."
+        try {
+            git checkout main 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "git checkout main 失败" }
+            git checkout $branchNow -- latest.json 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "从 $branchNow 取 latest.json 失败" }
+            if (@(git status --porcelain -- latest.json).Count -gt 0) {
+                git add latest.json | Out-Null
+                git commit -m "chore(release): 更新发布清单至 v$Version（同步 $branchNow）" | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "提交到 main 失败" }
+                git push origin main
+                if ($LASTEXITCODE -ne 0) { throw "推送 main 失败" }
+                Write-Host "      ✅ main 上的 latest.json 已同步"
+            } else {
+                Write-Host "      main 上已经是这份，跳过"
+            }
+        } catch {
+            # 发布本身已经成功（tag 与资产都在），别让这一步把它变成「失败」——
+            # 告警 + 把手动命令打出来。
+            Write-Warning "latest.json 同步到 main 失败：$_"
+            Write-Warning ("请手动执行：git checkout main && git checkout $branchNow -- latest.json " +
+                "&& git commit -m 'chore(release): 更新发布清单至 v$Version（同步 $branchNow）' " +
+                "&& git push origin main && git checkout $branchNow")
+        } finally {
+            git checkout $branchNow 2>&1 | Out-Null
+        }
     }
 }
