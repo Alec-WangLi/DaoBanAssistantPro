@@ -106,18 +106,24 @@ extension ShiftClassRowX on ShiftClassRow {
 }
 
 extension AppDatabaseQueries on AppDatabase {
-  /// 监听当前排班方案及其班次、周期、按天覆盖（响应式）。
+  /// 监听当前排班方案及其班次、闹钟、周期、按天覆盖（响应式）。
   ///
-  /// **必须同时监听覆盖表**：只监听方案行的话，用户改完覆盖落库成功，
-  /// 这个流不会重发，日历上**纹丝不动** —— 不报错、不崩溃，从界面上看不出
-  /// 原因。班次 / 周期是随方案行一起改的（保存方案会 update 那一行），所以
-  /// 它们靠方案行的通知就够了；覆盖是独立的行，得单独挂一条。
+  /// **必须同时监听覆盖表与闹钟表**：只监听方案行的话，用户改完覆盖 / 闹钟落库
+  /// 成功，这个流不会重发，日历上**纹丝不动** —— 不报错、不崩溃，从界面上看不出
+  /// 原因。班次 / 周期是随方案行一起改的（保存方案会 update 那一行），所以它们靠
+  /// 方案行的通知就够了；覆盖与闹钟是独立的子表，得各挂一条。
+  ///
+  /// （闹钟表这条是 2026-09-21 加多闹钟时补上的：当时只有日历信息卡那一处 widget
+  /// 测试直接往闹钟表里写数据，才发现没挂 —— 生产路径今天都经过 `saveSchedule`
+  /// （它同时 update 方案行），所以不是活 bug；但不挂的话，**任何直接写闹钟表的
+  /// 路径都会静默不刷新**。与「按天覆盖」那次的教训是同一条。）
   Stream<ActiveSchedule?> watchActiveSchedule() {
     final schedQuery = select(shiftScheduleRows)
       ..where((s) => s.isCurrent.equals(true));
     final triggers = <Stream<Object?>>[
       schedQuery.watchSingleOrNull(),
       select(shiftDayOverrides).watch(),
+      select(shiftClassAlarms).watch(),
     ];
     // 不用 rxdart（项目没有这个依赖）：手写一个「任一来源发值就置位」的触发流。
     return Stream<Object?>.multi((controller) {
@@ -507,6 +513,35 @@ class AppRepository {
       }
       return id;
     });
+  }
+
+  /// 测试专用：给**当前方案**第 [classIndex] 个班次（按 `order`）设一组闹钟，
+  /// 顺带打开总开关。
+  ///
+  /// 按下标取而不是按名字 —— 班次名是用户改得的（模板里的名字还跟着语言变），
+  /// 测试别赌它叫什么。
+  Future<void> setClassAlarmsForTesting(
+      int classIndex, List<ShiftAlarm> alarms) async {
+    final rows = await (db.select(db.shiftClassRows)
+          ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+        .get();
+    if (classIndex < 0 || classIndex >= rows.length) return;
+    final classId = rows[classIndex].id;
+    await (db.update(db.shiftClassRows)..where((t) => t.id.equals(classId)))
+        .write(const ShiftClassRowsCompanion(alarmEnabled: Value(true)));
+    await (db.delete(db.shiftClassAlarms)
+          ..where((t) => t.classId.equals(classId)))
+        .go();
+    for (var k = 0; k < alarms.length; k++) {
+      await db.into(db.shiftClassAlarms).insert(
+            ShiftClassAlarmsCompanion.insert(
+              classId: classId,
+              order: k,
+              minute: alarms[k].minute,
+              label: Value(alarms[k].label),
+            ),
+          );
+    }
   }
 
   Future<int> addEvent({

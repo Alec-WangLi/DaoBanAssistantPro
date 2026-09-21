@@ -1444,4 +1444,33 @@ void main() {
 
     await _disposeCalendar(tester);
   });
+
+  // 一个班次挂多个闹钟之后，信息卡那一行**只有一行**（卡片是定高的，多出来的
+  // 内容会顶高卡片、把网格挤矮）—— 所以只写首条 + 「等 N 个」。
+  testWidgets('信息卡：一个班次多个闹钟时只写首条 + 「等 N 个」', (tester) async {
+    final db = await _pumpCalendar(tester, 'four_crew_three_shift');
+    // 给第一个班次塞三条闹钟，然后**逐天点过去找它** —— 不假定「今天」正好上
+    // 这个班次（模板的周期第一个元素是什么、今天轮到谁，都不该写死在用例里）。
+    await AppRepository(db).setClassAlarmsForTesting(0, const [
+      ShiftAlarm(minute: 6 * 60 + 30, label: '起床'),
+      ShiftAlarm(minute: 12 * 60 + 30, label: '午休'),
+      ShiftAlarm(minute: 17 * 60 + 30),
+    ]);
+    final daysInMonth =
+        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+    var found = false;
+    for (var d = 1; d <= daysInMonth && !found; d++) {
+      await tester.tap(find.text('$d').first);
+      await tester.pumpAndSettle();
+      final line = _shiftLine(tester);
+      if (line.contains('06:30')) {
+        found = true;
+        expect(line, contains('等 3 个'),
+            reason: '卡片定高、这一行只有一行：铺开列三个时刻会把后面的内容挤掉');
+      }
+    }
+    expect(found, isTrue, reason: '本月应当有上这个班次的日子，否则这条用例没有意义');
+
+    await _disposeCalendar(tester);
+  });
 }

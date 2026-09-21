@@ -256,22 +256,26 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ],
             ),
           ),
-          // 响铃落在上班前一天时（00:00 上班的夜班）把「前一天」写在钟点下面：
-          // 左边那列本来就是「班次名 + 日期」两行，右边跟着长成两行不占新高度，
-          // 也不会再让人把 23:00 读成班次**当天**的 23:00。
+          // 这个班次当天有几条闹钟就列几行（时间 + 可选名字）；落在上班前一天的
+          // 那条自己带一行「前一天」小字 —— 多条混排时标记必须跟着**各自那条**
+          // 走，不标就会被读成班次当天的钟点（v0.8.9 用户问的正是这个）。
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                _fmt(e.shift.alarms.first.minute),
-                style: AppTokens.titleStrong,
-              ),
-              if (alarmFallsOnPreviousDay(e.shift, e.shift.alarms.first))
+              for (final a in e.shift.alarms) ...[
                 Text(
-                  L10n.prevDay,
-                  style: AppTokens.microText.copyWith(color: muted),
+                  a.label == null || a.label!.trim().isEmpty
+                      ? _fmt(a.minute)
+                      : '${_fmt(a.minute)} ${a.label!.trim()}',
+                  style: AppTokens.titleStrong,
                 ),
+                if (alarmFallsOnPreviousDay(e.shift, a))
+                  Text(
+                    L10n.prevDay,
+                    style: AppTokens.microText.copyWith(color: muted),
+                  ),
+              ],
             ],
           ),
         ],

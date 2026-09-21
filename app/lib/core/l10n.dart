@@ -499,6 +499,13 @@ class L10n {
   static String get restNoAlarm => t('休息日 · 不响闹钟', 'Rest day · no alarm');
   static String get alarmOff => t('闹钟：未开启', 'Alarm: off');
   static String alarmAt(String time) => isEn ? 'Alarm $time' : '闹钟 $time';
+
+  /// 信息卡上「首条闹钟 + 一共几条」。
+  ///
+  /// 那一行是 `maxLines: 1` + 省略号、卡片又是定高的，把每条时刻都铺开会把
+  /// 后面的内容挤掉（还会顶高卡片、连带把日历网格挤矮）。
+  static String alarmFirstOfMany(String time, int total) => t(
+      '闹钟 $time 等 $total 个', 'Alarm $time (+${total - 1})');
   static String get otherCrews => t('其他班组', 'Other crews');
   static String get savedAndRescheduled => t('已保存并重排闹钟', 'Saved & alarms rescheduled');
   static String switchedTo(String name) => isEn ? 'Switched to $name' : '已切换到 $name';
