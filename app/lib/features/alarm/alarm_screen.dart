@@ -226,6 +226,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   Widget _shiftAlarmTile(BuildContext context, _ShiftAlarmEntry e) {
     final muted = AppTokens.inkMuted(context);
     return GlassTile(
+      // 测试用抓手：按天的行 + 行里每条闹钟的块（`alarm-block-<天>-<序号>`）。
+      // 「前一天」标记要断言**跟着各自那条走**，只能靠这个块定位。
+      key: Key('alarm-day-row-${dayNumber(e.date)}'),
       enableBlur: false,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -269,21 +272,30 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                for (final a in e.shift.alarms) ...[
-                  Text(
-                    a.label == null || a.label!.trim().isEmpty
-                        ? _fmt(a.minute)
-                        : '${_fmt(a.minute)} ${a.label!.trim()}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.titleStrong,
+                for (var k = 0; k < e.shift.alarms.length; k++)
+                  Column(
+                    key: Key('alarm-block-${dayNumber(e.date)}-$k'),
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        e.shift.alarms[k].label == null ||
+                                e.shift.alarms[k].label!.trim().isEmpty
+                            ? _fmt(e.shift.alarms[k].minute)
+                            : '${_fmt(e.shift.alarms[k].minute)} '
+                                '${e.shift.alarms[k].label!.trim()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTokens.titleStrong,
+                      ),
+                      if (alarmFallsOnPreviousDay(
+                          e.shift, e.shift.alarms[k]))
+                        Text(
+                          L10n.prevDay,
+                          style: AppTokens.microText.copyWith(color: muted),
+                        ),
+                    ],
                   ),
-                  if (alarmFallsOnPreviousDay(e.shift, a))
-                    Text(
-                      L10n.prevDay,
-                      style: AppTokens.microText.copyWith(color: muted),
-                    ),
-                ],
               ],
             ),
           ),
