@@ -14,6 +14,7 @@
 // 顺带钉住 `offset`：原生 id 是 `_shiftBaseId + offset`（offset = 距起点日的
 // 天数），跳过某天时**不能**重新编号 —— 否则闹钟会集体换个号。
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 
@@ -315,6 +316,35 @@ void main() {
           .map((p) => p.alarmIndex * 1000 + p.offset)
           .toList();
       expect(a, b, reason: '同一份数据重排两次必须一致，否则用户设过的响铃记录会错位');
+    });
+  });
+
+  // 响铃标题：班次名 + 这条闹钟自己的名字。**名字的边界要钉住** —— 只填空格的
+  // 名字不能拼成「白班 · 」（屏上会留一个悬着的「·」），也不能把「提醒」拼两遍。
+  group('响铃标题（L10n.shiftAlarmTitle）', () {
+    tearDown(() => L10n.locale = 'zh');
+
+    test('没名字 → 「白班提醒」（与只有一条闹钟那会儿逐字一致）', () {
+      expect(L10n.shiftAlarmTitle('白班', null), '白班提醒');
+    });
+
+    test('有名字 → 「白班 · 午休」', () {
+      expect(L10n.shiftAlarmTitle('白班', '午休'), '白班 · 午休');
+    });
+
+    test('只填空格 / 空串 → 当没填，不留一个悬着的「·」', () {
+      expect(L10n.shiftAlarmTitle('白班', '   '), '白班提醒');
+      expect(L10n.shiftAlarmTitle('白班', ''), '白班提醒');
+    });
+
+    test('两端带空格 → 用 trim 过的名字', () {
+      expect(L10n.shiftAlarmTitle('白班', ' 起床 '), '白班 · 起床');
+    });
+
+    test('英文界面：无名那条不再露出中文', () {
+      L10n.locale = 'en';
+      expect(L10n.shiftAlarmTitle('Day shift', null), 'Day shift alarm');
+      expect(L10n.shiftAlarmTitle('Day shift', 'Nap'), 'Day shift · Nap');
     });
   });
 }
