@@ -41,7 +41,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.2\n'
+const String _changelogZh = 'v0.9.3\n'
+    '· 修好 0.9.2 里漏掉的一类班次：12 小时制的夜班（20:30 上班那种）配一个落在值班时间之内的闹钟，从前会被排到前一天同一钟点 —— 0.9.2 只修好了「00:00 上班」那种写法，这类没修到。现在两种写法都算班次当天\n'
+    '· 修好闹钟页把整行藏早了一点：那天的第一个闹钟响过之后，整行（连同后面还没到的那条）就看不见了，也没法在那行关掉当天剩下的闹钟。现在只要那天还有没响的闹钟，那一行就留着\n'
+    '· 闹钟名字最多 12 个字（太长会把闹钟页那一行撑坏）\n\n'
+
+    'v0.9.2\n'
     '· 新增：每个班次最多可以配 6 个联动闹钟，每条还能起个名字（「起床」「午休」）。响铃标题会写明是哪一条（「白班 · 午休」）；不填名字就还是「白班提醒」\n'
     '· 修好一个会把闹钟排错天的问题：钟点落在值班时间之内的闹钟（白班的午休、零点班班中那次）从前被排到前一天同一钟点 —— 等于提前二十来小时响。现在这类算班次当天；起床闹钟那种（早于上班、或零点班的前一晚）照旧\n'
     '· 班次编辑页的闹钟区跟着改了：一条一行（时间 + 名字 + 删除），下面有「添加闹钟」；到 6 个上限时收掉按钮、给一行说明\n'
@@ -81,11 +86,13 @@ const String _changelogZh = 'v0.9.2\n'
     '· 升级后桌面上原有的旧小组件会消失，需要在桌面重新添加\n\n'
     'v0.8.7\n'
     '· 修好桌面小组件上那枚「N 项待办」徽章不跟着变：在 App 里勾掉或新增今天的待办之后，此前要等到下次打开 App 它才更新，现在会跟着一起变\n'
-    '· 内部：推送路径上新加的一处数据库读取补上了错误处理 —— 此前读失败一次会中断整次推送刷新\n\n'
-    'v0.8.6\n'
-    '· 桌面小组件按尺寸重做了版式：矮的时候是一列班次，按高度显示今天起 2 / 3 / 5 天；高的时候是一周或两周的网格，网格下面附一张今日卡片，写着农历、其他班组当天的班次和当天有几项待办\n'
-    '· 改的原因是原来三个版式要摊到七个高度上：拉高或压扁之后行高会被拉长、格子显得又大又空。现在每个高度都有一版对得上的版式\n';
-const String _changelogEn = 'v0.9.2\n'
+    '· 内部：推送路径上新加的一处数据库读取补上了错误处理 —— 此前读失败一次会中断整次推送刷新\n';
+const String _changelogEn = 'v0.9.3\n'
+    '· Fixed a class of shifts missed in 0.9.2: a 12-hour night shift (the 20:30-start kind) with an alarm set inside the shift was still scheduled on the previous day at the same clock time — 0.9.2 only fixed the "midnight start" shape. Both shapes now ring on the shift\'s own day\n'
+    '· Fixed the alarm page hiding a day too early: once that day\'s first alarm had rung, the whole row (including alarms still to come that day) disappeared, and the rest of the day could no longer be muted from it. The row now stays as long as some alarm is still coming\n'
+    '· Alarm names are capped at 12 characters (a longer one used to break the alarm page row)\n\n'
+
+    'v0.9.2\n'
     '· New: each shift can carry up to 6 linked alarms, and each one can have a name ("Wake up", "Nap"). The ringing screen says which one it is ("Day shift · Nap"); leave the name empty and it stays "Day shift alarm"\n'
     '· Fixed alarms landing on the wrong day: an alarm whose clock time falls inside the shift (a lunch nap on a day shift, a break during a midnight shift) used to be scheduled on the previous day at the same time — some 20 hours early. Those now ring on the shift\'s own day; wake-up alarms (before the shift, or the night-before case for midnight shifts) are unchanged\n'
     '· The shift editor\'s alarm section follows: one row per alarm (time + name + delete) with an "Add alarm" button; at the 6-alarm limit the button goes away and a line explains why\n'
@@ -125,10 +132,7 @@ const String _changelogEn = 'v0.9.2\n'
     '· After upgrading, the old widget on your home screen will disappear — you will need to add it again\n\n'
     'v0.8.7\n'
     '· Fixed the "N todos" badge on the home-screen widget not keeping up: after you tick off or add a todo for today in the app, the badge used to stay put until the next time you opened the app — it now follows along\n'
-    '· Internal: a database read on the widget-push path gained error handling — one failed read used to abort the whole push refresh\n\n'
-    'v0.8.6\n'
-    '· The home-screen widget was rebuilt around size: when it is short it shows a single column of shifts — 2, 3 or 5 days from today, depending on how tall it is; when it is tall it shows a one- or two-week grid with today\'s card below it, listing the lunar date, the other teams\' shifts for the day and how many todos the day has\n'
-    '· The reason: the three old layouts had to stretch across seven possible heights, so raising or squashing the widget stretched the row height and left the cells large and empty. Each height now has a layout that fits it\n';
+    '· Internal: a database read on the widget-push path gained error handling — one failed read used to abort the whole push refresh\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
