@@ -18,6 +18,19 @@
 - 打完版本本地 `git tag vX.Y.Z`。
 - 最近历史：0.1.45(+46) → **0.2.0(+47)**（第二大版）→ 0.2.1(+48)~0.2.4(+51) 测试版 → **0.3.0(+52)**（正式稳定版）→ 0.3.1(+53) 测试版 → 0.3.2(+54) 测试版 → 0.3.3(+55) 测试版 → 0.3.4(+56) 测试版 → 0.3.5(+57)~0.3.7(+59) 测试版 → **0.4.0(+60)**（正式稳定版）→ 0.4.1(+61) 测试版 → 0.4.2(+62) 测试版 → 0.4.4(+64)~0.4.9(+69) 测试版 → **0.5.0(+70)**（正式稳定版 · 开源）→ **0.6.0(+71)**（正式稳定版）→ 0.6.1(+72)~0.6.13(+84) 测试版 → **0.7.0(+85)**（正式稳定版）→ 0.7.1(+86)~0.7.5(+90) 测试版 → **0.8.0(+91)**（正式稳定版）→ 0.8.1(+92) 测试版 → 0.8.2(+93) 测试版 → 0.8.3(+94) 测试版 → 0.8.4(+95) 测试版 → 0.8.5(+96) 测试版 → 0.8.6(+97) 测试版 → 0.8.7(+98) 测试版 → 0.8.8(+99) 测试版 → 0.8.9(+100) 测试版 → 0.8.10(+101) 测试版 → 0.8.11(+102) 测试版 → 0.8.12(+103) 测试版 → **0.9.0(+104) 正式稳定版** → 0.9.1(+105) 测试版 → 0.9.2(+106) 测试版 → 0.9.3(+107) 测试版（独立审查抓出的两处修复）。更早见 `git log` 或应用内更新日志。
 
+## 分支与发布（2026-09-21 用户定，从 0.9.4 起照此办）
+
+- **测试版（末位 `Z ≠ 0`）一律在 `beta` 分支上做、提交、发布**：`git checkout beta` → 提交 → `git push origin beta` → `git tag vX.Y.Z && git push origin vX.Y.Z` → `scripts/release.ps1 -SkipConfirm`。**tag 打在 beta 的提交上没问题**（预发布本来就不占 Releases 页的 Latest）。
+- **`main` 只在发正式版（`Z = 0`）时收一次合并**：`beta` → `main` 用 `--no-ff`（留一条合并记录），正式版的 tag 打在 **main** 上。
+- **`latest.json` 必须留在 `main` 上**：App 的兜底更新通道读的是 `raw.githubusercontent.com/<owner>/<repo>/main/latest.json`（`update_checker.dart`），而 `release.ps1` 是把它提交到**当前分支**的。所以在 beta 上发完版要单独把那份同步回 main（只为这一个数据文件，不算「往 main 上放测试版源码」）：
+  ```bash
+  git checkout main && git checkout beta -- latest.json \
+    && git commit -m "chore(release): 更新发布清单至 vX.Y.Z" \
+    && git push origin main && git checkout beta
+  ```
+  不同步的话，GitHub API 被限流（403）时 App 读到的兜底清单会停在旧版本。
+- 历史注记：**0.9.1 / 0.9.2 / 0.9.3 三个测试版是直接在 main 上发的**（那时还没定这条规矩）；从这之后的测试版走 beta。
+
 ## 目录架构地图（app/lib）
 ```
 main.dart / app.dart        入口 + 根 Widget（跟随系统深浅主题）
@@ -84,7 +97,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
 - 改表后：`dart run build_runner build --delete-conflicting-outputs`。
-- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 329 条，只增不减 —— v0.8.8 删掉随 `WidgetTier` 一起作废的五档阈值护栏、换上三张固定卡的结构护栏，是等量替换）。
+- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 333 条，只增不减 —— v0.8.8 删掉随 `WidgetTier` 一起作废的五档阈值护栏、换上三张固定卡的结构护栏，是等量替换）。
 - 构建：`flutter build apk --release --target-platform android-arm64` → `app/build/app/outputs/flutter-apk/app-release.apk`（**切 arm64 单 ABI**，APK 从 ~60MB 降到 ~21MB；仅 64 位设备）。
 - 分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，用 `aapt2 dump badging` 校验 versionName/versionCode 与包名。
 - 一键发布（GitHub Releases）：`scripts/release.ps1`。
