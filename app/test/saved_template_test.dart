@@ -106,7 +106,7 @@ ShiftSchedule _domain() => ShiftSchedule(
             endMinute: 20 * 60 + 30,
             color: 0xFF4C8DFF,
             alarmEnabled: true,
-            alarmMinute: 7 * 60),
+            alarms: [ShiftAlarm(minute: 7 * 60)]),
         ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
       ],
       cycle: const [0, 0, 1, 1, 1],

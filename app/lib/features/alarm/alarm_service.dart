@@ -54,29 +54,38 @@ class ShiftAlarmPlan {
   const ShiftAlarmPlan({
     required this.offset,
     required this.shift,
+    required this.alarm,
+    required this.alarmIndex,
     required this.fireAt,
   });
 
   final int offset;
   final ShiftClass shift;
+
+  /// 要响的那一条闹钟。
+  final ShiftAlarm alarm;
+
+  /// 这个闹钟在 `shift.alarms` 里的下标 —— 原生 id 的「序号」就是它。
+  final int alarmIndex;
+
   final DateTime fireAt;
 }
 
-/// 某天某个班次的响铃时刻。
+/// 某天某个班次的**某一条**闹钟的响铃时刻。
 ///
-/// 钟点取 [ShiftClass.alarmMinute]；[ShiftClass.alarmPreviousDay] 为真时整体前移
-/// 一天 —— 规则是「**不晚于上班时刻的最近一次该钟点**」，所以 00:00 上班、
-/// 23:00 响铃排的是前一天 23:00（排在班次当天就已经是班后 15 小时了）。
+/// 钟点取 [alarm] 的钟面值；[alarmFallsOnPreviousDay] 为真时整体前移一天 ——
+/// 规则是「**不晚于上班时刻的最近一次该钟点**」，所以 00:00 上班、23:00 响铃排的是
+/// 前一天 23:00（排在班次当天就已经是班后 15 小时了）。
 ///
 /// 日期用 `DateTime(y, m, d - 1)` 重建而不是 `subtract(Duration(days: 1))`：
 /// 后者减的是绝对 24 小时，碰上夏令时切换会把钟点也挪掉一小时。
-DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift) {
-  final alarm = shift.alarmMinute!;
-  return shift.alarmPreviousDay
+DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
+  final clock = alarm.minute;
+  return alarmFallsOnPreviousDay(shift, alarm)
       ? DateTime(date.year, date.month, date.day - 1)
-          .add(Duration(minutes: alarm))
+          .add(Duration(minutes: clock))
       : DateTime(date.year, date.month, date.day)
-          .add(Duration(minutes: alarm));
+          .add(Duration(minutes: clock));
 }
 
 /// 决定「未来 [days] 天里哪些天要排班次联动闹钟、各排在几点」。
@@ -88,9 +97,11 @@ DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift) {
 /// 与「按天关闹钟」正交）**从来没有被任何测试盖到**。
 ///
 /// 跳过条件与从前的循环逐条一致：
-/// 那天没有班次 / 是休班 / 班次没开闹钟 / 班次没设闹钟时间 /
+/// 那天没有班次 / 是休班 / 班次没开总开关 / 班次一条闹钟都没配 /
 /// 那天被「按天关闹钟」显式关过（[overrides] 里值为 `false`）/
 /// 算出来的触发时刻不晚于 [from]（今天这个点已经过去了）。
+///
+/// **一个班次挂了几个闹钟就出几条 plan**，各自算各自的触发时刻与落点。
 ///
 /// 触发时刻由 [shiftAlarmFireAt] 算（可能是**前一天**晚上），但 `offset` 与原生
 /// id 始终按**班次那一天**算 —— id 是 `_shiftBaseId + 天数偏移`，跟着触发时刻走
@@ -106,16 +117,24 @@ List<ShiftAlarmPlan> planShiftAlarms(
   for (var d = 0; d < days; d++) {
     final date = today.add(Duration(days: d));
     final t = schedule.shiftOn(date);
-    if (t == null || t.isRest || !t.alarmEnabled || t.alarmMinute == null) {
+    if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
       continue;
     }
     // 按天覆盖：该天被单独关闭则跳过
     if (overrides[dayNumber(date)] == false) continue;
 
-    final fireAt = shiftAlarmFireAt(date, t);
-    if (!fireAt.isAfter(from)) continue;
-
-    plans.add(ShiftAlarmPlan(offset: d, shift: t, fireAt: fireAt));
+    for (var i = 0; i < t.alarms.length; i++) {
+      final alarm = t.alarms[i];
+      final fireAt = shiftAlarmFireAt(date, t, alarm);
+      if (!fireAt.isAfter(from)) continue;
+      plans.add(ShiftAlarmPlan(
+        offset: d,
+        shift: t,
+        alarm: alarm,
+        alarmIndex: i,
+        fireAt: fireAt,
+      ));
+    }
   }
   return plans;
 }
@@ -736,7 +755,9 @@ class AlarmService {
         from: DateTime.now(), days: days, overrides: overrides)) {
       try {
         await scheduleNativeAlarm(
-            _shiftBaseId + plan.offset, plan.fireAt, '${plan.shift.name}提醒');
+            _shiftBaseId + plan.offset,
+            plan.fireAt,
+            L10n.shiftAlarmTitle(plan.shift.name, plan.alarm.label));
       } catch (e) {
         await appendLog('reschedule: 排班闹钟排定失败: $e');
       }

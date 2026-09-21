@@ -546,11 +546,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     // 响铃落在哪天是「算」出来的、看不出来（00:00 上班 + 23:00 响铃 = **前一天**
     // 晚上，见 `ShiftClass.alarmPreviousDay`），所以下面既改钟点的写法、又补一行
     // 小字：用户反馈里问的正是「这 23:00 到底是哪天」。
-    final alarmPrevDay =
-        c.alarmEnabled && c.alarmMinute != null && c.alarmPreviousDay;
+    final firstAlarm = c.alarms.isEmpty ? null : c.alarms.first;
+    final alarmPrevDay = c.alarmEnabled &&
+        firstAlarm != null &&
+        alarmFallsOnPreviousDay(c, firstAlarm);
     final alarmNoStart = c.alarmEnabled &&
-        c.alarmMinute != null &&
-        !c.alarmPreviousDay &&
+        firstAlarm != null &&
+        !alarmFallsOnPreviousDay(c, firstAlarm) &&
         c.startMinute == null;
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
@@ -669,14 +671,21 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               _timeChip(
                 context,
                 label: L10n.alarmTime,
-                minutes: c.alarmMinute,
+                minutes: firstAlarm?.minute,
                 // 落在上班前一天的写成「前一天 23:00」：只写钟点会让人读成班次
                 // 当天，而那正是用户反馈里说的「看不到有这个选项」。
                 valueText: alarmPrevDay
-                    ? L10n.clockPrevDay(formatClock(c.alarmMinute!))
+                    ? L10n.clockPrevDay(formatClock(firstAlarm.minute))
                     : null,
-                onPick: (m) => setState(() => _classes[index] =
-                    _editClass(_classes[index], alarmMinute: m)),
+                onPick: (m) {
+                  // `_timeChip` 的 onPick 类型是可空 int（没选就调不到这里），
+                  // 但闹钟必须有个钟点，所以空值直接忽略。
+                  if (m == null) return;
+                  setState(() => _classes[index] = _editClass(_classes[index],
+                      alarms: [
+                        ShiftAlarm(minute: m, label: firstAlarm?.label)
+                      ]));
+                },
               ),
               if (alarmPrevDay || alarmNoStart)
                 Padding(
@@ -684,7 +693,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   child: Text(
                     alarmPrevDay
                         ? L10n.alarmPrevDayHint(formatClock(c.startMinute!),
-                            formatClock(c.alarmMinute!))
+                            formatClock(firstAlarm.minute))
                         : L10n.alarmNoStartHint,
                     style: AppTokens.microText.copyWith(color: muted),
                   ),
@@ -730,7 +739,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               isRest: true,
               clearTimes: true,
               alarmEnabled: false,
-              clearAlarmMinute: true)
+              clearAlarms: true)
           : _editClass(cur,
               isRest: false,
               startMinute: cur.startMinute ?? toMinutes(8, 0),
@@ -1582,8 +1591,8 @@ ShiftClass _editClass(
   bool? isRest,
   int? color,
   bool? alarmEnabled,
-  int? alarmMinute,
-  bool clearAlarmMinute = false,
+  List<ShiftAlarm>? alarms,
+  bool clearAlarms = false,
 }) {
   return ShiftClass(
     // 必须带下去：丢了 id 就等于把这个班次变成「新班次」，保存时会插一条新行，
@@ -1597,7 +1606,7 @@ ShiftClass _editClass(
     isRest: isRest ?? c.isRest,
     color: color ?? c.color,
     alarmEnabled: alarmEnabled ?? c.alarmEnabled,
-    alarmMinute: clearAlarmMinute ? null : (alarmMinute ?? c.alarmMinute),
+    alarms: clearAlarms ? const [] : (alarms ?? c.alarms),
   );
 }
 

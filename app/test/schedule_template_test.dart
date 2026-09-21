@@ -19,7 +19,7 @@ ShiftSchedule _tenDay({int ourTeamIndex = 0, List<int>? offsets}) =>
             endMinute: 20 * 60 + 30,
             color: 0xFF4C8DFF,
             alarmEnabled: true,
-            alarmMinute: 7 * 60),
+            alarms: [ShiftAlarm(minute: 7 * 60)]),
         ShiftClass(
             name: '中班',
             abbr: '中',
@@ -33,7 +33,7 @@ ShiftSchedule _tenDay({int ourTeamIndex = 0, List<int>? offsets}) =>
             endMinute: 8 * 60,
             color: 0xFF7A5CFF,
             alarmEnabled: true,
-            alarmMinute: 23 * 60),
+            alarms: [ShiftAlarm(minute: 23 * 60)]),
         ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
       ],
       cycle: const [0, 0, 1, 1, 3, 2, 2, 3, 3, 3],
@@ -127,11 +127,11 @@ void main() {
       expect(back.length, 4);
       expect(back[0].name, '白班');
       expect(back[0].startMinute, 8 * 60 + 30);
-      expect(back[0].alarmMinute, 7 * 60);
+      expect(back[0].alarms.single.minute, 7 * 60);
       expect(back[0].alarmEnabled, isTrue);
       // 中班没有闹钟、夜班从 00:00 开始（钟面 0 与「没填」必须分得开）
       expect(back[1].alarmEnabled, isFalse);
-      expect(back[1].alarmMinute, isNull);
+      expect(back[1].alarms, isEmpty);
       expect(back[2].startMinute, 0);
       expect(back[3].isRest, isTrue);
       expect(back[3].startMinute, isNull);

@@ -102,7 +102,7 @@ ShiftClass _toClass(_LegacyRow r) => ShiftClass(
       isRest: r.isRest != 0,
       color: r.color,
       alarmEnabled: r.alarmOn != 0,
-      alarmMinute: r.alarm,
+      alarms: r.alarm == null ? const [] : [ShiftAlarm(minute: r.alarm!)],
     );
 
 void main() {
@@ -179,7 +179,7 @@ void main() {
       expect(b?.isRest, a?.isRest, reason: why);
       expect(b?.color, a?.color, reason: why);
       expect(b?.alarmEnabled, a?.alarmEnabled, reason: why);
-      expect(b?.alarmMinute, a?.alarmMinute, reason: why);
+      expect(b?.alarms, a?.alarms, reason: why);
     }
   });
 

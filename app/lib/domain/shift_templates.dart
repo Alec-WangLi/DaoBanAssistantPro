@@ -54,7 +54,7 @@ class ShiftClassProto {
     this.isRest = false,
     required this.color,
     this.alarmEnabled = false,
-    this.alarmMinute,
+    this.alarms = const [],
   });
 
   final ShiftRole role;
@@ -63,7 +63,9 @@ class ShiftClassProto {
   final bool isRest;
   final int color;
   final bool alarmEnabled;
-  final int? alarmMinute;
+
+  /// 这个班次的联动闹钟（内置模板每个都是一条，钟点与从前逐个一致）。
+  final List<ShiftAlarm> alarms;
 
   ShiftClass toClass() => ShiftClass(
         name: _roleName[role]!.value,
@@ -73,7 +75,7 @@ class ShiftClassProto {
         isRest: isRest,
         color: color,
         alarmEnabled: alarmEnabled,
-        alarmMinute: alarmMinute,
+        alarms: alarms,
       );
 }
 
@@ -173,45 +175,45 @@ const shiftTemplateGroups = <String>[
 // 12 小时制
 const _d12 = ShiftClassProto(
     role: ShiftRole.day, startMinute: 8 * 60 + 30, endMinute: 20 * 60 + 30,
-    color: 0xFF4C8DFF, alarmEnabled: true, alarmMinute: 7 * 60);
+    color: 0xFF4C8DFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 7 * 60)]);
 const _n12 = ShiftClassProto(
     role: ShiftRole.night, startMinute: 20 * 60 + 30, endMinute: 8 * 60 + 30,
-    color: 0xFF7A5CFF, alarmEnabled: true, alarmMinute: 19 * 60);
+    color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 19 * 60)]);
 
 // 8 小时制
 const _e8 = ShiftClassProto(
     role: ShiftRole.morning, startMinute: 8 * 60, endMinute: 16 * 60,
-    color: 0xFF4C8DFF, alarmEnabled: true, alarmMinute: 7 * 60);
+    color: 0xFF4C8DFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 7 * 60)]);
 const _m8 = ShiftClassProto(
     role: ShiftRole.afternoon, startMinute: 16 * 60, endMinute: 24 * 60,
-    color: 0xFFFF9F0A, alarmEnabled: true, alarmMinute: 15 * 60);
+    color: 0xFFFF9F0A, alarmEnabled: true, alarms: [ShiftAlarm(minute: 15 * 60)]);
 const _n8 = ShiftClassProto(
     role: ShiftRole.night, startMinute: 0, endMinute: 8 * 60,
-    color: 0xFF7A5CFF, alarmEnabled: true, alarmMinute: 23 * 60);
+    color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 23 * 60)]);
 
 // 6 小时制
 const _e6 = ShiftClassProto(
     role: ShiftRole.morning, startMinute: 6 * 60, endMinute: 12 * 60,
-    color: 0xFF4C8DFF, alarmEnabled: true, alarmMinute: 5 * 60 + 30);
+    color: 0xFF4C8DFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 5 * 60 + 30)]);
 const _m6 = ShiftClassProto(
     role: ShiftRole.afternoon, startMinute: 12 * 60, endMinute: 18 * 60,
-    color: 0xFFFF9F0A, alarmEnabled: true, alarmMinute: 11 * 60 + 30);
+    color: 0xFFFF9F0A, alarmEnabled: true, alarms: [ShiftAlarm(minute: 11 * 60 + 30)]);
 const _l6 = ShiftClassProto(
     role: ShiftRole.evening, startMinute: 18 * 60, endMinute: 24 * 60,
-    color: 0xFF00C7BE, alarmEnabled: true, alarmMinute: 17 * 60 + 30);
+    color: 0xFF00C7BE, alarmEnabled: true, alarms: [ShiftAlarm(minute: 17 * 60 + 30)]);
 const _n6 = ShiftClassProto(
     role: ShiftRole.night, startMinute: 0, endMinute: 6 * 60,
-    color: 0xFF7A5CFF, alarmEnabled: true, alarmMinute: 23 * 60);
+    color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 23 * 60)]);
 
 // 24 小时值班：08:00 → 次日 08:00（endMinute 跨过午夜继续累加）
 const _duty = ShiftClassProto(
     role: ShiftRole.duty, startMinute: 8 * 60, endMinute: 32 * 60,
-    color: 0xFFFF375F, alarmEnabled: true, alarmMinute: 7 * 60);
+    color: 0xFFFF375F, alarmEnabled: true, alarms: [ShiftAlarm(minute: 7 * 60)]);
 
 // 常白（与 12 小时制白班同名同色，仅时段不同 —— 故复用同一角色）
 const _office = ShiftClassProto(
     role: ShiftRole.day, startMinute: 8 * 60 + 30, endMinute: 17 * 60 + 30,
-    color: 0xFF4C8DFF, alarmEnabled: true, alarmMinute: 7 * 60 + 30);
+    color: 0xFF4C8DFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 7 * 60 + 30)]);
 
 // 休息
 const _rest = ShiftClassProto(

@@ -51,6 +51,60 @@ String formatClock(int minutes) {
   return '$h:${(m % 60).toString().padLeft(2, '0')}';
 }
 
+/// 一个班次上的**一条**联动闹钟。
+///
+/// [minute] 是钟面值（0..1439，分钟自午夜）。[label] 是可选名字（「起床」「午休」），
+/// 为空时响铃标题退回「白班提醒」。名字的空白由**输入侧**（编辑器）负责 trim，
+/// 值类型本身不做归一化 —— 它是纯数据，跟库里存的一致。
+class ShiftAlarm {
+  const ShiftAlarm({required this.minute, this.label});
+
+  final int minute;
+  final String? label;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ShiftAlarm && other.minute == minute && other.label == label;
+
+  @override
+  int get hashCode => Object.hash(minute, label);
+
+  @override
+  String toString() => 'ShiftAlarm($minute${label == null ? '' : ', $label'})';
+}
+
+/// 一个班次最多挂几个联动闹钟。
+///
+/// **不是产品口味，是原生 id 空间的硬上限**：原生 id 是
+/// `序号 × 天数窗口 + 天数偏移`（见 `alarm_service.dart` 的 `_shiftDaysHorizon`），
+/// Kotlin 侧 `cancelAllNativeAlarms` 扫的是 `0..400`（`MainActivity.kt:550`）。
+/// 6 × 60 = 360 ≤ 400 刚好放得下。**改这个数或改天数窗口，必须同时改另一边。**
+const int maxAlarmsPerShift = 6;
+
+/// 响铃钟点是否落在上班的**前一天**。
+///
+/// 判据（Task 1 先原样搬旧规则，Task 2 再补「窗口内」那一档）：响铃的钟面值晚于
+/// 上班的钟面值 —— 那个钟点在同一天里只可能排在上班**之后**（00:00 上班、23:00
+/// 响铃 → 当天 23:00 那个班已经结束 15 小时），所以它指的必然是前一天晚上那个钟点。
+///
+/// 上班时间没填（或钟点相同）时返回 false：前者无从判断，后者「不晚于上班时刻的
+/// 最近一次该钟点」就是上班那一刻本身。
+bool alarmFallsOnPreviousDay(ShiftClass shift, ShiftAlarm alarm) {
+  final s = shift.startMinute;
+  if (s == null) return false;
+  return alarm.minute > s;
+}
+
+/// 两个闹钟列表逐条相等（本文件不引 Flutter，拿不到 `listEquals`）。
+bool _sameAlarms(List<ShiftAlarm> a, List<ShiftAlarm> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
 /// 班次定义：一个班次只定义一次，周期里的每一天引用它。
 class ShiftClass {
   const ShiftClass({
@@ -62,7 +116,7 @@ class ShiftClass {
     this.isRest = false,
     this.color = 0xFF5B7FFF,
     this.alarmEnabled = false,
-    this.alarmMinute,
+    this.alarms = const [],
   });
 
   /// 库里的行 id；null = 还没落库的新班次。
@@ -91,14 +145,15 @@ class ShiftClass {
   /// 日历格子的 ARGB 颜色。
   final int color;
 
-  /// 联动闹钟是否开启。
+  /// 联动闹钟总开关：关掉**不清空** [alarms]（用户手滑关一下不该丢配置）。
   final bool alarmEnabled;
 
-  /// 联动闹钟响铃时间（分钟自午夜）；null 表示未设。
+  /// 这个班次的联动闹钟（有序）。
   ///
-  /// **钟面值晚于 [startMinute] 时，这个钟点落在上班的前一天**（见
-  /// [alarmPreviousDay]）—— 00:00 上班、23:00 响铃的夜班就是它。
-  final int? alarmMinute;
+  /// **顺序就是原生 id 里的「序号」**（见 `alarm_service.dart` 的 `_shiftDaysHorizon`）——
+  /// 所以用户在编辑页里调整顺序会让闹钟换号（可接受：编辑之后必然重排、`cancelAll`
+  /// 先跑），但**重排本身绝不能重新编号**。上限 [maxAlarmsPerShift]。
+  final List<ShiftAlarm> alarms;
 
   /// 工作窗口是否跨过午夜。
   bool get crossesMidnight {
@@ -115,20 +170,6 @@ class ShiftClass {
     final s = startMinute, e = endMinute;
     if (s == null || e == null) return false;
     return e >= 1440 || e < s;
-  }
-
-  /// 联动闹钟是否落在上班的**前一天**。
-  ///
-  /// 判据只有一条：响铃的钟面值晚于上班的钟面值。这个钟点在同一天里只可能排在
-  /// 上班**之后**（00:00 上班、23:00 响铃 → 当天 23:00 时这个班已经结束 15 小时），
-  /// 所以它指的必然是前一天晚上那个钟点。
-  ///
-  /// 上班时间没填（或钟点相同）时返回 false：前者无从判断，后者「不晚于上班时刻
-  /// 的最近一次该钟点」就是上班那一刻本身。
-  bool get alarmPreviousDay {
-    final s = startMinute, a = alarmMinute;
-    if (s == null || a == null) return false;
-    return a > s;
   }
 
   /// 日历格子显示的简称：优先用 [abbr]，为空时按名称推断。
@@ -153,7 +194,7 @@ class ShiftClass {
     bool? isRest,
     int? color,
     bool? alarmEnabled,
-    int? alarmMinute,
+    List<ShiftAlarm>? alarms,
   }) {
     return ShiftClass(
       id: id ?? this.id,
@@ -164,7 +205,7 @@ class ShiftClass {
       isRest: isRest ?? this.isRest,
       color: color ?? this.color,
       alarmEnabled: alarmEnabled ?? this.alarmEnabled,
-      alarmMinute: alarmMinute ?? this.alarmMinute,
+      alarms: alarms ?? this.alarms,
     );
   }
 
@@ -179,11 +220,11 @@ class ShiftClass {
       other.isRest == isRest &&
       other.color == color &&
       other.alarmEnabled == alarmEnabled &&
-      other.alarmMinute == alarmMinute;
+      _sameAlarms(other.alarms, alarms);
 
   @override
   int get hashCode => Object.hash(id, name, abbr, startMinute, endMinute,
-      isRest, color, alarmEnabled, alarmMinute);
+      isRest, color, alarmEnabled, Object.hashAll(alarms));
 
   @override
   String toString() => 'ShiftClass($name, rest=$isRest)';
@@ -381,7 +422,7 @@ ShiftSchedule defaultSchedule() {
         endMinute: 20 * 60 + 30,
         color: 0xFF4C8DFF,
         alarmEnabled: true,
-        alarmMinute: 7 * 60,
+        alarms: const [ShiftAlarm(minute: 7 * 60)],
       ),
       ShiftClass(
         name: L10n.t('上夜班', 'Night shift'),
@@ -390,7 +431,7 @@ ShiftSchedule defaultSchedule() {
         endMinute: 8 * 60 + 30,
         color: 0xFF7A5CFF,
         alarmEnabled: true,
-        alarmMinute: 19 * 60 + 30,
+        alarms: const [ShiftAlarm(minute: 19 * 60 + 30)],
       ),
       ShiftClass(
         name: L10n.t('下夜班', 'Off after nights'),

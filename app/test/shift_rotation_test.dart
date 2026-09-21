@@ -48,26 +48,32 @@ void main() {
 
   // 响铃落在上班前一天：判据是「响铃钟点晚于上班钟点」。00:00 上班的夜班配
   // 23:00 响铃就是它（排到班次当天的话，响铃时这个班已经结束 15 小时）。
-  test('alarmPreviousDay：钟点晚于上班钟点才算前一天', () {
-    const midnight =
-        ShiftClass(name: '夜班', startMinute: 0, endMinute: 480, alarmMinute: 1380);
-    expect(midnight.alarmPreviousDay, isTrue);
+  test('alarmFallsOnPreviousDay：钟点晚于上班钟点才算前一天', () {
+    expect(
+        alarmFallsOnPreviousDay(
+            const ShiftClass(name: '夜班', startMinute: 0, endMinute: 480),
+            const ShiftAlarm(minute: 1380)),
+        isTrue);
 
     // 内置 12 小时制夜班：20:30 上班、19:30 响铃 —— 当天，没有歧义。
-    const evening = ShiftClass(
-        name: '夜班', startMinute: 1230, endMinute: 510, alarmMinute: 1170);
-    expect(evening.alarmPreviousDay, isFalse);
+    expect(
+        alarmFallsOnPreviousDay(
+            const ShiftClass(name: '夜班', startMinute: 1230, endMinute: 510),
+            const ShiftAlarm(minute: 1170)),
+        isFalse);
 
     // 钟点相同：就是上班那一刻本身，算当天。
-    const same =
-        ShiftClass(name: '白班', startMinute: 480, endMinute: 1020, alarmMinute: 480);
-    expect(same.alarmPreviousDay, isFalse);
+    expect(
+        alarmFallsOnPreviousDay(
+            const ShiftClass(name: '白班', startMinute: 480, endMinute: 1020),
+            const ShiftAlarm(minute: 480)),
+        isFalse);
 
-    // 判断不了的两种：缺上班时间 / 缺响铃时间。
+    // 判断不了的：缺上班时间 —— 按当天（不瞎挪一天）。
     expect(
-        const ShiftClass(name: '夜班', alarmMinute: 1380).alarmPreviousDay, isFalse);
-    expect(
-        const ShiftClass(name: '夜班', startMinute: 0).alarmPreviousDay, isFalse);
+        alarmFallsOnPreviousDay(
+            const ShiftClass(name: '夜班'), const ShiftAlarm(minute: 1380)),
+        isFalse);
   });
 
   test('多班组错开（四班两倒 4 个班）', () {
@@ -312,6 +318,48 @@ void main() {
       expect(a, isNot(b), reason: '内容相同但 id 不同 = 两个不同实体');
       expect(a, isNot(noId));
       expect(a.copyWith(abbr: '白').id, 1, reason: 'copyWith 必须保住 id');
+    });
+  });
+
+  group('ShiftAlarm：班次上的多个闹钟', () {
+    const shift = ShiftClass(
+      name: '白班',
+      startMinute: 8 * 60,
+      endMinute: 20 * 60,
+      alarmEnabled: true,
+      alarms: [
+        ShiftAlarm(minute: 6 * 60 + 30, label: '起床'),
+        ShiftAlarm(minute: 12 * 60 + 30, label: '午休'),
+      ],
+    );
+
+    test('alarms 默认空表，且带着 label 一起比相等', () {
+      const bare = ShiftClass(name: '休班', isRest: true);
+      expect(bare.alarms, isEmpty);
+      expect(shift.alarms, hasLength(2));
+      expect(shift.alarms.first.label, '起床');
+      expect(shift.alarms.first,
+          const ShiftAlarm(minute: 6 * 60 + 30, label: '起床'));
+      expect(shift.alarms.first == const ShiftAlarm(minute: 6 * 60 + 30),
+          isFalse, reason: '名字不同就是不同的闹钟（响铃标题与列表行都靠它）');
+    });
+
+    test('闹钟列表参与 ShiftClass 的相等判定', () {
+      final same = ShiftClass(
+        name: shift.name,
+        startMinute: shift.startMinute,
+        endMinute: shift.endMinute,
+        alarmEnabled: true,
+        alarms: const [
+          ShiftAlarm(minute: 6 * 60 + 30, label: '起床'),
+          ShiftAlarm(minute: 12 * 60 + 30, label: '午休'),
+        ],
+      );
+      final other =
+          shift.copyWith(alarms: const [ShiftAlarm(minute: 6 * 60 + 30)]);
+      expect(same, equals(shift));
+      expect(same.hashCode, shift.hashCode);
+      expect(other == shift, isFalse, reason: '少一个闹钟就不是同一个班次定义');
     });
   });
 }

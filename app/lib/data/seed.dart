@@ -35,7 +35,9 @@ Future<void> seedIfEmpty(AppDatabase db) async {
             isRest: Value(c.isRest),
             color: Value(c.color),
             alarmEnabled: Value(c.alarmEnabled),
-            alarmMinute: Value(c.alarmMinute),
+            // 本轮只换形状：库表还是「一个钟点」那一列，先落第一条。
+            alarmMinute:
+                Value(c.alarms.isEmpty ? null : c.alarms.first.minute),
           ),
         ));
   }

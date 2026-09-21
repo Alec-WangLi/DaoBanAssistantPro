@@ -264,9 +264,9 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
   // 六天一轮的四班三倒：白 / 白 / 中 / 中 / 夜 / 休。
   // 夜班跨午夜（20:30 → 08:00），专门让「跨午夜」那段展示逻辑有东西可画。
   final triShift = [
-    const ShiftClass(name: '白班', abbr: '白', startMinute: 480, endMinute: 1080, color: 0xFF4C8DFF, alarmEnabled: true, alarmMinute: 420),
+    const ShiftClass(name: '白班', abbr: '白', startMinute: 480, endMinute: 1080, color: 0xFF4C8DFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 420)]),
     const ShiftClass(name: '中班', abbr: '中', startMinute: 1080, endMinute: 1320, color: 0xFFFF9F0A),
-    const ShiftClass(name: '夜班', abbr: '夜', startMinute: 1230, endMinute: 1920, color: 0xFF7A5CFF, alarmEnabled: true, alarmMinute: 1170),
+    const ShiftClass(name: '夜班', abbr: '夜', startMinute: 1230, endMinute: 1920, color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 1170)]),
     const ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
   ];
   final currentId = await repo.saveSchedule(
@@ -284,7 +284,7 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
   // 12 天长周期，班次名长一点，用来检验名称/简称在窄列里的排布。
   final longCycle = [
     const ShiftClass(name: '白班', abbr: '白', startMinute: 480, endMinute: 1200, color: 0xFF4C8DFF),
-    const ShiftClass(name: '上夜班', abbr: '上夜', startMinute: 1200, endMinute: 1920, color: 0xFF7A5CFF, alarmEnabled: true, alarmMinute: 1140),
+    const ShiftClass(name: '上夜班', abbr: '上夜', startMinute: 1200, endMinute: 1920, color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 1140)]),
     const ShiftClass(name: '下夜班', abbr: '下夜', startMinute: 0, endMinute: 480, color: 0xFF5A5F73),
     const ShiftClass(name: '大休', abbr: '休', isRest: true, color: 0xFF34C759),
   ];
@@ -389,7 +389,7 @@ Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
           endMinute: 960,
           color: 0xFF4C8DFF,
           alarmEnabled: true,
-          alarmMinute: 420),
+          alarms: [ShiftAlarm(minute: 420)]),
       ShiftClass(
           name: '零点班',
           abbr: '零',
@@ -397,7 +397,7 @@ Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
           endMinute: 480,
           color: 0xFF7A5CFF,
           alarmEnabled: true,
-          alarmMinute: 23 * 60),
+          alarms: [ShiftAlarm(minute: 23 * 60)]),
       ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
     ],
     cycle: const [0, 0, 1, 1, 2],
@@ -428,7 +428,7 @@ Future<void> makeCrewClashCurrent(AppDatabase db) async {
           endMinute: 20 * 60 + 30,
           color: 0xFF4C8DFF,
           alarmEnabled: true,
-          alarmMinute: 7 * 60),
+          alarms: [ShiftAlarm(minute: 7 * 60)]),
       ShiftClass(
           name: '中班',
           abbr: '中',
@@ -442,7 +442,7 @@ Future<void> makeCrewClashCurrent(AppDatabase db) async {
           endMinute: 8 * 60,
           color: 0xFF7A5CFF,
           alarmEnabled: true,
-          alarmMinute: 23 * 60),
+          alarms: [ShiftAlarm(minute: 23 * 60)]),
       ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
     ],
     cycle: const [0, 0, 1, 1, 3, 2, 2, 3, 3, 3],
@@ -477,7 +477,7 @@ Future<void> seedMyTemplates(AppDatabase db) async {
           endMinute: 16 * 60,
           color: 0xFF4C8DFF,
           alarmEnabled: true,
-          alarmMinute: 7 * 60),
+          alarms: [ShiftAlarm(minute: 7 * 60)]),
       ShiftClass(
           name: '中班',
           abbr: '中',
@@ -491,7 +491,7 @@ Future<void> seedMyTemplates(AppDatabase db) async {
           endMinute: 8 * 60,
           color: 0xFF7A5CFF,
           alarmEnabled: true,
-          alarmMinute: 23 * 60),
+          alarms: [ShiftAlarm(minute: 23 * 60)]),
       ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
     ],
     cycle: [0, 0, 1, 1, 3, 2, 2, 3, 3, 3],

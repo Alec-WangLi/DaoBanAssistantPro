@@ -94,7 +94,9 @@ extension ShiftClassRowX on ShiftClassRow {
         isRest: isRest,
         color: color,
         alarmEnabled: alarmEnabled,
-        alarmMinute: alarmMinute,
+        // 本轮只换形状：库表还是「一个钟点」那一列，先读第一条。
+        alarms:
+            alarmMinute == null ? const [] : [ShiftAlarm(minute: alarmMinute!)],
       );
 }
 
@@ -390,7 +392,7 @@ class AppRepository {
             isRest: Value(c.isRest),
             color: Value(c.color),
             alarmEnabled: Value(c.alarmEnabled),
-            alarmMinute: Value(c.alarmMinute),
+            alarmMinute: Value(c.alarms.isEmpty ? null : c.alarms.first.minute),
           ));
           classIds.add(c.id!);
         } else {
@@ -405,7 +407,7 @@ class AppRepository {
                   isRest: Value(c.isRest),
                   color: Value(c.color),
                   alarmEnabled: Value(c.alarmEnabled),
-                  alarmMinute: Value(c.alarmMinute),
+                  alarmMinute: Value(c.alarms.isEmpty ? null : c.alarms.first.minute),
                 ),
               ));
         }

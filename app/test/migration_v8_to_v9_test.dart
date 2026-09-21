@@ -37,7 +37,7 @@ ShiftSchedule _schedule() => ShiftSchedule(
             endMinute: 20 * 60 + 30,
             color: 0xFF4C8DFF,
             alarmEnabled: true,
-            alarmMinute: 7 * 60),
+            alarms: [ShiftAlarm(minute: 7 * 60)]),
         ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
       ],
       cycle: const [0, 1],
@@ -92,6 +92,6 @@ void main() {
     expect(back.single.teamCount, 2);
     expect(back.single.teamOffsets, [0, 1]);
     expect(back.single.classes.map((c) => c.name), ['白班', '休班']);
-    expect(back.single.classes.first.alarmMinute, 7 * 60);
+    expect(back.single.classes.first.alarms.single.minute, 7 * 60);
   });
 }

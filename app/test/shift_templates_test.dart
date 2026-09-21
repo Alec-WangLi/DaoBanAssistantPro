@@ -95,7 +95,7 @@ void main() {
         } else {
           expect(c.startMinute, isNotNull, reason: '$why：工作班次必须有时间');
           expect(c.endMinute, isNotNull, reason: '$why：工作班次必须有时间');
-          expect(c.alarmMinute, isNotNull, reason: '$why：工作班次必须带建议闹钟');
+          expect(c.alarms, isNotEmpty, reason: '$why：工作班次必须带建议闹钟');
         }
       }
     }

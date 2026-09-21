@@ -1883,11 +1883,13 @@ String _timeRange(ShiftClass t) {
 
 String _alarmText(ShiftClass t) {
   if (t.isRest) return L10n.restNoAlarm;
-  if (!t.alarmEnabled || t.alarmMinute == null) return L10n.alarmOff;
-  final clock = formatClock(t.alarmMinute!);
+  if (!t.alarmEnabled || t.alarms.isEmpty) return L10n.alarmOff;
+  final alarm = t.alarms.first;
+  final clock = formatClock(alarm.minute);
   // 落在上班**前一天**的（00:00 上班的夜班）必须标出来：不标的话，这一行会跟
   // 前面的「00:00 – 08:00」读成同一天的两件事。
-  return L10n.alarmAt(t.alarmPreviousDay ? L10n.clockPrevDay(clock) : clock);
+  return L10n.alarmAt(
+      alarmFallsOnPreviousDay(t, alarm) ? L10n.clockPrevDay(clock) : clock);
 }
 
 /// 信息卡（完整版）在**底栏**时的高度不再是写死的常数，改成按当前月最满的

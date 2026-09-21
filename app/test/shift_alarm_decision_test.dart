@@ -34,7 +34,7 @@ ShiftSchedule _schedule({Map<int, int> overrides = const {}}) => ShiftSchedule(
             startMinute: 8 * 60,
             endMinute: 20 * 60,
             alarmEnabled: true,
-            alarmMinute: 7 * 60),
+            alarms: [ShiftAlarm(minute: 7 * 60)]),
         ShiftClass(
             id: 12,
             name: '夜班',
@@ -42,7 +42,7 @@ ShiftSchedule _schedule({Map<int, int> overrides = const {}}) => ShiftSchedule(
             startMinute: 20 * 60,
             endMinute: 8 * 60,
             alarmEnabled: true,
-            alarmMinute: 19 * 60 + 30),
+            alarms: [ShiftAlarm(minute: 19 * 60 + 30)]),
         ShiftClass(id: 13, name: '休班', abbr: '休', isRest: true),
       ],
       cycle: const [0, 2],
@@ -70,7 +70,9 @@ ShiftSchedule _nightOnlySchedule(
             startMinute: startMinute,
             endMinute: startMinute == null ? null : startMinute + 8 * 60,
             alarmEnabled: true,
-            alarmMinute: alarmMinute),
+            alarms: alarmMinute == null
+                ? const []
+                : [ShiftAlarm(minute: alarmMinute)]),
       ],
       cycle: const [0],
       teamCount: 1,
@@ -181,7 +183,8 @@ void main() {
       // 20:30 上班、19:30 响铃（内置 12 小时制夜班那档）：钟点早于上班钟点，
       // 没有「前一天」的歧义，排的还是班次当天。
       final plans = planShiftAlarms(
-          _nightOnlySchedule(startMinute: 20 * 60 + 30, alarmMinute: 19 * 60 + 30),
+          _nightOnlySchedule(
+              startMinute: 20 * 60 + 30, alarmMinute: 19 * 60 + 30),
           from: DateTime(2026, 9, 20, 6),
           days: 1);
       expect(plans.single.fireAt, DateTime(2026, 9, 20, 19, 30));

@@ -82,10 +82,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
       for (var i = 0; i < 30; i++) {
         final date = today.add(Duration(days: i));
         final t = schedule.shiftOn(date);
-        if (t == null || t.isRest || !t.alarmEnabled || t.alarmMinute == null) {
+        if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
           continue;
         }
-        final fireAt = shiftAlarmFireAt(date, t);
+        final fireAt = shiftAlarmFireAt(date, t, t.alarms.first);
         if (!fireAt.isAfter(now)) continue; // 响过的自动隐藏
         shiftAlarms.add(_ShiftAlarmEntry(date, t, overrides[dayNumber(date)] ?? true));
       }
@@ -264,10 +264,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                _fmt(e.shift.alarmMinute!),
+                _fmt(e.shift.alarms.first.minute),
                 style: AppTokens.titleStrong,
               ),
-              if (e.shift.alarmPreviousDay)
+              if (alarmFallsOnPreviousDay(e.shift, e.shift.alarms.first))
                 Text(
                   L10n.prevDay,
                   style: AppTokens.microText.copyWith(color: muted),

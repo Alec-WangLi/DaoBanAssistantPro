@@ -116,7 +116,8 @@ String encodeTemplateClasses(List<ShiftClass> classes) => jsonEncode([
           'isRest': c.isRest,
           'color': c.color,
           'alarmEnabled': c.alarmEnabled,
-          'alarmMinute': c.alarmMinute,
+          // 本轮只换形状：格式仍是旧的两个字段（取第一条），Task 4 才换成 alarms。
+          'alarmMinute': c.alarms.isEmpty ? null : c.alarms.first.minute,
         }
     ]);
 
@@ -137,7 +138,9 @@ List<ShiftClass> decodeTemplateClasses(String raw) {
             isRest: e['isRest'] == true,
             color: (e['color'] as num?)?.toInt() ?? 0xFF5B7FFF,
             alarmEnabled: e['alarmEnabled'] == true,
-            alarmMinute: (e['alarmMinute'] as num?)?.toInt(),
+            alarms: (e['alarmMinute'] as num?) == null
+                ? const []
+                : [ShiftAlarm(minute: (e['alarmMinute'] as num).toInt())],
           ),
     ];
   } catch (_) {

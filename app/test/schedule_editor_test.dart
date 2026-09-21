@@ -866,7 +866,7 @@ void main() {
                 startMinute: 8 * 60,
                 endMinute: 20 * 60,
                 alarmEnabled: true,
-                alarmMinute: at2359),
+                alarms: const [ShiftAlarm(minute: at2359)]),
             const ShiftClass(name: '休班', abbr: '休', isRest: true),
           ],
           cycle: const [0, 1],

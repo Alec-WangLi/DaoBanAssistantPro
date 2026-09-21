@@ -311,6 +311,18 @@ class L10n {
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
   static String get alarmTime => t('响铃时间', 'Alarm time');
 
+  /// 联动闹钟的响铃标题。[label] 是这条闹钟自己的名字（可空）。
+  ///
+  /// 从前这里是 `'${shift.name}提醒'` 拼裸中文 —— 英文界面下会露出中文。
+  /// 名字为空的判定连空白一起算：用户在输入框里敲了个空格不该变成「白班 · 」。
+  static String shiftAlarmTitle(String shiftName, String? label) {
+    final name = label?.trim();
+    if (name == null || name.isEmpty) {
+      return t('$shiftName提醒', '$shiftName alarm');
+    }
+    return '$shiftName · $name';
+  }
+
   /// 响铃时间落在上班**前一天**时的钟点写法（班次编辑的选择块 / 日历信息卡）。
   ///
   /// 中英语序不同（中文把「前一天」放前面、英文放括号里），所以整串交给 [t]

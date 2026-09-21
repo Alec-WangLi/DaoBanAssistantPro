@@ -89,7 +89,7 @@ Future<AppDatabase> promoDatabase() async {
         endMinute: 20 * 60 + 30,
         color: 0xFF4C8DFF,
         alarmEnabled: true,
-        alarmMinute: 7 * 60),
+        alarms: [ShiftAlarm(minute: 7 * 60)]),
     ShiftClass(
         name: '上夜班',
         abbr: '夜',
@@ -97,7 +97,7 @@ Future<AppDatabase> promoDatabase() async {
         endMinute: 8 * 60 + 30,
         color: 0xFF7A5CFF,
         alarmEnabled: true,
-        alarmMinute: 19 * 60 + 30),
+        alarms: [ShiftAlarm(minute: 19 * 60 + 30)]),
     ShiftClass(
         name: '下夜班', abbr: '下夜', isRest: true, color: 0xFF9AA0B4),
     ShiftClass(name: '大休', abbr: '休', isRest: true, color: 0xFF5A5F73),
