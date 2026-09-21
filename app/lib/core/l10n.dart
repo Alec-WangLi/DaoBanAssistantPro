@@ -311,6 +311,18 @@ class L10n {
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
   static String get alarmTime => t('响铃时间', 'Alarm time');
 
+  static String get addAlarm => t('添加闹钟', 'Add alarm');
+  static String get alarmNameOptional => t('名称（可选）', 'Name (optional)');
+  static String get alarmNameHint => t('如「起床」「午休」', 'e.g. "Wake up"');
+
+  /// 每个班次几个闹钟的上限。
+  ///
+  /// 数字与 `domain/shift_rotation.dart` 的 `maxAlarmsPerShift` 必须一致（那边是
+  /// 权威定义）。本文件**有意不 import 它**：`l10n.dart` 只依赖 intl 这件性质
+  /// （纯 Dart、能被 `dart test` 直接跑）比少写一个数字值钱。
+  static String get alarmLimitReached =>
+      t('每个班次最多 6 个闹钟', 'Up to 6 alarms per shift');
+
   /// 联动闹钟的响铃标题。[label] 是这条闹钟自己的名字（可空）。
   ///
   /// 从前这里是 `'${shift.name}提醒'` 拼裸中文 —— 英文界面下会露出中文。

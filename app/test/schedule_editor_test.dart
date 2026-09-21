@@ -1361,4 +1361,58 @@ void main() {
     expect(find.byKey(const Key('editor-crew-clash-hint')), findsNothing);
     expect(find.text(L10n.evenCrewStarts), findsNothing);
   });
+
+  // 班次闹钟从「一个钟点」变成一组：编辑页要能加、能删、能起名，并在到上限
+  // 之后**收掉那颗按钮**（不能留一颗点了没反应的按钮 —— 设计语言里没有禁用态，
+  // 所以是消失 + 一行说明）。
+  testWidgets('给白班加两个闹钟：列表里两行、保存后落库两条（名字已 trim）',
+      (tester) async {
+    final repo = await _pumpEditor(tester, _domain());
+
+    // 打开第一个班次（白班）的联动闹钟开关
+    await tester.tap(find.byKey(const Key('shift-alarm-switch-0')));
+    await tester.pumpAndSettle();
+
+    // 加两条：这个班次上原本一条闹钟都没有，所以第一次点加的是第 0 条
+    await tester.tap(find.text(L10n.addAlarm));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('shift-alarm-row-0-0')), findsOneWidget);
+    await tester.tap(find.text(L10n.addAlarm));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('shift-alarm-row-0-1')), findsOneWidget);
+
+    // 给第二条起名字（前后都带空格，落库必须是 trim 过的）
+    await tester.enterText(
+        find.byKey(const Key('shift-alarm-label-0-1')), ' 午休 ');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    final saved = repo.saved!.classes.first;
+    expect(saved.alarmEnabled, isTrue);
+    expect(saved.alarms, hasLength(2));
+    expect(saved.alarms[1].label, '午休',
+        reason: '名字要落库且已经 trim 过 —— 空串一律当没填');
+    expect(saved.alarms[0].label, isNull);
+  });
+
+  testWidgets('闹钟到上限：不再出现「添加闹钟」，改为一行说明', (tester) async {
+    final repo = await _pumpEditor(tester, _domain());
+    await tester.tap(find.byKey(const Key('shift-alarm-switch-0')));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < maxAlarmsPerShift; i++) {
+      await tester.tap(find.text(L10n.addAlarm));
+      await tester.pumpAndSettle();
+    }
+    expect(find.byKey(const Key('shift-alarm-row-0-${maxAlarmsPerShift - 1}')),
+        findsOneWidget);
+    expect(find.text(L10n.addAlarm), findsNothing,
+        reason: '到上限之后按钮要消失 —— 不能留一颗点了没反应的按钮');
+    expect(find.text(L10n.alarmLimitReached), findsOneWidget);
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+    expect(repo.saved!.classes.first.alarms, hasLength(maxAlarmsPerShift));
+  });
 }

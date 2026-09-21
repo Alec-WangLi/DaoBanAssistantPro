@@ -52,6 +52,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 所以字号与这个宽度必须一起改。
   static const double _abbrFieldWidth = 68;
 
+  /// 闹钟名输入框的宽度：与时间块、删除钮并排一行，所以按「够写两个字」定
+  /// （「起床」「午休」），比简称框宽一档留出内边距。窄屏上被挤的是**时间块**
+  /// （它是 Expanded），名字框与删除钮要保持可点 —— 这条由视觉工装出图核对。
+  static const double _alarmLabelFieldWidth = 120;
+
   bool _loaded = false;
   bool _notFound = false;
   bool _saving = false;
@@ -544,16 +549,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final outline = Theme.of(context).colorScheme.outlineVariant;
     final muted = AppTokens.inkMuted(context);
     // 响铃落在哪天是「算」出来的、看不出来（00:00 上班 + 23:00 响铃 = **前一天**
-    // 晚上，见 `ShiftClass.alarmPreviousDay`），所以下面既改钟点的写法、又补一行
+    // 晚上，见 `alarmFallsOnPreviousDay`），所以下面既改钟点的写法、又补一行
     // 小字：用户反馈里问的正是「这 23:00 到底是哪天」。
-    final firstAlarm = c.alarms.isEmpty ? null : c.alarms.first;
-    final alarmPrevDay = c.alarmEnabled &&
-        firstAlarm != null &&
-        alarmFallsOnPreviousDay(c, firstAlarm);
-    final alarmNoStart = c.alarmEnabled &&
-        firstAlarm != null &&
-        !alarmFallsOnPreviousDay(c, firstAlarm) &&
-        c.startMinute == null;
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.all(AppTokens.spaceMd),
@@ -660,6 +657,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       style: AppTokens.rowPrimary),
                 ),
                 GlassSwitch(
+                  key: Key('shift-alarm-switch-$index'),
                   value: c.alarmEnabled,
                   onChanged: (v) => setState(() => _classes[index] =
                       _editClass(_classes[index], alarmEnabled: v)),
@@ -668,35 +666,121 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             ),
             if (c.alarmEnabled) ...[
               const SizedBox(height: AppTokens.spaceSm),
-              _timeChip(
-                context,
-                label: L10n.alarmTime,
-                minutes: firstAlarm?.minute,
-                // 落在上班前一天的写成「前一天 23:00」：只写钟点会让人读成班次
-                // 当天，而那正是用户反馈里说的「看不到有这个选项」。
-                valueText: alarmPrevDay
-                    ? L10n.clockPrevDay(formatClock(firstAlarm.minute))
-                    : null,
-                onPick: (m) {
-                  // `_timeChip` 的 onPick 类型是可空 int（没选就调不到这里），
-                  // 但闹钟必须有个钟点，所以空值直接忽略。
-                  if (m == null) return;
-                  setState(() => _classes[index] = _editClass(_classes[index],
-                      alarms: [
-                        ShiftAlarm(minute: m, label: firstAlarm?.label)
-                      ]));
-                },
-              ),
-              if (alarmPrevDay || alarmNoStart)
+              for (var k = 0; k < c.alarms.length; k++)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+                  child: Row(
+                    key: Key('shift-alarm-row-$index-$k'),
+                    children: [
+                      Expanded(
+                        child: _timeChip(
+                          context,
+                          label: L10n.alarmTime,
+                          minutes: c.alarms[k].minute,
+                          // 落在上班前一天的写成「前一天 23:00」：只写钟点会让人
+                          // 读成班次当天，而那正是用户反馈里说的「看不到有这个选项」。
+                          valueText: alarmFallsOnPreviousDay(c, c.alarms[k])
+                              ? L10n.clockPrevDay(
+                                  formatClock(c.alarms[k].minute))
+                              : null,
+                          onPick: (m) {
+                            // `_timeChip` 的 onPick 类型是可空 int（没选就调不到
+                            // 这里），但闹钟必须有个钟点，所以空值直接忽略。
+                            if (m == null) return;
+                            setState(() => _classes[index] =
+                                _editClass(_classes[index], alarms: [
+                                  for (var j = 0; j < c.alarms.length; j++)
+                                    j == k
+                                        ? ShiftAlarm(
+                                            minute: m,
+                                            label: c.alarms[j].label)
+                                        : c.alarms[j],
+                                ]));
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      SizedBox(
+                        width: _alarmLabelFieldWidth,
+                        child: _AlarmLabelField(
+                          key: Key('shift-alarm-label-$index-$k'),
+                          label: c.alarms[k].label,
+                          onChanged: (v) => setState(
+                              () => _classes[index] =
+                                  _editClass(_classes[index], alarms: [
+                                    for (var j = 0; j < c.alarms.length; j++)
+                                      j == k
+                                          ? ShiftAlarm(
+                                              minute: c.alarms[j].minute,
+                                              label: v)
+                                          : c.alarms[j],
+                                  ])),
+                        ),
+                      ),
+                      const SizedBox(width: AppTokens.spaceXs),
+                      GlassDeleteButton(
+                        compact: true,
+                        onPressed: () => setState(() =>
+                            _classes[index] =
+                                _editClass(_classes[index], alarms: [
+                              for (var j = 0; j < c.alarms.length; j++)
+                                if (j != k) c.alarms[j],
+                            ])),
+                      ),
+                    ],
+                  ),
+                ),
+              // 「前一天」的小字：整组给一句就够 —— 它讲的是**规则**（上班 HH:MM、
+              // 闹钟排在前一天 HH:MM），不是某一条的正文；多条各给一句会重复成一片。
+              if (c.alarms.any((a) => alarmFallsOnPreviousDay(c, a)))
                 Padding(
                   padding: const EdgeInsets.only(top: AppTokens.spaceXs),
                   child: Text(
-                    alarmPrevDay
-                        ? L10n.alarmPrevDayHint(formatClock(c.startMinute!),
-                            formatClock(firstAlarm.minute))
-                        : L10n.alarmNoStartHint,
+                    L10n.alarmPrevDayHint(
+                        formatClock(c.startMinute!),
+                        formatClock(c.alarms
+                            .firstWhere((a) => alarmFallsOnPreviousDay(c, a))
+                            .minute)),
                     style: AppTokens.microText.copyWith(color: muted),
                   ),
+                )
+              else if (c.startMinute == null && c.alarms.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+                  child: Text(L10n.alarmNoStartHint,
+                      style: AppTokens.microText.copyWith(color: muted)),
+                ),
+              // 到上限就**收掉按钮**、换一行说明：设计语言里没有「禁用态」，
+              // 一颗点了没反应的按钮比没有按钮更让人困惑。
+              if (c.alarms.length < maxAlarmsPerShift)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: GlassActionButton(
+                      variant: GlassActionVariant.secondary,
+                      icon: const AppIcon(Icons.add_outlined),
+                      label: L10n.addAlarm,
+                      onPressed: () => setState(() {
+                        _classes[index] =
+                            _editClass(_classes[index], alarms: [
+                          ...c.alarms,
+                          // 新的一条默认排在上一条之后一小时；第一条落到 08:00
+                          // （与 `_timeChip` 没设过时的缺省一致）。
+                          ShiftAlarm(
+                              minute: c.alarms.isEmpty
+                                  ? toMinutes(8, 0)
+                                  : ((c.alarms.last.minute + 60) % 1440)),
+                        ]);
+                      }),
+                    ),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+                  child: Text(L10n.alarmLimitReached,
+                      style: AppTokens.microText.copyWith(color: muted)),
                 ),
             ],
           ],
@@ -1608,6 +1692,57 @@ ShiftClass _editClass(
     alarmEnabled: alarmEnabled ?? c.alarmEnabled,
     alarms: clearAlarms ? const [] : (alarms ?? c.alarms),
   );
+}
+
+/// 一条闹钟的名字输入框：自己持 controller，初值由 [label] 给。
+///
+/// **不把 controller 放进编辑器的状态里**：闹钟可以随时增删，班次下标 × 闹钟下标
+/// 两层对账很容易漏一处，而漏了的表现是「改了名字没生效」或「名字串到别的闹钟
+/// 上」，都不报错。控件自己持有时靠位置做 Key（`shift-alarm-label-<班次>-<序号>`，
+/// 由调用方给），**删掉前面那条闹钟之后同一格会换上别人的名字** —— 所以必须靠
+/// [didUpdateWidget] 把文本同步过去。
+class _AlarmLabelField extends StatefulWidget {
+  const _AlarmLabelField(
+      {super.key, required this.label, required this.onChanged});
+
+  final String? label;
+
+  /// 已经 trim 过：空串一律当没填（用户敲了个空格不该变成「白班 · 」）。
+  final ValueChanged<String?> onChanged;
+
+  @override
+  State<_AlarmLabelField> createState() => _AlarmLabelFieldState();
+}
+
+class _AlarmLabelFieldState extends State<_AlarmLabelField> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.label ?? '');
+
+  @override
+  void didUpdateWidget(covariant _AlarmLabelField old) {
+    super.didUpdateWidget(old);
+    final next = widget.label ?? '';
+    // 比的是 `_ctrl.text.trim()`：正在打字时下一个字符可能是空格，不该被当成
+    // 「换了另一条闹钟」而把输入重置掉。
+    if (next != old.label && next != _ctrl.text.trim()) {
+      _ctrl.text = next;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: _ctrl,
+        onChanged: (v) => widget.onChanged(v.trim().isEmpty ? null : v.trim()),
+        decoration: glassInputDecoration(context, L10n.alarmNameOptional,
+                isDense: true)
+            .copyWith(hintText: L10n.alarmNameHint),
+      );
 }
 
 /// 周期行里某个 chip 的 Key —— 让测试能精确点到「第几天选哪个班次」。
