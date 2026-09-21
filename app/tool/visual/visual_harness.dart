@@ -409,6 +409,61 @@ Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
   );
 }
 
+/// 把当前方案里那个班次改成带 [count] 个闹钟，其中一个带名字。
+///
+/// [nightShift] 为真时改用「零点班」形状（00:00–08:00、起床 23:00 + 班中 03:00）：
+/// 只有这种形状才拍得出「前一天」那行小字与「班中补觉」两条混排的样子。
+///
+/// 闹钟列表是新界面 —— 令牌守门只能看出字面量，看不出「一行挤没挤、标记跟没跟着
+/// 走、到上限有没有把按钮收掉」，只有出图能看，所以这几屏必须进屏单
+/// （AGENTS.md 的规矩）。
+Future<void> makeAlarmShowcase(
+  AppDatabase db, {
+  required int count,
+  bool nightShift = false,
+}) async {
+  final today = dateOnly(DateTime.now());
+  await AppRepository(db).saveSchedule(
+    name: nightShift ? '零点班 · 两条闹钟' : '白班 · 多条闹钟',
+    anchorDate: today,
+    classes: [
+      ShiftClass(
+        name: nightShift ? '零点班' : '白班',
+        abbr: nightShift ? '零' : '白',
+        startMinute: nightShift ? 0 : 8 * 60,
+        endMinute: nightShift ? 8 * 60 : 20 * 60,
+        color: 0xFF7A5CFF,
+        alarmEnabled: true,
+        alarms: [
+          for (var k = 0; k < count; k++)
+            ShiftAlarm(
+              // 零点班那套刻着用户的例子：起床 23:00（前一天）+ 班中 03:00（当天）
+              minute: nightShift
+                  ? (k == 0 ? 23 * 60 : 3 * 60)
+                  : const [
+                      6 * 60 + 30,
+                      12 * 60 + 30,
+                      17 * 60 + 30,
+                      22 * 60,
+                      5 * 60,
+                      9 * 60,
+                    ][k % 6],
+              label: k == 0 ? '起床' : (k == 1 ? '午休' : null),
+            ),
+        ],
+      ),
+      const ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+    ],
+    // 让今天必落在上班那个班次上 —— 闹钟页才有行可看。
+    cycle: const [0, 0, 1],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: L10n.defaultTeamNames(1),
+    ourTeamIndex: 0,
+    teamOffsets: const [0],
+  );
+}
+
 /// 把一套「五班三倒 · 10 天一轮」设为当前方案，但**各班组仍按 1 天错开** ——
 /// 也就是「撞班」那个状态（白白中中休夜夜休休休，5 个班组天天撞）。
 ///

@@ -312,8 +312,15 @@ class L10n {
   static String get alarmTime => t('响铃时间', 'Alarm time');
 
   static String get addAlarm => t('添加闹钟', 'Add alarm');
-  static String get alarmNameOptional => t('名称（可选）', 'Name (optional)');
-  static String get alarmNameHint => t('如「起床」「午休」', 'e.g. "Wake up"');
+
+  /// 闹钟名输入框的标签与提示。
+  ///
+  /// 标签只写「名称」两个字的理由（2026-09-21 出图时看到的）：写全「名称（可选）」
+  /// 在 120 宽的框里会被截成「名称（可…」，而**加宽这个框又会把左边时间块挤窄**
+  /// —— 那里最长的值是「前一天 22:00」（v0.8.9 专门做出来的一档），被截更糟。
+  /// 「可选」那半句挪进 hint：点进去（或填了字）就看得见。
+  static String get alarmNameOptional => t('名称', 'Name');
+  static String get alarmNameHint => t('可选，如「午休」', 'Optional, e.g. "Nap"');
 
   /// 每个班次几个闹钟的上限。
   ///

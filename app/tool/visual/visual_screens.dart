@@ -178,6 +178,42 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    slug: '20_editor_alarm_one',
+    title: '排班编辑器 · 一个闹钟',
+    build: (db) async {
+      await makeAlarmShowcase(db, count: 1);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    slug: '21_editor_alarm_three',
+    title: '排班编辑器 · 三个闹钟（含命名）',
+    build: (db) async {
+      await makeAlarmShowcase(db, count: 3);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    slug: '22_editor_alarm_max',
+    title: '排班编辑器 · 闹钟到上限（6 个）',
+    build: (db) async {
+      await makeAlarmShowcase(db, count: maxAlarmsPerShift);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    slug: '23_alarm_two_per_shift',
+    title: '闹钟 · 一个班次两个闹钟（含「前一天」）',
+    build: (db) async {
+      await makeAlarmShowcase(db, count: 2, nightShift: true);
+      return const AlarmScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -305,6 +341,11 @@ const Map<String, double> visualScrollDown = {
   '06_alarm': 360, // 自定义闹钟那一段
   '03_management': 280, // 排班列表
   '13_editor_midnight': 900, // 零点班那张班次卡（响铃时间块与它的说明在这下面）
+  // 闹钟列表在那张班次卡更下面：滚过头会钳到页尾（周期表那段），所以只滚到
+  // 露得出「添加闹钟」/到上限那行说明就够 —— 三个屏各自差一行多点的高度。
+  '20_editor_alarm_one': 420,
+  '21_editor_alarm_three': 520,
+  '22_editor_alarm_max': 620,
   // 撞班提示挂在「周期设置」卡的末尾，10 行周期表的下面；给足量让它滚到底，
   // 靠到底后的钳位保证那张卡的下半段（提示 + 均分按钮）在画面里。
   '15_editor_crew_clash': 2400,
