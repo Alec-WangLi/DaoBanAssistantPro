@@ -22,13 +22,13 @@
 
 - **测试版（末位 `Z ≠ 0`）一律在 `beta` 分支上做、提交、发布**：`git checkout beta` → 提交 → `git push origin beta` → `git tag vX.Y.Z && git push origin vX.Y.Z` → `scripts/release.ps1 -SkipConfirm`。**tag 打在 beta 的提交上没问题**（预发布本来就不占 Releases 页的 Latest）。
 - **`main` 只在发正式版（`Z = 0`）时收一次合并**：`beta` → `main` 用 `--no-ff`（留一条合并记录），正式版的 tag 打在 **main** 上。
-- **`latest.json` 必须留在 `main` 上**：App 的兜底更新通道读的是 `raw.githubusercontent.com/<owner>/<repo>/main/latest.json`（`update_checker.dart`），而 `release.ps1` 是把它提交到**当前分支**的。所以在 beta 上发完版要单独把那份同步回 main（只为这一个数据文件，不算「往 main 上放测试版源码」）：
+- **`latest.json` 必须留在 `main` 上**：App 的兜底更新通道读的是 `raw.githubusercontent.com/<owner>/<repo>/main/latest.json`（`update_checker.dart`），而 `release.ps1` 第 7 步是把它提交到**当前分支**的。**这一步从 2026-09-21 起由脚本自动做**（第 7b 步：当前分支不是 main 时，切到 main、取这份清单、提交、推送、再切回来；失败只告警 + 打出手动命令，不让已成功的发布变成「失败」），正常不用管。万一它告警了，手动补：
   ```bash
   git checkout main && git checkout beta -- latest.json \
-    && git commit -m "chore(release): 更新发布清单至 vX.Y.Z" \
+    && git commit -m "chore(release): 更新发布清单至 vX.Y.Z（同步 beta）" \
     && git push origin main && git checkout beta
   ```
-  不同步的话，GitHub API 被限流（403）时 App 读到的兜底清单会停在旧版本。
+  不这么做的话，GitHub API 被限流（403）时 App 读到的兜底清单会停在旧版本，表现是「明明有更新的测试版，却说已是最新」。
 - 历史注记：**0.9.1 / 0.9.2 / 0.9.3 三个测试版是直接在 main 上发的**（那时还没定这条规矩）；从这之后的测试版走 beta。
 
 ## 目录架构地图（app/lib）
