@@ -82,15 +82,23 @@ bool _switchOn(WidgetTester tester) =>
 /// 保存链路里有「重排提醒」这一步（要过通道），不桩的话它卡在那里，
 /// 弹窗就永远关不掉，测出来的失败像是保存坏了。与视觉工装
 /// （`tool/visual/visual_harness.dart` 的 `stubPluginChannels`）同一件事。
-void _stubPluginChannels() {
+///
+/// [delay] 是给「保存链路还在飞」那两条用例准备的：真机上这段链路要过原生
+/// 通道，几十到几百毫秒；测试环境里通道是桩、库在内存，**几微秒就跑完**。
+/// 不撑开这个窗口，第二次点击就落在窗口之外，测出来的是「慢点两下」。
+void _stubPluginChannels({Duration delay = Duration.zero}) {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   for (final name in const [
     'dexterous.com/flutter/local_notifications',
     'com.daoban.shiftassistantpro/settings',
   ]) {
-    messenger.setMockMethodCallHandler(
-        MethodChannel(name), (call) async => null);
+    messenger.setMockMethodCallHandler(MethodChannel(name), (call) async {
+      if (delay > Duration.zero) {
+        await Future<void>.delayed(delay);
+      }
+      return null;
+    });
   }
 }
 
@@ -233,6 +241,69 @@ void main() {
     expect((await AppRepository(db).listEvents()).single.title, '新标题',
         reason: '保存没生效就说明按钮还是点不到（或保存链路断了）');
     expect(find.text(L10n.editEvent), findsNothing, reason: '保存后弹窗该关掉');
+
+    await _dispose(tester);
+  });
+
+  // ---------------------------------------------------------------------
+  // 弹窗动作被连点 / 被抢跑：v0.9.0 用户反馈「快速点击添加 → 整屏纯黑，但没卡死」
+  // （2026-09-21 真机复现：小米 25102RKBEC + release 包，屏幕全黑、`mCurrentFocus`
+  // 仍是 MainActivity、无崩溃无 ANR，信息卡上的待办数 +2）。
+  //
+  // 根因是**这段窗口里按钮照旧能点**：保存链路是异步的（写库 + 重排提醒要过原生
+  // 通道），第二次点击又跑了一遍整条链路，于是 pop 了两次 —— 第一次关掉弹窗，
+  // 第二次把 App 唯一剩下的那层路由也弹掉了，Navigator 一条路由不剩就是全黑。
+  // release 包剥掉断言，所以既不报错也不崩。
+  testWidgets('连点两次「添加」：只存一条，且不会把最后一层路由也弹掉',
+      (tester) async {
+    // 把保存链路的窗口撑开（理由见 `_stubPluginChannels` 的 [delay]）。
+    _stubPluginChannels(delay: const Duration(milliseconds: 300));
+    final db = await _pumpTodos(tester);
+
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+    await tester.enterText(find.byType(TextField), '连点测试');
+    await _settle(tester);
+
+    // 两次点击之间**故意不 pump**：真机上那两次相隔几十毫秒，而第一次的保存
+    // 链路还在 await 里 —— 中间一 pump 就等于把窗口让过去了，测不出问题。
+    await tester.tap(find.text(L10n.add));
+    await tester.tap(find.text(L10n.add));
+    await _settle(tester);
+
+    expect((await AppRepository(db).listEvents()).length, 1,
+        reason: '连点两次不该落两条待办');
+    expect(find.text(L10n.titleTodo), findsOneWidget,
+        reason: '页面还在 —— 第二次 pop 弹掉的是最后一层路由，那是整屏黑屏');
+
+    await _dispose(tester);
+  });
+
+  // 另一条通往同一个黑屏的路径：**两条不同的路径各 pop 一次**。
+  // 「添加」的保存链路还在 await 里时点「取消」，取消先把弹窗 pop 掉，
+  // 添加那条链路的 pop 随后落到 App 最后一层路由上 —— 同样全黑。
+  // 这一条**只锁按钮挡不住**（两次点击落在两颗不同的按钮上），必须再有一道
+  // 「pop 之前确认自己这层还是最上层」的护栏。
+  testWidgets('点完「添加」立刻点「取消」：不黑屏', (tester) async {
+    // 同「连点」那条：窗口不撑开，「取消」只会点在已经关掉的弹窗上（找不到
+    // 而直接报错），根本走不到要验的那条路径。
+    _stubPluginChannels(delay: const Duration(milliseconds: 300));
+    final db = await _pumpTodos(tester);
+
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+    await tester.enterText(find.byType(TextField), '抢跑测试');
+    await _settle(tester);
+
+    await tester.tap(find.text(L10n.add));
+    await tester.tap(find.text(L10n.cancel));
+    await _settle(tester);
+
+    expect(find.text(L10n.titleTodo), findsOneWidget,
+        reason: '「取消」抢在保存链路前面 pop 掉弹窗之后，保存链路那次 pop 必须跳过');
+    expect((await AppRepository(db).listEvents()).length, 1,
+        reason: '「添加」一点下去就落库了，随后的「取消」追不回来 —— 这是**有意的边界**：'
+            '这道护栏要挡的是黑屏，不是这条已经发生的写入');
 
     await _dispose(tester);
   });

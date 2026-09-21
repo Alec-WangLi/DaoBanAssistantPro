@@ -3,6 +3,30 @@ import 'package:flutter/material.dart';
 import '../design_tokens.dart';
 import 'app_icon.dart';
 
+/// 抓一个「关掉本弹窗」的回调，给弹窗里的动作在 `await` 之后用。
+///
+/// **只有在弹窗还是最上层、且还没开始退场时才真的 pop**（`Route.isCurrent`）。
+/// 理由是弹窗里的动作大多是异步的（写库、重排提醒要过原生通道），这段窗口里
+/// 用户还能点别的东西：点两次「保存」、或点完「保存」立刻点「取消」/ 点遮罩 ——
+/// 每条路径都会 pop 一次，第二次 pop 关掉的已经不是弹窗，而是 App 唯一剩下的
+/// 那层路由：Navigator 一条路由不剩 = **整屏纯黑**，而 release 包剥掉了断言，
+/// 所以既不报错也不崩，看着就是「屏幕黑了但 App 还活着」。v0.9.0 用户反馈的
+/// 「添加待办事项，快速点击添加的时候，APP 直接全部黑屏，但是没有卡死」正是它
+/// （2026-09-21 真机复现，两条路径都验过）。`GlassActionButton` 上的那把
+/// 「一次动作只许触发一次」的锁只挡得住同一颗按钮被连点，挡不住这种两条路径
+/// 各 pop 一次的情况，所以这里还得有一道。
+///
+/// navigator 与 route **都在 `await` 之前取好**：await 之后弹窗可能已经卸载，
+/// 那时再 `Navigator.of(context)` 就是「查一个已失活 element 的祖先」，会抛。
+VoidCallback dialogCloser(BuildContext context) {
+  final navigator = Navigator.of(context);
+  final route = ModalRoute.of(context);
+  return () {
+    // route 为 null = 没挂在任何路由上（理论上不会），那时按老行为直接 pop。
+    if (route == null || route.isCurrent) navigator.pop();
+  };
+}
+
 /// 通用玻璃弹窗：玻璃容器 + 主色标题条 + 内容 + 底部操作按钮。
 ///
 /// 用于统一各处的弹窗风格（待办、闹钟、确认、日志等）。
@@ -116,7 +140,7 @@ class _GlassCloseButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         customBorder: const CircleBorder(),
-        onTap: () => Navigator.pop(context),
+        onTap: dialogCloser(context),
         child: Ink(
           width: 32,
           height: 32,

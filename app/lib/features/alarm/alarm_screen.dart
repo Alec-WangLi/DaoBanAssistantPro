@@ -471,15 +471,19 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           ),
           actions: [
             GlassActionButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: dialogCloser(context),
               label: L10n.cancel,
             ),
             const SizedBox(width: 8),
             GlassActionButton(
               variant: GlassActionVariant.primary,
               onPressed: () async {
+                // 一周重复但一天都没选 = 这一下什么也没做，锁当帧放开。
                 if (repeatType == 2 && weekdays == 0) return;
-                final navigator = Navigator.of(context);
+                // 关窗回调在 await 之前取好，且只在自己这层还是最上层时才 pop：
+                // 连点两次「添加」会插两条自定义闹钟并 pop 两次，第二次 pop 掉的是
+                // App 唯一那层路由 = 整屏纯黑（与待办那个 bug 同一形状）。
+                final close = dialogCloser(context);
                 final repo = ref.read(appRepositoryProvider);
                 if (isEdit) {
                   await repo.updateCustomAlarm(
@@ -499,7 +503,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                     weekdays: repeatType == 2 ? weekdays : 0,
                   );
                 }
-                navigator.pop();
+                close();
                 _reschedule();
               },
               label: isEdit ? L10n.save : L10n.add,

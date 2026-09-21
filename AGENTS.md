@@ -16,7 +16,7 @@
 - 每轮改动收尾：`app/pubspec.yaml` 的 `version` 与 `app/lib/core/app_info.dart` 的 `appVersion` 同步。**这条由 `app/test/app_info_test.dart` 盯着** —— 两处不一致直接测试失败（v0.6.6~v0.6.9 曾漏改四轮，代价是「我的」页版本号显示错、升级后的更新弹窗再也不弹）。
 - 更新日志在 `app/lib/features/profile/app_dialogs.dart` 的 `_changelogZh` / `_changelogEn`：prepend 新版本、删最旧一条、保持 10 条。**正式版（末位 `Z=0`）发布时，其条目必须重写为「归纳总结版」——合并自上一个正式版以来所有测试版的更新内容；测试版条目一律原样保留，只写自己这版改了什么。**（例：v0.4.0 条目归纳 0.3.1~0.4.0 全部更新；v0.3.0 条目归纳 0.2.1~0.3.0，0.2.4 条目保留至今。）**这三条是长期规则（窗口固定 10 条、正式版归纳、测试版原样），v0.6.11 未改动。**
 - 打完版本本地 `git tag vX.Y.Z`。
-- 最近历史：0.1.45(+46) → **0.2.0(+47)**（第二大版）→ 0.2.1(+48)~0.2.4(+51) 测试版 → **0.3.0(+52)**（正式稳定版）→ 0.3.1(+53) 测试版 → 0.3.2(+54) 测试版 → 0.3.3(+55) 测试版 → 0.3.4(+56) 测试版 → 0.3.5(+57)~0.3.7(+59) 测试版 → **0.4.0(+60)**（正式稳定版）→ 0.4.1(+61) 测试版 → 0.4.2(+62) 测试版 → 0.4.4(+64)~0.4.9(+69) 测试版 → **0.5.0(+70)**（正式稳定版 · 开源）→ **0.6.0(+71)**（正式稳定版）→ 0.6.1(+72)~0.6.13(+84) 测试版 → **0.7.0(+85)**（正式稳定版）→ 0.7.1(+86)~0.7.5(+90) 测试版 → **0.8.0(+91)**（正式稳定版）→ 0.8.1(+92) 测试版 → 0.8.2(+93) 测试版 → 0.8.3(+94) 测试版 → 0.8.4(+95) 测试版 → 0.8.5(+96) 测试版 → 0.8.6(+97) 测试版 → 0.8.7(+98) 测试版 → 0.8.8(+99) 测试版 → 0.8.9(+100) 测试版 → 0.8.10(+101) 测试版 → 0.8.11(+102) 测试版 → 0.8.12(+103) 测试版 → **0.9.0(+104) 正式稳定版**。更早见 `git log` 或应用内更新日志。
+- 最近历史：0.1.45(+46) → **0.2.0(+47)**（第二大版）→ 0.2.1(+48)~0.2.4(+51) 测试版 → **0.3.0(+52)**（正式稳定版）→ 0.3.1(+53) 测试版 → 0.3.2(+54) 测试版 → 0.3.3(+55) 测试版 → 0.3.4(+56) 测试版 → 0.3.5(+57)~0.3.7(+59) 测试版 → **0.4.0(+60)**（正式稳定版）→ 0.4.1(+61) 测试版 → 0.4.2(+62) 测试版 → 0.4.4(+64)~0.4.9(+69) 测试版 → **0.5.0(+70)**（正式稳定版 · 开源）→ **0.6.0(+71)**（正式稳定版）→ 0.6.1(+72)~0.6.13(+84) 测试版 → **0.7.0(+85)**（正式稳定版）→ 0.7.1(+86)~0.7.5(+90) 测试版 → **0.8.0(+91)**（正式稳定版）→ 0.8.1(+92) 测试版 → 0.8.2(+93) 测试版 → 0.8.3(+94) 测试版 → 0.8.4(+95) 测试版 → 0.8.5(+96) 测试版 → 0.8.6(+97) 测试版 → 0.8.7(+98) 测试版 → 0.8.8(+99) 测试版 → 0.8.9(+100) 测试版 → 0.8.10(+101) 测试版 → 0.8.11(+102) 测试版 → 0.8.12(+103) 测试版 → **0.9.0(+104) 正式稳定版** → 0.9.1(+105) 测试版。更早见 `git log` 或应用内更新日志。
 
 ## 目录架构地图（app/lib）
 ```
@@ -42,7 +42,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 共享玻璃组件（core/widgets/）
 - `GlassSegment` 胶囊滑块 · `GlassSwitch` Q弹开关 · `GlassDialog` 通用弹窗 · `GlassButton` 主色玻璃实心按钮
-- `GlassActionButton`（primary / secondary / danger 变体）· `GlassPressable`（统一玻璃触摸反馈）· `GlassDeleteButton`（红色调圆形玻璃删除钮）+ `dangerButtonStyle`（危险红确认按钮）
+- `GlassActionButton`（primary / secondary / danger 变体；`onPressed` 返回 `Future` 时本次动作跑完前不再响应点击）· `GlassPressable`（统一玻璃触摸反馈）· `GlassDeleteButton`（红色调圆形玻璃删除钮）+ `dangerButtonStyle`（危险红确认按钮）· `glass_dialog.dart` 的 `dialogCloser(context)`（弹窗动作在 `await` 之后关窗要用它，见「关键决策与坑」）
 - `glass_pickers.dart` `showGlassTimePicker` / `showGlassDatePicker` / `showGlassMonthPicker`（底部玻璃弹层，已用 `solid:true`）
 - `glass_snackbar.dart` `showGlassSnack(context, msg, {icon, iconColor})`（提示条玻璃化）
 - `glass_input.dart` `glassInputDecoration(context, label)`
@@ -66,6 +66,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 - **README / 酷安配图是生成的，别手改 `docs/images/` 里的 PNG**：原始截图由 `app/tool/promo/render_promo_test.dart` 出（复用 `tool/visual/visual_harness.dart`，但用自己的一份屏单和自己的假库 —— 补了待办与自定义闹钟、并把「今天」调到白班，否则拍出来是空屏、「闹钟：未开启」），合成由 `scripts/make_promo_images.py` 做（套机身外框 → `docs/images/`，透明底以便 GitHub 深浅主题都能显示；另出大图与封面到 `work/promo-out/`，不入库）。改配图就改这两个脚本再各跑一次；酷安发帖稿在 `docs/coolapk-post.md`。
 - **「这一版改了什么」的说明图是另一条管线**：`scripts/make_update_images.py` → `docs/images/v080-*.png`（正式版的更新说明配图，见 `docs/v0.8.0-update-post.md`）。它吃的是**真机截图**，原始素材在 `docs/images/raw/`（已裁好、缩过半尺寸入库，来源与裁切框写在脚本头部），脚本只负责裁切/套机身/标注。同样别手改产物。两个踩过的坑记在脚本里：微软雅黑没有 ✕/✓ 这两个码位（会渲染成豆腐块，得用 ×/√）；标注要与主文字按**一组**居中算宽度，各自定位会叠在一起。
 - 弹窗遮罩统一 `barrierColor: Colors.black26`（不能太暗）；底部弹层 `GlassPanel(solid:true)`（背景暗、面板不暗）。
+- **弹窗里的异步动作，`pop()` 之前必须确认自己这层还是最上层 —— 用 `glass_dialog.dart` 的 `dialogCloser(context)`，别直接 `Navigator.pop`**：保存类动作是异步的（写库 + 重排提醒要过原生通道），这段窗口里按钮照旧能点 —— 点两次「保存」、或点完「保存」立刻点「取消」/点遮罩，每条路径都会 `pop()` 一次，**第二次 pop 关掉的不是弹窗，而是 App 唯一剩下的那层路由**：Navigator 一条路由不剩 = 整屏纯黑，release 包剥掉断言所以既不报错也不崩，看着就是「屏幕黑了但 App 还活着」（v0.9.0 用户反馈的「添加待办事项，快速点击添加的时候，APP 直接全部黑屏，但是没有卡死」，2026-09-21 真机复现 + 单测复现）。两道护栏分工不同、缺一不可：`GlassActionButton` 上的锁（回调返回 `Future` 时，本次动作跑完前不再响应点击）挡**同一颗按钮被连点**，顺带挡掉重复入库（连点两次从前会插两条待办/两条闹钟）；`dialogCloser` 挡**两条不同路径各 pop 一次**——只上按钮锁挡不住这条，两次点击落在两颗不同按钮上。回归测试在 `todo_dialog_test.dart`（两条路径各一条用例，都反向验证过：把 `lib/` 的改动 stash 掉立刻变红）。**判据 `Route.isCurrent` 的 SDK 语义是这件事的关键**：路由一旦被 `pop()` 就进入 `popping`，而 `popping` 在 `_RouteLifecycle` 里排在 `remove` **之后** —— 即它不再算 `isPresent`，所以第二次 `pop()` 的 `lastWhere(isPresentPredicate)` 会落到下面那层（主界面就是这么被弹掉的）。
 - **`SYSTEM_ALERT_WINDOW` 不能删**：代码里没有 `WindowManager.addView`，但「显示悬浮窗」权限卡（`AlarmService.checkOverlayPermission`→`Settings.canDrawOverlays`）依赖它在 manifest 声明——删了 App 就从系统「显示悬浮窗」列表消失、小米/华为锁屏全屏闹钟可能弹不出（AOSP 层那次后台启动豁免走的就是它，`BAL_ALLOW_SAW_PERMISSION`）。grep 判"未使用"是误判，勿再删。
 - **触觉挂动作、不挂按压（`core/haptics.dart`，v0.8.2）**：词汇表**只有三档语义** —— `Haptics.select()`（选中变了：开关翻转 / 胶囊段切换 / 选项胶囊选中 / 选择器提交 / 日历滑块换格 / 长按拖选每进一格）、`Haptics.commit()`（动作落实、这一步不可逆：删除清空类确认 / 应用改班与恢复轮转 / 切换排班方案）、`Haptics.modeEnter()`（进入一个模式：长按进入日历多选态）。**普通点击、列表行点击、滚动与选择器滚轮一律不震** —— `GlassPressable`（统一按压反馈）故意不挂：它包的是*每一次*按压，包括普通点击。理由写在 `haptics.dart` 顶上：震动一旦成为背景噪音，信息量就归零，用户会把系统触觉整个关掉，那时你想用震动区分的那件事也一起没了。开关是「我的 → 外观」那一个（默认开），走模块级 `hapticsDisabled`（与 `advancedMaterialDisabled` 同一条路：一处赋值全 app 生效，调用点不必各自查设置）；调用是 fire-and-forget，不 await、异常吞掉。**除 `core/haptics.dart` 外，任何文件不许出现 `HapticFeedback.`** —— `test/haptics_guard_test.dart` 扫 `lib/` 强制（在剥过注释/字符串的副本上扫，免得注释里提一句就打红）；绕过的那一行**不会**受用户开关控制。
   **同一条里最要命、且已经真犯过一次的子规则：共享组件已经自动震过的控件，绝不能再在调用点补一次触觉** —— 那就是「一次操作震两下」，两下比一下**信息量更少**。那份名单：`GlassSwitch` / `GlassSegment`（只在选中项**真的变了**时才发）/ `GlassChoiceChip` / 四个选择器提交点（时间、日期、月份、选项 —— **滚轮与「取消」不在此列**）。待办勾选正是这么被裁掉的：勾选载体是 `GlassSwitch`，它自己已发 `select()`，所以 `schedule_screen.dart` 那处 `commit()` **有意不加**（spec §4.2 的「一条自我纠正」有完整推导；§4.1 覆盖过的控件不再进 §4.2 的表）。**加任何一处触觉之前，先确认它不在那份名单里。**
@@ -82,7 +83,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
 - 改表后：`dart run build_runner build --delete-conflicting-outputs`。
-- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 267 条，只增不减 —— v0.8.8 删掉随 `WidgetTier` 一起作废的五档阈值护栏、换上三张固定卡的结构护栏，是等量替换）。
+- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 297 条，只增不减 —— v0.8.8 删掉随 `WidgetTier` 一起作废的五档阈值护栏、换上三张固定卡的结构护栏，是等量替换）。
 - 构建：`flutter build apk --release --target-platform android-arm64` → `app/build/app/outputs/flutter-apk/app-release.apk`（**切 arm64 单 ABI**，APK 从 ~60MB 降到 ~21MB；仅 64 位设备）。
 - 分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，用 `aapt2 dump badging` 校验 versionName/versionCode 与包名。
 - 一键发布（GitHub Releases）：`scripts/release.ps1`。

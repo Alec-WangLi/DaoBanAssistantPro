@@ -41,7 +41,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.0\n'
+const String _changelogZh = 'v0.9.1\n'
+    '· 修好一个用户反馈的问题：添加待办时快速连点「添加」，整个界面会变黑 —— App 本身没死也没卡住（状态栏还在、也能切走），只是界面被「关到底」了，只能杀掉重开。原因是这类保存要过一小会儿才落定，这段窗口里再点一次就会多存一条待办、并且多关一层 —— 多关掉的那一层正是 App 唯一剩下的主界面。现在连点只存一条，界面也不会再被关空\n'
+    '· 同一道护栏也盖住了另外两条能把界面点黑的路径：「点完添加马上点取消」、以及闹钟弹窗里的「添加 / 保存」\n\n'
+
+    'v0.9.0\n'
     '· 正式稳定版，归纳 0.8.1 到 0.8.12 的全部更新\n'
     '· 桌面小组件：三张固定尺寸的卡 —— 本周条（4×1，今天所在这一周）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历）。放置后不能拉伸，在 App 里改了排班桌面立刻跟着变，点某一天直接跳到那天的日历。升级后桌面上原有的旧小组件会消失，需要在桌面重新添加一次（小米 / HyperOS 在「支持小部件的应用 → 安卓小部件」里找）\n'
     '· 日历上可以单独改某几天的班了：点底栏那行班次、或长按格子拖选一段（可跨周、不跨月），就能给这几天单独指定班次（请假、跟同事换班都行），不动整套排班。被改过的那天格子上有个小圆点、信息卡写着「已调班」，选择层里可一键「恢复轮转」\n'
@@ -78,13 +82,12 @@ const String _changelogZh = 'v0.9.0\n'
     '· 修好大卡上「今天」那格没有标记：它的日期现在用主色 + 加粗，跟 App 日历里今天那格的做法一样（此前计划里要做的标记没落地，那格和别的格子看着一样）\n'
     '· 修好删掉小组件之后它还在后台每天自动刷新一次 —— 桌面上没有小组件时，不再排下一次刷新\n'
     '· 修好小卡在「还没有排班」变成「已排班」之后，班次名、日期、色条和分隔线一直不显示 —— 现在会正常出现\n'
-    '· 内部：补了 2 条测试（跨天的 24 小时班、按天改班反映到小组件快照），给一处过长的文字补上省略\n\n'
-    'v0.8.4\n'
-    '· 新增桌面小组件：小/中/大三档尺寸，一眼看到今天、未来三天或一周的班次\n'
-    '· 跨天自动翻页；在 App 里改了排班，桌面立刻跟着变\n'
-    '· 点小组件上的某一天，直接跳到那天的日历\n'
-    '· 小米 / HyperOS 机型上，小部件要进「支持小部件的应用」→「安卓小部件」才找得到（长按桌面空白处 → 添加小部件）；添加后没看到它，不代表功能没生效\n';
-const String _changelogEn = 'v0.9.0\n'
+    '· 内部：补了 2 条测试（跨天的 24 小时班、按天改班反映到小组件快照），给一处过长的文字补上省略\n';
+const String _changelogEn = 'v0.9.1\n'
+    '· Fixed an issue reported by users: tapping "Add" twice in a row while adding a todo turned the whole screen black — the app itself was neither dead nor frozen (the status bar was still there, you could still switch apps), the UI had simply been dismissed one screen too far, and only killing the app brought it back. The save takes a moment to land, and a second tap inside that window stored a duplicate todo and dismissed an extra screen — that extra one being the app\'s only remaining screen. A rapid double-tap now stores a single todo and leaves the UI alone\n'
+    '· The same guard covers two other ways to black out the screen: tapping "Add" and then "Cancel" right away, and the "Add / Save" buttons in the alarm dialog\n\n'
+
+    'v0.9.0\n'
     '· Stable release — merges everything from 0.8.1 through 0.8.12\n'
     '· Home-screen widgets: three fixed-size cards — a week strip (4×1, the current week), a today card (4×3, the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar). They cannot be resized once placed, follow any schedule change you make in the app, and tapping a day jumps to that date in the calendar. After upgrading, the old widget disappears from your home screen — add it again (on Xiaomi / HyperOS it lives under "Apps that support widgets → Android widgets")\n'
     '· Override individual days on the calendar: tap the shift row in the bottom bar, or long-press a cell and drag to pick a range (across weeks, not months), to give just those days a shift of their own — a day off, or swapping with a colleague — without touching the rest of the rotation. An overridden day carries a small dot in the grid and reads "Shift changed" on the info card, and the picker offers a one-tap "Restore rotation"\n'
@@ -121,12 +124,7 @@ const String _changelogEn = 'v0.9.0\n'
     '· Fixed the missing marker on the large widget\'s "today" cell: its date now uses the accent colour and bold, matching how the app\'s own calendar marks today (the marker was dropped along the way, so the cell looked like every other one)\n'
     '· Fixed the widget still scheduling its once-a-day refresh in the background after you removed it — with no widget on the home screen, the next refresh is no longer scheduled\n'
     '· Fixed the small widget losing its shift name, date, colour bar and dividers for good once "no schedule yet" turned into a real schedule — they show up again now\n'
-    '· Internal: two more tests (a 24-hour shift spanning midnight, and a per-day override reaching the widget snapshot), plus an ellipsis for one overlong label\n\n'
-    'v0.8.4\n'
-    '· New home screen widget: small / medium / large, showing today, the next three days or a whole week of shifts at a glance\n'
-    '· It flips over the day automatically, and follows any change you make to your schedule in the app right away\n'
-    '· Tap a day on the widget to jump straight to that date in the calendar\n'
-    '· On Xiaomi / HyperOS devices the widget lives under "Apps that support widgets" → "Android widgets" (long-press an empty spot on the home screen → Add widgets); not seeing it there does not mean the feature failed\n';
+    '· Internal: two more tests (a 24-hour shift spanning midnight, and a per-day override reaching the widget snapshot), plus an ellipsis for one overlong label\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

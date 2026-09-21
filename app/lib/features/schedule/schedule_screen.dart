@@ -206,6 +206,9 @@ class ScheduleScreen extends ConsumerWidget {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            // 「关掉本弹窗」的回调：navigator 与 route 都在这儿（**await 之前**）
+            // 取好，且只在自己这层还是最上层时才真的 pop —— 见 `dialogCloser`。
+            final close = dialogCloser(context);
             return GlassDialog(
               title: L10n.addEvent,
               content: Column(
@@ -222,7 +225,7 @@ class ScheduleScreen extends ConsumerWidget {
               ),
               actions: [
                 GlassActionButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: close,
                   label: L10n.cancel,
                 ),
                 const SizedBox(width: 8),
@@ -230,10 +233,9 @@ class ScheduleScreen extends ConsumerWidget {
                   variant: GlassActionVariant.primary,
                   onPressed: () async {
                     final title = titleCtrl.text.trim();
+                    // 标题为空 = 这一下什么也没做，按钮的锁当帧就放开（同步返回，
+                    // 见 `GlassActionButton._fire`）。
                     if (title.isEmpty) return;
-                    // 异步之前先把 navigator 抓住：await 之后再碰 context 不安全
-                    // （`if (context.mounted)` 在某些时机下会判假，弹窗就永远关不掉）。
-                    final navigator = Navigator.of(context);
                     await ref.read(appRepositoryProvider).addEvent(
                           title: title,
                           date: fields.date,
@@ -242,7 +244,7 @@ class ScheduleScreen extends ConsumerWidget {
                           alarmEnabled: fields.alarm,
                         );
                     await _rescheduleReminders(ref);
-                    navigator.pop();
+                    close();
                   },
                   label: L10n.add,
                 ),
@@ -269,6 +271,9 @@ class ScheduleScreen extends ConsumerWidget {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            // 同「添加」弹窗：closer 在 await 之前取好，且只在自己这层还是最上层
+            // 时才 pop —— 连点「保存」或点完保存点取消都不会把最后一层路由弹掉。
+            final close = dialogCloser(context);
             return GlassDialog(
               title: L10n.editEvent,
               content: Column(
@@ -285,7 +290,7 @@ class ScheduleScreen extends ConsumerWidget {
               ),
               actions: [
                 GlassActionButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: close,
                   label: L10n.cancel,
                 ),
                 const SizedBox(width: 8),
@@ -294,7 +299,6 @@ class ScheduleScreen extends ConsumerWidget {
                   onPressed: () async {
                     final title = titleCtrl.text.trim();
                     if (title.isEmpty) return;
-                    final navigator = Navigator.of(context);
                     await ref.read(appRepositoryProvider).updateEvent(
                           e,
                           title: title,
@@ -304,7 +308,7 @@ class ScheduleScreen extends ConsumerWidget {
                           alarmEnabled: fields.alarm,
                         );
                     await _rescheduleReminders(ref);
-                    navigator.pop();
+                    close();
                   },
                   label: L10n.save,
                 ),
