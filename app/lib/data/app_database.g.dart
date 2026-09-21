@@ -503,12 +503,6 @@ class $ShiftClassRowsTable extends ShiftClassRows
       defaultConstraints: GeneratedColumn.constraintIsAlways(
           'CHECK ("alarm_enabled" IN (0, 1))'),
       defaultValue: const Constant(false));
-  static const VerificationMeta _alarmMinuteMeta =
-      const VerificationMeta('alarmMinute');
-  @override
-  late final GeneratedColumn<int> alarmMinute = GeneratedColumn<int>(
-      'alarm_minute', aliasedName, true,
-      type: DriftSqlType.int, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -520,8 +514,7 @@ class $ShiftClassRowsTable extends ShiftClassRows
         endMinute,
         isRest,
         color,
-        alarmEnabled,
-        alarmMinute
+        alarmEnabled
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -584,12 +577,6 @@ class $ShiftClassRowsTable extends ShiftClassRows
           alarmEnabled.isAcceptableOrUnknown(
               data['alarm_enabled']!, _alarmEnabledMeta));
     }
-    if (data.containsKey('alarm_minute')) {
-      context.handle(
-          _alarmMinuteMeta,
-          alarmMinute.isAcceptableOrUnknown(
-              data['alarm_minute']!, _alarmMinuteMeta));
-    }
     return context;
   }
 
@@ -619,8 +606,6 @@ class $ShiftClassRowsTable extends ShiftClassRows
           .read(DriftSqlType.int, data['${effectivePrefix}color'])!,
       alarmEnabled: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}alarm_enabled'])!,
-      alarmMinute: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}alarm_minute']),
     );
   }
 
@@ -643,7 +628,6 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
   final bool isRest;
   final int color;
   final bool alarmEnabled;
-  final int? alarmMinute;
   const ShiftClassRow(
       {required this.id,
       required this.scheduleId,
@@ -654,8 +638,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       this.endMinute,
       required this.isRest,
       required this.color,
-      required this.alarmEnabled,
-      this.alarmMinute});
+      required this.alarmEnabled});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -675,9 +658,6 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
     map['is_rest'] = Variable<bool>(isRest);
     map['color'] = Variable<int>(color);
     map['alarm_enabled'] = Variable<bool>(alarmEnabled);
-    if (!nullToAbsent || alarmMinute != null) {
-      map['alarm_minute'] = Variable<int>(alarmMinute);
-    }
     return map;
   }
 
@@ -697,9 +677,6 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       isRest: Value(isRest),
       color: Value(color),
       alarmEnabled: Value(alarmEnabled),
-      alarmMinute: alarmMinute == null && nullToAbsent
-          ? const Value.absent()
-          : Value(alarmMinute),
     );
   }
 
@@ -717,7 +694,6 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       isRest: serializer.fromJson<bool>(json['isRest']),
       color: serializer.fromJson<int>(json['color']),
       alarmEnabled: serializer.fromJson<bool>(json['alarmEnabled']),
-      alarmMinute: serializer.fromJson<int?>(json['alarmMinute']),
     );
   }
   @override
@@ -734,7 +710,6 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       'isRest': serializer.toJson<bool>(isRest),
       'color': serializer.toJson<int>(color),
       'alarmEnabled': serializer.toJson<bool>(alarmEnabled),
-      'alarmMinute': serializer.toJson<int?>(alarmMinute),
     };
   }
 
@@ -748,8 +723,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
           Value<int?> endMinute = const Value.absent(),
           bool? isRest,
           int? color,
-          bool? alarmEnabled,
-          Value<int?> alarmMinute = const Value.absent()}) =>
+          bool? alarmEnabled}) =>
       ShiftClassRow(
         id: id ?? this.id,
         scheduleId: scheduleId ?? this.scheduleId,
@@ -761,7 +735,6 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
         isRest: isRest ?? this.isRest,
         color: color ?? this.color,
         alarmEnabled: alarmEnabled ?? this.alarmEnabled,
-        alarmMinute: alarmMinute.present ? alarmMinute.value : this.alarmMinute,
       );
   ShiftClassRow copyWithCompanion(ShiftClassRowsCompanion data) {
     return ShiftClassRow(
@@ -779,8 +752,6 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       alarmEnabled: data.alarmEnabled.present
           ? data.alarmEnabled.value
           : this.alarmEnabled,
-      alarmMinute:
-          data.alarmMinute.present ? data.alarmMinute.value : this.alarmMinute,
     );
   }
 
@@ -796,15 +767,14 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
           ..write('endMinute: $endMinute, ')
           ..write('isRest: $isRest, ')
           ..write('color: $color, ')
-          ..write('alarmEnabled: $alarmEnabled, ')
-          ..write('alarmMinute: $alarmMinute')
+          ..write('alarmEnabled: $alarmEnabled')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, scheduleId, order, name, abbr,
-      startMinute, endMinute, isRest, color, alarmEnabled, alarmMinute);
+      startMinute, endMinute, isRest, color, alarmEnabled);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -818,8 +788,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
           other.endMinute == this.endMinute &&
           other.isRest == this.isRest &&
           other.color == this.color &&
-          other.alarmEnabled == this.alarmEnabled &&
-          other.alarmMinute == this.alarmMinute);
+          other.alarmEnabled == this.alarmEnabled);
 }
 
 class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
@@ -833,7 +802,6 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
   final Value<bool> isRest;
   final Value<int> color;
   final Value<bool> alarmEnabled;
-  final Value<int?> alarmMinute;
   const ShiftClassRowsCompanion({
     this.id = const Value.absent(),
     this.scheduleId = const Value.absent(),
@@ -845,7 +813,6 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
     this.isRest = const Value.absent(),
     this.color = const Value.absent(),
     this.alarmEnabled = const Value.absent(),
-    this.alarmMinute = const Value.absent(),
   });
   ShiftClassRowsCompanion.insert({
     this.id = const Value.absent(),
@@ -858,7 +825,6 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
     this.isRest = const Value.absent(),
     this.color = const Value.absent(),
     this.alarmEnabled = const Value.absent(),
-    this.alarmMinute = const Value.absent(),
   })  : scheduleId = Value(scheduleId),
         order = Value(order),
         name = Value(name);
@@ -873,7 +839,6 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
     Expression<bool>? isRest,
     Expression<int>? color,
     Expression<bool>? alarmEnabled,
-    Expression<int>? alarmMinute,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -886,7 +851,6 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
       if (isRest != null) 'is_rest': isRest,
       if (color != null) 'color': color,
       if (alarmEnabled != null) 'alarm_enabled': alarmEnabled,
-      if (alarmMinute != null) 'alarm_minute': alarmMinute,
     });
   }
 
@@ -900,8 +864,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
       Value<int?>? endMinute,
       Value<bool>? isRest,
       Value<int>? color,
-      Value<bool>? alarmEnabled,
-      Value<int?>? alarmMinute}) {
+      Value<bool>? alarmEnabled}) {
     return ShiftClassRowsCompanion(
       id: id ?? this.id,
       scheduleId: scheduleId ?? this.scheduleId,
@@ -913,7 +876,6 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
       isRest: isRest ?? this.isRest,
       color: color ?? this.color,
       alarmEnabled: alarmEnabled ?? this.alarmEnabled,
-      alarmMinute: alarmMinute ?? this.alarmMinute,
     );
   }
 
@@ -950,9 +912,6 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
     if (alarmEnabled.present) {
       map['alarm_enabled'] = Variable<bool>(alarmEnabled.value);
     }
-    if (alarmMinute.present) {
-      map['alarm_minute'] = Variable<int>(alarmMinute.value);
-    }
     return map;
   }
 
@@ -968,8 +927,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
           ..write('endMinute: $endMinute, ')
           ..write('isRest: $isRest, ')
           ..write('color: $color, ')
-          ..write('alarmEnabled: $alarmEnabled, ')
-          ..write('alarmMinute: $alarmMinute')
+          ..write('alarmEnabled: $alarmEnabled')
           ..write(')'))
         .toString();
   }
@@ -1230,6 +1188,276 @@ class ShiftCycleRowsCompanion extends UpdateCompanion<ShiftCycleRow> {
           ..write('scheduleId: $scheduleId, ')
           ..write('order: $order, ')
           ..write('classId: $classId')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ShiftClassAlarmsTable extends ShiftClassAlarms
+    with TableInfo<$ShiftClassAlarmsTable, ShiftClassAlarm> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ShiftClassAlarmsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _classIdMeta =
+      const VerificationMeta('classId');
+  @override
+  late final GeneratedColumn<int> classId = GeneratedColumn<int>(
+      'class_id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _orderMeta = const VerificationMeta('order');
+  @override
+  late final GeneratedColumn<int> order = GeneratedColumn<int>(
+      'order', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _minuteMeta = const VerificationMeta('minute');
+  @override
+  late final GeneratedColumn<int> minute = GeneratedColumn<int>(
+      'minute', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+      'label', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [classId, order, minute, label];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shift_class_alarms';
+  @override
+  VerificationContext validateIntegrity(Insertable<ShiftClassAlarm> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('class_id')) {
+      context.handle(_classIdMeta,
+          classId.isAcceptableOrUnknown(data['class_id']!, _classIdMeta));
+    } else if (isInserting) {
+      context.missing(_classIdMeta);
+    }
+    if (data.containsKey('order')) {
+      context.handle(
+          _orderMeta, order.isAcceptableOrUnknown(data['order']!, _orderMeta));
+    } else if (isInserting) {
+      context.missing(_orderMeta);
+    }
+    if (data.containsKey('minute')) {
+      context.handle(_minuteMeta,
+          minute.isAcceptableOrUnknown(data['minute']!, _minuteMeta));
+    } else if (isInserting) {
+      context.missing(_minuteMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+          _labelMeta, label.isAcceptableOrUnknown(data['label']!, _labelMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {classId, order};
+  @override
+  ShiftClassAlarm map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ShiftClassAlarm(
+      classId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}class_id'])!,
+      order: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}order'])!,
+      minute: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}minute'])!,
+      label: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}label']),
+    );
+  }
+
+  @override
+  $ShiftClassAlarmsTable createAlias(String alias) {
+    return $ShiftClassAlarmsTable(attachedDatabase, alias);
+  }
+}
+
+class ShiftClassAlarm extends DataClass implements Insertable<ShiftClassAlarm> {
+  final int classId;
+  final int order;
+  final int minute;
+  final String? label;
+  const ShiftClassAlarm(
+      {required this.classId,
+      required this.order,
+      required this.minute,
+      this.label});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['class_id'] = Variable<int>(classId);
+    map['order'] = Variable<int>(order);
+    map['minute'] = Variable<int>(minute);
+    if (!nullToAbsent || label != null) {
+      map['label'] = Variable<String>(label);
+    }
+    return map;
+  }
+
+  ShiftClassAlarmsCompanion toCompanion(bool nullToAbsent) {
+    return ShiftClassAlarmsCompanion(
+      classId: Value(classId),
+      order: Value(order),
+      minute: Value(minute),
+      label:
+          label == null && nullToAbsent ? const Value.absent() : Value(label),
+    );
+  }
+
+  factory ShiftClassAlarm.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ShiftClassAlarm(
+      classId: serializer.fromJson<int>(json['classId']),
+      order: serializer.fromJson<int>(json['order']),
+      minute: serializer.fromJson<int>(json['minute']),
+      label: serializer.fromJson<String?>(json['label']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'classId': serializer.toJson<int>(classId),
+      'order': serializer.toJson<int>(order),
+      'minute': serializer.toJson<int>(minute),
+      'label': serializer.toJson<String?>(label),
+    };
+  }
+
+  ShiftClassAlarm copyWith(
+          {int? classId,
+          int? order,
+          int? minute,
+          Value<String?> label = const Value.absent()}) =>
+      ShiftClassAlarm(
+        classId: classId ?? this.classId,
+        order: order ?? this.order,
+        minute: minute ?? this.minute,
+        label: label.present ? label.value : this.label,
+      );
+  ShiftClassAlarm copyWithCompanion(ShiftClassAlarmsCompanion data) {
+    return ShiftClassAlarm(
+      classId: data.classId.present ? data.classId.value : this.classId,
+      order: data.order.present ? data.order.value : this.order,
+      minute: data.minute.present ? data.minute.value : this.minute,
+      label: data.label.present ? data.label.value : this.label,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftClassAlarm(')
+          ..write('classId: $classId, ')
+          ..write('order: $order, ')
+          ..write('minute: $minute, ')
+          ..write('label: $label')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(classId, order, minute, label);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ShiftClassAlarm &&
+          other.classId == this.classId &&
+          other.order == this.order &&
+          other.minute == this.minute &&
+          other.label == this.label);
+}
+
+class ShiftClassAlarmsCompanion extends UpdateCompanion<ShiftClassAlarm> {
+  final Value<int> classId;
+  final Value<int> order;
+  final Value<int> minute;
+  final Value<String?> label;
+  final Value<int> rowid;
+  const ShiftClassAlarmsCompanion({
+    this.classId = const Value.absent(),
+    this.order = const Value.absent(),
+    this.minute = const Value.absent(),
+    this.label = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ShiftClassAlarmsCompanion.insert({
+    required int classId,
+    required int order,
+    required int minute,
+    this.label = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : classId = Value(classId),
+        order = Value(order),
+        minute = Value(minute);
+  static Insertable<ShiftClassAlarm> custom({
+    Expression<int>? classId,
+    Expression<int>? order,
+    Expression<int>? minute,
+    Expression<String>? label,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (classId != null) 'class_id': classId,
+      if (order != null) 'order': order,
+      if (minute != null) 'minute': minute,
+      if (label != null) 'label': label,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ShiftClassAlarmsCompanion copyWith(
+      {Value<int>? classId,
+      Value<int>? order,
+      Value<int>? minute,
+      Value<String?>? label,
+      Value<int>? rowid}) {
+    return ShiftClassAlarmsCompanion(
+      classId: classId ?? this.classId,
+      order: order ?? this.order,
+      minute: minute ?? this.minute,
+      label: label ?? this.label,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (classId.present) {
+      map['class_id'] = Variable<int>(classId.value);
+    }
+    if (order.present) {
+      map['order'] = Variable<int>(order.value);
+    }
+    if (minute.present) {
+      map['minute'] = Variable<int>(minute.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftClassAlarmsCompanion(')
+          ..write('classId: $classId, ')
+          ..write('order: $order, ')
+          ..write('minute: $minute, ')
+          ..write('label: $label, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -2863,6 +3091,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ShiftScheduleRowsTable(this);
   late final $ShiftClassRowsTable shiftClassRows = $ShiftClassRowsTable(this);
   late final $ShiftCycleRowsTable shiftCycleRows = $ShiftCycleRowsTable(this);
+  late final $ShiftClassAlarmsTable shiftClassAlarms =
+      $ShiftClassAlarmsTable(this);
   late final $ScheduleEventsTable scheduleEvents = $ScheduleEventsTable(this);
   late final $CustomAlarmsTable customAlarms = $CustomAlarmsTable(this);
   late final $ShiftAlarmOverridesTable shiftAlarmOverrides =
@@ -2879,6 +3109,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         shiftScheduleRows,
         shiftClassRows,
         shiftCycleRows,
+        shiftClassAlarms,
         scheduleEvents,
         customAlarms,
         shiftAlarmOverrides,
@@ -3114,7 +3345,6 @@ typedef $$ShiftClassRowsTableCreateCompanionBuilder = ShiftClassRowsCompanion
   Value<bool> isRest,
   Value<int> color,
   Value<bool> alarmEnabled,
-  Value<int?> alarmMinute,
 });
 typedef $$ShiftClassRowsTableUpdateCompanionBuilder = ShiftClassRowsCompanion
     Function({
@@ -3128,7 +3358,6 @@ typedef $$ShiftClassRowsTableUpdateCompanionBuilder = ShiftClassRowsCompanion
   Value<bool> isRest,
   Value<int> color,
   Value<bool> alarmEnabled,
-  Value<int?> alarmMinute,
 });
 
 class $$ShiftClassRowsTableFilterComposer
@@ -3169,9 +3398,6 @@ class $$ShiftClassRowsTableFilterComposer
 
   ColumnFilters<bool> get alarmEnabled => $composableBuilder(
       column: $table.alarmEnabled, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<int> get alarmMinute => $composableBuilder(
-      column: $table.alarmMinute, builder: (column) => ColumnFilters(column));
 }
 
 class $$ShiftClassRowsTableOrderingComposer
@@ -3213,9 +3439,6 @@ class $$ShiftClassRowsTableOrderingComposer
   ColumnOrderings<bool> get alarmEnabled => $composableBuilder(
       column: $table.alarmEnabled,
       builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<int> get alarmMinute => $composableBuilder(
-      column: $table.alarmMinute, builder: (column) => ColumnOrderings(column));
 }
 
 class $$ShiftClassRowsTableAnnotationComposer
@@ -3256,9 +3479,6 @@ class $$ShiftClassRowsTableAnnotationComposer
 
   GeneratedColumn<bool> get alarmEnabled => $composableBuilder(
       column: $table.alarmEnabled, builder: (column) => column);
-
-  GeneratedColumn<int> get alarmMinute => $composableBuilder(
-      column: $table.alarmMinute, builder: (column) => column);
 }
 
 class $$ShiftClassRowsTableTableManager extends RootTableManager<
@@ -3298,7 +3518,6 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             Value<bool> isRest = const Value.absent(),
             Value<int> color = const Value.absent(),
             Value<bool> alarmEnabled = const Value.absent(),
-            Value<int?> alarmMinute = const Value.absent(),
           }) =>
               ShiftClassRowsCompanion(
             id: id,
@@ -3311,7 +3530,6 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             isRest: isRest,
             color: color,
             alarmEnabled: alarmEnabled,
-            alarmMinute: alarmMinute,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -3324,7 +3542,6 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             Value<bool> isRest = const Value.absent(),
             Value<int> color = const Value.absent(),
             Value<bool> alarmEnabled = const Value.absent(),
-            Value<int?> alarmMinute = const Value.absent(),
           }) =>
               ShiftClassRowsCompanion.insert(
             id: id,
@@ -3337,7 +3554,6 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             isRest: isRest,
             color: color,
             alarmEnabled: alarmEnabled,
-            alarmMinute: alarmMinute,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -3513,6 +3729,165 @@ typedef $$ShiftCycleRowsTableProcessedTableManager = ProcessedTableManager<
       BaseReferences<_$AppDatabase, $ShiftCycleRowsTable, ShiftCycleRow>
     ),
     ShiftCycleRow,
+    PrefetchHooks Function()>;
+typedef $$ShiftClassAlarmsTableCreateCompanionBuilder
+    = ShiftClassAlarmsCompanion Function({
+  required int classId,
+  required int order,
+  required int minute,
+  Value<String?> label,
+  Value<int> rowid,
+});
+typedef $$ShiftClassAlarmsTableUpdateCompanionBuilder
+    = ShiftClassAlarmsCompanion Function({
+  Value<int> classId,
+  Value<int> order,
+  Value<int> minute,
+  Value<String?> label,
+  Value<int> rowid,
+});
+
+class $$ShiftClassAlarmsTableFilterComposer
+    extends Composer<_$AppDatabase, $ShiftClassAlarmsTable> {
+  $$ShiftClassAlarmsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get classId => $composableBuilder(
+      column: $table.classId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get order => $composableBuilder(
+      column: $table.order, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get minute => $composableBuilder(
+      column: $table.minute, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get label => $composableBuilder(
+      column: $table.label, builder: (column) => ColumnFilters(column));
+}
+
+class $$ShiftClassAlarmsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShiftClassAlarmsTable> {
+  $$ShiftClassAlarmsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get classId => $composableBuilder(
+      column: $table.classId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get order => $composableBuilder(
+      column: $table.order, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get minute => $composableBuilder(
+      column: $table.minute, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get label => $composableBuilder(
+      column: $table.label, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ShiftClassAlarmsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShiftClassAlarmsTable> {
+  $$ShiftClassAlarmsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get classId =>
+      $composableBuilder(column: $table.classId, builder: (column) => column);
+
+  GeneratedColumn<int> get order =>
+      $composableBuilder(column: $table.order, builder: (column) => column);
+
+  GeneratedColumn<int> get minute =>
+      $composableBuilder(column: $table.minute, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+}
+
+class $$ShiftClassAlarmsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ShiftClassAlarmsTable,
+    ShiftClassAlarm,
+    $$ShiftClassAlarmsTableFilterComposer,
+    $$ShiftClassAlarmsTableOrderingComposer,
+    $$ShiftClassAlarmsTableAnnotationComposer,
+    $$ShiftClassAlarmsTableCreateCompanionBuilder,
+    $$ShiftClassAlarmsTableUpdateCompanionBuilder,
+    (
+      ShiftClassAlarm,
+      BaseReferences<_$AppDatabase, $ShiftClassAlarmsTable, ShiftClassAlarm>
+    ),
+    ShiftClassAlarm,
+    PrefetchHooks Function()> {
+  $$ShiftClassAlarmsTableTableManager(
+      _$AppDatabase db, $ShiftClassAlarmsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ShiftClassAlarmsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ShiftClassAlarmsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ShiftClassAlarmsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> classId = const Value.absent(),
+            Value<int> order = const Value.absent(),
+            Value<int> minute = const Value.absent(),
+            Value<String?> label = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ShiftClassAlarmsCompanion(
+            classId: classId,
+            order: order,
+            minute: minute,
+            label: label,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required int classId,
+            required int order,
+            required int minute,
+            Value<String?> label = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ShiftClassAlarmsCompanion.insert(
+            classId: classId,
+            order: order,
+            minute: minute,
+            label: label,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ShiftClassAlarmsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ShiftClassAlarmsTable,
+    ShiftClassAlarm,
+    $$ShiftClassAlarmsTableFilterComposer,
+    $$ShiftClassAlarmsTableOrderingComposer,
+    $$ShiftClassAlarmsTableAnnotationComposer,
+    $$ShiftClassAlarmsTableCreateCompanionBuilder,
+    $$ShiftClassAlarmsTableUpdateCompanionBuilder,
+    (
+      ShiftClassAlarm,
+      BaseReferences<_$AppDatabase, $ShiftClassAlarmsTable, ShiftClassAlarm>
+    ),
+    ShiftClassAlarm,
     PrefetchHooks Function()>;
 typedef $$ScheduleEventsTableCreateCompanionBuilder = ScheduleEventsCompanion
     Function({
@@ -4407,6 +4782,8 @@ class $AppDatabaseManager {
       $$ShiftClassRowsTableTableManager(_db, _db.shiftClassRows);
   $$ShiftCycleRowsTableTableManager get shiftCycleRows =>
       $$ShiftCycleRowsTableTableManager(_db, _db.shiftCycleRows);
+  $$ShiftClassAlarmsTableTableManager get shiftClassAlarms =>
+      $$ShiftClassAlarmsTableTableManager(_db, _db.shiftClassAlarms);
   $$ScheduleEventsTableTableManager get scheduleEvents =>
       $$ScheduleEventsTableTableManager(_db, _db.scheduleEvents);
   $$CustomAlarmsTableTableManager get customAlarms =>

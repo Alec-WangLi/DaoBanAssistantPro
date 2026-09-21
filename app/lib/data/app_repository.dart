@@ -31,6 +31,7 @@ class ActiveSchedule {
     required this.classes,
     required this.cycle,
     this.overrideRows = const [],
+    this.classAlarms = const {},
   });
 
   final ShiftScheduleRow schedule;
@@ -40,8 +41,13 @@ class ActiveSchedule {
   /// 本方案的按天改班覆盖行（存的是 classId）。
   final List<ShiftDayOverride> overrideRows;
 
+  /// 各班次的闹钟行：key = classId，value 已按 `order` 排好（顺序即原生 id 的序号）。
+  final Map<int, List<ShiftAlarm>> classAlarms;
+
   ShiftSchedule toDomain() {
-    final domainClasses = classes.map((c) => c.toDomain()).toList();
+    final domainClasses = classes
+        .map((c) => c.toDomain(alarms: classAlarms[c.id] ?? const []))
+        .toList();
     // 库里存的是 classId，领域层要的是 classes 的下标。
     final indexById = {
       for (var i = 0; i < classes.length; i++) classes[i].id: i,
@@ -84,7 +90,8 @@ class ActiveSchedule {
 }
 
 extension ShiftClassRowX on ShiftClassRow {
-  ShiftClass toDomain() => ShiftClass(
+  /// [alarms] 由调用方从 `shift_class_alarms` 取好传进来（本行没有那张表的信息）。
+  ShiftClass toDomain({List<ShiftAlarm> alarms = const []}) => ShiftClass(
         // id 必须带上：覆盖存的是 classId，丢了它整套覆盖都装配不出来。
         id: id,
         name: name,
@@ -94,9 +101,7 @@ extension ShiftClassRowX on ShiftClassRow {
         isRest: isRest,
         color: color,
         alarmEnabled: alarmEnabled,
-        // 本轮只换形状：库表还是「一个钟点」那一列，先读第一条。
-        alarms:
-            alarmMinute == null ? const [] : [ShiftAlarm(minute: alarmMinute!)],
+        alarms: alarms,
       );
 }
 
@@ -141,11 +146,26 @@ extension AppDatabaseQueries on AppDatabase {
     final overrideRows = await (select(shiftDayOverrides)
           ..where((t) => t.scheduleId.equals(sched.id)))
         .get();
+    // 闹钟表**没有 scheduleId**（它的存在只对班次定义负责），按本方案的 classId 取；
+    // 按 `order` 升序 —— 那个顺序就是原生 id 里的「序号」。
+    final classIds = classes.map((c) => c.id).toList();
+    final alarmRows = classIds.isEmpty
+        ? const <ShiftClassAlarm>[]
+        : await (select(shiftClassAlarms)
+              ..where((t) => t.classId.isIn(classIds))
+              ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+            .get();
+    final alarmsByClass = <int, List<ShiftAlarm>>{};
+    for (final r in alarmRows) {
+      (alarmsByClass[r.classId] ??= [])
+          .add(ShiftAlarm(minute: r.minute, label: r.label));
+    }
     return ActiveSchedule(
       schedule: sched,
       classes: classes,
       cycle: cycle,
       overrideRows: overrideRows,
+      classAlarms: alarmsByClass,
     );
   }
 
@@ -157,6 +177,17 @@ extension AppDatabaseQueries on AppDatabase {
         (t) => OrderingTerm.asc(t.timeMinute),
       ]);
     return q.watch();
+  }
+
+  /// 测试专用：按当前方案装配一次 [ActiveSchedule]（不经过 Riverpod 流）。
+  ///
+  /// 迁移测试要验「闹钟搬进了新表、覆盖还指得对」，直接装配一次最短。
+  Future<ActiveSchedule?> loadActiveScheduleForTesting() async {
+    final sched = await (select(shiftScheduleRows)
+          ..where((s) => s.isCurrent.equals(true)))
+        .getSingleOrNull();
+    if (sched == null) return null;
+    return _loadChildren(sched);
   }
 }
 
@@ -175,6 +206,8 @@ class AppRepository {
       await db.delete(db.shiftAlarmOverrides).go();
       // 按天改班覆盖引用班次定义的 id，是班次的子表：与周期一样先于班次删。
       await db.delete(db.shiftDayOverrides).go();
+      // 班次闹钟同理：+`class_id` 指着班次定义。
+      await db.delete(db.shiftClassAlarms).go();
       // 先删子表（周期）再删父表（班次定义）。
       await db.delete(db.shiftCycleRows).go();
       await db.delete(db.shiftClassRows).go();
@@ -219,9 +252,21 @@ class AppRepository {
     return (await db._loadChildren(row)).toDomain();
   }
 
-  /// 删除一套排班方案（连带其班次定义、周期与按天改班覆盖），并保证始终有一套当前方案。
+  /// 删除一套排班方案（连带其班次定义、周期、按天改班覆盖与班次闹钟），
+  /// 并保证始终有一套当前方案。
   Future<void> deleteSchedule(int id) async {
     await db.transaction(() async {
+      // 闹钟表**没有 scheduleId**，得先捞出这套方案的班次 id 再删（子表先走）。
+      final classIds = (await (db.select(db.shiftClassRows)
+                ..where((t) => t.scheduleId.equals(id)))
+              .get())
+          .map((c) => c.id)
+          .toList();
+      if (classIds.isNotEmpty) {
+        await (db.delete(db.shiftClassAlarms)
+              ..where((t) => t.classId.isIn(classIds)))
+            .go();
+      }
       await (db.delete(db.shiftCycleRows)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
@@ -379,6 +424,7 @@ class AppRepository {
       final classIds = <int>[];
       for (var i = 0; i < classes.length; i++) {
         final c = classes[i];
+        final int classId;
         if (c.id != null) {
           await (db.update(db.shiftClassRows)
                 ..where((t) => t.id.equals(c.id!)))
@@ -392,11 +438,10 @@ class AppRepository {
             isRest: Value(c.isRest),
             color: Value(c.color),
             alarmEnabled: Value(c.alarmEnabled),
-            alarmMinute: Value(c.alarms.isEmpty ? null : c.alarms.first.minute),
           ));
-          classIds.add(c.id!);
+          classId = c.id!;
         } else {
-          classIds.add(await db.into(db.shiftClassRows).insert(
+          classId = await db.into(db.shiftClassRows).insert(
                 ShiftClassRowsCompanion.insert(
                   scheduleId: id,
                   order: i,
@@ -407,13 +452,31 @@ class AppRepository {
                   isRest: Value(c.isRest),
                   color: Value(c.color),
                   alarmEnabled: Value(c.alarmEnabled),
-                  alarmMinute: Value(c.alarms.isEmpty ? null : c.alarms.first.minute),
                 ),
-              ));
+              );
+        }
+        classIds.add(classId);
+
+        // 闹钟**整组重写**：条数少（≤ `maxAlarmsPerShift`）、没有任何东西引用
+        // 单条闹钟，删了重建比逐条对账简单得多。顺序按列表落 —— **它就是原生 id
+        // 里的「序号」**，所以别排序、别去重。（班次那条链走增量是因为按天覆盖
+        // 引用了 classId；闹钟没有这层引用，见 `app_database.dart` 的注释。）
+        await (db.delete(db.shiftClassAlarms)
+              ..where((t) => t.classId.equals(classId)))
+            .go();
+        for (var k = 0; k < c.alarms.length; k++) {
+          await db.into(db.shiftClassAlarms).insert(
+                ShiftClassAlarmsCompanion.insert(
+                  classId: classId,
+                  order: k,
+                  minute: c.alarms[k].minute,
+                  label: Value(c.alarms[k].label),
+                ),
+              );
         }
       }
 
-      // 库里不在新列表里的班次定义：删掉，并**连带删掉引用它的覆盖行**
+      // 库里不在新列表里的班次定义：删掉，并**连带删掉引用它的覆盖行与它的闹钟**
       // （悬空引用留着只会在表里攒垃圾，渲染时还得再兜一次底）。
       final keptClassIds = classIds.toSet();
       final staleClasses = await (db.select(db.shiftClassRows)
@@ -422,6 +485,9 @@ class AppRepository {
       for (final row in staleClasses) {
         if (keptClassIds.contains(row.id)) continue;
         await (db.delete(db.shiftDayOverrides)
+              ..where((t) => t.classId.equals(row.id)))
+            .go();
+        await (db.delete(db.shiftClassAlarms)
               ..where((t) => t.classId.equals(row.id)))
             .go();
         await (db.delete(db.shiftClassRows)..where((t) => t.id.equals(row.id)))

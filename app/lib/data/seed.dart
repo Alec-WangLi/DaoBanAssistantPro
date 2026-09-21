@@ -24,7 +24,7 @@ Future<void> seedIfEmpty(AppDatabase db) async {
   final classIds = <int>[];
   for (var i = 0; i < sched.classes.length; i++) {
     final c = sched.classes[i];
-    classIds.add(await db.into(db.shiftClassRows).insert(
+    final classId = await db.into(db.shiftClassRows).insert(
           ShiftClassRowsCompanion.insert(
             scheduleId: id,
             order: i,
@@ -35,11 +35,20 @@ Future<void> seedIfEmpty(AppDatabase db) async {
             isRest: Value(c.isRest),
             color: Value(c.color),
             alarmEnabled: Value(c.alarmEnabled),
-            // 本轮只换形状：库表还是「一个钟点」那一列，先落第一条。
-            alarmMinute:
-                Value(c.alarms.isEmpty ? null : c.alarms.first.minute),
           ),
-        ));
+        );
+    classIds.add(classId);
+    // 闹钟落进 v10 那张表；顺序即列表顺序（= 原生 id 的「序号」）。
+    for (var k = 0; k < c.alarms.length; k++) {
+      await db.into(db.shiftClassAlarms).insert(
+            ShiftClassAlarmsCompanion.insert(
+              classId: classId,
+              order: k,
+              minute: c.alarms[k].minute,
+              label: Value(c.alarms[k].label),
+            ),
+          );
+    }
   }
   for (var i = 0; i < sched.cycle.length; i++) {
     await db.into(db.shiftCycleRows).insert(

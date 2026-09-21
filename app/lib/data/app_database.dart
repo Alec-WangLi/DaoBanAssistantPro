@@ -35,7 +35,9 @@ class ShiftClassRows extends Table {
   BoolColumn get isRest => boolean().withDefault(const Constant(false))();
   IntColumn get color => integer().withDefault(const Constant(0xFF5B7FFF))();
   BoolColumn get alarmEnabled => boolean().withDefault(const Constant(false))();
-  IntColumn get alarmMinute => integer().nullable()();
+  // `alarm_minute` 在 v10 迁进 `ShiftClassAlarms` 后从本表删掉了（见 onUpgrade
+  // 的 `from < 10` 分支与 TableMigration）—— 不留死列，免得下一个人从两个来源里
+  // 挑错那个。
 }
 
 /// 周期序列表：第 N 天用哪个班次定义。
@@ -44,6 +46,25 @@ class ShiftCycleRows extends Table {
   IntColumn get scheduleId => integer()();
   IntColumn get order => integer()();
   IntColumn get classId => integer()();
+}
+
+/// 班次闹钟表：一个班次可以挂多条联动闹钟（上限 `maxAlarmsPerShift`）。
+///
+/// **不设自增 id**：没有任何东西引用单条闹钟（「按天关闹钟」是按天、不是按闹钟；
+/// 模板不存身份），所以它跟 [ShiftDayOverrides] 不是一类东西 —— 那边要稳定 id
+/// 是因为覆盖要指得住班次定义。别为了对称给它加 id。
+///
+/// `order` 是用户在编辑页里的顺序，**同时也是原生 id 里的「序号」**
+/// （见 `AlarmService._shiftDaysHorizon`）。总开关在 [ShiftClassRows.alarmEnabled]
+/// 上 —— 关掉开关**不清空**这里的时间（用户手滑关一下不该丢配置）。
+class ShiftClassAlarms extends Table {
+  IntColumn get classId => integer()();
+  IntColumn get order => integer()();
+  IntColumn get minute => integer()();
+  TextColumn get label => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {classId, order};
 }
 
 /// 日程事件表。
@@ -142,6 +163,7 @@ class CustomTemplates extends Table {
   ShiftScheduleRows,
   ShiftClassRows,
   ShiftCycleRows,
+  ShiftClassAlarms,
   ScheduleEvents,
   CustomAlarms,
   ShiftAlarmOverrides,
@@ -155,12 +177,38 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 10) {
+            // 班次闹钟：一个钟点（`alarm_minute` 列）→ 一张表（一组有序闹钟）。
+            await m.createTable(shiftClassAlarms);
+            // ⚠️ 只有 v6 及以后才有 `shift_class_rows`（它是 `from < 6` 那段建的）。
+            // 从 v5 或更早升上来时这一段先跑，那时表还不存在 —— 硬插会
+            // 「no such table: shift_class_rows」（`migration_v5_to_v6_test.dart`
+            // 正是拦这个的）。那种老库的闹钟由 `from < 6` 那段直接落进新表。
+            if (from >= 6) {
+              // 条件只看 alarm_minute：**开关关着但时间还留着的行同样要搬** ——
+              // 只挑 alarm_enabled = 1 等于把用户配好的时间吞了，界面上看不出来。
+              await customStatement(
+                'INSERT INTO shift_class_alarms (class_id, "order", minute, label) '
+                'SELECT id, 0, alarm_minute, NULL FROM shift_class_rows '
+                'WHERE alarm_minute IS NOT NULL',
+              );
+              // 删掉旧列（重建表）。**id 必须原样带过去** —— shift_cycle_rows 与
+              // shift_day_overrides 都指着它，一变就集体指飞（不报错，只是那天
+              // 变成别的班）。回归测试在 `migration_v9_to_v10_test.dart`。
+              //
+              // `TableMigration` 在 drift 里标着 experimental（API 可能变），这里
+              // 仍然用它：它按**当前 schema 的生成代码**重建表，列定义不会写歪；
+              // 手抄 DDL 那一套（v1→v2 分支那种）更适合已经不在 schema 里的历史表。
+              // ignore: experimental_member_use
+              await m.alterTable(TableMigration(shiftClassRows));
+            }
+          }
           if (from < 9) {
             // 「我的模板」（自定义模板）。纯新增一张表，不碰任何既有数据。
             await m.createTable(customTemplates);
@@ -269,8 +317,8 @@ class AppDatabase extends _$AppDatabase {
         await customInsert(
           'INSERT INTO shift_class_rows '
           '(id, schedule_id, "order", name, abbr, start_minute, end_minute, '
-          'is_rest, color, alarm_enabled, alarm_minute) '
-          'VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)',
+          'is_rest, color, alarm_enabled) '
+          'VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)',
           variables: [
             Variable.withInt(classId),
             Variable.withInt(scheduleId),
@@ -283,9 +331,20 @@ class AppDatabase extends _$AppDatabase {
             Variable.withInt(isRest ? 1 : 0),
             Variable.withInt(color),
             Variable.withInt(alarmEnabled ? 1 : 0),
-            Variable<int>(alarmMinute),
           ],
         );
+        // 闹钟落进 v10 那张新表。**`from < 10` 那段排在 `from < 6` 之前**，
+        // 所以从 v5 一升上来时新表已经建好了；顺序一颠倒这段就会打到不存在的表上。
+        if (alarmMinute != null) {
+          await customInsert(
+            'INSERT INTO shift_class_alarms (class_id, "order", minute, label) '
+            'VALUES (?, 0, ?, NULL)',
+            variables: [
+              Variable.withInt(classId),
+              Variable.withInt(alarmMinute),
+            ],
+          );
+        }
       }
 
       await customInsert(

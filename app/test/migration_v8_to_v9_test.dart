@@ -13,6 +13,24 @@ import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 /// v8 时期的 `shift_schedule_rows`（v9 没有改动它）。
+/// 班次定义表 —— v6 起就存在，v9→v10 那一步要读它的 `alarm_minute` 搬进新表。
+/// fixture 里加它是因为**真实 v8 库一定有这样一张表**（不是为了让断言变松）。
+const _v8ClassTable = '''
+CREATE TABLE shift_class_rows (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  schedule_id INTEGER NOT NULL,
+  "order" INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  abbr TEXT,
+  start_minute INTEGER,
+  end_minute INTEGER,
+  is_rest INTEGER NOT NULL DEFAULT 0,
+  color INTEGER NOT NULL DEFAULT 4284186623,
+  alarm_enabled INTEGER NOT NULL DEFAULT 0,
+  alarm_minute INTEGER
+)
+''';
+
 const _v8ScheduleTable = '''
 CREATE TABLE shift_schedule_rows (
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -52,6 +70,7 @@ void main() {
   setUp(() {
     raw = sqlite3.sqlite3.openInMemory();
     raw.execute(_v8ScheduleTable);
+    raw.execute(_v8ClassTable);
     raw.execute(
       'INSERT INTO shift_schedule_rows '
       '(id, name, anchor_date, is_current, team_count, team_names, '
