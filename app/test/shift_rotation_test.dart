@@ -387,6 +387,40 @@ void main() {
       expect(prev(20 * 60, 8 * 60 + 1440, 2 * 60), isFalse);
     });
 
+    // ⚠️ 上面那条用的是**累计式**（endMinute 越过 1440 继续加），而内置 12 小时制
+    // 模板与编辑器实际产出的是**回绕式**（endMinute < startMinute）——
+    // `span = e - s` 在那种存法下是**负的**，窗口判据会静默失效、班中闹钟又回到
+    // 前一天。这条（独立审查抓出来的）就钉这个。
+    test('回绕式存法的跨午夜班（20:30 → 08:30 存成 510）也算得对', () {
+      expect(prev(20 * 60 + 30, 8 * 60 + 30, 22 * 60), isFalse,
+          reason: '22:00 落在值班窗口内 → 当天（不是前一天晚上 22:00）');
+      expect(prev(20 * 60 + 30, 8 * 60 + 30, 2 * 60), isFalse,
+          reason: '凌晨 2 点也在窗口内');
+      expect(prev(20 * 60 + 30, 8 * 60 + 30, 19 * 60), isFalse,
+          reason: '19:00 早于上班钟点 → 当天');
+    });
+
+    test('两种存法同解：回绕式与累计式在每个钟点上答案一致', () {
+      const start = 20 * 60 + 30;
+      const endWrapped = 8 * 60 + 30;
+      const endAccumulated = endWrapped + 1440;
+      for (final alarm in [
+        19 * 60,
+        20 * 60,
+        20 * 60 + 29,
+        20 * 60 + 30,
+        22 * 60,
+        2 * 60,
+        8 * 60,
+        8 * 60 + 30,
+        12 * 60,
+      ]) {
+        expect(prev(start, endWrapped, alarm),
+            prev(start, endAccumulated, alarm),
+            reason: '钟点 $alarm：两种存法必须同解（模板存回绕式、24 小时值班存累计式）');
+      }
+    });
+
     test('边界：正好等于上班时刻 → 当天', () {
       expect(prev(8 * 60, 20 * 60, 8 * 60), isFalse);
     });

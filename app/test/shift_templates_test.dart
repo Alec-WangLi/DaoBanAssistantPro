@@ -204,4 +204,22 @@ void main() {
           reason: '模板 ${t.id} 的别名全是中文，英文用户搜不到它');
     }
   });
+
+  // 内置模板的建议闹钟：加多闹钟那轮只把形状从「一个钟点」换成列表，**钟点一个
+  // 都没动**（对照过改前那份 commit：11 处逐个一致）。这条把几个代表值钉住，
+  // 免得以后顺手改模板时静默改掉用户的默认响铃时刻 —— 班次名跟着语言走，
+  // 所以按**下标 / 上班时刻**取班次，不按名字。
+  test('内置模板的建议闹钟钟点（代表值）', () {
+    ShiftTemplate t(String id) => shiftTemplates.firstWhere((x) => x.id == id);
+
+    // 12 小时制四班两倒：白班 07:00、夜班 19:00（夜班 20:30 上班 → 落在当天）
+    final dn = t('day_night_rest_rest').classes;
+    expect(dn[0].alarms.single.minute, 7 * 60);
+    expect(dn[1].alarms.single.minute, 19 * 60);
+
+    // 8 小时制三班倒：夜班 00:00 上班、23:00 响铃 —— **用户 v0.8.9 报的那一档**
+    final eight = t('four_crew_three_shift').classes;
+    expect(eight.firstWhere((c) => c.startMinute == 0).alarms.single.minute,
+        23 * 60);
+  });
 }

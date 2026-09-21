@@ -85,8 +85,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
         if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
           continue;
         }
-        final fireAt = shiftAlarmFireAt(date, t, t.alarms.first);
-        if (!fireAt.isAfter(now)) continue; // 响过的自动隐藏
+        // 这个班次当天**只要还有没响过的闹钟**就保留这一行（响过的自动隐藏）。
+        // 判据不能只看第一条 —— 见 `hasPendingShiftAlarm`。
+        if (!hasPendingShiftAlarm(t, date, now)) continue;
         shiftAlarms.add(_ShiftAlarmEntry(date, t, overrides[dayNumber(date)] ?? true));
       }
     }
@@ -259,24 +260,32 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           // 这个班次当天有几条闹钟就列几行（时间 + 可选名字）；落在上班前一天的
           // 那条自己带一行「前一天」小字 —— 多条混排时标记必须跟着**各自那条**
           // 走，不标就会被读成班次当天的钟点（v0.8.9 用户问的正是这个）。
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (final a in e.shift.alarms) ...[
-                Text(
-                  a.label == null || a.label!.trim().isEmpty
-                      ? _fmt(a.minute)
-                      : '${_fmt(a.minute)} ${a.label!.trim()}',
-                  style: AppTokens.titleStrong,
-                ),
-                if (alarmFallsOnPreviousDay(e.shift, a))
+          //
+          // **这一列必须 Flexible**：名字最长 12 个字，连着时间一起算下来可能超过
+          // 这一行剩下的宽度 —— 不放 Flexible 的话行内会 RenderFlex 溢出
+          // （release 下静默裁掉）。名字那一行自身再截断一次（独立审查提的）。
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (final a in e.shift.alarms) ...[
                   Text(
-                    L10n.prevDay,
-                    style: AppTokens.microText.copyWith(color: muted),
+                    a.label == null || a.label!.trim().isEmpty
+                        ? _fmt(a.minute)
+                        : '${_fmt(a.minute)} ${a.label!.trim()}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTokens.titleStrong,
                   ),
+                  if (alarmFallsOnPreviousDay(e.shift, a))
+                    Text(
+                      L10n.prevDay,
+                      style: AppTokens.microText.copyWith(color: muted),
+                    ),
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),

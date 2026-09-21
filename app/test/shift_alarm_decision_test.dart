@@ -11,8 +11,8 @@
 //   · 与「按天关闹钟」（ShiftAlarmOverrides）正交，关着的仍关着
 // —— 一条都没有过。抽成不碰插件、不读挂钟的纯函数之后才测得到。
 //
-// 顺带钉住 `offset`：原生 id 是 `_shiftBaseId + offset`（offset = 距起点日的
-// 天数），跳过某天时**不能**重新编号 —— 否则闹钟会集体换个号。
+// 顺带钉住 `offset` 与「序号」：原生 id 是 `序号 × 天数窗口 + 天数偏移`，跳过某天
+// 时**不能**重新编号 —— 否则闹钟会集体换个号。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -282,6 +282,37 @@ void main() {
               days: 1,
               overrides: {dayNumber(DateTime(2026, 9, 20)): false}),
           isEmpty);
+    });
+
+    // 闹钟页「未来 30 天」那一行留不留：**不能只看第一条**（独立审查抓出来的）。
+    test('首条已响、后面还有 → 仍然算「有没响的」，整行不能藏', () {
+      final t = twoAlarms().classes.first; // 白班 08:00–20:00，06:30 + 12:30
+      final date = DateTime(2026, 9, 20);
+      expect(hasPendingShiftAlarm(t, date, DateTime(2026, 9, 20, 9)), isTrue,
+          reason: '06:30 响过了，但 12:30 还没到 —— 只看第一条会把整行（'
+              '连那一行的「按天关闹钟」开关）一起藏掉，用户当天再也关不掉剩下那条');
+      expect(hasPendingShiftAlarm(t, date, DateTime(2026, 9, 20, 13)), isFalse,
+          reason: '两条都响过 → 这时才可以藏');
+    });
+
+    test('零点班：起床在前一晚已响，班中 03:00 还没到 → 仍算「有」', () {
+      const night = ShiftClass(
+        name: '夜班',
+        abbr: '夜',
+        startMinute: 0,
+        endMinute: 8 * 60,
+        alarmEnabled: true,
+        alarms: [
+          ShiftAlarm(minute: 23 * 60, label: '起床'),
+          ShiftAlarm(minute: 3 * 60, label: '补觉'),
+        ],
+      );
+      // 9/20 那天的班：起床 9/19 23:00、补觉 9/20 03:00
+      expect(hasPendingShiftAlarm(night, DateTime(2026, 9, 20),
+          DateTime(2026, 9, 19, 23, 30)), isTrue,
+          reason: '起床已经响过，但 03:00 还有三个半小时');
+      expect(hasPendingShiftAlarm(night, DateTime(2026, 9, 20),
+          DateTime(2026, 9, 20, 4)), isFalse);
     });
 
     test('原生 id 的算式：序号 × 天窗口 + 天数偏移，且落在 0..400 里', () {

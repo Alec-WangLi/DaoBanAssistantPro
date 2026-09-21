@@ -1694,6 +1694,12 @@ ShiftClass _editClass(
   );
 }
 
+/// 闹钟名字的长度上限（字符数）。
+///
+/// 不封顶的话，闹钟页那一行会被超长名字顶到溢出（独立审查提的）。12 个字对
+/// 「起床 / 午休 / 交接班提醒」这类名字绰绰有余。
+const int _alarmNameMaxLength = 12;
+
 /// 一条闹钟的名字输入框：自己持 controller，初值由 [label] 给。
 ///
 /// **不把 controller 放进编辑器的状态里**：闹钟可以随时增删，班次下标 × 闹钟下标
@@ -1738,10 +1744,14 @@ class _AlarmLabelFieldState extends State<_AlarmLabelField> {
   @override
   Widget build(BuildContext context) => TextField(
         controller: _ctrl,
+        // 名字有长度上限：不封顶的话，闹钟页那一行会被超长名字顶到溢出
+        // （独立审查提的）。12 个字对「起床 / 午休 / 交接班提醒」这类名字绰绰有余，
+        // 与旁边的简称框一样**不显示计数器**（120 宽的框里那是噪音）。
+        maxLength: _alarmNameMaxLength,
         onChanged: (v) => widget.onChanged(v.trim().isEmpty ? null : v.trim()),
         decoration: glassInputDecoration(context, L10n.alarmNameOptional,
                 isDense: true)
-            .copyWith(hintText: L10n.alarmNameHint),
+            .copyWith(hintText: L10n.alarmNameHint, counterText: ''),
       );
 }
 

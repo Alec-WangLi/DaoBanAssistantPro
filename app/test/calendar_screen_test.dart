@@ -1471,6 +1471,18 @@ void main() {
     }
     expect(found, isTrue, reason: '本月应当有上这个班次的日子，否则这条用例没有意义');
 
+    // spec §11 点名的断言：3 条闹钟那天的**卡片内容高度**必须与 1 条时一模一样
+    // （那一行仍然只有一行；卡片被顶高就会连累日历网格变矮）。
+    final withThree =
+        tester.getSize(find.byKey(const Key('info-card-content'))).height;
+    await AppRepository(db)
+        .setClassAlarmsForTesting(0, const [ShiftAlarm(minute: 6 * 60 + 30)]);
+    await tester.pumpAndSettle();
+    final withOne =
+        tester.getSize(find.byKey(const Key('info-card-content'))).height;
+    expect(withThree, withOne,
+        reason: '多条闹钟只改那一行的文字，不该把卡片顶高');
+
     await _disposeCalendar(tester);
   });
 }

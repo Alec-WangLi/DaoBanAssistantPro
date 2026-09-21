@@ -104,7 +104,12 @@ bool alarmFallsOnPreviousDay(ShiftClass shift, ShiftAlarm alarm) {
   if (s == null) return false;
   final e = shift.endMinute;
   if (e != null) {
-    final span = e - s; // 值班时长；跨午夜/24 小时班都成立（end 允许 > 1440）
+    // 值班时长。**班次有两种存法**：累计式（24 小时值班 480 → 1920）与回绕式
+    // （夜班 20:30 → 08:30 存成 510 < 1230 —— 内置 12 小时制模板与编辑器产出的
+    // 都是这一种）。所以要补一天再减：直接 `e - s` 在回绕式下**是负的**，窗口
+    // 判据会静默失效、班中闹钟又回到前一天（独立审查抓出来的；`shift_rotation_test`
+    // 里「回绕式存法的跨午夜班」与「两种存法同解」两条是它的护栏）。
+    final span = e > s ? e - s : e - s + _dayMinutes;
     final rel = ((alarm.minute - s) % _dayMinutes + _dayMinutes) % _dayMinutes;
     if (rel < span) return false;
   }

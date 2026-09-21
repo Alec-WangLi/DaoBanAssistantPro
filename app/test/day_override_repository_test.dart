@@ -346,4 +346,40 @@ void main() {
     await repo.setDayOverrides([DateTime(2026, 9, 18)], classId: 1);
     expect(await repo.dayOverrideCount(), 0);
   });
+
+  // 闹钟的**顺序**是有意义的：它就是原生 id 里的「序号」。所以落库/读回都不许排序
+  // —— 排序会让「重排之后 id 换号」，用户设过的响铃记录跟着错位（spec §6）。
+  test('班次闹钟：按列表顺序落库、按 order 读回来，不许被排序', () async {
+    await repo.saveSchedule(
+      name: '两条闹钟',
+      anchorDate: dateOnly(DateTime.now()),
+      classes: const [
+        ShiftClass(
+          name: '白班',
+          startMinute: 8 * 60 + 30,
+          endMinute: 20 * 60 + 30,
+          alarmEnabled: true,
+          // **故意不按时钟顺序**：12:30 在 06:30 前面
+          alarms: [
+            ShiftAlarm(minute: 12 * 60 + 30, label: '午休'),
+            ShiftAlarm(minute: 6 * 60 + 30, label: '起床'),
+            ShiftAlarm(minute: 17 * 60 + 30),
+          ],
+        ),
+      ],
+      cycle: const [0],
+      makeCurrent: true,
+      teamCount: 1,
+      teamNames: const ['我'],
+      teamOffsets: const [0],
+    );
+
+    final s = (await repo.getActiveSchedule())!;
+    expect(s.classes.single.alarms.map((a) => a.minute).toList(),
+        [12 * 60 + 30, 6 * 60 + 30, 17 * 60 + 30],
+        reason: '顺序 = 原生 id 的「序号」，排序会把它换掉');
+    expect(s.classes.single.alarms.map((a) => a.label).toList(),
+        ['午休', '起床', null], reason: '名字要原样回来');
+    expect(s.classes.single.alarmEnabled, isTrue);
+  });
 }

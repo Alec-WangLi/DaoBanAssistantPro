@@ -47,9 +47,10 @@ class AlarmRing {
 
 /// 「某天要排一条班次联动闹钟」的一条决策结果。
 ///
-/// [offset] 是距起点日的天数偏移（`0` = 起点当天），原生 id 由它算出
-/// （`AlarmService._shiftBaseId + offset`）—— 这个映射必须保持不变，否则
-/// 每次重排都会把闹钟换个号，用户设过的响铃记录会跟着错位。
+/// [offset] 是距起点日的天数偏移（`0` = 起点当天）。原生 id 由 `offset` 与
+/// [alarmIndex] 一起算出（`序号 × 天数窗口 + 天数偏移`，见 [planShiftAlarms] 与
+/// `AlarmService._shiftDaysHorizon`）—— 这个映射必须保持不变，否则每次重排都会把
+/// 闹钟换个号，用户设过的响铃记录会跟着错位。
 class ShiftAlarmPlan {
   const ShiftAlarmPlan({
     required this.offset,
@@ -141,10 +142,20 @@ List<ShiftAlarmPlan> planShiftAlarms(
   return plans;
 }
 
+/// 某天这个班次**还有没有没响过的**闹钟 —— 闹钟页「未来 30 天」那一行留不留。
+///
+/// **不能只看第一条**（那是只有一个闹钟时的口径）：首条已响、后面还有时
+/// （早餐闹钟 06:30 响过了、午休 12:30 还等着），整行会被「响过的自动隐藏」
+/// 一起藏掉 —— 那一行的「按天关闹钟」开关也跟着没了，用户当天再也没法关掉
+/// 剩下的那一条。（独立审查抓出来的；`shift_alarm_decision_test.dart` 里
+/// 「首条已响、后面还有」与「零点班：起床在前一晚已响」两条是它的护栏。）
+bool hasPendingShiftAlarm(ShiftClass shift, DateTime date, DateTime now) =>
+    shift.alarms.any((a) => shiftAlarmFireAt(date, shift, a).isAfter(now));
+
 /// 联动班次闹钟 + 自定义闹钟服务。
 ///
-/// 排班闹钟排定未来 365 天；每次打开 App 自动续排，跟着排班走、不过期。
-/// 自定义闹钟支持：一次性 / 每天 / 每周（可选星期几）。
+/// 排班闹钟排定未来 `_shiftDaysHorizon` 天（60）；每次打开 App 自动续排，
+/// 跟着排班走、不过期。自定义闹钟支持：一次性 / 每天 / 每周（可选星期几）。
 class AlarmService {
   AlarmService._();
 
@@ -742,6 +753,11 @@ class AlarmService {
     Map<int, bool> overrides = const {},
     List<ScheduleEvent> events = const [],
   }) async {
+    // id 算式是 `序号 × _shiftDaysHorizon + 天数偏移`：`days` 一旦超过天数窗口，
+    // 「某天的第 2 个闹钟」就会撞上「更晚那天的第 1 个闹钟」。今天两个调用点都走
+    // 缺省值，所以这里只是把那条隐含约束写成断言（debug 生效）。
+    assert(days <= _shiftDaysHorizon,
+        'days（$days）不得超过天数窗口 $_shiftDaysHorizon —— 原生 id 会撞号');
     await logInfo(
         'reschedule: 开始，排班=${schedule.name}，自定义闹钟=${customAlarms.length} 个');
     // 先清掉可能已损坏的排定缓存，再 cancelAll（否则会抛 Missing type parameter）
