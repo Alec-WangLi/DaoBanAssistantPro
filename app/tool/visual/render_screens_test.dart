@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 
 import 'visual_harness.dart';
 import 'visual_screens.dart';
@@ -123,6 +124,27 @@ void main() {
       name: '09_calendar_long_abbr',
       home: const CalendarScreen(),
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
+    );
+  });
+
+  // 搜不到倒班方式那张空态。**只能单独一个用例**：搜索词 `_query` 是选择页的
+  // 内部状态、构造参数进不去，必须首帧之后真敲一次字（`beforeCapture`）。
+  // 也正因为它没法进 `visualScreens`（记录类型加可选字段要改全部 24 条），
+  // 对比度审计不覆盖这一张 —— 那条空态用的全是既有令牌（rowPrimary /
+  // rowSecondary / inkMuted），没有新引入的配色。
+  visualTest('倒班方式选择 · 搜索落空', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '19_template_picker_no_match',
+      home: const ShiftTemplatePickerScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      beforeCapture: (t) async {
+        // 用一个**真实存在、但不在内置模板里**的班表名 —— 这正是这条反馈的原形。
+        await t.enterText(find.byType(TextField), '上12休24');
+        await t.pumpAndSettle();
+      },
     );
   });
 }
