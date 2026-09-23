@@ -274,6 +274,20 @@ if ($repo) {
     $branchNow = git rev-parse --abbrev-ref HEAD
     if ($branchNow -ne 'main') {
         Write-Host "      同步 latest.json 到 main（兜底通道读的是 main 上那份）..."
+
+        # 这一段里的 git 调用，stderr 上写的全是**正常提示**（切换分支时 git 会往
+        # stderr 写「Switched to branch 'main'」）。而在脚本顶部的
+        # `$ErrorActionPreference = 'Stop'` 下，`git … 2>&1 | Out-Null` 会把那行提示
+        # 包成 NativeCommandError **抛出来** —— git 明明成功了也照抛。
+        #
+        # 2026-09-23 实测（PowerShell 5.1）：带 `2>&1` 必抛、不带 `2>&1` 不抛、
+        # `2>$null` 也抛。所以不是「偶尔失败」，是**必然失败** —— 7b 步上线后发过
+        # 两次测试版（v0.9.4 / v0.9.5），两次都挂在这一行、两次都靠手动补 main。
+        #
+        # 修法：这一段临时放宽成 Continue，成败只看下面的 $LASTEXITCODE（本来就逐个
+        # 查着）。`throw` 不受 ErrorActionPreference 影响，下面那几条判断照常生效。
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         try {
             git checkout main 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "git checkout main 失败" }
@@ -297,7 +311,10 @@ if ($repo) {
                 "&& git commit -m 'chore(release): 更新发布清单至 v$Version（同步 $branchNow）' " +
                 "&& git push origin main && git checkout $branchNow")
         } finally {
+            # 切回原分支这行同样会往 stderr 写提示，所以必须仍在 Continue 下跑，
+            # 跑完再把 ErrorActionPreference 还原（脚本尾部还有别的动作）。
             git checkout $branchNow 2>&1 | Out-Null
+            $ErrorActionPreference = $prevEap
         }
     }
 }
