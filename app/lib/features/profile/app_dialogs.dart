@@ -41,7 +41,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.4\n'
+const String _changelogZh = 'v0.9.5\n'
+    '· 新用户第一次打开 App 弹的那个弹窗重做了：从前直接弹整份《使用帮助》（九个条目、上千字），现在只讲三件事 —— 先把班排上、把权限开齐、临时请假或换班怎么操作。完整说明仍在「我的 → 使用帮助」\n'
+    '· 《使用帮助》九条全部改写：从一整段长句改成一条条短句，原先夹在括号里的细节拆出来独立成条，能扫着读了\n'
+    '· 搜索倒班方式没搜到时，不再只写一句「没找到匹配的倒班方式」就结束 —— 补上了下一步：换个说法再搜，或者从下面挑一个最接近的进去改\n'
+    '· 修好一处自相矛盾的文案：「我自己排」的英文标题原标题是 Start from scratch（从零开始），但它其实是给你一套默认的四班两倒起步，中文副标题一直是对的\n\n'
+
+    'v0.9.4\n'
     '· 修好「检查更新」经常失败：更新检查以前先打 GitHub 的接口，那个接口对未登录的请求限制 60 次/小时，很容易被用光——用光之后其实一直在走备用的另一条路。现在改成先读发布清单（静态文件，不限次数），顺带也快了一点\n'
     '· 「检查更新」和「下载」失败时不再只弹一句「网络异常，请稍后再试」（这句只停 2 秒，看完也来不及做什么），改为弹窗说清楚：连不上 GitHub 服务器，国内网络通常需要开启代理或加速器后重试。\n\n'
 
@@ -83,12 +89,15 @@ const String _changelogZh = 'v0.9.4\n'
     '· 修好「把 5 天一轮的排班改成 10 天之后，同一天有两个班组上同一个班」：各组的周期起始日此前不跟着周期长度走。现在编辑器的「周期设置」里会直接点出撞班的两个班组，并给一个按钮把各组起始日按周期长度一键均分（你自己那一组不动）\n\n'
     'v0.8.9\n'
     '· 修好零点班（00:00 上班）的联动闹钟排晚了整整一天：响铃设成 23:00 时，以前排在班次当天晚上 23:00 —— 那时这个班已经结束 15 个小时；现在排在「前一天」晚上 23:00，也就是上班前 1 小时。早班、中班这些上班前设响铃的班次不受影响\n'
-    '· 闹钟落在上班前一天的，界面上会写明「前一天」：班次设置里响铃那一块写成「前一天 23:00」并附一行说明，闹钟页的列表和日历信息卡同样标出来 —— 以前只写「23:00」，看不出是哪一天\n\n'
-    'v0.8.8\n'
-    '· 桌面小组件改成三张固定尺寸的卡，放置之后不能再拉伸：本周条（4×1，今天所在这一周的七天）、今日卡（4×3，App 底栏那张信息卡的完整版）、整月（4×5，月份标题 + 周几行 + 42 格）\n'
-    '· 三张卡的视觉跟着 App 的设计语言走：班次胶囊从实心改成淡染底 + 同色描边（那天没班次就不画），去掉「白卡里再套白卡」的双层\n'
-    '· 升级后桌面上原有的旧小组件会消失，需要在桌面重新添加\n';
-const String _changelogEn = 'v0.9.4\n'
+    '· 闹钟落在上班前一天的，界面上会写明「前一天」：班次设置里响铃那一块写成「前一天 23:00」并附一行说明，闹钟页的列表和日历信息卡同样标出来 —— 以前只写「23:00」，看不出是哪一天\n';
+
+const String _changelogEn = 'v0.9.5\n'
+    '· Reworked the dialog shown on first launch: it used to open the entire Usage guide (nine sections, over a thousand characters) — it now covers just three things: setting up your schedule, turning on the permissions, and changing a day or two. The full guide is still under Me → Usage guide\n'
+    '· Rewrote all nine Usage guide sections from long single paragraphs into short scannable lines, pulling the details back out of their parentheses\n'
+    '· Searching for a shift pattern with no matches no longer dead-ends on "No matching pattern" — it now says what to try next: another name, or start from the closest match below\n'
+    '· Fixed a self-contradicting label: the English title for "Build my own" read "Start from scratch", but the route actually starts you off with the default 4-crew rotation — the Chinese subtitle had it right all along\n\n'
+
+    'v0.9.4\n'
     '· Fixed "Check for update" failing so often: it used to call a GitHub API first, and that API allows only 60 unauthenticated requests per hour — easy to exhaust, after which checks were silently running on the fallback route all along. It now reads the release manifest first (a static file with no such limit), which is also a little faster\n'
     '· A failed update check or download no longer shows just "network error, try later" — that line stayed up for 2 seconds, too short to act on. A dialog now says it plainly: GitHub is unreachable, and in mainland China a proxy or accelerator is usually required.\n\n'
 
@@ -130,11 +139,7 @@ const String _changelogEn = 'v0.9.4\n'
     '· Fixed two crews landing on the same shift on the same day after changing a 5-day cycle into a 10-day one: the crew start dates never followed the cycle length. The editor\'s cycle section now names the two crews that collide and offers a button that spreads every crew start date evenly across the cycle (your own crew stays put)\n\n'
     'v0.8.9\n'
     '· Fixed shift alarms for midnight shifts (00:00 start) landing a full day late: an alarm set to 23:00 used to be scheduled for 23:00 on the shift\'s own day — by then that shift had been over for 15 hours. It now rings at 23:00 the day before, one hour before the shift starts. Morning and afternoon shifts, whose alarm already sits before the start, are unaffected\n'
-    '· When an alarm falls the day before a shift the app now says so: the shift editor shows "23:00 (day before)" with a line explaining why, and the alarm list and the calendar info card are tagged the same way — a bare "23:00" never told you which day it was\n\n'
-    'v0.8.8\n'
-    '· The home-screen widget is now three fixed-size cards that cannot be resized once placed: a week strip (4×1 — the seven days of the current week), a today card (4×3 — the full version of the info card at the bottom of the app), and a month view (4×5 — month title, day-of-week row and a 6×7 grid)\n'
-    '· Their look now follows the app\'s design language: shift chips went from solid fills to a tinted background with a matching outline (a day with no shift stays blank), and the "white card inside a white card" double container is gone\n'
-    '· After upgrading, the old widget on your home screen will disappear — you will need to add it again\n';
+    '· When an alarm falls the day before a shift the app now says so: the shift editor shows "23:00 (day before)" with a line explaining why, and the alarm list and the calendar info card are tagged the same way — a bare "23:00" never told you which day it was\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
@@ -227,8 +232,81 @@ Widget _updateChannelRow(
   );
 }
 
+/// 帮助类弹窗的公共外壳：同一个 [GlassDialog]、同样的滚动上限与「知道了」。
+///
+/// 「开始使用」与「使用帮助」只有内容不同，壳子必须一模一样 —— 各写一套的话
+/// 两个弹窗的圆角、滚动上限、按钮措辞会慢慢漂开。
+void _showHelpDialog(
+  BuildContext context, {
+  required String title,
+  required Widget content,
+}) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black26,
+    builder: (dialogContext) => GlassDialog(
+      title: title,
+      showClose: true,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 420),
+        child: SingleChildScrollView(child: content),
+      ),
+      actions: [
+        GlassActionButton(
+          variant: GlassActionVariant.primary,
+          onPressed: () => Navigator.pop(dialogContext),
+          label: L10n.ok,
+        ),
+      ],
+    ),
+  );
+}
+
+/// 首次启动弹的「开始使用」。
+///
+/// **不要退回成直接弹「使用帮助」**（2026-09-23 改的）：那份是九个条目、
+/// 一千多字的说明书，当欢迎页用等于没写 —— 新用户第一眼要知道的是「现在该
+/// 干什么」。完整说明仍在「我的 → 使用帮助」里，这条路径由最后一句话指出去。
+void showGettingStartedDialog(BuildContext context) {
+  final muted = AppTokens.inkMuted(context);
+  _showHelpDialog(
+    context,
+    title: L10n.gettingStarted,
+    content: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(L10n.gettingStartedLead,
+            style: AppTokens.rowSecondary.copyWith(height: 1.45, color: muted)),
+        const SizedBox(height: 16),
+        _GuideEntry(
+            icon: Icons.edit_calendar_outlined,
+            title: L10n.gettingStartedSchedTitle,
+            lines: [L10n.gettingStartedSchedBody],
+            bulleted: false),
+        const SizedBox(height: 16),
+        _GuideEntry(
+            icon: Icons.shield_outlined,
+            title: L10n.gettingStartedPermTitle,
+            lines: [L10n.gettingStartedPermBody],
+            bulleted: false),
+        const SizedBox(height: 16),
+        _GuideEntry(
+            icon: Icons.touch_app_outlined,
+            title: L10n.gettingStartedOverrideTitle,
+            lines: [L10n.gettingStartedOverrideBody],
+            bulleted: false),
+        const SizedBox(height: 20),
+        const Divider(height: 1),
+        const SizedBox(height: 12),
+        Text(L10n.gettingStartedMore,
+            style: AppTokens.rowSecondary.copyWith(height: 1.45, color: muted)),
+      ],
+    ),
+  );
+}
+
 void showUsageGuideDialog(BuildContext context) {
-  final items = [
+  final items = <(IconData, String, List<String>)>[
     (Icons.calendar_month_outlined, L10n.guideCalTitle, L10n.guideCalDesc),
     (Icons.tune_outlined, L10n.guideSchedTitle, L10n.guideSchedDesc),
     (Icons.alarm_outlined, L10n.guideAlarmTitle, L10n.guideAlarmDesc),
@@ -242,74 +320,104 @@ void showUsageGuideDialog(BuildContext context) {
         L10n.guideUpdateDesc),
   ];
 
-  showDialog<void>(
-    context: context,
-    barrierColor: Colors.black26,
-    builder: (context) {
-      final accent = Theme.of(context).colorScheme.primary;
-      final muted = AppTokens.inkMuted(context);
-      return GlassDialog(
-        title: L10n.usageGuide,
-        showClose: true,
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 420),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                for (final it in items) ...[
+  _showHelpDialog(
+    context,
+    title: L10n.usageGuide,
+    content: Column(
+      children: [
+        for (final it in items) ...[
+          _GuideEntry(icon: it.$1, title: it.$2, lines: it.$3),
+          const SizedBox(height: 16),
+        ],
+      ],
+    ),
+  );
+}
+
+/// 帮助弹窗里的一条：图标 + 标题 + 正文行。
+///
+/// [lines] 多于一行时每行前面加一个小圆点（参考条目是多项并列，得能扫）；
+/// 只有一行、且是引导语时把 [bulleted] 关掉 —— 单条正文顶个圆点像没写完的列表。
+class _GuideEntry extends StatelessWidget {
+  const _GuideEntry({
+    required this.icon,
+    required this.title,
+    required this.lines,
+    this.bulleted = true,
+  });
+
+  final IconData icon;
+  final String title;
+  final List<String> lines;
+  final bool bulleted;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final muted = AppTokens.inkMuted(context);
+    final body =
+        AppTokens.rowSecondary.copyWith(height: 1.45, color: muted);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                accent.withValues(alpha: 0.28),
+                accent.withValues(alpha: 0.10),
+              ],
+            ),
+            border: Border.all(color: accent.withValues(alpha: 0.35)),
+          ),
+          child: AppIcon(icon, size: AppTokens.iconMd, color: accent),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: AppTokens.labelStrong),
+              const SizedBox(height: AppTokens.padChipV),
+              for (var i = 0; i < lines.length; i++) ...[
+                if (i > 0) const SizedBox(height: AppTokens.spaceXs),
+                if (!bulleted)
+                  Text(lines[i], style: body)
+                else
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 圆点用固定 4dp（设计语言里「被改过的那天」也是这个尺寸），
+                      // 不跟字号缩放 —— 小窗下缩到 1~2px 就等于没有。
+                      // 上边距是把它压到首行文字中线上（spaceSm = 8），
+                      // 7 那种值不上 4px 栅格，会打红 design_tokens_test。
                       Container(
-                        width: 38,
-                        height: 38,
+                        width: 4,
+                        height: 4,
+                        margin: const EdgeInsets.only(top: AppTokens.spaceSm),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              accent.withValues(alpha: 0.28),
-                              accent.withValues(alpha: 0.10),
-                            ],
-                          ),
-                          border: Border.all(
-                              color: accent.withValues(alpha: 0.35)),
-                        ),
-                        child: AppIcon(it.$1,
-                            size: AppTokens.iconMd, color: accent),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(it.$2, style: AppTokens.labelStrong),
-                            const SizedBox(height: AppTokens.padChipV),
-                            Text(it.$3,
-                                style: AppTokens.rowSecondary
-                                    .copyWith(height: 1.45, color: muted)),
-                          ],
+                          color: muted.withValues(alpha: 0.75),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      // 走 Expanded 而不是给整段加「· 」前缀：英文条目会折行，
+                      // 前缀写法的第二行会顶到最左边、看不出是同一条。
+                      Expanded(child: Text(lines[i], style: body)),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                ],
               ],
-            ),
+            ],
           ),
         ),
-        actions: [
-          GlassActionButton(
-            variant: GlassActionVariant.primary,
-            onPressed: () => Navigator.pop(context),
-            label: L10n.ok,
-          ),
-        ],
-      );
-    },
-  );
+      ],
+    );
+  }
 }
 
 /// 关闭更新弹窗后，弹出下载进度弹窗（内部完成下载并自动拉起系统安装器）。

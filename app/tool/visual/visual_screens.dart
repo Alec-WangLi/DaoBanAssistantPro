@@ -14,6 +14,7 @@ import 'package:shiftassistantpro/features/calendar/schedule_management_screen.d
 import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
@@ -214,6 +215,22 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 首启弹的那份（三条），与「我的 → 使用帮助」那份完整说明是**两套内容** ——
+    // 2026-09-23 之前首启弹的是后者，等于把说明书当欢迎页。
+    slug: '17_getting_started',
+    title: '开始使用（首启）',
+    build: (db) async => const _DialogHost(showGettingStartedDialog),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 完整说明。正文从「一整段」改成了「短句 + 圆点」，是最容易在版式上跑偏的
+    // 一处 —— 圆点的对齐、英文条目折行后的缩进，只有看图才知道对不对。
+    slug: '18_usage_guide',
+    title: '使用帮助',
+    build: (db) async => const _DialogHost(showUsageGuideDialog),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -257,6 +274,37 @@ class _OverridePickerHostState extends State<_OverridePickerHost> {
         currentClass: widget.currentClass,
         canRestore: widget.canRestore,
       );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 命令式弹窗的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 「开始使用」「使用帮助」都是 `showXxxDialog(context)` 这种命令式 API：调一下
+/// 就弹、返回一个 Future，没有可以放进 `home:` 的 widget。这层薄壳在首帧后把它
+/// 弹出来，`build` 只交一个空 `Scaffold` 让弹窗浮在上面（与 `_OverridePickerHost`
+/// 同一套路）。
+class _DialogHost extends StatefulWidget {
+  const _DialogHost(this.show);
+
+  final void Function(BuildContext context) show;
+
+  @override
+  State<_DialogHost> createState() => _DialogHostState();
+}
+
+class _DialogHostState extends State<_DialogHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showDialog` 要用 `context` 的 `Overlay`，而 `initState` 里
+    // context 还没挂进树。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.show(context);
     });
   }
 

@@ -125,6 +125,10 @@ void main() {
     await tester.enterText(find.byType(TextField), 'zzzzzz');
     await tester.pumpAndSettle();
     expect(find.text(L10n.noPatternMatch), findsOneWidget);
+    // 光有「没找到」是个死胡同：搜索框的提示语就是在教用户按行话名搜
+    //（举的例子「上24休48」就是真别名），所以他完全可能搜不到。空状态必须
+    // 自带下一步 —— 2026-09-23 的「上12休24」反馈就是这么卡住的。
+    expect(find.text(L10n.noPatternMatchHint), findsOneWidget);
     expect(find.text(L10n.customPattern), findsOneWidget);
   });
 

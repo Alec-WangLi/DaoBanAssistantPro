@@ -77,14 +77,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     WidgetService.widgetLaunchRequested.addListener(_onWidgetDayRequested);
   }
 
-  /// 首次使用弹「使用帮助」；每次更新后弹「版本更新」简介。
+  /// 首次使用弹「开始使用」；每次更新后弹「版本更新」简介。
+  ///
+  /// 首启弹的是**精简版**（三条），不是完整的「使用帮助」—— 见
+  /// `showGettingStartedDialog` 的说明。
   Future<void> _maybeShowLaunchDialogs() async {
     final sp = await SharedPreferences.getInstance();
     final onboarded = sp.getBool('onboarded') ?? false;
     if (!onboarded) {
       await sp.setBool('onboarded', true);
       await sp.setString('lastSeenVersion', appVersion);
-      if (mounted) showUsageGuideDialog(context);
+      if (mounted) showGettingStartedDialog(context);
       return;
     }
     final lastSeen = sp.getString('lastSeenVersion');
