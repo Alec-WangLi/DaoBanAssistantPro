@@ -41,7 +41,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.5\n'
+const String _changelogZh = 'v0.9.6\n'
+    '· 新建自定义闹钟的默认重复方式从「每天」改成「一次性」：加一条闹钟十有八九是响这一次，响过之后它自己就消失了，不用你回来删。要天天响的，点一下「每天」\n'
+    '· 修好一个会让一次性闹钟「加了就没」的坑：新建时时间和日期默认都是「此刻」「今天」，两个默认叠在一起，那一刻在按下「添加」之前已经过去了 —— 这种闹钟既不会响，还会在下次进闹钟页时被自动清掉。现在日期取的是这个钟点的下一次出现：今天还没到就是今天，已经过了就顺延到明天；日期那一行写的永远是你真正会听到它的那天\n\n'
+
+    'v0.9.5\n'
     '· 新用户第一次打开 App 弹的那个弹窗重做了：从前直接弹整份《使用帮助》（九个条目、上千字），现在只讲三件事 —— 先把班排上、把权限开齐、临时请假或换班怎么操作。完整说明仍在「我的 → 使用帮助」\n'
     '· 《使用帮助》九条全部改写：从一整段长句改成一条条短句，原先夹在括号里的细节拆出来独立成条，能扫着读了\n'
     '· 搜索倒班方式没搜到时，不再只写一句「没找到匹配的倒班方式」就结束 —— 补上了下一步：换个说法再搜，或者从下面挑一个最接近的进去改\n'
@@ -86,12 +90,13 @@ const String _changelogZh = 'v0.9.5\n'
     '· 存下的模板可以在选择页点「管理」改名或删除；每张卡片上写着几天一轮、几个班组\n\n'
     'v0.8.10\n'
     '· 新增「五班三倒 · 10 天一轮」模板：早班两天、中班两天、休一天、夜班两天，然后休三天。此前只有 5 天一轮的那套，10 天一轮得自己搭 —— 内置模板现在共 20 种\n'
-    '· 修好「把 5 天一轮的排班改成 10 天之后，同一天有两个班组上同一个班」：各组的周期起始日此前不跟着周期长度走。现在编辑器的「周期设置」里会直接点出撞班的两个班组，并给一个按钮把各组起始日按周期长度一键均分（你自己那一组不动）\n\n'
-    'v0.8.9\n'
-    '· 修好零点班（00:00 上班）的联动闹钟排晚了整整一天：响铃设成 23:00 时，以前排在班次当天晚上 23:00 —— 那时这个班已经结束 15 个小时；现在排在「前一天」晚上 23:00，也就是上班前 1 小时。早班、中班这些上班前设响铃的班次不受影响\n'
-    '· 闹钟落在上班前一天的，界面上会写明「前一天」：班次设置里响铃那一块写成「前一天 23:00」并附一行说明，闹钟页的列表和日历信息卡同样标出来 —— 以前只写「23:00」，看不出是哪一天\n';
+    '· 修好「把 5 天一轮的排班改成 10 天之后，同一天有两个班组上同一个班」：各组的周期起始日此前不跟着周期长度走。现在编辑器的「周期设置」里会直接点出撞班的两个班组，并给一个按钮把各组起始日按周期长度一键均分（你自己那一组不动）\n';
 
-const String _changelogEn = 'v0.9.5\n'
+const String _changelogEn = 'v0.9.6\n'
+    '· New custom alarms now default to "Once" instead of "Daily": an alarm you add is usually a one-off, and once it has rung it clears itself away so you never have to come back and delete it. For one that repeats every day, tap "Daily"\n'
+    '· Fixed a hole that made a one-off alarm vanish the moment you added it: a new alarm defaulted to today at the current time, so that moment had already passed by the time you tapped "Add" — such an alarm never rang, and was quietly deleted the next time you opened the alarm page. The date is now the next time that clock time comes around: today if it is still ahead, tomorrow if it has passed. The date row always shows the day you will actually hear it\n\n'
+
+    'v0.9.5\n'
     '· Reworked the dialog shown on first launch: it used to open the entire Usage guide (nine sections, over a thousand characters) — it now covers just three things: setting up your schedule, turning on the permissions, and changing a day or two. The full guide is still under Me → Usage guide\n'
     '· Rewrote all nine Usage guide sections from long single paragraphs into short scannable lines, pulling the details back out of their parentheses\n'
     '· Searching for a shift pattern with no matches no longer dead-ends on "No matching pattern" — it now says what to try next: another name, or start from the closest match below\n'
@@ -136,10 +141,7 @@ const String _changelogEn = 'v0.9.5\n'
     '· Saved templates can be renamed or deleted from "Manage" on the picker; each card shows the cycle length and team count\n\n'
     'v0.8.10\n'
     '· New "5-crew 3-shift · 10-day cycle" template: two mornings, two afternoons, one off, two nights, then three off. Until now only the 5-day version existed, so a 10-day roster had to be built by hand — there are now 20 built-in templates\n'
-    '· Fixed two crews landing on the same shift on the same day after changing a 5-day cycle into a 10-day one: the crew start dates never followed the cycle length. The editor\'s cycle section now names the two crews that collide and offers a button that spreads every crew start date evenly across the cycle (your own crew stays put)\n\n'
-    'v0.8.9\n'
-    '· Fixed shift alarms for midnight shifts (00:00 start) landing a full day late: an alarm set to 23:00 used to be scheduled for 23:00 on the shift\'s own day — by then that shift had been over for 15 hours. It now rings at 23:00 the day before, one hour before the shift starts. Morning and afternoon shifts, whose alarm already sits before the start, are unaffected\n'
-    '· When an alarm falls the day before a shift the app now says so: the shift editor shows "23:00 (day before)" with a line explaining why, and the alarm list and the calendar info card are tagged the same way — a bare "23:00" never told you which day it was\n';
+    '· Fixed two crews landing on the same shift on the same day after changing a 5-day cycle into a 10-day one: the crew start dates never followed the cycle length. The editor\'s cycle section now names the two crews that collide and offers a button that spreads every crew start date evenly across the cycle (your own crew stays put)\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

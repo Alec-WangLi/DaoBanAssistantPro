@@ -383,8 +383,20 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     final isEdit = a != null;
     final now = TimeOfDay.now();
     var time = TimeOfDay(hour: a?.hour ?? now.hour, minute: a?.minute ?? now.minute);
-    var repeatType = a?.repeatType ?? 1; // 0=一次性 1=每天 2=每周
+    // 默认「一次性」：新建自定义闹钟里绝大多数就是「响这一次」，响过之后
+    // `deleteExpiredOnceAlarms` 会把它收走，不用用户自己回来删。编辑既有闹钟时
+    // 当然还是读存下来的那个值。
+    var repeatType = a?.repeatType ?? 0; // 0=一次性 1=每天 2=每周
+    // 用户选的日期，**保持原样不动**（新建时就是今天）。真正会响的那天由
+    // `_onceDate` 派生 —— 时间默认此刻、写「今天」的话那一刻已经过去了，这一条
+    // 既不会响也会被自动删掉（见 `nextOnceDate`）。
+    //
+    // 这里不能「改钟点时就把 `onceDate` 就地改写成结果」：默认值一顺延到明天，
+    // 用户再把钟点往前调回今天，就再也回不到今天了 —— 派生而不是回写，才不会
+    // 把默认值当成用户的选择。
     var onceDate = a?.onceDate ?? dateOnly(DateTime.now());
+    DateTime onceDateAt(int hour, int minute) => nextOnceDate(
+        now: DateTime.now(), chosen: onceDate, hour: hour, minute: minute);
     var weekdays = a?.weekdays ?? 0;
     if (repeatType == 2 && weekdays == 0) {
       weekdays = 1 << (DateTime.now().weekday - 1);
@@ -428,11 +440,14 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(L10n.date),
-                  trailing: Text(L10n.monthDay(onceDate)),
+                  // 这一行写的是**真正会响的那天**（`onceDateAt` 派生），不是用户
+                  // 选的那个原始日期 —— 两者只在「选的那天已经过去」时才不同。
+                  trailing: Text(
+                      L10n.monthDay(onceDateAt(time.hour, time.minute))),
                   onTap: () async {
                     final p = await showGlassDatePicker(
                       context,
-                      initialDate: onceDate,
+                      initialDate: onceDateAt(time.hour, time.minute),
                       firstDate: DateTime(2000),
                       lastDate: DateTime(2100),
                     );
@@ -510,13 +525,18 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                 // App 唯一那层路由 = 整屏纯黑（与待办那个 bug 同一形状）。
                 final close = dialogCloser(context);
                 final repo = ref.read(appRepositoryProvider);
+                // 一次性闹钟的日期在这里**再派生一次**：用户可能开着窗一直没动，
+                // 那个钟点已经过去了。写库的必须是「下一次出现」，否则这一条不会
+                // 响、还会被 `deleteExpiredOnceAlarms` 收走。
+                final onceAt =
+                    repeatType == 0 ? onceDateAt(time.hour, time.minute) : null;
                 if (isEdit) {
                   await repo.updateCustomAlarm(
                     a,
                     hour: time.hour,
                     minute: time.minute,
                     repeatType: repeatType,
-                    onceDate: repeatType == 0 ? onceDate : null,
+                    onceDate: onceAt,
                     weekdays: repeatType == 2 ? weekdays : 0,
                   );
                 } else {
@@ -524,7 +544,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                     hour: time.hour,
                     minute: time.minute,
                     repeatType: repeatType,
-                    onceDate: repeatType == 0 ? onceDate : null,
+                    onceDate: onceAt,
                     weekdays: repeatType == 2 ? weekdays : 0,
                   );
                 }

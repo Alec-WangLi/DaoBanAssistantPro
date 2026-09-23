@@ -91,6 +91,11 @@ class CustomAlarms extends Table {
   IntColumn get minute => integer()();
 
   /// 0=一次性，1=每天，2=每周。
+  ///
+  /// 这里那个默认值 1 是**建表时的**，与界面无关：界面新建时一律显式传值
+  /// （v0.9.6 起新建默认 0=一次性，见 `alarm_screen.dart` 的 `_showAlarmDialog`），
+  /// 只有绕开 `addCustomAlarm` 直接插行才会用到它。改它要动 schema 版本与迁移，
+  /// 没必要 —— 别把这两个默认值当成一处。
   IntColumn get repeatType => integer().withDefault(const Constant(1))();
 
   /// 一次性闹钟的日期（repeatType=0 时用）。

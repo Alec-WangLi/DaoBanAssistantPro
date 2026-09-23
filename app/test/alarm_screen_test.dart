@@ -226,6 +226,88 @@ void main() {
 
     await _dispose(tester);
   });
+
+  // ── 自定义闹钟：新建的默认值（v0.9.6） ──
+  //
+  // 默认从「每天」改成「一次性」：新建自定义闹钟十有八九就是「响这一次」，响过
+  // 之后由 `deleteExpiredOnceAlarms` 收走，用户不必自己回来删。
+  //
+  // **但只改那一个默认值会造出一类排不出去的闹钟**：时间默认此刻、日期默认今天，
+  // 两个默认叠在一起，触发时刻在按下「添加」之前就已经过去了，而一次性闹钟的排定
+  // 判据是 `fire.isAfter(now)` —— 不排，下次进这一页还会被删掉。所以日期一律取
+  // 「下一次出现」（`nextOnceDate`，边界在 `once_alarm_date_test.dart` 里逐条钉死）。
+  // 下面这两条合起来才算数：一条盯默认值，一条盯「写库的那天在将来」。
+
+  testWidgets('新建闹钟：默认「一次性」，日期行直接就在', (tester) async {
+    await _pumpAlarmScreen(
+      tester,
+      name: '早班',
+      startMinute: 8 * 60,
+      endMinute: 16 * 60,
+      alarms: const [], // 不留班次闹钟行，页面只剩自定义闹钟这一段
+    );
+
+    await tester.tap(find.text(L10n.newAlarm));
+    await _settle(tester);
+
+    // 日期行只在重复类型是「一次性」时才画（`_showAlarmDialog` 里的
+    // `if (repeatType == 0)`），所以「它在」== 默认就是一次性。默认是「每天」的
+    // 那几版里，这一行要手动点一下「一次性」才出现。
+    expect(find.text(L10n.date), findsOneWidget,
+        reason: '默认不是「一次性」的话，日期这一行根本不会画');
+    expect(find.text(L10n.once), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('新建闹钟：什么都不动直接「添加」，存下来的是将来那一刻', (tester) async {
+    final db = await _pumpAlarmScreen(
+      tester,
+      name: '早班',
+      startMinute: 8 * 60,
+      endMinute: 16 * 60,
+      alarms: const [],
+    );
+
+    await tester.tap(find.text(L10n.newAlarm));
+    await _settle(tester);
+    await tester.tap(find.text(L10n.add));
+    await _settle(tester);
+
+    final alarms = await AppRepository(db).listCustomAlarms();
+    expect(alarms, hasLength(1));
+    final a = alarms.single;
+    expect(a.repeatType, 0, reason: '新建的默认重复类型该是一次性');
+
+    final od = a.onceDate!;
+    final fire = DateTime(od.year, od.month, od.day, a.hour, a.minute);
+    expect(fire.isAfter(DateTime.now()), isTrue,
+        reason: '一次性的触发时刻落在过去 = 这一条排不出去、也不会响，'
+            '下次进闹钟页还会被 deleteExpiredOnceAlarms 删掉 —— '
+            '新建时的默认时间就是此刻，所以这一条必须靠日期顺延兜住');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('编辑一条「每天」的闹钟：不被新默认值盖成一次性', (tester) async {
+    final db = await _pumpAlarmScreen(
+      tester,
+      name: '早班',
+      startMinute: 8 * 60,
+      endMinute: 16 * 60,
+      alarms: const [],
+    );
+    await AppRepository(db).addCustomAlarm(hour: 7, minute: 30, repeatType: 1);
+    await _settle(tester);
+
+    await tester.tap(find.text(L10n.daily));
+    await _settle(tester);
+
+    expect(find.text(L10n.date), findsNothing,
+        reason: '编辑既有闹钟要读它自己存的类型；默认值只在新建时说话');
+
+    await _dispose(tester);
+  });
 }
 
 /// 与 `AlarmScreen` 里那个私有 `_fmt` 同一形状（`HH:mm`）。

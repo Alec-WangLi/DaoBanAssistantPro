@@ -152,6 +152,41 @@ List<ShiftAlarmPlan> planShiftAlarms(
 bool hasPendingShiftAlarm(ShiftClass shift, DateTime date, DateTime now) =>
     shift.alarms.any((a) => shiftAlarmFireAt(date, shift, a).isAfter(now));
 
+/// 一次性自定义闹钟该落在哪天：`hour:minute` 的**下一次出现**。
+///
+/// **为什么不能就是「今天」**：新建闹钟时时间默认此刻、日期默认今天，两个默认叠在
+/// 一起，触发时刻在按下「添加」之前就已经过去了。而一次性闹钟的排定判据是
+/// `fire.isAfter(now)`（见 `reschedule`）—— 过去的那一刻直接**不排**，
+/// `deleteExpiredOnceAlarms` 还会在下一次进闹钟页时把它删掉。用户看到的是「加了一
+/// 条、它自己没了」。`repeatType` 的默认值从「每天」改成「一次性」之后（v0.9.6），
+/// 这不是边角情况而是常态，所以日期一律由这里算。
+///
+/// 规则：今天这个钟点还没到就是今天，已经过了就顺延一天；[chosen] 是更晚的日期时
+/// 听用户的（手选了日子的人比默认值清楚）。界面那行「日期」显示的就是它的结果，
+/// 所以卡上写的永远等于真正会响的那天。
+///
+/// 返回的是**日期**（`dateOnly`，与库里 `onceDate` 那一列同形），不是带钟点的时刻：
+/// 钟点单独存在 `hour`/`minute` 两列，排定时由 `reschedule` 现拼
+/// （`DateTime(od.year, od.month, od.day, a.hour, a.minute)`）。
+///
+/// `alarm_screen_test.dart` 里「新建后直接添加」那条用例盯住落点，
+/// `once_alarm_date_test.dart` 在纯函数上把边界逐条钉死。
+DateTime nextOnceDate({
+  required DateTime now,
+  required DateTime chosen,
+  required int hour,
+  required int minute,
+}) {
+  final chosenAt = DateTime(chosen.year, chosen.month, chosen.day, hour, minute);
+  final today = DateTime(now.year, now.month, now.day, hour, minute);
+  // `day + 1` 交给 `DateTime` 归一化（月末、年末都跨得过去），不要自己加 24 小时
+  // —— `Duration` 遇上夏令时会偏一小时。
+  final occurrence = today.isAfter(now)
+      ? today
+      : DateTime(now.year, now.month, now.day + 1, hour, minute);
+  return dateOnly(chosenAt.isAfter(occurrence) ? chosenAt : occurrence);
+}
+
 /// 联动班次闹钟 + 自定义闹钟服务。
 ///
 /// 排班闹钟排定未来 `_shiftDaysHorizon` 天（60）；每次打开 App 自动续排，
