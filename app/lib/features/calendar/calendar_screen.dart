@@ -7,6 +7,7 @@ import '../../core/haptics.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
+import '../../core/theme/animated_background.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -45,6 +46,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// —— 光靠自觉，这两个数迟早还会各走各的。
   static BorderRadius get _cellRadius =>
       BorderRadius.circular(AppTokens.radiusM);
+
+  /// 这一页光晕背景的强度（`FlowingBackground.intensity`）。
+  ///
+  /// 响铃界面用满 1.0 —— 那是它的主角、只出现几秒。日历页是天天停留的一页，而且
+  /// **大半被 92% 不透明的格子盖住**（浅色下格底是 `Colors.white` 0.92），光晕主要
+  /// 从三处透出来：格子之间的缝、网格四周的留白、以及**信息卡那块真正的磨砂**
+  /// （它是全页最大的一片 `BackdropFilter`）。深色下格底只有 6% 白，光晕透得更足，
+  /// 所以同一档强度在深色里本来就更明显 —— 这也是它先按浅色调、再回来看深色的原因。
+  static const double _bgIntensity = 0.65;
 
   late DateTime _month; // 显示月的 1 号
   late DateTime _selected; // 选中的日期（默认今天）
@@ -382,8 +392,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     ref.watch(appSettingsProvider); // 语言切换时重建
 
     return Scaffold(
-      body: SafeArea(
-        child: Builder(builder: (context) {
+      // 玻璃要有东西可透（见 `FlowingBackground`）：底色仍是主题给的那块平坦中性色，
+      // 光晕叠在它上面。在此之前整页唯一的「流光」只出现在响铃界面，日历页是一块纯色
+      // —— 满页磨砂其实没在磨东西，只靠高光与描边撑着。
+      //
+      // 包在 `SafeArea` **外面**：它是整页的底，不该被安全区切掉边。两层包在一行里，
+      // 好让下面这一大段内容保持原缩进、不制造一片只有空白的 diff。
+      body: FlowingBackground(
+        intensity: _bgIntensity,
+        // 这一页天天停留，「高级材质」一关就别再推动背景了（见那个参数的说明）。
+        freezeWhenBlurDisabled: true,
+        child: SafeArea(child: Builder(builder: (context) {
           final layout = AppLayout.of(context);
           final gridArea = Expanded(
             // 网格区高度要先量出来，才能决定格子长多高（见 _buildGrid）。
@@ -435,7 +454,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ],
             ],
           );
-        }),
+        })),
       ),
     );
   }

@@ -41,7 +41,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.7\n'
+const String _changelogZh = 'v0.9.8\n'
+    '· 日历页的背景不再是死板的纯色：加了一层极慢的流光（26 秒才挪一小段）。压在上面的磨砂卡片这下「有东西可磨」了 —— 在这之前整页只有响铃界面有那层光，日历是一块平色，玻璃只看得见高光与白描边。浅色主题下它很轻（格子几乎是实心白，光主要从格子缝里和信息卡的磨砂上透出来），深色主题下更明显\n'
+    '· 这层光是按最慢的节奏推进的，不是每帧重画：它 26 秒才漂 46dp，逐帧画每帧只动 0.03dp、没人看得出来，却会让整页永远不空闲、把压在背景上的每一层模糊拖着每帧重算\n'
+    '· 「我的 → 外观 → 高级材质」关掉时，这层光会停下 —— 那个开关的意思就是「这台机器不做贵的合成」，不该一边关模糊一边还在推背景\n\n'
+
+    'v0.9.7\n'
     '· 信息卡底下那截空白用起来了：卡片是按「本月最满的一天」定高的 —— 这样点日期时上面的日历格子不会跟着伸缩 —— 于是普通日子底下会空出三四十 dp。现在那里写一行本月统计，比如「本月 早12 · 午8 · 夜8 · 休6」，一眼看出这个月上了几个什么班。装得下才画：节假日那种最满的日子它自动不出现，卡片高度一个像素都没动\n'
     '· 换月加了一点方向感：往前翻往左滑、往后翻往右滑，顶栏的「年月」跟着一起动；以前是硬切\n\n'
 
@@ -88,12 +93,14 @@ const String _changelogZh = 'v0.9.7\n'
 
     'v0.8.12\n'
     '· 修好「存了模板却在新建排班时看不到」：如果这一趟开 App 时先打开过一次「新建排班」（那时还没有模板），之后存下的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
-    '· 存完模板的提示补了一句去哪儿找：「新建排班时可选」\n\n'
-    'v0.8.11\n'
-    '· 新增「我的模板」：调好一套排班之后，在编辑器右上角点「存为模板」，下次新建排班时直接在「我的模板」里选它 —— 自己厂里的班表不用每次从头搭\n'
-    '· 存下的模板可以在选择页点「管理」改名或删除；每张卡片上写着几天一轮、几个班组\n';
+    '· 存完模板的提示补了一句去哪儿找：「新建排班时可选」\n';
 
-const String _changelogEn = 'v0.9.7\n'
+const String _changelogEn = 'v0.9.8\n'
+    '· The calendar no longer sits on a flat colour: a very slow drift of light moves behind it (a full lap takes 26 seconds). The frosted cards now have something to frost — until now the only place with that drifting light was the ringing screen, so on the calendar the glass showed nothing but its highlight and hairline border. It is subtle in the light theme (the cells are almost solid white, so the light mostly shows between them and through the info card) and clearly visible in the dark one\n'
+    '· That layer advances at the slowest pace rather than being redrawn every frame: it travels 46dp in 26 seconds, so per-frame it would move 0.03dp — invisible, while keeping the whole page permanently busy and forcing every blur above it to recompute each frame\n'
+    '· With "Advanced materials" switched off under Me → Appearance, the light stops — that switch means "this device does not do expensive compositing", so it should not keep pushing a background while the blur is off\n\n'
+
+    'v0.9.7\n'
     '· The empty space under the info card now says something: the card is sized to the fullest day of the month — that way tapping a day never makes the calendar grid above it resize — which leaves roughly 30-50dp empty on ordinary days. That line now carries a tally of the month, such as "This month  M12 · A8 · N8 · O6", so you can see at a glance how many of each shift you have. It only shows when there is room: on the fullest days (public holidays) it stays out, and the card never grows a pixel for it\n'
     '· Changing months now has a sense of direction: going back slides left, going forward slides right, with the month label travelling along. It used to be an instant swap\n\n'
 
@@ -140,10 +147,7 @@ const String _changelogEn = 'v0.9.7\n'
 
     'v0.8.12\n'
     '· Fixed saved templates not showing up in the picker: if you had opened "New schedule" once earlier in the same app session (back when you had no templates yet), a template saved afterwards only appeared after restarting the app. The list is now re-read every time you open it\n'
-    '· The confirmation shown after saving now says where to find it ("pick it when creating a schedule")\n\n'
-    'v0.8.11\n'
-    '· New "My templates": once a schedule looks right, tap "Save as template" in the editor\'s top-right corner and pick it the next time you create a schedule — no more rebuilding your own roster from scratch\n'
-    '· Saved templates can be renamed or deleted from "Manage" on the picker; each card shows the cycle length and team count\n';
+    '· The confirmation shown after saving now says where to find it ("pick it when creating a schedule")\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

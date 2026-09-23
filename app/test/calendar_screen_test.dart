@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/theme/animated_background.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
@@ -1148,6 +1149,25 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(cell, findsOneWidget, reason: '落定后旧的那版要收干净');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 光晕背景 ──
+
+  testWidgets('日历页挂着光晕背景，且它不是逐帧驱动的', (tester) async {
+    // 这一条盯两件事。
+    // ① 页面确实有那层流光（在此之前整页唯一的流光只出现在响铃界面，日历页是一块
+    //    纯色 —— 满页磨砂没在磨东西）。
+    // ② 它**不是逐帧驱动**的：`pumpAndSettle` 能停下来（下面这行断言为假）就说明
+    //    帧队列空得下来。用 `AnimationController..repeat()` 的话这里永远有待处理帧
+    //    —— 那意味着整页永久不空闲，压在背景上的每一层 `BackdropFilter` 每帧重算。
+    //    日历是长时间停留的一页，所以驱动改成了低频定时器（见 `FlowingBackground`
+    //    类头注：26 秒漂 46dp，逐帧更新每帧只动 0.03dp，纯粹是白烧）。
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+    expect(find.byType(FlowingBackground), findsOneWidget);
+    expect(tester.binding.hasScheduledFrame, isFalse,
+        reason: '背景在逐帧推帧 —— 整页不空闲，每层模糊每帧重算');
 
     await _disposeCalendar(tester);
   });
