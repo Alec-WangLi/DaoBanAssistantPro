@@ -219,13 +219,30 @@ if ($LASTEXITCODE -ne 0) {
 
 # ---------- 7. 验证 ----------
 if ($repo) {
-    $rel = & $gh api "repos/$repo/releases/tags/$tag" 2>&1 | ConvertFrom-Json
-    Write-Host ""
-    Write-Host "✅ 发布成功！"
-    Write-Host "   仓库  : $($rel.html_url)"
-    foreach ($a in $rel.assets) {
-        Write-Host "   资产  : $($a.name)  ($([math]::Round($a.size / 1MB, 1)) MB)"
-        Write-Host "   下载  : $($a.browser_download_url)"
+    # 两条都与 7b 步同源，见那一段的长注释：
+    #   ① `gh api … 2>&1 | ConvertFrom-Json` 不能要 —— stderr 一有输出，`2>&1` 就会在
+    #      `$ErrorActionPreference = 'Stop'` 下抛 NativeCommandError；而且 gh 真失败时
+    #      那串错误文本会被直接喂进 ConvertFrom-Json，报的是「JSON 解析失败」而不是
+    #      「gh 失败了」，看不出真因。所以 stderr 让它照常打到控制台，只管 stdout。
+    #   ② **这一步跑在 Release 已经建好之后**，在这儿抛异常会让一次成功的发布看起来
+    #      像失败。所以照 7b 立下的同一条规矩办：只告警、不改变发布结论。
+    try {
+        $raw = & $gh api "repos/$repo/releases/tags/$tag"
+        if ($LASTEXITCODE -ne 0) {
+            throw "gh api 退出码 $LASTEXITCODE（多为网络或鉴权问题）"
+        }
+        $rel = ($raw -join '') | ConvertFrom-Json
+        Write-Host ""
+        Write-Host "✅ 发布成功！"
+        Write-Host "   仓库  : $($rel.html_url)"
+        foreach ($a in $rel.assets) {
+            Write-Host "   资产  : $($a.name)  ($([math]::Round($a.size / 1MB, 1)) MB)"
+            Write-Host "   下载  : $($a.browser_download_url)"
+        }
+    } catch {
+        Write-Warning "发布验证没跑成：$_"
+        Write-Warning "Release 本身已经建好了（上面那步没报错的话），去仓库页确认一下："
+        Write-Warning "  https://github.com/$repo/releases/tag/$tag"
     }
 } else {
     Write-Host "✅ Release $tag 已创建（无法从 remote 解析仓库地址，请手动确认）。"
