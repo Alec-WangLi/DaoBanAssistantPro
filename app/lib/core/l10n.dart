@@ -153,7 +153,11 @@ class L10n {
   static String get checkUpdate => t('检查更新', 'Check for update');
   static String get checkUpdateSubtitle => t('获取正式版与测试版', 'Get stable & beta releases');
   static String get alreadyLatest => t('已是最新', 'Up to date');
-  static String get updateCheckFailed => t('检查更新失败（网络异常，请稍后再试）', 'Update check failed (network error), try later');
+  // 连不上 GitHub 不要笼统说「网络异常」—— 国内用户看到这句只会反复重试，
+  // 得直接告诉他要开代理。
+  static String get updateCheckFailed => t(
+      '检查更新失败：连不上 GitHub 服务器。若你在国内，通常需要开启代理或加速器后重试。',
+      'Update check failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
   static String get stableChannel => t('正式版', 'Stable');
   static String get testChannel => t('测试版', 'Beta');
   // 渠道没有发布时的占位。不要复用 `none`（「不设」，说的是「这个可选字段留空」）——
@@ -165,7 +169,9 @@ class L10n {
   static String get testChannelHint => t('抢先体验新功能，可能有小问题', 'Early access to new features, may have minor issues');
   static String get download => t('去下载', 'Download');
   static String get downloadingUpdate => t('正在下载新版本', 'Downloading update');
-  static String get downloadFailed => t('下载失败，请检查网络后重试', 'Download failed, check your connection and retry');
+  static String get downloadFailed => t(
+      '下载失败：连不上 GitHub 服务器。若你在国内，通常需要开启代理或加速器后重试。',
+      'Download failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
   static String get jumpToMonth => t('跳转月份', 'Jump to month');
   static String get usageGuide => t('使用帮助', 'Usage guide');
   static String get viewLog => t('查看日志', 'View log');

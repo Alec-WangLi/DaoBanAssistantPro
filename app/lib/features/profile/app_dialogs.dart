@@ -41,7 +41,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.3\n'
+const String _changelogZh = 'v0.9.4\n'
+    '· 修好「检查更新」经常失败：更新检查以前先打 GitHub 的接口，那个接口对未登录的请求限制 60 次/小时，很容易被用光——用光之后其实一直在走备用的另一条路。现在改成先读发布清单（静态文件，不限次数），顺带也快了一点\n'
+    '· 「检查更新」和「下载」失败时不再只弹一句「网络异常，请稍后再试」（这句只停 2 秒，看完也来不及做什么），改为弹窗说清楚：连不上 GitHub 服务器，国内网络通常需要开启代理或加速器后重试。\n\n'
+
+    'v0.9.3\n'
     '· 修好 0.9.2 里漏掉的一类班次：12 小时制的夜班（20:30 上班那种）配一个落在值班时间之内的闹钟，从前会被排到前一天同一钟点 —— 0.9.2 只修好了「00:00 上班」那种写法，这类没修到。现在两种写法都算班次当天\n'
     '· 修好闹钟页把整行藏早了一点：那天的第一个闹钟响过之后，整行（连同后面还没到的那条）就看不见了，也没法在那行关掉当天剩下的闹钟。现在只要那天还有没响的闹钟，那一行就留着\n'
     '· 闹钟名字最多 12 个字（太长会把闹钟页那一行撑坏）\n\n'
@@ -83,11 +87,12 @@ const String _changelogZh = 'v0.9.3\n'
     'v0.8.8\n'
     '· 桌面小组件改成三张固定尺寸的卡，放置之后不能再拉伸：本周条（4×1，今天所在这一周的七天）、今日卡（4×3，App 底栏那张信息卡的完整版）、整月（4×5，月份标题 + 周几行 + 42 格）\n'
     '· 三张卡的视觉跟着 App 的设计语言走：班次胶囊从实心改成淡染底 + 同色描边（那天没班次就不画），去掉「白卡里再套白卡」的双层\n'
-    '· 升级后桌面上原有的旧小组件会消失，需要在桌面重新添加\n\n'
-    'v0.8.7\n'
-    '· 修好桌面小组件上那枚「N 项待办」徽章不跟着变：在 App 里勾掉或新增今天的待办之后，此前要等到下次打开 App 它才更新，现在会跟着一起变\n'
-    '· 内部：推送路径上新加的一处数据库读取补上了错误处理 —— 此前读失败一次会中断整次推送刷新\n';
-const String _changelogEn = 'v0.9.3\n'
+    '· 升级后桌面上原有的旧小组件会消失，需要在桌面重新添加\n';
+const String _changelogEn = 'v0.9.4\n'
+    '· Fixed "Check for update" failing so often: it used to call a GitHub API first, and that API allows only 60 unauthenticated requests per hour — easy to exhaust, after which checks were silently running on the fallback route all along. It now reads the release manifest first (a static file with no such limit), which is also a little faster\n'
+    '· A failed update check or download no longer shows just "network error, try later" — that line stayed up for 2 seconds, too short to act on. A dialog now says it plainly: GitHub is unreachable, and in mainland China a proxy or accelerator is usually required.\n\n'
+
+    'v0.9.3\n'
     '· Fixed a class of shifts missed in 0.9.2: a 12-hour night shift (the 20:30-start kind) with an alarm set inside the shift was still scheduled on the previous day at the same clock time — 0.9.2 only fixed the "midnight start" shape. Both shapes now ring on the shift\'s own day\n'
     '· Fixed the alarm page hiding a day too early: once that day\'s first alarm had rung, the whole row (including alarms still to come that day) disappeared, and the rest of the day could no longer be muted from it. The row now stays as long as some alarm is still coming\n'
     '· Alarm names are capped at 12 characters (a longer one used to break the alarm page row)\n\n'
@@ -129,10 +134,7 @@ const String _changelogEn = 'v0.9.3\n'
     'v0.8.8\n'
     '· The home-screen widget is now three fixed-size cards that cannot be resized once placed: a week strip (4×1 — the seven days of the current week), a today card (4×3 — the full version of the info card at the bottom of the app), and a month view (4×5 — month title, day-of-week row and a 6×7 grid)\n'
     '· Their look now follows the app\'s design language: shift chips went from solid fills to a tinted background with a matching outline (a day with no shift stays blank), and the "white card inside a white card" double container is gone\n'
-    '· After upgrading, the old widget on your home screen will disappear — you will need to add it again\n\n'
-    'v0.8.7\n'
-    '· Fixed the "N todos" badge on the home-screen widget not keeping up: after you tick off or add a todo for today in the app, the badge used to stay put until the next time you opened the app — it now follows along\n'
-    '· Internal: a database read on the widget-push path gained error handling — one failed read used to abort the whole push refresh\n';
+    '· After upgrading, the old widget on your home screen will disappear — you will need to add it again\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
@@ -170,6 +172,17 @@ void showUpdateDialog(BuildContext context, UpdateCheckResult result) {
       ),
       actions: const [],
     ),
+  );
+}
+
+/// 检查更新失败的提示：说清「连不上 GitHub、国内要开代理」。
+///
+/// 走弹窗而不是 snack —— snack 只停 2 秒，这条提示却要用户读完再去做一件事。
+void showUpdateFailedDialog(BuildContext context) {
+  showAppInfoDialog(
+    context,
+    title: L10n.checkUpdate,
+    content: L10n.updateCheckFailed,
   );
 }
 

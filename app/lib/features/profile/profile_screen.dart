@@ -281,12 +281,7 @@ class ProfileScreen extends ConsumerWidget {
     final r = await UpdateChecker.checkUpdates();
     if (!context.mounted) return;
     if (r.error) {
-      showGlassSnack(
-        context,
-        L10n.updateCheckFailed,
-        icon: Icons.error_outlined,
-        iconColor: AppTokens.danger,
-      );
+      showUpdateFailedDialog(context);
       return;
     }
     showUpdateDialog(context, r);
