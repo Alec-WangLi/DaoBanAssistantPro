@@ -66,8 +66,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 这正是它不随点日期抖动的原因。而这几样在一次拖动里都不会变，所以量一次
   /// 缓存住即可：`_dayRows` 每帧都重建，量一次要排三十来个 `TextPainter`。
   /// 只留一条（同时只会显示一个月的卡片），键变了就重量。
-  String? _cardHeightKey;
-  double? _cardHeight;
+  String? _cardMetricsKey;
+  InfoCardMetrics? _cardMetrics;
 
   /// 本月里有没有**未完成**的待办。
   ///
@@ -98,9 +98,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return keys.any((d) => d >= firstOfMonth && d < firstOfNext);
   }
 
-  /// 底栏信息卡该多高：取本月最满的一天（见 `info_card_metrics.dart`）。
-  double _bottomCardHeight(BuildContext context, ShiftSchedule? schedule,
-      double cardOuterWidth) {
+  /// 底栏信息卡该多高、以及本月每一天各自的内容高度（见 `info_card_metrics.dart`）。
+  InfoCardMetrics _cardMetricsFor(
+      BuildContext context, ShiftSchedule? schedule, double cardOuterWidth) {
     final hasTodoHint = _monthHasPendingTodos;
     final hasOverrideHint = _monthHasOverrideHint(schedule);
     final key = [
@@ -122,8 +122,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       // 这个月有被按天调过的日子时，班次行要给「已调整」胶囊留高度，也按月。
       hasOverrideHint,
     ].join('|');
-    if (key == _cardHeightKey && _cardHeight != null) return _cardHeight!;
-    final h = measureBottomInfoCardHeight(
+    if (key == _cardMetricsKey && _cardMetrics != null) return _cardMetrics!;
+    final m = measureBottomInfoCardHeight(
       context: context,
       cardOuterWidth: cardOuterWidth,
       schedule: schedule,
@@ -131,9 +131,37 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       hasTodoHint: hasTodoHint,
       hasOverrideHint: hasOverrideHint,
     );
-    _cardHeightKey = key;
-    _cardHeight = h;
-    return h;
+    _cardMetricsKey = key;
+    _cardMetrics = m;
+    return m;
+  }
+
+  /// 信息卡最后那行「本月 早12 · 午8 · 夜8 · 休6」：**整个月**各上几天什么班。
+  ///
+  /// 数整月而不是数到今天为止 —— 于是同一月里每天这一行完全一样、量出来的高度也
+  /// 一样，判定它画不画的时候不必按天重量。班次用 `shortLabel`（日历格子里那个
+  /// 一到两个字的简称：早 / 午 / 夜 / 休，英文是 M / A / N / O），一行放得下；
+  /// 班次多的排班会折到第二行，折行的高度也照量（见 `measureInfoCardLine`）。
+  ///
+  /// 没有排班、或空白表（跟随法定节假日）时返回 null —— 那时候没有班次可数。
+  String? _monthTally(ShiftSchedule? schedule) {
+    if (schedule == null || schedule.classes.isEmpty) return null;
+    final counts = List<int>.filled(schedule.classes.length, 0);
+    final days = DateTime(_month.year, _month.month + 1, 0).day;
+    for (var d = 1; d <= days; d++) {
+      final shift = schedule.shiftOn(DateTime(_month.year, _month.month, d));
+      if (shift == null) continue;
+      // `shiftOn` 返回的就是 `classes` 里那个实例，所以按身份找得到。
+      final i = schedule.classes.indexOf(shift);
+      if (i >= 0) counts[i]++;
+    }
+    final parts = <String>[];
+    for (var i = 0; i < schedule.classes.length; i++) {
+      if (counts[i] == 0) continue;
+      parts.add('${schedule.classes[i].shortLabel}${counts[i]}');
+    }
+    if (parts.isEmpty) return null;
+    return '${L10n.monthTally} ${parts.join(' · ')}';
   }
 
   @override
@@ -178,13 +206,30 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     });
   }
 
-  void _prev() =>
-      setState(() => _month = DateTime(_month.year, _month.month - 1, 1));
-  void _next() =>
-      setState(() => _month = DateTime(_month.year, _month.month + 1, 1));
+  /// 换月动画的方向：`+1` 往后的月份、`-1` 往前的月份。
+  ///
+  /// 换月动画要「往哪翻就从哪边进来」，所以方向不能写死。`_today` 与月份选择器
+  /// 可能一次跳好几个月，一律按实际前后关系定，不按点了哪个键。
+  int _monthRoll = 1;
+
+  /// 换月都要走这里：定方向 + 换月。月份没变就什么都不做（`_today` 在本月内点
+  /// 一下不该触发一次动画）。
+  void _setMonth(DateTime m) {
+    final next = DateTime(m.year, m.month, 1);
+    if (next == _month) return;
+    setState(() {
+      _monthRoll = next.isAfter(_month) ? 1 : -1;
+      _month = next;
+    });
+  }
+
+  void _prev() => _setMonth(DateTime(_month.year, _month.month - 1, 1));
+  void _next() => _setMonth(DateTime(_month.year, _month.month + 1, 1));
   void _today() {
     final n = DateTime.now();
     setState(() {
+      // 今天跳回本月要不要滑、往哪边滑，同样按前后关系定。
+      _monthRoll = DateTime(n.year, n.month, 1).isAfter(_month) ? 1 : -1;
       _month = DateTime(n.year, n.month, 1);
       _selected = dateOnly(n);
     });
@@ -193,9 +238,58 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Future<void> _showMonthPicker() async {
     final picked = await showGlassMonthPicker(context, initialMonth: _month);
     if (picked != null && mounted) {
-      setState(() => _month = DateTime(picked.year, picked.month, 1));
+      _setMonth(picked);
     }
   }
+
+  /// 换月那一下位移：往前翻往左走、往后翻往右走，两头都带淡入淡出。
+  ///
+  /// **只包「随月份变的那部分」** —— 网格，以及年月胶囊里那几个字。顶栏那几个圆形
+  /// 按钮不包：它们不随月份变，跟着一起滑会显得整条顶栏在晃。
+  ///
+  /// 换月只有「‹ ›」和月份选择器两条路径（网格上没有横向手势，横向拖动归底栏导航），
+  /// 所以这个位移不会跟任何手势打架。
+  Widget _monthSlide({
+    required DateTime month,
+    required String tag,
+    required Widget child,
+  }) =>
+      AnimatedSwitcher(
+        duration: AppTokens.durMed,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        // 默认把两个孩子**居中**堆叠；5 行的月份换 6 行的月份时两者高度不同，居中
+        // 会让旧的那版上下错开半行。按上沿对齐才是「一页换一页」。
+        layoutBuilder: (current, previous) => Stack(
+          alignment: Alignment.topLeft,
+          children: [...previous, if (current != null) current],
+        ),
+        transitionBuilder: (child, animation) {
+          // 进来的那个是当前月份（从翻页那一侧滑入），出去的是上一个月（往反方向
+          // 滑走）—— 两个孩子方向相反，而 `AnimatedSwitcher` 给它们的 `animation`
+          // 是同一个（一个正向、一个反向），光看 `animation` 分不出谁是谁，所以让
+          // 每个孩子自己带上月份来分（[_MonthPane]）。
+          final pane = child as _MonthPane;
+          final dir = pane.month == month ? _monthRoll : -_monthRoll;
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                // 位移只要一小段（卡片宽度的 6%），其余观感交给淡入淡出 —— 整屏
+                // 宽度那种滑法在月历上太闹。
+                begin: Offset(0.06 * dir, 0),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: _MonthPane(
+          key: ValueKey('$tag-${month.year}-${month.month}'),
+          month: month,
+          child: child,
+        ),
+      );
 
   int get _leading => DateTime(_month.year, _month.month, 1).weekday - 1;
   int get _daysInMonth => DateTime(_month.year, _month.month + 1, 0).day;
@@ -299,7 +393,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   // 网格可滚动：格子保持全尺寸，小屏 6 行放不下时滚动而非被裁切，
                   // 避免底部行与信息卡重叠。
                   : SingleChildScrollView(
-                      child: _buildGrid(context, schedule, c.maxHeight),
+                      child: _monthSlide(
+                        month: _month,
+                        tag: 'grid',
+                        child: _buildGrid(context, schedule, c.maxHeight),
+                      ),
                     ),
             ),
           );
@@ -369,11 +467,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     context,
                     onTap: _showMonthPicker,
                     height: narrowSide,
-                    child: Text(
-                      L10n.yearMonth(_month),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTokens.titleStrong,
+                    // 年月这几个字跟着网格一起滑（见 `_monthSlide`），方向才一致。
+                    child: _monthSlide(
+                      month: _month,
+                      tag: 'pill',
+                      child: Text(
+                        L10n.yearMonth(_month),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTokens.titleStrong,
+                      ),
                     ),
                   ),
                 ),
@@ -418,11 +521,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             child: _glassPill(
               context,
               onTap: _showMonthPicker,
-              child: Text(
-                L10n.yearMonth(_month),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTokens.titleStrong,
+              // 年月这几个字跟着网格一起滑（见 `_monthSlide`），方向才一致。
+              child: _monthSlide(
+                month: _month,
+                tag: 'pill',
+                child: Text(
+                  L10n.yearMonth(_month),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTokens.titleStrong,
+                ),
               ),
             ),
           ),
@@ -1590,7 +1698,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             .length ??
         0;
 
-    final content = Column(
+    // 卡片内容。做成**闭包**而不是直接赋值：最后那行「本月统计」画不画，要等
+    // `LayoutBuilder` 量出卡片宽度、拿到当天的富余才知道（见 `_tallyFits`），而闭包
+    // 顺手把上面这些派生值都捕获了，不必为此抽一层参数长长的私有方法。
+    Widget buildContent(String? tally) => Column(
       key: const Key('info-card-content'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1764,26 +1875,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ],
           ),
         ],
+        // 「本月 早12 · 午8 · 夜8 · 休6」—— 只在**这天还有富余**时才画。
+        //
+        // 卡片高度是按月定死的（`info_card_metrics.dart`）：最满的那天（通常是有
+        // 法定节假日、农历又占两行的日子）正好占满，普通日子则空出 32~51dp。与其
+        // 把高度改小 —— 那会把上面的网格带得一起抖，用户明确不要 —— 不如把这截富余
+        // 用起来：够就画这一行，不够（比如节假日那天）就不画，**绝不为它动卡片高度**。
+        // 判定见 `_tallyFits`，差一两个 dp 也算得出来。
+        if (tally != null) ...[
+          const SizedBox(height: AppTokens.spaceSm),
+          Text(
+            tally,
+            key: const Key('info-card-month-tally'),
+            // 班次多、简称长的排班会折到第二行；折行的高度已由 `_tallyFits` 计入。
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTokens.microText.copyWith(color: muted),
+          ),
+        ],
       ],
-    );
-
-    // 底栏时面板必须**撑满**那个定高盒子。`Stack` 默认 `StackFit.loose`，
-    // 只给非定位子节点松约束，面板于是缩到内容高度；而左侧色条是
-    // `Positioned(top/bottom: spaceLg)`，量的却是外面那个定高盒子 —— 两边
-    // 各按各的高度走，色条就比卡片长出几十 dp、垂在空白里（v0.6.6 用户
-    // 实测：卡片 126 高，色条 212 高）。给面板一层定高，两者才对得上。
-    //
-    // 右栏那份反过来要贴内容高度：那边没有「撑满」的必要，也就没有空档，
-    // 所以不套这层，色条跟着面板走本来就是对的。
-    final panel = GlassTile(
-      key: const Key('info-card-panel'),
-      padding: const EdgeInsets.fromLTRB(AppTokens.spaceXl, AppTokens.spaceLg,
-          AppTokens.spaceLg, AppTokens.spaceLg),
-      child: inSidePane
-          ? content
-          // 兜底：字号被系统放大到装不下时，卡片内部滚动，而不是溢出成
-          // 黄黑条纹。正常字号下内容矮于卡片，这一层不产生任何滚动。
-          : SingleChildScrollView(child: content),
     );
 
     final padding = inSidePane
@@ -1796,35 +1906,73 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     // 卡片外框宽度要量出来才能算高度（内容区宽度决定农历与色块折几行），
     // 而宽度只有这里才知道 —— 所以在内边距**里面**再套一层 LayoutBuilder。
+    //
+    // 内容也在这里面才建出来：那行「本月统计」画不画，取决于「卡片内高 − 当天内容
+    // 高度」这截富余（`infoCardTallyFits`），而富余也要先知道卡片宽度。`buildContent`
+    // 是闭包，所以搬进来不必给内容补一长串参数。
     return Padding(
       padding: padding,
       child: LayoutBuilder(
-        builder: (context, constraints) => Stack(
-          children: [
-            SizedBox(
-              key: const Key('info-card-box'),
-              height: inSidePane
-                  ? null
-                  : _bottomCardHeight(context, schedule, constraints.maxWidth),
-              child: panel,
-            ),
-            Positioned(
-              left: 0,
-              // 上下与面板内边距（spaceLg）一致，色条才是「卡片内高」而不是靠边。
-              top: AppTokens.spaceLg,
-              bottom: AppTokens.spaceLg,
-              width: 6,
-              child: DecoratedBox(
-                key: const Key('info-card-accent-bar'),
-                decoration: BoxDecoration(
-                  color: accent,
-                  // 6dp 宽的细长条就是胶囊：圆角取高度的一半。
-                  borderRadius: AppTokens.pillOf(6),
+        builder: (context, constraints) {
+          final metrics = inSidePane
+              ? null
+              : _cardMetricsFor(context, schedule, constraints.maxWidth);
+          final tally = _monthTally(schedule);
+          final showTally = tally != null &&
+              infoCardTallyFits(
+                context: context,
+                metrics: metrics,
+                tally: tally,
+                cardOuterWidth: constraints.maxWidth,
+                dayOfMonth: _selected.day,
+              );
+
+          final content = buildContent(showTally ? tally : null);
+
+          // 底栏时面板必须**撑满**那个定高盒子。`Stack` 默认 `StackFit.loose`，
+          // 只给非定位子节点松约束，面板于是缩到内容高度；而左侧色条是
+          // `Positioned(top/bottom: spaceLg)`，量的却是外面那个定高盒子 —— 两边
+          // 各按各的高度走，色条就比卡片长出几十 dp、垂在空白里（v0.6.6 用户
+          // 实测：卡片 126 高，色条 212 高）。给面板一层定高，两者才对得上。
+          //
+          // 右栏那份反过来要贴内容高度：那边没有「撑满」的必要，也就没有空档，
+          // 所以不套这层（`metrics` 为 null → 高度交给内容），色条跟着面板走本来就是对的。
+          final panel = GlassTile(
+            key: const Key('info-card-panel'),
+            padding: const EdgeInsets.fromLTRB(AppTokens.spaceXl,
+                AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceLg),
+            child: inSidePane
+                ? content
+                // 兜底：字号被系统放大到装不下时，卡片内部滚动，而不是溢出成
+                // 黄黑条纹。正常字号下内容矮于卡片，这一层不产生任何滚动。
+                : SingleChildScrollView(child: content),
+          );
+
+          return Stack(
+            children: [
+              SizedBox(
+                key: const Key('info-card-box'),
+                height: metrics?.outerHeight,
+                child: panel,
+              ),
+              Positioned(
+                left: 0,
+                // 上下与面板内边距（spaceLg）一致，色条才是「卡片内高」而不是靠边。
+                top: AppTokens.spaceLg,
+                bottom: AppTokens.spaceLg,
+                width: 6,
+                child: DecoratedBox(
+                  key: const Key('info-card-accent-bar'),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    // 6dp 宽的细长条就是胶囊：圆角取高度的一半。
+                    borderRadius: AppTokens.pillOf(6),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -2006,3 +2154,20 @@ double calendarCellHeight({
       : fillCellH;
   return math.max(shrunk, _minCellH);
 }
+
+/// 换月动画里的一「页」（网格，或年月胶囊里那几个字），带着**它自己那个月**。
+///
+/// 带月份只为一件事：`_monthSlide` 的 `transitionBuilder` 一次拿到两个孩子 —— 进来
+/// 的新月份、出去的旧月份 —— 而两者的滑动方向相反（进来的从翻页那一侧滑入，出去的
+/// 往另一侧滑走）。`AnimatedSwitcher` 给两个孩子的 `animation` 是同一个（一个正向、
+/// 一个反向），`animation` 本身分不出谁是谁，让每个孩子自己带上月份就分得清了。
+class _MonthPane extends StatelessWidget {
+  const _MonthPane({super.key, required this.month, required this.child});
+
+  final DateTime month;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => child;
+}
+

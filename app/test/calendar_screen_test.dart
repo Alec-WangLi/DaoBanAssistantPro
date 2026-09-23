@@ -1013,11 +1013,141 @@ void main() {
           month: DateTime(2026, 9, 1),
           hasTodoHint: false,
           hasOverrideHint: hasOverrideHint,
-        );
+        ).outerHeight;
 
     expect(cardH(hasOverrideHint: true), greaterThan(cardH(hasOverrideHint: false)),
         reason: '这个月有被按天调过的日子时，班次行要按「已调整」胶囊的高度预留 —— '
             '少了这一步，真机上有标记的那天卡片内容会顶出定高');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 信息卡最后那行「本月统计」 ──
+  //
+  // 它填的是卡片**按月定高**留下的那截富余：最满的一天（有法定节假日、农历又占两行
+  // 的日子）正好占满，普通日子空出 32~51dp。**卡片高度一像素都不能为此动** —— 动了
+  // 上面六个格子就跟着抖，而用户明确不要那个抖动。所以判定只能是「这天的富余装得下
+  // 就画」，下面两条一条盯「装不下真的不画、画了真的不裁」，一条盯「数字对不对」。
+
+  /// 往后翻，找到第一个**有法定节假日**的月份（只有这种月份才有富余可填；没有节假日
+  /// 的月份，卡片是按普通日子的高度定的，几乎没有空档）。
+  Future<DateTime> seekHolidayMonth(WidgetTester tester) async {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, 1);
+    for (var i = 0; i < 24; i++) {
+      if (i > 0) {
+        await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+        await tester.pumpAndSettle();
+      }
+      final m = DateTime(start.year, start.month + i, 1);
+      final days = DateTime(m.year, m.month + 1, 0).day;
+      final has = List.generate(days, (k) => lunarOf(DateTime(m.year, m.month, k + 1)))
+          .any((l) => l.isLegalHoliday);
+      if (has) return m;
+    }
+    fail('两年内总该有一个月有法定节假日');
+  }
+
+  /// 点开这一天，并回答「统计行画着没有」。
+  Future<bool> tapDay(WidgetTester tester, int day) async {
+    await tester.tap(find.text('$day').first);
+    await tester.pump();
+    return find.byKey(const Key('info-card-month-tally')).evaluate().isNotEmpty;
+  }
+
+  testWidgets('信息卡「本月统计」：只画在装得下的那天，最满的一天不画', (tester) async {
+    await _pumpCalendar(tester, 'six_crew_three_shift');
+    final m = await seekHolidayMonth(tester);
+
+    final box = find.byKey(const Key('info-card-box'));
+    final content = find.byKey(const Key('info-card-content'));
+    final cardH = tester.getSize(box).height;
+    final inner = cardH - (AppTokens.spaceLg * 2 + 2);
+    final days = DateTime(m.year, m.month + 1, 0).day;
+
+    var maxContent = 0.0;
+    var shown = 0;
+    var hidden = 0;
+    for (var d = 1; d <= days; d++) {
+      final hasTally = await tapDay(tester, d);
+      expect(tester.getSize(box).height, cardH,
+          reason: '$d 日：统计行不许把卡片顶高 —— 顶高一像素，上面六个格子就集体矮一像素');
+      final c = tester.getSize(content).height;
+      maxContent = math.max(maxContent, c);
+      if (hasTally) {
+        shown++;
+        expect(c, lessThanOrEqualTo(inner),
+            reason: '$d 日：画了统计行之后内容 $c 装不进卡片内高 $inner，最后一行会被裁掉');
+      } else {
+        hidden++;
+      }
+    }
+    expect(shown, greaterThan(0),
+        reason: '有节假日的月份里普通日子是有富余的，一天都没画说明判定收得太紧');
+    expect(hidden, greaterThan(0), reason: '最满的那天富余为 0，那天必须不画');
+
+    // 前提：卡片确实紧贴最满的那天（容 2dp 取整余量，与另一条用例同口径）。
+    expect(inner - maxContent, lessThanOrEqualTo(2),
+        reason: '卡片该是紧贴最满那天的；高出太多说明富余被算漏了');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('信息卡「本月统计」：数字就是本月的实际班次天数', (tester) async {
+    await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
+    final m = await seekHolidayMonth(tester);
+    final days = DateTime(m.year, m.month + 1, 0).day;
+
+    String? text;
+    for (var d = 1; d <= days && text == null; d++) {
+      if (await tapDay(tester, d)) {
+        text = tester
+            .widget<Text>(find.byKey(const Key('info-card-month-tally')))
+            .data;
+      }
+    }
+    expect(text, isNotNull, reason: '有节假日的月份里该有画着统计行的日子');
+    expect(text, startsWith(L10n.monthTally));
+
+    final parts = text!.substring(L10n.monthTally.length).trim().split(' · ');
+    expect(parts, isNotEmpty);
+    var total = 0;
+    final labels = <String>[];
+    for (final p in parts) {
+      // 形状是「简称 + 数字」：白12 / 夜8 / 休11（英文是 M12 / N8 / O11）。
+      final match = RegExp(r'^(\D+?)(\d+)$').firstMatch(p);
+      expect(match, isNotNull, reason: '「$p」不符合「简称 + 数字」的形状');
+      labels.add(match!.group(1)!);
+      final n = int.parse(match.group(2)!);
+      expect(n, greaterThan(0), reason: '「$p」是 0 天，那这个班次这个月根本没出现');
+      total += n;
+    }
+    expect(labels.toSet().length, labels.length, reason: '同一个班次不许出现两次');
+    expect(labels.length, greaterThanOrEqualTo(2), reason: '这个模板至少白 / 夜 / 休三种班');
+    expect(total, days,
+        reason: '数的是**整月**（不是到今天为止），每天都有班次，加总该等于这个月的天数');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 换月动画 ──
+
+  testWidgets('换月：进出两版同时在树上，落定后只剩一版', (tester) async {
+    // 换月从前是瞬切。加了位移 + 淡入之后要盯两件事：动画真的起来了（两版同时在
+    // 树上，而不是被同一个键判成「同一个孩子」直接换掉），以及落定之后不留残影
+    // —— 留着的话按 `day-card-N` 找格子会找到两个。
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+    final cell = find.byKey(const ValueKey('day-card-1'));
+    expect(cell, findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+    await tester.pump(); // 起手一帧
+    await tester.pump(AppTokens.durMed ~/ 2); // 动画正中间
+    expect(cell, findsNWidgets(2),
+        reason: '换月动画中途该有新旧两版；只找到一版说明位移/淡入没起来');
+
+    await tester.pumpAndSettle();
+    expect(cell, findsOneWidget, reason: '落定后旧的那版要收干净');
 
     await _disposeCalendar(tester);
   });

@@ -41,7 +41,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.6\n'
+const String _changelogZh = 'v0.9.7\n'
+    '· 信息卡底下那截空白用起来了：卡片是按「本月最满的一天」定高的 —— 这样点日期时上面的日历格子不会跟着伸缩 —— 于是普通日子底下会空出三四十 dp。现在那里写一行本月统计，比如「本月 早12 · 午8 · 夜8 · 休6」，一眼看出这个月上了几个什么班。装得下才画：节假日那种最满的日子它自动不出现，卡片高度一个像素都没动\n'
+    '· 换月加了一点方向感：往前翻往左滑、往后翻往右滑，顶栏的「年月」跟着一起动；以前是硬切\n\n'
+
+    'v0.9.6\n'
     '· 新建自定义闹钟的默认重复方式从「每天」改成「一次性」：加一条闹钟十有八九是响这一次，响过之后它自己就消失了，不用你回来删。要天天响的，点一下「每天」\n'
     '· 修好一个会让一次性闹钟「加了就没」的坑：新建时时间和日期默认都是「此刻」「今天」，两个默认叠在一起，那一刻在按下「添加」之前已经过去了 —— 这种闹钟既不会响，还会在下次进闹钟页时被自动清掉。现在日期取的是这个钟点的下一次出现：今天还没到就是今天，已经过了就顺延到明天；日期那一行写的永远是你真正会听到它的那天\n\n'
 
@@ -87,12 +91,13 @@ const String _changelogZh = 'v0.9.6\n'
     '· 存完模板的提示补了一句去哪儿找：「新建排班时可选」\n\n'
     'v0.8.11\n'
     '· 新增「我的模板」：调好一套排班之后，在编辑器右上角点「存为模板」，下次新建排班时直接在「我的模板」里选它 —— 自己厂里的班表不用每次从头搭\n'
-    '· 存下的模板可以在选择页点「管理」改名或删除；每张卡片上写着几天一轮、几个班组\n\n'
-    'v0.8.10\n'
-    '· 新增「五班三倒 · 10 天一轮」模板：早班两天、中班两天、休一天、夜班两天，然后休三天。此前只有 5 天一轮的那套，10 天一轮得自己搭 —— 内置模板现在共 20 种\n'
-    '· 修好「把 5 天一轮的排班改成 10 天之后，同一天有两个班组上同一个班」：各组的周期起始日此前不跟着周期长度走。现在编辑器的「周期设置」里会直接点出撞班的两个班组，并给一个按钮把各组起始日按周期长度一键均分（你自己那一组不动）\n';
+    '· 存下的模板可以在选择页点「管理」改名或删除；每张卡片上写着几天一轮、几个班组\n';
 
-const String _changelogEn = 'v0.9.6\n'
+const String _changelogEn = 'v0.9.7\n'
+    '· The empty space under the info card now says something: the card is sized to the fullest day of the month — that way tapping a day never makes the calendar grid above it resize — which leaves roughly 30-50dp empty on ordinary days. That line now carries a tally of the month, such as "This month  M12 · A8 · N8 · O6", so you can see at a glance how many of each shift you have. It only shows when there is room: on the fullest days (public holidays) it stays out, and the card never grows a pixel for it\n'
+    '· Changing months now has a sense of direction: going back slides left, going forward slides right, with the month label travelling along. It used to be an instant swap\n\n'
+
+    'v0.9.6\n'
     '· New custom alarms now default to "Once" instead of "Daily": an alarm you add is usually a one-off, and once it has rung it clears itself away so you never have to come back and delete it. For one that repeats every day, tap "Daily"\n'
     '· Fixed a hole that made a one-off alarm vanish the moment you added it: a new alarm defaulted to today at the current time, so that moment had already passed by the time you tapped "Add" — such an alarm never rang, and was quietly deleted the next time you opened the alarm page. The date is now the next time that clock time comes around: today if it is still ahead, tomorrow if it has passed. The date row always shows the day you will actually hear it\n\n'
 
@@ -138,10 +143,7 @@ const String _changelogEn = 'v0.9.6\n'
     '· The confirmation shown after saving now says where to find it ("pick it when creating a schedule")\n\n'
     'v0.8.11\n'
     '· New "My templates": once a schedule looks right, tap "Save as template" in the editor\'s top-right corner and pick it the next time you create a schedule — no more rebuilding your own roster from scratch\n'
-    '· Saved templates can be renamed or deleted from "Manage" on the picker; each card shows the cycle length and team count\n\n'
-    'v0.8.10\n'
-    '· New "5-crew 3-shift · 10-day cycle" template: two mornings, two afternoons, one off, two nights, then three off. Until now only the 5-day version existed, so a 10-day roster had to be built by hand — there are now 20 built-in templates\n'
-    '· Fixed two crews landing on the same shift on the same day after changing a 5-day cycle into a 10-day one: the crew start dates never followed the cycle length. The editor\'s cycle section now names the two crews that collide and offers a button that spreads every crew start date evenly across the cycle (your own crew stays put)\n';
+    '· Saved templates can be renamed or deleted from "Manage" on the picker; each card shows the cycle length and team count\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

@@ -66,6 +66,38 @@ const double _shiftDot = 12;
 const double _otherCrewsLabelGap = 8;
 const double _otherCrewsLabelTop = AppTokens.spaceXs; // 4
 
+/// 底栏信息卡高度的测算结果。
+///
+/// [outerHeight] 是卡片**外框**高度（竖屏 / 短屏非紧凑形态）。[dayContentHeights]
+/// 是本月的逐日内容高度（下标 0 = 1 号，不含卡片内边距与描边），给「这一天还剩多少
+/// 富余」用 —— 卡片里那行「本月统计」就靠它决定画不画（见 [slackOn]）。
+class InfoCardMetrics {
+  const InfoCardMetrics({
+    required this.outerHeight,
+    required this.dayContentHeights,
+  });
+
+  final double outerHeight;
+  final List<double> dayContentHeights;
+
+  /// 卡片**内容区**高度：外框减去上下内边距与描边（与渲染侧同源，见 [_cardChromeV]）。
+  double get innerHeight => outerHeight - _cardChromeV;
+
+  /// [dayOfMonth]（1 起）那天的内容装进卡片之后还剩多少垂直富余。
+  ///
+  /// 这是**卡片高度一个像素都不用动**就能把空白用起来的全部秘密：高度按月定死，
+  /// 富余只有多少之分，没有「卡片跟着当天长」这回事（那会把网格带得一起抖）。
+  ///
+  /// 富余可能为负 —— 逐日用的是**按月闸门**算出来的高度（日期行给「待办徽章」、
+  /// 班次行给「已调整」胶囊各留了一份，见 [measureBottomInfoCardHeight]），它 ≥
+  /// 那天实际渲染出来的高度。也就是说这里偏保守：宁可少画一次，也不裁字。
+  double slackOn(int dayOfMonth) {
+    final i = dayOfMonth - 1;
+    if (i < 0 || i >= dayContentHeights.length) return 0;
+    return innerHeight - dayContentHeights[i];
+  }
+}
+
 /// 底栏信息卡的外框高度（竖屏 / 短屏非紧凑形态）。
 ///
 /// [cardOuterWidth] 是卡片**外框**宽度（还没扣内边距与描边）。[month] 只用到
@@ -77,7 +109,12 @@ const double _otherCrewsLabelTop = AppTokens.spaceXs; // 4
 ///
 /// [hasOverrideHint] 同理，管的是班次行尾巴上那颗「已调整」胶囊（见
 /// [_adjustedBadgeH]）：这个月里有被按天调整过的日子才要预留。也按月。
-double measureBottomInfoCardHeight({
+///
+/// **高度是「逐日取大」的结果，不是把各项的月内最大值相加。** 后者会把「A 天有
+/// 节假日徽章」「B 天色块折三行」「C 天的农历描述两行」叠成一天的高度，而一个月里
+/// 没有哪天真需要那么高 —— 多出来的部分白占网格。逐日算这一天自己的总和、再取
+/// 最大，才是这个月实际需要的高度。代价只有一个：换月时高度可能变一次。
+InfoCardMetrics measureBottomInfoCardHeight({
   required BuildContext context,
   required double cardOuterWidth,
   required ShiftSchedule? schedule,
@@ -148,13 +185,8 @@ double measureBottomInfoCardHeight({
 
   final showChips = schedule != null && schedule.teamCount > 1;
 
-  // ── 逐日取大：节假日徽章、农历行数、色块折行数 ──
-  var badgeH = 0.0;
-  var lunarH = 0.0;
-  var chipsH = 0.0;
-
   // 「其他班组」那一行是 `Row[标签, 色块]`，高度取两者的大者。标签不折行，
-  // 它那份是定值，先算好。
+  // 它那份是定值，先算好。这两项与具体哪天无关，逐日的循环里不用重量。
   final otherCrewsLabelH = showChips
       ? measure
               .text(L10n.otherCrews, AppTokens.microText)
@@ -163,47 +195,108 @@ double measureBottomInfoCardHeight({
       : 0.0;
   final chipLineH = showChips ? _chipLineH(measure) : 0.0;
 
+  // ── 逐日取大：把**这一天自己**的各项加起来，最后取月内最大的那天 ──
   final days = DateTime(month.year, month.month + 1, 0).day;
+  final dayContentHeights = <double>[];
+  var maxDayContent = 0.0;
+
   for (var d = 1; d <= days; d++) {
     final date = DateTime(month.year, month.month, d);
     final lunar = lunarOf(date);
 
+    // 这一天自己的节假日徽章高度（不是这个月里最高的那个徽章）。图标 16 + 小字
+    // 「法定节假日」12 + 大字节日名 14，外加 3×2 内边距与 1×2 描边。
+    var badgeH = 0.0;
     if (lunar.isLegalHoliday) {
-      // 徽章：图标 16 + 小字「法定节假日」12 + 大字节日名 14，外加 3×2 内边距
-      // 与 1×2 描边。两个字号不同的 span 并排，行高由大的那档决定。
-      final textH = measure.rich(
-        [
-          TextSpan(text: L10n.legalHoliday, style: AppTokens.microLabel),
-          TextSpan(text: lunar.legalHolidayName, style: AppTokens.labelStrong),
-        ],
-        maxLines: 1,
-        maxWidth: contentW,
-      ).height;
-      final h = textH + _chipPadV * 2 + _chipBorder * 2;
-      if (h > badgeH) badgeH = h;
+      final textH = measure
+          .rich(
+            [
+              TextSpan(text: L10n.legalHoliday, style: AppTokens.microLabel),
+              TextSpan(text: lunar.legalHolidayName, style: AppTokens.labelStrong),
+            ],
+            maxLines: 1,
+            maxWidth: contentW,
+          )
+          .height;
+      badgeH = textH + _chipPadV * 2 + _chipBorder * 2;
     }
 
-    final lh = measure.text(
+    final lunarH = measure.text(
       lunar.fullDescription,
       AppTokens.rowSecondary,
       maxLines: 2,
       maxWidth: contentW,
     ).height;
-    if (lh > lunarH) lunarH = lh;
 
+    var chipsH = 0.0;
     if (showChips) {
       final rows = _chipRows(measure, contentW, schedule, date);
-      final h = math.max(
-          otherCrewsLabelH, rows * chipLineH + (rows - 1) * _chipGapY);
-      if (h > chipsH) chipsH = h;
+      chipsH =
+          math.max(otherCrewsLabelH, rows * chipLineH + (rows - 1) * _chipGapY);
     }
+
+    var dayContent =
+        dateH + _gapAfterDate + lunarH + _gapBetweenSections + shiftRowH;
+    if (badgeH > 0) dayContent += badgeH + _gapAfterBadge;
+    if (showChips) dayContent += _gapBetweenSections + chipsH;
+
+    dayContentHeights.add(dayContent);
+    if (dayContent > maxDayContent) maxDayContent = dayContent;
   }
 
-  var content = dateH + _gapAfterDate + lunarH + _gapBetweenSections + shiftRowH;
-  if (badgeH > 0) content += badgeH + _gapAfterBadge;
-  if (showChips) content += _gapBetweenSections + chipsH;
+  return InfoCardMetrics(
+    outerHeight: maxDayContent + _cardChromeV,
+    dayContentHeights: dayContentHeights,
+  );
+}
 
-  return content + _cardChromeV;
+/// 卡片底部那行「本月统计」，[dayOfMonth] 这天到底画不画。
+///
+/// 比的是**这天的富余**（[InfoCardMetrics.slackOn]）：卡片高度按月定死，富余就是
+/// 那截空白 —— 够就把这截空白用起来，不够就不画。**永远不为这一行去动卡片高度**，
+/// 否则卡片一长，上面六个格子就一起矮（那正是这个文件要消灭的东西）。
+///
+/// [metrics] 为 null 表示右栏 / 横屏那张卡：那种形态下高度跟着内容走，没有「装不下」
+/// 这回事，所以恒为 true。
+///
+/// 判定里留 1dp 容差：量高的取整与渲染的取整不是同一条路，差一两个 dp 就翻脸的话，
+/// 这行会时有时无地闪。宁可退一步不画，也不让它压到内容上。
+bool infoCardTallyFits({
+  required BuildContext context,
+  required InfoCardMetrics? metrics,
+  required String tally,
+  required double cardOuterWidth,
+  required int dayOfMonth,
+}) {
+  if (metrics == null) return true;
+  final h = _measureLine(
+    context: context,
+    text: tally,
+    // 与渲染那一行同一套样式（`_infoCard` 里的 `microText`）。
+    style: AppTokens.microText,
+    maxWidth: cardOuterWidth - _cardChromeH,
+  ).height;
+  return metrics.slackOn(dayOfMonth) >= h + AppTokens.spaceSm + 1;
+}
+
+/// 量卡片内**一段文字**排出来要多高、多宽（给上面那个判定用）。
+///
+/// 与卡片里其它文字走同一套 `DefaultTextStyle` 合并与 `TextScaler`，所以系统字号
+/// 放大后量出来的跟着涨、判定跟着收紧。`maxLines: 2` 与渲染侧一致 —— 班次多、简称
+/// 长的排班会折两行，折行的高度要照量。
+Size _measureLine({
+  required BuildContext context,
+  required String text,
+  required TextStyle style,
+  required double maxWidth,
+  int maxLines = 2,
+}) {
+  final measure = _Measure(
+    def: DefaultTextStyle.of(context),
+    scaler: MediaQuery.textScalerOf(context),
+  );
+  final p = measure.text(text, style, maxLines: maxLines, maxWidth: maxWidth);
+  return Size(p.width, p.height);
 }
 
 /// 单个色块的高度（`Wrap` 里一行的高度）。

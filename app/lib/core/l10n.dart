@@ -534,6 +534,10 @@ class L10n {
   static String alarmFirstOfMany(String time, int total) => t(
       '闹钟 $time 等 $total 个', 'Alarm $time (+${total - 1})');
   static String get otherCrews => t('其他班组', 'Other crews');
+
+  /// 信息卡那行「本月统计」的前缀，后面接 `早12 · 午8 · 夜8 · 休6`（班次简称
+  /// 直接取 `ShiftClass.shortLabel`，日历格子里已经在用那一套，中英文各自成立）。
+  static String get monthTally => t('本月', 'This month');
   static String get savedAndRescheduled => t('已保存并重排闹钟', 'Saved & alarms rescheduled');
   static String switchedTo(String name) => isEn ? 'Switched to $name' : '已切换到 $name';
   static List<String> get weekdays => isEn
