@@ -24,7 +24,8 @@ const int _boundaryDay = 15;
 /// 造两套各带时段的方案 + 渲染日历页。
 ///
 /// 时段落在**本月中间**，于是打开日历（默认就是本月）便直接看到衔接。
-Future<AppDatabase> _pumpChainedCalendar(WidgetTester tester) async {
+Future<AppDatabase> _pumpChainedCalendar(WidgetTester tester,
+    {bool noScheduleAtAll = false}) async {
   tester.view.physicalSize = const Size(420, 1600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -54,8 +55,13 @@ Future<AppDatabase> _pumpChainedCalendar(WidgetTester tester) async {
 
   final aId = await save('A', '甲', current: true);
   final bId = await save('B', '丙', current: false);
-  await repo.addSpan(aId, to: DateTime(now.year, now.month, 14));
-  await repo.addSpan(bId, from: DateTime(now.year, now.month, _boundaryDay));
+  if (noScheduleAtAll) {
+    // 「其余时间」设成「无」、又不给任何段 → 整月一天班都没有。
+    await repo.setRemainingNone();
+  } else {
+    await repo.addSpan(aId, to: DateTime(now.year, now.month, 14));
+    await repo.addSpan(bId, from: DateTime(now.year, now.month, _boundaryDay));
+  }
 
   await tester.pumpWidget(ProviderScope(
     overrides: [databaseProvider.overrideWithValue(db)],
@@ -188,6 +194,65 @@ void main() {
 
     expect(find.textContaining('请分开调整'), findsNothing);
     expect(find.textContaining('8 天'), findsOneWidget);
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('顶栏那颗按钮点开是**只读**的排班时段总览，今天所在那段打勾', (tester) async {
+    await _pumpChainedCalendar(tester);
+
+    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    await tester.pumpAndSettle();
+
+    // 只读：**没有**「点一行就切过去」这件事，只有一句说明 + 一条时间线 + 跳转。
+    final sheet = find.byType(BottomSheet);
+    expect(sheet, findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text(L10n.remainingTime)),
+        findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.byIcon(Icons.check_circle_outlined)),
+        findsOneWidget,
+        reason: '今天所在的那一段要打勾（今天落在 B 那段里）');
+    expect(find.text(L10n.manageTimeline), findsOneWidget);
+
+    // 「管理排班时段」跳到排班管理页。
+    await tester.tap(find.text(L10n.manageTimeline));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.scheduleTimeline), findsWidgets);
+    expect(find.text(L10n.remainingHint), findsOneWidget);
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('其余时间为无 + 没有段 → 网格上有指路，**而且点某天仍然有效**', (tester) async {
+    // 这一条的重头戏是后半句：指路那一层必须 `IgnorePointer`，否则它会吃掉网格的
+    // 手势（点日期、长按拖选全失灵）—— 而「盖了层透明东西导致交互没了」在 widget
+    // 测试里默认照不出来，所以要**真的点一下**再断言信息卡跟着变。
+    final db = await _pumpChainedCalendar(tester, noScheduleAtAll: true);
+    expect(await AppRepository(db).getActiveSchedules(), isNotNull);
+
+    expect(find.text(L10n.noScheduleHere), findsOneWidget);
+    expect(find.text(L10n.noScheduleHereHint), findsOneWidget);
+
+    // **主判据**：在指路文字**自己的中心**做一次命中测试 —— 它必须不在命中路径里
+    // （`IgnorePointer` 在起作用）。它若能命中，就会把网格的手势吃掉（点日期、
+    // 长按拖选全失灵），而那种「盖了层透明东西导致交互没了」默认照不出来。
+    //
+    // 别写成「它有没有 IgnorePointer 祖先」：框架内部自己就套了三层，那种断言
+    // 两种写法都能过（假护栏）。下面那句「点得动」是行为层的旁证，但它不保证有
+    // 鉴别力 —— 指路文字未必正好盖住点的那一格。
+    final hint = find.text(L10n.noScheduleHere);
+    final hit = tester.hitTestOnBinding(tester.getCenter(hint));
+    expect(
+      hit.path.where((e) => e.target == tester.renderObject(hint)),
+      isEmpty,
+      reason: '指路那一层必须不可命中',
+    );
+
+    await _tapDay(tester, 10);
+    // 没班次时信息卡走的是另一支（没有 `info-card-shift-line` 那个 key），
+    // 所以直接找那句文案。
+    expect(find.text(L10n.noSchedule), findsOneWidget,
+        reason: '点得动 —— 指路那一层没有把网格的手势吃掉');
 
     await _disposeCalendar(tester);
   });

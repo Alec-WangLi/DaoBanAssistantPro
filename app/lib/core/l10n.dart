@@ -398,11 +398,6 @@ class L10n {
   /// 段的两端都留空 = 这套方案一直用（不与任何别的段重叠时才有意义）。
   static String get spanAlways => t('一直', 'Always');
 
-  /// 日历那个弹层顶上的一句说明。**归 Task 7 处理** —— 那一屏要换成「排班时段」
-  /// 只读总览，这句话会被 `remainingHint` 取代。现在先留着，因为日历还在用它。
-  static String get effectiveOutsideHint => t(
-      '没被上面时段覆盖的日子，用标着「其余日子」的那套。',
-      'Days not covered by a period above use the one marked "Other days".');
   static String spansTwoSchedules(String name, String d) => t(
       '这段跨了两套排班的生效边界（$d 起换成「$name」），请分开调整。',
       'This range spans a schedule boundary (switches to “$name” on $d); adjust them separately.');

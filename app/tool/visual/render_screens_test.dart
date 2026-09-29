@@ -209,7 +209,7 @@ void main() {
       home: const CalendarScreen(),
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
       beforeCapture: (t) async {
-        await t.tap(find.byIcon(Icons.swap_vert_outlined));
+        await t.tap(find.byIcon(Icons.timeline));
         await settleVisual(t);
       },
     );

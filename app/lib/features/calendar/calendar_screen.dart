@@ -21,10 +21,9 @@ import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import '../widget/widget_service.dart';
 import 'info_card_metrics.dart';
-import 'schedule_editor_screen.dart';
+import 'schedule_management_screen.dart';
 import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
-import 'shift_template_picker_screen.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -503,8 +502,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             const SizedBox(height: narrowGap),
             Row(
               children: [
-                _circleIcon(context, Icons.swap_vert_outlined,
-                    L10n.switchSchedule, _showScheduleSwitcher, size: narrowSide),
+                _circleIcon(context, Icons.timeline, L10n.scheduleTimeline,
+                    _showTimeline, size: narrowSide),
                 const Spacer(),
                 GlassPill(
                   onTap: _today,
@@ -552,8 +551,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               context, Icons.chevron_right_outlined, L10n.nextMonth, _next),
           const SizedBox(width: AppTokens.gapIconText),
           // 切换排班：纯图标圆形钮（省宽，保证年月完整显示）
-          _circleIcon(context, Icons.swap_vert_outlined, L10n.switchSchedule,
-              _showScheduleSwitcher),
+          _circleIcon(context, Icons.timeline, L10n.scheduleTimeline,
+              _showTimeline),
           const SizedBox(width: AppTokens.gapIconText),
           GlassPill(
             onTap: _today,
@@ -637,17 +636,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Future<void> _switchSchedule(int id) async {
-    final repo = ref.read(appRepositoryProvider);
-    await repo.setCurrentSchedule(id);
-    // 方案真的换过去了 —— 这是「动作落实」，不是「选中变了」，所以是 `commit`
-    // 而不是 `select`。放在写库**之后**：写失败就不该报「落实了」。
-    Haptics.commit();
-    // 重排读的是库里**刚设成当前**的那套方案（`rescheduleAll` 自己读），
-    // 所以这里不用先把领域模型取出来。
-    if (mounted) await AlarmService.rescheduleAll(repo);
-  }
-
   /// 弹「调整班次」选择层，把 [from]..[to] 这段日子改掉（或恢复轮转）。
   ///
   /// 改完必须重排闹钟：这天可能从工作班变成休班（不该响），或从休班变成夜班
@@ -729,120 +717,203 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Future<void> _showScheduleSwitcher() async {
-    // 预加载排班列表，避免弹窗内 ref.watch 不刷新导致列表为空
+  /// 「排班时段」只读总览。
+  ///
+  /// **只读是有意的**：原来那个「切换排班」点一行就把 `isCurrent` 换过去，可它改的
+  /// 只是「没被时段覆盖时的兜底」—— 时段盖满之后点它什么也不会变，用户以为按钮
+  /// 坏了（那正是这一轮重做的起因）。现在它只回答「这段时间在用哪套、今天在哪一
+  /// 段」，要改就去排班管理页那条时间线。
+  Future<void> _showTimeline() async {
     final schedules = await ref.read(schedulesProvider.future);
-    if (!mounted) return;
-    final current = ref.read(activeScheduleProvider).valueOrNull;
-    // 段也要读：副标题里的身份标签（「已排入时段」还是「未使用」）要数段。
     final spans = await ref.read(scheduleSpansProvider.future);
     if (!mounted) return;
-    await showModalBottomSheet(
+    final current = ref.read(activeScheduleProvider).valueOrNull;
+    final remaining = current?.current;
+    final today = dayNumber(dateOnly(DateTime.now()));
+
+    // 今天落在哪一段上（段之间不重叠，所以至多一段）—— 给那一行打勾。
+    int? todaySpanId;
+    for (final s in spans) {
+      final from = s.startDate == null ? null : dayNumber(s.startDate!);
+      final to = s.endDate == null ? null : dayNumber(s.endDate!);
+      if ((from == null || today >= from) && (to == null || today <= to)) {
+        todaySpanId = s.id;
+        break;
+      }
+    }
+    final byId = {for (final s in schedules) s.id: s};
+
+    await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black26,
-      builder: (context) {
-        return GlassPanel(
-          solid: true,
-          margin: const EdgeInsets.all(12),
-          borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 底部弹层标题走 `dialogTitle`（规格 §3.2「弹窗与**底部弹层**
-                  // 标题」），与 `glass_dialog` 里那些弹窗同角色 —— 原为
-                  // 18/w700，本轮统一成 20/w600。
-                  Text(L10n.switchSchedule, style: AppTokens.dialogTitle),
-                  const SizedBox(height: 4),
-                  // 这一句是把解析规则讲给用户听的**唯一**一处：设了时段的方案
-                  // 按天接管，没被时段覆盖的日子才归当前方案。
-                  Text(
-                    L10n.effectiveOutsideHint,
+      builder: (sheetContext) => GlassPanel(
+        solid: true,
+        margin: const EdgeInsets.all(12),
+        borderRadius:
+            const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 底部弹层标题走 `dialogTitle`，与其它弹层同角色。
+                Text(L10n.scheduleTimeline, style: AppTokens.dialogTitle),
+                const SizedBox(height: 4),
+                Text(L10n.remainingHint,
                     style: AppTokens.rowSecondary
-                        .copyWith(color: AppTokens.inkMuted(context)),
-                  ),
-                  const SizedBox(height: 8),
-                  Flexible(
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        ...schedules.map((s) {
-                          final selected = s.id == current?.currentScheduleId;
-                          return GlassPressable(
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Icon(
-                                selected
-                                    ? Icons.check_circle_outlined
-                                    : Icons.circle_outlined,
-                                color: selected
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
-                              ),
-                              title: Text(s.name),
-                              subtitle: Text(
-                                  '${scheduleRoleLabel(s, spanCount: spanCountOf(spans, s.id), isCurrent: selected)} · '
-                                  '${L10n.teamCountN(parseTeamNames(s.teamNames).length)}'),
-                              onTap: () async {
-                                final name = s.name;
-                                Navigator.pop(context); // 关弹窗，退回日历
-                                await _switchSchedule(s.id);
-                                if (mounted) {
-                                  showGlassSnack(
-                                    this.context,
-                                    L10n.switchedTo(name),
-                                    icon: Icons.swap_horiz_outlined,
-                                  );
-                                }
-                              },
-                            ),
-                          );
-                        }),
-                        GlassPressable(
-                          child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.add_outlined),
-                            title: Text(L10n.addSchedule),
-                            onTap: () async {
-                              // 与「我的 → 排班管理 → 新增排班」共用同一条
-                              // 选择倒班方式的入口，日历进来的用户也能看到模板库。
-                              final id = await createScheduleFromTemplatePicker(
-                                  context, ref,
-                                  makeCurrent: true);
-                              if (id == null || !mounted) return;
-                              final nav = Navigator.of(this.context);
-                              nav.pop(); // 关弹窗，退回日历
-                              final saved = await nav.push<bool>(
-                                  MaterialPageRoute(
-                                      builder: (_) => ScheduleEditorScreen(
-                                          scheduleId: id)));
-                              if (saved == true && mounted) {
-                                showGlassSnack(
-                                  this.context,
-                                  L10n.savedAndRescheduled,
-                                  icon: Icons.check_circle_outlined,
-                                );
-                              }
-                            },
-                          ),
+                        .copyWith(color: AppTokens.inkMuted(sheetContext))),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      _timelineLine(
+                        sheetContext,
+                        label: L10n.remainingTime,
+                        value: remaining?.schedule.name ?? L10n.remainingNone,
+                        mutedValue: remaining == null,
+                        // 今天没落在任何段上 → 今天归「其余时间」。
+                        isToday: todaySpanId == null,
+                      ),
+                      for (final s in spans)
+                        _timelineLine(
+                          sheetContext,
+                          label: spanRangeLabel(s.startDate, s.endDate),
+                          value: byId[s.scheduleId]?.name ?? L10n.remainingNone,
+                          mutedValue: byId[s.scheduleId] == null,
+                          isToday: s.id == todaySpanId,
                         ),
-                      ],
-                    ),
+                      const Divider(height: 1),
+                      GlassPressable(
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(L10n.manageTimeline),
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            Navigator.of(context).push(MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    const ScheduleManagementScreen()));
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
+  /// 总览里的一行：左边的勾（今天所在的那一段）+ 日期 / 「其余时间」 + 方案名。
+  ///
+  /// 两边都是 flex、各自省略号 —— 与排班管理页那一节同一套写法（`ListTile` 的
+  /// `trailing` 在 200dp 小窗下会横向溢出）。
+  Widget _timelineLine(
+    BuildContext context, {
+    required String label,
+    required String value,
+    required bool mutedValue,
+    required bool isToday,
+  }) {
+    final muted = AppTokens.inkMuted(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
+      child: Row(
+        children: [
+          SizedBox(
+            width: AppTokens.iconMd,
+            child: isToday
+                ? AppIcon(Icons.check_circle_outlined,
+                    size: AppTokens.iconMd,
+                    color: Theme.of(context).colorScheme.primary)
+                : null,
+          ),
+          const SizedBox(width: AppTokens.gapIconText),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTokens.rowPrimary),
+          ),
+          const SizedBox(width: AppTokens.spaceSm),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: mutedValue
+                  ? AppTokens.rowSecondary.copyWith(color: muted)
+                  : AppTokens.labelStrong,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 网格 + （整月都没排班时）一层指路。
+  ///
+  /// **指路那一层必须 `IgnorePointer`**：不加的话它会吃掉网格的手势 —— 点日期、
+  /// 长按拖选全失灵，而「盖了一层透明东西导致交互没了」在 widget 测试里默认照不
+  /// 出来（除非专门去点一下）。用例里就是**真的点某天**再断言信息卡变了。
   Widget _buildGrid(
+      BuildContext context, ScheduleChain? chain, double availHeight) {
+    final body = _gridBody(context, chain, availHeight);
+    if (!_monthHasNoShift(chain, _month)) return body;
+    final muted = AppTokens.inkMuted(context);
+    return Stack(
+      children: [
+        body,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.spaceXl),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(L10n.noScheduleHere,
+                        textAlign: TextAlign.center,
+                        style: AppTokens.sectionTitle),
+                    const SizedBox(height: AppTokens.spaceXs),
+                    Text(L10n.noScheduleHereHint,
+                        textAlign: TextAlign.center,
+                        style:
+                            AppTokens.rowSecondary.copyWith(color: muted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 这个月是不是**一天班都没有**（「其余时间」设成了「无」、又没有任何段覆盖）。
+  ///
+  /// 逐天问一遍：一个月最多 31 次，可以忽略；而判「中点那天」会在跨段边界的
+  /// 月份上判错。
+  bool _monthHasNoShift(ScheduleChain? chain, DateTime month) {
+    if (chain == null) return true;
+    final days = DateTime(month.year, month.month + 1, 0).day;
+    for (var d = 1; d <= days; d++) {
+      if (chain.shiftOn(DateTime(month.year, month.month, d)) != null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Widget _gridBody(
       BuildContext context, ScheduleChain? chain, double availHeight) {
     return LayoutBuilder(
       builder: (context, constraints) {

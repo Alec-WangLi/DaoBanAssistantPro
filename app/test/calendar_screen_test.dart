@@ -617,13 +617,17 @@ void main() {
   // 编辑器 —— 从日历进来的用户永远看不到 19 种模板。
   // ---------------------------------------------------------------------------
 
-  testWidgets('日历「新增排班」弹「选择你的倒班方式」；按返回键放弃不建方案',
+  testWidgets('日历 → 排班时段 → 管理排班时段 → 新增排班：弹「选择你的倒班方式」；返回键放弃不建方案',
       (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
     expect(await _scheduleCount(db), 1, reason: '进入前只有种子方案');
 
-    // 日历右上角「切换排班」→ 弹层里的「新增排班」
-    await tester.tap(find.byTooltip(L10n.switchSchedule));
+    // 顶栏那颗按钮现在是**只读**的「排班时段」总览（v0.9.14 起不再「切换」——
+    // 它改的只是「没被时段覆盖时的兜底」，时段盖满之后点它什么也不会变），
+    // 底部一个「管理排班时段」跳到排班管理页；新增排班在那页上。
+    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.manageTimeline));
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.addSchedule));
     await tester.pumpAndSettle();
@@ -641,11 +645,13 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  testWidgets('日历「新增排班」选中的模板真的落库，并进入带 id 的编辑器',
+  testWidgets('（同一条新路径）选中的模板真的落库，并进入带 id 的编辑器',
       (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
 
-    await tester.tap(find.byTooltip(L10n.switchSchedule));
+    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.manageTimeline));
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.addSchedule));
     await tester.pumpAndSettle();
