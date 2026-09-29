@@ -738,7 +738,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 办事，与从前在「只有一套」时完全一致。
     final chain = ref.read(activeScheduleProvider).valueOrNull?.chain;
     final schedule = chain?.scheduleOn(from);
-    if (schedule == null || schedule.isBlank || schedule.classes.isEmpty) {
+    if (chain == null ||
+        schedule == null ||
+        schedule.isBlank ||
+        schedule.classes.isEmpty) {
       // 空白表（跟随法定节假日）没有班次定义可挑，入口本来就不该出现；
       // 这里再兜一次，免得别处误调。
       return;
@@ -747,6 +750,30 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final span = daysBetween(from, to);
     for (var i = 0; i <= span; i++) {
       days.add(dateOnly(DateTime(from.year, from.month, from.day + i)));
+    }
+
+    // 拖选跨了时段边界 → **拦住**。
+    //
+    // 选择层列的是**某一套**的班次定义，而覆盖表的主键是 `{scheduleId, day}`、
+    // 按天归属 —— 放过去只能得到「列了 A 的班次、却只对 A 的日子生效」这种
+    // **静默半生效**，正是最难查的那类 bug。拦住是不让用户走进那个状态，
+    // 代价只是一句话。（与「不跨月拖选」同一条思路。）
+    //
+    // 判等用 `identical` 而不是 `==`：`ShiftSchedule` 没有 `operator ==`，
+    // 两份内容相同的不同实例会被 `==` 判成不等 —— 这里问的是「是不是**同一套**」。
+    for (var i = 1; i < days.length; i++) {
+      final before = chain.scheduleOn(days[i - 1]);
+      final here = chain.scheduleOn(days[i]);
+      if (!identical(before, here)) {
+        if (mounted) {
+          showGlassSnack(
+            context,
+            L10n.spansTwoSchedules(here?.name ?? '', L10n.monthDay(days[i])),
+            icon: Icons.info_outline,
+          );
+        }
+        return;
+      }
     }
 
     final hasOverride =

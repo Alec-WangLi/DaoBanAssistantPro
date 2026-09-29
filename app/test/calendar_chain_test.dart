@@ -90,6 +90,18 @@ Future<void> _disposeCalendar(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 20));
 }
 
+/// 长按某天那一格，往下拖 [stepRows] 行（每 60px ≈ 一行；格子高约 91，见
+/// `calendar_screen_test.dart` 里同一套手势的说明）。
+Future<void> _longPressDrag(WidgetTester tester, int fromDay, int stepRows) async {
+  final start = tester.getCenter(find.byKey(ValueKey('day-card-$fromDay')));
+  final gesture = await tester.startGesture(start);
+  await tester.pump(const Duration(milliseconds: 600)); // 过长按判定
+  await gesture.moveBy(Offset(0, 60.0 * stepRows));
+  await tester.pump();
+  await gesture.up();
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh');
@@ -149,6 +161,33 @@ void main() {
     // 同一个，数字会错得看不出来（spec §7.1）。
     final expected = '甲${_boundaryDay - 1} · 丙${days - _boundaryDay + 1}';
     expect(tally!.substring(L10n.monthTally.length).trim(), expected);
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('长按拖选跨过时段边界 → 拦下并说明，不弹选择层', (tester) async {
+    await _pumpChainedCalendar(tester);
+
+    // 8 日往下拖一行 → 圈住 8…15，而边界正在 15 日（8…14 归 A、15 起归 B）。
+    await _longPressDrag(tester, 8, 1);
+
+    expect(find.textContaining('请分开调整'), findsOneWidget,
+        reason: '跨边界要给一句说明，而不是静默半生效');
+    // 选择层没开：它的标题是「9月8日 – 9月15日 · 8 天」。
+    expect(find.textContaining('8 天'), findsNothing,
+        reason: '放过去只能得到「列了 A 的班次、却只对 A 的日子生效」');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('长按拖选**不跨**边界 → 照旧弹选择层', (tester) async {
+    await _pumpChainedCalendar(tester);
+
+    // 1 日往下拖一行 → 圈住 1…8，整段都在 A（1…14）里。
+    await _longPressDrag(tester, 1, 1);
+
+    expect(find.textContaining('请分开调整'), findsNothing);
+    expect(find.textContaining('8 天'), findsOneWidget);
 
     await _disposeCalendar(tester);
   });
