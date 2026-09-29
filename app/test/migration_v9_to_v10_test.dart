@@ -70,6 +70,24 @@ const _v9Tables = [
     created_at INTEGER NOT NULL
   )
   ''',
+  // v9 时期的 `schedule_events`（它从 v1 就在，真实 v9 库一定有）。
+  //
+  // fixture 里加它是因为**迁移链会碰它**：v10→v11 那一步要给它加一列
+  // `series_id`，而迁移分支一律按倒序跑 —— 谁碰了什么表，所有更早版本的 fixture
+  // 就都得有那张表，否则会在 `ALTER TABLE` 上抛 `no such table`（只在这个 fixture
+  // 里红，真机上不会）。
+  '''
+  CREATE TABLE schedule_events (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    date INTEGER NOT NULL,
+    time_minute INTEGER,
+    advance_remind_minutes INTEGER,
+    is_completed INTEGER NOT NULL DEFAULT 0,
+    alarm_enabled INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  )
+  ''',
 ];
 
 int _day(int y, int m, int d) => dayNumber(DateTime.utc(y, m, d));

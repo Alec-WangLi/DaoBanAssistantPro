@@ -81,6 +81,14 @@ class ScheduleEvents extends Table {
   /// 与 [advanceRemindMinutes] 耦合：闹钟要有可响的时点，所以「不设提醒」的待办
   /// 不可能开着闹钟（界面上这两者联动，见 `schedule_screen.dart`）。
   BoolColumn get alarmEnabled => boolean().withDefault(const Constant(false))();
+
+  /// 重复待办：这条行是哪个系列的**某一次**（null = 一次性待办）。
+  ///
+  /// 不反过来在系列上存「当前行 id」—— 那是个要在新建 / 顺延 / 删除 / 跳过四条
+  /// 路径上保持同步的指针，漏一条就指向一条不存在的行。而「当前那一条 = 这个系列
+  /// 里未完成的那一条」是从数据本身推出来的，天然自愈。
+  IntColumn get seriesId => integer().nullable()();
+
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -164,6 +172,50 @@ class CustomTemplates extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
+/// 重复待办表（「每周三开会」这类）。
+///
+/// 存的是**系列定义**，不是一个一个实例：某一个具体日子由
+/// `domain/recurring_todo.dart` 的规则现算，只有「当前这一次」会落到
+/// `schedule_events` 里一行（挂 `series_id`）。这样：
+///  - 列表里永远只有当前这一次（用户的诉求是「到点才出现」）；
+///  - 提醒的号可以按**系列 id** 来发（`40000 + id`），与「越攒越多的行号」脱钩。
+class RecurringTodos extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get title => text()();
+
+  /// 分钟自午夜；空 = 全天。
+  IntColumn get timeMinute => integer().nullable()();
+
+  /// 提醒档位；空 = 不提醒。语义与 `ScheduleEvents.advanceRemindMinutes` 一致。
+  IntColumn get advanceRemindMinutes => integer().nullable()();
+
+  BoolColumn get alarmEnabled => boolean().withDefault(const Constant(false))();
+
+  /// 0 = 每天，1 = 每周（看 [weekdays]），2 = 每月（看 [monthDay]）。
+  IntColumn get repeatType => integer().withDefault(const Constant(0))();
+
+  /// 每周：`1 << (weekday - 1)`，周一 = 1。与 `CustomAlarms.weekdays` 同一约定。
+  IntColumn get weekdays => integer().withDefault(const Constant(0))();
+
+  /// 每月：1..31；该月没有这一天时取该月最后一天。
+  IntColumn get monthDay => integer().withDefault(const Constant(1))();
+
+  /// 首次生效日（纯日期，`dateOnly` 口径）。这一天之前不产生任何发生日。
+  DateTimeColumn get startDate => dateTime()();
+
+  /// 「这次不要了」记到哪天为止（自 epoch 天数，与 `dayNumber` 同口径）。
+  ///
+  /// 没有它就会出现「删不掉」：在列表里删掉当前那条之后，生成器一看「没有未完成
+  /// 的行、而这次的发生日还在今天之前」，下一次打开 App 又把它补出来。
+  IntColumn get skipThrough => integer().nullable()();
+
+  /// 停用：不再生成、不再顺延、不再排提醒；**已经出现的那条留着**（那是用户还没
+  /// 做的一件事，替他删掉他就再也看不见了）。
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+
+  DateTimeColumn get createdAt => dateTime()();
+}
+
 @DriftDatabase(tables: [
   ShiftScheduleRows,
   ShiftClassRows,
@@ -174,6 +226,7 @@ class CustomTemplates extends Table {
   ShiftAlarmOverrides,
   ShiftDayOverrides,
   CustomTemplates,
+  RecurringTodos,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'shiftassistantpro'));
@@ -182,12 +235,18 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 11) {
+            // 重复待办：纯新增一张表 + 给待办加一列可空的 series_id。
+            // 两样都不碰既有数据（addColumn 加可空列时老行自动是 null）。
+            await m.createTable(recurringTodos);
+            await m.addColumn(scheduleEvents, scheduleEvents.seriesId);
+          }
           if (from < 10) {
             // 班次闹钟：一个钟点（`alarm_minute` 列）→ 一张表（一组有序闹钟）。
             await m.createTable(shiftClassAlarms);

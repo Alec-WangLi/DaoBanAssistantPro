@@ -1520,6 +1520,12 @@ class $ScheduleEventsTable extends ScheduleEvents
       defaultConstraints: GeneratedColumn.constraintIsAlways(
           'CHECK ("alarm_enabled" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _seriesIdMeta =
+      const VerificationMeta('seriesId');
+  @override
+  late final GeneratedColumn<int> seriesId = GeneratedColumn<int>(
+      'series_id', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -1535,6 +1541,7 @@ class $ScheduleEventsTable extends ScheduleEvents
         advanceRemindMinutes,
         isCompleted,
         alarmEnabled,
+        seriesId,
         createdAt
       ];
   @override
@@ -1586,6 +1593,10 @@ class $ScheduleEventsTable extends ScheduleEvents
           alarmEnabled.isAcceptableOrUnknown(
               data['alarm_enabled']!, _alarmEnabledMeta));
     }
+    if (data.containsKey('series_id')) {
+      context.handle(_seriesIdMeta,
+          seriesId.isAcceptableOrUnknown(data['series_id']!, _seriesIdMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -1615,6 +1626,8 @@ class $ScheduleEventsTable extends ScheduleEvents
           .read(DriftSqlType.bool, data['${effectivePrefix}is_completed'])!,
       alarmEnabled: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}alarm_enabled'])!,
+      seriesId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}series_id']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -1639,6 +1652,13 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
   /// 与 [advanceRemindMinutes] 耦合：闹钟要有可响的时点，所以「不设提醒」的待办
   /// 不可能开着闹钟（界面上这两者联动，见 `schedule_screen.dart`）。
   final bool alarmEnabled;
+
+  /// 重复待办：这条行是哪个系列的**某一次**（null = 一次性待办）。
+  ///
+  /// 不反过来在系列上存「当前行 id」—— 那是个要在新建 / 顺延 / 删除 / 跳过四条
+  /// 路径上保持同步的指针，漏一条就指向一条不存在的行。而「当前那一条 = 这个系列
+  /// 里未完成的那一条」是从数据本身推出来的，天然自愈。
+  final int? seriesId;
   final DateTime createdAt;
   const ScheduleEvent(
       {required this.id,
@@ -1648,6 +1668,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
       this.advanceRemindMinutes,
       required this.isCompleted,
       required this.alarmEnabled,
+      this.seriesId,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1663,6 +1684,9 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
     }
     map['is_completed'] = Variable<bool>(isCompleted);
     map['alarm_enabled'] = Variable<bool>(alarmEnabled);
+    if (!nullToAbsent || seriesId != null) {
+      map['series_id'] = Variable<int>(seriesId);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -1680,6 +1704,9 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           : Value(advanceRemindMinutes),
       isCompleted: Value(isCompleted),
       alarmEnabled: Value(alarmEnabled),
+      seriesId: seriesId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(seriesId),
       createdAt: Value(createdAt),
     );
   }
@@ -1696,6 +1723,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           serializer.fromJson<int?>(json['advanceRemindMinutes']),
       isCompleted: serializer.fromJson<bool>(json['isCompleted']),
       alarmEnabled: serializer.fromJson<bool>(json['alarmEnabled']),
+      seriesId: serializer.fromJson<int?>(json['seriesId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1710,6 +1738,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
       'advanceRemindMinutes': serializer.toJson<int?>(advanceRemindMinutes),
       'isCompleted': serializer.toJson<bool>(isCompleted),
       'alarmEnabled': serializer.toJson<bool>(alarmEnabled),
+      'seriesId': serializer.toJson<int?>(seriesId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1722,6 +1751,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           Value<int?> advanceRemindMinutes = const Value.absent(),
           bool? isCompleted,
           bool? alarmEnabled,
+          Value<int?> seriesId = const Value.absent(),
           DateTime? createdAt}) =>
       ScheduleEvent(
         id: id ?? this.id,
@@ -1733,6 +1763,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
             : this.advanceRemindMinutes,
         isCompleted: isCompleted ?? this.isCompleted,
         alarmEnabled: alarmEnabled ?? this.alarmEnabled,
+        seriesId: seriesId.present ? seriesId.value : this.seriesId,
         createdAt: createdAt ?? this.createdAt,
       );
   ScheduleEvent copyWithCompanion(ScheduleEventsCompanion data) {
@@ -1750,6 +1781,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
       alarmEnabled: data.alarmEnabled.present
           ? data.alarmEnabled.value
           : this.alarmEnabled,
+      seriesId: data.seriesId.present ? data.seriesId.value : this.seriesId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1764,6 +1796,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           ..write('advanceRemindMinutes: $advanceRemindMinutes, ')
           ..write('isCompleted: $isCompleted, ')
           ..write('alarmEnabled: $alarmEnabled, ')
+          ..write('seriesId: $seriesId, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1771,7 +1804,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
 
   @override
   int get hashCode => Object.hash(id, title, date, timeMinute,
-      advanceRemindMinutes, isCompleted, alarmEnabled, createdAt);
+      advanceRemindMinutes, isCompleted, alarmEnabled, seriesId, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1783,6 +1816,7 @@ class ScheduleEvent extends DataClass implements Insertable<ScheduleEvent> {
           other.advanceRemindMinutes == this.advanceRemindMinutes &&
           other.isCompleted == this.isCompleted &&
           other.alarmEnabled == this.alarmEnabled &&
+          other.seriesId == this.seriesId &&
           other.createdAt == this.createdAt);
 }
 
@@ -1794,6 +1828,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
   final Value<int?> advanceRemindMinutes;
   final Value<bool> isCompleted;
   final Value<bool> alarmEnabled;
+  final Value<int?> seriesId;
   final Value<DateTime> createdAt;
   const ScheduleEventsCompanion({
     this.id = const Value.absent(),
@@ -1803,6 +1838,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
     this.advanceRemindMinutes = const Value.absent(),
     this.isCompleted = const Value.absent(),
     this.alarmEnabled = const Value.absent(),
+    this.seriesId = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   ScheduleEventsCompanion.insert({
@@ -1813,6 +1849,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
     this.advanceRemindMinutes = const Value.absent(),
     this.isCompleted = const Value.absent(),
     this.alarmEnabled = const Value.absent(),
+    this.seriesId = const Value.absent(),
     required DateTime createdAt,
   })  : title = Value(title),
         date = Value(date),
@@ -1825,6 +1862,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
     Expression<int>? advanceRemindMinutes,
     Expression<bool>? isCompleted,
     Expression<bool>? alarmEnabled,
+    Expression<int>? seriesId,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -1836,6 +1874,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
         'advance_remind_minutes': advanceRemindMinutes,
       if (isCompleted != null) 'is_completed': isCompleted,
       if (alarmEnabled != null) 'alarm_enabled': alarmEnabled,
+      if (seriesId != null) 'series_id': seriesId,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -1848,6 +1887,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
       Value<int?>? advanceRemindMinutes,
       Value<bool>? isCompleted,
       Value<bool>? alarmEnabled,
+      Value<int?>? seriesId,
       Value<DateTime>? createdAt}) {
     return ScheduleEventsCompanion(
       id: id ?? this.id,
@@ -1857,6 +1897,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
       advanceRemindMinutes: advanceRemindMinutes ?? this.advanceRemindMinutes,
       isCompleted: isCompleted ?? this.isCompleted,
       alarmEnabled: alarmEnabled ?? this.alarmEnabled,
+      seriesId: seriesId ?? this.seriesId,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -1885,6 +1926,9 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
     if (alarmEnabled.present) {
       map['alarm_enabled'] = Variable<bool>(alarmEnabled.value);
     }
+    if (seriesId.present) {
+      map['series_id'] = Variable<int>(seriesId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1901,6 +1945,7 @@ class ScheduleEventsCompanion extends UpdateCompanion<ScheduleEvent> {
           ..write('advanceRemindMinutes: $advanceRemindMinutes, ')
           ..write('isCompleted: $isCompleted, ')
           ..write('alarmEnabled: $alarmEnabled, ')
+          ..write('seriesId: $seriesId, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -2048,6 +2093,11 @@ class CustomAlarm extends DataClass implements Insertable<CustomAlarm> {
   final int minute;
 
   /// 0=一次性，1=每天，2=每周。
+  ///
+  /// 这里那个默认值 1 是**建表时的**，与界面无关：界面新建时一律显式传值
+  /// （v0.9.6 起新建默认 0=一次性，见 `alarm_screen.dart` 的 `_showAlarmDialog`），
+  /// 只有绕开 `addCustomAlarm` 直接插行才会用到它。改它要动 schema 版本与迁移，
+  /// 没必要 —— 别把这两个默认值当成一处。
   final int repeatType;
 
   /// 一次性闹钟的日期（repeatType=0 时用）。
@@ -3084,6 +3134,630 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
   }
 }
 
+class $RecurringTodosTable extends RecurringTodos
+    with TableInfo<$RecurringTodosTable, RecurringTodo> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RecurringTodosTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+      'title', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _timeMinuteMeta =
+      const VerificationMeta('timeMinute');
+  @override
+  late final GeneratedColumn<int> timeMinute = GeneratedColumn<int>(
+      'time_minute', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _advanceRemindMinutesMeta =
+      const VerificationMeta('advanceRemindMinutes');
+  @override
+  late final GeneratedColumn<int> advanceRemindMinutes = GeneratedColumn<int>(
+      'advance_remind_minutes', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _alarmEnabledMeta =
+      const VerificationMeta('alarmEnabled');
+  @override
+  late final GeneratedColumn<bool> alarmEnabled = GeneratedColumn<bool>(
+      'alarm_enabled', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("alarm_enabled" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _repeatTypeMeta =
+      const VerificationMeta('repeatType');
+  @override
+  late final GeneratedColumn<int> repeatType = GeneratedColumn<int>(
+      'repeat_type', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _weekdaysMeta =
+      const VerificationMeta('weekdays');
+  @override
+  late final GeneratedColumn<int> weekdays = GeneratedColumn<int>(
+      'weekdays', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _monthDayMeta =
+      const VerificationMeta('monthDay');
+  @override
+  late final GeneratedColumn<int> monthDay = GeneratedColumn<int>(
+      'month_day', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(1));
+  static const VerificationMeta _startDateMeta =
+      const VerificationMeta('startDate');
+  @override
+  late final GeneratedColumn<DateTime> startDate = GeneratedColumn<DateTime>(
+      'start_date', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _skipThroughMeta =
+      const VerificationMeta('skipThrough');
+  @override
+  late final GeneratedColumn<int> skipThrough = GeneratedColumn<int>(
+      'skip_through', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _enabledMeta =
+      const VerificationMeta('enabled');
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+      'enabled', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("enabled" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        title,
+        timeMinute,
+        advanceRemindMinutes,
+        alarmEnabled,
+        repeatType,
+        weekdays,
+        monthDay,
+        startDate,
+        skipThrough,
+        enabled,
+        createdAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'recurring_todos';
+  @override
+  VerificationContext validateIntegrity(Insertable<RecurringTodo> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('time_minute')) {
+      context.handle(
+          _timeMinuteMeta,
+          timeMinute.isAcceptableOrUnknown(
+              data['time_minute']!, _timeMinuteMeta));
+    }
+    if (data.containsKey('advance_remind_minutes')) {
+      context.handle(
+          _advanceRemindMinutesMeta,
+          advanceRemindMinutes.isAcceptableOrUnknown(
+              data['advance_remind_minutes']!, _advanceRemindMinutesMeta));
+    }
+    if (data.containsKey('alarm_enabled')) {
+      context.handle(
+          _alarmEnabledMeta,
+          alarmEnabled.isAcceptableOrUnknown(
+              data['alarm_enabled']!, _alarmEnabledMeta));
+    }
+    if (data.containsKey('repeat_type')) {
+      context.handle(
+          _repeatTypeMeta,
+          repeatType.isAcceptableOrUnknown(
+              data['repeat_type']!, _repeatTypeMeta));
+    }
+    if (data.containsKey('weekdays')) {
+      context.handle(_weekdaysMeta,
+          weekdays.isAcceptableOrUnknown(data['weekdays']!, _weekdaysMeta));
+    }
+    if (data.containsKey('month_day')) {
+      context.handle(_monthDayMeta,
+          monthDay.isAcceptableOrUnknown(data['month_day']!, _monthDayMeta));
+    }
+    if (data.containsKey('start_date')) {
+      context.handle(_startDateMeta,
+          startDate.isAcceptableOrUnknown(data['start_date']!, _startDateMeta));
+    } else if (isInserting) {
+      context.missing(_startDateMeta);
+    }
+    if (data.containsKey('skip_through')) {
+      context.handle(
+          _skipThroughMeta,
+          skipThrough.isAcceptableOrUnknown(
+              data['skip_through']!, _skipThroughMeta));
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(_enabledMeta,
+          enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RecurringTodo map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RecurringTodo(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      title: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
+      timeMinute: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}time_minute']),
+      advanceRemindMinutes: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}advance_remind_minutes']),
+      alarmEnabled: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}alarm_enabled'])!,
+      repeatType: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}repeat_type'])!,
+      weekdays: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}weekdays'])!,
+      monthDay: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}month_day'])!,
+      startDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}start_date'])!,
+      skipThrough: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}skip_through']),
+      enabled: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}enabled'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $RecurringTodosTable createAlias(String alias) {
+    return $RecurringTodosTable(attachedDatabase, alias);
+  }
+}
+
+class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
+  final int id;
+  final String title;
+
+  /// 分钟自午夜；空 = 全天。
+  final int? timeMinute;
+
+  /// 提醒档位；空 = 不提醒。语义与 `ScheduleEvents.advanceRemindMinutes` 一致。
+  final int? advanceRemindMinutes;
+  final bool alarmEnabled;
+
+  /// 0 = 每天，1 = 每周（看 [weekdays]），2 = 每月（看 [monthDay]）。
+  final int repeatType;
+
+  /// 每周：`1 << (weekday - 1)`，周一 = 1。与 `CustomAlarms.weekdays` 同一约定。
+  final int weekdays;
+
+  /// 每月：1..31；该月没有这一天时取该月最后一天。
+  final int monthDay;
+
+  /// 首次生效日（纯日期，`dateOnly` 口径）。这一天之前不产生任何发生日。
+  final DateTime startDate;
+
+  /// 「这次不要了」记到哪天为止（自 epoch 天数，与 `dayNumber` 同口径）。
+  ///
+  /// 没有它就会出现「删不掉」：在列表里删掉当前那条之后，生成器一看「没有未完成
+  /// 的行、而这次的发生日还在今天之前」，下一次打开 App 又把它补出来。
+  final int? skipThrough;
+
+  /// 停用：不再生成、不再顺延、不再排提醒；**已经出现的那条留着**（那是用户还没
+  /// 做的一件事，替他删掉他就再也看不见了）。
+  final bool enabled;
+  final DateTime createdAt;
+  const RecurringTodo(
+      {required this.id,
+      required this.title,
+      this.timeMinute,
+      this.advanceRemindMinutes,
+      required this.alarmEnabled,
+      required this.repeatType,
+      required this.weekdays,
+      required this.monthDay,
+      required this.startDate,
+      this.skipThrough,
+      required this.enabled,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || timeMinute != null) {
+      map['time_minute'] = Variable<int>(timeMinute);
+    }
+    if (!nullToAbsent || advanceRemindMinutes != null) {
+      map['advance_remind_minutes'] = Variable<int>(advanceRemindMinutes);
+    }
+    map['alarm_enabled'] = Variable<bool>(alarmEnabled);
+    map['repeat_type'] = Variable<int>(repeatType);
+    map['weekdays'] = Variable<int>(weekdays);
+    map['month_day'] = Variable<int>(monthDay);
+    map['start_date'] = Variable<DateTime>(startDate);
+    if (!nullToAbsent || skipThrough != null) {
+      map['skip_through'] = Variable<int>(skipThrough);
+    }
+    map['enabled'] = Variable<bool>(enabled);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  RecurringTodosCompanion toCompanion(bool nullToAbsent) {
+    return RecurringTodosCompanion(
+      id: Value(id),
+      title: Value(title),
+      timeMinute: timeMinute == null && nullToAbsent
+          ? const Value.absent()
+          : Value(timeMinute),
+      advanceRemindMinutes: advanceRemindMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(advanceRemindMinutes),
+      alarmEnabled: Value(alarmEnabled),
+      repeatType: Value(repeatType),
+      weekdays: Value(weekdays),
+      monthDay: Value(monthDay),
+      startDate: Value(startDate),
+      skipThrough: skipThrough == null && nullToAbsent
+          ? const Value.absent()
+          : Value(skipThrough),
+      enabled: Value(enabled),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory RecurringTodo.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RecurringTodo(
+      id: serializer.fromJson<int>(json['id']),
+      title: serializer.fromJson<String>(json['title']),
+      timeMinute: serializer.fromJson<int?>(json['timeMinute']),
+      advanceRemindMinutes:
+          serializer.fromJson<int?>(json['advanceRemindMinutes']),
+      alarmEnabled: serializer.fromJson<bool>(json['alarmEnabled']),
+      repeatType: serializer.fromJson<int>(json['repeatType']),
+      weekdays: serializer.fromJson<int>(json['weekdays']),
+      monthDay: serializer.fromJson<int>(json['monthDay']),
+      startDate: serializer.fromJson<DateTime>(json['startDate']),
+      skipThrough: serializer.fromJson<int?>(json['skipThrough']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'title': serializer.toJson<String>(title),
+      'timeMinute': serializer.toJson<int?>(timeMinute),
+      'advanceRemindMinutes': serializer.toJson<int?>(advanceRemindMinutes),
+      'alarmEnabled': serializer.toJson<bool>(alarmEnabled),
+      'repeatType': serializer.toJson<int>(repeatType),
+      'weekdays': serializer.toJson<int>(weekdays),
+      'monthDay': serializer.toJson<int>(monthDay),
+      'startDate': serializer.toJson<DateTime>(startDate),
+      'skipThrough': serializer.toJson<int?>(skipThrough),
+      'enabled': serializer.toJson<bool>(enabled),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  RecurringTodo copyWith(
+          {int? id,
+          String? title,
+          Value<int?> timeMinute = const Value.absent(),
+          Value<int?> advanceRemindMinutes = const Value.absent(),
+          bool? alarmEnabled,
+          int? repeatType,
+          int? weekdays,
+          int? monthDay,
+          DateTime? startDate,
+          Value<int?> skipThrough = const Value.absent(),
+          bool? enabled,
+          DateTime? createdAt}) =>
+      RecurringTodo(
+        id: id ?? this.id,
+        title: title ?? this.title,
+        timeMinute: timeMinute.present ? timeMinute.value : this.timeMinute,
+        advanceRemindMinutes: advanceRemindMinutes.present
+            ? advanceRemindMinutes.value
+            : this.advanceRemindMinutes,
+        alarmEnabled: alarmEnabled ?? this.alarmEnabled,
+        repeatType: repeatType ?? this.repeatType,
+        weekdays: weekdays ?? this.weekdays,
+        monthDay: monthDay ?? this.monthDay,
+        startDate: startDate ?? this.startDate,
+        skipThrough: skipThrough.present ? skipThrough.value : this.skipThrough,
+        enabled: enabled ?? this.enabled,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  RecurringTodo copyWithCompanion(RecurringTodosCompanion data) {
+    return RecurringTodo(
+      id: data.id.present ? data.id.value : this.id,
+      title: data.title.present ? data.title.value : this.title,
+      timeMinute:
+          data.timeMinute.present ? data.timeMinute.value : this.timeMinute,
+      advanceRemindMinutes: data.advanceRemindMinutes.present
+          ? data.advanceRemindMinutes.value
+          : this.advanceRemindMinutes,
+      alarmEnabled: data.alarmEnabled.present
+          ? data.alarmEnabled.value
+          : this.alarmEnabled,
+      repeatType:
+          data.repeatType.present ? data.repeatType.value : this.repeatType,
+      weekdays: data.weekdays.present ? data.weekdays.value : this.weekdays,
+      monthDay: data.monthDay.present ? data.monthDay.value : this.monthDay,
+      startDate: data.startDate.present ? data.startDate.value : this.startDate,
+      skipThrough:
+          data.skipThrough.present ? data.skipThrough.value : this.skipThrough,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecurringTodo(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('timeMinute: $timeMinute, ')
+          ..write('advanceRemindMinutes: $advanceRemindMinutes, ')
+          ..write('alarmEnabled: $alarmEnabled, ')
+          ..write('repeatType: $repeatType, ')
+          ..write('weekdays: $weekdays, ')
+          ..write('monthDay: $monthDay, ')
+          ..write('startDate: $startDate, ')
+          ..write('skipThrough: $skipThrough, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      title,
+      timeMinute,
+      advanceRemindMinutes,
+      alarmEnabled,
+      repeatType,
+      weekdays,
+      monthDay,
+      startDate,
+      skipThrough,
+      enabled,
+      createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RecurringTodo &&
+          other.id == this.id &&
+          other.title == this.title &&
+          other.timeMinute == this.timeMinute &&
+          other.advanceRemindMinutes == this.advanceRemindMinutes &&
+          other.alarmEnabled == this.alarmEnabled &&
+          other.repeatType == this.repeatType &&
+          other.weekdays == this.weekdays &&
+          other.monthDay == this.monthDay &&
+          other.startDate == this.startDate &&
+          other.skipThrough == this.skipThrough &&
+          other.enabled == this.enabled &&
+          other.createdAt == this.createdAt);
+}
+
+class RecurringTodosCompanion extends UpdateCompanion<RecurringTodo> {
+  final Value<int> id;
+  final Value<String> title;
+  final Value<int?> timeMinute;
+  final Value<int?> advanceRemindMinutes;
+  final Value<bool> alarmEnabled;
+  final Value<int> repeatType;
+  final Value<int> weekdays;
+  final Value<int> monthDay;
+  final Value<DateTime> startDate;
+  final Value<int?> skipThrough;
+  final Value<bool> enabled;
+  final Value<DateTime> createdAt;
+  const RecurringTodosCompanion({
+    this.id = const Value.absent(),
+    this.title = const Value.absent(),
+    this.timeMinute = const Value.absent(),
+    this.advanceRemindMinutes = const Value.absent(),
+    this.alarmEnabled = const Value.absent(),
+    this.repeatType = const Value.absent(),
+    this.weekdays = const Value.absent(),
+    this.monthDay = const Value.absent(),
+    this.startDate = const Value.absent(),
+    this.skipThrough = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  RecurringTodosCompanion.insert({
+    this.id = const Value.absent(),
+    required String title,
+    this.timeMinute = const Value.absent(),
+    this.advanceRemindMinutes = const Value.absent(),
+    this.alarmEnabled = const Value.absent(),
+    this.repeatType = const Value.absent(),
+    this.weekdays = const Value.absent(),
+    this.monthDay = const Value.absent(),
+    required DateTime startDate,
+    this.skipThrough = const Value.absent(),
+    this.enabled = const Value.absent(),
+    required DateTime createdAt,
+  })  : title = Value(title),
+        startDate = Value(startDate),
+        createdAt = Value(createdAt);
+  static Insertable<RecurringTodo> custom({
+    Expression<int>? id,
+    Expression<String>? title,
+    Expression<int>? timeMinute,
+    Expression<int>? advanceRemindMinutes,
+    Expression<bool>? alarmEnabled,
+    Expression<int>? repeatType,
+    Expression<int>? weekdays,
+    Expression<int>? monthDay,
+    Expression<DateTime>? startDate,
+    Expression<int>? skipThrough,
+    Expression<bool>? enabled,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (timeMinute != null) 'time_minute': timeMinute,
+      if (advanceRemindMinutes != null)
+        'advance_remind_minutes': advanceRemindMinutes,
+      if (alarmEnabled != null) 'alarm_enabled': alarmEnabled,
+      if (repeatType != null) 'repeat_type': repeatType,
+      if (weekdays != null) 'weekdays': weekdays,
+      if (monthDay != null) 'month_day': monthDay,
+      if (startDate != null) 'start_date': startDate,
+      if (skipThrough != null) 'skip_through': skipThrough,
+      if (enabled != null) 'enabled': enabled,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  RecurringTodosCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? title,
+      Value<int?>? timeMinute,
+      Value<int?>? advanceRemindMinutes,
+      Value<bool>? alarmEnabled,
+      Value<int>? repeatType,
+      Value<int>? weekdays,
+      Value<int>? monthDay,
+      Value<DateTime>? startDate,
+      Value<int?>? skipThrough,
+      Value<bool>? enabled,
+      Value<DateTime>? createdAt}) {
+    return RecurringTodosCompanion(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      timeMinute: timeMinute ?? this.timeMinute,
+      advanceRemindMinutes: advanceRemindMinutes ?? this.advanceRemindMinutes,
+      alarmEnabled: alarmEnabled ?? this.alarmEnabled,
+      repeatType: repeatType ?? this.repeatType,
+      weekdays: weekdays ?? this.weekdays,
+      monthDay: monthDay ?? this.monthDay,
+      startDate: startDate ?? this.startDate,
+      skipThrough: skipThrough ?? this.skipThrough,
+      enabled: enabled ?? this.enabled,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (timeMinute.present) {
+      map['time_minute'] = Variable<int>(timeMinute.value);
+    }
+    if (advanceRemindMinutes.present) {
+      map['advance_remind_minutes'] = Variable<int>(advanceRemindMinutes.value);
+    }
+    if (alarmEnabled.present) {
+      map['alarm_enabled'] = Variable<bool>(alarmEnabled.value);
+    }
+    if (repeatType.present) {
+      map['repeat_type'] = Variable<int>(repeatType.value);
+    }
+    if (weekdays.present) {
+      map['weekdays'] = Variable<int>(weekdays.value);
+    }
+    if (monthDay.present) {
+      map['month_day'] = Variable<int>(monthDay.value);
+    }
+    if (startDate.present) {
+      map['start_date'] = Variable<DateTime>(startDate.value);
+    }
+    if (skipThrough.present) {
+      map['skip_through'] = Variable<int>(skipThrough.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecurringTodosCompanion(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('timeMinute: $timeMinute, ')
+          ..write('advanceRemindMinutes: $advanceRemindMinutes, ')
+          ..write('alarmEnabled: $alarmEnabled, ')
+          ..write('repeatType: $repeatType, ')
+          ..write('weekdays: $weekdays, ')
+          ..write('monthDay: $monthDay, ')
+          ..write('startDate: $startDate, ')
+          ..write('skipThrough: $skipThrough, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3101,6 +3775,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ShiftDayOverridesTable(this);
   late final $CustomTemplatesTable customTemplates =
       $CustomTemplatesTable(this);
+  late final $RecurringTodosTable recurringTodos = $RecurringTodosTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3114,7 +3789,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         customAlarms,
         shiftAlarmOverrides,
         shiftDayOverrides,
-        customTemplates
+        customTemplates,
+        recurringTodos
       ];
 }
 
@@ -3898,6 +4574,7 @@ typedef $$ScheduleEventsTableCreateCompanionBuilder = ScheduleEventsCompanion
   Value<int?> advanceRemindMinutes,
   Value<bool> isCompleted,
   Value<bool> alarmEnabled,
+  Value<int?> seriesId,
   required DateTime createdAt,
 });
 typedef $$ScheduleEventsTableUpdateCompanionBuilder = ScheduleEventsCompanion
@@ -3909,6 +4586,7 @@ typedef $$ScheduleEventsTableUpdateCompanionBuilder = ScheduleEventsCompanion
   Value<int?> advanceRemindMinutes,
   Value<bool> isCompleted,
   Value<bool> alarmEnabled,
+  Value<int?> seriesId,
   Value<DateTime> createdAt,
 });
 
@@ -3942,6 +4620,9 @@ class $$ScheduleEventsTableFilterComposer
 
   ColumnFilters<bool> get alarmEnabled => $composableBuilder(
       column: $table.alarmEnabled, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get seriesId => $composableBuilder(
+      column: $table.seriesId, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -3979,6 +4660,9 @@ class $$ScheduleEventsTableOrderingComposer
       column: $table.alarmEnabled,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get seriesId => $composableBuilder(
+      column: $table.seriesId, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -4012,6 +4696,9 @@ class $$ScheduleEventsTableAnnotationComposer
 
   GeneratedColumn<bool> get alarmEnabled => $composableBuilder(
       column: $table.alarmEnabled, builder: (column) => column);
+
+  GeneratedColumn<int> get seriesId =>
+      $composableBuilder(column: $table.seriesId, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -4051,6 +4738,7 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             Value<int?> advanceRemindMinutes = const Value.absent(),
             Value<bool> isCompleted = const Value.absent(),
             Value<bool> alarmEnabled = const Value.absent(),
+            Value<int?> seriesId = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               ScheduleEventsCompanion(
@@ -4061,6 +4749,7 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             advanceRemindMinutes: advanceRemindMinutes,
             isCompleted: isCompleted,
             alarmEnabled: alarmEnabled,
+            seriesId: seriesId,
             createdAt: createdAt,
           ),
           createCompanionCallback: ({
@@ -4071,6 +4760,7 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             Value<int?> advanceRemindMinutes = const Value.absent(),
             Value<bool> isCompleted = const Value.absent(),
             Value<bool> alarmEnabled = const Value.absent(),
+            Value<int?> seriesId = const Value.absent(),
             required DateTime createdAt,
           }) =>
               ScheduleEventsCompanion.insert(
@@ -4081,6 +4771,7 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             advanceRemindMinutes: advanceRemindMinutes,
             isCompleted: isCompleted,
             alarmEnabled: alarmEnabled,
+            seriesId: seriesId,
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0
@@ -4772,6 +5463,282 @@ typedef $$CustomTemplatesTableProcessedTableManager = ProcessedTableManager<
     ),
     CustomTemplate,
     PrefetchHooks Function()>;
+typedef $$RecurringTodosTableCreateCompanionBuilder = RecurringTodosCompanion
+    Function({
+  Value<int> id,
+  required String title,
+  Value<int?> timeMinute,
+  Value<int?> advanceRemindMinutes,
+  Value<bool> alarmEnabled,
+  Value<int> repeatType,
+  Value<int> weekdays,
+  Value<int> monthDay,
+  required DateTime startDate,
+  Value<int?> skipThrough,
+  Value<bool> enabled,
+  required DateTime createdAt,
+});
+typedef $$RecurringTodosTableUpdateCompanionBuilder = RecurringTodosCompanion
+    Function({
+  Value<int> id,
+  Value<String> title,
+  Value<int?> timeMinute,
+  Value<int?> advanceRemindMinutes,
+  Value<bool> alarmEnabled,
+  Value<int> repeatType,
+  Value<int> weekdays,
+  Value<int> monthDay,
+  Value<DateTime> startDate,
+  Value<int?> skipThrough,
+  Value<bool> enabled,
+  Value<DateTime> createdAt,
+});
+
+class $$RecurringTodosTableFilterComposer
+    extends Composer<_$AppDatabase, $RecurringTodosTable> {
+  $$RecurringTodosTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get timeMinute => $composableBuilder(
+      column: $table.timeMinute, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get advanceRemindMinutes => $composableBuilder(
+      column: $table.advanceRemindMinutes,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get alarmEnabled => $composableBuilder(
+      column: $table.alarmEnabled, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get repeatType => $composableBuilder(
+      column: $table.repeatType, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get weekdays => $composableBuilder(
+      column: $table.weekdays, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get monthDay => $composableBuilder(
+      column: $table.monthDay, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get startDate => $composableBuilder(
+      column: $table.startDate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get skipThrough => $composableBuilder(
+      column: $table.skipThrough, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+      column: $table.enabled, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$RecurringTodosTableOrderingComposer
+    extends Composer<_$AppDatabase, $RecurringTodosTable> {
+  $$RecurringTodosTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get timeMinute => $composableBuilder(
+      column: $table.timeMinute, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get advanceRemindMinutes => $composableBuilder(
+      column: $table.advanceRemindMinutes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get alarmEnabled => $composableBuilder(
+      column: $table.alarmEnabled,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get repeatType => $composableBuilder(
+      column: $table.repeatType, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get weekdays => $composableBuilder(
+      column: $table.weekdays, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get monthDay => $composableBuilder(
+      column: $table.monthDay, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get startDate => $composableBuilder(
+      column: $table.startDate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get skipThrough => $composableBuilder(
+      column: $table.skipThrough, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+      column: $table.enabled, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$RecurringTodosTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RecurringTodosTable> {
+  $$RecurringTodosTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<int> get timeMinute => $composableBuilder(
+      column: $table.timeMinute, builder: (column) => column);
+
+  GeneratedColumn<int> get advanceRemindMinutes => $composableBuilder(
+      column: $table.advanceRemindMinutes, builder: (column) => column);
+
+  GeneratedColumn<bool> get alarmEnabled => $composableBuilder(
+      column: $table.alarmEnabled, builder: (column) => column);
+
+  GeneratedColumn<int> get repeatType => $composableBuilder(
+      column: $table.repeatType, builder: (column) => column);
+
+  GeneratedColumn<int> get weekdays =>
+      $composableBuilder(column: $table.weekdays, builder: (column) => column);
+
+  GeneratedColumn<int> get monthDay =>
+      $composableBuilder(column: $table.monthDay, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startDate =>
+      $composableBuilder(column: $table.startDate, builder: (column) => column);
+
+  GeneratedColumn<int> get skipThrough => $composableBuilder(
+      column: $table.skipThrough, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$RecurringTodosTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $RecurringTodosTable,
+    RecurringTodo,
+    $$RecurringTodosTableFilterComposer,
+    $$RecurringTodosTableOrderingComposer,
+    $$RecurringTodosTableAnnotationComposer,
+    $$RecurringTodosTableCreateCompanionBuilder,
+    $$RecurringTodosTableUpdateCompanionBuilder,
+    (
+      RecurringTodo,
+      BaseReferences<_$AppDatabase, $RecurringTodosTable, RecurringTodo>
+    ),
+    RecurringTodo,
+    PrefetchHooks Function()> {
+  $$RecurringTodosTableTableManager(
+      _$AppDatabase db, $RecurringTodosTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RecurringTodosTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RecurringTodosTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RecurringTodosTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> title = const Value.absent(),
+            Value<int?> timeMinute = const Value.absent(),
+            Value<int?> advanceRemindMinutes = const Value.absent(),
+            Value<bool> alarmEnabled = const Value.absent(),
+            Value<int> repeatType = const Value.absent(),
+            Value<int> weekdays = const Value.absent(),
+            Value<int> monthDay = const Value.absent(),
+            Value<DateTime> startDate = const Value.absent(),
+            Value<int?> skipThrough = const Value.absent(),
+            Value<bool> enabled = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              RecurringTodosCompanion(
+            id: id,
+            title: title,
+            timeMinute: timeMinute,
+            advanceRemindMinutes: advanceRemindMinutes,
+            alarmEnabled: alarmEnabled,
+            repeatType: repeatType,
+            weekdays: weekdays,
+            monthDay: monthDay,
+            startDate: startDate,
+            skipThrough: skipThrough,
+            enabled: enabled,
+            createdAt: createdAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String title,
+            Value<int?> timeMinute = const Value.absent(),
+            Value<int?> advanceRemindMinutes = const Value.absent(),
+            Value<bool> alarmEnabled = const Value.absent(),
+            Value<int> repeatType = const Value.absent(),
+            Value<int> weekdays = const Value.absent(),
+            Value<int> monthDay = const Value.absent(),
+            required DateTime startDate,
+            Value<int?> skipThrough = const Value.absent(),
+            Value<bool> enabled = const Value.absent(),
+            required DateTime createdAt,
+          }) =>
+              RecurringTodosCompanion.insert(
+            id: id,
+            title: title,
+            timeMinute: timeMinute,
+            advanceRemindMinutes: advanceRemindMinutes,
+            alarmEnabled: alarmEnabled,
+            repeatType: repeatType,
+            weekdays: weekdays,
+            monthDay: monthDay,
+            startDate: startDate,
+            skipThrough: skipThrough,
+            enabled: enabled,
+            createdAt: createdAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$RecurringTodosTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $RecurringTodosTable,
+    RecurringTodo,
+    $$RecurringTodosTableFilterComposer,
+    $$RecurringTodosTableOrderingComposer,
+    $$RecurringTodosTableAnnotationComposer,
+    $$RecurringTodosTableCreateCompanionBuilder,
+    $$RecurringTodosTableUpdateCompanionBuilder,
+    (
+      RecurringTodo,
+      BaseReferences<_$AppDatabase, $RecurringTodosTable, RecurringTodo>
+    ),
+    RecurringTodo,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4794,4 +5761,6 @@ class $AppDatabaseManager {
       $$ShiftDayOverridesTableTableManager(_db, _db.shiftDayOverrides);
   $$CustomTemplatesTableTableManager get customTemplates =>
       $$CustomTemplatesTableTableManager(_db, _db.customTemplates);
+  $$RecurringTodosTableTableManager get recurringTodos =>
+      $$RecurringTodosTableTableManager(_db, _db.recurringTodos);
 }

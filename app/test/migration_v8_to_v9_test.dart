@@ -44,6 +44,25 @@ CREATE TABLE shift_schedule_rows (
 )
 ''';
 
+/// v8 时期的 `schedule_events`（它从 v1 就在，真实 v8 库一定有）。
+///
+/// fixture 里加它是因为**迁移链会碰它**：v10→v11 那一步要给它加一列
+/// `series_id`，而迁移分支一律按倒序跑 —— 谁碰了什么表，所有更早版本的 fixture
+/// 就都得有那张表，否则会在 `ALTER TABLE` 上抛 `no such table`（只在这个 fixture
+/// 里红，真机上不会）。
+const _v8ScheduleEventsTable = '''
+CREATE TABLE schedule_events (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  date INTEGER NOT NULL,
+  time_minute INTEGER,
+  advance_remind_minutes INTEGER,
+  is_completed INTEGER NOT NULL DEFAULT 0,
+  alarm_enabled INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+)
+''';
+
 ShiftSchedule _schedule() => ShiftSchedule(
       name: '我的班',
       anchorDate: DateTime.utc(2026, 9, 21),
@@ -71,6 +90,7 @@ void main() {
     raw = sqlite3.sqlite3.openInMemory();
     raw.execute(_v8ScheduleTable);
     raw.execute(_v8ClassTable);
+    raw.execute(_v8ScheduleEventsTable);
     raw.execute(
       'INSERT INTO shift_schedule_rows '
       '(id, name, anchor_date, is_current, team_count, team_names, '
