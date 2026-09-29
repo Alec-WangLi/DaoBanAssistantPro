@@ -267,17 +267,26 @@ final List<VisualScreen> visualScreens = [
     needsOnboardingPrefs: false,
   ),
   (
-    // 编辑器那一节在长页的最下面，靠 `visualScrollDown` 滚到底才拍得到。
-    //
-    // 编辑的是**第二套**（设了时段的那套）—— 于是那一节是「设好了」的形态：
-    // 两行都显示日期、右边都有清除钮。空态（两行都写「不限」/「一直持续」）
-    // 是升级后绝大多数用户会看到的那个，与它只差两个 ✕，不另出一屏。
-    slug: '29_editor_span',
-    title: '排班编辑器 · 生效时段',
+    // 排班时段那一节：**其余时间 + 两段**，三种日期说法各出现一次
+    //（「其余时间」/「9月15日 ～ 9月30日」/「10月1日 起」），下面接现有的排班表
+    // 列表 —— 一页看完「有哪些班表 + 它们怎么排」，正是这一节并进管理页的理由。
+    slug: '30_management_timeline',
+    title: '排班管理 · 排班时段',
     build: (db) async {
       await seedScheduleChain(db);
-      final rows = await AppRepository(db).listSchedules();
-      return ScheduleEditorScreen(scheduleId: rows.last.id);
+      return const ScheduleManagementScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 整月一天班都没有（其余时间设成「无」、又没有段）—— 网格上叠一句指路。
+    // 这一屏要看的是：那句指路盖在网格上居中、不压顶栏与信息卡、两层文字不打
+    // 架，而且网格的日期与农历仍然看得见（它只是叠了一层说明，不是替换）。
+    slug: '31_calendar_no_schedule',
+    title: '日历 · 这段时间没有排班',
+    build: (db) async {
+      await seedNoScheduleAtAll(db);
+      return const CalendarScreen();
     },
     needsOnboardingPrefs: false,
   ),
@@ -447,7 +456,4 @@ const Map<String, double> visualScrollDown = {
   // 撞班提示挂在「周期设置」卡的末尾，10 行周期表的下面；给足量让它滚到底，
   // 靠到底后的钳位保证那张卡的下半段（提示 + 均分按钮）在画面里。
   '15_editor_crew_clash': 2400,
-  // 「生效时段」一节在班组设置与跟随法定节假日**之间**，长页的靠下位置；
-  // 给足量滚到底，靠钳位让它落在画面里。
-  '29_editor_span': 3000,
 };

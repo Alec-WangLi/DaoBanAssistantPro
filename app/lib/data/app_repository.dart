@@ -390,6 +390,19 @@ class AppRepository {
   // 事）—— 这里只负责「把自己那一行写对」。
   // ---------------------------------------------------------------------------
 
+  /// 时间线上的全部段（按起点升序，起点为空的排最前）。
+  ///
+  /// 界面读的是 `scheduleSpansProvider`（响应式）；这个是给非 widget 的调用点
+  /// （种子、用例）用的。
+  Future<List<ScheduleSpanRow>> listSpans() {
+    final q = db.select(db.scheduleSpanRows)
+      ..orderBy([
+        (t) => OrderingTerm.asc(t.startDate),
+        (t) => OrderingTerm.asc(t.id),
+      ]);
+    return q.get();
+  }
+
   /// 在时间线上加一段。
   ///
   /// **空值必须显式构造 `Value(...)`**：`Value.absent()` 表达不了「这一端留空」

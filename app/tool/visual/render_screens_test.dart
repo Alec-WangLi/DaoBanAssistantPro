@@ -197,15 +197,15 @@ void main() {
     );
   });
 
-  // 切换排班弹层里的**时段标签**（五种形态）。弹层是命令式的、没有可渲染的
+  // 顶栏那颗按钮点开的**排班时段只读总览**。弹层是命令式的、没有可渲染的
   // widget，所以只能首帧之后真点一次那个入口 —— 与上面那张空态同一条路子。
-  visualTest('切换排班 · 时段标签', (tester) async {
+  visualTest('日历 · 排班时段总览', (tester) async {
     failOnOverflow(tester);
     final db = await freshDb();
     await seedScheduleChain(db);
     await renderScreen(
       tester,
-      name: '28_span_picker',
+      name: '28_calendar_timeline',
       home: const CalendarScreen(),
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
       beforeCapture: (t) async {

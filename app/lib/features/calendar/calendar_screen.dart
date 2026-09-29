@@ -877,18 +877,26 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppTokens.spaceXl),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(L10n.noScheduleHere,
-                        textAlign: TextAlign.center,
-                        style: AppTokens.sectionTitle),
-                    const SizedBox(height: AppTokens.spaceXs),
-                    Text(L10n.noScheduleHereHint,
-                        textAlign: TextAlign.center,
-                        style:
-                            AppTokens.rowSecondary.copyWith(color: muted)),
-                  ],
+                // **必须是一张（近）不透明的面板**：直接铺两行字会压在格子的
+                // 日期与农历上，两边都看不清（出图当场看出来的）。
+                child: GlassPanel(
+                  solid: true,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.spaceLg,
+                      vertical: AppTokens.spaceMd),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(L10n.noScheduleHere,
+                          textAlign: TextAlign.center,
+                          style: AppTokens.sectionTitle),
+                      const SizedBox(height: AppTokens.spaceXs),
+                      Text(L10n.noScheduleHereHint,
+                          textAlign: TextAlign.center,
+                          style:
+                              AppTokens.rowSecondary.copyWith(color: muted)),
+                    ],
+                  ),
                 ),
               ),
             ),

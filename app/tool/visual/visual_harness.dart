@@ -629,12 +629,54 @@ Future<void> seedScheduleChain(AppDatabase db) async {
   final rows = await repo.listSchedules();
   if (rows.length < 2) return;
   final t = DateTime.now();
+
+  // 第三套：让时间线上出现**三种不同的日期说法**（其余时间 / 「～ 止」/「起 ～」）。
+  // 只给这一屏加，不动共享的 `seedVisualDatabase`（那会让别的屏的图都变）。
+  final third = await repo.saveSchedule(
+    name: '新项目部 · 三班倒',
+    anchorDate: dateOnly(t),
+    classes: const [
+      ShiftClass(
+          name: '白班',
+          abbr: '白',
+          startMinute: 480,
+          endMinute: 1080,
+          color: 0xFF4C8DFF),
+      ShiftClass(
+          name: '中班',
+          abbr: '中',
+          startMinute: 1080,
+          endMinute: 1320,
+          color: 0xFFFF9F0A),
+      ShiftClass(name: '夜班', abbr: '夜', startMinute: 1230, endMinute: 1920, color: 0xFF7A5CFF),
+    ],
+    cycle: const [0, 1, 2],
+    makeCurrent: false,
+    teamCount: 3,
+    teamNames: L10n.defaultTeamNames(3),
+    ourTeamIndex: 0,
+    teamOffsets: const [0, 1, 2],
+  );
+
   // 第一套（当前）**不设段** —— 它是「其余时间」，标签正好是那四个字。
   await repo.addSpan(
     rows[1].id,
     from: DateTime(t.year, t.month, 15),
     to: DateTime(t.year, t.month + 1, 0), // 本月最后一天
   );
+  await repo.addSpan(third, from: DateTime(t.year, t.month + 1, 1));
+}
+
+/// 让整个日历**一天班都没有**：把「其余时间」设成无、又不给任何方案时段。
+///
+/// 这是用户点过「设为无」又忘了加段时的样子 —— 也是这一轮唯一会画出一片空白
+/// （带指路）的状态，必须出图看一眼那句指路盖在网格上是什么观感。
+Future<void> seedNoScheduleAtAll(AppDatabase db) async {
+  final repo = AppRepository(db);
+  for (final s in await repo.listSpans()) {
+    await repo.deleteSpan(s.id);
+  }
+  await repo.setRemainingNone();
 }
 
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。

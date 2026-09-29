@@ -622,7 +622,10 @@ class L10n {
   static String get switchSchedule => t('切换排班', 'Switch schedule');
   static String get switchScheduleShort => t('切换', 'Switch');
   static String get manageSchedule => t('管理排班', 'Manage schedules');
-  static String get noSchedule => t('尚未配置排班，请到「我的」页编辑排班。', 'No schedule yet, edit in "Me".');
+  /// 信息卡里那行「这天没排班」。**指路要指对地方** —— 时段现在在
+  /// 「我的 → 排班管理 → 排班时段」，不再是「我的」页上直接编辑排班。
+  static String get noSchedule => t('这段时间没有排班（去「排班时段」加一段）',
+      'No schedule for these dates (add a period under "Schedule timeline")');
   static String get restNoAlarm => t('休息日 · 不响闹钟', 'Rest day · no alarm');
   static String get alarmOff => t('闹钟：未开启', 'Alarm: off');
   static String alarmAt(String time) => isEn ? 'Alarm $time' : '闹钟 $time';
