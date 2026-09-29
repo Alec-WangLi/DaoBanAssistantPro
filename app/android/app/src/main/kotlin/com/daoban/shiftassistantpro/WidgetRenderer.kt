@@ -14,7 +14,7 @@ import java.time.LocalDate
  * 与 ShiftWidgetBase 分开是为了能单独读懂它 —— 这个类里没有一行涉及
  * 「什么时候刷新」「刷新排在哪」，只有「给我一份快照，我给你一棵 RemoteViews 树」。
  *
- * 三条纪律：
+ * 四条纪律：
  *  1. Kotlin 侧一个中文字面量都不许有。所有文案都来自快照（Dart 侧 `L10n` 产出）。
  *     唯一的例外是占位态那行应用名，它取自 `applicationInfo.loadLabel()`。
  *  2. 明暗一律**显式选资源**，不依赖 `-night` 限定符 —— `RemoteViews` 由宿主进程
@@ -22,8 +22,40 @@ import java.time.LocalDate
  *  3. 布局只用 RemoteViews 白名单里的类：FrameLayout / LinearLayout / RelativeLayout /
  *     GridLayout + TextView / ImageView。**没有 ConstraintLayout**，报的是运行期
  *     `ClassNotFoundException`，不是编译错误。
+ *  4. **往容器里 `addView` 之前必须先 `removeAllViews`**（每一个容器、每一次渲染，
+ *     包括 `continue` 逃掉的那几支）。见下面那条长说明 —— 漏掉它不会报任何错，
+ *     只在部分机型上表现为「内容一变就重影」。
  */
 object WidgetRenderer {
+
+    /*
+     * ── 纪律 4 的长说明：为什么每个容器在 addView 之前都要 removeAllViews ──
+     *
+     * 症状（2026-09-29 用户反馈，几个 OPPO / vivo 用户，开发机上复现不出来）：
+     * 把某天的「前夜」按天改成「休班」之后，桌面小组件上的字**重影**了 ——
+     * 旧班的字压在新班的字上、上一周的日期压在今天的日期上。
+     *
+     * 机制：桌面（宿主）收到与手上那棵视图树**同一个布局 id** 的 RemoteViews 时，
+     * **不会重新 inflate**，而是走 `RemoteViews.reapply(...)`，把整串动作在已有的
+     * 视图树上重放一遍。而 `AppWidgetHostView` 只管换掉旧的**根**视图，**不负责
+     * 清空容器里的子视图**。于是同一个槽位每渲染一次就多一个格子；格子根是
+     * `match_parent`（`widget_strip_cell.xml` / `widget_month_cell.xml`），
+     * 后加的不会把先加的挤开，而是**叠在同一块面积上**。
+     *
+     * 为什么平时看不出来：两层内容完全一样时，合成结果只是略微糊一点、胶囊深一档，
+     * 没人会注意。**只有某一格的内容变了，旧层才露出来** —— 这正是「改了排班才出现」
+     * 的原因，也是它被当成新 bug 的原因（其实一直在叠，只是从前看不见）。
+     *
+     * 为什么只有部分机型：新一些的 AOSP / 启动器会**回收**已加进去的子视图
+     * （`canRecycleView`，Android 12 起进了 CTS），刚好把缺陷盖住；旧框架与厂商分叉
+     * 会老老实实再加一个。所以「我这台上没问题」不能当成这条不存在 —— 它取决于宿主，
+     * 不取决于我们。`RemoteViews.addView` 的官方文档写的就是这条：宿主可能回收布局，
+     * 要用 `removeAllViews(int)` 清掉已有的子视图。
+     *
+     * 护栏：`app/test/widget_fixed_cards_guard_test.dart` 里那条「每处 addView 的容器
+     * 都先被 removeAllViews 清过」，扫的就是本文件。**别为消掉它的红而放宽正则** ——
+     * 它是这条约定唯一的凭据（本文件没有编译期可以依赖的东西）。
+     */
 
     /**
      * dp → px。`RemoteViews` 里的尺寸单位是 px，送给 `WidgetChip` 画位图前要自己乘密度。
@@ -220,6 +252,11 @@ object WidgetRenderer {
         )
 
         for (col in columns.indices) {
+            // **先清空再填** —— 这一句是「内容变了之后小组件重影」的修复，见本文件顶部
+            // 那条 addView 的说明。放在循环开头而不是紧贴 addView：`continue` 逃掉的
+            // 那一支（窗口里没有这天）同样要让容器里**一个子视图都不留**，否则旧格子
+            // 会缩在 GONE 的槽位里，等这个槽位下次填上时又叠一层。
+            v.removeAllViews(columns[col])
             val epoch = monday.plusDays(col.toLong()).toEpochDay()
             val i = snap.days.indexOfFirst { it.day == epoch }
             if (i < 0) {
@@ -355,6 +392,9 @@ object WidgetRenderer {
         }
 
         for (slot in 0 until 42) {
+            // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
+            // 前面的取舍）。42 格每格都要清 —— 前导/尾随空格那两支也走这里。
+            v.removeAllViews(slotIds[slot])
             val dayOfMonth = slot - leading + 1
             if (dayOfMonth < 1 || dayOfMonth > daysInMonth) {
                 // 前导/尾随空格：GONE —— GridLayout 里 GONE 的子视图不参与布局。
@@ -571,6 +611,8 @@ object WidgetRenderer {
         } else {
             v.setViewVisibility(R.id.wg_tc_crew_row, android.view.View.VISIBLE)
             for (slot in crewSlots.indices) {
+                // 先清空再填，理由与 `weekStrip` 那处逐字相同。
+                v.removeAllViews(crewSlots[slot])
                 if (slot >= crews.size) {
                     v.setViewVisibility(crewSlots[slot], android.view.View.GONE)
                     continue
@@ -623,6 +665,10 @@ object WidgetRenderer {
         // 点击就有一圈「看得见但不响应」的死区（4×3 下各约 34dp）。这条与
         // `weekStrip` / `monthCard` / `empty` / `placeholder` 一致，见那几处的 KDoc。
         v.setOnClickPendingIntent(R.id.wg_ts_root, launchIntent(context, rootRequestCode(widgetId)))
+        // 先清空再填 —— 这一处塞进去的是**整棵今日卡子树**，叠起来比一格重影严重得多：
+        // 槽位是个竖向 LinearLayout，多余的副本会往下排、把卡片撑出外壳后被裁掉。
+        // 完整的机制说明见 `weekStrip` 那处。
+        v.removeAllViews(R.id.wg_ts_slot)
         v.addView(R.id.wg_ts_slot, renderTodayCard(context, snap, todayIndex, widgetId))
         return v
     }

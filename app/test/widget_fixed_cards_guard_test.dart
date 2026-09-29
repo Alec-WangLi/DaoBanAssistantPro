@@ -94,4 +94,39 @@ void main() {
           reason: '$file 的 minHeight 应当是 ${_cellsToDp(h)}dp');
     }
   });
+
+  // 这条是 2026-09-29 用户反馈的护栏：把「前夜改成休班之后，桌面小组件的字**重影**」
+  // （OPPO / vivo 等机型，开发机上复现不出来）。
+  //
+  // 根因在宿主的 **reapply** 路径：桌面收到同一个布局 id 的 RemoteViews 时，不会重新
+  // inflate，而是把整串动作在**已经在的那棵视图树**上重放一遍，而 `AppWidgetHostView`
+  // **不会**替你清空子视图。于是每渲染一次就往同一个容器里再 addView 一个格子，
+  // 分子视图在 FrameLayout / LinearLayout 里**叠在一起**（格子根是 match_parent，
+  // 不是把后者挤开）。内容一样时看不出来（只是稍微糊一点、胶囊深一档），一旦某格的
+  // 内容变了 —— 比如按天改班把「前夜」改成「休班」—— 旧层的字就露出来了。
+  //
+  // 为什么只有部分机型中招：新一些的 AOSP / 启动器会**回收**已加进去的子视图
+  // （`canRecycleView`，Android 12 起进了 CTS），刚好把这个缺陷盖住；旧框架与厂商
+  // 分叉会老老实实再加一个。所以「开发机上没问题」**不能**当作这条不存在。
+  //
+  // `RemoteViews.addView` 的官方文档写的就是这条：宿主可能回收布局，
+  // 要用 `removeAllViews(int)` 清掉已有的子视图。
+  test('每处 addView 的容器都先被 removeAllViews 清过', () {
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    // 取每处 `addView(<容器>, ...)` 的第一个实参（容器表达式）。
+    final containers = RegExp(r'addView\(([^,]+),\s')
+        .allMatches(kt)
+        .map((m) => m.group(1)!.trim())
+        .toList();
+    // 先确认这条护栏自己没瞎：扫不到东西时它必须红，而不是静默通过。
+    expect(containers.length, greaterThanOrEqualTo(4),
+        reason: '只扫到 ${containers.length} 处 addView —— 要么渲染器被重构了，'
+            '要么这条正则匹配不到新的写法，两种情况都要人来重新对一遍');
+    for (final c in containers) {
+      expect(kt.contains('removeAllViews($c)'), true,
+          reason: '容器 $c 被 addView 塞了子视图，却从没被 removeAllViews 清过 —— '
+              '宿主 reapply 时每刷一次就叠一层，症状是内容变化后出现重影');
+    }
+  });
 }
