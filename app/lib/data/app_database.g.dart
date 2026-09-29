@@ -71,6 +71,18 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant(''));
+  static const VerificationMeta _effectiveFromMeta =
+      const VerificationMeta('effectiveFrom');
+  @override
+  late final GeneratedColumn<DateTime> effectiveFrom =
+      GeneratedColumn<DateTime>('effective_from', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _effectiveToMeta =
+      const VerificationMeta('effectiveTo');
+  @override
+  late final GeneratedColumn<DateTime> effectiveTo = GeneratedColumn<DateTime>(
+      'effective_to', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -80,7 +92,9 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
         teamCount,
         teamNames,
         ourTeamIndex,
-        teamOffsets
+        teamOffsets,
+        effectiveFrom,
+        effectiveTo
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -133,6 +147,18 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
           teamOffsets.isAcceptableOrUnknown(
               data['team_offsets']!, _teamOffsetsMeta));
     }
+    if (data.containsKey('effective_from')) {
+      context.handle(
+          _effectiveFromMeta,
+          effectiveFrom.isAcceptableOrUnknown(
+              data['effective_from']!, _effectiveFromMeta));
+    }
+    if (data.containsKey('effective_to')) {
+      context.handle(
+          _effectiveToMeta,
+          effectiveTo.isAcceptableOrUnknown(
+              data['effective_to']!, _effectiveToMeta));
+    }
     return context;
   }
 
@@ -158,6 +184,10 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
           .read(DriftSqlType.int, data['${effectivePrefix}our_team_index'])!,
       teamOffsets: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}team_offsets'])!,
+      effectiveFrom: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}effective_from']),
+      effectiveTo: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}effective_to']),
     );
   }
 
@@ -177,6 +207,16 @@ class ShiftScheduleRow extends DataClass
   final String teamNames;
   final int ourTeamIndex;
   final String teamOffsets;
+
+  /// 生效时段起点（**闭区间**，纯日期，`dateOnly` 口径）；null = 不限起点。
+  ///
+  /// 与 [effectiveTo] 一起决定「某天归哪套方案」（见 `domain/schedule_chain.dart`）。
+  /// **两端都空 = 不参与衔接** —— 这是老库（两列都是 null）行为一字不变的关键：
+  /// 那种方案永远选不上，于是每天都落到「当前方案」兜底那条路。
+  final DateTime? effectiveFrom;
+
+  /// 生效时段终点（**闭区间**，纯日期）；null = 一直持续下去。
+  final DateTime? effectiveTo;
   const ShiftScheduleRow(
       {required this.id,
       required this.name,
@@ -185,7 +225,9 @@ class ShiftScheduleRow extends DataClass
       required this.teamCount,
       required this.teamNames,
       required this.ourTeamIndex,
-      required this.teamOffsets});
+      required this.teamOffsets,
+      this.effectiveFrom,
+      this.effectiveTo});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -197,6 +239,12 @@ class ShiftScheduleRow extends DataClass
     map['team_names'] = Variable<String>(teamNames);
     map['our_team_index'] = Variable<int>(ourTeamIndex);
     map['team_offsets'] = Variable<String>(teamOffsets);
+    if (!nullToAbsent || effectiveFrom != null) {
+      map['effective_from'] = Variable<DateTime>(effectiveFrom);
+    }
+    if (!nullToAbsent || effectiveTo != null) {
+      map['effective_to'] = Variable<DateTime>(effectiveTo);
+    }
     return map;
   }
 
@@ -210,6 +258,12 @@ class ShiftScheduleRow extends DataClass
       teamNames: Value(teamNames),
       ourTeamIndex: Value(ourTeamIndex),
       teamOffsets: Value(teamOffsets),
+      effectiveFrom: effectiveFrom == null && nullToAbsent
+          ? const Value.absent()
+          : Value(effectiveFrom),
+      effectiveTo: effectiveTo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(effectiveTo),
     );
   }
 
@@ -225,6 +279,8 @@ class ShiftScheduleRow extends DataClass
       teamNames: serializer.fromJson<String>(json['teamNames']),
       ourTeamIndex: serializer.fromJson<int>(json['ourTeamIndex']),
       teamOffsets: serializer.fromJson<String>(json['teamOffsets']),
+      effectiveFrom: serializer.fromJson<DateTime?>(json['effectiveFrom']),
+      effectiveTo: serializer.fromJson<DateTime?>(json['effectiveTo']),
     );
   }
   @override
@@ -239,6 +295,8 @@ class ShiftScheduleRow extends DataClass
       'teamNames': serializer.toJson<String>(teamNames),
       'ourTeamIndex': serializer.toJson<int>(ourTeamIndex),
       'teamOffsets': serializer.toJson<String>(teamOffsets),
+      'effectiveFrom': serializer.toJson<DateTime?>(effectiveFrom),
+      'effectiveTo': serializer.toJson<DateTime?>(effectiveTo),
     };
   }
 
@@ -250,7 +308,9 @@ class ShiftScheduleRow extends DataClass
           int? teamCount,
           String? teamNames,
           int? ourTeamIndex,
-          String? teamOffsets}) =>
+          String? teamOffsets,
+          Value<DateTime?> effectiveFrom = const Value.absent(),
+          Value<DateTime?> effectiveTo = const Value.absent()}) =>
       ShiftScheduleRow(
         id: id ?? this.id,
         name: name ?? this.name,
@@ -260,6 +320,9 @@ class ShiftScheduleRow extends DataClass
         teamNames: teamNames ?? this.teamNames,
         ourTeamIndex: ourTeamIndex ?? this.ourTeamIndex,
         teamOffsets: teamOffsets ?? this.teamOffsets,
+        effectiveFrom:
+            effectiveFrom.present ? effectiveFrom.value : this.effectiveFrom,
+        effectiveTo: effectiveTo.present ? effectiveTo.value : this.effectiveTo,
       );
   ShiftScheduleRow copyWithCompanion(ShiftScheduleRowsCompanion data) {
     return ShiftScheduleRow(
@@ -275,6 +338,11 @@ class ShiftScheduleRow extends DataClass
           : this.ourTeamIndex,
       teamOffsets:
           data.teamOffsets.present ? data.teamOffsets.value : this.teamOffsets,
+      effectiveFrom: data.effectiveFrom.present
+          ? data.effectiveFrom.value
+          : this.effectiveFrom,
+      effectiveTo:
+          data.effectiveTo.present ? data.effectiveTo.value : this.effectiveTo,
     );
   }
 
@@ -288,14 +356,16 @@ class ShiftScheduleRow extends DataClass
           ..write('teamCount: $teamCount, ')
           ..write('teamNames: $teamNames, ')
           ..write('ourTeamIndex: $ourTeamIndex, ')
-          ..write('teamOffsets: $teamOffsets')
+          ..write('teamOffsets: $teamOffsets, ')
+          ..write('effectiveFrom: $effectiveFrom, ')
+          ..write('effectiveTo: $effectiveTo')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, name, anchorDate, isCurrent, teamCount,
-      teamNames, ourTeamIndex, teamOffsets);
+      teamNames, ourTeamIndex, teamOffsets, effectiveFrom, effectiveTo);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -307,7 +377,9 @@ class ShiftScheduleRow extends DataClass
           other.teamCount == this.teamCount &&
           other.teamNames == this.teamNames &&
           other.ourTeamIndex == this.ourTeamIndex &&
-          other.teamOffsets == this.teamOffsets);
+          other.teamOffsets == this.teamOffsets &&
+          other.effectiveFrom == this.effectiveFrom &&
+          other.effectiveTo == this.effectiveTo);
 }
 
 class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
@@ -319,6 +391,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
   final Value<String> teamNames;
   final Value<int> ourTeamIndex;
   final Value<String> teamOffsets;
+  final Value<DateTime?> effectiveFrom;
+  final Value<DateTime?> effectiveTo;
   const ShiftScheduleRowsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -328,6 +402,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     this.teamNames = const Value.absent(),
     this.ourTeamIndex = const Value.absent(),
     this.teamOffsets = const Value.absent(),
+    this.effectiveFrom = const Value.absent(),
+    this.effectiveTo = const Value.absent(),
   });
   ShiftScheduleRowsCompanion.insert({
     this.id = const Value.absent(),
@@ -338,6 +414,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     this.teamNames = const Value.absent(),
     this.ourTeamIndex = const Value.absent(),
     this.teamOffsets = const Value.absent(),
+    this.effectiveFrom = const Value.absent(),
+    this.effectiveTo = const Value.absent(),
   })  : name = Value(name),
         anchorDate = Value(anchorDate);
   static Insertable<ShiftScheduleRow> custom({
@@ -349,6 +427,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     Expression<String>? teamNames,
     Expression<int>? ourTeamIndex,
     Expression<String>? teamOffsets,
+    Expression<DateTime>? effectiveFrom,
+    Expression<DateTime>? effectiveTo,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -359,6 +439,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       if (teamNames != null) 'team_names': teamNames,
       if (ourTeamIndex != null) 'our_team_index': ourTeamIndex,
       if (teamOffsets != null) 'team_offsets': teamOffsets,
+      if (effectiveFrom != null) 'effective_from': effectiveFrom,
+      if (effectiveTo != null) 'effective_to': effectiveTo,
     });
   }
 
@@ -370,7 +452,9 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       Value<int>? teamCount,
       Value<String>? teamNames,
       Value<int>? ourTeamIndex,
-      Value<String>? teamOffsets}) {
+      Value<String>? teamOffsets,
+      Value<DateTime?>? effectiveFrom,
+      Value<DateTime?>? effectiveTo}) {
     return ShiftScheduleRowsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -380,6 +464,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       teamNames: teamNames ?? this.teamNames,
       ourTeamIndex: ourTeamIndex ?? this.ourTeamIndex,
       teamOffsets: teamOffsets ?? this.teamOffsets,
+      effectiveFrom: effectiveFrom ?? this.effectiveFrom,
+      effectiveTo: effectiveTo ?? this.effectiveTo,
     );
   }
 
@@ -410,6 +496,12 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     if (teamOffsets.present) {
       map['team_offsets'] = Variable<String>(teamOffsets.value);
     }
+    if (effectiveFrom.present) {
+      map['effective_from'] = Variable<DateTime>(effectiveFrom.value);
+    }
+    if (effectiveTo.present) {
+      map['effective_to'] = Variable<DateTime>(effectiveTo.value);
+    }
     return map;
   }
 
@@ -423,7 +515,9 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
           ..write('teamCount: $teamCount, ')
           ..write('teamNames: $teamNames, ')
           ..write('ourTeamIndex: $ourTeamIndex, ')
-          ..write('teamOffsets: $teamOffsets')
+          ..write('teamOffsets: $teamOffsets, ')
+          ..write('effectiveFrom: $effectiveFrom, ')
+          ..write('effectiveTo: $effectiveTo')
           ..write(')'))
         .toString();
   }
@@ -3806,6 +3900,8 @@ typedef $$ShiftScheduleRowsTableCreateCompanionBuilder
   Value<String> teamNames,
   Value<int> ourTeamIndex,
   Value<String> teamOffsets,
+  Value<DateTime?> effectiveFrom,
+  Value<DateTime?> effectiveTo,
 });
 typedef $$ShiftScheduleRowsTableUpdateCompanionBuilder
     = ShiftScheduleRowsCompanion Function({
@@ -3817,6 +3913,8 @@ typedef $$ShiftScheduleRowsTableUpdateCompanionBuilder
   Value<String> teamNames,
   Value<int> ourTeamIndex,
   Value<String> teamOffsets,
+  Value<DateTime?> effectiveFrom,
+  Value<DateTime?> effectiveTo,
 });
 
 class $$ShiftScheduleRowsTableFilterComposer
@@ -3851,6 +3949,12 @@ class $$ShiftScheduleRowsTableFilterComposer
 
   ColumnFilters<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get effectiveFrom => $composableBuilder(
+      column: $table.effectiveFrom, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get effectiveTo => $composableBuilder(
+      column: $table.effectiveTo, builder: (column) => ColumnFilters(column));
 }
 
 class $$ShiftScheduleRowsTableOrderingComposer
@@ -3886,6 +3990,13 @@ class $$ShiftScheduleRowsTableOrderingComposer
 
   ColumnOrderings<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get effectiveFrom => $composableBuilder(
+      column: $table.effectiveFrom,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get effectiveTo => $composableBuilder(
+      column: $table.effectiveTo, builder: (column) => ColumnOrderings(column));
 }
 
 class $$ShiftScheduleRowsTableAnnotationComposer
@@ -3920,6 +4031,12 @@ class $$ShiftScheduleRowsTableAnnotationComposer
 
   GeneratedColumn<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get effectiveFrom => $composableBuilder(
+      column: $table.effectiveFrom, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get effectiveTo => $composableBuilder(
+      column: $table.effectiveTo, builder: (column) => column);
 }
 
 class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
@@ -3958,6 +4075,8 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             Value<String> teamNames = const Value.absent(),
             Value<int> ourTeamIndex = const Value.absent(),
             Value<String> teamOffsets = const Value.absent(),
+            Value<DateTime?> effectiveFrom = const Value.absent(),
+            Value<DateTime?> effectiveTo = const Value.absent(),
           }) =>
               ShiftScheduleRowsCompanion(
             id: id,
@@ -3968,6 +4087,8 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             teamNames: teamNames,
             ourTeamIndex: ourTeamIndex,
             teamOffsets: teamOffsets,
+            effectiveFrom: effectiveFrom,
+            effectiveTo: effectiveTo,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -3978,6 +4099,8 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             Value<String> teamNames = const Value.absent(),
             Value<int> ourTeamIndex = const Value.absent(),
             Value<String> teamOffsets = const Value.absent(),
+            Value<DateTime?> effectiveFrom = const Value.absent(),
+            Value<DateTime?> effectiveTo = const Value.absent(),
           }) =>
               ShiftScheduleRowsCompanion.insert(
             id: id,
@@ -3988,6 +4111,8 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             teamNames: teamNames,
             ourTeamIndex: ourTeamIndex,
             teamOffsets: teamOffsets,
+            effectiveFrom: effectiveFrom,
+            effectiveTo: effectiveTo,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

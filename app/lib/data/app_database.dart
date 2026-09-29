@@ -19,6 +19,16 @@ class ShiftScheduleRows extends Table {
   // 每个班组相对基准日的**天数偏移**（逗号分隔，如 "0,1,2,3"）。
   // 第 i 组在某天的周期下标 = (目标日 − 基准日 + offsets[i]) mod 周期长度。
   TextColumn get teamOffsets => text().withDefault(const Constant(''))();
+
+  /// 生效时段起点（**闭区间**，纯日期，`dateOnly` 口径）；null = 不限起点。
+  ///
+  /// 与 [effectiveTo] 一起决定「某天归哪套方案」（见 `domain/schedule_chain.dart`）。
+  /// **两端都空 = 不参与衔接** —— 这是老库（两列都是 null）行为一字不变的关键：
+  /// 那种方案永远选不上，于是每天都落到「当前方案」兜底那条路。
+  DateTimeColumn get effectiveFrom => dateTime().nullable()();
+
+  /// 生效时段终点（**闭区间**，纯日期）；null = 一直持续下去。
+  DateTimeColumn get effectiveTo => dateTime().nullable()();
 }
 
 /// 班次定义表：一个班次只定义一次（属于某套排班方案）。
@@ -240,12 +250,25 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 12) {
+            // 多排班表按日期衔接：给方案加两个**可空**的时段列。
+            // 老行自动是 null（= 不参与衔接），于是老库的所见行为一字不变 ——
+            // 这一步**不改任何既有行的数据**。
+            //
+            // ⚠️ 与 v10→v11 那次的连带约束一样（虽然形态不同）：这两列加在
+            // **v1 起就存在**的表上，而迁移分支一律按**倒序**执行 ——
+            // 从任何老版本升上来时这两行都会跑到，所以**每一份更早的迁移 fixture
+            // 都得有 `shift_schedule_rows`**。本轮 v6→v7 与 v10→v11 两份因此补了
+            // DDL（那两份按「只抄自己碰到的表」的惯例没建它）。
+            await m.addColumn(shiftScheduleRows, shiftScheduleRows.effectiveFrom);
+            await m.addColumn(shiftScheduleRows, shiftScheduleRows.effectiveTo);
+          }
           if (from < 11) {
             // 重复待办：纯新增一张表 + 给待办加一列可空的 series_id。
             // 两样都不碰既有数据（addColumn 加可空列时老行自动是 null）。

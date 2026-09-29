@@ -34,10 +34,29 @@ CREATE TABLE schedule_events (
 )
 ''';
 
+/// 排班方案表 —— 本条迁移**不碰它**，但 v11→v12 会给它加两列，而迁移分支一律按
+/// **倒序**跑（先 `if (from < 12)`、再 `if (from < 11)`），所以从 v10 升上来时
+/// 那一对 `addColumn` 同样会执行。真实 v10 库一定有这张表，fixture 就得有 ——
+/// 这与 v10→v11 当初给更早的 fixture 补 `schedule_events` 是同一条。
+/// 列是 v10 形态（只差 v12 那两列）。
+const _v10ScheduleTable = '''
+CREATE TABLE shift_schedule_rows (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  anchor_date INTEGER NOT NULL,
+  is_current INTEGER NOT NULL DEFAULT 0,
+  team_count INTEGER NOT NULL DEFAULT 4,
+  team_names TEXT NOT NULL DEFAULT '一班,二班,三班,四班',
+  our_team_index INTEGER NOT NULL DEFAULT 0,
+  team_offsets TEXT NOT NULL DEFAULT ''
+)
+''';
+
 void main() {
   test('v10 → v11：老待办一条不丢、series_id 为空、新表能写能读', () async {
     final raw = sqlite3.sqlite3.openInMemory();
     raw.execute(_v10ScheduleEvents);
+    raw.execute(_v10ScheduleTable);
     // 两条老待办：一条未完成、一条已完成，值都写全（迁移把值吞了才看得出来）
     raw.execute(
       'INSERT INTO schedule_events '
@@ -66,7 +85,9 @@ void main() {
     // 交给 drift —— 迁移在打开时跑。（与 `migration_v9_to_v10_test.dart` 同一套。）
     final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
     addTearDown(db.close);
-    expect(db.schemaVersion, 11);
+    // 从 v10 升上来会一路跑到**最新**的 schema（迁移分支按倒序全部执行），
+    // 所以这里跟的是当前的 `schemaVersion`，不是 11 —— 每加一版 schema 都要回来改。
+    expect(db.schemaVersion, 12);
 
     // ① 老待办原样保留，且新列取到的是 null
     final events = await db.select(db.scheduleEvents).get();
