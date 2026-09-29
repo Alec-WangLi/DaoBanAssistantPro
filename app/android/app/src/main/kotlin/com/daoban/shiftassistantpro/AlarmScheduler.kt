@@ -19,11 +19,22 @@ object AlarmScheduler {
     const val CUSTOM_BASE_ID = 10000
 
     /**
-     * 待办提醒的原生 id 基址（id = 20000 + 数据库自增 id）。
+     * 待办提醒的原生 id 基址（id = 20000 + 数据库里那一行的自增 id）。
      *
-     * 三段互不重叠，各自按区间扫着取消 —— 见 `MainActivity` 里那几个 cancel 分支。
+     * **`AUTOINCREMENT` 永不复用**，所以这个号只增不减。留到 39999（两万槽）：
+     * 一个「每天」的重复待办每完成一次就产生一行，两三年就能把一千个号用光 ——
+     * 而从前只留了 1000，越界之后提醒**排得下去、谁也取消不掉**（幽灵提醒）。
      */
     const val TODO_BASE_ID = 20000
+
+    /**
+     * 重复待办提醒的原生 id 基址（id = 40000 + 系列的自增 id）。
+     *
+     * **与待办行的号段分开**是有意的：系列的条数由用户手建，几十条就到头了，而
+     * 待办行会越攒越多 —— 两者共用一个自增序列的话，行号迟早把提醒的号挤出去。
+     * 留到 41999。
+     */
+    const val RECURRING_BASE_ID = 40000
 
     /**
      * 排一条「安静的」提醒：到点只弹一条通知，不响铃、不全屏、不进系统闹钟栏。
@@ -91,15 +102,35 @@ object AlarmScheduler {
         )
     }
 
-    /** 按 id 区间取消全部待办提醒与待办闹钟。 */
-    fun cancelTodoReminders(context: Context, from: Int = 0, to: Int = 1000) {
+    /**
+     * 取消全部待办提醒与待办闹钟。
+     *
+     * **按落盘清单逐个撤，不再盲目扫一大段 id。** 从前扫的是固定 1000 个号，而
+     * 现在待办提醒能排到 [RECURRING_BASE_ID] 附近 —— 盲扫会变成几万次
+     * `PendingIntent` 操作，而**每勾一次待办都要跑一遍这一段**。
+     *
+     * 末尾保留一小段盲扫（`TODO_BASE_ID .. +1000`）：只为清掉「升级前排下、清单里
+     * 还没有」的陈旧记录。这一段的开销与从前的实现相同，所以不引入新的性能代价。
+     */
+    fun cancelTodoReminders(context: Context) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        // **两种目标都要扫**：同一条待办按「联动闹钟」开关二选一 —— 开走
+        // **两种目标都要取消**：同一条待办按「联动闹钟」开关二选一 —— 开走
         // AlarmReceiver（响铃），关走 TodoReminderReceiver（通知）。两者用的是
-        // 同一个 id，只扫一种就会把另一种留成幽灵闹钟，到点还会响。
+        // 同一个 id，只取消一种就会把另一种留成幽灵闹钟，到点还会响。
         val targets = listOf(AlarmReceiver::class.java, TodoReminderReceiver::class.java)
-        for (i in from until to) {
-            val id = TODO_BASE_ID + i
+        val upper = RECURRING_BASE_ID + 2000
+        val ids = mutableSetOf<Int>()
+        // ① 清单里记着的（准确、量小）
+        for (e in AlarmStore.all(context)) {
+            if (e.id in TODO_BASE_ID until upper) ids.add(e.id)
+        }
+        for (q in AlarmStore.allQuiets(context)) {
+            if (q.id in TODO_BASE_ID until upper) ids.add(q.id)
+        }
+        // ② 一小段盲扫兜底：旧版本用过、清单里没有的那些
+        for (i in 0 until 1000) ids.add(TODO_BASE_ID + i)
+
+        for (id in ids) {
             for (target in targets) {
                 try {
                     val pi = PendingIntent.getBroadcast(
@@ -115,9 +146,9 @@ object AlarmScheduler {
                 }
             }
         }
-        // 落盘清单同步清掉这一段（提醒那条链路的那份）。清了之后 Dart 会把要留的
-        // 重新排一遍，两份清单因此始终一致 —— 与 cancelAllNativeAlarms 同一套。
-        AlarmStore.clearQuiets(context, TODO_BASE_ID + from, TODO_BASE_ID + to)
+        // 两份清单同步清掉这两段（清了之后 Dart 会把要留的重新排一遍）。
+        AlarmStore.clearQuiets(context, TODO_BASE_ID, upper)
+        AlarmStore.clearEntries(context, TODO_BASE_ID, upper)
     }
 
     fun schedule(

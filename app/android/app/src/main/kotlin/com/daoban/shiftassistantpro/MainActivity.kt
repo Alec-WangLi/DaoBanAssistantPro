@@ -643,8 +643,9 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     "cancelAllTodoReminders" -> {
-                        // 与另外两个 cancelAll 一样放后台：一千次 PendingIntent 操作
-                        // 会把主线程卡住（重排时正播着开关动画）。
+                        // 放后台：现在它按落盘清单逐个撤（几百到几千次 PendingIntent
+                        // 操作），再加上一小段旧号段的盲扫兜底 —— 在主线程上会把
+                        // 重排时正播着的开关动画卡住。
                         Thread {
                             try {
                                 AlarmScheduler.cancelTodoReminders(this)

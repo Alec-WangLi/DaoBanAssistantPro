@@ -78,4 +78,24 @@ void main() {
     expect(_read('$_dir/BootReceiver.kt').contains('repeatType == 3'), true,
         reason: '重启后也要按同一条规则重排，否则重启一次就退回按星期重算');
   });
+
+  test('号段：待办行在 20000 段、重复系列在 40000 段，且互不重叠', () {
+    final s = _read('$_dir/AlarmScheduler.kt');
+    expect(s.contains('TODO_BASE_ID = 20000'), true);
+    expect(s.contains('RECURRING_BASE_ID = 40000'), true);
+    // 上界：待办段不许伸进系列段
+    expect(s.contains('RECURRING_BASE_ID + 2000'), true,
+        reason: '取消与清单清理的范围要覆盖到系列段的上界');
+  });
+
+  test('取消改成按落盘清单走，不再盲目扫一大段 id', () {
+    final s = _read('$_dir/AlarmScheduler.kt');
+    final body = s.substring(s.indexOf('fun cancelTodoReminders'));
+    expect(body.contains('AlarmStore.all('), true,
+        reason: '先取消清单里记着的那几条');
+    expect(body.contains('AlarmStore.allQuiets('), true,
+        reason: '两份清单都要（响铃那条走 Entry，安静那条走 Quiet）');
+    expect(body.contains('for (i in from until to)'), false,
+        reason: '别再扫一大段 —— 号段已经到两万，每勾一次待办都要跑一遍');
+  });
 }

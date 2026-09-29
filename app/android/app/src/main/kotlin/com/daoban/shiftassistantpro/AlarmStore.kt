@@ -128,11 +128,31 @@ object AlarmStore {
         }
     }
 
+    /**
+     * 按 id 区间清闹钟清单。
+     *
+     * `AlarmScheduler.cancelTodoReminders` 收尾用：那一趟把待办那两段里的提醒都
+     * 取消了（含响铃那条链路写在 [Entry] 里的），清单也得跟着清 —— 只清安静的
+     * 那一份，下次重启 BootReceiver 会照 [Entry] 把已经取消的闹钟排回来。
+     */
+    @Synchronized
+    fun clearEntries(context: Context, from: Int, to: Int) {
+        try {
+            write(context, all(context).filterNot { it.id in from until to })
+        } catch (ex: Exception) {
+            AlarmLog.error(context, "AlarmStore.clearEntries 失败: ${ex.message}")
+        }
+    }
+
     // ---------- 安静提醒（待办提醒那条链路）----------
     //
     // 与闹钟是**两份独立的清单**：id 段不重叠（闹钟 0..400 / 10000..11000，
-    // 待办提醒 20000..21000），取消路径也各走各的 —— 合成一份反而要在每次取消时
-    // 判断类型，正是容易漏删的地方。
+    // 待办提醒 20000..21999、重复待办 40000..41999），取消路径也各走各的 ——
+    // 合成一份反而要在每次取消时判断类型，正是容易漏删的地方。
+    //
+    // 但**待办那两段横跨两份清单**：同一条待办按「联动闹钟」开关二选一，开的那条
+    // 写在 [Entry] 里、关的那条写在 [Quiet] 里。所以 `cancelTodoReminders` 两份
+    // 都要查、都要清。
 
     @Synchronized
     fun allQuiets(context: Context): List<Quiet> {

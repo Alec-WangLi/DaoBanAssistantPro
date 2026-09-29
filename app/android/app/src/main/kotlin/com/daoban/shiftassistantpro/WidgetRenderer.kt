@@ -74,9 +74,15 @@ object WidgetRenderer {
      * 互相覆盖 extras。
      *
      * 既有区间（`AlarmScheduler` / `TodoReminderReceiver` 都用 `requestCode = 各自的 id`）：
-     * 班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒 20000..21000，另有
-     * `AlarmRingService` 的通知点击 0 / 1（同样带着 `alarm_label` 打向 `MainActivity`）
-     * 与 `MainActivity.REQ_PICK_RINGTONE = 40071`。取 100000 起，全部避开。
+     * 班次闹钟 0..400、自定义闹钟 10000..11000、待办行提醒 20000..39999、重复待办
+     * 提醒 40000..41999，另有 `AlarmRingService` 的通知点击 0 / 1（同样带着
+     * `alarm_label` 打向 `MainActivity`）与 `MainActivity.REQ_PICK_RINGTONE = 40071`。
+     * 取 100000 起，全部避开。
+     *
+     * （`REQ_PICK_RINGTONE` 那个 40071 与重复待办的号段数值上挨着，但**不是同一个
+     * 池**：它是 `getActivity` 的活动池，这里是 `getBroadcast` 的闹钟池，
+     * `filterEquals` 连目标组件一起比。之所以写下来，是免得下一个人看到两个
+     * 4 万多的号以为撞了。）
      *
      * `WidgetRefreshScheduler.REQ = 40081` **不在此列**：它是 `getBroadcast` 给
      * `WidgetRefreshReceiver` 且 `setAction` 过，目标组件与 `filterEquals` 都不同，
