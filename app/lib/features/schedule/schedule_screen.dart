@@ -10,8 +10,11 @@ import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
+import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/glass_weekday_picker.dart';
 import '../../data/app_repository.dart';
+import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
@@ -236,13 +239,7 @@ class ScheduleScreen extends ConsumerWidget {
                     // 标题为空 = 这一下什么也没做，按钮的锁当帧就放开（同步返回，
                     // 见 `GlassActionButton._fire`）。
                     if (title.isEmpty) return;
-                    await ref.read(appRepositoryProvider).addEvent(
-                          title: title,
-                          date: fields.date,
-                          timeMinute: fields.timeMinute,
-                          advanceRemindMinutes: fields.advance,
-                          alarmEnabled: fields.alarm,
-                        );
+                    await fields.commit(ref, title: title);
                     await _rescheduleReminders(ref);
                     close();
                   },
@@ -256,15 +253,35 @@ class ScheduleScreen extends ConsumerWidget {
     );
   }
 
-  void _showEditDialog(BuildContext context, WidgetRef ref, ScheduleEvent e) {
+  Future<void> _showEditDialog(
+      BuildContext context, WidgetRef ref, ScheduleEvent e) async {
+    // 这条行属于某个系列时，弹窗里编的其实是**那个系列**（标题 / 时间 / 提醒 /
+    // 周期都写回系列，见 `_EventFields.commit`），所以得先把系列读出来。
+    RecurringTodo? series;
+    if (e.seriesId != null) {
+      for (final s
+          in await ref.read(appRepositoryProvider).listRecurringTodos()) {
+        if (s.id == e.seriesId) {
+          series = s;
+          break;
+        }
+      }
+    }
+    if (!context.mounted) return;
+
     final titleCtrl = TextEditingController(text: e.title);
     final fields = _EventFields(
       date: e.date,
       timeMinute: e.timeMinute,
       advance: e.advanceRemindMinutes,
       alarm: e.alarmEnabled,
+      repeat: series?.repeat,
+      weekdays: series?.weekdays ?? 0,
+      monthDay: series?.monthDay ?? 1,
+      seriesId: e.seriesId,
     );
 
+    if (!context.mounted) return;
     showDialog(
       context: context,
       barrierColor: Colors.black26,
@@ -299,14 +316,7 @@ class ScheduleScreen extends ConsumerWidget {
                   onPressed: () async {
                     final title = titleCtrl.text.trim();
                     if (title.isEmpty) return;
-                    await ref.read(appRepositoryProvider).updateEvent(
-                          e,
-                          title: title,
-                          date: fields.date,
-                          timeMinute: fields.timeMinute,
-                          advanceRemindMinutes: fields.advance,
-                          alarmEnabled: fields.alarm,
-                        );
+                    await fields.commit(ref, title: title, existing: e);
                     await _rescheduleReminders(ref);
                     close();
                   },
@@ -332,6 +342,10 @@ class _EventFields {
     this.timeMinute,
     this.advance,
     this.alarm = false,
+    this.repeat,
+    this.weekdays = 0,
+    this.monthDay = 1,
+    this.seriesId,
   });
 
   DateTime date;
@@ -345,11 +359,77 @@ class _EventFields {
   /// 到点走**闹钟**（全屏 + 循环铃声）而不是只弹一条通知。
   bool alarm;
 
+  /// 重复周期；null = 不重复（这条是一次性待办）。
+  RecurRepeat? repeat;
+
+  /// 每周的位掩码（`1 << (weekday - 1)`）。
+  int weekdays;
+
+  /// 每月的第几天（1..31）。
+  int monthDay;
+
+  /// 这条行属于哪个系列；null = 一次性待办。编辑既有行时带进来。
+  int? seriesId;
+
   List<Widget> build(BuildContext context, StateSetter setState) {
     return [
+      // 重复：四档胶囊。与闹钟弹窗的「一次性 / 每天 / 每周」同一个控件、同一套
+      // 字重规则（选中 w700、未选中 w500）—— 那是最靠近的同类件。
+      GlassSegment(
+        count: 4,
+        selectedIndex: repeat == null ? 0 : repeat!.index + 1,
+        onSelected: (i) => setState(() {
+          repeat = i == 0 ? null : RecurRepeat.values[i - 1];
+          // **「每周」至少得有一天**：掩码为空时 `occurrenceOnOrBefore` 返回 null，
+          // 生成器会当它是脏数据、一条都不生成 —— 而界面上完全看不出来，
+          // 用户只会觉得「选了每周却什么都没发生」。默认勾上今天那一天，他再改。
+          if (repeat == RecurRepeat.weekly && weekdays == 0) {
+            weekdays = 1 << (date.weekday - 1);
+          }
+        }),
+        itemBuilder: (i, selected) => Text(
+          [
+            L10n.repeatNone,
+            L10n.repeatDaily,
+            L10n.repeatWeekly,
+            L10n.repeatMonthly,
+          ][i],
+          style: AppTokens.labelSecondary.copyWith(
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+      if (repeat == RecurRepeat.weekly)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
+          child: GlassWeekdayPicker(
+            value: weekdays,
+            // **这里不补触觉**：控件自己已经发了一记（`Haptics.select()`），
+            // 调用点再补就是一次操作震两下 —— 两下比一下信息量更少。
+            onChanged: (v) => setState(() => weekdays = v),
+          ),
+        ),
+      if (repeat == RecurRepeat.monthly)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(L10n.repeatMonthly),
+          trailing: Text('$monthDay'),
+          onTap: () async {
+            final picked = await showGlassOptionPicker<int>(
+              context,
+              title: L10n.repeatMonthly,
+              options: [for (var d = 1; d <= 31; d++) d],
+              labelOf: (d) => '$d',
+              selected: monthDay,
+            );
+            if (picked != null) setState(() => monthDay = picked);
+          },
+        ),
       ListTile(
         contentPadding: EdgeInsets.zero,
-        title: Text(L10n.date),
+        // 重复项那一行不叫「日期」：它的意思是「从哪天开始生效」，之后的日期由
+        // 规则算出来，用户改不了单次（想改就改这一次那条行本身）。
+        title: Text(repeat == null ? L10n.date : L10n.startsOn),
         trailing: Text(L10n.monthDay(date)),
         onTap: () async {
           final p = await showGlassDatePicker(
@@ -411,6 +491,102 @@ class _EventFields {
         ),
       ),
     ];
+  }
+
+  /// 把这一组字段落到库里：需要时先建 / 改系列，再建 / 改那条行。
+  ///
+  /// **收在一处是有意的**：这段有四个分支（新建一次性 / 新建重复 / 编辑一次性 /
+  /// 编辑重复），抄两遍必然有一遍漏掉某个分支 —— 而漏掉不会报错，只是「改成重复
+  /// 之后不生效」或者「解绑了系列还留着」。
+  ///
+  /// [existing] 为 null 表示新建。
+  Future<void> commit(
+    WidgetRef ref, {
+    required String title,
+    ScheduleEvent? existing,
+  }) async {
+    final repo = ref.read(appRepositoryProvider);
+    var sid = seriesId;
+
+    if (repeat == null) {
+      // 从重复改回不重复：**解绑 + 删系列定义，一条待办都不删**。
+      //
+      // 这里**不能**用 `deleteRecurringTodo`（它连带删行）—— 那会把用户正在
+      // 编辑的这条待办本身也删掉，而他想要的只是「以后别再自动出现」。
+      if (sid != null) {
+        await repo.unlinkRecurringSeries(sid);
+        sid = null;
+      }
+    } else if (sid == null) {
+      // 一次性改成重复（或新建一个重复的）：建系列
+      sid = await repo.addRecurringTodo(
+        title: title,
+        repeat: repeat!,
+        startDate: date,
+        timeMinute: timeMinute,
+        advanceRemindMinutes: advance,
+        alarmEnabled: alarm,
+        weekdays: weekdays,
+        monthDay: monthDay,
+      );
+    } else {
+      // 编辑既有系列：**显式全字段构造，不用 `copyWith`** —— 那是 `?? this.x`，
+      // 没有把可空字段清成 null 的通道，用户把提醒从「提前 5 分钟」改回「不设」
+      // 时 `advanceRemindMinutes: null` 会被丢掉、旧值原样留着。
+      final s =
+          (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
+      await repo.updateRecurringTodo(RecurringTodo(
+        id: s.id,
+        title: title,
+        repeat: repeat!,
+        startDate: date,
+        timeMinute: timeMinute,
+        advanceRemindMinutes: advance,
+        alarmEnabled: alarm,
+        weekdays: weekdays,
+        monthDay: monthDay,
+        // 这两个不属于这个弹窗管的字段，原样带过去（不然会被清掉）。
+        skipThrough: s.skipThrough,
+        enabled: s.enabled,
+      ));
+    }
+
+    if (existing == null) {
+      await repo.addEvent(
+        title: title,
+        date: date,
+        timeMinute: timeMinute,
+        advanceRemindMinutes: advance,
+        alarmEnabled: alarm,
+        seriesId: sid,
+      );
+    } else {
+      await repo.updateEvent(
+        existing,
+        title: title,
+        date: date,
+        timeMinute: timeMinute,
+        advanceRemindMinutes: advance,
+        alarmEnabled: alarm,
+        seriesId: sid,
+      );
+    }
+
+    // 改完周期要把「当前这一次」对齐到新规则的最近一次发生日（spec §4.2 末段）。
+    //
+    // **这一步生成器不会替我们做**：它只往前顺延、永不回退（用户手工把这一次
+    // 挪到别的日子时不许被拽回来），而「把每周三改成每周五」恰恰需要回退。
+    // 两条路径的分工写在这里，免得后人把哪一边当成 bug 去改。
+    if (sid != null) {
+      final s = (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
+      final occ = occurrenceOnOrBefore(s, dateOnly(DateTime.now()));
+      if (occ != null) {
+        for (final r in (await repo.listEvents())
+            .where((e) => e.seriesId == sid && !e.isCompleted)) {
+          if (!isSameDay(r.date, occ)) await repo.setEventDate(r.id, occ);
+        }
+      }
+    }
   }
 }
 
