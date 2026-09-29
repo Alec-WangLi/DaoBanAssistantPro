@@ -56,6 +56,12 @@ void _stubPluginChannels() {
       (call) async =>
           call.method == 'listRingtones' ? <Map<String, Object?>>[] : null,
     );
+    // **用完还回去**（`haptics_setting_test.dart` / `alarm_screen_test.dart` 都这么写）。
+    // 不还的话，同一个文件后面再加的用例会静默继承这个桩 —— 那时想断言某个原生
+    // 方法真的被调过（或没被调），拿到的一律是这里的 null，断言恒真或恒假且看不出
+    // 原因。
+    addTearDown(
+        () => messenger.setMockMethodCallHandler(MethodChannel(channel), null));
   }
 }
 

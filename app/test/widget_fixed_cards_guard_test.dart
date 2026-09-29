@@ -124,9 +124,20 @@ void main() {
         reason: '只扫到 ${containers.length} 处 addView —— 要么渲染器被重构了，'
             '要么这条正则匹配不到新的写法，两种情况都要人来重新对一遍');
     for (final c in containers) {
-      expect(kt.contains('removeAllViews($c)'), true,
+      final add = kt.indexOf('addView($c,');
+      final clear = kt.indexOf('removeAllViews($c)');
+      expect(add, greaterThanOrEqualTo(0),
+          reason: '正则取到的容器名 $c 在文件里找不到对应的 addView 调用 —— '
+              '这条护栏自己跟源码对不上了，先修它');
+      // **顺序是这条不变量的一半，别只查「出现过」。** 先加后清同样是坏的：
+      // 那会把刚填进去的子视图又清掉，槽位渲染成空的。而且写成「顺序反了」时
+      // 「文件里出现过 removeAllViews(x)」照样成立 —— 那种检查抓不到它。
+      expect(clear, greaterThanOrEqualTo(0),
           reason: '容器 $c 被 addView 塞了子视图，却从没被 removeAllViews 清过 —— '
               '宿主 reapply 时每刷一次就叠一层，症状是内容变化后出现重影');
+      expect(clear, lessThan(add),
+          reason: '容器 $c 的 removeAllViews 出现在了它的 addView **之后** —— '
+              '先加后清会把刚填进去的那份又清掉，槽位渲染成空的');
     }
   });
 }
