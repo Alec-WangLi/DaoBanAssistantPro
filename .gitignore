@@ -40,6 +40,12 @@ Thumbs.db
 desktop.ini
 *.log
 
+# ---- Windows 工具在 cwd 掉下的缓存（护栏，不是常规产物）----
+# 2026-09-29 真踩过：powershell 的 ModuleAnalysisCache 落在这里，`git add -A`
+# 差点把它提交进去。根因是 bash 环境把 APPDATA/LOCALAPPDATA 导成了 MSYS 风格
+# 路径（`/c/...`）—— 那件事已在 `tools/bash-env.sh` 里写明。这一行只是兜底。
+/app/Microsoft/
+
 # ---- Python 构建缓存 ----
 __pycache__/
 *.pyc
