@@ -41,7 +41,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.9\n'
+const String _changelogZh = 'v0.9.10\n'
+    '· 桌面小组件（4×5 整月那张）里超过三个字的农历节日名，现在与 App 里的日历显示一致：前三个字加省略号。上一版只改了 App 里的日历，桌面那张卡漏掉了 —— 同一天两个界面显示得不一样\n'
+    '· 顺带补了几条自查用例：桌面小组件「先清空再填」的顺序、以及更新日志固定 10 条这两件长期规则，此前只靠人记，现在漏了会直接测试失败\n\n'
+
+    'v0.9.9\n'
     '· 修好桌面小组件的字重影：把某天的班按天改成休班之后，有的手机上小组件的旧内容会压在新内容上（日期、班次、周几叠成一团）。成因是小组件每次刷新都往同一个格子里再叠一份、从来不先清空 —— 多数手机上系统会替你清掉，所以一直没露出来，只在 OPPO / vivo 这类机型上现形\n'
     '· 闹钟铃声多了一档「仅震动」：不想被响醒的时候选它，到点只震动、一点声音都没有。在「我的 → 闹钟铃声」里，与内置铃声并排；那一行现在也会显示当前选的是哪一档（从前永远是一句固定提示），因为这一档设没设成功光靠听是确认不了的\n'
     '· 修好系统字号调大之后日历显示不全：农历那一行会被截成「财…」「地…」（节日名比「初一」长），周标题那一行还会挤进下面的格子。现在格子里的字一律缩到放得下、不再截断；超过三个字的节日名在格子里显示前三个字加省略号，信息卡里仍写完整的\n'
@@ -84,20 +88,13 @@ const String _changelogZh = 'v0.9.9\n'
 
     'v0.9.1\n'
     '· 修好一个用户反馈的问题：添加待办时快速连点「添加」，整个界面会变黑 —— App 本身没死也没卡住（状态栏还在、也能切走），只是界面被「关到底」了，只能杀掉重开。原因是这类保存要过一小会儿才落定，这段窗口里再点一次就会多存一条待办、并且多关一层 —— 多关掉的那一层正是 App 唯一剩下的主界面。现在连点只存一条，界面也不会再被关空\n'
-    '· 同一道护栏也盖住了另外两条能把界面点黑的路径：「点完添加马上点取消」、以及闹钟弹窗里的「添加 / 保存」\n\n'
+    '· 同一道护栏也盖住了另外两条能把界面点黑的路径：「点完添加马上点取消」、以及闹钟弹窗里的「添加 / 保存」\n';
 
-    'v0.9.0\n'
-    '· 正式稳定版，归纳 0.8.1 到 0.8.12 的全部更新\n'
-    '· 桌面小组件：三张固定尺寸的卡 —— 本周条（4×1，今天所在这一周）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历）。放置后不能拉伸，在 App 里改了排班桌面立刻跟着变，点某一天直接跳到那天的日历。升级后桌面上原有的旧小组件会消失，需要在桌面重新添加一次（小米 / HyperOS 在「支持小部件的应用 → 安卓小部件」里找）\n'
-    '· 日历上可以单独改某几天的班了：点底栏那行班次、或长按格子拖选一段（可跨周、不跨月），就能给这几天单独指定班次（请假、跟同事换班都行），不动整套排班。被改过的那天格子上有个小圆点、信息卡写着「已调班」，选择层里可一键「恢复轮转」\n'
-    '· 新增「我的模板」：调好一套排班之后，在编辑器右上角点「存为模板」，下次新建排班时直接在「我的模板」里选它，不用每次从头搭\n'
-    '· 新增「五班三倒 · 10 天一轮」模板；触觉反馈（切换开关、选中、拖选与改班时轻微震动，可在「我的 → 外观」里关掉）\n'
-    '· 修好两个用户反馈的问题：① 零点班（00:00 上班）的联动闹钟从前排在班次当天 —— 那会儿班已经结束 15 小时了，现在排在上班前 1 小时（前一天晚上），界面上写明「前一天」；② 把 5 天一轮的排班改成 10 天之后，同一天会出现两个班组上同一个班 —— 现在编辑器的「周期设置」里会点出相撞的两个班组，并给一个按钮按周期长度均分各组的起始日\n'
-    '· 修好「存了模板在新建排班时看不到」：如果这一趟先打开过「新建排班」，之后存的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
-    '· 一批小组件与界面的修复：大卡上「今天」的标记、待办数徽章跟着变、删掉小组件后不再后台刷新；小窗（高 < 480dp）改为只显示今日信息卡；横竖屏与宽屏布局收口；调整班次的选择层重排、色点与信息卡统一成 12dp\n'
-    '· 内置倒班方式模板共 20 种；数据库版本 8 → 9（新增「我的模板」一张表，原有排班与待办一条不丢）\n';
+const String _changelogEn = 'v0.9.10\n'
+    '· Lunar festival names longer than three characters now read the same on the 4×5 month widget as they do in the app\'s calendar (first three characters plus an ellipsis). The last version only fixed the in-app calendar and missed that card, so the same day looked different in the two places\n'
+    '· A couple of long-standing rules now have failing tests behind them instead of living in someone\'s memory: the widget clearing each slot before filling it, and the changelog keeping exactly 10 entries\n\n'
 
-const String _changelogEn = 'v0.9.9\n'
+    'v0.9.9\n'
     '· Fixed overlapping text in the home-screen widget: after changing a day\'s shift to a rest day, on some phones the old content was drawn on top of the new one (dates, shifts and weekdays piling up). The widget added a fresh copy into the same slot on every refresh without clearing it first — most launchers clear it for us, which is why it only showed up on OPPO / vivo devices\n'
     '· Added a "Vibrate only" ringtone: the alarm vibrates without making a sound. Pick it in Me → Alarm ringtone, next to the built-in one. That row now also shows which option is active (it used to show a fixed hint) — with this option you cannot confirm it by ear until the next alarm rings\n'
     '· Fixed the calendar being cut off with a large system font: the lunar line was truncated to "财…" / "地…" (festival names are longer than "初一"), and the weekday row bled into the grid below. Text in the cells now shrinks to fit instead of being cut off; festival names longer than three characters show their first three plus an ellipsis in the grid, and stay complete in the info card\n'
@@ -140,18 +137,7 @@ const String _changelogEn = 'v0.9.9\n'
 
     'v0.9.1\n'
     '· Fixed an issue reported by users: tapping "Add" twice in a row while adding a todo turned the whole screen black — the app itself was neither dead nor frozen (the status bar was still there, you could still switch apps), the UI had simply been dismissed one screen too far, and only killing the app brought it back. The save takes a moment to land, and a second tap inside that window stored a duplicate todo and dismissed an extra screen — that extra one being the app\'s only remaining screen. A rapid double-tap now stores a single todo and leaves the UI alone\n'
-    '· The same guard covers two other ways to black out the screen: tapping "Add" and then "Cancel" right away, and the "Add / Save" buttons in the alarm dialog\n\n'
-
-    'v0.9.0\n'
-    '· Stable release — merges everything from 0.8.1 through 0.8.12\n'
-    '· Home-screen widgets: three fixed-size cards — a week strip (4×1, the current week), a today card (4×3, the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar). They cannot be resized once placed, follow any schedule change you make in the app, and tapping a day jumps to that date in the calendar. After upgrading, the old widget disappears from your home screen — add it again (on Xiaomi / HyperOS it lives under "Apps that support widgets → Android widgets")\n'
-    '· Override individual days on the calendar: tap the shift row in the bottom bar, or long-press a cell and drag to pick a range (across weeks, not months), to give just those days a shift of their own — a day off, or swapping with a colleague — without touching the rest of the rotation. An overridden day carries a small dot in the grid and reads "Shift changed" on the info card, and the picker offers a one-tap "Restore rotation"\n'
-    '· New "My templates": once a schedule looks right, tap "Save as template" in the editor and pick it next time you create one — no more rebuilding your own roster from scratch\n'
-    '· New "5-crew 3-shift · 10-day cycle" template; haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change — turn it off under Me → Appearance)\n'
-    '· Fixed two issues reported by users: (1) shift alarms for midnight shifts (00:00 start) used to be scheduled on the shift\'s own day — by then that shift had been over for 15 hours; they now ring one hour before the shift starts, the evening before, and the UI says so; (2) after changing a 5-day cycle into a 10-day one, two crews ended up on the same shift on the same day — the editor\'s cycle section now names the colliding crews and offers a button that spreads their start dates evenly\n'
-    '· Fixed "saved templates not showing up when creating a schedule": if you had opened "New schedule" earlier in the same session, a template saved afterwards only appeared after restarting the app — the list is now re-read every time\n'
-    '· A batch of widget and UI fixes: the "today" marker on the large card, the todo-count badge keeping up, no more background refresh after you remove the widget; small windows (under 480dp tall) now show only today\'s info card; landscape and wide-screen layouts tightened up; the adjust-shift sheet reworked with the colour dot unified to 12dp\n'
-    '· 20 built-in shift-pattern templates; database version 8 → 9 (one new table for "My templates" — no existing schedules or todos are lost)\n';
+    '· The same guard covers two other ways to black out the screen: tapping "Add" and then "Cancel" right away, and the "Add / Save" buttons in the alarm dialog\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
