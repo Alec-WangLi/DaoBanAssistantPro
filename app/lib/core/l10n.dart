@@ -359,27 +359,25 @@ class L10n {
 
   // ── 方案「生效时段」（多排班表按日期衔接） ──
   //
-  // 三种「空」各有各的说法，别合并：两端都空 = 不参与衔接（**非当前**那套要
+  // 三种「空」各有各的说法，别合并：两端都空 = 不在时间线上（**非当前**那套要
   // 说成「未参与衔接」、当前那套说成「其余日子」），只有起点 = 一直持续，
   // 只有终点 = 不限起点。
-  static String get effectivePeriod => t('生效时段', 'Active period');
-  static String get effectiveFrom => t('从', 'From');
-  static String get effectiveTo => t('到', 'To');
-  static String get effectiveUnbounded => t('不限', 'Any time');
-  static String get effectiveForever => t('一直持续', 'Ongoing');
-  static String get effectiveRangeInvalid =>
-      t('开始日期晚于结束日期', 'Start date is after the end date');
+  //
+  // ⚠️ `effectiveFromDate` / `effectiveUntilDate` / `effectiveRangeSpan` 这三个是
+  // **两个标签函数**（`effectiveRangeLabel` 与 `spanRangeLabel`）共用的日期组合，
+  // 别当成上面那批「编辑器专属」的一起删掉。
   static String effectiveFromDate(String d) => t('$d 起', 'From $d');
   static String effectiveUntilDate(String d) => t('到 $d', 'Until $d');
   static String effectiveRangeSpan(String a, String b) => t('$a ～ $b', '$a – $b');
   static String get effectiveRemaining => t('其余日子', 'Other days');
   static String get effectiveNotChained => t('未参与衔接', 'Not in the timeline');
+
+  /// 日历那个弹层顶上的一句说明。**归 Task 7 处理** —— 那一屏要换成「排班时段」
+  /// 只读总览，这句话会被 `remainingHint`（Task 4 的产物）取代。现在先留着，
+  /// 因为日历还在用它（它不属于「编辑器那一节」的专属文案）。
   static String get effectiveOutsideHint => t(
       '没被上面时段覆盖的日子，用标着「其余日子」的那套。',
       'Days not covered by a period above use the one marked "Other days".');
-  static String overlappingSpan(String name) => t(
-      '与「$name」的时段重叠，重叠的日子按开始更晚的那套算。',
-      'Overlaps “$name”; those days use the one that starts later.');
   static String spansTwoSchedules(String name, String d) => t(
       '这段跨了两套排班的生效边界（$d 起换成「$name」），请分开调整。',
       'This range spans a schedule boundary (switches to “$name” on $d); adjust them separately.');

@@ -17,7 +17,6 @@ import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
-import '../../domain/schedule_chain.dart';
 import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
@@ -93,14 +92,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   bool _followHoliday = false; // 空白表：跟随法定节假日，无班次轮换
   bool _crewExpanded = false;
 
-  /// 本方案的**生效时段**（多排班表按日期衔接）。
-  ///
-  /// 两个都可空，三种含义要分清：两端都空 = **不参与衔接**（老库全是这种）、
-  /// 只有起点 = 一直持续、只有终点 = 不限起点。`null` 与「设了又清掉」在库里
-  /// 是同一个状态（都是 null），所以保存时一律显式写下去（见 `_save`）。
-  DateTime? _effectiveFrom;
-  DateTime? _effectiveTo;
-
   // 可编辑文本用真控制器（与 _classes / _teamNames 平行），而不是每次 build
   // 新建 —— 后者会让光标跳动并泄漏控制器。
   final List<TextEditingController> _nameCtrls = [];
@@ -128,26 +119,15 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   Future<void> _load() async {
     final repo = ref.read(appRepositoryProvider);
     ShiftSchedule? d;
-    int? id = widget.scheduleId;
-    if (id != null) {
-      d = await repo.getScheduleDomain(id);
+    if (widget.scheduleId != null) {
+      d = await repo.getScheduleDomain(widget.scheduleId!);
     } else {
       final active = await ref.read(activeScheduleProvider.future);
-      id = active?.currentScheduleId;
       d = active?.currentDomain;
     }
     if (d == null) {
       if (mounted) setState(() => _notFound = true);
       return;
-    }
-    // 生效时段是**库行**上的两列，领域模型（`ShiftSchedule`）不带，所以按行 id
-    // 单独读一次。读不到（id 为 null）就当作「没设过」。
-    DateTime? spanFrom;
-    DateTime? spanTo;
-    if (id != null) {
-      final span = await repo.getScheduleSpan(id);
-      spanFrom = span.from;
-      spanTo = span.to;
     }
     final dd = d;
     if (mounted && !_loaded) {
@@ -172,8 +152,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     dd.teamCount,
               );
         _followHoliday = dd.isBlank;
-        _effectiveFrom = spanFrom;
-        _effectiveTo = spanTo;
         _syncClassCtrls();
         _syncTeamNameCtrls();
       });
@@ -329,9 +307,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       _crewCard(context),
                       const SizedBox(height: AppTokens.spaceMd),
                     ],
-                    // 生效时段在 `if (!_followHoliday)` **外面**：空白表方案同样
-                    // 可以有生效时段（它是方案的元信息，与班次 / 周期无关）。
-                    _effectivePeriodCard(context),
                     _followHolidayCard(context),
                   ],
                 ),
@@ -1362,76 +1337,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     });
   }
 
-  /// 6') 生效时段：这套方案从哪天到哪天生效（两端都可留空）。
-  ///
-  /// 排在**班组设置之后、跟随法定节假日之前**，而且在 `if (!_followHoliday)`
-  /// 那块**外面** —— 空白表方案同样可以有生效时段：它是方案的**元信息**，
-  /// 与班次 / 周期无关。
-  ///
-  /// 解析规则（「时段优先、当前方案兜底」）不在这里解释第二遍，只在日历顶栏的
-  /// 切换弹窗里讲给用户听（`L10n.effectiveOutsideHint`）—— 那里才是用户看
-  /// 「谁管哪些日子」的地方。
-  Widget _effectivePeriodCard(BuildContext context) {
-    final muted = AppTokens.inkMuted(context);
-
-    // 行的配方照仓库主流那套：`GlassPressable(child: ListTile(...))`。**不要包
-    // `InkWell`**：`GlassPressable` 自己已经是「玻璃按压缩放」，再叠一层 Material
-    // 水波纹就是两套反馈叠在一起（v0.8.2 把信息卡的水波纹撤掉，理由同一条）。
-    Widget row(String label, DateTime? value, String emptyText,
-        ValueChanged<DateTime?> onChanged) {
-      return GlassPressable(
-        child: ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(label, style: AppTokens.rowPrimary),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                value == null ? emptyText : L10n.monthDay(value),
-                style: value == null
-                    ? AppTokens.rowSecondary.copyWith(color: muted)
-                    : AppTokens.rowPrimary,
-              ),
-              if (value != null)
-                IconButton(
-                  onPressed: () => setState(() => onChanged(null)),
-                  icon: const Icon(Icons.close_outlined),
-                  iconSize: AppTokens.iconSm,
-                  color: muted,
-                ),
-            ],
-          ),
-          onTap: () async {
-            // 日期选择器是选择器的**提交点**，它自己会发 `select()`
-            // （见 `core/haptics.dart` 那份名单）—— 这里不补触觉。
-            final picked = await showGlassDatePicker(
-              context,
-              initialDate: value ?? dateOnly(DateTime.now()),
-            );
-            if (picked != null && mounted) {
-              setState(() => onChanged(picked));
-            }
-          },
-        ),
-      );
-    }
-
-    return GlassTile(
-      margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(L10n.effectivePeriod, style: AppTokens.sectionTitle),
-          const SizedBox(height: AppTokens.spaceSm),
-          row(L10n.effectiveFrom, _effectiveFrom, L10n.effectiveUnbounded,
-              (d) => _effectiveFrom = d),
-          row(L10n.effectiveTo, _effectiveTo, L10n.effectiveForever,
-              (d) => _effectiveTo = d),
-        ],
-      ),
-    );
-  }
-
   /// 6) 跟随法定节假日：打开即变成空白表（无班次、无周期）。
   Widget _followHolidayCard(BuildContext context) {
     final muted = AppTokens.inkMuted(context);
@@ -1725,20 +1630,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   Future<void> _save() async {
-    // 校验放在写库**之前**：开始晚于结束时直接打回，别写进去再让用户自己发现。
-    final from = _effectiveFrom;
-    final to = _effectiveTo;
-    if (from != null && to != null && dayNumber(from) > dayNumber(to)) {
-      showGlassSnack(context, L10n.effectiveRangeInvalid,
-          icon: Icons.error_outline);
-      return;
-    }
     setState(() => _saving = true);
     try {
       final name = _name.trim().isEmpty ? L10n.schedule : _name.trim();
       final anchor = dateOnly(_anchor);
       final repo = ref.read(appRepositoryProvider);
-      final id = await repo.saveSchedule(
+      await repo.saveSchedule(
             scheduleId: widget.scheduleId ??
                 ref.read(activeScheduleProvider).valueOrNull?.currentScheduleId,
             name: name,
@@ -1751,67 +1648,14 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             ourTeamIndex: _ourTeamIndex,
             teamOffsets: _teamOffsets,
           );
-      // 生效时段**单独写**：`saveSchedule` 是整行覆盖，给它加两个可空参数意味着
-      // 每个调用点都得记得带上，漏一个就把用户设好的时段静默清掉（理由与
-      // `setScheduleSpan` / `setEventDate` 两处注释同）。
-      await repo.setScheduleSpan(id, from: _effectiveFrom, to: _effectiveTo);
-      // 改了时段 = 某些天的班变了，闹钟必须跟着重排。
-      //
       // 重排读的是**整条链**（`rescheduleAll` → `getActiveSchedules`），链上既有
-      // 刚编辑的这套、也有当前方案 —— 所以「编辑的是一套非当前方案」这条路径
-      // 本来就对，不必再特别处理。
+      // 刚编辑的这套、也有「其余时间」那套 —— 所以「编辑的是一套非当前方案」
+      // 这条路径本来就对，不必再特别处理。
       await AlarmService.rescheduleAll(repo);
-      // 重叠提示放在 `pop` 之前：`ScaffoldMessenger` 是根上那一个（由 `MaterialApp`
-      // 提供），所以提示条不会跟着本页一起销毁；而 `pop` 之后再弹的话，这个
-      // `context` 已经不能用了。
-      await _warnIfSpanOverlaps(id);
       // 返回 true 告知上层「已保存」，由上层弹提示（避免 SnackBar 随页面一起销毁）
       if (mounted) Navigator.of(context).pop(true);
     } finally {
       if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  /// 保存后若与别的方案时段重叠，弹一句说明（**不拦** —— 解析规则给的是确定答案）。
-  ///
-  /// 判定只看 `from` / `to`，但提示里要写**对方的名字**，所以壳方案拿真实的名字与
-  /// 锚点搭：直接复用 `_draftSchedule()` 的话，四个调用点会各自写成自己。
-  ///
-  /// **走 `repo.listSchedules()` 而不是 `schedulesProvider`**：后者挂在
-  /// `databaseProvider` 上（`AppDatabase()` 会开真库），而本页要的只是「别的方案
-  /// 各管哪一段」—— 用注入进来的仓库，编辑器测试才替换得掉。
-  Future<void> _warnIfSpanOverlaps(int id) async {
-    List<ShiftScheduleRow> rows;
-    try {
-      rows = await ref.read(appRepositoryProvider).listSchedules();
-    } catch (_) {
-      return; // 读不到就别打扰用户：这只是「顺便提一句」
-    }
-    ShiftSchedule shell(String name, DateTime anchor) => ShiftSchedule(
-          name: name,
-          anchorDate: anchor,
-          classes: const [],
-          cycle: const [],
-        );
-    final all = [
-      for (final r in rows)
-        ScheduleSpan(
-          id: r.id,
-          schedule: shell(r.name, r.anchorDate),
-          from: r.effectiveFrom,
-          to: r.effectiveTo,
-        ),
-    ];
-    final self = ScheduleSpan(
-      id: id,
-      schedule: shell(_name, _anchor),
-      from: _effectiveFrom,
-      to: _effectiveTo,
-    );
-    final clash = overlappingSpans(all, self);
-    if (clash.isNotEmpty && mounted) {
-      showGlassSnack(context, L10n.overlappingSpan(clash.first.schedule.name),
-          icon: Icons.info_outline);
     }
   }
 }
