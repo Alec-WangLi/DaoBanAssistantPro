@@ -6,6 +6,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 
 import '../../core/l10n.dart';
 import '../../data/app_repository.dart';
+import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart';
 import '../widget/widget_service.dart';
 
@@ -142,6 +143,65 @@ List<ShiftAlarmPlan> planShiftAlarms(
   return plans;
 }
 
+/// 一条重复待办提醒的排定计划。
+///
+/// 队首（[fireAt]）现在排给原生；[repeatTimes] 是它后面还跟着的几次 —— 一起递
+/// 过去，由原生在响完之后**弹队首、续队尾**，所以 App 长期不开也不漏。
+class RecurringAlarmPlan {
+  const RecurringAlarmPlan({
+    required this.seriesId,
+    required this.fireAt,
+    required this.repeatTimes,
+  });
+
+  final int seriesId;
+  final DateTime fireAt;
+
+  /// [fireAt] 之后的下几次触发时刻（升序，不含 [fireAt]）。
+  final List<DateTime> repeatTimes;
+}
+
+/// 纯函数：把系列列表算成要排的提醒。**不碰通知通道、不读时钟**。
+///
+/// 抽出来是为了能直接单测 —— 它错了不会报错，只会**在错的时候提醒**或者
+/// **根本不提醒**，两样都靠界面看不出来（与 [planShiftAlarms] 同一条理由）。
+///
+/// 关键的一条：时刻从 [from] **之后**算起（`upcomingFireTimes` 的语义），不是从
+/// 「当前那一次的日期」算起 —— 下午打开 App 时今天那次早过去了，照那一次排等于
+/// 永远排不上。
+///
+/// 规则**不递给原生**：那一串绝对时刻就是全部，原生只做「弹队首、续队尾」。
+/// 把月份 / 星期掩码 / 提前提醒的偏移照抄一份到 Kotlin 会变成第二份实现，而原生
+/// 在这个仓库里没有可跑的测试目标 —— 两份迟早对不上，症状还是「某天没响」。
+List<RecurringAlarmPlan> planRecurringReminders(
+  List<RecurringTodo> series, {
+  required DateTime from,
+  int days = 180,
+  int cap = 200,
+}) {
+  final out = <RecurringAlarmPlan>[];
+  for (final s in series) {
+    final id = s.id;
+    // 提醒的号是 `_recurringBaseId + 系列 id`，没有 id 就没有稳定的号可排。
+    if (id == null) continue;
+    final times = upcomingFireTimes(
+      s,
+      from: from,
+      // 「没设时间按几点提醒」是提醒层的策略，领域层不知道也不该知道。
+      clockMinute: s.timeMinute ?? allDayReminderHour * 60,
+      days: days,
+      cap: cap,
+    );
+    if (times.isEmpty) continue;
+    out.add(RecurringAlarmPlan(
+      seriesId: id,
+      fireAt: times.first,
+      repeatTimes: times.skip(1).toList(),
+    ));
+  }
+  return out;
+}
+
 /// 某天这个班次**还有没有没响过的**闹钟 —— 闹钟页「未来 30 天」那一行留不留。
 ///
 /// **不能只看第一条**（那是只有一个闹钟时的口径）：首条已响、后面还有时
@@ -212,9 +272,19 @@ class AlarmService {
 
   static const _customBaseId = 10000;
 
-  /// 待办提醒的原生 id 基址。三段互不重叠：班次 0..400、自定义 10000..11000、
-  /// 待办 20000..21000（原生侧按这几个区间扫，见 `MainActivity` 的 cancel 分支）。
+  /// 待办提醒的原生 id 基址。
+  ///
+  /// **四段互不重叠**，原生侧按区间扫着取消（见 `MainActivity` 的几个 cancel 分支）：
+  /// 班次 `0..400`、自定义闹钟 `10000..11000`、待办行 `20000..`（留到 39999）、
+  /// 重复待办系列 `40000..41999`。
+  ///
+  /// 为什么把重复待办单列一段：它的号按**系列 id** 算，而待办行的号按**行 id** 算，
+  /// 而行 id 只增不减（`AUTOINCREMENT` 永不复用）—— 两者共用一个自增序列的话，
+  /// 行号迟早会把提醒的号挤出去，越界之后提醒排得下去、谁也取消不掉。
   static const _eventBaseId = 20000;
+
+  /// 重复待办提醒的原生 id 基址（id = `40000 + 系列 id`）。
+  static const _recurringBaseId = 40000;
 
   static Future<void> init() async {
     // 时区库：当前**没有**用它的地方 —— 排定全部走原生（epoch 毫秒）或
@@ -425,6 +495,7 @@ class AlarmService {
     int hour = 0,
     int minute = 0,
     int weekdays = 0,
+    List<DateTime> repeatTimes = const [],
   }) async {
     try {
       await _settingsChannel.invokeMethod('scheduleNativeAlarm', {
@@ -432,10 +503,16 @@ class AlarmService {
         'millis': fireAt.millisecondsSinceEpoch,
         'label': label,
         'detail': detail,
-        'repeatType': repeatType,
+        // **队列优先**：带时刻表时一律发 3（「时刻表驱动」），原生据此走
+        // 「弹队首、续队尾」，而不是自定义闹钟的 nextDaily / nextWeekly 重算 ——
+        // 重复待办的那些边角（月末、多选星期几、夏令时）只在 Dart 侧算得对。
+        'repeatType': repeatTimes.isEmpty ? repeatType : 3,
         'hour': hour,
         'minute': minute,
         'weekdays': weekdays,
+        'repeatTimes': [
+          for (final t in repeatTimes) t.millisecondsSinceEpoch,
+        ],
       });
       await logInfo(
           'scheduleNativeAlarm 成功: id=$id, label=$label, repeatType=$repeatType');
@@ -709,6 +786,7 @@ class AlarmService {
     DateTime fireAt, {
     required String title,
     required String body,
+    List<DateTime> repeatTimes = const [],
   }) async {
     try {
       await _settingsChannel.invokeMethod('scheduleTodoReminder', {
@@ -716,6 +794,11 @@ class AlarmService {
         'millis': fireAt.millisecondsSinceEpoch,
         'title': title,
         'body': body,
+        // 后续几次的绝对时刻（升序）。**规则不递过去** —— 原生只做「弹队首、
+        // 续队尾」，规则判断全在 Dart 侧（那边有测试）。空数组 = 一次性提醒。
+        'repeatTimes': [
+          for (final t in repeatTimes) t.millisecondsSinceEpoch,
+        ],
       });
     } catch (e) {
       await appendLog('scheduleTodoReminder 失败: $e');
@@ -790,6 +873,9 @@ class AlarmService {
       overrides: await repo.listShiftAlarmOverrides(),
       events: await repo.listEvents(),
     );
+    // 重复待办的提醒走独立号段，与上面那条链路互不影响（`reschedule` 里的
+    // 待办那一段会跳过带 `seriesId` 的行）。
+    await rescheduleRecurringReminders(await repo.listRecurringTodos());
   }
 
   /// 清除并按 [schedule] + [customAlarms] + [events] + [overrides] 重排所有闹钟。
@@ -908,6 +994,9 @@ class AlarmService {
     await cancelAllTodoReminders();
     final now = DateTime.now();
     for (final e in events) {
+      // **重复待办的「某一次」不在这里排**：它的提醒由系列那一条负责
+      // （`rescheduleRecurringReminders`）。两处都排的话同一次会响两声。
+      if (e.seriesId != null) continue;
       final fireAt = eventReminderTime(e);
       if (fireAt == null || !fireAt.isAfter(now)) continue;
       try {
@@ -924,6 +1013,41 @@ class AlarmService {
         }
       } catch (err) {
         await appendLog('rescheduleEventReminders: 排定失败: $err');
+      }
+    }
+  }
+
+  /// 重排全部重复待办的提醒（与 [rescheduleEventReminders] 分工，见那里的说明）。
+  ///
+  /// 每次都把整条时刻表**重新算一遍**再排：`cancelTodoReminders` 已经把这一段
+  /// 清空了，所以这里排的就是全部 —— 停了、删了的系列自然不会再排上。
+  static Future<void> rescheduleRecurringReminders(
+      List<RecurringTodo> series) async {
+    final plans = planRecurringReminders(series, from: DateTime.now());
+    for (final p in plans) {
+      final s = series.firstWhere((x) => x.id == p.seriesId);
+      final id = _recurringBaseId + p.seriesId;
+      try {
+        if (s.alarmEnabled) {
+          await scheduleNativeAlarm(
+            id,
+            p.fireAt,
+            s.title,
+            detail: s.ruleWithTime,
+            repeatTimes: p.repeatTimes,
+          );
+        } else {
+          await scheduleTodoReminder(
+            id,
+            p.fireAt,
+            title: s.title,
+            // 正文写**规则**不写日期：同一条提醒会跨很多次，写死日期第二次就是错的。
+            body: s.ruleWithTime,
+            repeatTimes: p.repeatTimes,
+          );
+        }
+      } catch (e) {
+        await appendLog('rescheduleRecurringReminders: 排定失败: $e');
       }
     }
   }
