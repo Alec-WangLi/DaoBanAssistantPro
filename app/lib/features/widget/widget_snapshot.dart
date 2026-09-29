@@ -117,7 +117,14 @@ Map<String, Object?> buildWidgetSnapshot({
       'color': shift?.color ?? 0,
       'timeRange': timeRange,
       // 月历格子的第三行。原生不查农历（那是 Dart 侧的事），所以按日期烘焙。
-      'lunarShort': lunar.shortLabel,
+      //
+      // 用 `cellLabel`（≤3 字 + 省略号）而不是 `shortLabel`：月历格子与 App 的
+      // 日历格子是同一种窄格子（约 40dp、11sp），原生那边是 `maxLines=1` +
+      // `ellipsize=end`。喂完整名字的话，「全民国防教育日」这种 7 字节日名会被
+      // 原生截成「全民…」，而 App 里的同一天写着「全民国…」—— 同一天两个界面
+      // 显示得不一样，而且这一版修的正是「农历显示不全」，桌面那张卡不该漏掉。
+      // （今日卡用的是 `lunarFull`，不受影响。）
+      'lunarShort': lunar.cellLabel,
       'lunarIsHoliday': lunar.isLegalHoliday,
       // v1 的 `abbrInk`（`AppTokens.onSolid` 算出的胶囊字色）在本版**删掉**：
       // 胶囊底从实心班次色改成 14% 淡染后，`onSolid` 给的黑/白字在淡染底上是错的

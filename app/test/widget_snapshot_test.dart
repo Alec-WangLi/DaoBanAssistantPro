@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/domain/lunar_info.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/features/widget/widget_snapshot.dart';
@@ -148,6 +149,29 @@ void main() {
     expect(months.map((m) => '${m['y']}-${m['m']}').toList(),
         ['2026-9', '2026-10', '2026-11']);
     expect(months.first['title'], L10n.yearMonth(DateTime(2026, 9)));
+  });
+
+  test('月历格子的农历走 cellLabel：超长节日名截到 3 个字，与 App 日历一致', () {
+    // 2026-09-19 是「全民国防教育日」（7 个字）。桌面月历格子与 App 的日历格子是
+    // 同一种窄格子（约 40dp / 11sp），原生那边 `wg_mc_lunar` 是 maxLines=1 +
+    // ellipsize=end —— 喂完整名字会被原生截成「全民…」，而 App 里同一天写着
+    // 「全民国…」：同一天两个界面显示得不一样，而且这一版修的正是「农历显示不全」。
+    final s = buildWidgetSnapshot(
+      schedule: null,
+      now: DateTime(2026, 9, 19, 10),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+    final days = (s['days']! as List).cast<Map>();
+    Map dayOf(int day) =>
+        days.firstWhere((e) => e['day'] == dayNumber(DateTime(2026, 9, day)));
+
+    expect(dayOf(19)['lunarShort'], '全民国…',
+        reason: '长节日名必须在 Dart 侧就截好 —— 原生只会再截一次，截出来还不一样');
+    // 同一条窗口里 3 个字及以内的名字一个字都不动（截断只该发生在超长的那些天）。
+    expect(dayOf(25)['lunarShort'], lunarOf(DateTime(2026, 9, 25)).shortLabel);
+    expect(dayOf(25)['lunarShort'], '中秋节');
   });
 
   test('协议版本是 2', () {
