@@ -11,6 +11,7 @@ import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
 import 'schedule_editor_screen.dart';
+import 'schedule_span_label.dart';
 import 'shift_template_picker_screen.dart';
 
 /// 排班管理：列出所有排班表，可单独编辑、新增、删除。
@@ -49,6 +50,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
                         ),
                         title: Text(s.name),
                         subtitle: Text(
+                            '${effectiveRangeLabel(s, isCurrent: isCurrent)} · '
                             '${L10n.teamCountN(parseTeamNames(s.teamNames).length)} · '
                             '${L10n.monthDay(s.anchorDate)}'
                             '${isCurrent ? ' · ${L10n.current}' : ''}'),

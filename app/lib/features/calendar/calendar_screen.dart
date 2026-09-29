@@ -21,6 +21,7 @@ import '../alarm/alarm_service.dart';
 import '../widget/widget_service.dart';
 import 'info_card_metrics.dart';
 import 'schedule_editor_screen.dart';
+import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
 import 'shift_template_picker_screen.dart';
 
@@ -808,6 +809,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   // 标题」），与 `glass_dialog` 里那些弹窗同角色 —— 原为
                   // 18/w700，本轮统一成 20/w600。
                   Text(L10n.switchSchedule, style: AppTokens.dialogTitle),
+                  const SizedBox(height: 4),
+                  // 这一句是把解析规则讲给用户听的**唯一**一处：设了时段的方案
+                  // 按天接管，没被时段覆盖的日子才归当前方案。
+                  Text(
+                    L10n.effectiveOutsideHint,
+                    style: AppTokens.rowSecondary
+                        .copyWith(color: AppTokens.inkMuted(context)),
+                  ),
                   const SizedBox(height: 8),
                   Flexible(
                     child: ListView(
@@ -827,8 +836,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                     : null,
                               ),
                               title: Text(s.name),
-                              subtitle: Text(L10n.teamCountN(
-                                  parseTeamNames(s.teamNames).length)),
+                              subtitle: Text(
+                                  '${effectiveRangeLabel(s, isCurrent: selected)} · '
+                                  '${L10n.teamCountN(parseTeamNames(s.teamNames).length)}'),
                               onTap: () async {
                                 final name = s.name;
                                 Navigator.pop(context); // 关弹窗，退回日历
