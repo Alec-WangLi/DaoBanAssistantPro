@@ -615,6 +615,28 @@ Future<void> seedRecurringTodo(AppDatabase db) async {
   );
 }
 
+/// 让种子库里**已有的第二套方案**带一个生效时段，边界落在**本月中间**。
+///
+/// 于是同一个月的格子左半边画第一套、右半边画第二套 —— 一张图就能看出衔接对不对。
+/// 边界**必须落在本月中间**：落在上月 / 下月时，这一屏什么都看不出来。
+///
+/// 刻意让**第一套（当前）不设时段**：那样切换弹层里它标的是「其余日子」——
+/// 这四个字正是用户要读懂的解析规则（设了时段的按天接管，剩下的才归当前方案），
+/// 而它只有在「当前方案没时段」时才出现。第二套设**两端**，顺带把「最长的那种
+/// 标签会不会挤坏那一行」也拍进去。
+Future<void> seedScheduleChain(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final rows = await repo.listSchedules();
+  if (rows.length < 2) return;
+  final t = DateTime.now();
+  await repo.setScheduleSpan(rows[0].id);
+  await repo.setScheduleSpan(
+    rows[1].id,
+    from: DateTime(t.year, t.month, 15),
+    to: DateTime(t.year, t.month + 1, 0), // 本月最后一天
+  );
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});

@@ -254,6 +254,33 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const _DialogHost(showUsageGuideDialog),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 多排班表按日期衔接：种子给第二套方案一个时段、边界落在**本月 15 日** ——
+    // 于是同一张图上左半月的格子画第一套、右半月的画第二套。这一屏是检验
+    // 「按天解析」的唯一一只眼睛（单测只看得到断言，看不到「两半张得一样」）。
+    slug: '27_calendar_chained',
+    title: '日历 · 排班衔接',
+    build: (db) async {
+      await seedScheduleChain(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 编辑器那一节在长页的最下面，靠 `visualScrollDown` 滚到底才拍得到。
+    //
+    // 编辑的是**第二套**（设了时段的那套）—— 于是那一节是「设好了」的形态：
+    // 两行都显示日期、右边都有清除钮。空态（两行都写「不限」/「一直持续」）
+    // 是升级后绝大多数用户会看到的那个，与它只差两个 ✕，不另出一屏。
+    slug: '29_editor_span',
+    title: '排班编辑器 · 生效时段',
+    build: (db) async {
+      await seedScheduleChain(db);
+      final rows = await AppRepository(db).listSchedules();
+      return ScheduleEditorScreen(scheduleId: rows.last.id);
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -420,4 +447,7 @@ const Map<String, double> visualScrollDown = {
   // 撞班提示挂在「周期设置」卡的末尾，10 行周期表的下面；给足量让它滚到底，
   // 靠到底后的钳位保证那张卡的下半段（提示 + 均分按钮）在画面里。
   '15_editor_crew_clash': 2400,
+  // 「生效时段」一节在班组设置与跟随法定节假日**之间**，长页的靠下位置；
+  // 给足量滚到底，靠钳位让它落在画面里。
+  '29_editor_span': 3000,
 };
