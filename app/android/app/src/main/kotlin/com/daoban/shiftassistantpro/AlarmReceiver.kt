@@ -62,8 +62,29 @@ class AlarmReceiver : BroadcastReceiver() {
             )
         }
 
-        // 3) 重复闹钟续排下一次
+        // 3) 续排下一次
         val now = System.currentTimeMillis()
+
+        // **时刻表驱动（重复待办）优先。** 队首是 Dart 侧按规则算好的下一个触发
+        // 时刻 —— 与下面自定义闹钟的 `nextDaily` / `nextWeekly` 是两套，不能混：
+        // 重复待办的月末特例、多选星期几、提前提醒的偏移都只在 Dart 侧算得对
+        // （Kotlin 侧没有可跑的测试目标）。
+        val queue = intent.getLongArrayExtra("repeatTimes") ?: LongArray(0)
+        if (repeatType == 3) {
+            val pending = AlarmScheduler.nextPending(0L, queue, now)
+            if (pending == null) {
+                // 队空了：这条重复待办就到这里，落盘清单里那条也要删
+                //（留着的话下次重启 BootReceiver 会把它当成「还没到点」再排一遍）。
+                AlarmStore.remove(context, id)
+            } else {
+                AlarmScheduler.schedule(
+                    context, id, pending.first, label, uri,
+                    repeatType, hour, minute, weekdays, detail, pending.second
+                )
+            }
+            return
+        }
+
         when (repeatType) {
             1 -> {
                 val next = AlarmScheduler.nextDaily(now, hour, minute)

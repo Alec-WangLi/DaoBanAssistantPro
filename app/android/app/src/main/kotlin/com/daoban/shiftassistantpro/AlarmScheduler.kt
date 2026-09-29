@@ -42,12 +42,15 @@ object AlarmScheduler {
         id: Int,
         millis: Long,
         title: String,
-        body: String
+        body: String,
+        repeatTimes: LongArray = LongArray(0)
     ) {
         val op = Intent(context, TodoReminderReceiver::class.java).apply {
             putExtra("id", id)
             putExtra("title", title)
             putExtra("body", body)
+            // 后面还跟着的几次点火时刻（升序）。空数组 = 一次性提醒，与从前一样。
+            putExtra("repeatTimes", repeatTimes)
         }
         val pi = PendingIntent.getBroadcast(
             context, id, op,
@@ -81,7 +84,10 @@ object AlarmScheduler {
         // 提醒就全没了。
         AlarmStore.putQuiet(
             context,
-            AlarmStore.Quiet(id = id, millis = millis, title = title, body = body)
+            AlarmStore.Quiet(
+                id = id, millis = millis, title = title, body = body,
+                repeatTimes = repeatTimes.toList()
+            )
         )
     }
 
@@ -124,7 +130,8 @@ object AlarmScheduler {
         hour: Int = 0,
         minute: Int = 0,
         weekdays: Int = 0,
-        detail: String? = null
+        detail: String? = null,
+        repeatTimes: LongArray = LongArray(0)
     ) {
         // showIntent：系统「闹钟图标/通知」用的 Activity，点击回到本 App。
         val show = Intent(context, MainActivity::class.java).apply {
@@ -151,6 +158,9 @@ object AlarmScheduler {
             putExtra("minute", minute)
             putExtra("weekdays", weekdays)
             putExtra("detail", detail)
+            // 时刻表驱动（`repeatType == 3`）时后面还跟着的几次（升序）。
+            // showIntent 那枚 PendingIntent 不用带：它只负责点通知回 App。
+            putExtra("repeatTimes", repeatTimes)
         }
         val opPi = PendingIntent.getBroadcast(
             context, id, op,
@@ -168,9 +178,29 @@ object AlarmScheduler {
             AlarmStore.Entry(
                 id = id, millis = millis, label = label, uri = uri,
                 repeatType = repeatType, hour = hour, minute = minute,
-                weekdays = weekdays, detail = detail
+                weekdays = weekdays, detail = detail,
+                repeatTimes = repeatTimes.toList()
             )
         )
+    }
+
+    /**
+     * 从「本次时刻 + 后续队列」里挑出第一个还没过的时刻，连同剩下的队列。
+     *
+     * 队列是 Dart 侧算好的（`upcomingFireTimes`，见 `alarm_service.dart` 的
+     * `planRecurringReminders`）。**规则判断一律不写在这里**：Kotlin 侧没有可跑的
+     * 测试目标，而月末特例 / 多选星期几 / 提前提醒的偏移 / 夏令时这些边角照抄
+     * 一份必然与 Dart 侧对不上 —— 症状还是「某天没响」这种不报错的。
+     *
+     * 全过了（或队列为空、时刻本身也过了）返回 null，由调用方决定「不再续排」。
+     */
+    fun nextPending(millis: Long, queue: LongArray, now: Long): Pair<Long, LongArray>? {
+        val all = LongArray(queue.size + 1)
+        all[0] = millis
+        System.arraycopy(queue, 0, all, 1, queue.size)
+        val idx = all.indexOfFirst { it > now }
+        if (idx < 0) return null
+        return all[idx] to all.copyOfRange(idx + 1, all.size)
     }
 
     /**

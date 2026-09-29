@@ -22,6 +22,7 @@ import androidx.core.content.FileProvider
 import java.io.File
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
@@ -534,7 +535,8 @@ class MainActivity : FlutterActivity() {
                             val uri = sp.getString("flutter.ringtoneUri", null)
                             AlarmScheduler.schedule(
                                 this, id, millis, label, uri,
-                                repeatType, hour, minute, weekdays, detail
+                                repeatType, hour, minute, weekdays, detail,
+                                longArrayArg(call, "repeatTimes")
                             )
                             AlarmLog.info(
                                 this,
@@ -627,7 +629,10 @@ class MainActivity : FlutterActivity() {
                             if (id < 0 || title.isEmpty()) {
                                 result.error("BAD_ARGS", "id/title 缺失", null)
                             } else {
-                                AlarmScheduler.scheduleQuiet(this, id, millis, title, body)
+                                AlarmScheduler.scheduleQuiet(
+                                    this, id, millis, title, body,
+                                    longArrayArg(call, "repeatTimes")
+                                )
                                 AlarmLog.info(
                                     this, "scheduleTodoReminder: id=$id, millis=$millis"
                                 )
@@ -824,3 +829,19 @@ class MainActivity : FlutterActivity() {
 
 /** 自选的铃声文件超过 [MainActivity] 允许复制的上限。要单独一类错误码，用户才知道该换个文件。 */
 class RingtoneTooLargeException(val bytes: Long) : Exception("ringtone too large: $bytes")
+
+/**
+ * Dart 过通道递来的「时刻表」→ `LongArray`（重复待办的原生续排用）。
+ *
+ * 声明成顶层私有函数而不是 [MainActivity] 的成员：两个 handler 都要用，而它不碰
+ * 任何 Activity 状态。
+ *
+ * 元素一律按 `Number` 取 `toLong()`：标准编解码器把 Dart 的 int 解成
+ * `Integer`（放得下 32 位时）或 `Long`，不一定是哪个。
+ * 字段缺失（老版本 Dart 不传）→ 空数组，语义就是「一次性」。
+ */
+private fun longArrayArg(call: MethodCall, key: String): LongArray {
+    val raw = call.argument<List<*>>(key) ?: return LongArray(0)
+    return raw.mapNotNull { (it as? Number)?.toLong() }.toLongArray()
+}
+

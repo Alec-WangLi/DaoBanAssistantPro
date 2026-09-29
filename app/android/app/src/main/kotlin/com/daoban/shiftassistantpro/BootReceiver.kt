@@ -40,6 +40,32 @@ class BootReceiver : BroadcastReceiver() {
 
         var rescheduled = 0
         for (e in entries) {
+            // 时刻表驱动（重复待办）：从「本次时刻 + 后续队列」里挑第一个还没过的。
+            // **必须与 `AlarmReceiver` 同一套规则** —— 否则重启一次就退回按星期重算，
+            // 月末特例与多选星期几立刻对不上。
+            if (e.repeatType == 3) {
+                val pending = AlarmScheduler.nextPending(
+                    e.millis, e.repeatTimes.toLongArray(), now
+                )
+                if (pending == null) {
+                    AlarmStore.remove(context, e.id)
+                    continue
+                }
+                try {
+                    AlarmScheduler.schedule(
+                        context, e.id, pending.first, e.label, e.uri,
+                        e.repeatType, e.hour, e.minute, e.weekdays, e.detail,
+                        pending.second
+                    )
+                    rescheduled++
+                } catch (ex: Exception) {
+                    AlarmLog.error(
+                        context,
+                        "BootReceiver: 重排 id=${e.id} 失败: ${ex.javaClass.name}: ${ex.message}"
+                    )
+                }
+                continue
+            }
             val next = when (e.repeatType) {
                 1 -> AlarmScheduler.nextDaily(now, e.hour, e.minute)
 
@@ -78,14 +104,22 @@ class BootReceiver : BroadcastReceiver() {
         // 安静提醒（待办提醒那条链路）：规则与闹钟一致 —— 还没到点的排回去，
         // 关机期间**已经错过的不补发**。一次重启冒出一串「你几小时前该交体检报告」
         // 比不提醒更烦。
+        //
+        // 重复待办靠队列续排：从「本次时刻 + 队列」里挑第一个还没过的，所以关机
+        // 期间错过的那几次会自然被跨过去（与「错过的不补」同一条规矩）。
         var quiets = 0
         for (q in AlarmStore.allQuiets(context)) {
-            if (q.millis <= now) {
+            val pending = AlarmScheduler.nextPending(
+                q.millis, q.repeatTimes.toLongArray(), now
+            )
+            if (pending == null) {
                 AlarmStore.removeQuiet(context, q.id)
                 continue
             }
             try {
-                AlarmScheduler.scheduleQuiet(context, q.id, q.millis, q.title, q.body)
+                AlarmScheduler.scheduleQuiet(
+                    context, q.id, pending.first, q.title, q.body, pending.second
+                )
                 quiets++
             } catch (ex: Exception) {
                 AlarmLog.error(
