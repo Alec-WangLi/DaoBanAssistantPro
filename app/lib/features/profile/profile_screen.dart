@@ -183,19 +183,7 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionAlarm),
-            GlassTile(
-              enableBlur: false,
-              padding: EdgeInsets.zero,
-              child: GlassPressable(
-                child: ListTile(
-                  leading: const Icon(Icons.music_note_outlined),
-                  title: Text(L10n.ringtone),
-                  subtitle: Text(L10n.ringtoneSubtitle),
-                  trailing: const Icon(Icons.chevron_right_outlined),
-                  onTap: () => _showRingtonePicker(context, ref),
-                ),
-              ),
-            ),
+            _RingtoneTile(onPick: () => _showRingtonePicker(context, ref)),
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionData),
             GlassTile(
@@ -408,6 +396,26 @@ class ProfileScreen extends ConsumerWidget {
                         onTap: () => Navigator.pop(sheetContext, 'builtin'),
                       ),
                     ),
+                    // 「仅震动」与内置铃声同级：两者都不碰自选文件，都是「不指定音源」
+                    // 的一档。放在这里而不是列表末尾，是因为设置铃声的人第一眼就该
+                    // 看到它 —— 用户反馈的就是「不想响、只想震」，让它埋在系统铃声
+                    // 底下等于没做。
+                    GlassPressable(
+                      child: ListTile(
+                        leading: const Icon(Icons.vibration),
+                        title: Text(L10n.vibrateOnlyRingtone),
+                        subtitle: Text(L10n.vibrateOnlyRingtoneSubtitle),
+                        trailing: _ringtoneTrailing(
+                          context,
+                          selected: current == AlarmService.vibrateOnlyRingtone,
+                          // 试听这一档就是**震一下**（原生侧走一次性震动）。
+                          onPreview: () => AlarmService.playRingtone(
+                              AlarmService.vibrateOnlyRingtone),
+                        ),
+                        onTap: () => Navigator.pop(
+                            sheetContext, AlarmService.vibrateOnlyRingtone),
+                      ),
+                    ),
                     // 自选铃声：只在真的设过时出现，免得平时多占一行。
                     if (_isFileRingtone(current))
                       GlassPressable(
@@ -500,17 +508,27 @@ class ProfileScreen extends ConsumerWidget {
     } else if (_isFileRingtone(selection)) {
       await sp.setString('ringtoneUri', selection);
     } else {
-      // 系统铃声：同样清掉自选文件。
+      // 其余两种：系统铃声 URI（`content://`）与「仅震动」哨兵（见
+      // `AlarmService.vibrateOnlyRingtone`）。两者都是「直接把这个值存进去」——
+      // 原生侧认的是同一个键，不需要在这里分叉。同样清掉自选文件。
+      //
+      // **哨兵这一档别写成 `remove('ringtoneUri')`**：删掉这个键的含义是「内置铃声」，
+      // 用户选了静音、闹钟反而响起来。
       await AlarmService.clearRingtoneFile();
       await sp.setString('ringtoneUri', selection);
       await sp.remove('ringtoneTitle');
     }
     await _rescheduleAlarms(ref);
     if (context.mounted) {
+      final vibrateOnly = selection == AlarmService.vibrateOnlyRingtone;
       showGlassSnack(
         context,
-        selection == 'builtin' ? L10n.setBuiltinRingtone : L10n.ringtoneSet,
-        icon: Icons.music_note_outlined,
+        selection == 'builtin'
+            ? L10n.setBuiltinRingtone
+            : vibrateOnly
+                ? L10n.setVibrateOnlyRingtone
+                : L10n.ringtoneSet,
+        icon: vibrateOnly ? Icons.vibration : Icons.music_note_outlined,
       );
     }
   }
@@ -578,6 +596,94 @@ class ProfileScreen extends ConsumerWidget {
   Future<void> _rescheduleAlarms(WidgetRef ref) async {
     await AlarmService.rescheduleAll(ref.read(appRepositoryProvider));
   }
+}
+
+/// 「闹钟铃声」这一行：副标题显示**当前生效的那一档**。
+///
+/// 为什么它必须是个 StatefulWidget：铃声存在 SharedPreferences 里，不在任何 provider
+/// 里，选择层改完之后这一行不会自己重建。不重读的话，用户刚把铃声设成「仅震动」、
+/// 退回来却还写着「选择内置、系统、你的铃声，或「仅震动」」—— 会以为自己没设成功，
+/// 而这一档设没设成功是**听不出来的**（要等到下次响铃才知道）。
+///
+/// 副标题只区分**模式**，不显示系统铃声的具体名字：那要先过 `listRingtones()` 拿
+/// uri→名字的对应（列表里才有），为一行副标题多付一次原生通道调用不值当。自选铃声
+/// 的名字是选的时候顺手存下来的（`ringtoneTitle`），直接读就有。
+class _RingtoneTile extends ConsumerStatefulWidget {
+  const _RingtoneTile({required this.onPick});
+
+  /// 弹出选择层；返回后本组件重读一次设置。
+  final Future<void> Function() onPick;
+
+  @override
+  ConsumerState<_RingtoneTile> createState() => _RingtoneTileState();
+}
+
+class _RingtoneTileState extends ConsumerState<_RingtoneTile> {
+  String? _uri;
+  String? _title;
+
+  /// 还没读出来时用 `false` 区分「读到的是内置」和「还没读到」—— 读设置要过一次
+  /// 异步，首帧必然还没有值。
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    String? uri;
+    String? title;
+    try {
+      final sp = await SharedPreferences.getInstance();
+      uri = sp.getString('ringtoneUri');
+      title = sp.getString('ringtoneTitle');
+    } catch (_) {
+      // 读不到（极少见）就退回那句泛泛的提示，不抛给界面 —— 这一行不该因为读设置
+      // 失败而把整页带崩。
+    }
+    if (!mounted) return;
+    setState(() {
+      _uri = uri;
+      _title = title;
+      _loaded = true;
+    });
+  }
+
+  String get _subtitle {
+    if (!_loaded) return L10n.ringtoneSubtitle;
+    final uri = _uri;
+    if (uri == AlarmService.vibrateOnlyRingtone) {
+      return L10n.vibrateOnlyRingtone;
+    }
+    // 没存这个键 = 内置（不是存了 'builtin'，见 `_showRingtonePicker` 的写入分支）。
+    if (uri == null || uri.isEmpty) return L10n.builtinRingtone;
+    if (uri.startsWith('file://')) {
+      final t = _title?.trim();
+      return (t == null || t.isEmpty) ? L10n.myRingtone : t;
+    }
+    return L10n.systemRingtones;
+  }
+
+  @override
+  Widget build(BuildContext context) => GlassTile(
+        enableBlur: false,
+        padding: EdgeInsets.zero,
+        child: GlassPressable(
+          child: ListTile(
+            leading: const Icon(Icons.music_note_outlined),
+            title: Text(L10n.ringtone),
+            subtitle:
+                Text(_subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: const Icon(Icons.chevron_right_outlined),
+            onTap: () async {
+              await widget.onPick();
+              if (mounted) await _load();
+            },
+          ),
+        ),
+      );
 }
 
 /// 权限检测卡：展示通知 + 精确闹钟权限状态，未开启时可一键跳转系统开启。

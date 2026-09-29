@@ -444,25 +444,40 @@ class MainActivity : FlutterActivity() {
                     "playRingtone" -> {
                         try {
                             playingRingtone?.stop()
+                            playingRingtone = null
                             val uriStr = call.argument<String>("uri")
-                            val uri = if (uriStr.isNullOrEmpty()) {
-                                Uri.parse(
-                                    "android.resource://$packageName/raw/alarm_beep"
+                            // 「仅震动」试听：震一下就走。**不能落到下面的
+                            // `Uri.parse("vibrateOnly")` 上** —— 那会当成一个坏音源，
+                            // 被 RingtoneManager 静默忽略或抛异常，用户按了试听
+                            // 什么都不发生，看着就像这个选项坏了。
+                            if (uriStr == AlarmSound.VIBRATE_ONLY) {
+                                val v = getSystemService(VIBRATOR_SERVICE) as Vibrator
+                                v.vibrate(
+                                    VibrationEffect.createOneShot(
+                                        400, VibrationEffect.DEFAULT_AMPLITUDE
+                                    )
                                 )
+                                result.success(null)
                             } else {
-                                Uri.parse(uriStr)
+                                val uri = if (uriStr.isNullOrEmpty()) {
+                                    Uri.parse(
+                                        "android.resource://$packageName/raw/alarm_beep"
+                                    )
+                                } else {
+                                    Uri.parse(uriStr)
+                                }
+                                val rt = RingtoneManager.getRingtone(this, uri)
+                                // 试听走「闹钟音量」，静音/免打扰下也能听到
+                                rt.setAudioAttributes(
+                                    AudioAttributes.Builder()
+                                        .setUsage(AudioAttributes.USAGE_ALARM)
+                                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                        .build()
+                                )
+                                playingRingtone = rt
+                                rt.play()
+                                result.success(null)
                             }
-                            val rt = RingtoneManager.getRingtone(this, uri)
-                            // 试听走「闹钟音量」，静音/免打扰下也能听到
-                            rt.setAudioAttributes(
-                                AudioAttributes.Builder()
-                                    .setUsage(AudioAttributes.USAGE_ALARM)
-                                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                                    .build()
-                            )
-                            playingRingtone = rt
-                            rt.play()
-                            result.success(null)
                         } catch (e: Exception) {
                             result.error("PLAY_RINGTONE_FAILED", e.message, null)
                         }

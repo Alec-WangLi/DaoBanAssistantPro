@@ -607,6 +607,21 @@ class AlarmService {
     } catch (_) {}
   }
 
+  /// 「仅震动」——响铃时**不发声**，只有震动。
+  ///
+  /// 它和铃声 URI 存在**同一个** SharedPreferences 键（`ringtoneUri`）里，因为整条
+  /// 链路本来就是一路的字符串：prefs → `AlarmScheduler` 的 Intent extra →
+  /// `AlarmReceiver` → `AlarmRingService` → `AlarmSound`。另加一个布尔开关要同时改
+  /// 这五处、还得改 `AlarmStore` 的开机重排记录，不值当。
+  ///
+  /// 它不可能与真实音源撞上：系统铃声是 `content://`、自选是 `file://`、内置**根本不存**
+  /// 这个键（见 `profile_screen.dart` 写入的四个分支）。
+  ///
+  /// ⚠️ 与 Kotlin 侧的 `AlarmSound.VIBRATE_ONLY` **必须逐字一致**。两边各持一份常量
+  /// 而不是互相 import（Dart 与 Kotlin 之间没有共享常量的通道），所以由
+  /// `test/ringtone_vibrate_only_test.dart` 扫两边源码比对，改单边会当场变红。
+  static const String vibrateOnlyRingtone = 'vibrateOnly';
+
   /// 让用户从系统文件选择器挑一个音频当铃声。
   ///
   /// 原生侧会把选中的文件**复制进应用私有目录**再返回 `file://` 路径 —— 不直接

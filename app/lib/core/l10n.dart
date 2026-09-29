@@ -144,7 +144,7 @@ class L10n {
   static String get scheduleManagement => t('排班管理', 'Schedule management');
   static String get scheduleManagementSubtitle => t('管理、编辑你的排班表', 'Manage and edit your schedules');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
-  static String get ringtoneSubtitle => t('选择内置、系统或你的铃声', 'Choose a built-in, system, or your own ringtone');
+  static String get ringtoneSubtitle => t('选择内置、系统、你的铃声，或「仅震动」', 'Choose a built-in, system, or your own ringtone, or vibrate only');
   static String get clearReset => t('清空重置', 'Clear & reset');
   static String get clearResetSubtitle => t('清空排班与日程，恢复默认四班两倒', 'Clear schedules & events, restore default rotation');
   static String get version => t('版本', 'Version');
@@ -185,6 +185,11 @@ class L10n {
   static String get logCopied => t('日志已复制到剪贴板', 'Log copied to clipboard');
   static String get builtinRingtone => t('内置铃声（默认）', 'Built-in (default)');
   static String get builtinRingtoneSubtitle => t('叮咚数字闹钟声', 'Ding-dong digital alarm');
+  static String get vibrateOnlyRingtone => t('仅震动', 'Vibrate only');
+  static String get vibrateOnlyRingtoneSubtitle =>
+      t('只震动，不发出声音', 'Vibrates without making a sound');
+  static String get setVibrateOnlyRingtone =>
+      t('已设为「仅震动」，下次响铃生效', 'Set to "Vibrate only", takes effect next alarm');
   static String get preview => t('试听', 'Preview');
   static String get noRingtones => t('没有读取到系统铃声，请选择内置铃声', 'No system ringtones found, choose the built-in one');
   static String get setBuiltinRingtone => t('已设为内置铃声', 'Set to built-in ringtone');
@@ -612,8 +617,8 @@ class L10n {
             'Add custom alarms too: once / daily / weekly'),
         t('零点班（00:00 上班）的响铃排在上班前 1 小时，也就是前一天晚上，列表里写明「前一天」',
             'A midnight shift (00:00 start) rings an hour before work starts — the evening before, marked "day before" in the list'),
-        t('铃声可用内置、系统铃声，或从手机里自选',
-            'Pick a built-in, system or your own ringtone'),
+        t('铃声可用内置、系统铃声、从手机里自选，或选「仅震动」只震不响',
+            'Pick a built-in, system or your own ringtone — or "Vibrate only" to ring silently'),
       ];
   static String get guideTodoTitle => t('待办', 'Todo');
   static List<String> get guideTodoDesc => [
