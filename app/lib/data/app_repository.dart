@@ -745,6 +745,72 @@ class AppRepository {
     return rows.map((r) => r.toDomain()).toList();
   }
 
+  /// 把每个重复待办的「当前这一次」推进到今天该有的样子。
+  ///
+  /// [today] 由调用方注入，**不读 `DateTime.now()`** —— 读时钟的话，月末、跨年、
+  /// 起始日这些边界全都测不成（与 `planShiftAlarms(from:)` 同一条理由）。
+  ///
+  /// 一个事务里做完：这份数据的不变量是「一个系列至多一条未完成的行」，
+  /// 中途失败留下两条就破了。
+  ///
+  /// 跑在三个时点：App 启动、回到前台、改完系列之后（见 `home_shell.dart` 与
+  /// `schedule_screen.dart`）。列表是 drift 流，**不写库就不会重发**，所以
+  /// 「一直没关过的 App 跨过午夜」那条路径必须靠「回到前台」这一下。
+  Future<void> advanceRecurringTodos({required DateTime today}) async {
+    await db.transaction(() async {
+      final series = await listRecurringTodos();
+      final rows = await listEvents();
+      for (final s in series) {
+        // 停用：不生成也不顺延。已经出现的那条留着 —— 那是用户还没做的一件事，
+        // 替他删掉他就再也看不见了。
+        if (!s.enabled) continue;
+
+        final occ = occurrenceOnOrBefore(s, today);
+        if (occ == null) continue; // 还没到起始日
+        // 「这次不要了」：跳过标记与 occurrence 都是「自 epoch 天数」。
+        // 直接拿 DateTime 比 int 是拿毫秒去比天数，恒不成立 —— 那正是「删了又回来」。
+        if (s.skipThrough != null && dayNumber(occ) <= s.skipThrough!) continue;
+
+        final live = rows
+            .where((r) => r.seriesId == s.id && !r.isCompleted)
+            .toList()
+          ..sort((a, b) => a.date.compareTo(b.date));
+
+        if (live.isEmpty) {
+          await db.into(db.scheduleEvents).insert(
+                ScheduleEventsCompanion.insert(
+                  title: s.title,
+                  date: occ,
+                  timeMinute: Value(s.timeMinute),
+                  advanceRemindMinutes: Value(s.advanceRemindMinutes),
+                  alarmEnabled: Value(s.alarmEnabled),
+                  seriesId: Value(s.id),
+                  createdAt: DateTime.now(),
+                ),
+              );
+          continue;
+        }
+
+        // 多条未完成是脏数据：留日期最新的那条，其余按已完成处理（留下痕迹，
+        // 但不再参与「当前那一条」的判定）。
+        for (final extra in live.take(live.length - 1)) {
+          await (db.update(db.scheduleEvents)
+                ..where((r) => r.id.equals(extra.id)))
+              .write(const ScheduleEventsCompanion(isCompleted: Value(true)));
+        }
+        final keep = live.last;
+        // **只往前顺延**：用户手工把这一次改到别的日子（这周的会挪到周五）之后，
+        // 生成器不许把它拽回来。这是有意的 —— 代价是「改周期」那条路径要自己把
+        // 当前那条对齐（见 `_EventFields.commit`），别把哪一边当 bug 改。
+        if (daysBetween(keep.date, occ) > 0) {
+          await (db.update(db.scheduleEvents)
+                ..where((r) => r.id.equals(keep.id)))
+              .write(ScheduleEventsCompanion(date: Value(occ)));
+        }
+      }
+    });
+  }
+
   /// 立即读取全部日程（重排提醒用，避免读 Riverpod 流拿到旧值）。
   Future<List<ScheduleEvent>> listEvents() {
     final q = db.select(db.scheduleEvents)
