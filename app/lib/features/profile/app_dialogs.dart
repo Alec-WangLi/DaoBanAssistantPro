@@ -41,7 +41,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.8\n'
+const String _changelogZh = 'v0.9.9\n'
+    '· 修好桌面小组件的字重影：把某天的班按天改成休班之后，有的手机上小组件的旧内容会压在新内容上（日期、班次、周几叠成一团）。成因是小组件每次刷新都往同一个格子里再叠一份、从来不先清空 —— 多数手机上系统会替你清掉，所以一直没露出来，只在 OPPO / vivo 这类机型上现形\n'
+    '· 闹钟铃声多了一档「仅震动」：不想被响醒的时候选它，到点只震动、一点声音都没有。在「我的 → 闹钟铃声」里，与内置铃声并排；那一行现在也会显示当前选的是哪一档（从前永远是一句固定提示），因为这一档设没设成功光靠听是确认不了的\n'
+    '· 修好系统字号调大之后日历显示不全：农历那一行会被截成「财…」「地…」（节日名比「初一」长），周标题那一行还会挤进下面的格子。现在格子里的字一律缩到放得下、不再截断；超过三个字的节日名在格子里显示前三个字加省略号，信息卡里仍写完整的\n'
+    '· 顺带给视觉工装加了一档「大字号」的屏 —— 此前每一屏都只在默认字号下出图，「系统字号放大之后文字被截」这类问题在图上根本看不见（这一轮的日历截断就是这么漏掉的）\n\n'
+
+    'v0.9.8\n'
     '· 日历页的背景不再是死板的纯色：加了一层极慢的流光（26 秒才挪一小段）。压在上面的磨砂卡片这下「有东西可磨」了 —— 在这之前整页只有响铃界面有那层光，日历是一块平色，玻璃只看得见高光与白描边。浅色主题下它很轻（格子几乎是实心白，光主要从格子缝里和信息卡的磨砂上透出来），深色主题下更明显\n'
     '· 这层光是按最慢的节奏推进的，不是每帧重画：它 26 秒才漂 46dp，逐帧画每帧只动 0.03dp、没人看得出来，却会让整页永远不空闲、把压在背景上的每一层模糊拖着每帧重算\n'
     '· 「我的 → 外观 → 高级材质」关掉时，这层光会停下 —— 那个开关的意思就是「这台机器不做贵的合成」，不该一边关模糊一边还在推背景\n\n'
@@ -89,13 +95,15 @@ const String _changelogZh = 'v0.9.8\n'
     '· 修好两个用户反馈的问题：① 零点班（00:00 上班）的联动闹钟从前排在班次当天 —— 那会儿班已经结束 15 小时了，现在排在上班前 1 小时（前一天晚上），界面上写明「前一天」；② 把 5 天一轮的排班改成 10 天之后，同一天会出现两个班组上同一个班 —— 现在编辑器的「周期设置」里会点出相撞的两个班组，并给一个按钮按周期长度均分各组的起始日\n'
     '· 修好「存了模板在新建排班时看不到」：如果这一趟先打开过「新建排班」，之后存的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
     '· 一批小组件与界面的修复：大卡上「今天」的标记、待办数徽章跟着变、删掉小组件后不再后台刷新；小窗（高 < 480dp）改为只显示今日信息卡；横竖屏与宽屏布局收口；调整班次的选择层重排、色点与信息卡统一成 12dp\n'
-    '· 内置倒班方式模板共 20 种；数据库版本 8 → 9（新增「我的模板」一张表，原有排班与待办一条不丢）\n\n'
+    '· 内置倒班方式模板共 20 种；数据库版本 8 → 9（新增「我的模板」一张表，原有排班与待办一条不丢）\n';
 
-    'v0.8.12\n'
-    '· 修好「存了模板却在新建排班时看不到」：如果这一趟开 App 时先打开过一次「新建排班」（那时还没有模板），之后存下的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
-    '· 存完模板的提示补了一句去哪儿找：「新建排班时可选」\n';
+const String _changelogEn = 'v0.9.9\n'
+    '· Fixed overlapping text in the home-screen widget: after changing a day\'s shift to a rest day, on some phones the old content was drawn on top of the new one (dates, shifts and weekdays piling up). The widget added a fresh copy into the same slot on every refresh without clearing it first — most launchers clear it for us, which is why it only showed up on OPPO / vivo devices\n'
+    '· Added a "Vibrate only" ringtone: the alarm vibrates without making a sound. Pick it in Me → Alarm ringtone, next to the built-in one. That row now also shows which option is active (it used to show a fixed hint) — with this option you cannot confirm it by ear until the next alarm rings\n'
+    '· Fixed the calendar being cut off with a large system font: the lunar line was truncated to "财…" / "地…" (festival names are longer than "初一"), and the weekday row bled into the grid below. Text in the cells now shrinks to fit instead of being cut off; festival names longer than three characters show their first three plus an ellipsis in the grid, and stay complete in the info card\n'
+    '· The visual harness now renders a large-font screen too. Every screen used to be captured at the default font size only, so "text cut off when the system font is enlarged" was structurally invisible in the images — which is how this round\'s calendar truncation slipped through\n\n'
 
-const String _changelogEn = 'v0.9.8\n'
+    'v0.9.8\n'
     '· The calendar no longer sits on a flat colour: a very slow drift of light moves behind it (a full lap takes 26 seconds). The frosted cards now have something to frost — until now the only place with that drifting light was the ringing screen, so on the calendar the glass showed nothing but its highlight and hairline border. It is subtle in the light theme (the cells are almost solid white, so the light mostly shows between them and through the info card) and clearly visible in the dark one\n'
     '· That layer advances at the slowest pace rather than being redrawn every frame: it travels 46dp in 26 seconds, so per-frame it would move 0.03dp — invisible, while keeping the whole page permanently busy and forcing every blur above it to recompute each frame\n'
     '· With "Advanced materials" switched off under Me → Appearance, the light stops — that switch means "this device does not do expensive compositing", so it should not keep pushing a background while the blur is off\n\n'
@@ -143,11 +151,7 @@ const String _changelogEn = 'v0.9.8\n'
     '· Fixed two issues reported by users: (1) shift alarms for midnight shifts (00:00 start) used to be scheduled on the shift\'s own day — by then that shift had been over for 15 hours; they now ring one hour before the shift starts, the evening before, and the UI says so; (2) after changing a 5-day cycle into a 10-day one, two crews ended up on the same shift on the same day — the editor\'s cycle section now names the colliding crews and offers a button that spreads their start dates evenly\n'
     '· Fixed "saved templates not showing up when creating a schedule": if you had opened "New schedule" earlier in the same session, a template saved afterwards only appeared after restarting the app — the list is now re-read every time\n'
     '· A batch of widget and UI fixes: the "today" marker on the large card, the todo-count badge keeping up, no more background refresh after you remove the widget; small windows (under 480dp tall) now show only today\'s info card; landscape and wide-screen layouts tightened up; the adjust-shift sheet reworked with the colour dot unified to 12dp\n'
-    '· 20 built-in shift-pattern templates; database version 8 → 9 (one new table for "My templates" — no existing schedules or todos are lost)\n\n'
-
-    'v0.8.12\n'
-    '· Fixed saved templates not showing up in the picker: if you had opened "New schedule" once earlier in the same app session (back when you had no templates yet), a template saved afterwards only appeared after restarting the app. The list is now re-read every time you open it\n'
-    '· The confirmation shown after saving now says where to find it ("pick it when creating a schedule")\n';
+    '· 20 built-in shift-pattern templates; database version 8 → 9 (one new table for "My templates" — no existing schedules or todos are lost)\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
