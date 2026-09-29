@@ -218,6 +218,36 @@ class L10n {
   static String get advanceRemindOptional => t('提醒（可选）', 'Remind (optional)');
   static String get none => t('不设', 'None');
 
+  // 重复待办
+  static String get repeatNone => t('不重复', 'Does not repeat');
+  static String get repeatDaily => t('每天', 'Every day');
+  static String get repeatWeekly => t('每周', 'Every week');
+  static String get repeatMonthly => t('每月', 'Every month');
+  static String everyWeekOn(List<int> days) {
+    final names = days.map(ruleWeekday).join(isEn ? ', ' : '、');
+    return isEn ? 'Every $names' : '每周$names';
+  }
+
+  /// 重复规则里的星期简写：中文一个字（「三」），英文三个字母（「Wed」）。
+  ///
+  /// **它与 `weekday(i)`（「周三」/「Wed」）是两套，不能混用** —— 规则要拼成
+  /// 「每周一、三、五」，拿「周一」去拼会得到「每周周一、周三、周五」。
+  /// 简写之所以不写成 `weekday(i).substring(1)`：那是在切本地化字符串，换个语言
+  /// 就塌了，而这里本来就该是一份独立的文案。
+  static String ruleWeekday(int i) => isEn
+      ? const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]
+      : const ['一', '二', '三', '四', '五', '六', '日'][i];
+  static String everyMonthOnDay(int d) => t('每月 $d 号', 'Day $d of every month');
+  static String get repeats => t('重复', 'Repeats');
+  static String get startsOn => t('从这天起', 'Starts on');
+
+  /// 提醒正文用的规则描述：`每周三 · 09:00`。
+  ///
+  /// **不带日期是有意的**：重复待办的同一条提醒会跨很多次，写死日期第二次就是
+  /// 错的（一次性待办那边相反，正文写的是完整日期，见 `eventReminderBody`）。
+  static String ruleWithTime(String rule, String time) =>
+      time.isEmpty ? rule : '$rule · $time';
+
   /// 「不设」在选择器里的取值。
   ///
   /// 用 -1 而不是 null：选择器靠「返回 null = 用户取消 / 点外面关掉」来判断，
