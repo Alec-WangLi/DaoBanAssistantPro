@@ -10,6 +10,105 @@
 
 **Spec:** [docs/superpowers/specs/2026-09-29-schedule-timeline-redesign-design.md](../specs/2026-09-29-schedule-timeline-redesign-design.md)
 
+---
+
+## ⚠️ 2026-09-29 修订（实施到 Task 3 时发现，已拍板）
+
+**原计划的「存储完全不动」不成立。** 旧规则（起点最晚的赢）能表达一种**一对起止
+装不下**的形状：外段被内段截断之后还要接着用 —— 例如 `B[7/1, ∞)` 与
+`C[9/1, 9/30]`，用户看到的是「7/1–8/31 归 B、9 月归 C、10/1 起又归 B」，而 B 得
+出现在**两段**上。这不是迁移的锅，是模型的限制：**「9 月临时换别的班表、之后换
+回来」在原模型下也做不到**。
+
+**已拍板改为：段独立成一张表**（无损、一套方案可以出现在多段上）。本节的改动
+**取代**下面各任务里的相应内容；其余部分（界面、文案、日历按钮、工装、收尾）不变。
+
+### 改动一：新表 `ScheduleSpanRows`（schema 12 → 13）
+
+```dart
+/// 时间线上的一段。**表名带 `Rows` 后缀**：drift 按表名生成行类，叫
+/// `ScheduleSpans` 会生成 `ScheduleSpan`、与领域层那个撞名
+/// （`ShiftClassRows` / `RecurringSeriesRows` 是同一回事）。
+class ScheduleSpanRows extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get scheduleId => integer()();                    // → shift_schedule_rows.id
+  DateTimeColumn get startDate => dateTime().nullable()();    // null = 不限起点
+  DateTimeColumn get endDate => dateTime().nullable()();      // null = 一直持续
+}
+```
+
+`ShiftScheduleRows.effectiveFrom` / `effectiveTo` **作废并删掉**（不留死列，照 v10
+删 `alarm_minute` 的先例）。`@DriftDatabase` 的 tables 列表加上新表，
+`schemaVersion => 13`。
+
+### 改动二：迁移按「边界切、逐段求胜者、再合并」
+
+**逐区间重放旧规则**（覆盖那天的段里起点最晚的赢，并列按 id 大者胜），所以天然
+无损、不必为「装不下的形状」做特判：
+
+1. 读出带时段的方案行（按 id 升序）。没有就只建表、删列。
+2. 收集**边界点**：每段的 `from`，以及每段 `to` 的**次日**（`to == null` 跳过）。
+   起点为空用 `-∞` 哨兵、终点为空用 `+∞`。
+3. 边界点去重排序 → 区间 `[pₖ, p₊₁ − 1]`。
+4. 每个区间求胜者；**没人覆盖的区间跳过**（那些天归「其余时间」）。
+5. **合并相邻同胜者的区间**成一段 —— B 因此会产生两段。
+6. 逐段 INSERT；再 `TableMigration(shiftScheduleRows)` 删掉那两列。
+
+> ⚠️ **从 v11 及更早升上来时那两列还不存在**（它们是 v12 加的）：`from < 12` 的
+> 分支先跑、把列加上，才轮到 `from < 13`。所以读列之前先判 `from >= 12`（照
+> v9→v10 那次「⚠️ 只有 v6 及以后才有 shift_class_rows」的先例）。
+
+### 改动三：`ScheduleSpan` 带两个 id
+
+```dart
+class ScheduleSpan {
+  /// **段**的行 id：编辑 / 删除 / `conflictingSpans` 判「是不是自己」。
+  final int? id;
+  /// **方案**的行 id：`scheduleIdOn(day)` 返回它（按天改班要用）。
+  final int? scheduleId;
+  final ShiftSchedule schedule;
+  final DateTime? from;
+  final DateTime? to;
+}
+```
+
+`ScheduleChain._resolve` 返回 `(ShiftSchedule?, int?)` 里的第二个从「段的 id」
+改成「**方案的 id**」（`best?.scheduleId ?? fallbackId`）—— 这是最容易搞混的一处，
+混了的症状是**按天改班记到错的方案名下**（不生效也不报错）。
+
+### 改动四：仓库层的段 CRUD
+
+新增：`addSpan({scheduleId, from, to}) -> Future<int>`、`updateSpan(spanId, {from, to})`、
+`deleteSpan(spanId)`。**删掉** `setScheduleSpan` / `getScheduleSpan`。
+
+`deleteSchedule` 要**连带删掉该方案的段**（照它删班次 / 周期的既有做法）；
+`clearAll` 同理。两列的写入要**显式构造 `Value`**（`Value.absent()` 清不回 null）。
+
+### 改动五：装配
+
+`assembleSchedules` 多读一张 `scheduleSpanRows`，按 `scheduleId` 关联到方案；
+**关联不到的段跳过**（方案被删的脏数据）。`watchActiveSchedule` 的触发源**加上
+`select(scheduleSpanRows).watch()`**（漏了就是「改了段、日历不动」—— 与当年
+「覆盖表没挂 watch」同一条）。
+
+### 任务拆分的调整
+
+**原来的 Task 3 + Task 4 合成一个「数据层」任务，一次做完、一笔提交。** 理由是
+原子性：schemaVersion 只有一个，`if (from < 13)` 那一段必须**同时**建表、搬数据、
+删列；而一旦两列没了，装配 / 领域层 / 仓库那几处**必须同时**改成读段表，否则编译
+不过。拆开只会造出「编译不过」或「两个真相来源」的中间态。
+
+| 原 | 现 |
+|---|---|
+| Task 3 迁移（纯数据） + Task 4 仓库与文案 | **Task 3（新）**：数据层一次做完 —— 新表 + 删列 + 边界切迁移 + `ScheduleSpan.scheduleId` + 装配 + 段 CRUD + `setRemainingNone` + 删掉 `setScheduleSpan`/`getScheduleSpan`（含迁移与装配的用例）<br>**Task 4（新）**：只剩标签与文案（`effectiveRangeLabel` 两种说法、`spanRangeLabel`、l10n 增删） |
+| Task 5 / 6 / 7 / 8 / 9 | 序号不变（那一节的**行来源**从「方案行」改成「段表的行」，其余描述照旧） |
+
+**Task 5 里那一节的实现要点补两条**：① 行的数据源是 `scheduleSpanRows`，
+`label` 用 `spanRangeLabel`（由段的起止算），`value` 是它指向的**方案名**；
+② 「添加时段」先选方案、再选起止，走 `addSpan`。
+
+---
+
 ## Global Constraints
 
 - **版本号形如 `X.Y.Z+build`：`X.Y` 由用户决定，AI 只能改最后一位 `Z`（`build` 同步 +1）**；`app/pubspec.yaml` 与 `app/lib/core/app_info.dart` 必须一致（`app/test/app_info_test.dart` 把关）。
