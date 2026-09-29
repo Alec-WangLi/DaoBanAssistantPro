@@ -20,6 +20,7 @@ import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -61,8 +62,16 @@ class _FakeRepository extends AppRepository {
   @override
   Future<ShiftSchedule?> getScheduleDomain(int id) async => domain;
 
+  /// 重排闹钟读的是**整条链**（`AlarmService.rescheduleAll` 走 `getActiveSchedules`），
+  /// 所以这里给它一条只有兜底、没有时段的链 —— 兜底就是 [active]（库里的当前方案），
+  /// 与 [domain]（编辑器手里这套）不同时才验得出「重排用的是当前方案」。
+  ///
+  /// `all` 留空：重排那条路径只用 `.chain`，不碰 `all` / `current`。
   @override
-  Future<ShiftSchedule?> getActiveSchedule() async => active ?? domain;
+  Future<ActiveSchedules?> getActiveSchedules() async => ActiveSchedules(
+        all: const [],
+        chain: ScheduleChain(fallback: active ?? domain, fallbackId: 1),
+      );
 
   @override
   Future<int> saveSchedule({

@@ -388,7 +388,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final scheduleAsync = ref.watch(activeScheduleProvider);
-    final schedule = scheduleAsync.valueOrNull?.toDomain();
+    // 过渡态：本任务只做类型替换，日历仍只画「当前方案」（= 链的兜底那套），
+    // 所以这一步的**行为与从前一字不差**。下一个任务（日历整体按天解析）
+    // 会把这里换成整条链。
+    final schedule = scheduleAsync.valueOrNull?.chain.fallback;
     ref.watch(appSettingsProvider); // 语言切换时重建
 
     return Scaffold(
@@ -738,7 +741,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 改完必须重排闹钟：这天可能从工作班变成休班（不该响），或从休班变成夜班
   /// （要响）—— 不重排的话闹钟跟日历就对不上了。
   Future<void> adjustDays(DateTime from, DateTime to) async {
-    final schedule = ref.read(activeScheduleProvider).valueOrNull?.toDomain();
+    // 过渡态，同 `build` 里那处：这个任务只换类型，下一轮改按天解析。
+    final schedule =
+        ref.read(activeScheduleProvider).valueOrNull?.chain.fallback;
     if (schedule == null || schedule.isBlank || schedule.classes.isEmpty) {
       // 空白表（跟随法定节假日）没有班次定义可挑，入口本来就不该出现；
       // 这里再兜一次，免得别处误调。
@@ -816,7 +821,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       shrinkWrap: true,
                       children: [
                         ...schedules.map((s) {
-                          final selected = s.id == current?.schedule.id;
+                          final selected = s.id == current?.currentScheduleId;
                           return GlassPressable(
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,

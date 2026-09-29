@@ -124,7 +124,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           .getScheduleDomain(widget.scheduleId!);
     } else {
       final active = await ref.read(activeScheduleProvider.future);
-      d = active?.toDomain();
+      d = active?.currentDomain;
     }
     if (d == null) {
       if (mounted) setState(() => _notFound = true);
@@ -1637,7 +1637,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       final anchor = dateOnly(_anchor);
       await ref.read(appRepositoryProvider).saveSchedule(
             scheduleId: widget.scheduleId ??
-                ref.read(activeScheduleProvider).valueOrNull?.schedule.id,
+                ref.read(activeScheduleProvider).valueOrNull?.currentScheduleId,
             name: name,
             anchorDate: anchor,
             classes: _classes,

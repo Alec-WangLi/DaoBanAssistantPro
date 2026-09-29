@@ -15,6 +15,7 @@
 // 时**不能**重新编号 —— 否则闹钟会集体换个号。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 
@@ -376,6 +377,54 @@ void main() {
       L10n.locale = 'en';
       expect(L10n.shiftAlarmTitle('Day shift', null), 'Day shift alarm');
       expect(L10n.shiftAlarmTitle('Day shift', 'Nap'), 'Day shift · Nap');
+    });
+  });
+
+  group('跨时段边界：同一段窗口里前段按 A、后段按 B', () {
+    /// 周期 2 天（第 0 天白班 + 07:00 闹钟、第 1 天休班），锚点 2026-01-01。
+    ShiftSchedule sched(String name) => ShiftSchedule(
+          name: name,
+          anchorDate: DateTime.utc(2026, 1, 1),
+          classes: [
+            ShiftClass(
+                name: '$name-白',
+                abbr: '白',
+                startMinute: 480,
+                endMinute: 1080,
+                alarmEnabled: true,
+                alarms: const [ShiftAlarm(minute: 420)]),
+            ShiftClass(name: '$name-休', abbr: '休', isRest: true),
+          ],
+          cycle: const [0, 1],
+        );
+
+    /// A 管到 6/29、B 从 6/30 起 —— 边界落在窗口中间。
+    ScheduleChain chain() => ScheduleChain(spans: [
+          ScheduleSpan(
+              id: 1,
+              schedule: sched('A'),
+              from: DateTime.utc(2026, 1, 1),
+              to: DateTime.utc(2026, 6, 29)),
+          ScheduleSpan(
+              id: 2, schedule: sched('B'), from: DateTime.utc(2026, 6, 30)),
+        ]);
+
+    test('边界前按 A 的班、边界后按 B 的班（闭区间：6/29 仍归 A）', () {
+      // 锚点 2026-01-01 起的第 178 天是 6/28 → 178 % 2 = 0 → 白班
+      final plans = planShiftAlarms(chain(), from: DateTime(2026, 6, 28), days: 4);
+      final byOffset = <int, String>{for (final p in plans) p.offset: p.shift.name};
+      expect(byOffset[0], 'A-白'); // 6/28 → A
+      expect(byOffset.containsKey(1), isFalse); // 6/29 → A 的休班，不排
+      expect(byOffset[2], 'B-白'); // 6/30 → B（边界第一天）
+      expect(byOffset.containsKey(3), isFalse); // 7/1 → B 的休班
+    });
+
+    test('原生 id 不撞号：同一天只归一套方案', () {
+      final plans = planShiftAlarms(chain(), from: DateTime(2026, 6, 28), days: 8);
+      final ids = [for (final p in plans) p.alarmIndex * 60 + p.offset];
+      expect(ids, isNotEmpty);
+      expect(ids.toSet().length, ids.length,
+          reason: 'id 撞上 = 两个闹钟互相取消（`setAlarmClock` 同号覆盖）');
     });
   });
 }

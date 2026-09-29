@@ -32,7 +32,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
                 ...schedules.map((s) {
-                  final isCurrent = s.id == current?.schedule.id;
+                  final isCurrent = s.id == current?.currentScheduleId;
                   return GlassTile(
                     enableBlur: false,
                     margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),

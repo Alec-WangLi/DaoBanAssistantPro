@@ -192,7 +192,7 @@ void main() {
         schedulesProvider
             .overrideWith((ref) => Stream.value(const <ShiftScheduleRow>[])),
         activeScheduleProvider
-            .overrideWith((ref) => Stream<ActiveSchedule?>.value(null)),
+            .overrideWith((ref) => Stream<ActiveSchedules?>.value(null)),
       ],
       child: const MaterialApp(home: ScheduleManagementScreen()),
     ));

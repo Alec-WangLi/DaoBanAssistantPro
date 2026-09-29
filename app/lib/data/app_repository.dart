@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/recurring_todo.dart';
+import '../domain/schedule_chain.dart';
 import '../domain/schedule_template.dart';
 import '../domain/shift_rotation.dart';
 import 'app_database.dart';
@@ -90,6 +91,38 @@ class ActiveSchedule {
   }
 }
 
+/// 时间线上的全部方案（已装配成领域模型）+ 按天解析面。
+///
+/// 与单套的 [ActiveSchedule] 是两个类型，别混：编辑器 / 管理页 / 模板那边要的是
+/// **某一套**（按 id 查，见 `getScheduleDomain`），而日历 / 闹钟 / 桌面小组件要的是
+/// [chain] —— 「一个能回答某天什么班的东西」。
+class ActiveSchedules {
+  const ActiveSchedules({required this.all, required this.chain});
+
+  /// 全部方案（按 id 升序）。装配 [chain] 的原料，界面要「列出所有方案」时也用它。
+  final List<ActiveSchedule> all;
+
+  /// 按天解析面。
+  final ScheduleChain chain;
+
+  /// 当前方案（`isCurrent`）。没有就返回 null。
+  ActiveSchedule? get current {
+    for (final a in all) {
+      if (a.schedule.isCurrent) return a;
+    }
+    return null;
+  }
+
+  /// 当前方案的领域模型。
+  ShiftSchedule? get currentDomain => current?.toDomain();
+
+  /// 当前方案的行 id。
+  ///
+  /// 单拎出来是因为有三处（编辑器的「新建」路径、管理页的「当前」标记、切换弹窗的
+  /// 选中态）都要它，各写一遍 `current?.schedule.id` 迟早写歪。
+  int? get currentScheduleId => current?.schedule.id;
+}
+
 extension ShiftClassRowX on ShiftClassRow {
   /// [alarms] 由调用方从 `shift_class_alarms` 取好传进来（本行没有那张表的信息）。
   ShiftClass toDomain({List<ShiftAlarm> alarms = const []}) => ShiftClass(
@@ -129,22 +162,27 @@ extension RecurringSeriesRowX on RecurringSeriesRow {
 }
 
 extension AppDatabaseQueries on AppDatabase {
-  /// 监听当前排班方案及其班次、闹钟、周期、按天覆盖（响应式）。
+  /// 监听**全部**排班方案（含各自的班次、闹钟、周期、按天覆盖），装配成
+  /// [ActiveSchedules]（响应式）。
   ///
-  /// **必须同时监听覆盖表与闹钟表**：只监听方案行的话，用户改完覆盖 / 闹钟落库
-  /// 成功，这个流不会重发，日历上**纹丝不动** —— 不报错、不崩溃，从界面上看不出
-  /// 原因。班次 / 周期是随方案行一起改的（保存方案会 update 那一行），所以它们靠
-  /// 方案行的通知就够了；覆盖与闹钟是独立的子表，得各挂一条。
+  /// **方案表那条触发源不能少**：少了它，改一套方案的时段 / 班次不会让这条流重发，
+  /// 日历、闹钟、桌面小组件全都不动，**不报错**（与「按天覆盖没挂 watch」那次完全
+  /// 同一条，那次也是静默不刷新）。由 `schedule_chain_repository_test` 的
+  /// 「改非当前方案 → 重发」钉住，**已反向验证**（把这一条从 triggers 里删掉，
+  /// 用例立刻变红：`Expected: <1> Actual: <0>`）。
   ///
-  /// （闹钟表这条是 2026-09-21 加多闹钟时补上的：当时只有日历信息卡那一处 widget
-  /// 测试直接往闹钟表里写数据，才发现没挂 —— 生产路径今天都经过 `saveSchedule`
-  /// （它同时 update 方案行），所以不是活 bug；但不挂的话，**任何直接写闹钟表的
-  /// 路径都会静默不刷新**。与「按天覆盖」那次的教训是同一条。）
-  Stream<ActiveSchedule?> watchActiveSchedule() {
-    final schedQuery = select(shiftScheduleRows)
-      ..where((s) => s.isCurrent.equals(true));
+  /// 顺带一条实测的细节，免得后人误判：**从前那个 `watchSingleOrNull()` 其实也会
+  /// 在整表任意一行变动时重发**（drift 对带 `where` 的查询不加行级过滤）——所以
+  /// 「改非当前方案看不见」的根因不是触发源，而是**装配**只装了 `isCurrent` 那一套
+  /// （`_loadChildren(sched)`）。改成整表 `.watch()` 是为了换来另外两件事：装配得
+  /// 到全部方案，以及**再也不会在出现两行 `isCurrent` 时往流里推错**
+  /// （`save_schedule_current_test` 记的正是那个坑）。
+  ///
+  /// 覆盖表与闹钟表是独立的子表，各挂一条；班次 / 周期跟着方案行一起改
+  /// （`saveSchedule` 会 update 那一行），靠方案行的通知就够了。
+  Stream<ActiveSchedules?> watchActiveSchedule() {
     final triggers = <Stream<Object?>>[
-      schedQuery.watchSingleOrNull(),
+      select(shiftScheduleRows).watch(),
       select(shiftDayOverrides).watch(),
       select(shiftClassAlarms).watch(),
     ];
@@ -157,10 +195,64 @@ extension AppDatabaseQueries on AppDatabase {
         }
       };
     }).asyncMap((_) async {
-      final sched = await schedQuery.getSingleOrNull();
-      if (sched == null) return null;
-      return _loadChildren(sched);
+      final rows = await (select(shiftScheduleRows)
+            ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+          .get();
+      if (rows.isEmpty) return null;
+      return assembleSchedules(rows);
     });
+  }
+
+  /// 把一行行方案装配成 [ActiveSchedules]。
+  ///
+  /// 每套方案的 children 各查一次 —— [_loadChildren] 按 `scheduleId` 过滤，
+  /// 天然是单套的（所以这里能直接复用，不必为多套另写一套查询）。
+  ///
+  /// 公开是因为 `AppRepository.getActiveSchedules()` 与两个 `*ForTesting` 都要它；
+  /// 生产路径只走 [watchActiveSchedule]。
+  Future<ActiveSchedules> assembleSchedules(List<ShiftScheduleRow> rows) async {
+    final all = <ActiveSchedule>[];
+    for (final r in rows) {
+      all.add(await _loadChildren(r));
+    }
+    ActiveSchedule? current;
+    for (final a in all) {
+      if (a.schedule.isCurrent) {
+        current = a;
+        break;
+      }
+    }
+    // 参与衔接的 = **设了任一端时段**的那些。两端都空的不参与 —— 老库全是这种，
+    // 于是它们全都落到 `fallback` 那条路，行为与从前一字不差（spec §3）。
+    final spans = <ScheduleSpan>[
+      for (final a in all)
+        if (a.schedule.effectiveFrom != null || a.schedule.effectiveTo != null)
+          ScheduleSpan(
+            id: a.schedule.id,
+            schedule: a.toDomain(),
+            from: a.schedule.effectiveFrom,
+            to: a.schedule.effectiveTo,
+          ),
+    ];
+    // 排序只为了让界面与日志有个稳定顺序 —— 解析规则自己显式比起点，不靠顺序。
+    spans.sort((a, b) {
+      final af = a.from, bf = b.from;
+      if (af == null && bf == null) return (a.id ?? 0).compareTo(b.id ?? 0);
+      if (af == null) return -1;
+      if (bf == null) return 1;
+      final c = dayNumber(af).compareTo(dayNumber(bf));
+      return c != 0 ? c : (a.id ?? 0).compareTo(b.id ?? 0);
+    });
+    return ActiveSchedules(
+      all: all,
+      chain: ScheduleChain(
+        spans: spans,
+        fallback: current?.toDomain(),
+        // 兜底那套的**行 id** 要单独递进去：`ShiftSchedule` 是领域模型、不带 id，
+        // 而「写按天覆盖该记在哪套名下」得靠它（见 `ScheduleChain.scheduleIdOn`）。
+        fallbackId: current?.schedule.id,
+      ),
+    );
   }
 
   Future<ActiveSchedule> _loadChildren(ShiftScheduleRow sched) async {
@@ -212,11 +304,22 @@ extension AppDatabaseQueries on AppDatabase {
   ///
   /// 迁移测试要验「闹钟搬进了新表、覆盖还指得对」，直接装配一次最短。
   Future<ActiveSchedule?> loadActiveScheduleForTesting() async {
-    final sched = await (select(shiftScheduleRows)
-          ..where((s) => s.isCurrent.equals(true)))
-        .getSingleOrNull();
-    if (sched == null) return null;
-    return _loadChildren(sched);
+    final rows = await (select(shiftScheduleRows)
+          ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+        .get();
+    if (rows.isEmpty) return null;
+    return (await assembleSchedules(rows)).current;
+  }
+
+  /// 测试专用：装配整条链。
+  ///
+  /// 「时段两列为 null → 不参与衔接」这条得整条链才看得见（单套装配体里没有它）。
+  Future<ActiveSchedules?> loadActiveSchedulesForTesting() async {
+    final rows = await (select(shiftScheduleRows)
+          ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+        .get();
+    if (rows.isEmpty) return null;
+    return assembleSchedules(rows);
   }
 }
 
@@ -265,6 +368,42 @@ class AppRepository {
       await (db.update(db.shiftScheduleRows)..where((s) => s.id.equals(id)))
           .write(const ShiftScheduleRowsCompanion(isCurrent: Value(true)));
     });
+  }
+
+  /// 立即读取整条链（重排闹钟用，避免读 Riverpod 流拿到旧值）。
+  Future<ActiveSchedules?> getActiveSchedules() async {
+    final rows = await (db.select(db.shiftScheduleRows)
+          ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+        .get();
+    if (rows.isEmpty) return null;
+    return db.assembleSchedules(rows);
+  }
+
+  /// 写一套方案的**生效时段**（`null` = 不限 / 一直持续；两端都 `null` = 不参与衔接）。
+  ///
+  /// 单独一个方法而不是给 [saveSchedule] 加两个参数，理由是仓库里已有的先例
+  /// （[setEventDate]）：`saveSchedule` 是**整行覆盖**，给它加两个可空参数意味着
+  /// 每个调用点都得记得带上，漏一个就把用户设好的时段**静默清掉**了。而这里只碰
+  /// 那两列，忘了传就是「不动」，错法安全得多。
+  ///
+  /// **必须显式写 `Value(...)`**：`Value.absent()` 表达不了「清成 null」，
+  /// 那条路径（把设好的时段改回不限）会静默保留旧值。
+  Future<void> setScheduleSpan(int id, {DateTime? from, DateTime? to}) async {
+    await (db.update(db.shiftScheduleRows)..where((s) => s.id.equals(id)))
+        .write(ShiftScheduleRowsCompanion(
+      effectiveFrom: Value(from == null ? null : dateOnly(from)),
+      effectiveTo: Value(to == null ? null : dateOnly(to)),
+    ));
+  }
+
+  /// 取一套方案的生效时段（`ShiftSchedule` 是领域模型，不带这两个库字段）。
+  ///
+  /// 编辑器进页面时读它；写成两条记录是为了调用点不必再碰生成的行类型。
+  Future<({DateTime? from, DateTime? to})> getScheduleSpan(int id) async {
+    final row = await (db.select(db.shiftScheduleRows)
+          ..where((s) => s.id.equals(id)))
+        .getSingleOrNull();
+    return (from: row?.effectiveFrom, to: row?.effectiveTo);
   }
 
   /// 取一套排班方案的完整领域模型（含班次定义与周期）。
@@ -916,18 +1055,25 @@ class AppRepository {
     return row?.id;
   }
 
-  /// 把 [dates] 这些天改成 [classId] 指定的班次（当前方案）。
+  /// 把 [dates] 这些天改成 [classId] 指定的班次。
   ///
   /// 一次写多天为什么不做成范围：底层就是一天一行（复合主键 `{scheduleId, day}`），
   /// 存范围反而要在读写两头各拆一次。连休三天就是三行，天然支持。
   ///
   /// 重复设置同一天走 `insertOnConflictUpdate`，是更新不是报错。
+  ///
+  /// **每一天记在「那天所属方案」名下**（`ScheduleChain.scheduleIdOn`），不是
+  /// 「当前方案」名下：有了时段衔接之后，用户可以在日历上选中属于**非当前**方案的
+  /// 那天去调整 —— 记在当前方案名下的话那条覆盖**既查不出来、也不报错**，用户
+  /// 看到的是「改了班，日历纹丝不动」。老库没有时段时两者恒等，行为与从前一致。
   Future<void> setDayOverrides(List<DateTime> dates,
       {required int classId}) async {
-    final scheduleId = await currentScheduleId();
-    if (scheduleId == null) return;
+    final chain = (await getActiveSchedules())?.chain;
+    if (chain == null) return;
     await db.transaction(() async {
       for (final date in dates) {
+        final scheduleId = chain.scheduleIdOn(date);
+        if (scheduleId == null) continue;
         await db.into(db.shiftDayOverrides).insertOnConflictUpdate(
               ShiftDayOverridesCompanion.insert(
                 scheduleId: scheduleId,
@@ -939,12 +1085,18 @@ class AppRepository {
     });
   }
 
-  /// 清掉 [dates] 这些天的覆盖，让它们回到按轮转算（当前方案）。
+  /// 清掉 [dates] 这些天的覆盖，让它们回到按轮转算。
+  ///
+  /// 同 [setDayOverrides]：逐天找「那天所属方案」再删。跨两套方案的一段日子由界面
+  /// 拦住（`calendar_screen.dart` 的 `adjustDays` 里那句说明），但仓库这一层照样
+  /// 各删各的 —— 撤回本来就不需要 `classId`，没有理由只删一半。
   Future<void> clearDayOverrides(List<DateTime> dates) async {
-    final scheduleId = await currentScheduleId();
-    if (scheduleId == null) return;
+    final chain = (await getActiveSchedules())?.chain;
+    if (chain == null) return;
     await db.transaction(() async {
       for (final date in dates) {
+        final scheduleId = chain.scheduleIdOn(date);
+        if (scheduleId == null) continue;
         await (db.delete(db.shiftDayOverrides)
               ..where((t) =>
                   t.scheduleId.equals(scheduleId) &
@@ -993,7 +1145,8 @@ final appRepositoryProvider = Provider<AppRepository>((ref) {
   return AppRepository(ref.watch(databaseProvider));
 });
 
-final activeScheduleProvider = StreamProvider<ActiveSchedule?>((ref) async* {
+final activeScheduleProvider =
+    StreamProvider<ActiveSchedules?>((ref) async* {
   final db = ref.watch(databaseProvider);
   await seedIfEmpty(db);
   yield* db.watchActiveSchedule();

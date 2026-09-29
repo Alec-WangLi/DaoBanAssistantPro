@@ -110,8 +110,18 @@ DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
 /// 的话，每个午夜班的闹钟都会换号。**「序号」是闹钟在 `shift.alarms` 里的下标**：
 /// 用户在编辑页里调整顺序会让闹钟换号（可接受 —— 编辑之后必然重排、`cancelAll`
 /// 先跑），但**重排本身绝不能重新编号**，否则每次打开 App 都换一批。
+///
+/// 入参是 [ShiftSource] 而不是 `ShiftSchedule`：**「按天衔接」之后，某天归哪套方案
+/// 是那条链自己知道的事**，而这里本来就逐天问一次「今天什么班」—— 换一个源进来
+/// 即可，函数体一个字不用改（除了这一处 `source.shiftOn`）。原生的 id 算式因此
+/// 天生安全：**同一天只归一套方案**，`offset` 相同的两天不可能同时存在。
+///
+/// 一条容易被误报成 bug 的语义：跨时段边界时，落在**前一天**的那条闹钟会排到
+/// 「前一天所属那套方案」的日子里 —— 那是**对的**，闹钟属于那个班次、不属于
+/// 触发日。落哪天由 [shiftAlarmFireAt] 里**班次自己的日期**决定，与「那天归哪套」
+/// 无关，别把它「修」成按触发日解析。
 List<ShiftAlarmPlan> planShiftAlarms(
-  ShiftSchedule schedule, {
+  ShiftSource source, {
   required DateTime from,
   required int days,
   Map<int, bool> overrides = const {},
@@ -120,7 +130,7 @@ List<ShiftAlarmPlan> planShiftAlarms(
   final plans = <ShiftAlarmPlan>[];
   for (var d = 0; d < days; d++) {
     final date = today.add(Duration(days: d));
-    final t = schedule.shiftOn(date);
+    final t = source.shiftOn(date);
     if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
       continue;
     }
@@ -865,10 +875,12 @@ class AlarmService {
   /// 与其让每个调用点抄一遍，不如在这里读齐。漏传一个参数不会报错，只会让
   /// 那类提醒静默不生效，所以这个「读齐」的动作只该有一份。
   static Future<void> rescheduleAll(AppRepository repo) async {
-    final sched = await repo.getActiveSchedule();
-    if (sched == null) return;
+    // 读的是**整条链**：未来 60 天里可能跨时段边界，边界之后那几天的班属于别的
+    // 方案 —— 只按当前方案排会排到错的班表上，直到冷启动才自愈。
+    final schedules = await repo.getActiveSchedules();
+    if (schedules == null) return;
     await reschedule(
-      sched,
+      schedules.chain,
       await repo.listCustomAlarms(),
       overrides: await repo.listShiftAlarmOverrides(),
       events: await repo.listEvents(),
@@ -878,12 +890,14 @@ class AlarmService {
     await rescheduleRecurringReminders(await repo.listRecurringTodos());
   }
 
-  /// 清除并按 [schedule] + [customAlarms] + [events] + [overrides] 重排所有闹钟。
+  /// 清除并按 [source] + [customAlarms] + [events] + [overrides] 重排所有闹钟。
   ///
   /// [overrides] 为按天覆盖（dayNumber → enabled）；值为 false 的日期跳过班次闹钟。
   /// [events] 是要排提醒的待办（`advanceRemindMinutes` 为 null 的跳过）。
+  ///
+  /// [source] 是 [ShiftSource] 而不是 `ShiftSchedule`，理由见 [planShiftAlarms]。
   static Future<void> reschedule(
-    ShiftSchedule schedule,
+    ShiftSource source,
     List<CustomAlarm> customAlarms, {
     int days = _shiftDaysHorizon,
     Map<int, bool> overrides = const {},
@@ -895,7 +909,7 @@ class AlarmService {
     assert(days <= _shiftDaysHorizon,
         'days（$days）不得超过天数窗口 $_shiftDaysHorizon —— 原生 id 会撞号');
     await logInfo(
-        'reschedule: 开始，排班=${schedule.name}，自定义闹钟=${customAlarms.length} 个');
+        'reschedule: 开始，排班=${source.label}，自定义闹钟=${customAlarms.length} 个');
     // 先清掉可能已损坏的排定缓存，再 cancelAll（否则会抛 Missing type parameter）
     try {
       await _plugin.cancelAll();
@@ -917,7 +931,7 @@ class AlarmService {
     //
     // 「哪些天要排、各排几点」由 [planShiftAlarms] 这个纯函数决定（可单测）；
     // 这里只负责把决策落成原生闹钟。id 仍是 `_shiftBaseId + 天数偏移`。
-    for (final plan in planShiftAlarms(schedule,
+    for (final plan in planShiftAlarms(source,
         from: DateTime.now(), days: days, overrides: overrides)) {
       try {
         await scheduleNativeAlarm(

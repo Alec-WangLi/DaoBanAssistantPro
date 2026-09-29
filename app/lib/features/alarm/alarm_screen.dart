@@ -69,7 +69,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(activeScheduleProvider);
-    final schedule = async.valueOrNull?.toDomain();
+    // 「未来 30 天」按天解析 —— 30 天里跨时段边界比 60 天更常见，只画当前方案
+    // 就会出现「日历上换了、闹钟页没换」。
+    final chain = async.valueOrNull?.chain;
     final alarms =
         ref.watch(customAlarmsProvider).valueOrNull ?? const <CustomAlarm>[];
     final overrides = ref.watch(shiftAlarmOverridesProvider).valueOrNull ??
@@ -79,10 +81,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     final now = DateTime.now();
     final today = dateOnly(now);
     final shiftAlarms = <_ShiftAlarmEntry>[];
-    if (schedule != null) {
+    if (chain != null) {
       for (var i = 0; i < 30; i++) {
         final date = today.add(Duration(days: i));
-        final t = schedule.shiftOn(date);
+        final t = chain.shiftOn(date);
         if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
           continue;
         }
@@ -109,7 +111,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             ),
             const SizedBox(height: 12),
             _sectionTitleRow(context, L10n.upcoming30),
-            Expanded(child: _shiftAlarmSection(context, schedule, shiftAlarms)),
+            Expanded(child: _shiftAlarmSection(context, chain, shiftAlarms)),
             const SizedBox(height: 8),
             _sectionTitleRow(context, L10n.customAlarms),
             Expanded(child: _customAlarmSection(context, alarms)),
@@ -138,9 +140,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     );
   }
 
-  Widget _shiftAlarmSection(BuildContext context, ShiftSchedule? schedule,
+  Widget _shiftAlarmSection(BuildContext context, ShiftSource? chain,
       List<_ShiftAlarmEntry> shiftAlarms) {
-    if (schedule == null) {
+    if (chain == null) {
       return const Center(child: CircularProgressIndicator());
     }
     if (shiftAlarms.isEmpty) {

@@ -175,7 +175,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
     if (!mounted) return;
     await WidgetService.push(
-      schedule: async.value?.toDomain(),
+      // 过渡态：`WidgetService.push` 此刻还收 `ShiftSchedule?`，所以先给兜底那套
+      // （行为与从前一字不差）。它改成收整条链的任务紧跟在后。
+      schedule: async.value?.chain.fallback,
       settings: ref.read(appSettingsProvider),
       todayTodoCount: todoCount,
     );
@@ -196,12 +198,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   Future<void> _tryStartupReschedule() async {
     if (_startupRescheduled) return;
-    final sched = ref.read(activeScheduleProvider).valueOrNull?.toDomain();
+    // 重排要的是**整条链**，不只是当前方案：未来 60 天里可能跨时段边界，
+    // 边界之后那几天的班属于别的方案。
+    final chain = ref.read(activeScheduleProvider).valueOrNull?.chain;
     final alarms = ref.read(customAlarmsProvider).valueOrNull;
     // 待办也要等流到齐再排，理由同前两个：`activeScheduleProvider` 会先
     // `seedIfEmpty`，这几个流非空就说明首启播种已经完成、库可以读了。
     final events = ref.read(eventsProvider).valueOrNull;
-    if (sched == null || alarms == null || events == null) return;
+    if (chain == null || alarms == null || events == null) return;
     _startupRescheduled = true;
     final repo = ref.read(appRepositoryProvider);
     // **先生成、再重排**：重复待办的提醒要按「今天该有的那一条」来排，顺序反了
@@ -211,7 +215,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // 待办**重新读一次**：上面那个 `events` 是生成**之前**的快照，直接用它排会漏掉
     // 刚建出来的那几条（重复待办的提醒走另一条链路，但一次性待办的那几条不能少）。
     AlarmService.reschedule(
-      sched,
+      chain,
       alarms,
       overrides: overrides,
       events: await repo.listEvents(),
