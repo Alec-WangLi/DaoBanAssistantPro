@@ -87,7 +87,7 @@ void main() {
     addTearDown(db.close);
     // 从 v10 升上来会一路跑到**最新**的 schema（迁移分支按倒序全部执行），
     // 所以这里跟的是当前的 `schemaVersion`，不是 11 —— 每加一版 schema 都要回来改。
-    expect(db.schemaVersion, 12);
+    expect(db.schemaVersion, 13);
 
     // ① 老待办原样保留，且新列取到的是 null
     final events = await db.select(db.scheduleEvents).get();

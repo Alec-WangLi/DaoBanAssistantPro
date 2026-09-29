@@ -629,8 +629,8 @@ Future<void> seedScheduleChain(AppDatabase db) async {
   final rows = await repo.listSchedules();
   if (rows.length < 2) return;
   final t = DateTime.now();
-  await repo.setScheduleSpan(rows[0].id);
-  await repo.setScheduleSpan(
+  // 第一套（当前）**不设段** —— 它是「其余时间」，标签正好是那四个字。
+  await repo.addSpan(
     rows[1].id,
     from: DateTime(t.year, t.month, 15),
     to: DateTime(t.year, t.month + 1, 0), // 本月最后一天

@@ -1,6 +1,9 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+// 迁移里要用 `dayNumber`（自 epoch 天数）—— 时段的边界一律按它比。
+import '../domain/shift_rotation.dart';
+
 part 'app_database.g.dart';
 
 /// 排班方案表（一套轮换周期 + 班组）。
@@ -19,16 +22,31 @@ class ShiftScheduleRows extends Table {
   // 每个班组相对基准日的**天数偏移**（逗号分隔，如 "0,1,2,3"）。
   // 第 i 组在某天的周期下标 = (目标日 − 基准日 + offsets[i]) mod 周期长度。
   TextColumn get teamOffsets => text().withDefault(const Constant(''))();
+}
 
-  /// 生效时段起点（**闭区间**，纯日期，`dateOnly` 口径）；null = 不限起点。
-  ///
-  /// 与 [effectiveTo] 一起决定「某天归哪套方案」（见 `domain/schedule_chain.dart`）。
-  /// **两端都空 = 不参与衔接** —— 这是老库（两列都是 null）行为一字不变的关键：
-  /// 那种方案永远选不上，于是每天都落到「当前方案」兜底那条路。
-  DateTimeColumn get effectiveFrom => dateTime().nullable()();
+/// 时间线上的一段：**这套方案从哪天到哪天生效**（多排班表按日期衔接）。
+///
+/// 段独立成表（而不是方案行上的两列）是为了让**一套方案出现在多段上** ——
+/// 「9 月临时换成别的班表、之后换回来」那种排法需要它，而「一套方案只有一对
+/// 起止」表达不了（v0.9.12 的两列就是这样，迁移时才发现装不下）。
+///
+/// **表名带 `Rows` 后缀**：drift 按表名生成行类，表叫 `ScheduleSpans` 就会生成
+/// `ScheduleSpan`、与领域层那个撞名（`ShiftClassRows` → `ShiftClassRow`、
+/// `RecurringSeriesRows` 是同一回事）。
+///
+/// **段与段不许重叠**（一个人一天不可能有两套班）：由界面在保存前拦下，
+/// 迁移也把历史数据规整成不重叠的。解析某天时因此至多命中一段。
+class ScheduleSpanRows extends Table {
+  IntColumn get id => integer().autoIncrement()();
 
-  /// 生效时段终点（**闭区间**，纯日期）；null = 一直持续下去。
-  DateTimeColumn get effectiveTo => dateTime().nullable()();
+  /// 指向 `shift_schedule_rows.id`。
+  IntColumn get scheduleId => integer()();
+
+  /// 起点（**闭区间**，纯日期，`dateOnly` 口径）；null = 不限起点。
+  DateTimeColumn get startDate => dateTime().nullable()();
+
+  /// 终点（**闭区间**）；null = 一直持续。
+  DateTimeColumn get endDate => dateTime().nullable()();
 }
 
 /// 班次定义表：一个班次只定义一次（属于某套排班方案）。
@@ -233,6 +251,7 @@ class RecurringSeriesRows extends Table {
 
 @DriftDatabase(tables: [
   ShiftScheduleRows,
+  ScheduleSpanRows,
   ShiftClassRows,
   ShiftCycleRows,
   ShiftClassAlarms,
@@ -250,24 +269,26 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
-          if (from < 12) {
-            // 多排班表按日期衔接：给方案加两个**可空**的时段列。
-            // 老行自动是 null（= 不参与衔接），于是老库的所见行为一字不变 ——
-            // 这一步**不改任何既有行的数据**。
-            //
-            // ⚠️ 与 v10→v11 那次的连带约束一样（虽然形态不同）：这两列加在
-            // **v1 起就存在**的表上，而迁移分支一律按**倒序**执行 ——
-            // 从任何老版本升上来时这两行都会跑到，所以**每一份更早的迁移 fixture
-            // 都得有 `shift_schedule_rows`**。本轮 v6→v7 与 v10→v11 两份因此补了
-            // DDL（那两份按「只抄自己碰到的表」的惯例没建它）。
-            await m.addColumn(shiftScheduleRows, shiftScheduleRows.effectiveFrom);
-            await m.addColumn(shiftScheduleRows, shiftScheduleRows.effectiveTo);
+          if (from < 13) {
+            // 排班时段重做：段从「方案行上的两列」搬进**自己的表**，并改成
+            // **不许重叠**（v0.9.12 允许重叠、按「起点最晚的赢」解析）。
+            await m.createTable(scheduleSpanRows);
+            // ⚠️ 那两列是 v12 才加的：从 v11 及更早升上来时这里它们**还不存在**
+            // （`from < 12` 那段排在**后面**跑）。那种库从来没有过时段，不需要搬
+            // —— 所以先判版本再读列（照 v9→v10 那次「只有 v6 及以后才有
+            // shift_class_rows」的先例）。
+            if (from >= 12) {
+              await _migrateSpansToOwnTable();
+            }
+            // 删掉那两列（不留死列，照 v10 删 `alarm_minute` 的先例）。
+            // ignore: experimental_member_use
+            await m.alterTable(TableMigration(shiftScheduleRows));
           }
           if (from < 11) {
             // 重复待办：纯新增一张表 + 给待办加一列可空的 series_id。
@@ -362,6 +383,99 @@ class AppDatabase extends _$AppDatabase {
           }
         },
       );
+
+  /// v12 → v13：把方案行上的时段两列，按**旧解析结果等价**重放成一张段表。
+  ///
+  /// 旧规则是「覆盖那天的段里起点最晚的赢」（并列按 id 大者胜）。这里用
+  /// **按边界切 → 逐区间求胜者 → 合并相邻同胜者** 的办法重放它 —— 天然无损，
+  /// 不必为「外段被内段截断之后还要接着用」那种形状做特判（那正是段独立成表的
+  /// 理由：同一套方案会因此产生**两段**）。
+  ///
+  /// **日期一律走 `dayNumber`**（自 epoch 天数）：起点为空的段用 −∞ 哨兵、终点为
+  /// 空的用 +∞，写回时再换回 null。
+  Future<void> _migrateSpansToOwnTable() async {
+    // **直接读原始列**：那两列已经从 schema 里删掉了（生成的行类上不再有 getter），
+    // 而迁移必须在 `TableMigration` 把它们删掉**之前**读到它们（照 v1→v2 那段用
+    // 原始 SQL 读历史表的先例）。
+    //
+    // drift 把 `DateTime` 存成 unix **秒**，所以读回来是 int。
+    final raw = await customSelect(
+      'SELECT id, effective_from, effective_to FROM shift_schedule_rows',
+    ).get();
+    int? dayOf(int? seconds) => seconds == null
+        ? null
+        : dayNumber(
+            DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true));
+
+    final src = <({int id, int? from, int? to})>[];
+    for (final r in raw) {
+      final id = r.read<int>('id');
+      final from = dayOf(r.read<int?>('effective_from'));
+      final to = dayOf(r.read<int?>('effective_to'));
+      if (from == null && to == null) continue; // 不在时间线上
+      src.add((id: id, from: from, to: to));
+    }
+    src.sort((a, b) => a.id.compareTo(b.id));
+    if (src.isEmpty) return;
+
+    // 远比任何真实日期的 dayNumber 小 / 大。
+    const int negInf = -1 << 40;
+    const int posInf = 1 << 40;
+    int lo(({int id, int? from, int? to}) r) => r.from ?? negInf;
+    int hi(({int id, int? from, int? to}) r) => r.to ?? posInf;
+
+    // 边界点：每段的起点，以及每段终点的**次日**。
+    final points = <int>{};
+    for (final r in src) {
+      points.add(lo(r));
+      if (hi(r) < posInf) points.add(hi(r) + 1);
+    }
+    final bounds = points.toList()..sort();
+
+    // 逐区间求胜者（全按 v0.9.12 的旧规则）；没人覆盖的区间跳过 ——
+    // 那些天本来就归「其余时间」。
+    int? winnerOf(int day) {
+      ({int id, int? from, int? to})? best;
+      for (final r in src) {
+        if (day < lo(r) || day > hi(r)) continue;
+        // 起点并列时**靠后的赢**（src 按 id 升序，所以 >= 就是「后建的那套赢」）。
+        if (best == null || lo(r) >= lo(best)) best = r;
+      }
+      return best?.id;
+    }
+
+    final segs = <({int scheduleId, int from, int to})>[];
+    // **循环跑满 bounds.length 轮**：最后一个边界之后还有一段开到 +∞ 的区间
+    // （「一直持续」全靠它）—— 写成 `i + 1 < bounds.length` 会把它整段漏掉。
+    for (var i = 0; i < bounds.length; i++) {
+      final day = bounds[i];
+      final end = (i + 1 < bounds.length) ? bounds[i + 1] - 1 : posInf;
+      final w = winnerOf(day);
+      if (w == null) continue;
+      // 与上一段同胜者且**首尾相接** → 并进上一段（这一步就是「接着用」的来源）。
+      if (segs.isNotEmpty &&
+          segs.last.scheduleId == w &&
+          segs.last.to == day - 1) {
+        segs[segs.length - 1] = (scheduleId: w, from: segs.last.from, to: end);
+      } else {
+        segs.add((scheduleId: w, from: day, to: end));
+      }
+    }
+
+    DateTime? asDate(int n) => (n == negInf || n == posInf)
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(
+            n * Duration.millisecondsPerDay,
+            isUtc: true,
+          );
+    for (final s in segs) {
+      await into(scheduleSpanRows).insert(ScheduleSpanRowsCompanion.insert(
+            scheduleId: s.scheduleId,
+            startDate: Value(asDate(s.from)),
+            endDate: Value(asDate(s.to)),
+          ));
+    }
+  }
 
   /// v5 → v6：把「每天一行」的班次拆成
   /// 班次定义（shift_class_rows）+ 周期序列（shift_cycle_rows）。

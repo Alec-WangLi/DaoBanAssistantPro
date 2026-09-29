@@ -369,12 +369,37 @@ class L10n {
   static String effectiveFromDate(String d) => t('$d 起', 'From $d');
   static String effectiveUntilDate(String d) => t('到 $d', 'Until $d');
   static String effectiveRangeSpan(String a, String b) => t('$a ～ $b', '$a – $b');
-  static String get effectiveRemaining => t('其余日子', 'Other days');
-  static String get effectiveNotChained => t('未参与衔接', 'Not in the timeline');
+  // ── 排班时段（时间线） ──
+  static String get scheduleTimeline => t('排班时段', 'Schedule timeline');
+  static String get remainingTime => t('其余时间', 'Other dates');
+  static String get remainingNone => t('无', 'None');
+  static String get remainingHint => t('没被时段覆盖的日子，用「其余时间」那一套。',
+      'Dates not covered by a period use the one under "Other dates".');
+  static String get addSpan => t('添加时段', 'Add a period');
+  static String get setRemainingNone => t('设为无', 'Set to none');
+  static String get manageTimeline => t('管理排班时段', 'Manage the timeline');
+  static String spanConflicts(String name, String range) => t(
+      '与「$name」的 $range 重叠了 —— 一天只能有一套排班，改开一点或先改那一段。',
+      'Overlaps “$name” ($range) — a day can only have one schedule. Adjust the dates or edit that period first.');
+  static String get noScheduleHere => t('这段时间没有排班', 'No schedule for these dates');
+  static String get noScheduleHereHint => t(
+      '去「我的 → 排班管理 → 排班时段」里加一段，或者给它设一套「其余时间」',
+      'Add a period under Me → Schedules → Schedule timeline, or give it an "Other dates" schedule');
+  static String get unusedSchedule => t('未使用', 'Unused');
+  static String get unusedHint =>
+      t('未使用 —— 去上面的「排班时段」把它排进去', 'Unused — put it on the timeline above');
+  static String get onTimeline => t('已排入时段', 'On the timeline');
+
+  // 段本身的两端（弹层里的两行）。
+  static String get spanFrom => t('从', 'From');
+  static String get spanTo => t('到', 'To');
+  static String get spanUnbounded => t('不限', 'Any time');
+  static String get spanForever => t('一直持续', 'Ongoing');
+  /// 段的两端都留空 = 这套方案一直用（不与任何别的段重叠时才有意义）。
+  static String get spanAlways => t('一直', 'Always');
 
   /// 日历那个弹层顶上的一句说明。**归 Task 7 处理** —— 那一屏要换成「排班时段」
-  /// 只读总览，这句话会被 `remainingHint`（Task 4 的产物）取代。现在先留着，
-  /// 因为日历还在用它（它不属于「编辑器那一节」的专属文案）。
+  /// 只读总览，这句话会被 `remainingHint` 取代。现在先留着，因为日历还在用它。
   static String get effectiveOutsideHint => t(
       '没被上面时段覆盖的日子，用标着「其余日子」的那套。',
       'Days not covered by a period above use the one marked "Other days".');

@@ -58,8 +58,8 @@ void main() {
   test('两套各带时段 → 按天各归各的，时段之外仍归当前方案', () async {
     final aId = await _save(repo, 'A', current: true);
     final bId = await _save(repo, 'B', current: false);
-    await repo.setScheduleSpan(aId, from: _d(2026, 1, 1), to: _d(2026, 6, 30));
-    await repo.setScheduleSpan(bId, from: _d(2026, 7, 1));
+    await repo.addSpan(aId, from: _d(2026, 1, 1), to: _d(2026, 6, 30));
+    await repo.addSpan(bId, from: _d(2026, 7, 1));
 
     final s = (await repo.getActiveSchedules())!;
     expect(s.chain.spans.length, 2);
@@ -68,19 +68,30 @@ void main() {
     expect(s.chain.scheduleOn(_d(2025, 1, 1))!.name, 'A', reason: '兜底是当前方案');
   });
 
-  test('setScheduleSpan 能把时段清回 null（= 不再参与衔接）', () async {
+  test('deleteSpan 之后那一段就不在时间线上了', () async {
     final id = await _save(repo, 'A', current: true);
-    await repo.setScheduleSpan(id, from: _d(2026, 1, 1));
+    // 「两端都留空」也是一段合法的段（这套方案一直用），不是「没有段」。
+    final spanId = await repo.addSpan(id, from: _d(2026, 1, 1));
     expect((await repo.getActiveSchedules())!.chain.spans.length, 1);
-    await repo.setScheduleSpan(id);
-    expect((await repo.getActiveSchedules())!.chain.spans, isEmpty);
+
+    await repo.updateSpan(spanId);
+    var s = (await repo.getActiveSchedules())!.chain;
+    expect(s.spans.single.from, isNull, reason: '改起止要能清回留空');
+    expect(s.spans.single.to, isNull);
+    expect(s.scheduleOn(_d(2026, 9, 1))!.name, 'A', reason: '两端都空的段 = 一直用');
+
+    await repo.deleteSpan(spanId);
+    s = (await repo.getActiveSchedules())!.chain;
+    expect(s.spans, isEmpty);
+    // 段没了，那天就回到「其余时间」（也是 A）—— 两者都要能回答。
+    expect(s.scheduleOn(_d(2026, 9, 1))!.name, 'A');
   });
 
   test('按天覆盖跟着「那天归哪套」走 —— 记在**那天所属方案**名下', () async {
     final aId = await _save(repo, 'A', current: true);
     final bId = await _save(repo, 'B', current: false);
-    await repo.setScheduleSpan(aId, from: _d(2026, 1, 1), to: _d(2026, 6, 30));
-    await repo.setScheduleSpan(bId, from: _d(2026, 7, 1));
+    await repo.addSpan(aId, from: _d(2026, 1, 1), to: _d(2026, 6, 30));
+    await repo.addSpan(bId, from: _d(2026, 7, 1));
 
     final bRestId = (await repo.getScheduleDomain(bId))!.classes.last.id!;
 
@@ -101,8 +112,8 @@ void main() {
   test('clearDayOverrides 同样按天找方案（否则撤不回来）', () async {
     final aId = await _save(repo, 'A', current: true);
     final bId = await _save(repo, 'B', current: false);
-    await repo.setScheduleSpan(aId, from: _d(2026, 1, 1), to: _d(2026, 6, 30));
-    await repo.setScheduleSpan(bId, from: _d(2026, 7, 1));
+    await repo.addSpan(aId, from: _d(2026, 1, 1), to: _d(2026, 6, 30));
+    await repo.addSpan(bId, from: _d(2026, 7, 1));
     final bRestId = (await repo.getScheduleDomain(bId))!.classes.last.id!;
 
     await repo.setDayOverrides([_d(2026, 7, 1)], classId: bRestId);
@@ -128,7 +139,7 @@ void main() {
     expect(seen, isNotEmpty);
     expect(seen.last, 0);
 
-    await repo.setScheduleSpan(bId, from: _d(2026, 7, 1));
+    await repo.addSpan(bId, from: _d(2026, 7, 1));
     await Future<void>.delayed(const Duration(milliseconds: 50));
     await sub.cancel();
 

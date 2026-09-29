@@ -734,6 +734,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final schedules = await ref.read(schedulesProvider.future);
     if (!mounted) return;
     final current = ref.read(activeScheduleProvider).valueOrNull;
+    // 段也要读：副标题里的身份标签（「已排入时段」还是「未使用」）要数段。
+    final spans = await ref.read(scheduleSpansProvider.future);
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
@@ -783,7 +785,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               ),
                               title: Text(s.name),
                               subtitle: Text(
-                                  '${effectiveRangeLabel(s, isCurrent: selected)} · '
+                                  '${scheduleRoleLabel(s, spanCount: spanCountOf(spans, s.id), isCurrent: selected)} · '
                                   '${L10n.teamCountN(parseTeamNames(s.teamNames).length)}'),
                               onTap: () async {
                                 final name = s.name;

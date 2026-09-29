@@ -183,6 +183,7 @@ extension AppDatabaseQueries on AppDatabase {
   Stream<ActiveSchedules?> watchActiveSchedule() {
     final triggers = <Stream<Object?>>[
       select(shiftScheduleRows).watch(),
+      select(scheduleSpanRows).watch(),
       select(shiftDayOverrides).watch(),
       select(shiftClassAlarms).watch(),
     ];
@@ -222,16 +223,19 @@ extension AppDatabaseQueries on AppDatabase {
         break;
       }
     }
-    // 参与衔接的 = **设了任一端时段**的那些。两端都空的不参与 —— 老库全是这种，
-    // 于是它们全都落到 `fallback` 那条路，行为与从前一字不差（spec §3）。
+    // 段表独立：一套方案可以出现在多段上。**关联不到方案的段跳过**
+    // （方案被删之后的脏数据），而不是让整条装配崩掉。
+    final spanRows = await select(scheduleSpanRows).get();
+    final byId = {for (final a in all) a.schedule.id: a};
     final spans = <ScheduleSpan>[
-      for (final a in all)
-        if (a.schedule.effectiveFrom != null || a.schedule.effectiveTo != null)
+      for (final s in spanRows)
+        if (byId[s.scheduleId] != null)
           ScheduleSpan(
-            id: a.schedule.id,
-            schedule: a.toDomain(),
-            from: a.schedule.effectiveFrom,
-            to: a.schedule.effectiveTo,
+            id: s.id,
+            scheduleId: s.scheduleId,
+            schedule: byId[s.scheduleId]!.toDomain(),
+            from: s.startDate,
+            to: s.endDate,
           ),
     ];
     // 排序只为了让界面与日志有个稳定顺序 —— 解析规则自己显式比起点，不靠顺序。
@@ -337,6 +341,8 @@ class AppRepository {
       await db.delete(db.shiftClassAlarms).go();
       // 先删子表（周期）再删父表（班次定义）。
       await db.delete(db.shiftCycleRows).go();
+      // 时间线上的段指着方案行，也是子表。
+      await db.delete(db.scheduleSpanRows).go();
       await db.delete(db.shiftClassRows).go();
       await db.delete(db.shiftScheduleRows).go();
       // 重复待办的**系列定义**。它的「行」就是 `schedule_events`，上面已经删了 ——
@@ -374,31 +380,58 @@ class AppRepository {
     return db.assembleSchedules(rows);
   }
 
-  /// 写一套方案的**生效时段**（`null` = 不限 / 一直持续；两端都 `null` = 不参与衔接）。
+  // ---------------------------------------------------------------------------
+  // 时间线上的「段」（多排班表按日期衔接）
+  //
+  // 段独立成表而不是方案行上的两列：**一套方案可以出现在多段上** ——
+  // 「9 月临时换成别的班表、之后换回来」那种排法需要它。
+  //
+  // 段与段**不许重叠**，但这一层**不校验**（它要拿全量 spans 比，而那是界面的
+  // 事）—— 这里只负责「把自己那一行写对」。
+  // ---------------------------------------------------------------------------
+
+  /// 在时间线上加一段。
   ///
-  /// 单独一个方法而不是给 [saveSchedule] 加两个参数，理由是仓库里已有的先例
-  /// （[setEventDate]）：`saveSchedule` 是**整行覆盖**，给它加两个可空参数意味着
-  /// 每个调用点都得记得带上，漏一个就把用户设好的时段**静默清掉**了。而这里只碰
-  /// 那两列，忘了传就是「不动」，错法安全得多。
-  ///
-  /// **必须显式写 `Value(...)`**：`Value.absent()` 表达不了「清成 null」，
-  /// 那条路径（把设好的时段改回不限）会静默保留旧值。
-  Future<void> setScheduleSpan(int id, {DateTime? from, DateTime? to}) async {
-    await (db.update(db.shiftScheduleRows)..where((s) => s.id.equals(id)))
-        .write(ShiftScheduleRowsCompanion(
-      effectiveFrom: Value(from == null ? null : dateOnly(from)),
-      effectiveTo: Value(to == null ? null : dateOnly(to)),
+  /// **空值必须显式构造 `Value(...)`**：`Value.absent()` 表达不了「这一端留空」
+  /// （不限起点 / 一直持续），会静默保留列默认值。
+  Future<int> addSpan(int scheduleId, {DateTime? from, DateTime? to}) {
+    return db.into(db.scheduleSpanRows).insert(
+          ScheduleSpanRowsCompanion.insert(
+            scheduleId: scheduleId,
+            startDate: Value(from == null ? null : dateOnly(from)),
+            endDate: Value(to == null ? null : dateOnly(to)),
+          ),
+        );
+  }
+
+  /// 改一段的起止（**段 id**，不是方案 id）。换方案请走
+  /// [deleteSpan] + [addSpan]：段是「这一段时间归谁」，换方案等于换一段。
+  Future<void> updateSpan(int spanId, {DateTime? from, DateTime? to}) async {
+    await (db.update(db.scheduleSpanRows)..where((t) => t.id.equals(spanId)))
+        .write(ScheduleSpanRowsCompanion(
+      startDate: Value(from == null ? null : dateOnly(from)),
+      endDate: Value(to == null ? null : dateOnly(to)),
     ));
   }
 
-  /// 取一套方案的生效时段（`ShiftSchedule` 是领域模型，不带这两个库字段）。
+  /// 删掉一段（**段 id**）。
+  Future<void> deleteSpan(int spanId) async {
+    await (db.delete(db.scheduleSpanRows)..where((t) => t.id.equals(spanId)))
+        .go();
+  }
+
+  /// 把「其余时间」设成**无**：所有方案都不再是 `isCurrent`。
   ///
-  /// 编辑器进页面时读它；写成两条记录是为了调用点不必再碰生成的行类型。
-  Future<({DateTime? from, DateTime? to})> getScheduleSpan(int id) async {
-    final row = await (db.select(db.shiftScheduleRows)
-          ..where((s) => s.id.equals(id)))
-        .getSingleOrNull();
-    return (from: row?.effectiveFrom, to: row?.effectiveTo);
+  /// 与 [setCurrentSchedule] 配套 —— 后者永远是「设成某一套」，这个是「一套都不设」。
+  /// 于是没被任何段覆盖的日子在日历上**真的没有排班**。
+  ///
+  /// **只有「排班时段」那一节的「设为无」会调它** —— 删掉一套方案时仍然自动把
+  /// 其余时间交给列表里的第一套（[deleteSchedule]），否则「删掉默认那套」会让整张
+  /// 日历变空，那是个惊悚结果。
+  Future<void> setRemainingNone() async {
+    await db.update(db.shiftScheduleRows).write(
+          const ShiftScheduleRowsCompanion(isCurrent: Value(false)),
+        );
   }
 
   /// 取一套排班方案的完整领域模型（含班次定义与周期）。
@@ -438,6 +471,10 @@ class AppRepository {
             ..where((t) => t.scheduleId.equals(id)))
           .go();
       await (db.delete(db.shiftDayOverrides)
+            ..where((t) => t.scheduleId.equals(id)))
+          .go();
+      // 时间线上的段也指着这套方案 —— 它同样是子表，先于方案行删。
+      await (db.delete(db.scheduleSpanRows)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
       await (db.delete(db.shiftClassRows)
@@ -1151,6 +1188,21 @@ final schedulesProvider = StreamProvider<List<ShiftScheduleRow>>((ref) {
   final db = ref.watch(databaseProvider);
   return (db.select(db.shiftScheduleRows)
         ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+      .watch();
+});
+
+/// 时间线上的全部段（**按起点升序，起点为空的排最前** —— 与
+/// `compareSpansByStart` 同一条口径）。
+///
+/// 「排班时段」那一节与日历那个总览弹层都读它；两处各自的「按方案数几段」也从
+/// 它算，免得各写一份。
+final scheduleSpansProvider = StreamProvider<List<ScheduleSpanRow>>((ref) {
+  final db = ref.watch(databaseProvider);
+  return (db.select(db.scheduleSpanRows)
+        ..orderBy([
+          (t) => OrderingTerm.asc(t.startDate),
+          (t) => OrderingTerm.asc(t.id),
+        ]))
       .watch();
 });
 

@@ -71,18 +71,6 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant(''));
-  static const VerificationMeta _effectiveFromMeta =
-      const VerificationMeta('effectiveFrom');
-  @override
-  late final GeneratedColumn<DateTime> effectiveFrom =
-      GeneratedColumn<DateTime>('effective_from', aliasedName, true,
-          type: DriftSqlType.dateTime, requiredDuringInsert: false);
-  static const VerificationMeta _effectiveToMeta =
-      const VerificationMeta('effectiveTo');
-  @override
-  late final GeneratedColumn<DateTime> effectiveTo = GeneratedColumn<DateTime>(
-      'effective_to', aliasedName, true,
-      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -92,9 +80,7 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
         teamCount,
         teamNames,
         ourTeamIndex,
-        teamOffsets,
-        effectiveFrom,
-        effectiveTo
+        teamOffsets
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -147,18 +133,6 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
           teamOffsets.isAcceptableOrUnknown(
               data['team_offsets']!, _teamOffsetsMeta));
     }
-    if (data.containsKey('effective_from')) {
-      context.handle(
-          _effectiveFromMeta,
-          effectiveFrom.isAcceptableOrUnknown(
-              data['effective_from']!, _effectiveFromMeta));
-    }
-    if (data.containsKey('effective_to')) {
-      context.handle(
-          _effectiveToMeta,
-          effectiveTo.isAcceptableOrUnknown(
-              data['effective_to']!, _effectiveToMeta));
-    }
     return context;
   }
 
@@ -184,10 +158,6 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
           .read(DriftSqlType.int, data['${effectivePrefix}our_team_index'])!,
       teamOffsets: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}team_offsets'])!,
-      effectiveFrom: attachedDatabase.typeMapping.read(
-          DriftSqlType.dateTime, data['${effectivePrefix}effective_from']),
-      effectiveTo: attachedDatabase.typeMapping
-          .read(DriftSqlType.dateTime, data['${effectivePrefix}effective_to']),
     );
   }
 
@@ -207,16 +177,6 @@ class ShiftScheduleRow extends DataClass
   final String teamNames;
   final int ourTeamIndex;
   final String teamOffsets;
-
-  /// 生效时段起点（**闭区间**，纯日期，`dateOnly` 口径）；null = 不限起点。
-  ///
-  /// 与 [effectiveTo] 一起决定「某天归哪套方案」（见 `domain/schedule_chain.dart`）。
-  /// **两端都空 = 不参与衔接** —— 这是老库（两列都是 null）行为一字不变的关键：
-  /// 那种方案永远选不上，于是每天都落到「当前方案」兜底那条路。
-  final DateTime? effectiveFrom;
-
-  /// 生效时段终点（**闭区间**，纯日期）；null = 一直持续下去。
-  final DateTime? effectiveTo;
   const ShiftScheduleRow(
       {required this.id,
       required this.name,
@@ -225,9 +185,7 @@ class ShiftScheduleRow extends DataClass
       required this.teamCount,
       required this.teamNames,
       required this.ourTeamIndex,
-      required this.teamOffsets,
-      this.effectiveFrom,
-      this.effectiveTo});
+      required this.teamOffsets});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -239,12 +197,6 @@ class ShiftScheduleRow extends DataClass
     map['team_names'] = Variable<String>(teamNames);
     map['our_team_index'] = Variable<int>(ourTeamIndex);
     map['team_offsets'] = Variable<String>(teamOffsets);
-    if (!nullToAbsent || effectiveFrom != null) {
-      map['effective_from'] = Variable<DateTime>(effectiveFrom);
-    }
-    if (!nullToAbsent || effectiveTo != null) {
-      map['effective_to'] = Variable<DateTime>(effectiveTo);
-    }
     return map;
   }
 
@@ -258,12 +210,6 @@ class ShiftScheduleRow extends DataClass
       teamNames: Value(teamNames),
       ourTeamIndex: Value(ourTeamIndex),
       teamOffsets: Value(teamOffsets),
-      effectiveFrom: effectiveFrom == null && nullToAbsent
-          ? const Value.absent()
-          : Value(effectiveFrom),
-      effectiveTo: effectiveTo == null && nullToAbsent
-          ? const Value.absent()
-          : Value(effectiveTo),
     );
   }
 
@@ -279,8 +225,6 @@ class ShiftScheduleRow extends DataClass
       teamNames: serializer.fromJson<String>(json['teamNames']),
       ourTeamIndex: serializer.fromJson<int>(json['ourTeamIndex']),
       teamOffsets: serializer.fromJson<String>(json['teamOffsets']),
-      effectiveFrom: serializer.fromJson<DateTime?>(json['effectiveFrom']),
-      effectiveTo: serializer.fromJson<DateTime?>(json['effectiveTo']),
     );
   }
   @override
@@ -295,8 +239,6 @@ class ShiftScheduleRow extends DataClass
       'teamNames': serializer.toJson<String>(teamNames),
       'ourTeamIndex': serializer.toJson<int>(ourTeamIndex),
       'teamOffsets': serializer.toJson<String>(teamOffsets),
-      'effectiveFrom': serializer.toJson<DateTime?>(effectiveFrom),
-      'effectiveTo': serializer.toJson<DateTime?>(effectiveTo),
     };
   }
 
@@ -308,9 +250,7 @@ class ShiftScheduleRow extends DataClass
           int? teamCount,
           String? teamNames,
           int? ourTeamIndex,
-          String? teamOffsets,
-          Value<DateTime?> effectiveFrom = const Value.absent(),
-          Value<DateTime?> effectiveTo = const Value.absent()}) =>
+          String? teamOffsets}) =>
       ShiftScheduleRow(
         id: id ?? this.id,
         name: name ?? this.name,
@@ -320,9 +260,6 @@ class ShiftScheduleRow extends DataClass
         teamNames: teamNames ?? this.teamNames,
         ourTeamIndex: ourTeamIndex ?? this.ourTeamIndex,
         teamOffsets: teamOffsets ?? this.teamOffsets,
-        effectiveFrom:
-            effectiveFrom.present ? effectiveFrom.value : this.effectiveFrom,
-        effectiveTo: effectiveTo.present ? effectiveTo.value : this.effectiveTo,
       );
   ShiftScheduleRow copyWithCompanion(ShiftScheduleRowsCompanion data) {
     return ShiftScheduleRow(
@@ -338,11 +275,6 @@ class ShiftScheduleRow extends DataClass
           : this.ourTeamIndex,
       teamOffsets:
           data.teamOffsets.present ? data.teamOffsets.value : this.teamOffsets,
-      effectiveFrom: data.effectiveFrom.present
-          ? data.effectiveFrom.value
-          : this.effectiveFrom,
-      effectiveTo:
-          data.effectiveTo.present ? data.effectiveTo.value : this.effectiveTo,
     );
   }
 
@@ -356,16 +288,14 @@ class ShiftScheduleRow extends DataClass
           ..write('teamCount: $teamCount, ')
           ..write('teamNames: $teamNames, ')
           ..write('ourTeamIndex: $ourTeamIndex, ')
-          ..write('teamOffsets: $teamOffsets, ')
-          ..write('effectiveFrom: $effectiveFrom, ')
-          ..write('effectiveTo: $effectiveTo')
+          ..write('teamOffsets: $teamOffsets')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, name, anchorDate, isCurrent, teamCount,
-      teamNames, ourTeamIndex, teamOffsets, effectiveFrom, effectiveTo);
+      teamNames, ourTeamIndex, teamOffsets);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -377,9 +307,7 @@ class ShiftScheduleRow extends DataClass
           other.teamCount == this.teamCount &&
           other.teamNames == this.teamNames &&
           other.ourTeamIndex == this.ourTeamIndex &&
-          other.teamOffsets == this.teamOffsets &&
-          other.effectiveFrom == this.effectiveFrom &&
-          other.effectiveTo == this.effectiveTo);
+          other.teamOffsets == this.teamOffsets);
 }
 
 class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
@@ -391,8 +319,6 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
   final Value<String> teamNames;
   final Value<int> ourTeamIndex;
   final Value<String> teamOffsets;
-  final Value<DateTime?> effectiveFrom;
-  final Value<DateTime?> effectiveTo;
   const ShiftScheduleRowsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -402,8 +328,6 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     this.teamNames = const Value.absent(),
     this.ourTeamIndex = const Value.absent(),
     this.teamOffsets = const Value.absent(),
-    this.effectiveFrom = const Value.absent(),
-    this.effectiveTo = const Value.absent(),
   });
   ShiftScheduleRowsCompanion.insert({
     this.id = const Value.absent(),
@@ -414,8 +338,6 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     this.teamNames = const Value.absent(),
     this.ourTeamIndex = const Value.absent(),
     this.teamOffsets = const Value.absent(),
-    this.effectiveFrom = const Value.absent(),
-    this.effectiveTo = const Value.absent(),
   })  : name = Value(name),
         anchorDate = Value(anchorDate);
   static Insertable<ShiftScheduleRow> custom({
@@ -427,8 +349,6 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     Expression<String>? teamNames,
     Expression<int>? ourTeamIndex,
     Expression<String>? teamOffsets,
-    Expression<DateTime>? effectiveFrom,
-    Expression<DateTime>? effectiveTo,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -439,8 +359,6 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       if (teamNames != null) 'team_names': teamNames,
       if (ourTeamIndex != null) 'our_team_index': ourTeamIndex,
       if (teamOffsets != null) 'team_offsets': teamOffsets,
-      if (effectiveFrom != null) 'effective_from': effectiveFrom,
-      if (effectiveTo != null) 'effective_to': effectiveTo,
     });
   }
 
@@ -452,9 +370,7 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       Value<int>? teamCount,
       Value<String>? teamNames,
       Value<int>? ourTeamIndex,
-      Value<String>? teamOffsets,
-      Value<DateTime?>? effectiveFrom,
-      Value<DateTime?>? effectiveTo}) {
+      Value<String>? teamOffsets}) {
     return ShiftScheduleRowsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -464,8 +380,6 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       teamNames: teamNames ?? this.teamNames,
       ourTeamIndex: ourTeamIndex ?? this.ourTeamIndex,
       teamOffsets: teamOffsets ?? this.teamOffsets,
-      effectiveFrom: effectiveFrom ?? this.effectiveFrom,
-      effectiveTo: effectiveTo ?? this.effectiveTo,
     );
   }
 
@@ -496,12 +410,6 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     if (teamOffsets.present) {
       map['team_offsets'] = Variable<String>(teamOffsets.value);
     }
-    if (effectiveFrom.present) {
-      map['effective_from'] = Variable<DateTime>(effectiveFrom.value);
-    }
-    if (effectiveTo.present) {
-      map['effective_to'] = Variable<DateTime>(effectiveTo.value);
-    }
     return map;
   }
 
@@ -515,9 +423,279 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
           ..write('teamCount: $teamCount, ')
           ..write('teamNames: $teamNames, ')
           ..write('ourTeamIndex: $ourTeamIndex, ')
-          ..write('teamOffsets: $teamOffsets, ')
-          ..write('effectiveFrom: $effectiveFrom, ')
-          ..write('effectiveTo: $effectiveTo')
+          ..write('teamOffsets: $teamOffsets')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ScheduleSpanRowsTable extends ScheduleSpanRows
+    with TableInfo<$ScheduleSpanRowsTable, ScheduleSpanRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScheduleSpanRowsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _scheduleIdMeta =
+      const VerificationMeta('scheduleId');
+  @override
+  late final GeneratedColumn<int> scheduleId = GeneratedColumn<int>(
+      'schedule_id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _startDateMeta =
+      const VerificationMeta('startDate');
+  @override
+  late final GeneratedColumn<DateTime> startDate = GeneratedColumn<DateTime>(
+      'start_date', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _endDateMeta =
+      const VerificationMeta('endDate');
+  @override
+  late final GeneratedColumn<DateTime> endDate = GeneratedColumn<DateTime>(
+      'end_date', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [id, scheduleId, startDate, endDate];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'schedule_span_rows';
+  @override
+  VerificationContext validateIntegrity(Insertable<ScheduleSpanRow> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('schedule_id')) {
+      context.handle(
+          _scheduleIdMeta,
+          scheduleId.isAcceptableOrUnknown(
+              data['schedule_id']!, _scheduleIdMeta));
+    } else if (isInserting) {
+      context.missing(_scheduleIdMeta);
+    }
+    if (data.containsKey('start_date')) {
+      context.handle(_startDateMeta,
+          startDate.isAcceptableOrUnknown(data['start_date']!, _startDateMeta));
+    }
+    if (data.containsKey('end_date')) {
+      context.handle(_endDateMeta,
+          endDate.isAcceptableOrUnknown(data['end_date']!, _endDateMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ScheduleSpanRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ScheduleSpanRow(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      scheduleId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}schedule_id'])!,
+      startDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}start_date']),
+      endDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}end_date']),
+    );
+  }
+
+  @override
+  $ScheduleSpanRowsTable createAlias(String alias) {
+    return $ScheduleSpanRowsTable(attachedDatabase, alias);
+  }
+}
+
+class ScheduleSpanRow extends DataClass implements Insertable<ScheduleSpanRow> {
+  final int id;
+
+  /// 指向 `shift_schedule_rows.id`。
+  final int scheduleId;
+
+  /// 起点（**闭区间**，纯日期，`dateOnly` 口径）；null = 不限起点。
+  final DateTime? startDate;
+
+  /// 终点（**闭区间**）；null = 一直持续。
+  final DateTime? endDate;
+  const ScheduleSpanRow(
+      {required this.id,
+      required this.scheduleId,
+      this.startDate,
+      this.endDate});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['schedule_id'] = Variable<int>(scheduleId);
+    if (!nullToAbsent || startDate != null) {
+      map['start_date'] = Variable<DateTime>(startDate);
+    }
+    if (!nullToAbsent || endDate != null) {
+      map['end_date'] = Variable<DateTime>(endDate);
+    }
+    return map;
+  }
+
+  ScheduleSpanRowsCompanion toCompanion(bool nullToAbsent) {
+    return ScheduleSpanRowsCompanion(
+      id: Value(id),
+      scheduleId: Value(scheduleId),
+      startDate: startDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startDate),
+      endDate: endDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endDate),
+    );
+  }
+
+  factory ScheduleSpanRow.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ScheduleSpanRow(
+      id: serializer.fromJson<int>(json['id']),
+      scheduleId: serializer.fromJson<int>(json['scheduleId']),
+      startDate: serializer.fromJson<DateTime?>(json['startDate']),
+      endDate: serializer.fromJson<DateTime?>(json['endDate']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'scheduleId': serializer.toJson<int>(scheduleId),
+      'startDate': serializer.toJson<DateTime?>(startDate),
+      'endDate': serializer.toJson<DateTime?>(endDate),
+    };
+  }
+
+  ScheduleSpanRow copyWith(
+          {int? id,
+          int? scheduleId,
+          Value<DateTime?> startDate = const Value.absent(),
+          Value<DateTime?> endDate = const Value.absent()}) =>
+      ScheduleSpanRow(
+        id: id ?? this.id,
+        scheduleId: scheduleId ?? this.scheduleId,
+        startDate: startDate.present ? startDate.value : this.startDate,
+        endDate: endDate.present ? endDate.value : this.endDate,
+      );
+  ScheduleSpanRow copyWithCompanion(ScheduleSpanRowsCompanion data) {
+    return ScheduleSpanRow(
+      id: data.id.present ? data.id.value : this.id,
+      scheduleId:
+          data.scheduleId.present ? data.scheduleId.value : this.scheduleId,
+      startDate: data.startDate.present ? data.startDate.value : this.startDate,
+      endDate: data.endDate.present ? data.endDate.value : this.endDate,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScheduleSpanRow(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('startDate: $startDate, ')
+          ..write('endDate: $endDate')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, scheduleId, startDate, endDate);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleSpanRow &&
+          other.id == this.id &&
+          other.scheduleId == this.scheduleId &&
+          other.startDate == this.startDate &&
+          other.endDate == this.endDate);
+}
+
+class ScheduleSpanRowsCompanion extends UpdateCompanion<ScheduleSpanRow> {
+  final Value<int> id;
+  final Value<int> scheduleId;
+  final Value<DateTime?> startDate;
+  final Value<DateTime?> endDate;
+  const ScheduleSpanRowsCompanion({
+    this.id = const Value.absent(),
+    this.scheduleId = const Value.absent(),
+    this.startDate = const Value.absent(),
+    this.endDate = const Value.absent(),
+  });
+  ScheduleSpanRowsCompanion.insert({
+    this.id = const Value.absent(),
+    required int scheduleId,
+    this.startDate = const Value.absent(),
+    this.endDate = const Value.absent(),
+  }) : scheduleId = Value(scheduleId);
+  static Insertable<ScheduleSpanRow> custom({
+    Expression<int>? id,
+    Expression<int>? scheduleId,
+    Expression<DateTime>? startDate,
+    Expression<DateTime>? endDate,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (scheduleId != null) 'schedule_id': scheduleId,
+      if (startDate != null) 'start_date': startDate,
+      if (endDate != null) 'end_date': endDate,
+    });
+  }
+
+  ScheduleSpanRowsCompanion copyWith(
+      {Value<int>? id,
+      Value<int>? scheduleId,
+      Value<DateTime?>? startDate,
+      Value<DateTime?>? endDate}) {
+    return ScheduleSpanRowsCompanion(
+      id: id ?? this.id,
+      scheduleId: scheduleId ?? this.scheduleId,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (scheduleId.present) {
+      map['schedule_id'] = Variable<int>(scheduleId.value);
+    }
+    if (startDate.present) {
+      map['start_date'] = Variable<DateTime>(startDate.value);
+    }
+    if (endDate.present) {
+      map['end_date'] = Variable<DateTime>(endDate.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScheduleSpanRowsCompanion(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('startDate: $startDate, ')
+          ..write('endDate: $endDate')
           ..write(')'))
         .toString();
   }
@@ -3858,6 +4036,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ShiftScheduleRowsTable shiftScheduleRows =
       $ShiftScheduleRowsTable(this);
+  late final $ScheduleSpanRowsTable scheduleSpanRows =
+      $ScheduleSpanRowsTable(this);
   late final $ShiftClassRowsTable shiftClassRows = $ShiftClassRowsTable(this);
   late final $ShiftCycleRowsTable shiftCycleRows = $ShiftCycleRowsTable(this);
   late final $ShiftClassAlarmsTable shiftClassAlarms =
@@ -3878,6 +4058,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
         shiftScheduleRows,
+        scheduleSpanRows,
         shiftClassRows,
         shiftCycleRows,
         shiftClassAlarms,
@@ -3900,8 +4081,6 @@ typedef $$ShiftScheduleRowsTableCreateCompanionBuilder
   Value<String> teamNames,
   Value<int> ourTeamIndex,
   Value<String> teamOffsets,
-  Value<DateTime?> effectiveFrom,
-  Value<DateTime?> effectiveTo,
 });
 typedef $$ShiftScheduleRowsTableUpdateCompanionBuilder
     = ShiftScheduleRowsCompanion Function({
@@ -3913,8 +4092,6 @@ typedef $$ShiftScheduleRowsTableUpdateCompanionBuilder
   Value<String> teamNames,
   Value<int> ourTeamIndex,
   Value<String> teamOffsets,
-  Value<DateTime?> effectiveFrom,
-  Value<DateTime?> effectiveTo,
 });
 
 class $$ShiftScheduleRowsTableFilterComposer
@@ -3949,12 +4126,6 @@ class $$ShiftScheduleRowsTableFilterComposer
 
   ColumnFilters<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<DateTime> get effectiveFrom => $composableBuilder(
-      column: $table.effectiveFrom, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<DateTime> get effectiveTo => $composableBuilder(
-      column: $table.effectiveTo, builder: (column) => ColumnFilters(column));
 }
 
 class $$ShiftScheduleRowsTableOrderingComposer
@@ -3990,13 +4161,6 @@ class $$ShiftScheduleRowsTableOrderingComposer
 
   ColumnOrderings<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<DateTime> get effectiveFrom => $composableBuilder(
-      column: $table.effectiveFrom,
-      builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<DateTime> get effectiveTo => $composableBuilder(
-      column: $table.effectiveTo, builder: (column) => ColumnOrderings(column));
 }
 
 class $$ShiftScheduleRowsTableAnnotationComposer
@@ -4031,12 +4195,6 @@ class $$ShiftScheduleRowsTableAnnotationComposer
 
   GeneratedColumn<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get effectiveFrom => $composableBuilder(
-      column: $table.effectiveFrom, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get effectiveTo => $composableBuilder(
-      column: $table.effectiveTo, builder: (column) => column);
 }
 
 class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
@@ -4075,8 +4233,6 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             Value<String> teamNames = const Value.absent(),
             Value<int> ourTeamIndex = const Value.absent(),
             Value<String> teamOffsets = const Value.absent(),
-            Value<DateTime?> effectiveFrom = const Value.absent(),
-            Value<DateTime?> effectiveTo = const Value.absent(),
           }) =>
               ShiftScheduleRowsCompanion(
             id: id,
@@ -4087,8 +4243,6 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             teamNames: teamNames,
             ourTeamIndex: ourTeamIndex,
             teamOffsets: teamOffsets,
-            effectiveFrom: effectiveFrom,
-            effectiveTo: effectiveTo,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -4099,8 +4253,6 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             Value<String> teamNames = const Value.absent(),
             Value<int> ourTeamIndex = const Value.absent(),
             Value<String> teamOffsets = const Value.absent(),
-            Value<DateTime?> effectiveFrom = const Value.absent(),
-            Value<DateTime?> effectiveTo = const Value.absent(),
           }) =>
               ShiftScheduleRowsCompanion.insert(
             id: id,
@@ -4111,8 +4263,6 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             teamNames: teamNames,
             ourTeamIndex: ourTeamIndex,
             teamOffsets: teamOffsets,
-            effectiveFrom: effectiveFrom,
-            effectiveTo: effectiveTo,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4135,6 +4285,159 @@ typedef $$ShiftScheduleRowsTableProcessedTableManager = ProcessedTableManager<
       BaseReferences<_$AppDatabase, $ShiftScheduleRowsTable, ShiftScheduleRow>
     ),
     ShiftScheduleRow,
+    PrefetchHooks Function()>;
+typedef $$ScheduleSpanRowsTableCreateCompanionBuilder
+    = ScheduleSpanRowsCompanion Function({
+  Value<int> id,
+  required int scheduleId,
+  Value<DateTime?> startDate,
+  Value<DateTime?> endDate,
+});
+typedef $$ScheduleSpanRowsTableUpdateCompanionBuilder
+    = ScheduleSpanRowsCompanion Function({
+  Value<int> id,
+  Value<int> scheduleId,
+  Value<DateTime?> startDate,
+  Value<DateTime?> endDate,
+});
+
+class $$ScheduleSpanRowsTableFilterComposer
+    extends Composer<_$AppDatabase, $ScheduleSpanRowsTable> {
+  $$ScheduleSpanRowsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get startDate => $composableBuilder(
+      column: $table.startDate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get endDate => $composableBuilder(
+      column: $table.endDate, builder: (column) => ColumnFilters(column));
+}
+
+class $$ScheduleSpanRowsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ScheduleSpanRowsTable> {
+  $$ScheduleSpanRowsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get startDate => $composableBuilder(
+      column: $table.startDate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get endDate => $composableBuilder(
+      column: $table.endDate, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ScheduleSpanRowsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ScheduleSpanRowsTable> {
+  $$ScheduleSpanRowsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startDate =>
+      $composableBuilder(column: $table.startDate, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endDate =>
+      $composableBuilder(column: $table.endDate, builder: (column) => column);
+}
+
+class $$ScheduleSpanRowsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ScheduleSpanRowsTable,
+    ScheduleSpanRow,
+    $$ScheduleSpanRowsTableFilterComposer,
+    $$ScheduleSpanRowsTableOrderingComposer,
+    $$ScheduleSpanRowsTableAnnotationComposer,
+    $$ScheduleSpanRowsTableCreateCompanionBuilder,
+    $$ScheduleSpanRowsTableUpdateCompanionBuilder,
+    (
+      ScheduleSpanRow,
+      BaseReferences<_$AppDatabase, $ScheduleSpanRowsTable, ScheduleSpanRow>
+    ),
+    ScheduleSpanRow,
+    PrefetchHooks Function()> {
+  $$ScheduleSpanRowsTableTableManager(
+      _$AppDatabase db, $ScheduleSpanRowsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScheduleSpanRowsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ScheduleSpanRowsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ScheduleSpanRowsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int> scheduleId = const Value.absent(),
+            Value<DateTime?> startDate = const Value.absent(),
+            Value<DateTime?> endDate = const Value.absent(),
+          }) =>
+              ScheduleSpanRowsCompanion(
+            id: id,
+            scheduleId: scheduleId,
+            startDate: startDate,
+            endDate: endDate,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required int scheduleId,
+            Value<DateTime?> startDate = const Value.absent(),
+            Value<DateTime?> endDate = const Value.absent(),
+          }) =>
+              ScheduleSpanRowsCompanion.insert(
+            id: id,
+            scheduleId: scheduleId,
+            startDate: startDate,
+            endDate: endDate,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ScheduleSpanRowsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ScheduleSpanRowsTable,
+    ScheduleSpanRow,
+    $$ScheduleSpanRowsTableFilterComposer,
+    $$ScheduleSpanRowsTableOrderingComposer,
+    $$ScheduleSpanRowsTableAnnotationComposer,
+    $$ScheduleSpanRowsTableCreateCompanionBuilder,
+    $$ScheduleSpanRowsTableUpdateCompanionBuilder,
+    (
+      ScheduleSpanRow,
+      BaseReferences<_$AppDatabase, $ScheduleSpanRowsTable, ScheduleSpanRow>
+    ),
+    ScheduleSpanRow,
     PrefetchHooks Function()>;
 typedef $$ShiftClassRowsTableCreateCompanionBuilder = ShiftClassRowsCompanion
     Function({
@@ -5876,6 +6179,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$ShiftScheduleRowsTableTableManager get shiftScheduleRows =>
       $$ShiftScheduleRowsTableTableManager(_db, _db.shiftScheduleRows);
+  $$ScheduleSpanRowsTableTableManager get scheduleSpanRows =>
+      $$ScheduleSpanRowsTableTableManager(_db, _db.scheduleSpanRows);
   $$ShiftClassRowsTableTableManager get shiftClassRows =>
       $$ShiftClassRowsTableTableManager(_db, _db.shiftClassRows);
   $$ShiftCycleRowsTableTableManager get shiftCycleRows =>

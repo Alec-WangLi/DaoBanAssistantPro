@@ -15,13 +15,22 @@ library;
 
 import 'shift_rotation.dart';
 
-/// 一套方案 + 它的生效时段（**闭区间**，两端都可留空）。
+/// 时间线上的一段（**闭区间**，两端都可留空）。
 class ScheduleSpan {
-  const ScheduleSpan({this.id, required this.schedule, this.from, this.to});
+  const ScheduleSpan(
+      {this.id, this.scheduleId, required this.schedule, this.from, this.to});
 
-  /// `shift_schedule_rows.id`。界面用来跳编辑器 / 删除 / 判重叠；
-  /// **解析规则只用它当起点并列时的胜负判据**。
+  /// **段**的行 id（`schedule_span_rows.id`）。
+  ///
+  /// 编辑 / 删除 / `conflictingSpans` 判「是不是自己」都用它。
   final int? id;
+
+  /// **方案**的行 id（`shift_schedule_rows.id`）。[ScheduleChain.scheduleIdOn]
+  /// 返回的是它 —— 按天改班的覆盖表主键是 `{scheduleId, day}`，要的是**方案**
+  /// 的 id，不是段的。
+  ///
+  /// **两个 id 别搞混**：混了的症状是覆盖记到错的方案名下（不生效、也不报错）。
+  final int? scheduleId;
 
   final ShiftSchedule schedule;
 
@@ -99,7 +108,8 @@ class ScheduleChain implements ShiftSource {
       if (!s.covers(day)) continue;
       if (best == null || _startsLater(s, best)) best = s;
     }
-    if (best != null) return (best.schedule, best.id);
+    // 返回的是**方案**的行 id（不是段的）—— 见 `ScheduleSpan.scheduleId`。
+    if (best != null) return (best.schedule, best.scheduleId);
     return (fallback, fallbackId);
   }
 

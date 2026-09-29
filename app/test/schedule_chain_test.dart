@@ -24,8 +24,16 @@ ShiftSchedule _sched(String name) => ShiftSchedule(
 
 DateTime _d(int y, int m, int day) => DateTime.utc(y, m, day);
 
-ScheduleSpan _span(String name, {int id = 1, DateTime? from, DateTime? to}) =>
-    ScheduleSpan(id: id, schedule: _sched(name), from: from, to: to);
+/// 段 id 与**方案** id 默认取同一个值（多数用例不关心两者之别）；
+/// 需要分辨它们的地方显式传 `scheduleId`。
+ScheduleSpan _span(String name,
+        {int id = 1, int? scheduleId, DateTime? from, DateTime? to}) =>
+    ScheduleSpan(
+        id: id,
+        scheduleId: scheduleId ?? id,
+        schedule: _sched(name),
+        from: from,
+        to: to);
 
 void main() {
   group('ScheduleSpan.covers —— 闭区间', () {
@@ -128,17 +136,21 @@ void main() {
       expect(chain.scheduleOn(_d(2025, 1, 1)), isNull);
     });
 
-    test('scheduleIdOn：报出**那天归哪一套的行 id**（写按天覆盖要用）', () {
+    test('scheduleIdOn：报出**那天归哪一套方案的行 id**（写按天覆盖要用）', () {
+      // **段 id 与方案 id 故意取不同的值** —— 段独立成表之后两者是两回事，混了
+      // 的症状是「按天改班记到错的方案名下」（不生效、也不报错）。这样这条才
+      // 真的能分辨它返回的是哪一个。
       final chain = ScheduleChain(
         spans: [
-          _span('A', id: 11, from: _d(2026, 1, 1), to: _d(2026, 6, 30)),
-          _span('B', id: 22, from: _d(2026, 7, 1)),
+          _span('A',
+              id: 111, scheduleId: 11, from: _d(2026, 1, 1), to: _d(2026, 6, 30)),
+          _span('B', id: 222, scheduleId: 22, from: _d(2026, 7, 1)),
         ],
         fallback: _sched('当前'),
         fallbackId: 99,
       );
-      expect(chain.scheduleIdOn(_d(2026, 3, 1)), 11);
-      expect(chain.scheduleIdOn(_d(2026, 8, 1)), 22);
+      expect(chain.scheduleIdOn(_d(2026, 3, 1)), 11, reason: '不是段 id 111');
+      expect(chain.scheduleIdOn(_d(2026, 8, 1)), 22, reason: '不是段 id 222');
       // 时段之外 → 兜底那套的 id（老库恒走这一支，与从前一致）
       expect(chain.scheduleIdOn(_d(2025, 1, 1)), 99);
       // 完全没有方案 → null

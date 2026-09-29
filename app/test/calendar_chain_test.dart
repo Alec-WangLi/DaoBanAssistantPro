@@ -54,8 +54,8 @@ Future<AppDatabase> _pumpChainedCalendar(WidgetTester tester) async {
 
   final aId = await save('A', '甲', current: true);
   final bId = await save('B', '丙', current: false);
-  await repo.setScheduleSpan(aId, to: DateTime(now.year, now.month, 14));
-  await repo.setScheduleSpan(bId, from: DateTime(now.year, now.month, _boundaryDay));
+  await repo.addSpan(aId, to: DateTime(now.year, now.month, 14));
+  await repo.addSpan(bId, from: DateTime(now.year, now.month, _boundaryDay));
 
   await tester.pumpWidget(ProviderScope(
     overrides: [databaseProvider.overrideWithValue(db)],

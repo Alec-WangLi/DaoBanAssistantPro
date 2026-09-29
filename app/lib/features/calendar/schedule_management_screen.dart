@@ -23,6 +23,9 @@ class ScheduleManagementScreen extends ConsumerWidget {
     final async = ref.watch(schedulesProvider);
     final schedules = async.valueOrNull ?? const <ShiftScheduleRow>[];
     final current = ref.watch(activeScheduleProvider).valueOrNull;
+    // 每套方案被多少段引用 —— 身份标签要用（「已排入时段」还是「未使用」）。
+    final spans =
+        ref.watch(scheduleSpansProvider).valueOrNull ?? const <ScheduleSpanRow>[];
 
     return Scaffold(
       appBar: AppBar(title: Text(L10n.scheduleManagement)),
@@ -50,7 +53,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
                         ),
                         title: Text(s.name),
                         subtitle: Text(
-                            '${effectiveRangeLabel(s, isCurrent: isCurrent)} · '
+                            '${scheduleRoleLabel(s, spanCount: spanCountOf(spans, s.id), isCurrent: isCurrent)} · '
                             '${L10n.teamCountN(parseTeamNames(s.teamNames).length)} · '
                             '${L10n.monthDay(s.anchorDate)}'
                             '${isCurrent ? ' · ${L10n.current}' : ''}'),
