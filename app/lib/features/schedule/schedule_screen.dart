@@ -10,6 +10,7 @@ import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
+import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
@@ -18,6 +19,7 @@ import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
+import 'recurring_panel.dart';
 
 /// 日程：最简事件（标题 + 日期 + 可选时间 + 可选提前提醒 + 完成勾选）。
 class ScheduleScreen extends ConsumerWidget {
@@ -36,7 +38,30 @@ class ScheduleScreen extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: Text(L10n.titleTodo, style: AppTokens.pageTitle),
+              child: Row(
+                children: [
+                  Text(L10n.titleTodo, style: AppTokens.pageTitle),
+                  const Spacer(),
+                  // 「重复待办」管理面板的入口。与「选择你的倒班方式」页里分组标题
+                  // 旁那个「管理」同一套写法：一个文字按钮，不抢标题。
+                  GlassPressable(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => showRecurringTodosDialog(context),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppTokens.spaceSm,
+                            vertical: AppTokens.spaceXs),
+                        child: Text(
+                          L10n.recurring,
+                          style: AppTokens.labelSecondary.copyWith(
+                              color: Theme.of(context).colorScheme.primary),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             Expanded(
               child: events.isEmpty
@@ -117,7 +142,7 @@ class ScheduleScreen extends ConsumerWidget {
       // 卡片之间：分隔两条待办（两个板块），归节奏档。
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      onTap: () => _showEditDialog(context, ref, e),
+      onTap: () => showEditEventDialog(context, ref, e),
       child: Row(
         children: [
           GlassSwitch(
@@ -270,83 +295,6 @@ class ScheduleScreen extends ConsumerWidget {
                     close();
                   },
                   label: L10n.add,
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _showEditDialog(
-      BuildContext context, WidgetRef ref, ScheduleEvent e) async {
-    // 这条行属于某个系列时，弹窗里编的其实是**那个系列**（标题 / 时间 / 提醒 /
-    // 周期都写回系列，见 `_EventFields.commit`），所以得先把系列读出来。
-    RecurringTodo? series;
-    if (e.seriesId != null) {
-      for (final s
-          in await ref.read(appRepositoryProvider).listRecurringTodos()) {
-        if (s.id == e.seriesId) {
-          series = s;
-          break;
-        }
-      }
-    }
-    if (!context.mounted) return;
-
-    final titleCtrl = TextEditingController(text: e.title);
-    final fields = _EventFields(
-      date: e.date,
-      timeMinute: e.timeMinute,
-      advance: e.advanceRemindMinutes,
-      alarm: e.alarmEnabled,
-      repeat: series?.repeat,
-      weekdays: series?.weekdays ?? 0,
-      monthDay: series?.monthDay ?? 1,
-      seriesId: e.seriesId,
-    );
-
-    if (!context.mounted) return;
-    showDialog(
-      context: context,
-      barrierColor: Colors.black26,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            // 同「添加」弹窗：closer 在 await 之前取好，且只在自己这层还是最上层
-            // 时才 pop —— 连点「保存」或点完保存点取消都不会把最后一层路由弹掉。
-            final close = dialogCloser(context);
-            return GlassDialog(
-              title: L10n.editEvent,
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleCtrl,
-                    autofocus: true,
-                    decoration: glassInputDecoration(context, L10n.title),
-                  ),
-                  const SizedBox(height: 12),
-                  ...fields.build(context, setState),
-                ],
-              ),
-              actions: [
-                GlassActionButton(
-                  onPressed: close,
-                  label: L10n.cancel,
-                ),
-                const SizedBox(width: 8),
-                GlassActionButton(
-                  variant: GlassActionVariant.primary,
-                  onPressed: () async {
-                    final title = titleCtrl.text.trim();
-                    if (title.isEmpty) return;
-                    await fields.commit(ref, title: title, existing: e);
-                    await _rescheduleReminders(ref);
-                    close();
-                  },
-                  label: L10n.save,
                 ),
               ],
             );
@@ -614,6 +562,84 @@ class _EventFields {
       }
     }
   }
+}
+
+Future<void> showEditEventDialog(
+    BuildContext context, WidgetRef ref, ScheduleEvent e) async {
+  // 这条行属于某个系列时，弹窗里编的其实是**那个系列**（标题 / 时间 / 提醒 /
+  // 周期都写回系列，见 `_EventFields.commit`），所以得先把系列读出来。
+  RecurringTodo? series;
+  if (e.seriesId != null) {
+    for (final s
+        in await ref.read(appRepositoryProvider).listRecurringTodos()) {
+      if (s.id == e.seriesId) {
+        series = s;
+        break;
+      }
+    }
+  }
+  if (!context.mounted) return;
+
+  final titleCtrl = TextEditingController(text: e.title);
+  final fields = _EventFields(
+    date: e.date,
+    timeMinute: e.timeMinute,
+    advance: e.advanceRemindMinutes,
+    alarm: e.alarmEnabled,
+    repeat: series?.repeat,
+    weekdays: series?.weekdays ?? 0,
+    monthDay: series?.monthDay ?? 1,
+    seriesId: e.seriesId,
+  );
+
+  if (!context.mounted) return;
+  showDialog(
+    context: context,
+    barrierColor: Colors.black26,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          // 同「添加」弹窗：closer 在 await 之前取好，且只在自己这层还是最上层
+          // 时才 pop —— 连点「保存」或点完保存点取消都不会把最后一层路由弹掉。
+          final close = dialogCloser(context);
+          return GlassDialog(
+            title: L10n.editEvent,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleCtrl,
+                  autofocus: true,
+                  decoration: glassInputDecoration(context, L10n.title),
+                ),
+                const SizedBox(height: 12),
+                ...fields.build(context, setState),
+              ],
+            ),
+            actions: [
+              GlassActionButton(
+                onPressed: close,
+                label: L10n.cancel,
+              ),
+              const SizedBox(width: 8),
+              GlassActionButton(
+                variant: GlassActionVariant.primary,
+                onPressed: () async {
+                  final title = titleCtrl.text.trim();
+                  if (title.isEmpty) return;
+                  await fields.commit(ref, title: title, existing: e);
+                  await AlarmService.rescheduleEventReminders(
+        await ref.read(appRepositoryProvider).listEvents());
+                  close();
+                },
+                label: L10n.save,
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }
 
 String _fmt(int minutes) {
