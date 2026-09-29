@@ -404,11 +404,17 @@ class AppRepository {
         );
   }
 
-  /// 改一段的起止（**段 id**，不是方案 id）。换方案请走
-  /// [deleteSpan] + [addSpan]：段是「这一段时间归谁」，换方案等于换一段。
-  Future<void> updateSpan(int spanId, {DateTime? from, DateTime? to}) async {
+  /// 改一段：起止（**段 id**），或者把它改指到另一套方案。
+  ///
+  /// `scheduleId` 传 null 表示**不动**它 —— 段必须指向一套方案（列非空），
+  /// 所以这里用 `Value.absent()` 而不是 `Value(null)`；那两列可空，**必须显式
+  /// 构造 `Value`**（`Value.absent()` 表达不了「清回留空」）。
+  Future<void> updateSpan(int spanId,
+      {int? scheduleId, DateTime? from, DateTime? to}) async {
     await (db.update(db.scheduleSpanRows)..where((t) => t.id.equals(spanId)))
         .write(ScheduleSpanRowsCompanion(
+      scheduleId:
+          scheduleId == null ? const Value.absent() : Value(scheduleId),
       startDate: Value(from == null ? null : dateOnly(from)),
       endDate: Value(to == null ? null : dateOnly(to)),
     ));
