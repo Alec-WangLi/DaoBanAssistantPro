@@ -41,7 +41,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.12\n'
+const String _changelogZh = 'v0.9.13\n'
+    '· 待办页右上角那个「重复待办」入口重新做了：原来是几个小字，现在是实心主色胶囊（与日历右上角那颗「今天」同一个形态），一眼看得出是个按钮。窄屏上仍只留图标，位置不变\n\n'
+
+    'v0.9.12\n'
     '· 排班表可以「衔接」了：每套方案能设一个生效时段（从几号到几号，两端都可以留空 —— 留空就是「不限起点」或「一直持续」）。日历、闹钟、桌面小组件从此都按天取「那天归哪一套」，翻回历史看到的也是当时的班\n'
     '· 设在排班编辑器里新的一节「生效时段」（在「班组设置」下面）。没设过时段的方案不参与衔接，一切照旧 —— 升级后什么都不用做\n'
     '· 顶栏「切换排班」现在写明每套方案管哪些日子：设了时段的写时段；没设时段又正在用的那套标「其余日子」（没被时段覆盖的日子就归它管）\n'
@@ -85,14 +88,12 @@ const String _changelogZh = 'v0.9.12\n'
 
     'v0.9.4\n'
     '· 修好「检查更新」经常失败：更新检查以前先打 GitHub 的接口，那个接口对未登录的请求限制 60 次/小时，很容易被用光——用光之后其实一直在走备用的另一条路。现在改成先读发布清单（静态文件，不限次数），顺带也快了一点\n'
-    '· 「检查更新」和「下载」失败时不再只弹一句「网络异常，请稍后再试」（这句只停 2 秒，看完也来不及做什么），改为弹窗说清楚：连不上 GitHub 服务器，国内网络通常需要开启代理或加速器后重试。\n\n'
+    '· 「检查更新」和「下载」失败时不再只弹一句「网络异常，请稍后再试」（这句只停 2 秒，看完也来不及做什么），改为弹窗说清楚：连不上 GitHub 服务器，国内网络通常需要开启代理或加速器后重试。\n\n';
 
-    'v0.9.3\n'
-    '· 修好 0.9.2 里漏掉的一类班次：12 小时制的夜班（20:30 上班那种）配一个落在值班时间之内的闹钟，从前会被排到前一天同一钟点 —— 0.9.2 只修好了「00:00 上班」那种写法，这类没修到。现在两种写法都算班次当天\n'
-    '· 修好闹钟页把整行藏早了一点：那天的第一个闹钟响过之后，整行（连同后面还没到的那条）就看不见了，也没法在那行关掉当天剩下的闹钟。现在只要那天还有没响的闹钟，那一行就留着\n'
-    '· 闹钟名字最多 12 个字（太长会把闹钟页那一行撑坏）\n\n';
+const String _changelogEn = 'v0.9.13\n'
+    '· The "Repeating" entry at the top of the todo screen has been redone: it was a few small characters, and is now a solid accent pill (the same shape as the "Today" button on the calendar), so it reads as a button at a glance. In a narrow window it still shows just the icon, in the same place\n\n'
 
-const String _changelogEn = 'v0.9.12\n'
+    'v0.9.12\n'
     '· Schedules can now be chained: each one can carry an active period (from a date to a date, either end may be left empty — empty means "any time" or "ongoing"). The calendar, the alarms and the home-screen widget now resolve day by day which schedule a date belongs to, and history shows the schedule that was in force back then\n'
     '· Where to set it: the new "Active period" section in the schedule editor (under "Crews"). Schedules without a period take no part in chaining, so nothing changes until you set one\n'
     '· The "Switch schedule" sheet now spells out which days each schedule covers: the ones with a period show it, and the one currently in use without a period is marked "Other days" — those are the days it covers\n'
@@ -136,12 +137,7 @@ const String _changelogEn = 'v0.9.12\n'
 
     'v0.9.4\n'
     '· Fixed "Check for update" failing so often: it used to call a GitHub API first, and that API allows only 60 unauthenticated requests per hour — easy to exhaust, after which checks were silently running on the fallback route all along. It now reads the release manifest first (a static file with no such limit), which is also a little faster\n'
-    '· A failed update check or download no longer shows just "network error, try later" — that line stayed up for 2 seconds, too short to act on. A dialog now says it plainly: GitHub is unreachable, and in mainland China a proxy or accelerator is usually required.\n\n'
-
-    'v0.9.3\n'
-    '· Fixed a class of shifts missed in 0.9.2: a 12-hour night shift (the 20:30-start kind) with an alarm set inside the shift was still scheduled on the previous day at the same clock time — 0.9.2 only fixed the "midnight start" shape. Both shapes now ring on the shift\'s own day\n'
-    '· Fixed the alarm page hiding a day too early: once that day\'s first alarm had rung, the whole row (including alarms still to come that day) disappeared, and the rest of the day could no longer be muted from it. The row now stays as long as some alarm is still coming\n'
-    '· Alarm names are capped at 12 characters (a longer one used to break the alarm page row)\n\n';
+    '· A failed update check or download no longer shows just "network error, try later" — that line stayed up for 2 seconds, too short to act on. A dialog now says it plainly: GitHub is unreachable, and in mainland China a proxy or accelerator is usually required.\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

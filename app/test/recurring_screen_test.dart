@@ -12,7 +12,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
-import 'package:shiftassistantpro/core/widgets/app_icon.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
@@ -92,16 +91,18 @@ void main() {
   testWidgets('重复项那一行带循环标记，普通待办不带', (tester) async {
     await seed();
     await mount(tester);
-    // 只有一条重复项 → 全页恰好一个 ↻
-    expect(find.byIcon(Icons.repeat), findsOneWidget);
-    expect(
-      find.descendant(
-          of: find.ancestor(
-              of: find.text('周三例会'), matching: find.byType(AppIcon)),
-          matching: find.byIcon(Icons.repeat)),
-      findsNothing,
-      reason: '循环标记在副标题那一行、不在标题上；这里只是确保它没长错地方',
-    );
+
+    // **限定在那条待办所在的行里数**：页面顶部那个「重复待办」入口用的是同一个
+    // 图标，全页数会把两者混在一起（这条断言原来就是全页数，加那个入口才现形）。
+    Finder repeatIn(String title) => find.descendant(
+          of: find.ancestor(of: find.text(title), matching: find.byType(Row)),
+          matching: find.byIcon(Icons.repeat),
+        );
+
+    expect(repeatIn('周三例会'), findsOneWidget);
+    // 另一半（用例名里写着、原来却没验）：一次性待办不该带这个标记。
+    expect(repeatIn('交体检报告'), findsNothing);
+
     await _dispose(tester);
   });
 

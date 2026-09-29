@@ -11,7 +11,7 @@ import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
-import '../../core/widgets/glass_pressable.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
@@ -90,31 +90,37 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                     ),
                   ),
                   const SizedBox(width: AppTokens.spaceSm),
-                  // 「重复待办」管理面板的入口。与「选择你的倒班方式」页里分组标题
-                  // 旁那个「管理」同一套写法：一个文字按钮，不抢标题。
+                  // 「重复待办」管理面板的入口。**实心主色胶囊** —— 与日历顶栏
+                  // 那颗「今天」同一个件（`GlassPill`），因为两者承担的是同一类
+                  // 角色：一个页面级的动作入口。
                   //
                   // **窄窗（< 360dp）只留图标**：那一档里标题加这四个字必然放不下，
                   // 而入口又不能藏（那是唯一的管理路径）—— 于是把**文字**收掉，
                   // 与「小窗里不显示时间副标题 / 不显示待办徽章」是同一条取舍。
-                  GlassPressable(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => showRecurringTodosDialog(context),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppTokens.spaceSm,
-                            vertical: AppTokens.spaceXs),
-                        child: AppLayout.of(context).isNarrow
-                            ? AppIcon(Icons.repeat,
-                                size: AppTokens.iconMd,
-                                color: Theme.of(context).colorScheme.primary)
-                            : Text(
-                                L10n.recurring,
-                                style: AppTokens.labelSecondary.copyWith(
-                                    color:
-                                        Theme.of(context).colorScheme.primary),
-                              ),
-                      ),
+                  GlassPill(
+                    onTap: () => showRecurringTodosDialog(context),
+                    accent: true,
+                    // 比顶栏那颗矮一档：这一行旁边是页面标题，不是年月胶囊。
+                    height: 36,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const AppIcon(
+                          Icons.repeat,
+                          size: AppTokens.iconMd,
+                          color: Colors.white,
+                        ),
+                        if (!AppLayout.of(context).isNarrow) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            L10n.recurring,
+                            // 压在实心主色胶囊上的白字，「前景色已定」，不归明度两档。
+                            style: AppTokens.labelStrong.copyWith(
+                              color: Colors.white.withValues(alpha: 0.98),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],

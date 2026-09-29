@@ -10,6 +10,7 @@ import '../../core/l10n.dart';
 import '../../core/theme/animated_background.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_pickers.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
@@ -478,8 +479,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     _prev, size: narrowSide),
                 const SizedBox(width: narrowGap),
                 Expanded(
-                  child: _glassPill(
-                    context,
+                  child: GlassPill(
                     onTap: _showMonthPicker,
                     height: narrowSide,
                     // 年月这几个字跟着网格一起滑（见 `_monthSlide`），方向才一致。
@@ -506,8 +506,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 _circleIcon(context, Icons.swap_vert_outlined,
                     L10n.switchSchedule, _showScheduleSwitcher, size: narrowSide),
                 const Spacer(),
-                _glassPill(
-                  context,
+                GlassPill(
                   onTap: _today,
                   accent: true,
                   height: narrowSide,
@@ -533,8 +532,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               context, Icons.chevron_left_outlined, L10n.prevMonth, _prev),
           const SizedBox(width: AppTokens.gapIconText),
           Expanded(
-            child: _glassPill(
-              context,
+            child: GlassPill(
               onTap: _showMonthPicker,
               // 年月这几个字跟着网格一起滑（见 `_monthSlide`），方向才一致。
               child: _monthSlide(
@@ -557,8 +555,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           _circleIcon(context, Icons.swap_vert_outlined, L10n.switchSchedule,
               _showScheduleSwitcher),
           const SizedBox(width: AppTokens.gapIconText),
-          _glassPill(
-            context,
+          GlassPill(
             onTap: _today,
             accent: true,
             // accent 变体是实心主色底，内容用白（别再跟着 colorScheme.primary，
@@ -586,84 +583,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  /// 统一 40px 高的玻璃胶囊（accent=true 为主色调渐变，用于「今天」）。
-  /// 窄档传 36 —— 小窗里每一像素都要省。
-  Widget _glassPill(
-    BuildContext context, {
-    VoidCallback? onTap,
-    required Widget child,
-    bool accent = false,
-    double height = 40,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primary = Theme.of(context).colorScheme.primary;
-    final decoration = accent
-        ? BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTokens.radiusL),
-            // 实心主色 + 白字。原来是「主色 30% 透明度的底 + 主色字」——
-            // 同一个色相只差透明度，实测对比度浅色 3.0:1、深色 2.7:1，都低于
-            // WCAG AA 要求的 4.5:1，深色下那两个字几乎看不见。
-            // 改成实心后是 5.3:1（渐变深处 7:1），也跟主按钮（新增排班、
-            // 保存并重排闹钟）的实心主色形态一致。
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                primary,
-                Color.lerp(primary, Colors.black, 0.18)!,
-              ],
-            ),
-            border: Border.all(color: primary),
-            boxShadow: [
-              BoxShadow(
-                color: primary.withValues(alpha: isDark ? 0.45 : 0.28),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          )
-        : BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTokens.radiusL),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isDark
-                  ? [
-                      Colors.white.withValues(alpha: 0.22),
-                      Colors.white.withValues(alpha: 0.06),
-                    ]
-                  : [
-                      Colors.white.withValues(alpha: 0.95),
-                      Colors.white.withValues(alpha: 0.55),
-                    ],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: isDark ? 0.28 : 0.95),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.10),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          );
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppTokens.radiusL),
-        onTap: onTap,
-        child: Container(
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          alignment: Alignment.center,
-          decoration: decoration,
-          child: child,
-        ),
       ),
     );
   }
