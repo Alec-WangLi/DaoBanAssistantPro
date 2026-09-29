@@ -357,6 +357,33 @@ class L10n {
   static String get followHolidayHint => t('法定节假日休息，其余按上班', 'Rest on legal holidays, work otherwise');
   static String get holidayScheduleName => t('法定班次', 'Legal-holiday schedule');
 
+  // ── 方案「生效时段」（多排班表按日期衔接） ──
+  //
+  // 三种「空」各有各的说法，别合并：两端都空 = 不参与衔接（**非当前**那套要
+  // 说成「未参与衔接」、当前那套说成「其余日子」），只有起点 = 一直持续，
+  // 只有终点 = 不限起点。
+  static String get effectivePeriod => t('生效时段', 'Active period');
+  static String get effectiveFrom => t('从', 'From');
+  static String get effectiveTo => t('到', 'To');
+  static String get effectiveUnbounded => t('不限', 'Any time');
+  static String get effectiveForever => t('一直持续', 'Ongoing');
+  static String get effectiveRangeInvalid =>
+      t('开始日期晚于结束日期', 'Start date is after the end date');
+  static String effectiveFromDate(String d) => t('$d 起', 'From $d');
+  static String effectiveUntilDate(String d) => t('到 $d', 'Until $d');
+  static String effectiveRangeSpan(String a, String b) => t('$a ～ $b', '$a – $b');
+  static String get effectiveRemaining => t('其余日子', 'Other days');
+  static String get effectiveNotChained => t('未参与衔接', 'Not in the timeline');
+  static String get effectiveOutsideHint => t(
+      '没被上面时段覆盖的日子，用标着「其余日子」的那套。',
+      'Days not covered by a period above use the one marked "Other days".');
+  static String overlappingSpan(String name) => t(
+      '与「$name」的时段重叠，重叠的日子按开始更晚的那套算。',
+      'Overlaps “$name”; those days use the one that starts later.');
+  static String spansTwoSchedules(String name, String d) => t(
+      '这段跨了两套排班的生效边界（$d 起换成「$name」），请分开调整。',
+      'This range spans a schedule boundary (switches to “$name” on $d); adjust them separately.');
+
   /// 打开「跟随法定节假日」会清空班次定义，保存时连带丢掉引用它们的按天覆盖
   /// （`saveSchedule` 的悬空清理）。会真的丢东西时先问一次 —— 切回来恢复的默认
   /// 班次是**全新的 id**，那些覆盖接不回去。

@@ -104,6 +104,36 @@ class _FakeRepository extends AppRepository {
 
   @override
   Future<Map<int, bool>> listShiftAlarmOverrides() async => const {};
+
+  // ── 生效时段（多排班表按日期衔接） ──
+
+  /// 「库里那两列」。`_load` 读它、`_save` 写回它。
+  DateTime? persistedFrom;
+  DateTime? persistedTo;
+
+  /// `setScheduleSpan` 最后一次调用的入参（`spanCalled` 区分「没调用」与「写了 null」）。
+  bool spanCalled = false;
+  int? spanId;
+  DateTime? spanFrom;
+  DateTime? spanTo;
+
+  @override
+  Future<({DateTime? from, DateTime? to})> getScheduleSpan(int id) async =>
+      (from: persistedFrom, to: persistedTo);
+
+  @override
+  Future<void> setScheduleSpan(int id, {DateTime? from, DateTime? to}) async {
+    spanCalled = true;
+    spanId = id;
+    spanFrom = from;
+    spanTo = to;
+  }
+
+  /// 库里**别的方案**的行 —— 只为时段重叠提示提供数据。
+  List<ShiftScheduleRow> spanRows = const [];
+
+  @override
+  Future<List<ShiftScheduleRow>> listSchedules() async => spanRows;
 }
 
 ShiftSchedule _domain({
@@ -170,6 +200,11 @@ Future<_FakeRepository> _pumpEditor(
   WidgetTester tester,
   ShiftSchedule domain, {
   ShiftSchedule? active,
+  // 生效时段：必须在 pump **之前**配好 —— `_load` 只在 post-frame 跑一次，
+  // pump 之后再改 fake 的状态它就读不到了。
+  DateTime? spanFrom,
+  DateTime? spanTo,
+  List<ShiftScheduleRow> spanRows = const [],
 }) async {
   // 编辑器是一整页长列表：给足高度，让周期里的每一行都真的被构建出来，
   // 否则 ListView 只会懒构建视口内的那几行，find 就找不到。
@@ -182,6 +217,9 @@ Future<_FakeRepository> _pumpEditor(
   final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
   addTearDown(db.close);
   final repo = _FakeRepository(db, domain, active: active);
+  repo.persistedFrom = spanFrom;
+  repo.persistedTo = spanTo;
+  repo.spanRows = spanRows;
 
   await tester.pumpWidget(ProviderScope(
     overrides: [appRepositoryProvider.overrideWithValue(repo)],
@@ -1423,5 +1461,103 @@ void main() {
     await tester.tap(find.text(L10n.saveAndReschedule));
     await tester.pumpAndSettle();
     expect(repo.saved!.classes.first.alarms, hasLength(maxAlarmsPerShift));
+  });
+
+  // ── 生效时段（多排班表按日期衔接） ──
+
+  testWidgets('生效时段：库里设过就读得进来，保存时原样写回去', (tester) async {
+    final repo = await _pumpEditor(tester, _domain(),
+        spanFrom: DateTime.utc(2026, 3, 1), spanTo: DateTime.utc(2026, 9, 30));
+
+    // 读得进来：两行显示的是库里那两个日期。
+    expect(find.text(L10n.monthDay(DateTime(2026, 3, 1))), findsOneWidget);
+    expect(find.text(L10n.monthDay(DateTime(2026, 9, 30))), findsOneWidget);
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(repo.spanCalled, isTrue, reason: '保存必须把生效时段写下去');
+    expect(repo.spanId, 7);
+    expect(dayNumber(repo.spanFrom!), dayNumber(DateTime(2026, 3, 1)));
+    expect(dayNumber(repo.spanTo!), dayNumber(DateTime(2026, 9, 30)));
+  });
+
+  testWidgets('生效时段：点「从」选一天，保存时带上它、结束仍为空', (tester) async {
+    final repo = await _pumpEditor(tester, _domain());
+
+    await tester.tap(find.text(L10n.effectiveFrom));
+    await tester.pumpAndSettle();
+    // 日期选择层点某天**直接返回**（没有「确定」按钮），选本月 3 号。
+    await tester.tap(find.descendant(
+        of: find.byType(BottomSheet), matching: find.text('3')));
+    await tester.pumpAndSettle();
+
+    final now = DateTime.now();
+    expect(find.text(L10n.monthDay(DateTime(now.year, now.month, 3))),
+        findsOneWidget, reason: '选完那一行要显示所选日期');
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+    expect(dayNumber(repo.spanFrom!), dayNumber(DateTime(now.year, now.month, 3)));
+    expect(repo.spanTo, isNull, reason: '「到」没设 = 一直持续');
+  });
+
+  testWidgets('生效时段：开始晚于结束 → 不保存，并给一句说明', (tester) async {
+    final repo = await _pumpEditor(tester, _domain(),
+        spanFrom: DateTime.utc(2026, 6, 1), spanTo: DateTime.utc(2026, 1, 1));
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved, isNull, reason: '校验没过就不该写库');
+    expect(repo.spanCalled, isFalse);
+    expect(find.text(L10n.effectiveRangeInvalid), findsOneWidget);
+  });
+
+  testWidgets('生效时段：与别的方案重叠 → 保存照旧，但多一句提示', (tester) async {
+    // 提示排在 `rescheduleAll` **之后**，而本机没有可运行的原生插件目标 ——
+    // 两个通道不接住的话 `cancelAll` 在测试环境里**永远不会完成**，提示那一句
+    // 就永远跑不到（同文件『保存一套非当前方案后…』那条也是为这个才接的）。
+    const settings = MethodChannel('com.daoban.shiftassistantpro/settings');
+    const notifications =
+        MethodChannel('dexterous.com/flutter/local_notifications');
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(settings, (call) async => null);
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(notifications, (call) async => null);
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(settings, null);
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(notifications, null);
+    });
+
+    // 「别的方案」：7/1 起一直持续 —— 与本方案的 1/1~12/31 真重叠
+    // （**不是**首尾相接：相接不算重叠，那是正常的衔接）。
+    final other = ShiftScheduleRow(
+      id: 9,
+      name: '备选班表',
+      anchorDate: DateTime.utc(2026, 1, 1),
+      isCurrent: false,
+      teamCount: 4,
+      teamNames: '一班,二班,三班,四班',
+      ourTeamIndex: 0,
+      teamOffsets: '0,1,2,3',
+      effectiveFrom: DateTime.utc(2026, 7, 1),
+      effectiveTo: null,
+    );
+    final repo = await _pumpEditor(tester, _domain(),
+        spanFrom: DateTime.utc(2026, 1, 1),
+        spanTo: DateTime.utc(2026, 12, 31),
+        spanRows: [other]);
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    // 不用 `pumpAndSettle`：提示条 2 秒后自己消失，settle 会一路推到它没了。
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(repo.saved, isNotNull, reason: '重叠不拦，只提示');
+    expect(find.text(L10n.overlappingSpan('备选班表')), findsOneWidget);
   });
 }
