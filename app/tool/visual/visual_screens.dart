@@ -16,6 +16,7 @@ import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
+import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
 import 'visual_harness.dart';
@@ -66,6 +67,28 @@ final List<VisualScreen> visualScreens = [
     slug: '05_todos',
     title: '待办事项',
     build: (db) async => const ScheduleScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「今天有一条重复待办」的待办页：循环标记、标题旁的「重复待办」入口、
+    // 以及已完成的历史那一条（带删除线）都在这屏。
+    slug: '24_todos_recurring',
+    title: '待办 · 含重复项',
+    build: (db) async {
+      await seedRecurringTodo(db);
+      return const ScheduleScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 管理面板是**弹层**（命令式、没有可渲染的 widget），要一层薄壳把它弹出来
+    // —— 与「开始使用」「使用帮助」那两张同一套路。
+    slug: '25_recurring_panel',
+    title: '重复待办 · 管理面板',
+    build: (db) async {
+      await seedRecurringTodo(db);
+      return const _DialogHost(showRecurringTodosDialog);
+    },
     needsOnboardingPrefs: false,
   ),
   (

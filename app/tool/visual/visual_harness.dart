@@ -35,6 +35,7 @@ import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/app_theme.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -572,6 +573,46 @@ Future<void> seedMyTemplates(AppDatabase db) async {
     teamCount: 5,
     teamOffsets: [0, 2, 4, 6, 8],
   ));
+}
+
+/// 给待办页预置一条重复待办（含一条已完成的历史）+ 一条普通待办。
+///
+/// 不预置的话待办页是空态 —— 新加的循环标记、标题旁的「重复待办」入口、
+/// 以及管理面板里的行，一个都拍不到。
+///
+/// 用**每天**那条规则，是为了让「历史 + 当前」两条落在不同的日子上：系列从昨天
+/// 起效，生成器先建昨天那条、标成已完成，再建今天这条。用「每周几」的话两次
+/// occurrence 会是同一天（生成器永远落在「不晚于今天的最近一次」），图上就是两条
+/// 同一天的待办，看着像坏了。
+Future<void> seedRecurringTodo(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final t = DateTime.now();
+  final yesterday = DateTime(t.year, t.month, t.day - 1);
+  final id = await repo.addRecurringTodo(
+    title: '每天交班',
+    repeat: RecurRepeat.daily,
+    startDate: dateOnly(yesterday),
+    timeMinute: 7 * 60,
+    advanceRemindMinutes: 0,
+  );
+  // 先生成「昨天那一条」再勾掉 —— 于是它成了带删除线的历史；再生成今天这条。
+  // （生成器落的是「不晚于今天的那一次」，所以昨天那条必须用 yesterday 当 today
+  // 跑一次才会出现，直接跑今天只会得到一条。）
+  //
+  // 取行时**按 seriesId 过滤**：视觉库自己还预置着几条普通待办，`.single` 会炸
+  //（「Bad state: Too many elements」）。
+  await repo.advanceRecurringTodos(today: dateOnly(yesterday));
+  await repo.setEventCompleted(
+    (await repo.listEvents()).where((e) => e.seriesId == id).single,
+    true,
+  );
+  await repo.advanceRecurringTodos(today: dateOnly(t));
+  await repo.addEvent(
+    title: '交体检报告',
+    date: dateOnly(t),
+    timeMinute: 17 * 60,
+    advanceRemindMinutes: 60,
+  );
 }
 
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。

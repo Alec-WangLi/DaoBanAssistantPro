@@ -627,9 +627,24 @@ class AppRepository {
         .write(ScheduleEventsCompanion(date: Value(dateOnly(date))));
   }
 
-  Future<void> setEventCompleted(ScheduleEvent e, bool done) {
-    return (db.update(db.scheduleEvents)..where((r) => r.id.equals(e.id)))
+  /// 勾选 / 取消勾选。
+  ///
+  /// **勾掉一条重复项时，顺手把「这一次已经了结」记到系列上**（`skipThrough`）：
+  /// 不记的话，下一次跑生成器时它一看「这个系列没有未完成的行、而这次的发生日
+  /// 正好是今天」，会**立刻补出一条一模一样的新行** —— 用户勾完、下次打开 App
+  /// 它又回来了。这与「删掉又回来」是同一个洞，所以用同一个标记
+  /// （[skipRecurringOccurrence]）：在生成器眼里「勾掉」与「删掉」都是
+  /// 「这次已经了结」，下一次 occurrence 一到自然又出现。
+  ///
+  /// 取消勾选**不撤销**那个标记：撤销了反而是「取消勾选 = 把它标成还没了结」——
+  /// 那条行本来就在列表里，改回未勾就够了。
+  Future<void> setEventCompleted(ScheduleEvent e, bool done) async {
+    await (db.update(db.scheduleEvents)..where((r) => r.id.equals(e.id)))
         .write(ScheduleEventsCompanion(isCompleted: Value(done)));
+    final sid = e.seriesId;
+    if (done && sid != null) {
+      await skipRecurringOccurrence(sid, e.date);
+    }
   }
 
   Future<void> deleteEvent(ScheduleEvent e) {

@@ -171,6 +171,42 @@ void main() {
     expect(dayNumber(live.single.date), dayNumber(_wed));
   });
 
+  test('勾掉当天那一条 → 再跑生成器**不复活**', () async {
+    // 出图时看出来的洞：勾完当天那一条之后，生成器下一次一跑就发现「这个系列
+    // 没有未完成的行、而这次的发生日正好是今天」，于是**立刻补出一条一模一样
+    // 的** —— 用户勾完、下次打开 App 它又回来了（与「删掉又回来」同一个洞，
+    // 用同一个 `skipThrough` 标记堵）。
+    await weekly();
+    await repo.advanceRecurringTodos(today: _wed);
+    final e = (await repo.listEvents()).single;
+    await repo.setEventCompleted(e, true);
+
+    await repo.advanceRecurringTodos(today: _wed);
+    final rows = await repo.listEvents();
+    expect(rows.length, 1, reason: '勾完不该立刻冒出一条一模一样的');
+    expect(rows.single.isCompleted, isTrue);
+
+    // 到了下一次 occurrence，它照常出现
+    await repo.advanceRecurringTodos(today: _nextWed);
+    expect((await repo.listEvents()).length, 2);
+  });
+
+  test('每次到点新建一条时，前一次的「已了结」标记不会拦住它', () async {
+    // `skipThrough` 只记「到哪天为止」，不是「永远不再生成」：下一次 occurrence
+    // 比它晚，生成器照常建新的。
+    await weekly();
+    await repo.advanceRecurringTodos(today: _wed);
+    await repo.setEventCompleted((await repo.listEvents()).single, true);
+    await repo.advanceRecurringTodos(today: _nextWed);
+    await repo.setEventCompleted(
+        (await repo.listEvents()).where((r) => !r.isCompleted).single, true);
+    await repo.advanceRecurringTodos(today: _twoWeeksOn);
+
+    final rows = await repo.listEvents();
+    expect(rows.length, 3, reason: '三次 occurrence 三条行（两条历史 + 一条当前）');
+    expect(rows.where((r) => !r.isCompleted).length, 1);
+  });
+
   test('多个系列互不干扰', () async {
     final a = await weekly();
     final b = await repo.addRecurringTodo(

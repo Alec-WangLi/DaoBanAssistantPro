@@ -13,9 +13,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
+import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
 import 'visual_harness.dart';
 import 'visual_screens.dart';
@@ -149,6 +151,28 @@ void main() {
       home: const CalendarScreen(),
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
       textScale: 1.8,
+    );
+  });
+
+  // 新建弹窗里选了「每周」的样子：星期胶囊那一排的间距、选中态、以及它与
+  // 「重复」四档胶囊的上下关系，只有看图才知道对不对。它是**内部状态**
+  //（`_EventFields` 不公开），只能靠首帧之后真点。同理它没进 `visualScreens`
+  //（记录类型加可选字段要改全部 24 条），对比度审计因此不覆盖这一张 ——
+  // 这屏用的全是既有令牌与既有配色。
+  visualTest('待办 · 新建弹窗选了每周', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '26_todo_dialog_weekly',
+      home: const ScheduleScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      beforeCapture: (t) async {
+        await t.tap(find.byIcon(Icons.add_outlined));
+        await settleVisual(t);
+        await t.tap(find.text(L10n.repeatWeekly));
+        await settleVisual(t);
+      },
     );
   });
 

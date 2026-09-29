@@ -13,11 +13,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
-import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
-import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
@@ -72,13 +70,20 @@ class _RecurringList extends ConsumerWidget {
     );
   }
 
-  /// 一行一个系列。行的配方**照排班管理页**（`GlassTile(enableBlur: false,
-  /// padding: EdgeInsets.zero)` + `GlassPressable` + `ListTile` + 尾部紧凑删除钮）
-  /// —— 那是全 app 的列表行做法。
+  /// 一行一个系列。
+  ///
+  /// **手搓 `Row` 而不是 `ListTile`** —— 照闹钟页那个「自定义闹钟」行
+  /// （`alarm_screen.dart` 的 `_alarmTile`）：`ListTile` 的 `minLeadingWidth`(40)
+  /// + `horizontalTitleGap`(16) + `contentPadding` 在**窄弹层**里光内边距就吃掉
+  /// 五六十 dp，而这一行尾部要放一个开关加一个删除钮，200×400 小窗实测尾部
+  /// 直接溢出（视觉工装的 `failOnOverflow` 抓的）。中间那一段用 `Expanded`
+  /// 兜底：实在放不下时先牺牲标题与副标题的宽度（它们本来就是省略号结尾）。
   Widget _row(BuildContext context, WidgetRef ref, RecurringTodo s) {
     final today = dateOnly(DateTime.now());
-    final next =
-        occurrenceOnOrBefore(s, today) ?? nextOccurrenceAfter(s, today);
+    // 「下次」要的是**严格晚于今天**的那一次。用 `occurrenceOnOrBefore` 兜底是错的：
+    // 那给出的是「已经过去的那一次」（比如今天是周二、系列是每周三，它给上周三），
+    // 而那一行此刻就在列表里躺着 —— 面板上再把它写成「下次 9月23日」是在说反话。
+    final next = nextOccurrenceAfter(s, today);
     final parts = [
       s.ruleLabel,
       if (s.timeLabel.isNotEmpty) s.timeLabel,
@@ -88,30 +93,36 @@ class _RecurringList extends ConsumerWidget {
     return GlassTile(
       enableBlur: false,
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
-      padding: EdgeInsets.zero,
-      child: GlassPressable(
-        child: ListTile(
-          leading: AppIcon(Icons.repeat,
-              size: AppTokens.iconMd,
-              color: s.enabled ? Theme.of(context).colorScheme.primary : muted),
-          title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(parts.join(' · '),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GlassSwitch(
-                value: s.enabled,
-                onChanged: (v) => _setEnabled(ref, s, v),
-              ),
-              GlassDeleteButton(
-                compact: true,
-                onPressed: () => _delete(context, ref, s),
-              ),
-            ],
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceXs),
+      onTap: () => _edit(context, ref, s),
+      child: Row(
+        children: [
+          GlassSwitch(
+            value: s.enabled,
+            onChanged: (v) => _setEnabled(ref, s, v),
           ),
-          onTap: () => _edit(context, ref, s),
-        ),
+          const SizedBox(width: AppTokens.gapIconText),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(s.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTokens.rowPrimary),
+                Text(parts.join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTokens.microText.copyWith(color: muted)),
+              ],
+            ),
+          ),
+          GlassDeleteButton(
+            compact: true,
+            onPressed: () => _delete(context, ref, s),
+          ),
+        ],
       ),
     );
   }
