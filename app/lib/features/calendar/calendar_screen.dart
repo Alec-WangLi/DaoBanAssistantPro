@@ -97,23 +97,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 本月里有没有被**按天调整过**的日子。
   ///
-  /// 与 `_monthHasPendingTodos` 同一个道理：班次行尾巴上的「已调整」胶囊只在被
+  /// 与 `_monthHasPendingTodos` 同一个道理：班次行尾巴上的「已调班」胶囊只在被
   /// 改过的那天画，而信息卡是定高的 —— 高度必须按**月**预留（这个月有被调过就
   /// 留），按天算的话点一天高度变一次，上面的网格跟着抖。
-  bool _monthHasOverrideHint(ShiftSchedule? schedule) {
-    final keys = schedule?.dayOverrides.keys;
-    if (keys == null || keys.isEmpty) return false;
-    // `dayNumber` 是自 epoch 的天数，单调，所以比一个左闭右开区间就够。
-    final firstOfMonth = dayNumber(DateTime(_month.year, _month.month, 1));
-    final firstOfNext = dayNumber(DateTime(_month.year, _month.month + 1, 1));
-    return keys.any((d) => d >= firstOfMonth && d < firstOfNext);
-  }
+  ///
+  /// 判定挪进 `ScheduleChain.monthHasOverrideHint`：跨时段的一个月里被改过的那天
+  /// 可能归**另一套**方案，得逐天问「那天归哪套」—— 那正是链才知道的事。
+  bool _monthHasOverrideHint(ScheduleChain? chain) =>
+      chain?.monthHasOverrideHint(_month) ?? false;
 
   /// 底栏信息卡该多高、以及本月每一天各自的内容高度（见 `info_card_metrics.dart`）。
   InfoCardMetrics _cardMetricsFor(
-      BuildContext context, ShiftSchedule? schedule, double cardOuterWidth) {
+      BuildContext context, ScheduleChain? chain, double cardOuterWidth) {
     final hasTodoHint = _monthHasPendingTodos;
-    final hasOverrideHint = _monthHasOverrideHint(schedule);
+    final hasOverrideHint = _monthHasOverrideHint(chain);
     final key = [
       _month.year,
       _month.month,
@@ -121,25 +118,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       L10n.isEn,
       // 系统字号：`TextScaler` 可能是非线性的，拿某一档的实际缩放当代表值。
       MediaQuery.textScalerOf(context).scale(14).toStringAsFixed(3),
-      schedule?.teamCount,
-      schedule?.ourTeamIndex,
-      schedule?.isBlank,
-      schedule?.teamNames.join('/'),
-      // 色块上写的是「组名 + 班次简称」，简称改了高度也可能变（比如从 1 字变
-      // 2 字、窄屏多折一行）。
-      schedule?.classes.map((c) => c.shortLabel).join('/'),
+      // **整条链**的指纹：哪几套方案、各自的时段与内容（组名、班次简称、是否
+      // 空白表）。少了它，跨时段时会拿到上一条链算出来的高度 —— 而卡片装不下时
+      // **只在卡内静默滚动**（末行被裁掉，没有任何报错）。
+      chain?.cacheKey ?? '-',
       // 有待办的那天日期行要多留一点（徽章比日期字高），按月参与。
       hasTodoHint,
-      // 这个月有被按天调过的日子时，班次行要给「已调整」胶囊留高度，也按月。
+      // 这个月有被按天调过的日子时，班次行要给「已调班」胶囊留高度，也按月。
       hasOverrideHint,
     ].join('|');
     if (key == _cardMetricsKey && _cardMetrics != null) return _cardMetrics!;
     final m = measureBottomInfoCardHeight(
       context: context,
       cardOuterWidth: cardOuterWidth,
-      // 过渡态：日历整体按天解析是下一个任务，此刻手上仍只有当前方案 ——
-      // 包成一条「只有兜底、没有时段」的链，行为与从前一字不差。
-      chain: ScheduleChain(fallback: schedule),
+      chain: chain,
       month: _month,
       hasTodoHint: hasTodoHint,
       hasOverrideHint: hasOverrideHint,
@@ -156,24 +148,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 一到两个字的简称：早 / 午 / 夜 / 休，英文是 M / A / N / O），一行放得下；
   /// 班次多的排班会折到第二行，折行的高度也照量（见 `measureInfoCardLine`）。
   ///
-  /// 没有排班、或空白表（跟随法定节假日）时返回 null —— 那时候没有班次可数。
-  String? _monthTally(ShiftSchedule? schedule) {
-    if (schedule == null || schedule.classes.isEmpty) return null;
-    final counts = List<int>.filled(schedule.classes.length, 0);
+  /// **按简称累加、不按 `classes` 下标计数**：跨时段的一个月里两套方案的班次定义
+  /// 不同，按下标数会把 A 的第 0 个班次和 B 的第 0 个班次算成同一个 —— 数字会错得
+  /// 看不出来（spec §7.1）。跨方案时同名的「休」合并成一个数，本来就该合。
+  ///
+  /// 没有排班、或整月都没有班次（空白表跟随法定节假日）时返回 null。
+  String? _monthTally(ScheduleChain? chain) {
+    if (chain == null) return null;
+    final counts = <String, int>{};
     final days = DateTime(_month.year, _month.month + 1, 0).day;
     for (var d = 1; d <= days; d++) {
-      final shift = schedule.shiftOn(DateTime(_month.year, _month.month, d));
+      final shift = chain.shiftOn(DateTime(_month.year, _month.month, d));
       if (shift == null) continue;
-      // `shiftOn` 返回的就是 `classes` 里那个实例，所以按身份找得到。
-      final i = schedule.classes.indexOf(shift);
-      if (i >= 0) counts[i]++;
+      counts.update(shift.shortLabel, (n) => n + 1, ifAbsent: () => 1);
     }
-    final parts = <String>[];
-    for (var i = 0; i < schedule.classes.length; i++) {
-      if (counts[i] == 0) continue;
-      parts.add('${schedule.classes[i].shortLabel}${counts[i]}');
-    }
-    if (parts.isEmpty) return null;
+    if (counts.isEmpty) return null;
+    final parts = [for (final e in counts.entries) '${e.key}${e.value}'];
     return '${L10n.monthTally} ${parts.join(' · ')}';
   }
 
@@ -391,10 +381,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final scheduleAsync = ref.watch(activeScheduleProvider);
-    // 过渡态：本任务只做类型替换，日历仍只画「当前方案」（= 链的兜底那套），
-    // 所以这一步的**行为与从前一字不差**。下一个任务（日历整体按天解析）
-    // 会把这里换成整条链。
-    final schedule = scheduleAsync.valueOrNull?.chain.fallback;
+    // 整页按**天**解析：某天归哪套方案由链回答（spec §2 ②），所以下面
+    // 「网格 / 信息卡 / 本月统计 / 已调班」全都只认它，不再认「当前方案」。
+    final chain = scheduleAsync.valueOrNull?.chain;
     ref.watch(appSettingsProvider); // 语言切换时重建
 
     return Scaffold(
@@ -413,7 +402,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           final gridArea = Expanded(
             // 网格区高度要先量出来，才能决定格子长多高（见 _buildGrid）。
             child: LayoutBuilder(
-              builder: (context, c) => scheduleAsync.isLoading && schedule == null
+              builder: (context, c) => scheduleAsync.isLoading && chain == null
                   ? const Center(child: CircularProgressIndicator())
                   // 网格可滚动：格子保持全尺寸，小屏 6 行放不下时滚动而非被裁切，
                   // 避免底部行与信息卡重叠。
@@ -421,7 +410,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       child: _monthSlide(
                         month: _month,
                         tag: 'grid',
-                        child: _buildGrid(context, schedule, c.maxHeight),
+                        child: _buildGrid(context, chain, c.maxHeight),
                       ),
                     ),
             ),
@@ -442,7 +431,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       SizedBox(
                         width: 300,
                         child: SingleChildScrollView(
-                          child: _infoCard(context, schedule, inSidePane: true),
+                          child: _infoCard(context, chain, inSidePane: true),
                         ),
                       ),
                     ],
@@ -456,7 +445,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 // 本来就在信息卡上 —— 卡留下、信息就齐了。
                 // 各机型小窗的默认尺寸 400×640 高 640 > 480，**不受影响**。
                 if (!layout.isShort) gridArea,
-                _infoCard(context, schedule, compact: layout.isShort),
+                _infoCard(context, chain, compact: layout.isShort),
               ],
             ],
           );
@@ -744,9 +733,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 改完必须重排闹钟：这天可能从工作班变成休班（不该响），或从休班变成夜班
   /// （要响）—— 不重排的话闹钟跟日历就对不上了。
   Future<void> adjustDays(DateTime from, DateTime to) async {
-    // 过渡态，同 `build` 里那处：这个任务只换类型，下一轮改按天解析。
-    final schedule =
-        ref.read(activeScheduleProvider).valueOrNull?.chain.fallback;
+    // 过渡态：跨时段边界要**拦住**是下一个任务；此刻先按**起点那天**所属的方案
+    // 办事，与从前在「只有一套」时完全一致。
+    final chain = ref.read(activeScheduleProvider).valueOrNull?.chain;
+    final schedule = chain?.scheduleOn(from);
     if (schedule == null || schedule.isBlank || schedule.classes.isEmpty) {
       // 空白表（跟随法定节假日）没有班次定义可挑，入口本来就不该出现；
       // 这里再兜一次，免得别处误调。
@@ -895,7 +885,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Widget _buildGrid(
-      BuildContext context, ShiftSchedule? schedule, double availHeight) {
+      BuildContext context, ScheduleChain? chain, double availHeight) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cellW = (constraints.maxWidth - _hPad * 2) / 7;
@@ -985,7 +975,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             // 空白表方案（跟随法定节假日）没有班次定义可挑，长按不该进入范围态
             // （spec §7.3）—— 否则用户拖出一片淡染、松手却什么也不发生。判据
             // 与信息卡入口、`adjustDays` 内部那一处同源。
-            final canPick = schedule != null && schedule.classes.isNotEmpty;
+            //
+            // 整条链上有一套「有周期」的就能进 —— 具体那天归哪套、能不能挑，
+            // 由 `adjustDays` 按起点那天再判一次。
+            final canPick = chain?.hasCycle ?? false;
             final date =
                 canPick ? _dateFromPosition(d.localPosition, cellW, cellH) : null;
             setState(() {
@@ -1045,7 +1038,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   child: Column(
                     children: [
                       _weekdayRow(context, cellW),
-                      ..._dayRows(context, cellW, cellH, schedule),
+                      ..._dayRows(context, cellW, cellH, chain),
                     ],
                   ),
                 ),
@@ -1112,7 +1105,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   List<Widget> _dayRows(
-      BuildContext context, double cellW, double cellH, ShiftSchedule? schedule) {
+      BuildContext context, double cellW, double cellH, ScheduleChain? chain) {
     // 比「同一天」用 `isSameDay` 而不是 `==`：`dateOnly` 是 UTC 日期、这里的
     // `date` 是本地日期，`DateTime.==` 连 `isUtc` 一起比，`==` 恒为假
     // （「今天」的日期因此一直没加粗过）。
@@ -1131,13 +1124,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       cells.add(_dayCell(
           context,
           date,
-          schedule?.shiftOn(date),
+          chain?.shiftOn(date),
           lunarOf(date),
           cellW,
           cellH,
           isSameDay(date, today),
           blockDate != null && isSameDay(date, blockDate),
-          schedule?.dayOverrides.containsKey(dayNumber(date)) ?? false,
+          chain?.scheduleOn(date)?.dayOverrides.containsKey(dayNumber(date)) ??
+              false,
           _rangeAnchor != null &&
               _rangeFocus != null &&
               _inSelectedRange(date)));
@@ -1606,10 +1600,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   /// 底部玻璃信息卡（完整分行）。
-  Widget _infoCard(BuildContext context, ShiftSchedule? schedule,
+  Widget _infoCard(BuildContext context, ScheduleChain? chain,
       {bool inSidePane = false, bool compact = false}) {
     final lunar = lunarOf(_selected);
-    final shift = schedule?.shiftOn(_selected);
+    // 这一屏讲的是**选中那天**，所以取那天所属的方案；下面「班次行 / 已调班 /
+    // 空白表 / 其他班组」四处全用它。跨时段之后**不能再认「当前方案」** ——
+    // 「今天归哪套」是链才知道的事。
+    final daySchedule = chain?.scheduleOn(_selected);
+    final shift = chain?.shiftOn(_selected);
     final isToday = _selected == dateOnly(DateTime.now());
     final muted = AppTokens.inkMuted(context);
     final accent = shift != null
@@ -1629,14 +1627,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ? _timeRange(shift)
               : null;
       final isAdjusted =
-          schedule?.dayOverrides.containsKey(dayNumber(_selected)) ?? false;
+          daySchedule?.dayOverrides.containsKey(dayNumber(_selected)) ?? false;
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 76),
         // 与完整信息卡那行班次同源：套 `GlassPressable` 承载点击（它自己没
         // `onTap`），内层 `InkWell` 负责手势 —— 见上面完整卡那段的说明。
         child: GlassPressable(
           child: InkWell(
-            onTap: (schedule == null || schedule.classes.isEmpty)
+            onTap: (daySchedule == null || daySchedule.classes.isEmpty)
                 ? null
                 : () => adjustDays(_selected, _selected),
             child: GlassTile(
@@ -1858,7 +1856,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         // 剩余宽度会被三等分，最长的时间串（「20:30 – 次日08:30」）反而先
         // 被截掉。并成一段后按「班次名 → 时间 → 闹钟」的顺序从尾部省略，
         // 优先级正好反过来。
-        if (shift != null && schedule != null)
+        if (shift != null && daySchedule != null)
           // `GlassPressable` **没有 `onTap`** —— 它只是个按压缩放的视觉包装
           // （`Listener` + `QScale`），点击一律由子 widget 承载。这里用
           // `GestureDetector` 只拿点击：全 app 的按压反馈就是玻璃的 Q 弹缩放，
@@ -1876,7 +1874,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             key: const Key('info-card-shift-entry'),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: schedule.classes.isEmpty
+              onTap: daySchedule.classes.isEmpty
                   ? null
                   : () => adjustDays(_selected, _selected),
               child: Row(
@@ -1920,8 +1918,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     ),
                   ),
                   // 这天被单独调动过：形状抄同一行的邻居，理由见 `_adjustedBadge`。
-                  if (schedule.dayOverrides
-                      .containsKey(dayNumber(_selected)))
+                  // （外层 `if (shift != null && daySchedule != null)` 已经把它收窄了。）
+                  if (daySchedule.dayOverrides.containsKey(dayNumber(_selected)))
                     Padding(
                       padding: const EdgeInsets.only(left: AppTokens.spaceSm),
                       child: _adjustedBadge(context, primary),
@@ -1930,7 +1928,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ),
             ),
           )
-        else if (schedule != null && schedule.isBlank)
+        else if (daySchedule != null && daySchedule.isBlank)
           Text(
             lunar.isLegalHoliday ? L10n.rest : L10n.workday,
             style: AppTokens.labelStrong.copyWith(
@@ -1940,7 +1938,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         else
           Text(L10n.noSchedule,
               style: AppTokens.rowSecondary.copyWith(color: muted)),
-        if (schedule != null && schedule.teamCount > 1) ...[
+        if (daySchedule != null && daySchedule.teamCount > 1) ...[
           const SizedBox(height: AppTokens.spaceMd),
           // 标签与色块同一行：标签独占一行要白占 12 + 16 + 6 = 34dp，而
           // 6 个班组要**两行**色块 —— 那两行必须留得住，否则最后一行会被
@@ -1960,7 +1958,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 child: Wrap(
                   spacing: AppTokens.spaceSm,
                   runSpacing: AppTokens.gapIconText,
-                  children: _otherCrewChips(schedule, _selected),
+                  children: _otherCrewChips(daySchedule, _selected),
                 ),
               ),
             ],
@@ -2007,8 +2005,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         builder: (context, constraints) {
           final metrics = inSidePane
               ? null
-              : _cardMetricsFor(context, schedule, constraints.maxWidth);
-          final tally = _monthTally(schedule);
+              : _cardMetricsFor(context, chain, constraints.maxWidth);
+          final tally = _monthTally(chain);
           final showTally = tally != null &&
               infoCardTallyFits(
                 context: context,
