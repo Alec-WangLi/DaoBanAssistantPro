@@ -15,6 +15,7 @@ import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/glass_weekday_picker.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
@@ -455,57 +456,13 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                   },
                 ),
               if (repeatType == 2)
-                Wrap(
-                  spacing: AppTokens.gapIconText,
-                  children: List.generate(7, (i) {
-                    final bit = 1 << i;
-                    final selected = (weekdays & bit) != 0;
-                    final isDark =
-                        Theme.of(context).brightness == Brightness.dark;
-                    return GestureDetector(
-                      onTap: () => setState(() {
-                        if (selected) {
-                          weekdays &= ~bit;
-                        } else {
-                          weekdays |= bit;
-                        }
-                      }),
-                      child: AnimatedContainer(
-                        duration: AppTokens.durMed,
-                        curve: Curves.easeOutBack,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppTokens.spaceMd,
-                            vertical: AppTokens.spaceSm),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(AppTokens.radiusL),
-                          color: selected
-                              ? Theme.of(context).colorScheme.primary
-                              : (isDark
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : Colors.white.withValues(alpha: 0.72)),
-                          border: Border.all(
-                            color: selected
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.white.withValues(
-                                    alpha: isDark ? 0.16 : 0.65),
-                          ),
-                        ),
-                        child: Text(
-                          L10n.weekday(i),
-                          // 同上面的分段器：13 档取 w600 的 labelSecondary，
-                          // 选中加粗到 w700 由这里显式给出。
-                          style: AppTokens.labelSecondary.copyWith(
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: selected
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
+                // 与重复待办弹窗共用同一个控件（`core/widgets/glass_weekday_picker.dart`）：
+                // 那段配方原来内联在这里，抄第二份必然抄歪，而抄歪不会报错。
+                // **触觉也由那个控件自己发**（`Haptics.select()`，「选中变了」），
+                // 这里不许再补一记 —— 一次操作震两下比一下信息量更少。
+                GlassWeekdayPicker(
+                  value: weekdays,
+                  onChanged: (v) => setState(() => weekdays = v),
                 ),
             ],
           ),
