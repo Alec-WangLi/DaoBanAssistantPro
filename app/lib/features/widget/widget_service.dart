@@ -9,7 +9,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../../domain/shift_rotation.dart';
+import '../../domain/schedule_chain.dart';
 import '../../state/app_settings.dart';
 import 'widget_snapshot.dart';
 
@@ -37,13 +37,13 @@ class WidgetService {
   /// 原生收到后会：落盘 → `updateAppWidget` 全部实例 → 重排下一次刷新闹钟。
   /// 所以「改完排班桌面立刻变」这件事，靠的就是这里被调到。
   static Future<void> push({
-    required ShiftSchedule? schedule,
+    required ScheduleChain? chain,
     required AppSettings settings,
     required int todayTodoCount,
   }) async {
     try {
       final json = jsonEncode(buildWidgetSnapshot(
-        schedule: schedule,
+        chain: chain,
         now: DateTime.now(),
         themeMode: settings.themeMode.name,
         accent: settings.accentColor.toARGB32(),

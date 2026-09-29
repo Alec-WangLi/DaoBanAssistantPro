@@ -175,9 +175,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
     if (!mounted) return;
     await WidgetService.push(
-      // 过渡态：`WidgetService.push` 此刻还收 `ShiftSchedule?`，所以先给兜底那套
-      // （行为与从前一字不差）。它改成收整条链的任务紧跟在后。
-      schedule: async.value?.chain.fallback,
+      // 推的是**整条链**：快照窗口是一个多月，跨时段边界是常态。
+      // 原生侧不受影响 —— 它本来只照着 `days[]` 排版。
+      chain: async.value?.chain,
       settings: ref.read(appSettingsProvider),
       todayTodoCount: todoCount,
     );

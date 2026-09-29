@@ -17,6 +17,7 @@ library;
 
 import '../../core/l10n.dart';
 import '../../domain/lunar_info.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 
 /// 快照格式版本。原生按它判断能不能解析 —— 对不上就按「无快照」走降级态。
@@ -52,8 +53,12 @@ const int kWidgetSnapshotMaxDays = 68;
 /// [themeMode] 是 `'system' | 'light' | 'dark'` —— **模式，不是解析结果**。
 /// 把 `system` 提前解析成 light/dark 存进来，「跟随系统」就变成了「跟随生成快照
 /// 那一刻的系统」，用户傍晚切深色模式要等到下次 App 启动才跟上。
+///
+/// [chain] 而不是 `ShiftSchedule`：窗口是一个多月，**跨时段边界是常态** —— 每天
+/// 归哪套方案由链回答。派生的好处是原生侧一个字都不用改（它本来就只是照着
+/// `days[]` 排版）。
 Map<String, Object?> buildWidgetSnapshot({
-  required ShiftSchedule? schedule,
+  required ScheduleChain? chain,
   required DateTime now,
   required String themeMode,
   required int accent,
@@ -75,7 +80,7 @@ Map<String, Object?> buildWidgetSnapshot({
     // 这样下面减出来的毫秒数才落在用户所在时区的正确钟点上。
     final date = DateTime(window.from.year, window.from.month, window.from.day + i);
     final dayStart = date;
-    final shift = schedule?.shiftOn(date);
+    final shift = chain?.shiftOn(date);
 
     // 本地零点也是边界：跨天要翻页。
     final nextMidnight = DateTime(date.year, date.month, date.day + 1);
@@ -139,14 +144,17 @@ Map<String, Object?> buildWidgetSnapshot({
   // 当成今天显示（见 spec §6 的 ⚠️）。
   final todayDate = DateTime(today.year, today.month, today.day);
   final lunar = lunarOf(todayDate);
+  // 「其他班组」与「有没有调过班」问的都是**今天所属的那一套** —— 跨时段之后
+  // 它可能不是「当前方案」，这正是这一块要改的原因。
+  final todaySchedule = chain?.scheduleOn(todayDate);
   final crews = <Map<String, Object?>>[];
-  if (schedule != null && !schedule.isBlank) {
-    for (var i = 0; i < schedule.teamCount; i++) {
-      if (i == schedule.ourTeamIndex) continue; // 只看别人
-      final t = schedule.teamShift(i, todayDate);
+  if (todaySchedule != null && !todaySchedule.isBlank) {
+    for (var i = 0; i < todaySchedule.teamCount; i++) {
+      if (i == todaySchedule.ourTeamIndex) continue; // 只看别人
+      final t = todaySchedule.teamShift(i, todayDate);
       if (t == null) continue;
-      final name = i < schedule.teamNames.length
-          ? schedule.teamNames[i]
+      final name = i < todaySchedule.teamNames.length
+          ? todaySchedule.teamNames[i]
           // 兜底走既有的 L10n.defaultTeamName —— 它自己的注释写着「唯一来源…
           // 免得两处各写一份、英文界面下漏出中文」。不要学 App 的信息卡内联写
           // `i + 1` + 中英三元（那是既有的疤，别再抄一份）。
@@ -159,7 +167,8 @@ Map<String, Object?> buildWidgetSnapshot({
     'lunarShort': lunar.shortLabel,
     'lunarIsHoliday': lunar.isLegalHoliday,
     'lunarFull': lunar.fullDescription,
-    'adjusted': schedule?.dayOverrides.containsKey(dayNumber(todayDate)) ?? false,
+    'adjusted':
+        todaySchedule?.dayOverrides.containsKey(dayNumber(todayDate)) ?? false,
     'todoCount': todayTodoCount,
     // 徽章上的**文字**也在这里给全 —— 原生不许有中文字面量，而
     // `'$n 项待办'` / `'$n todos'` 是双语的。没有待办时给 null，原生据此隐藏徽章。
@@ -173,7 +182,9 @@ Map<String, Object?> buildWidgetSnapshot({
     'lang': L10n.locale,
     'themeMode': themeMode,
     'accent': accent,
-    'hasSchedule': schedule != null && !schedule.isBlank,
+    // 「链上有没有一套有周期的方案」—— 只看兜底那套会漏（当前可能是空白表，
+    // 而另一套排得满满当当）。
+    'hasSchedule': chain?.hasCycle ?? false,
     'emptyHint': L10n.widgetEmptyHint,
     'labels': {
       'today': L10n.widgetToday,

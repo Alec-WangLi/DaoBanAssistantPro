@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
+import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/features/widget/widget_snapshot.dart';
@@ -39,6 +40,11 @@ ShiftSchedule _schedule({Map<int, int> overrides = const {}}) => ShiftSchedule(
       dayOverrides: overrides,
     );
 
+/// 本文件绝大多数用例验的都是**单套方案**下的排版（今天/明天、跨午夜时间串、
+/// 按月窗口…），与「按天衔接」无关 —— 所以包一层薄壳把它们做成「只有兜底的链」，
+/// 一处写完，21 个调用点不必各自改。真正的跨时段用例在文件末尾，自己建链。
+ScheduleChain _chain(ShiftSchedule? s) => ScheduleChain(fallback: s);
+
 /// 取快照里某一天的那一行。
 ///
 /// v2 起窗口是「按月对齐的绝对窗口」，含**过去**的天 —— `days[0]` 不再是今天，
@@ -66,7 +72,7 @@ void main() {
       DateTime(2027, 2, 14, 12),
     ]) {
       final s = buildWidgetSnapshot(
-        schedule: null,
+        chain: null,
         now: now,
         themeMode: 'system',
         accent: 0xFF4F5BE8,
@@ -114,7 +120,7 @@ void main() {
 
   test('窗口含过去的天：9/20 的窗口起点是 9/1（本月 1 日比本周一 9/14 更早）', () {
     final s = buildWidgetSnapshot(
-      schedule: null,
+      chain: null,
       now: DateTime(2026, 9, 20, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -128,7 +134,7 @@ void main() {
 
   test('days 每条都带农历；weekdays 七条、months 覆盖窗口的月', () {
     final s = buildWidgetSnapshot(
-      schedule: null,
+      chain: null,
       now: DateTime(2026, 10, 1, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -157,7 +163,7 @@ void main() {
     // ellipsize=end —— 喂完整名字会被原生截成「全民…」，而 App 里同一天写着
     // 「全民国…」：同一天两个界面显示得不一样，而且这一版修的正是「农历显示不全」。
     final s = buildWidgetSnapshot(
-      schedule: null,
+      chain: null,
       now: DateTime(2026, 9, 19, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -176,7 +182,7 @@ void main() {
 
   test('协议版本是 2', () {
     final s = buildWidgetSnapshot(
-      schedule: null,
+      chain: null,
       now: DateTime(2026, 9, 20, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -188,7 +194,7 @@ void main() {
   test('空白表（schedule=null）仍按窗口天数产出空行，并带上空表提示', () {
     final now = DateTime(2026, 9, 18, 10);
     final s = buildWidgetSnapshot(
-      schedule: null,
+      chain: null,
       now: now,
       themeMode: 'light',
       accent: 0xFF4F5BE8,
@@ -215,7 +221,7 @@ void main() {
       cycle: const [],
     );
     final s = buildWidgetSnapshot(
-      schedule: blank,
+      chain: _chain(blank),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -227,7 +233,7 @@ void main() {
   test('跨午夜班次的时间串由 L10n.timeRange 产出，不拼前缀', () {
     final s = buildWidgetSnapshot(
       // 9/19 在 3 天周期里是第 1 天 → 夜班（20:30 → 次日 08:30）
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: DateTime(2026, 9, 19, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -241,7 +247,7 @@ void main() {
   test('英文界面下跨午夜不露出中文', () {
     L10n.locale = 'en';
     final s = buildWidgetSnapshot(
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: DateTime(2026, 9, 19, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -254,7 +260,7 @@ void main() {
 
   test('24 小时班（08:00 → 24:00）的结束落在次日零点，不误加一天', () {
     final s = buildWidgetSnapshot(
-      schedule: ShiftSchedule(
+      chain: _chain(ShiftSchedule(
         name: '测试',
         anchorDate: DateTime.utc(2026, 9, 18),
         classes: const [
@@ -267,7 +273,7 @@ void main() {
               color: 0xFF4C8DFF),
         ],
         cycle: const [0],
-      ),
+      )),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -317,7 +323,7 @@ void main() {
       dayOverrides: {dayNumber(DateTime(2026, 9, 19)): 2},
     );
     final s = buildWidgetSnapshot(
-      schedule: withOverride,
+      chain: _chain(withOverride),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -332,7 +338,7 @@ void main() {
 
     // 反证：不带覆盖的同一方案里 9/19 是夜班 —— 差异确实来自覆盖。
     final plain = buildWidgetSnapshot(
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -344,7 +350,7 @@ void main() {
   test('休班行没有时间串', () {
     final restDay = DateTime(2026, 9, 20); // 周期第 2 天 → 休班
     final s = buildWidgetSnapshot(
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: restDay,
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -358,7 +364,7 @@ void main() {
   test('boundaries 升序、无重复、都是未来时刻', () {
     final now = DateTime(2026, 9, 18, 10);
     final s = buildWidgetSnapshot(
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: now,
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -381,7 +387,7 @@ void main() {
   test('主题模式原样透传，不在这里解析成 light/dark', () {
     for (final mode in ['system', 'light', 'dark']) {
       final s = buildWidgetSnapshot(
-        schedule: _schedule(),
+        chain: _chain(_schedule()),
         now: DateTime(2026, 9, 18, 10),
         themeMode: mode,
         accent: 0xFF4F5BE8,
@@ -393,7 +399,7 @@ void main() {
 
   test('快照可以 JSON 往返（原生按 org.json 解析，类型错了会静默变默认值）', () {
     final s = buildWidgetSnapshot(
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -422,7 +428,7 @@ void main() {
 
   test('labels 按偏移提供相对文案 —— 不变量 B 的契约', () {
     final s = buildWidgetSnapshot(
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -447,7 +453,7 @@ void main() {
 
   test('todayCard 带出农历、其他班组、待办数，且不含我们班组', () {
     final s = buildWidgetSnapshot(
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -489,7 +495,7 @@ void main() {
       teamOffsets: const [0],
     );
     final s = buildWidgetSnapshot(
-      schedule: solo,
+      chain: _chain(solo),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -501,7 +507,7 @@ void main() {
   test('今天被按天改班覆盖时 adjusted 为 true', () {
     final s = buildWidgetSnapshot(
       // 9/18 在 3 天周期里是第 0 天 → 白班；覆盖成 classes[2]（休班）
-      schedule: _schedule(overrides: {dayNumber(DateTime(2026, 9, 18)): 2}),
+      chain: _chain(_schedule(overrides: {dayNumber(DateTime(2026, 9, 18)): 2})),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
@@ -512,12 +518,59 @@ void main() {
 
   test('没有待办时 todoBadge 为 null（原生据此隐藏徽章）', () {
     final s = buildWidgetSnapshot(
-      schedule: _schedule(),
+      chain: _chain(_schedule()),
       now: DateTime(2026, 9, 18, 10),
       themeMode: 'system',
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
     expect((s['todayCard']! as Map)['todoBadge'], isNull);
+  });
+
+  test('窗口跨时段边界：边界前是 A 的班、边界后是 B 的班，今日卡取今天那套', () {
+    // 两套方案各有自己的班次名与班组名，于是「哪一段归谁」在快照上一眼可辨。
+    ShiftSchedule named(String name) => ShiftSchedule(
+          name: name,
+          anchorDate: DateTime.utc(2026, 9, 18),
+          classes: [
+            ShiftClass(
+                id: 1,
+                name: '$name-白',
+                abbr: '白',
+                startMinute: 8 * 60 + 30,
+                endMinute: 20 * 60 + 30,
+                color: 0xFF4C8DFF),
+            ShiftClass(id: 2, name: '$name-休', abbr: '休', isRest: true),
+          ],
+          cycle: const [0, 1],
+          teamNames: List.generate(4, (i) => '$name${i + 1}'),
+        );
+
+    // now 落在 9 月 → 窗口覆盖「9/1（或本周一）～ 10/31」，边界取 9/14|9/15。
+    final s = buildWidgetSnapshot(
+      chain: ScheduleChain(spans: [
+        ScheduleSpan(
+            id: 1,
+            schedule: named('A'),
+            from: DateTime.utc(2026, 1, 1),
+            to: DateTime.utc(2026, 9, 14)),
+        ScheduleSpan(id: 2, schedule: named('B'), from: DateTime.utc(2026, 9, 15)),
+      ]),
+      now: DateTime(2026, 9, 10, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+
+    // 闭区间：9/14 仍归 A、9/15 起归 B。窗口是「按月对齐的绝对窗口」，
+    // 这两天都在里面。
+    expect(_rowOf(s, DateTime(2026, 9, 14))['shiftName'], startsWith('A-'));
+    expect(_rowOf(s, DateTime(2026, 9, 15))['shiftName'], startsWith('B-'));
+    expect(s['hasSchedule'], true);
+
+    // 今日卡（今天 9/10 归 A）的「其他班组」取自**那天的方案** —— A 的组名。
+    final crews = ((s['todayCard']! as Map)['crews']! as List).cast<Map>();
+    expect(crews, isNotEmpty);
+    expect(crews.first['name'], startsWith('A'));
   });
 }
