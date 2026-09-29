@@ -45,6 +45,11 @@
 ### 待办日程
 15. 事件 = 标题 + 日期 + 可选时间 + 可选提醒档位（不设 / 准时 / 提前 5 分钟 / 15 分钟 / 30 分钟 / 1 小时 / 1 天）+ **联动闹钟开关**。两者**二选一**：开关关（默认）到点弹**普通通知**（标题 = 待办名，点通知进待办页）；开关开到点走**闹钟**那条链路（全屏 + 循环铃声 + 震动，与班次闹钟同一套），响铃界面除了标题还会显示这条待办的日期时间。两者联动：开着闹钟时提醒不可能是「不设」（界面上选「不设」会顺手关掉闹钟，开闹钟会把「不设」补成「准时」）。增删改与勾选之后立刻重排，不必等下次开 App。当天有待办时，日历底栏信息卡的日期行上显示「N 项待办」（不占新行，卡片高度不变）；列表里开了联动闹钟的那条带一个小铃铛图标。完成勾选后**字体变暗 + 删除线**并存。
 
+16. **重复待办**（v0.9.11）：新建 / 编辑弹窗里多一行四档胶囊 `[不重复] [每天] [每周] [每月]`；选「每周」出现七个可多选的星期胶囊（**默认勾上今天那一天** —— 掩码为空时生成器当脏数据、一条都不生成，而界面上看不出来），选「每月」出现「每月的 N 号」（小月没有那一天时取该月最后一天）。原来那行「日期」对重复项改叫「**从这天起**」（首次生效日）。
+    **列表形态**：一个系列同时只有一条「当前这一次」（未完成的），到点才出现；**勾过的留成历史**（带删除线，与一次性待办一样），由用户自己删。副标题前有一个 ↻ 标记。**过期未勾的下一次到点时就地顺延**（不另起一行，不留记录）。**删除重复项的当前那条要二选一**：「只这一次不要了」（往系列上写一个跳过标记，那天之前不再补）或「删除整个重复」（连带删掉它的行，含已完成的历史）。一次性待办那条路径一个字没改：直接删、什么都不问。
+    **管理面板**：待办页标题旁一个「重复待办」入口（窄窗下只剩图标）→ 弹窗列出全部系列，写着 `每周三 · 09:00 · 下次 10月21日`，行尾一个停用开关 + 删除钮，点行打开编辑弹窗。停用 / 启用都会跑一次生成器（启用后「当前这一次」立刻回到列表；停用后那一串提醒撤掉），「没有当前这一次」（起始日在将来 / 刚跳过）时给一句提示。
+    **提醒**：到点的时刻由规则现算，**排的是「下一次」而不是当前那一条的日期**（下午打开 App 时今天那次早过去了，照那一次排等于永远排不上）；正文写的是**规则**（「每周三 · 09:00」）不是日期 —— 同一条提醒会跨很多次。提醒由**原生按时刻表续排**：Dart 侧把未来 180 天内的触发时刻整串算好递过去，原生只做「弹队首、续队尾」，所以 App 长期不开也不漏（`repeatType = 3` 是它与自定义闹钟续排的分界）。
+
 ### 我的 / 设置
 16. **检查更新**：`UpdateChecker` 无鉴权拉公开仓库 GitHub API `/releases`（未认证限 60 次/小时/IP），自行按语义版本计算「最新正式版 + 最新测试版」并双通道展示；冷启动每日一次静默检查，**仅发现更新的正式版时弹窗**。
 17. **应用内下载并安装 APK**：`downloadApk`（直接经 `browser_download_url` 流式下载）→ `installApk` → FileProvider 拉起系统安装器。
@@ -78,7 +83,7 @@
 - 班组相位由「每班组一个周期起始日」表达：编辑器中为每个班组指定它的周期第 1 天（持久化为相对基准日的天数偏移 `teamOffsets`）。
 - 「法定班次」型方案（空白表）：`classes` 为空、周期为空、跟随法定节假日，不做轮换。
 
-## 4. 数据模型（Drift · schemaVersion = 10）
+## 4. 数据模型（Drift · schemaVersion = 11）
 
 | 表 | 关键字段 / 说明 |
 |---|---|
@@ -86,7 +91,8 @@
 | `ShiftClassRows` | 班次定义：scheduleId、order、name、abbr?、startMinute?、endMinute?、isRest、color、alarmEnabled（联动闹钟**总开关**） |
 | `ShiftCycleRows` | 周期序列：scheduleId、order、classId（第 N 天用哪个班次定义） |
 | `ShiftClassAlarms` | 班次闹钟：复合主键 `{classId, order}` + minute + label?（可选名字）。`order` 同时是原生 id 的**序号**；**没有自增 id** —— 没有任何东西引用单条闹钟（按天关闹钟是按天、模板不存身份），别为了对称给它加。上限 6 由原生 id 空间决定（见 §2 第 10 条） |
-| `ScheduleEvents` | 待办日程：title、date、timeMinute?、advanceRemindMinutes?、isCompleted、alarmEnabled（联动闹钟）、createdAt |
+| `ScheduleEvents` | 待办日程：title、date、timeMinute?、advanceRemindMinutes?、isCompleted、alarmEnabled（联动闹钟）、`seriesId?`（属于哪个重复系列；空 = 一次性待办）、createdAt |
+| `RecurringSeriesRows` | 重复待办的**系列定义**：title、timeMinute?、advanceRemindMinutes?、alarmEnabled、repeatType（0 每天 / 1 每周 / 2 每月）、weekdays（位掩码）、monthDay、startDate（首次生效日）、`skipThrough?`（「这次已经了结」记到哪天为止，自 epoch 天数）、enabled、createdAt。**表名带 `Rows` 后缀**：drift 按表名生成行类，叫 `RecurringTodos` 会与领域层的 `RecurringTodo` 撞名（`ShiftClassRows` → `ShiftClassRow` 是同一回事） |
 | `CustomAlarms` | 自定义闹钟：一次性 / 每天 / 每周（星期位掩码）等 |
 | `CustomTemplates` | 「我的模板」：name + **整块快照**（classes 走 JSON、cycle / teamOffsets 走逗号分隔）+ teamCount + createdAt。模板是只读快照（没有按字段查询、没有跨表引用、也不与任何行共享身份），所以整块存不拆表；比方案少两张表与一整套装配代码 |
 | `ShiftAlarmOverrides` | 按天覆盖班次闹钟开关：主键 `day`（自 epoch 天数），false 的日期重排时跳过 |
@@ -98,6 +104,8 @@
 > **v6 → v7 迁移**：`ScheduleEvents` 加一列 `alarm_enabled`（默认 0 = 只弹通知，保持旧行为）。
 > **v7 → v8 迁移**：新建 `ShiftDayOverrides` 表（按天改班覆盖）；原有数据一条不丢。
 > **v8 → v9 迁移**：新建 `CustomTemplates` 表（「我的模板」）；同为纯新增，原有排班与待办一条不丢。
+> **v10 → v11 迁移**：新建 `RecurringSeriesRows` 表（重复待办的系列定义）+ 给 `ScheduleEvents` 加一列可空的 `series_id`；纯新增，老待办原样保留（`seriesId` 为 null，也就是一次性待办）。
+> ⚠️ **迁移分支一律按倒序跑**（`from < 11` 在 `from < 10` 前面），所以**谁碰了什么表，所有更早版本的迁移 fixture 就都得有那张表** —— v10→v11 给 `schedule_events` 加列，于是 v7/v8/v9 三份 fixture 都被迫补上了它的 DDL（否则会在 `ALTER TABLE` 上抛 `no such table`，而真机上不会）。改动迁移链时先看这一条。
 
 ## 5. 技术选型（实际实现）
 

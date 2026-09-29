@@ -5,6 +5,7 @@ import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
+import '../../core/layout.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
@@ -78,10 +79,23 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
               child: Row(
                 children: [
-                  Text(L10n.titleTodo, style: AppTokens.pageTitle),
-                  const Spacer(),
+                  // `Flexible` 是兜底：窄窗里「重复待办」那几个字与标题抢宽度，
+                  // 不收缩就是横向溢出（200×400 小窗实测溢出 22px）。
+                  Flexible(
+                    child: Text(
+                      L10n.titleTodo,
+                      style: AppTokens.pageTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppTokens.spaceSm),
                   // 「重复待办」管理面板的入口。与「选择你的倒班方式」页里分组标题
                   // 旁那个「管理」同一套写法：一个文字按钮，不抢标题。
+                  //
+                  // **窄窗（< 360dp）只留图标**：那一档里标题加这四个字必然放不下，
+                  // 而入口又不能藏（那是唯一的管理路径）—— 于是把**文字**收掉，
+                  // 与「小窗里不显示时间副标题 / 不显示待办徽章」是同一条取舍。
                   GlassPressable(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -90,11 +104,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: AppTokens.spaceSm,
                             vertical: AppTokens.spaceXs),
-                        child: Text(
-                          L10n.recurring,
-                          style: AppTokens.labelSecondary.copyWith(
-                              color: Theme.of(context).colorScheme.primary),
-                        ),
+                        child: AppLayout.of(context).isNarrow
+                            ? AppIcon(Icons.repeat,
+                                size: AppTokens.iconMd,
+                                color: Theme.of(context).colorScheme.primary)
+                            : Text(
+                                L10n.recurring,
+                                style: AppTokens.labelSecondary.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary),
+                              ),
                       ),
                     ),
                   ),

@@ -41,7 +41,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.10\n'
+const String _changelogZh = 'v0.9.11\n'
+    '· 待办能重复了：新建待办时选「每天 / 每周几 / 每月某日」，它就会按时自己出现 —— 不用每周手动建一次。勾掉之后留成历史（带删除线），下一次到点自动来一条新的\n'
+    '· 一个重复待办同时只占一行：永远是「当前这一次」。过期没勾的，下一次到点时就地顺延，不会堆出一串「上周三的会」\n'
+    '· 删一条重复待办时会问一句：是「只这一次不要了」，还是「删除整个重复」—— 前者只是跳过这一次（下次照常出现），后者连它已完成的历史一起删掉\n'
+    '· 待办页右上角多了「重复待办」入口（小窗里只剩图标）：能看到有哪些重复项、各自的下一次是什么时候，能改周期、能停用、能删。停用之后当前那条会留着 —— 那是你还没做的一件事，不替你收走\n'
+    '· 重复待办的提醒由系统自己接着排，**App 长期不开也照常响**，不是「等你下次打开才补上」\n\n'
+
+    'v0.9.10\n'
     '· 桌面小组件（4×5 整月那张）里超过三个字的农历节日名，现在与 App 里的日历显示一致：前三个字加省略号。上一版只改了 App 里的日历，桌面那张卡漏掉了 —— 同一天两个界面显示得不一样\n'
     '· 顺带补了几条自查用例：桌面小组件「先清空再填」的顺序、以及更新日志固定 10 条这两件长期规则，此前只靠人记，现在漏了会直接测试失败\n\n'
 
@@ -84,13 +91,16 @@ const String _changelogZh = 'v0.9.10\n'
     '· 修好一个会把闹钟排错天的问题：钟点落在值班时间之内的闹钟（白班的午休、零点班班中那次）从前被排到前一天同一钟点 —— 等于提前二十来小时响。现在这类算班次当天；起床闹钟那种（早于上班、或零点班的前一晚）照旧\n'
     '· 班次编辑页的闹钟区跟着改了：一条一行（时间 + 名字 + 删除），下面有「添加闹钟」；到 6 个上限时收掉按钮、给一行说明\n'
     '· 闹钟页「未来 30 天」一个班次当天有几条就列几行，「前一天」那条各自标；日历信息卡写「闹钟 06:30 等 2 个」\n'
-    '· 数据库版本 9 → 10（班次闹钟单独一张表），老数据自动搬过去，配过的闹钟一条不丢（开关关着但时间还留着的也搬）\n\n'
+    '· 数据库版本 9 → 10（班次闹钟单独一张表），老数据自动搬过去，配过的闹钟一条不丢（开关关着但时间还留着的也搬）\n';
 
-    'v0.9.1\n'
-    '· 修好一个用户反馈的问题：添加待办时快速连点「添加」，整个界面会变黑 —— App 本身没死也没卡住（状态栏还在、也能切走），只是界面被「关到底」了，只能杀掉重开。原因是这类保存要过一小会儿才落定，这段窗口里再点一次就会多存一条待办、并且多关一层 —— 多关掉的那一层正是 App 唯一剩下的主界面。现在连点只存一条，界面也不会再被关空\n'
-    '· 同一道护栏也盖住了另外两条能把界面点黑的路径：「点完添加马上点取消」、以及闹钟弹窗里的「添加 / 保存」\n';
+const String _changelogEn = 'v0.9.11\n'
+    '· Todos can repeat now: pick "every day / weekly (choose the days) / monthly (pick a day)" when adding one and it shows up on its own — no more creating it by hand every week. Ticking it keeps it as history (struck through), and the next occurrence arrives on time\n'
+    '· A repeating todo only ever takes one line: the current occurrence. Miss one and it rolls forward in place at the next occurrence, instead of piling up a stack of "last Wednesday\'s meeting"\n'
+    '· Deleting a repeating todo asks which you mean: "skip this one" (the next occurrence still comes) or "delete the whole repeat" (its completed history goes too)\n'
+    '· The todo screen now has a "Repeating" entry (an icon in a small window): see your repeating todos and when each next occurs, and edit / pause / delete them. Pausing keeps the current entry — that is something you have not done yet, and the app will not take it away for you\n'
+    '· Their reminders are re-armed by the system itself, so they still ring after the app has been closed for a long time — not "fixed up the next time you open it"\n\n'
 
-const String _changelogEn = 'v0.9.10\n'
+    'v0.9.10\n'
     '· Lunar festival names longer than three characters now read the same on the 4×5 month widget as they do in the app\'s calendar (first three characters plus an ellipsis). The last version only fixed the in-app calendar and missed that card, so the same day looked different in the two places\n'
     '· A couple of long-standing rules now have failing tests behind them instead of living in someone\'s memory: the widget clearing each slot before filling it, and the changelog keeping exactly 10 entries\n\n'
 
@@ -133,11 +143,7 @@ const String _changelogEn = 'v0.9.10\n'
     '· Fixed alarms landing on the wrong day: an alarm whose clock time falls inside the shift (a lunch nap on a day shift, a break during a midnight shift) used to be scheduled on the previous day at the same time — some 20 hours early. Those now ring on the shift\'s own day; wake-up alarms (before the shift, or the night-before case for midnight shifts) are unchanged\n'
     '· The shift editor\'s alarm section follows: one row per alarm (time + name + delete) with an "Add alarm" button; at the 6-alarm limit the button goes away and a line explains why\n'
     '· The alarm page lists every alarm a shift has that day, each carrying its own "day before" tag where it applies; the calendar info card reads "Alarm 06:30 (+1)"\n'
-    '· Database version 9 → 10 (alarms get their own table); existing data moves over automatically and no alarm is lost — including times kept on shifts whose alarm switch is off\n\n'
-
-    'v0.9.1\n'
-    '· Fixed an issue reported by users: tapping "Add" twice in a row while adding a todo turned the whole screen black — the app itself was neither dead nor frozen (the status bar was still there, you could still switch apps), the UI had simply been dismissed one screen too far, and only killing the app brought it back. The save takes a moment to land, and a second tap inside that window stored a duplicate todo and dismissed an extra screen — that extra one being the app\'s only remaining screen. A rapid double-tap now stores a single todo and leaves the UI alone\n'
-    '· The same guard covers two other ways to black out the screen: tapping "Add" and then "Cancel" right away, and the "Add / Save" buttons in the alarm dialog\n';
+    '· Database version 9 → 10 (alarms get their own table); existing data moves over automatically and no alarm is lost — including times kept on shifts whose alarm switch is off\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
