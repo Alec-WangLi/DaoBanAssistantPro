@@ -84,8 +84,8 @@ void main() {
     expect(events.firstWhere((e) => e.title == '上个月总结').isCompleted, isTrue);
 
     // ② 新表在，且能写能读（用生成的表 API，不经仓库层）
-    final id = await db.into(db.recurringTodos).insert(
-          RecurringTodosCompanion.insert(
+    final id = await db.into(db.recurringSeriesRows).insert(
+          RecurringSeriesRowsCompanion.insert(
             title: '周三例会',
             startDate: DateTime.utc(2026, 10, 14),
             weekdays: const Value(1 << 2),
@@ -94,7 +94,7 @@ void main() {
             createdAt: DateTime.now(),
           ),
         );
-    final series = await db.select(db.recurringTodos).getSingle();
+    final series = await db.select(db.recurringSeriesRows).getSingle();
     expect(series.id, id);
     expect(series.title, '周三例会');
     expect(series.weekdays, 1 << 2);

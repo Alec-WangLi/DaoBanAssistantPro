@@ -179,7 +179,12 @@ class CustomTemplates extends Table {
 /// `schedule_events` 里一行（挂 `series_id`）。这样：
 ///  - 列表里永远只有当前这一次（用户的诉求是「到点才出现」）；
 ///  - 提醒的号可以按**系列 id** 来发（`40000 + id`），与「越攒越多的行号」脱钩。
-class RecurringTodos extends Table {
+///
+/// **表名带 `Rows` 后缀是有意的**：drift 会按表名生成一个行类，表叫
+/// `RecurringTodos` 就会生成 `RecurringTodo`，与领域层那个 `RecurringTodo`
+/// 撞名（`ShiftClassRows` → `ShiftClassRow` vs 领域层的 `ShiftClass` 是同一回事，
+/// 那条后缀就是为这个加的）。
+class RecurringSeriesRows extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get title => text()();
 
@@ -226,7 +231,7 @@ class RecurringTodos extends Table {
   ShiftAlarmOverrides,
   ShiftDayOverrides,
   CustomTemplates,
-  RecurringTodos,
+  RecurringSeriesRows,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'shiftassistantpro'));
@@ -244,7 +249,7 @@ class AppDatabase extends _$AppDatabase {
           if (from < 11) {
             // 重复待办：纯新增一张表 + 给待办加一列可空的 series_id。
             // 两样都不碰既有数据（addColumn 加可空列时老行自动是 null）。
-            await m.createTable(recurringTodos);
+            await m.createTable(recurringSeriesRows);
             await m.addColumn(scheduleEvents, scheduleEvents.seriesId);
           }
           if (from < 10) {

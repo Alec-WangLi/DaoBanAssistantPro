@@ -3134,12 +3134,12 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
   }
 }
 
-class $RecurringTodosTable extends RecurringTodos
-    with TableInfo<$RecurringTodosTable, RecurringTodo> {
+class $RecurringSeriesRowsTable extends RecurringSeriesRows
+    with TableInfo<$RecurringSeriesRowsTable, RecurringSeriesRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $RecurringTodosTable(this.attachedDatabase, [this._alias]);
+  $RecurringSeriesRowsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
@@ -3247,9 +3247,9 @@ class $RecurringTodosTable extends RecurringTodos
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'recurring_todos';
+  static const String $name = 'recurring_series_rows';
   @override
-  VerificationContext validateIntegrity(Insertable<RecurringTodo> instance,
+  VerificationContext validateIntegrity(Insertable<RecurringSeriesRow> instance,
       {bool isInserting = false}) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
@@ -3322,9 +3322,9 @@ class $RecurringTodosTable extends RecurringTodos
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  RecurringTodo map(Map<String, dynamic> data, {String? tablePrefix}) {
+  RecurringSeriesRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return RecurringTodo(
+    return RecurringSeriesRow(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
       title: attachedDatabase.typeMapping
@@ -3353,12 +3353,13 @@ class $RecurringTodosTable extends RecurringTodos
   }
 
   @override
-  $RecurringTodosTable createAlias(String alias) {
-    return $RecurringTodosTable(attachedDatabase, alias);
+  $RecurringSeriesRowsTable createAlias(String alias) {
+    return $RecurringSeriesRowsTable(attachedDatabase, alias);
   }
 }
 
-class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
+class RecurringSeriesRow extends DataClass
+    implements Insertable<RecurringSeriesRow> {
   final int id;
   final String title;
 
@@ -3391,7 +3392,7 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
   /// 做的一件事，替他删掉他就再也看不见了）。
   final bool enabled;
   final DateTime createdAt;
-  const RecurringTodo(
+  const RecurringSeriesRow(
       {required this.id,
       required this.title,
       this.timeMinute,
@@ -3428,8 +3429,8 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
     return map;
   }
 
-  RecurringTodosCompanion toCompanion(bool nullToAbsent) {
-    return RecurringTodosCompanion(
+  RecurringSeriesRowsCompanion toCompanion(bool nullToAbsent) {
+    return RecurringSeriesRowsCompanion(
       id: Value(id),
       title: Value(title),
       timeMinute: timeMinute == null && nullToAbsent
@@ -3451,10 +3452,10 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
     );
   }
 
-  factory RecurringTodo.fromJson(Map<String, dynamic> json,
+  factory RecurringSeriesRow.fromJson(Map<String, dynamic> json,
       {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return RecurringTodo(
+    return RecurringSeriesRow(
       id: serializer.fromJson<int>(json['id']),
       title: serializer.fromJson<String>(json['title']),
       timeMinute: serializer.fromJson<int?>(json['timeMinute']),
@@ -3489,7 +3490,7 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
     };
   }
 
-  RecurringTodo copyWith(
+  RecurringSeriesRow copyWith(
           {int? id,
           String? title,
           Value<int?> timeMinute = const Value.absent(),
@@ -3502,7 +3503,7 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
           Value<int?> skipThrough = const Value.absent(),
           bool? enabled,
           DateTime? createdAt}) =>
-      RecurringTodo(
+      RecurringSeriesRow(
         id: id ?? this.id,
         title: title ?? this.title,
         timeMinute: timeMinute.present ? timeMinute.value : this.timeMinute,
@@ -3518,8 +3519,8 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
         enabled: enabled ?? this.enabled,
         createdAt: createdAt ?? this.createdAt,
       );
-  RecurringTodo copyWithCompanion(RecurringTodosCompanion data) {
-    return RecurringTodo(
+  RecurringSeriesRow copyWithCompanion(RecurringSeriesRowsCompanion data) {
+    return RecurringSeriesRow(
       id: data.id.present ? data.id.value : this.id,
       title: data.title.present ? data.title.value : this.title,
       timeMinute:
@@ -3544,7 +3545,7 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
 
   @override
   String toString() {
-    return (StringBuffer('RecurringTodo(')
+    return (StringBuffer('RecurringSeriesRow(')
           ..write('id: $id, ')
           ..write('title: $title, ')
           ..write('timeMinute: $timeMinute, ')
@@ -3578,7 +3579,7 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is RecurringTodo &&
+      (other is RecurringSeriesRow &&
           other.id == this.id &&
           other.title == this.title &&
           other.timeMinute == this.timeMinute &&
@@ -3593,7 +3594,7 @@ class RecurringTodo extends DataClass implements Insertable<RecurringTodo> {
           other.createdAt == this.createdAt);
 }
 
-class RecurringTodosCompanion extends UpdateCompanion<RecurringTodo> {
+class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
   final Value<int> id;
   final Value<String> title;
   final Value<int?> timeMinute;
@@ -3606,7 +3607,7 @@ class RecurringTodosCompanion extends UpdateCompanion<RecurringTodo> {
   final Value<int?> skipThrough;
   final Value<bool> enabled;
   final Value<DateTime> createdAt;
-  const RecurringTodosCompanion({
+  const RecurringSeriesRowsCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
     this.timeMinute = const Value.absent(),
@@ -3620,7 +3621,7 @@ class RecurringTodosCompanion extends UpdateCompanion<RecurringTodo> {
     this.enabled = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
-  RecurringTodosCompanion.insert({
+  RecurringSeriesRowsCompanion.insert({
     this.id = const Value.absent(),
     required String title,
     this.timeMinute = const Value.absent(),
@@ -3636,7 +3637,7 @@ class RecurringTodosCompanion extends UpdateCompanion<RecurringTodo> {
   })  : title = Value(title),
         startDate = Value(startDate),
         createdAt = Value(createdAt);
-  static Insertable<RecurringTodo> custom({
+  static Insertable<RecurringSeriesRow> custom({
     Expression<int>? id,
     Expression<String>? title,
     Expression<int>? timeMinute,
@@ -3667,7 +3668,7 @@ class RecurringTodosCompanion extends UpdateCompanion<RecurringTodo> {
     });
   }
 
-  RecurringTodosCompanion copyWith(
+  RecurringSeriesRowsCompanion copyWith(
       {Value<int>? id,
       Value<String>? title,
       Value<int?>? timeMinute,
@@ -3680,7 +3681,7 @@ class RecurringTodosCompanion extends UpdateCompanion<RecurringTodo> {
       Value<int?>? skipThrough,
       Value<bool>? enabled,
       Value<DateTime>? createdAt}) {
-    return RecurringTodosCompanion(
+    return RecurringSeriesRowsCompanion(
       id: id ?? this.id,
       title: title ?? this.title,
       timeMinute: timeMinute ?? this.timeMinute,
@@ -3740,7 +3741,7 @@ class RecurringTodosCompanion extends UpdateCompanion<RecurringTodo> {
 
   @override
   String toString() {
-    return (StringBuffer('RecurringTodosCompanion(')
+    return (StringBuffer('RecurringSeriesRowsCompanion(')
           ..write('id: $id, ')
           ..write('title: $title, ')
           ..write('timeMinute: $timeMinute, ')
@@ -3775,7 +3776,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ShiftDayOverridesTable(this);
   late final $CustomTemplatesTable customTemplates =
       $CustomTemplatesTable(this);
-  late final $RecurringTodosTable recurringTodos = $RecurringTodosTable(this);
+  late final $RecurringSeriesRowsTable recurringSeriesRows =
+      $RecurringSeriesRowsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3790,7 +3792,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         shiftAlarmOverrides,
         shiftDayOverrides,
         customTemplates,
-        recurringTodos
+        recurringSeriesRows
       ];
 }
 
@@ -5463,8 +5465,8 @@ typedef $$CustomTemplatesTableProcessedTableManager = ProcessedTableManager<
     ),
     CustomTemplate,
     PrefetchHooks Function()>;
-typedef $$RecurringTodosTableCreateCompanionBuilder = RecurringTodosCompanion
-    Function({
+typedef $$RecurringSeriesRowsTableCreateCompanionBuilder
+    = RecurringSeriesRowsCompanion Function({
   Value<int> id,
   required String title,
   Value<int?> timeMinute,
@@ -5478,8 +5480,8 @@ typedef $$RecurringTodosTableCreateCompanionBuilder = RecurringTodosCompanion
   Value<bool> enabled,
   required DateTime createdAt,
 });
-typedef $$RecurringTodosTableUpdateCompanionBuilder = RecurringTodosCompanion
-    Function({
+typedef $$RecurringSeriesRowsTableUpdateCompanionBuilder
+    = RecurringSeriesRowsCompanion Function({
   Value<int> id,
   Value<String> title,
   Value<int?> timeMinute,
@@ -5494,9 +5496,9 @@ typedef $$RecurringTodosTableUpdateCompanionBuilder = RecurringTodosCompanion
   Value<DateTime> createdAt,
 });
 
-class $$RecurringTodosTableFilterComposer
-    extends Composer<_$AppDatabase, $RecurringTodosTable> {
-  $$RecurringTodosTableFilterComposer({
+class $$RecurringSeriesRowsTableFilterComposer
+    extends Composer<_$AppDatabase, $RecurringSeriesRowsTable> {
+  $$RecurringSeriesRowsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -5541,9 +5543,9 @@ class $$RecurringTodosTableFilterComposer
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
 }
 
-class $$RecurringTodosTableOrderingComposer
-    extends Composer<_$AppDatabase, $RecurringTodosTable> {
-  $$RecurringTodosTableOrderingComposer({
+class $$RecurringSeriesRowsTableOrderingComposer
+    extends Composer<_$AppDatabase, $RecurringSeriesRowsTable> {
+  $$RecurringSeriesRowsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -5589,9 +5591,9 @@ class $$RecurringTodosTableOrderingComposer
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
 
-class $$RecurringTodosTableAnnotationComposer
-    extends Composer<_$AppDatabase, $RecurringTodosTable> {
-  $$RecurringTodosTableAnnotationComposer({
+class $$RecurringSeriesRowsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RecurringSeriesRowsTable> {
+  $$RecurringSeriesRowsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -5635,32 +5637,35 @@ class $$RecurringTodosTableAnnotationComposer
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
 
-class $$RecurringTodosTableTableManager extends RootTableManager<
+class $$RecurringSeriesRowsTableTableManager extends RootTableManager<
     _$AppDatabase,
-    $RecurringTodosTable,
-    RecurringTodo,
-    $$RecurringTodosTableFilterComposer,
-    $$RecurringTodosTableOrderingComposer,
-    $$RecurringTodosTableAnnotationComposer,
-    $$RecurringTodosTableCreateCompanionBuilder,
-    $$RecurringTodosTableUpdateCompanionBuilder,
+    $RecurringSeriesRowsTable,
+    RecurringSeriesRow,
+    $$RecurringSeriesRowsTableFilterComposer,
+    $$RecurringSeriesRowsTableOrderingComposer,
+    $$RecurringSeriesRowsTableAnnotationComposer,
+    $$RecurringSeriesRowsTableCreateCompanionBuilder,
+    $$RecurringSeriesRowsTableUpdateCompanionBuilder,
     (
-      RecurringTodo,
-      BaseReferences<_$AppDatabase, $RecurringTodosTable, RecurringTodo>
+      RecurringSeriesRow,
+      BaseReferences<_$AppDatabase, $RecurringSeriesRowsTable,
+          RecurringSeriesRow>
     ),
-    RecurringTodo,
+    RecurringSeriesRow,
     PrefetchHooks Function()> {
-  $$RecurringTodosTableTableManager(
-      _$AppDatabase db, $RecurringTodosTable table)
+  $$RecurringSeriesRowsTableTableManager(
+      _$AppDatabase db, $RecurringSeriesRowsTable table)
       : super(TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$RecurringTodosTableFilterComposer($db: db, $table: table),
+              $$RecurringSeriesRowsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$RecurringTodosTableOrderingComposer($db: db, $table: table),
+              $$RecurringSeriesRowsTableOrderingComposer(
+                  $db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$RecurringTodosTableAnnotationComposer($db: db, $table: table),
+              $$RecurringSeriesRowsTableAnnotationComposer(
+                  $db: db, $table: table),
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
             Value<String> title = const Value.absent(),
@@ -5675,7 +5680,7 @@ class $$RecurringTodosTableTableManager extends RootTableManager<
             Value<bool> enabled = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
-              RecurringTodosCompanion(
+              RecurringSeriesRowsCompanion(
             id: id,
             title: title,
             timeMinute: timeMinute,
@@ -5703,7 +5708,7 @@ class $$RecurringTodosTableTableManager extends RootTableManager<
             Value<bool> enabled = const Value.absent(),
             required DateTime createdAt,
           }) =>
-              RecurringTodosCompanion.insert(
+              RecurringSeriesRowsCompanion.insert(
             id: id,
             title: title,
             timeMinute: timeMinute,
@@ -5724,20 +5729,21 @@ class $$RecurringTodosTableTableManager extends RootTableManager<
         ));
 }
 
-typedef $$RecurringTodosTableProcessedTableManager = ProcessedTableManager<
+typedef $$RecurringSeriesRowsTableProcessedTableManager = ProcessedTableManager<
     _$AppDatabase,
-    $RecurringTodosTable,
-    RecurringTodo,
-    $$RecurringTodosTableFilterComposer,
-    $$RecurringTodosTableOrderingComposer,
-    $$RecurringTodosTableAnnotationComposer,
-    $$RecurringTodosTableCreateCompanionBuilder,
-    $$RecurringTodosTableUpdateCompanionBuilder,
+    $RecurringSeriesRowsTable,
+    RecurringSeriesRow,
+    $$RecurringSeriesRowsTableFilterComposer,
+    $$RecurringSeriesRowsTableOrderingComposer,
+    $$RecurringSeriesRowsTableAnnotationComposer,
+    $$RecurringSeriesRowsTableCreateCompanionBuilder,
+    $$RecurringSeriesRowsTableUpdateCompanionBuilder,
     (
-      RecurringTodo,
-      BaseReferences<_$AppDatabase, $RecurringTodosTable, RecurringTodo>
+      RecurringSeriesRow,
+      BaseReferences<_$AppDatabase, $RecurringSeriesRowsTable,
+          RecurringSeriesRow>
     ),
-    RecurringTodo,
+    RecurringSeriesRow,
     PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
@@ -5761,6 +5767,6 @@ class $AppDatabaseManager {
       $$ShiftDayOverridesTableTableManager(_db, _db.shiftDayOverrides);
   $$CustomTemplatesTableTableManager get customTemplates =>
       $$CustomTemplatesTableTableManager(_db, _db.customTemplates);
-  $$RecurringTodosTableTableManager get recurringTodos =>
-      $$RecurringTodosTableTableManager(_db, _db.recurringTodos);
+  $$RecurringSeriesRowsTableTableManager get recurringSeriesRows =>
+      $$RecurringSeriesRowsTableTableManager(_db, _db.recurringSeriesRows);
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/recurring_todo.dart';
 import '../domain/schedule_template.dart';
 import '../domain/shift_rotation.dart';
 import 'app_database.dart';
@@ -102,6 +103,28 @@ extension ShiftClassRowX on ShiftClassRow {
         color: color,
         alarmEnabled: alarmEnabled,
         alarms: alarms,
+      );
+}
+
+/// `RecurringTodos` 一行 → 领域形态。
+extension RecurringSeriesRowX on RecurringSeriesRow {
+  RecurringTodo toDomain() => RecurringTodo(
+        id: id,
+        title: title,
+        // 库里存的是 int（0/1/2）。越界值（脏数据 / 将来可能加的第 4 种周期）
+        // 落回「每天」：静默当每天比抛异常好 —— 用户至少还看得见这一条并去改它。
+        repeat: RecurRepeat.values[
+            repeatType >= 0 && repeatType < RecurRepeat.values.length
+                ? repeatType
+                : 0],
+        startDate: startDate,
+        timeMinute: timeMinute,
+        advanceRemindMinutes: advanceRemindMinutes,
+        alarmEnabled: alarmEnabled,
+        weekdays: weekdays,
+        monthDay: monthDay,
+        skipThrough: skipThrough,
+        enabled: enabled,
       );
 }
 
@@ -218,6 +241,10 @@ class AppRepository {
       await db.delete(db.shiftCycleRows).go();
       await db.delete(db.shiftClassRows).go();
       await db.delete(db.shiftScheduleRows).go();
+      // 重复待办的**系列定义**。它的「行」就是 `schedule_events`，上面已经删了 ——
+      // 这里只清系列本身；漏了的话，下次打开 App 生成器会照着老系列再建出行来，
+      // 用户看到的就是「清空重置之后待办又冒出来了」。
+      await db.delete(db.recurringSeriesRows).go();
     });
     await seedIfEmpty(db);
   }
@@ -550,6 +577,7 @@ class AppRepository {
     int? timeMinute,
     int? advanceRemindMinutes,
     bool alarmEnabled = false,
+    int? seriesId,
   }) {
     return db.into(db.scheduleEvents).insert(
           ScheduleEventsCompanion.insert(
@@ -558,11 +586,16 @@ class AppRepository {
             timeMinute: Value(timeMinute),
             advanceRemindMinutes: Value(advanceRemindMinutes),
             alarmEnabled: Value(alarmEnabled),
+            seriesId: Value(seriesId),
             createdAt: DateTime.now(),
           ),
         );
   }
 
+  /// 全字段覆盖式更新。
+  ///
+  /// ⚠️ **只改某一个字段别用它**：没传的那几项会被写成默认值（`null` / `false`）。
+  /// 只改日期要用 [setEventDate]。
   Future<void> updateEvent(
     ScheduleEvent e, {
     required String title,
@@ -570,6 +603,7 @@ class AppRepository {
     int? timeMinute,
     int? advanceRemindMinutes,
     bool alarmEnabled = false,
+    int? seriesId,
   }) {
     return (db.update(db.scheduleEvents)..where((r) => r.id.equals(e.id)))
         .write(ScheduleEventsCompanion(
@@ -578,7 +612,19 @@ class AppRepository {
       timeMinute: Value(timeMinute),
       advanceRemindMinutes: Value(advanceRemindMinutes),
       alarmEnabled: Value(alarmEnabled),
+      seriesId: Value(seriesId),
     ));
+  }
+
+  /// **只**改某条行的日期。
+  ///
+  /// 不走 [updateEvent]：那个是全字段覆盖，只传日期会把这条的时间 / 提醒 /
+  /// 联动闹钟一起抹成默认值 —— 它名字看着像「更新这一条」，实际语义是「用这组
+  /// 字段替换这一条」。目前只有一处用它：改完重复周期之后把「当前这一次」对齐到
+  /// 新规则的最近一次发生日（见 `schedule_screen.dart` 的 `_EventFields.commit`）。
+  Future<void> setEventDate(int id, DateTime date) {
+    return (db.update(db.scheduleEvents)..where((r) => r.id.equals(id)))
+        .write(ScheduleEventsCompanion(date: Value(dateOnly(date))));
   }
 
   Future<void> setEventCompleted(ScheduleEvent e, bool done) {
@@ -589,6 +635,114 @@ class AppRepository {
   Future<void> deleteEvent(ScheduleEvent e) {
     return (db.delete(db.scheduleEvents)..where((r) => r.id.equals(e.id)))
         .go();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 重复待办（系列定义）
+  //
+  // 表里存的是**系列**，不是实例；「当前这一次」是 `schedule_events` 里挂着
+  // `seriesId` 的那一行。两者的关系由 `advanceRecurringTodos` 维持。
+  //
+  // 两个删除语义**不能混**：
+  //  - `unlinkRecurringSeries` —— 「以后不再重复」：行解绑、一条待办都不删；
+  //  - `deleteRecurringTodo`   —— 「删除这个重复」：连它的行一起删。
+  // ---------------------------------------------------------------------------
+
+  Future<int> addRecurringTodo({
+    required String title,
+    required RecurRepeat repeat,
+    required DateTime startDate,
+    int? timeMinute,
+    int? advanceRemindMinutes,
+    bool alarmEnabled = false,
+    int weekdays = 0,
+    int monthDay = 1,
+  }) {
+    return db.into(db.recurringSeriesRows).insert(
+          RecurringSeriesRowsCompanion.insert(
+            title: title,
+            repeatType: Value(repeat.index),
+            startDate: dateOnly(startDate),
+            timeMinute: Value(timeMinute),
+            advanceRemindMinutes: Value(advanceRemindMinutes),
+            alarmEnabled: Value(alarmEnabled),
+            weekdays: Value(weekdays),
+            monthDay: Value(monthDay),
+            enabled: const Value(true),
+            createdAt: DateTime.now(),
+          ),
+        );
+  }
+
+  /// 覆盖式更新（`RecurringTodo` 全字段）。
+  ///
+  /// 逐个 `Value(...)` 显式给，所以 **`advanceRemindMinutes` 能真的写成 null** ——
+  /// 调用方要显式构造一个 `RecurringTodo`，别用 `copyWith(advanceRemindMinutes:
+  /// null)`（那个清不掉，见 `RecurringTodo.copyWith` 的注释）。
+  Future<void> updateRecurringTodo(RecurringTodo s) {
+    return (db.update(db.recurringSeriesRows)..where((t) => t.id.equals(s.id!)))
+        .write(RecurringSeriesRowsCompanion(
+      title: Value(s.title),
+      repeatType: Value(s.repeat.index),
+      startDate: Value(dateOnly(s.startDate)),
+      timeMinute: Value(s.timeMinute),
+      advanceRemindMinutes: Value(s.advanceRemindMinutes),
+      alarmEnabled: Value(s.alarmEnabled),
+      weekdays: Value(s.weekdays),
+      monthDay: Value(s.monthDay),
+      skipThrough: Value(s.skipThrough),
+      enabled: Value(s.enabled),
+    ));
+  }
+
+  Future<void> setRecurringEnabled(int id, bool enabled) {
+    return (db.update(db.recurringSeriesRows)..where((t) => t.id.equals(id)))
+        .write(RecurringSeriesRowsCompanion(enabled: Value(enabled)));
+  }
+
+  /// 「这次不要了」：记下那天的 `dayNumber`，生成器在那天之前不再补出来。
+  ///
+  /// 不写这个标记的话，在列表里删掉当前那条之后，下一次打开 App 生成器又会把它
+  /// 补出来 —— 用户看到的就是「删不掉」。
+  Future<void> skipRecurringOccurrence(int seriesId, DateTime occ) {
+    return (db.update(db.recurringSeriesRows)..where((t) => t.id.equals(seriesId)))
+        .write(RecurringSeriesRowsCompanion(skipThrough: Value(dayNumber(occ))));
+  }
+
+  /// 删一个系列，**连带删它的行**（当前那条与已完成的历史都算它的）。
+  ///
+  /// 留下孤儿行的话，列表里会出现几条还原不回去的「历史」；而系列一回来
+  /// （用户又建了一个同样的），它们又会莫名其妙地挂上去。
+  ///
+  /// ⚠️ **「以后不再重复」不能走这个方法**：那会把用户正在编辑的这条待办本身也
+  /// 删掉。那种情形用 [unlinkRecurringSeries]。
+  Future<void> deleteRecurringTodo(int id) async {
+    await db.transaction(() async {
+      await (db.delete(db.scheduleEvents)..where((e) => e.seriesId.equals(id)))
+          .go();
+      await (db.delete(db.recurringSeriesRows)..where((t) => t.id.equals(id))).go();
+    });
+  }
+
+  /// 「以后不再重复」：**把行解绑、把系列定义删掉，但一条待办都不删。**
+  ///
+  /// 与 [deleteRecurringTodo] 的差别正是这一条：用户说的是「别再自动出现了」，
+  /// 不是「把我这条待办删了」。已完成的那些历史也解绑成普通待办留着 —— 它们本来
+  /// 就是做过的事，列表里一直看得见，用户想清自己删。
+  Future<void> unlinkRecurringSeries(int id) async {
+    await db.transaction(() async {
+      await (db.update(db.scheduleEvents)..where((e) => e.seriesId.equals(id)))
+          .write(const ScheduleEventsCompanion(seriesId: Value(null)));
+      await (db.delete(db.recurringSeriesRows)..where((t) => t.id.equals(id))).go();
+    });
+  }
+
+  /// 全部系列（按创建时间升序）。
+  Future<List<RecurringTodo>> listRecurringTodos() async {
+    final rows = await (db.select(db.recurringSeriesRows)
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
+    return rows.map((r) => r.toDomain()).toList();
   }
 
   /// 立即读取全部日程（重排提醒用，避免读 Riverpod 流拿到旧值）。
@@ -788,6 +942,20 @@ final savedTemplatesProvider =
 final eventsProvider = StreamProvider<List<ScheduleEvent>>((ref) {
   final db = ref.watch(databaseProvider);
   return db.watchEvents();
+});
+
+/// 全部重复待办（系列定义）。管理面板用它。
+///
+/// **一次性读 + `autoDispose`**，不是流 —— 与 `savedTemplatesProvider` 同一套
+/// 理由与坑：
+///  - 用流的话，每条挂这个弹窗的 widget 用例都会在拆树时报
+///    「A Timer is still pending」（drift 取消查询流时排的零时长定时器）；
+///  - 而 `autoDispose` 是**必需**的：面板里改完 / 删完之后由调用点
+///    `ref.invalidate` 重读，不 autoDispose 的话第一次读到的结果会被缓存一整个
+///    会话（v0.8.11 那个「存完模板看不到」就是这么来的）。
+final recurringTodosProvider =
+    FutureProvider.autoDispose<List<RecurringTodo>>((ref) {
+  return ref.watch(appRepositoryProvider).listRecurringTodos();
 });
 
 /// 一条日程是不是「属于 [day] 且未完成」。
