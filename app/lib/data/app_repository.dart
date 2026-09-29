@@ -235,14 +235,9 @@ extension AppDatabaseQueries on AppDatabase {
           ),
     ];
     // 排序只为了让界面与日志有个稳定顺序 —— 解析规则自己显式比起点，不靠顺序。
-    spans.sort((a, b) {
-      final af = a.from, bf = b.from;
-      if (af == null && bf == null) return (a.id ?? 0).compareTo(b.id ?? 0);
-      if (af == null) return -1;
-      if (bf == null) return 1;
-      final c = dayNumber(af).compareTo(dayNumber(bf));
-      return c != 0 ? c : (a.id ?? 0).compareTo(b.id ?? 0);
-    });
+    // 与时间线的显示顺序、以及冲突提示的报出顺序**共用同一条比较**（三处不一致
+    // 的话，「界面上看到的顺序」与「提示里点名的那个」会对不上）。
+    spans.sort(compareSpansByStart);
     return ActiveSchedules(
       all: all,
       chain: ScheduleChain(

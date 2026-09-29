@@ -49,7 +49,7 @@ void main() {
     });
   });
 
-  group('ScheduleChain.scheduleOn —— 时段优先、当前方案兜底', () {
+  group('ScheduleChain.scheduleOn —— 段不重叠 → 唯一解；其余时间兜底', () {
     test('没有任何时段 → 一律走 fallback（**老库行为一字不变**）', () {
       final chain = ScheduleChain(fallback: _sched('当前'));
       expect(chain.scheduleOn(_d(2020, 5, 5))!.name, '当前');
@@ -75,16 +75,35 @@ void main() {
       expect(chain.scheduleOn(_d(2026, 7, 1))!.name, 'B');
     });
 
-    test('两段重叠 → **起点晚的赢**（与列表顺序无关）', () {
-      // 故意把晚起的那段放在**前面**，证明结论不靠装配顺序。
+    test('重叠**不该出现**（界面禁止）—— 真出现时也必须确定，不随列表顺序变', () {
+      // 段之间不重叠是界面保证的（保存前用 `conflictingSpans` 拦）+ 迁移规整过的。
+      // 这条守的是万一库里真有脏数据时的**确定性**：结果仍按「起点晚的赢」，而不是
+      // 取列表里第一个 —— 后者会让同一条数据换一次装配顺序就换个答案。
+      // **别把这条读成「重叠是允许的」**：用户可见的语义已经是唯一解了。
       final early = _span('早', id: 1, from: _d(2026, 1, 1));
       final late = _span('晚', id: 2, from: _d(2026, 7, 1));
-      final a = ScheduleChain(spans: [late, early]);
-      final b = ScheduleChain(spans: [early, late]);
-      expect(a.scheduleOn(_d(2026, 9, 1))!.name, '晚');
-      expect(b.scheduleOn(_d(2026, 9, 1))!.name, '晚');
-      // 7/1 之前只有早的那段覆盖
-      expect(a.scheduleOn(_d(2026, 3, 1))!.name, '早');
+      expect(ScheduleChain(spans: [late, early]).scheduleOn(_d(2026, 9, 1))!.name,
+          '晚');
+      expect(ScheduleChain(spans: [early, late]).scheduleOn(_d(2026, 9, 1))!.name,
+          '晚');
+    });
+
+    test('其余时间为 null（设成「无」）→ 没段覆盖的日子返回 null', () {
+      final chain = ScheduleChain(
+        spans: [_span('A', id: 1, from: _d(2026, 9, 1), to: _d(2026, 9, 30))],
+        fallback: null,
+      );
+      expect(chain.scheduleOn(_d(2026, 9, 15))!.name, 'A');
+      expect(chain.scheduleOn(_d(2026, 9, 30))!.name, 'A'); // 闭区间
+      expect(chain.scheduleOn(_d(2026, 10, 1)), isNull);
+      expect(chain.scheduleOn(_d(2026, 8, 31)), isNull);
+      expect(chain.shiftOn(_d(2026, 10, 1)), isNull);
+    });
+
+    test('其余时间为 null 且没有任何段 → 哪天都是 null，且 hasCycle 为假', () {
+      const chain = ScheduleChain();
+      expect(chain.scheduleOn(_d(2026, 9, 1)), isNull);
+      expect(chain.hasCycle, isFalse, reason: '桌面小组件据此画空态');
     });
 
     test('起点并列 → id 大的（后建的那套）赢', () {
@@ -224,26 +243,44 @@ void main() {
     });
   });
 
-  group('overlappingSpans —— 只服务于那句提醒', () {
-    test('首尾相接**不算**重叠', () {
+  group('conflictingSpans —— 重叠**不许有**，界面靠它挡在保存前', () {
+    test('首尾相接**不算**重叠（那是正常的衔接）', () {
       final a = _span('A', id: 1, from: _d(2026, 1, 1), to: _d(2026, 6, 30));
       final b = _span('B', id: 2, from: _d(2026, 7, 1));
-      expect(overlappingSpans([a, b], a), isEmpty);
-      expect(overlappingSpans([a, b], b), isEmpty);
+      expect(conflictingSpans([a, b], a), isEmpty);
+      expect(conflictingSpans([a, b], b), isEmpty);
     });
 
     test('真重叠 → 报出对方', () {
       final a = _span('A', id: 1, from: _d(2026, 1, 1), to: _d(2026, 8, 31));
       final b = _span('B', id: 2, from: _d(2026, 7, 1));
-      expect(overlappingSpans([a, b], a).map((s) => s.schedule.name), ['B']);
-      expect(overlappingSpans([a, b], b).map((s) => s.schedule.name), ['A']);
+      expect(conflictingSpans([a, b], a).map((s) => s.schedule.name), ['B']);
+      expect(conflictingSpans([a, b], b).map((s) => s.schedule.name), ['A']);
     });
 
-    test('两端都空（不参与衔接）的既不算重叠、也不被报出', () {
-      final none = _span('未参与', id: 1);
+    test('多段都撞上时**全部**报出，且按**起点**升序（不是按 id）', () {
+      final self = _span('我', id: 9, from: _d(2026, 1, 1), to: _d(2026, 12, 31));
+      final all = [
+        self,
+        // 故意的：起得早的那个 id **更大** —— 这样「按起点」与「按 id」给出相反
+        // 的顺序，这条才真的有鉴别力（否则两种排法都能过）。
+        _span('早', id: 7, from: _d(2026, 2, 1), to: _d(2026, 3, 31)),
+        _span('晚', id: 3, from: _d(2026, 9, 1), to: _d(2026, 10, 31)),
+      ];
+      expect(
+          conflictingSpans(all, self).map((s) => s.schedule.name), ['早', '晚']);
+    });
+
+    test('两端都空（不在时间线上）的既不算冲突、也不被报出', () {
+      final none = _span('未使用', id: 1);
       final a = _span('A', id: 2, from: _d(2026, 1, 1));
-      expect(overlappingSpans([none, a], a), isEmpty);
-      expect(overlappingSpans([none, a], none), isEmpty);
+      expect(conflictingSpans([none, a], a), isEmpty);
+      expect(conflictingSpans([none, a], none), isEmpty);
+    });
+
+    test('自己与自己不算冲突（同一个 id）', () {
+      final a = _span('A', id: 1, from: _d(2026, 1, 1));
+      expect(conflictingSpans([a], a), isEmpty);
     });
   });
 }

@@ -54,8 +54,16 @@ class ScheduleSpan {
 /// **起点为空的按「一直往前」算**，也就是最不晚的那一档 —— 所以「～6月30日」
 /// 这种只设终点的时段，会把 6/30 之前全占了，但输给任何有明确起点的段。
 ///
-/// 结论**不依赖 [spans] 的顺序**（实现是显式比起点，不是「靠后的赢」）——
-/// 装配时的排序只为了让界面与日志有个稳定顺序。
+/// ---- 关于「重叠」----
+///
+/// **段之间不重叠是界面保证的**（保存前用 [conflictingSpans] 拦下 + 迁移规整过），
+/// 所以正常情况下上面第 1 条只有唯一解。实现里那条「起点最晚的赢」因此**退化成
+/// 一条防御性的 tiebreak**，只在库里真有重叠（脏数据 / 手工改库）时才会用到；
+/// 留着它而不是「取列表里第一个」，是因为后者会让同一条数据换一次装配顺序就换个
+/// 答案 —— 那是另一种静默的不确定。
+///
+/// **别把它的存在读成「重叠是允许的」**（v0.9.12 就是这么做的，代价是用户设了
+/// 两套都占 9 月、得到其中一套还说不出为什么）。用户可见的语义已经是唯一解。
 class ScheduleChain implements ShiftSource {
   const ScheduleChain({this.spans = const [], this.fallback, this.fallbackId});
 
@@ -70,7 +78,11 @@ class ScheduleChain implements ShiftSource {
   /// 装配方（`assembleSchedules`）把它一起递进来。写按天覆盖要用（见 [scheduleIdOn]）。
   final int? fallbackId;
 
-  /// 那天归哪套方案；连兜底都没有（还没有任何方案）时返回 null。
+  /// 那天归哪套方案。
+  ///
+  /// 返回 null 只有一种情况：**那天没有被任何段覆盖，而「其余时间」是「无」**
+  /// （用户明确设成了无，或者是还没有任何方案的空白库）—— 那时日历上那些天就是
+  /// 没有排班。
   ShiftSchedule? scheduleOn(DateTime day) => _resolve(day).$1;
 
   /// 那天归哪套方案的**行 id**。
@@ -158,14 +170,16 @@ bool _startsLater(ScheduleSpan a, ScheduleSpan b) {
   return c != 0 ? c > 0 : (a.id ?? 0) >= (b.id ?? 0);
 }
 
-/// [self] 之外的、与它时段重叠的那些方案（按 id 升序）。
+/// [self] 之外的、与它时段重叠的那些段（按起点升序）。
 ///
-/// 重叠**不是错误**：解析规则给的是确定答案（起点最晚的赢）。这条只服务于界面上
-/// 那句提醒 —— 用户设完时段要有机会知道「这个月和另一套撞上了」。
+/// **重叠是不允许的**：一段代表「这段时间归这套方案」，而一个人一天不可能同时有
+/// 两套班 —— 所以界面在保存前拿它拦下并点名（`L10n.spanConflicts`），而不是像
+/// v0.9.12 那样允许重叠、再用「起点最晚的赢」默默选一个（那正是「设了两套都占
+/// 9 月、出来的是其中一套、还说不出为什么」的根源）。
 ///
 /// **恰好首尾相接不算重叠**（`A.to + 1 天 == B.from` 是正常的衔接）。
-/// 留空端按无穷处理；两端都空（不参与衔接）的直接跳过。
-List<ScheduleSpan> overlappingSpans(List<ScheduleSpan> all, ScheduleSpan self) {
+/// 留空端按无穷处理；两端都空（不在时间线上）的直接跳过。
+List<ScheduleSpan> conflictingSpans(List<ScheduleSpan> all, ScheduleSpan self) {
   bool live(ScheduleSpan s) => s.from != null || s.to != null;
   if (!live(self)) return const [];
   final out = <ScheduleSpan>[];
@@ -175,8 +189,21 @@ List<ScheduleSpan> overlappingSpans(List<ScheduleSpan> all, ScheduleSpan self) {
     if (!live(s)) continue;
     if (_overlaps(self, s)) out.add(s);
   }
-  out.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
+  out.sort(compareSpansByStart);
   return out;
+}
+
+/// 段按**起点升序**排（起点为空按「一直往前」排最前；并列按 id）。
+///
+/// 时间线的显示顺序、装配时的排序、以及 [conflictingSpans] 报出来的顺序都用它 ——
+/// 三处必须是同一条，否则「界面上看到的顺序」与「提示里点名的那个」会对不上。
+int compareSpansByStart(ScheduleSpan a, ScheduleSpan b) {
+  final af = a.from, bf = b.from;
+  if (af == null && bf == null) return (a.id ?? 0).compareTo(b.id ?? 0);
+  if (af == null) return -1;
+  if (bf == null) return 1;
+  final c = dayNumber(af).compareTo(dayNumber(bf));
+  return c != 0 ? c : (a.id ?? 0).compareTo(b.id ?? 0);
 }
 
 bool _overlaps(ScheduleSpan a, ScheduleSpan b) {
