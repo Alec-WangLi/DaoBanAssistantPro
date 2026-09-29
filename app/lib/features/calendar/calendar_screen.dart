@@ -14,6 +14,7 @@ import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
 import '../../domain/lunar_info.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
@@ -136,7 +137,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final m = measureBottomInfoCardHeight(
       context: context,
       cardOuterWidth: cardOuterWidth,
-      schedule: schedule,
+      // 过渡态：日历整体按天解析是下一个任务，此刻手上仍只有当前方案 ——
+      // 包成一条「只有兜底、没有时段」的链，行为与从前一字不差。
+      chain: ScheduleChain(fallback: schedule),
       month: _month,
       hasTodoHint: hasTodoHint,
       hasOverrideHint: hasOverrideHint,

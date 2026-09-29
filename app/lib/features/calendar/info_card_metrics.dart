@@ -33,6 +33,7 @@ import 'package:flutter/material.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../domain/lunar_info.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 
 /// 卡片**内部**的垂直固定开销：上下内边距 `spaceLg`×2 + 描边 1×2（[GlassTile]
@@ -107,8 +108,12 @@ class InfoCardMetrics {
 /// 高度预留（见 [_todoHintH]）。按月而不是按天：按天算的话，点一天卡片高度就
 /// 变一次，上面的网格跟着抖 —— 那正是这个文件要消灭的东西。
 ///
-/// [hasOverrideHint] 同理，管的是班次行尾巴上那颗「已调整」胶囊（见
+/// [hasOverrideHint] 同理，管的是班次行尾巴上那颗「已调班」胶囊（见
 /// [_adjustedBadgeH]）：这个月里有被按天调整过的日子才要预留。也按月。
+///
+/// [chain] 而不是 `ShiftSchedule`：跨时段的一个月里，「其他班组」那一行有没有、
+/// 有几行，取决于**那天归哪套方案**（组数不同、色块折的行数也不同）—— 所以它跟着
+/// 逐日循环一起算，不是循环外量一次的固定项。
 ///
 /// **高度是「逐日取大」的结果，不是把各项的月内最大值相加。** 后者会把「A 天有
 /// 节假日徽章」「B 天色块折三行」「C 天的农历描述两行」叠成一天的高度，而一个月里
@@ -117,7 +122,7 @@ class InfoCardMetrics {
 InfoCardMetrics measureBottomInfoCardHeight({
   required BuildContext context,
   required double cardOuterWidth,
-  required ShiftSchedule? schedule,
+  required ScheduleChain? chain,
   required DateTime month,
   required bool hasTodoHint,
   required bool hasOverrideHint,
@@ -183,17 +188,12 @@ InfoCardMetrics measureBottomInfoCardHeight({
     if (hasOverrideHint) _adjustedBadgeH(measure),
   ].reduce((a, b) => a > b ? a : b);
 
-  final showChips = schedule != null && schedule.teamCount > 1;
-
-  // 「其他班组」那一行是 `Row[标签, 色块]`，高度取两者的大者。标签不折行，
-  // 它那份是定值，先算好。这两项与具体哪天无关，逐日的循环里不用重量。
-  final otherCrewsLabelH = showChips
-      ? measure
-              .text(L10n.otherCrews, AppTokens.microText)
-              .height +
-          _otherCrewsLabelTop
-      : 0.0;
-  final chipLineH = showChips ? _chipLineH(measure) : 0.0;
+  // 「其他班组」那一行（标签 + 色块）的高度**不能在这里一次算好**：跨方案的月份里，
+  // 有的天归 6 个班组的那套、有的天归 1 个班组的那套 —— 只有归多班组那套的日子才有
+  // 这一行。所以它与「那天归哪套」一起放进逐日循环里量（spec §7）。
+  //
+  // 标签不折行、色块行高也固定，两者与**哪天**无关，只与「那天归哪套」有关 ——
+  // 重复量同一个方案的代价可以忽略（一个月最多两种）。
 
   // ── 逐日取大：把**这一天自己**的各项加起来，最后取月内最大的那天 ──
   final days = DateTime(month.year, month.month + 1, 0).day;
@@ -228,11 +228,19 @@ InfoCardMetrics measureBottomInfoCardHeight({
       maxWidth: contentW,
     ).height;
 
+    // 那天归哪套方案 —— 「其他班组」有没有、有几行，都跟着它走。
+    final daySchedule = chain?.scheduleOn(date);
+    final showChips = daySchedule != null && daySchedule.teamCount > 1;
+
     var chipsH = 0.0;
     if (showChips) {
-      final rows = _chipRows(measure, contentW, schedule, date);
-      chipsH =
-          math.max(otherCrewsLabelH, rows * chipLineH + (rows - 1) * _chipGapY);
+      final labelH = measure
+              .text(L10n.otherCrews, AppTokens.microText)
+              .height +
+          _otherCrewsLabelTop;
+      final lineH = _chipLineH(measure);
+      final rows = _chipRows(measure, contentW, daySchedule, date);
+      chipsH = math.max(labelH, rows * lineH + (rows - 1) * _chipGapY);
     }
 
     var dayContent =

@@ -1010,7 +1010,7 @@ void main() {
           context: ctx,
           cardOuterWidth: 420,
           // 这一条只盯班次行：不挂排班就没有色块那一段的干扰。
-          schedule: null,
+          chain: null,
           month: DateTime(2026, 9, 1),
           hasTodoHint: false,
           hasOverrideHint: hasOverrideHint,
