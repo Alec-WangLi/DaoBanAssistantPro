@@ -127,6 +127,31 @@ void main() {
     );
   });
 
+  // 「大字号」的日历：系统字号 1.8×（Android 字体大小设置里那一档）。
+  //
+  // 单出一张的理由与上面「两字简称」同源，而且更硬：**全 app 都没有钳制
+  // `textScaler`，而工装此前每一屏都只在 1.0× 下出图** —— 于是「系统字号放大之后
+  // 文字被截」这一类问题在图上结构性地看不见。2026-09-29 用户反馈的那张截图
+  // （农历被截成「财…」「地…」、周标题那行挤进格子）就是这么漏掉的。
+  //
+  // 1.8 这个值是按「能把两条都压出来」挑的：周标题 13×1.8×1.15 ≈ 26.9 > `_weekdayH`
+  // 的 26（原来会压进第一行格子），农历 11×1.25×1.8 ≈ 24.8、两个字就要 49.6 > 格
+  // 内容宽的 44（原来会省略成「财…」）。
+  //
+  // 与「搜索落空」那张同理，它没有进 `visualScreens`（记录类型加可选字段要改全部
+  // 24 条），所以对比度审计不覆盖它 —— 这一屏用的也全是既有令牌与既有配色。
+  visualTest('日历 · 大字号', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '20_calendar_large_font',
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      textScale: 1.8,
+    );
+  });
+
   // 搜不到倒班方式那张空态。**只能单独一个用例**：搜索词 `_query` 是选择页的
   // 内部状态、构造参数进不去，必须首帧之后真敲一次字（`beforeCapture`）。
   // 也正因为它没法进 `visualScreens`（记录类型加可选字段要改全部 24 条），

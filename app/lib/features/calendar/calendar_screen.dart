@@ -1066,6 +1066,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
+  /// 周标题行。
+  ///
+  /// 每个标签**包一层 `FittedBox(scaleDown)`**：`_weekdayH` 是个固定常数（26），
+  /// 而这一行的字号是 `labelSecondary` **再乘系统字号** —— 系统字号放到 2×，字高
+  /// 约 30dp 就顶出这条 26dp 的带了，`Center` 不裁也不省略，于是这行字**压进下面
+  /// 第一行格子里**（2026-09-29 用户截图里那行看着「挤」的就是它）。
+  ///
+  /// **有意不去按系统字号长高 `_weekdayH`**：那个常量同时被 `_buildGrid` 的命中
+  /// 测试算式用（`d.localPosition.dy - _weekdayH`，六处），改成逐帧算的值要让那些
+  /// 算式一起跟着走 —— 漏一处就是「系统字号调大之后点哪一格都不对」。而且换来的
+  /// 高度换不成更大的字：格子里的字是按**格子高度**缩放的，网格本身是定尺的。
+  ///
+  /// 这条与整格那层 `FittedBox` 是同一条设计规则：**网格是定尺的点阵，字一律归一到
+  /// 格子里**；真正按系统字号长的是底栏信息卡（`info_card_metrics.dart` 用
+  /// `textScaler` 实测高度）。
   Widget _weekdayRow(BuildContext context, double cellW) {
     final labels = L10n.weekdays;
     return SizedBox(
@@ -1074,10 +1089,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         children: List.generate(7, (i) => SizedBox(
               width: cellW,
               child: Center(
-                child: Text(
-                  labels[i],
-                  style: AppTokens.labelSecondary
-                      .copyWith(color: AppTokens.inkMuted(context)),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    labels[i],
+                    style: AppTokens.labelSecondary
+                        .copyWith(color: AppTokens.inkMuted(context)),
+                  ),
                 ),
               ),
             )),
@@ -1180,26 +1198,47 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
 
     final lunarStyle = AppTokens.scaled(AppTokens.tinyLabel, s);
+    // 农历这行**必须有自己的 `FittedBox`**，与上面的日期行同一个写法。
+    //
+    // 它原来是 `maxLines: 1` + `ellipsis`，而整格外面那层 `FittedBox` 救不了它：
+    // 外层给这一行的约束是**固定的 `contentW` 宽**，文字先按那个宽度排好、省略号
+    // 已经烘进结果里了，之后外层再等比缩小也变不回来（缩小不能「取消省略」）。
+    // 日期与班次胶囊没这个问题，正因为它们各自有一层 `FittedBox`：文字在**无界宽**
+    // 下自然排布，再由那层按需缩放。
+    //
+    // 症状（2026-09-29 用户反馈的截图）：「财神节 / 地藏节 / 中秋节」这类**三个字
+    // 以上**的节日名被截成「财…」「地…」。两个字的「廿一」放得下、三个字放不下，
+    // 正是「格内容宽 44dp 上下 + 字号 13.75px」这条线上发生的事；**系统字号一放大
+    // 就更容易撞上**（App 全app 都没有钳制 `textScaler`，而这一行的字号是在令牌
+    // 基础上再乘系统缩放）。所以它不是「窄屏专属」，窄屏只是让它更早出现。
+    //
+    // 去掉 `ellipsis` 而不是留着：无界宽下它永远不会触发，留着会让人以为这里
+    // 还有一条省略的退路。
     final lunarLine = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 1),
-      child: Text.rich(
-        TextSpan(
-          children: [
-            if (lunar.isMakeupWorkday)
-              TextSpan(
-                text: '班 ',
-                // 调休日的「班」标记：与农历同一角色，转主色 + 加粗区分。
-                // 单行写法是守门测试的要求：`fontWeight` 字面量只有与
-                // `copyWith` 同行才豁免。
-                style: lunarStyle
-                    .copyWith(color: primary, fontWeight: FontWeight.w700),
-              ),
-            TextSpan(text: lunar.shortLabel),
-          ],
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              if (lunar.isMakeupWorkday)
+                TextSpan(
+                  text: '班 ',
+                  // 调休日的「班」标记：与农历同一角色，转主色 + 加粗区分。
+                  // 单行写法是守门测试的要求：`fontWeight` 字面量只有与
+                  // `copyWith` 同行才豁免。
+                  style: lunarStyle
+                      .copyWith(color: primary, fontWeight: FontWeight.w700),
+                ),
+              // `cellLabel` 而不是 `shortLabel`：格子装不下 4 个字以上的节日名，
+              // 而把长名字丢给上面那层 `FittedBox` 缩会变成 6px 的糊字（完整但
+              // 没人看得见）。两者的分工见 `LunarInfo.cellLabel` 的说明。
+              TextSpan(text: lunar.cellLabel),
+            ],
+          ),
+          maxLines: 1,
+          style: lunarStyle.copyWith(color: lunarColor),
         ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: lunarStyle.copyWith(color: lunarColor),
       ),
     );
 
@@ -1238,14 +1277,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ],
               ),
             )
-          : Text(
-              shift.shortLabel,
-              // 窄到画不出胶囊时的退路：班次色是给色块用的强色，当文字色太浅
-              // （橙 2.06:1、灰 2.60:1），要按格子底色算一版可读的。
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTokens.scaled(AppTokens.microStrong, s).copyWith(
-                color: AppTokens.inkFor(Color(shift.color), surface),
+          : FittedBox(
+              // 与日期、农历、周标题同一条规则：文字在**无界宽**下排好，再由这层
+              // 按需缩小 —— 有 `ellipsis` 的话，省略号会先按 `contentW` 烘进结果，
+              // 外层再怎么缩也变不回来（农历那一行的原话见 `lunarLine` 上面）。
+              fit: BoxFit.scaleDown,
+              child: Text(
+                shift.shortLabel,
+                // 窄到画不出胶囊时的退路：班次色是给色块用的强色，当文字色太浅
+                // （橙 2.06:1、灰 2.60:1），要按格子底色算一版可读的。
+                maxLines: 1,
+                style: AppTokens.scaled(AppTokens.microStrong, s).copyWith(
+                  color: AppTokens.inkFor(Color(shift.color), surface),
+                ),
               ),
             ));
     }
@@ -1726,12 +1770,32 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       children: [
         Row(
           children: [
-            Text(
-              L10n.monthDayWeekday(_selected),
-              // 设计规格把字重收成「标题 w700 / 强调 w600 / 正文 w500」，
-              // w800 只留给响铃大时钟与角标「今天」，所以日期行走 w700 的
-              // sectionTitle。
-              style: AppTokens.sectionTitle,
+            // **必须能收窄。** 这一行是「日期 + 今天徽章 + 待办徽章」三个并排，
+            // 而日期这一串（「9月29日 星期二」）没有弹性 —— 系统字号一放大
+            // （1.8× 实测）它就顶穿卡片右边缘 76px，把「N 项待办」徽章整个挤出去。
+            //
+            // 用 `FittedBox(scaleDown)` 而不是 `Flexible + ellipsis`：这一行里
+            // 日期与两个徽章都要紧（徽章分别说「今天」和「有几件待办」），
+            // 谁也丢不得。放不下时**缩日期**、三个元素全留着；放得下时它一像素
+            // 都不动（`scaleDown` 只缩不放）。
+            //
+            // 高度方向也因此是安全的：`info_card_metrics.dart` 是**按缩放大小的
+            // 字号**量这一行的，这里缩完只会更矮，不会把定高撑破。
+            //
+            // 与紧凑卡那一支（`Flexible` + 省略号）有意不同：那一支窄到 200dp，
+            // 缩到那个宽度日期就没法看了，宁可直接省略（那边另有说明）。
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  L10n.monthDayWeekday(_selected),
+                  // 设计规格把字重收成「标题 w700 / 强调 w600 / 正文 w500」，
+                  // w800 只留给响铃大时钟与角标「今天」，所以日期行走 w700 的
+                  // sectionTitle。
+                  style: AppTokens.sectionTitle,
+                ),
+              ),
             ),
             if (isToday) ...[
               const SizedBox(width: 8),

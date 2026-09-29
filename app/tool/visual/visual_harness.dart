@@ -217,11 +217,20 @@ class VisualApp extends StatelessWidget {
     required this.home,
     this.brightness = Brightness.light,
     this.language = 'zh',
+    this.textScale = 1.0,
   });
 
   final Widget home;
   final Brightness brightness;
   final String language;
+
+  /// 系统字号。默认 1.0（与真机「设置 → 显示 → 字体大小」的默认档一致）。
+  ///
+  /// **这一档必须能改**：全 app 都没有钳制 `textScaler`，而工装此前每一屏都只在
+  /// 1.0× 下出图 —— 于是「系统字号放大之后文字被截」这一类问题在图上**结构性地
+  /// 看不见**（v0.9.9 修的那个日历农历截断就是这么漏掉的）。屏单里有一屏专门
+  /// 跑大字号（见 `render_screens_test.dart`）。
+  final double textScale;
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +246,16 @@ class VisualApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: _applyVisualFonts(base),
+      // 在 `builder` 里套：这个 context 在 App 自己的 `MediaQuery` **之下**，
+      // 在这里 `of(context)` 拿到的是真实那一份，改文字缩放不会顺带把
+      // `size` / `padding` 一起改掉。
+      builder: textScale == 1.0
+          ? null
+          : (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(textScale)),
+                child: child!,
+              ),
       home: home,
     );
   }
@@ -604,6 +623,7 @@ Future<GlobalKey> pumpScreen(
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
   Size size = kVisualSize,
+  double textScale = 1.0,
   Future<void> Function(WidgetTester tester)? beforeCapture,
 }) async {
   // 字体得在 setUpAll 里装好（见 ensureVisualFonts 的说明）。这里只做体检：
@@ -643,6 +663,7 @@ Future<GlobalKey> pumpScreen(
           home: home,
           brightness: brightness,
           language: language,
+          textScale: textScale,
         ),
       ),
     ),
@@ -682,6 +703,7 @@ Future<void> renderScreen(
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
   Size size = kVisualSize,
+  double textScale = 1.0,
   Future<void> Function(WidgetTester tester)? beforeCapture,
 }) async {
   final boundaryKey = await pumpScreen(
@@ -692,6 +714,7 @@ Future<void> renderScreen(
     language: language,
     extraPrefs: extraPrefs,
     size: size,
+    textScale: textScale,
     beforeCapture: beforeCapture,
   );
 

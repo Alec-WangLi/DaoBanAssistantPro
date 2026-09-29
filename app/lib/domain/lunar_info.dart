@@ -1,3 +1,4 @@
+import 'package:characters/characters.dart';
 import 'package:lunar_plus/lunar.dart';
 
 import 'shift_rotation.dart';
@@ -11,6 +12,12 @@ const _legalHolidays = {
   '中秋节',
   '国庆节',
 };
+
+/// 日历格子里农历那一行最多显示几个字（见 [LunarInfo.cellLabel]）。
+///
+/// 3 是按格子的实际内容宽（400dp 手机上约 44dp）与设计字号（`tinyLabel` 11 ×
+/// 格子缩放上限 1.25 ≈ 13.75）算出来的，不要凭感觉调大。
+const int _cellLabelMaxChars = 3;
 
 /// 一条法定节假日区间（含首尾两天，国务院官方放假安排）。
 class _HolidaySpan {
@@ -122,6 +129,24 @@ class LunarInfo {
     if (festivals.isNotEmpty) return festivals.first;
     if (jieQi.isNotEmpty) return jieQi;
     return dayChinese;
+  }
+
+  /// 日历**格子**里那一行小字：在 [shortLabel] 之上多一道长度上限。
+  ///
+  /// 格子的内容宽只有 44dp 上下（400dp 的手机），设计尺寸下装得下 3 个字。而
+  /// [festivals] 里混着 `getOtherFestivals()` 那些很长的名字（「全民国防教育日」
+  /// 7 个字）—— 格子那一层的 `FittedBox` 会把它缩到 0.46 倍、约 6px，**完整，
+  /// 但没人看得见**，比截断更糟。所以在这里截到 3 个字并补省略号。
+  ///
+  /// **3 个字及以内（`元宵` / `财神节` / `廿一`，也就是绝大多数）一个字都不动。**
+  /// 2026-09-29 用户反馈被截成「财…」「地…」的正是这一批 —— 那是格子那一层缺
+  /// `FittedBox` 造成的，与这道上限无关，别把两者混起来。
+  ///
+  /// 信息卡有地方，用的一直是完整的 [shortLabel]。
+  String get cellLabel {
+    final s = shortLabel;
+    if (s.characters.length <= _cellLabelMaxChars) return s;
+    return '${s.characters.take(_cellLabelMaxChars)}…';
   }
 
   /// 详情里的完整农历描述（含小日子）。
