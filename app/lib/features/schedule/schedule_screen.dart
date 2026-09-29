@@ -161,6 +161,14 @@ class ScheduleScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    // 重复项：一眼看出「这不是一次性待办」。已完成的不给 ——
+                    // 那一条是历史，标着「它会再来」反而让人以为还没完。
+                    if (e.seriesId != null && !e.isCompleted) ...[
+                      const SizedBox(width: AppTokens.gapIconText),
+                      AppIcon(Icons.repeat,
+                          size: AppTokens.iconSm,
+                          color: AppTokens.inkMuted(context)),
+                    ],
                     // 开了联动闹钟的待办给个小铃铛：不用点进去就知道哪条会响。
                     // 已完成的不给 —— 它不会再响了。
                     if (e.alarmEnabled && !e.isCompleted) ...[
@@ -179,7 +187,25 @@ class ScheduleScreen extends ConsumerWidget {
             // 警报，盖过待办本身（组件注释里写明了这个分工）。
             compact: true,
             onPressed: () async {
-              await ref.read(appRepositoryProvider).deleteEvent(e);
+              final repo = ref.read(appRepositoryProvider);
+              final sid = e.seriesId;
+              if (sid == null) {
+                // 一次性待办：照旧直接删（一个字都不用问）。
+                await repo.deleteEvent(e);
+              } else {
+                // 重复项要问：直接删掉的话，生成器下一次打开 App 又会把它补出来
+                //（用户看到的是「删不掉」）；而直接删整个系列又会把「这周不做」
+                // 变成「以后都不做了」。
+                final choice = await _askDeleteRecurring(context, e.title);
+                if (choice == null || !context.mounted) return;
+                if (choice == _DeleteChoice.series) {
+                  await repo.deleteRecurringTodo(sid);
+                } else {
+                  // 只跳过这一次：记下这次的日子，生成器在那天之前不再补
+                  await repo.skipRecurringOccurrence(sid, e.date);
+                  await repo.deleteEvent(e);
+                }
+              }
               await _rescheduleReminders(ref);
             },
           ),
@@ -594,6 +620,38 @@ String _fmt(int minutes) {
   final h = (minutes ~/ 60).toString().padLeft(2, '0');
   final m = (minutes % 60).toString().padLeft(2, '0');
   return '$h:$m';
+}
+
+enum _DeleteChoice { once, series }
+
+/// 删一条重复待办时的二选一。
+///
+/// **必须问**：直接删掉的话，生成器下一次打开 App 又会把它补出来（用户看到的是
+/// 「删不掉」）；而直接删整个系列又会把「我这周不做」变成「以后都不做了」。
+///
+/// 两个回调都是**同步** `pop`（不 await 任何东西），所以不需要 `dialogCloser`
+/// —— 那个是给「await 之后才关窗」的保存类动作准备的。
+Future<_DeleteChoice?> _askDeleteRecurring(BuildContext context, String name) {
+  return showDialog<_DeleteChoice>(
+    context: context,
+    barrierColor: Colors.black26,
+    builder: (context) => GlassDialog(
+      title: L10n.deleteRecurringTitle,
+      content: Text(L10n.deleteRecurringContent(name)),
+      actions: [
+        GlassActionButton(
+          onPressed: () => Navigator.pop(context, _DeleteChoice.once),
+          label: L10n.skipThisOccurrence,
+        ),
+        const SizedBox(width: 8),
+        GlassActionButton(
+          variant: GlassActionVariant.danger,
+          onPressed: () => Navigator.pop(context, _DeleteChoice.series),
+          label: L10n.deleteWholeSeries,
+        ),
+      ],
+    ),
+  );
 }
 
 /// FAB 上移，避开底部悬浮玻璃胶囊。

@@ -240,6 +240,12 @@ class L10n {
   static String everyMonthOnDay(int d) => t('每月 $d 号', 'Day $d of every month');
   static String get repeats => t('重复', 'Repeats');
   static String get startsOn => t('从这天起', 'Starts on');
+  static String get skipThisOccurrence => t('只这一次不要了', 'Skip this one');
+  static String get deleteWholeSeries => t('删除整个重复', 'Delete the whole repeat');
+  static String get deleteRecurringTitle => t('这条待办是重复的', 'This todo repeats');
+  static String deleteRecurringContent(String name) => t(
+      '「$name」会自己按周期出现。你可以只跳过这一次，也可以让它以后都不再出现。',
+      '"$name" comes back on its own. You can skip just this one, or stop it for good.');
 
   /// 提醒正文用的规则描述：`每周三 · 09:00`。
   ///
