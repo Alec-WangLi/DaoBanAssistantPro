@@ -97,11 +97,15 @@ void main() {
     expect(find.text(L10n.recurring), findsOneWidget, reason: '标题那一行的入口');
     await openPanel(tester);
 
-    expect(find.text('周三例会'), findsWidgets);
-    // 副标题：「每周三 · 09:00 · 下次 …」
-    expect(find.textContaining(L10n.everyWeekOn([2])), findsOneWidget);
-    expect(find.textContaining('09:00'), findsOneWidget);
-    expect(find.textContaining(L10n.nextTime('').trim()), findsOneWidget);
+    // **断言一律限定在弹窗内**：待办页自己也会跑一次生成器，所以那条「当前这一次」
+    // 也在列表里，`'09:00'` 这类文字会出现两次。
+    Finder inDialog(Finder f) =>
+        find.descendant(of: find.byType(GlassDialog), matching: f);
+    expect(inDialog(find.text('周三例会')), findsOneWidget);
+    expect(inDialog(find.textContaining(L10n.everyWeekOn([2]))), findsOneWidget);
+    expect(inDialog(find.textContaining('09:00')), findsOneWidget);
+    expect(inDialog(find.textContaining(L10n.nextTime('').trim())),
+        findsOneWidget);
     await _dispose(tester);
   });
 
@@ -110,8 +114,9 @@ void main() {
     await mount(tester);
     await openPanel(tester);
 
-    // 面板里那个开关（页面上没有别的 GlassSwitch）
-    await tester.tap(find.byType(GlassSwitch));
+    // 面板里那个开关 —— **限定在弹窗内**：后面待办列表里那条也有一个（勾选用）。
+    await tester.tap(find.descendant(
+        of: find.byType(GlassDialog), matching: find.byType(GlassSwitch)));
     await _settle(tester);
 
     expect((await repo.listRecurringTodos()).single.enabled, isFalse);

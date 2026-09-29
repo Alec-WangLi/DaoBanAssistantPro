@@ -11,6 +11,7 @@ import '../../core/motion.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../data/app_repository.dart';
+import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_ringing_screen.dart';
 import '../alarm/alarm_screen.dart';
@@ -202,9 +203,19 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final events = ref.read(eventsProvider).valueOrNull;
     if (sched == null || alarms == null || events == null) return;
     _startupRescheduled = true;
-    final overrides =
-        await ref.read(appRepositoryProvider).listShiftAlarmOverrides();
-    AlarmService.reschedule(sched, alarms, overrides: overrides, events: events);
+    final repo = ref.read(appRepositoryProvider);
+    // **先生成、再重排**：重复待办的提醒要按「今天该有的那一条」来排，顺序反了
+    // 会拿上一轮的日期去算。
+    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    final overrides = await repo.listShiftAlarmOverrides();
+    // 待办**重新读一次**：上面那个 `events` 是生成**之前**的快照，直接用它排会漏掉
+    // 刚建出来的那几条（重复待办的提醒走另一条链路，但一次性待办的那几条不能少）。
+    AlarmService.reschedule(
+      sched,
+      alarms,
+      overrides: overrides,
+      events: await repo.listEvents(),
+    );
   }
 
   @override

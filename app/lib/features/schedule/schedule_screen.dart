@@ -22,11 +22,49 @@ import '../alarm/alarm_service.dart';
 import 'recurring_panel.dart';
 
 /// 日程：最简事件（标题 + 日期 + 可选时间 + 可选提前提醒 + 完成勾选）。
-class ScheduleScreen extends ConsumerWidget {
+///
+/// 是 `StatefulWidget` 的原因只有一个：要挂 `WidgetsBindingObserver`，在**回到
+/// 前台**时补跑一次重复待办的生成器（见 [_ScheduleScreenState.didChangeAppLifecycleState]）。
+class ScheduleScreen extends ConsumerStatefulWidget {
   const ScheduleScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ScheduleScreen> createState() => _ScheduleScreenState();
+}
+
+class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // 进页面就补一次（放在帧后：写库会触发 drift 流重发，等这一帧建完更稳）。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _advanceRecurring());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // **回到前台要补跑一次**：App 一直没关、跨过午夜的情况下，列表是 drift 流、
+    // 不写库就不会重发，界面上会一直挂着昨天的日期 —— 而用户只会觉得「今天这条
+    // 待办没出现」。（与 `alarm_screen` 回到前台重建「今天」是同一个场景。）
+    if (state == AppLifecycleState.resumed) _advanceRecurring();
+  }
+
+  /// 跑一遍重复待办的生成器，再重排提醒（改完「当前这一次」提醒也要跟着走）。
+  Future<void> _advanceRecurring() async {
+    final repo = ref.read(appRepositoryProvider);
+    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await _rescheduleReminders(ref);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
     final events = eventsAsync.valueOrNull ?? const [];
     ref.watch(appSettingsProvider); // 语言切换时重建
