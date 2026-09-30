@@ -316,6 +316,10 @@ class LiquidLensShape {
   double get centerX;
   double get width;
   double get height;
+  /// **必须存下来**：透镜铺在胶囊那一格里（`LiquidLens` 的 `size.height == capsuleH`），
+  /// 而按住时 `height > capsuleH` —— `toPath()` 要**竖直居中于 `capsuleH / 2`**，
+  /// 按自己的 `height / 2` 居中的话凸出会全部跑到下面去。
+  double get capsuleH;
   double get leftRadius;
   double get rightRadius;
   Path toPath();
@@ -638,7 +642,7 @@ ClipPath(
 
 `_zoomAbout` 照抄探针里的那个（`translate(c) · scale(s) · translate(-c)`）。`AppTokens.lensMagnify = 1.10`。
 
-**`centerY` 是透镜的中心 y**，不是胶囊的中心 —— 两者在 lift > 0 时不同（透镜更高）。用 `shape` 自己算，别用 `size.height / 2`。
+**`centerY` 是 `shape.capsuleH / 2`**（胶囊的竖直中心），**不是 `shape.height / 2`** —— 按住时透镜比胶囊高，`toPath()` 是竖直居中在 `capsuleH / 2` 上的（见 Task 4 的 Interfaces 说明），放大中心必须与它同一处，否则透镜会偏心。
 
 - [ ] **Step 4: 跑测试，确认通过**
 
