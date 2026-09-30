@@ -6,6 +6,10 @@
 //   · **过冲**：松手落回格子那一下要越过一点再回来，那才是「Q 弹」。
 //
 // 纯 Dart、没有 widget 依赖，所以可以直接跑 200 步去断言它的行为。
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
@@ -170,4 +174,126 @@ void main() {
           reason: '形状外面那个点被判成在里面 —— 外壳封错了');
     });
   });
+
+  // ── 渲染（光栅化，不是「有没有画东西」）─────────────────────────────────
+
+  const Size canvas = Size(200, 120);
+  const Size capsule = Size(120, 64);
+
+  /// 把「一枚透镜盖在一块胶囊底上」光栅化成原始 RGBA。
+  ///
+  /// [lineAtX] >= 0 时在胶囊底上画一条 2px 黑竖线（放大层的用例要用）。
+  Future<List<int>> shotLens(
+    WidgetTester tester, {
+    required double lift,
+    required Color accent,
+    double velocity = 0,
+    double magnifyScale = 1.0,
+    int lineAtX = -1,
+  }) async {
+    tester.view.physicalSize = canvas;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final GlobalKey key = GlobalKey();
+    final shape = LiquidLensShape.of(
+        itemW: capsule.width,
+        capsuleH: capsule.height,
+        pad: 0,
+        centerPage: 0,
+        lift: lift,
+        velocity: velocity);
+    final double top = (canvas.height - capsule.height) / 2;
+    await tester.pumpWidget(RepaintBoundary(
+      key: key,
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox.fromSize(
+            size: canvas,
+            child: Stack(clipBehavior: Clip.none, children: <Widget>[
+              Positioned(
+                left: 0,
+                top: top,
+                width: capsule.width,
+                height: capsule.height,
+                child: ColoredBox(
+                  color: const Color(0xFFF5F6FA),
+                  child: lineAtX < 0
+                      ? null
+                      : CustomPaint(painter: LinePainter(lineAtX)),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                top: top,
+                width: capsule.width,
+                height: capsule.height,
+                child: LiquidLens(
+                  size: capsule,
+                  shape: shape,
+                  lift: lift,
+                  isDark: false,
+                  accent: accent,
+                  magnifyScale: magnifyScale,
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final RenderRepaintBoundary boundary =
+        key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    late List<int> bytes;
+    await tester.runAsync(() async {
+      final ui.Image image = await boundary.toImage(pixelRatio: 1.0);
+      bytes = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!
+          .buffer
+          .asUint8List()
+          .toList();
+      image.dispose();
+    });
+    return bytes;
+  }
+
+  int alphaAt(List<int> px, int x, int y) => px[(y * canvas.width.toInt() + x) * 4 + 3];
+
+  testWidgets('按住时透镜凸出胶囊：外框之外上下各有非透明像素', (tester) async {
+    final px = await shotLens(tester,
+        lift: 1, accent: const Color(0xFF12B5A5));
+    final int top = ((canvas.height - capsule.height) / 2).round();
+    expect(alphaAt(px, 60, top - 2), greaterThan(0), reason: '没凸出胶囊上沿');
+    expect(alphaAt(px, 60, top - 2), lessThan(255), reason: '凸出来的应该还是玻璃，不是实心块');
+    expect(alphaAt(px, 60, top + capsule.height.toInt() + 1), greaterThan(0),
+        reason: '没凸出胶囊下沿');
+  });
+
+  testWidgets('静止时不凸出：胶囊外框之外全是透明的', (tester) async {
+    // 与上一条是一对 —— 缺了它，上一条可能因为别的原因（比如阴影）变绿。
+    final px = await shotLens(tester,
+        lift: 0, accent: const Color(0xFF12B5A5));
+    final int top = ((canvas.height - capsule.height) / 2).round();
+    expect(alphaAt(px, 60, top - 2), 0);
+    expect(alphaAt(px, 60, top + capsule.height.toInt() + 1), 0);
+  });
+}
+
+/// 胶囊底上一条 2px 黑竖线（放大层的用例要用）。白底 —— 放大时才看得出位移。
+class LinePainter extends CustomPainter {
+  const LinePainter(this.x);
+  final int x;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFFFFFFF));
+    canvas.drawRect(Rect.fromLTWH(x - 1, 0, 2, size.height),
+        Paint()..color = const Color(0xFF000000));
+  }
+
+  @override
+  bool shouldRepaint(LinePainter old) => old.x != x;
 }

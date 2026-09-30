@@ -1,5 +1,6 @@
 import 'dart:math' as math;
-import 'dart:ui' show Offset, Path, Rect;
+
+import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
 
@@ -198,4 +199,199 @@ class LiquidLensShape {
       ..close();
     return p;
   }
+}
+
+/// 透镜给自己留的一圈画布余量。
+///
+/// **为什么需要**：`ClipPath` 与 `BackdropFilter` 都只在自己的**布局边界**内生效 ——
+/// 透镜按住时会凸出胶囊，画布若就只有胶囊那一格大，凸出来的部分会被裁掉，而
+/// 「凸出」正是这一档的全部。客观需要的余量是 `navLensProtrude − pad`（= 4px），
+/// 这里给到 24 是留够动画期间的中间态，也免得将来调参刚好卡在边界上。
+const double _lensCanvasPad = 24;
+
+/// 液态档的那枚透镜：会凸出胶囊、会形变、边缘带彩色光的一枚玻璃滴。
+///
+/// **它是一个参数化的 widget** —— 给它一帧几何、一个升降程度、一个主色，它就把
+/// 那一帧画出来。它**不读** `liquidGlassActive`（档位判据只在 `features/home/`
+/// 里读，由 `test/liquid_scope_guard_test.dart` 守着），因此既能被单测直接驱动，
+/// 也不会在没人留意的时候自己长到别的玻璃面上。
+class LiquidLens extends StatelessWidget {
+  const LiquidLens({
+    super.key,
+    required this.size,
+    required this.shape,
+    required this.lift,
+    required this.isDark,
+    required this.accent,
+    this.magnifyScale = 1.0,
+  });
+
+  /// 它依附的那块胶囊的完整尺寸（局部坐标的边界，原点在胶囊左上角）。
+  final Size size;
+
+  /// 这一帧的几何。
+  final LiquidLensShape shape;
+
+  /// 升程 0..1。**0 时一个像素都不画**（连阴影都不画）—— 这是「静止时不凸出」
+  /// 与「与标准档逐像素相同」的保证。
+  final double lift;
+
+  final bool isDark;
+
+  /// 主色：本体的渐变与（Task 7 的）光谱环都锚在它上面。
+  final Color accent;
+
+  /// 放大倍率。1.0 = 不放大。
+  ///
+  /// Task 5 只声明它、**不用它** —— 放大层是 Task 6 的事，那一条有自己的红测试
+  /// 要先把「不放大」这个状态证伪。
+  final double magnifyScale;
+
+  @override
+  Widget build(BuildContext context) {
+    const double m = _lensCanvasPad;
+    final Size box = Size(size.width + 2 * m, size.height + 2 * m);
+    const Offset origin = Offset(m, m);
+
+    final Widget body = ClipPath(
+      clipper: _LensClipper(shape: shape, origin: origin),
+      child: CustomPaint(
+        size: box,
+        painter: _LensBodyPainter(
+            shape: shape, origin: origin, isDark: isDark, accent: accent),
+      ),
+    );
+
+    return Stack(clipBehavior: Clip.none, children: <Widget>[
+      // ① 浮起阴影：**在裁剪之外**。被裁掉的阴影会被切平，读不出「浮起来」。
+      Positioned(
+        left: -m,
+        top: -m,
+        width: box.width,
+        height: box.height,
+        child: IgnorePointer(
+          child: CustomPaint(
+            painter:
+                _LensShadowPainter(shape: shape, origin: origin, lift: lift),
+          ),
+        ),
+      ),
+      // ② 本体：被轮廓裁住。
+      Positioned(
+        left: -m,
+        top: -m,
+        width: box.width,
+        height: box.height,
+        child: IgnorePointer(child: body),
+      ),
+    ]);
+  }
+}
+
+/// 把绘制坐标系从「这块画布」搬回「胶囊左上角」。
+///
+/// 两处都要用，且**必须是同一份** —— 裁剪用的路径与画本体用的路径差一个像素，
+/// 观感就是「一圈描边糊在轮廓外」。
+Path _lensPath(LiquidLensShape shape, Offset origin) =>
+    shape.toPath().shift(origin);
+
+class _LensClipper extends CustomClipper<Path> {
+  const _LensClipper({required this.shape, required this.origin});
+
+  final LiquidLensShape shape;
+  final Offset origin;
+
+  @override
+  Path getClip(Size size) => _lensPath(shape, origin);
+
+  @override
+  bool shouldReclip(_LensClipper old) =>
+      old.shape.centerX != shape.centerX ||
+      old.shape.width != shape.width ||
+      old.shape.height != shape.height ||
+      old.shape.leftRadius != shape.leftRadius ||
+      old.shape.rightRadius != shape.rightRadius ||
+      old.origin != origin;
+}
+
+/// 透镜浮起时投在胶囊上的影子。**升程为 0 时一个像素都不画**。
+class _LensShadowPainter extends CustomPainter {
+  const _LensShadowPainter({
+    required this.shape,
+    required this.origin,
+    required this.lift,
+  });
+
+  final LiquidLensShape shape;
+  final Offset origin;
+  final double lift;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (lift <= 0.01) return;
+    // 影子往下偏一点、越浮越深越散 —— 「浮起来」这件事几乎全靠它。
+    canvas.drawPath(
+      _lensPath(shape, origin).shift(Offset(0, 2 + 3 * lift)),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.08 + 0.14 * lift)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 5 * lift),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LensShadowPainter old) =>
+      old.lift != lift ||
+      old.shape.centerX != shape.centerX ||
+      old.shape.width != shape.width ||
+      old.shape.height != shape.height ||
+      old.shape.leftRadius != shape.leftRadius ||
+      old.shape.rightRadius != shape.rightRadius;
+}
+
+/// 透镜本体：主色**半透明**渐变 + 一圈白描边。
+///
+/// **用的就是标准档那枚滑块的同一套配方**（`AppTokens.accentGradient`）。这一条
+/// 不只是好看：换成不透明主色会把导航选中项的白字对比度从 4.7~8.2 压到
+/// 2.35~4.43 —— 五种主色在深色下**全部跌破 AA**（v0.10.1 的独立审查算出来的）。
+class _LensBodyPainter extends CustomPainter {
+  const _LensBodyPainter({
+    required this.shape,
+    required this.origin,
+    required this.isDark,
+    required this.accent,
+  });
+
+  final LiquidLensShape shape;
+  final Offset origin;
+  final bool isDark;
+  final Color accent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Path p = _lensPath(shape, origin);
+    canvas.drawPath(
+      p,
+      Paint()
+        ..shader =
+            AppTokens.accentGradient(accent).createShader(p.getBounds()),
+    );
+    canvas.drawPath(
+      p,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.85),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LensBodyPainter old) =>
+      old.shape.centerX != shape.centerX ||
+      old.shape.width != shape.width ||
+      old.shape.height != shape.height ||
+      old.shape.leftRadius != shape.leftRadius ||
+      old.shape.rightRadius != shape.rightRadius ||
+      old.origin != origin ||
+      old.isDark != isDark ||
+      old.accent != accent;
 }
