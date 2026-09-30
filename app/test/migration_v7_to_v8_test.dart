@@ -42,6 +42,27 @@ CREATE TABLE shift_schedule_rows (
 )
 ''';
 
+/// v7 时期的 `schedule_events`。
+///
+/// fixture 里加它是因为**真实 v7 库一定有这样一张表**（它从 v1 就在），
+/// 而且现在**迁移链会碰它**：v10→v11 那一步要给它加一列 `series_id`。
+/// 少了它，那条分支会在 `ALTER TABLE` 上抛 `no such table: schedule_events`
+/// —— 只在这个 fixture 里红，真机上反而不会（真库什么表都有）。
+/// 这是**迁移分支一律按倒序跑**带来的连带约束：谁碰了什么表，所有更早版本的
+/// fixture 就都得有那张表。
+const _v7ScheduleEventsTable = '''
+CREATE TABLE schedule_events (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  date INTEGER NOT NULL,
+  time_minute INTEGER,
+  advance_remind_minutes INTEGER,
+  is_completed INTEGER NOT NULL DEFAULT 0,
+  alarm_enabled INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+)
+''';
+
 void main() {
   late sqlite3.Database raw;
 
@@ -49,6 +70,7 @@ void main() {
     raw = sqlite3.sqlite3.openInMemory();
     raw.execute(_v7ScheduleTable);
     raw.execute(_v7ClassTable);
+    raw.execute(_v7ScheduleEventsTable);
     raw.execute(
       'INSERT INTO shift_schedule_rows '
       '(id, name, anchor_date, is_current, team_count, team_names, '

@@ -10,7 +10,10 @@
       4. 生成发布说明（默认模板含 SHA256；可用 -NotesFile 指定）
       5. 人工确认后创建 GitHub Release 并上传 APK（资产名自动为 ASCII：<仓库名>-v<版本>.apk）
       6. 通过 GitHub API 验证并打印下载地址
-      7. 更新仓库根目录 latest.json 发布清单（App「检查更新」限流兜底）并提交推送
+      7. 更新仓库根目录 latest.json 发布清单（App「检查更新」限流兜底）并提交推送；
+         **若当前分支不是 main，再把这份清单同步一份到 main** —— App 的兜底通道读的
+         是 main 上那份（`raw.githubusercontent.com/<owner>/<repo>/main/latest.json`），
+         而测试版是在 beta 之类分支上发的。这一步失败只告警、不影响已完成的发布
 
 .PARAMETER Version
     手动指定版本号（如 0.3.0）。缺省时从 pubspec.yaml 读取。
@@ -216,13 +219,30 @@ if ($LASTEXITCODE -ne 0) {
 
 # ---------- 7. 验证 ----------
 if ($repo) {
-    $rel = & $gh api "repos/$repo/releases/tags/$tag" 2>&1 | ConvertFrom-Json
-    Write-Host ""
-    Write-Host "✅ 发布成功！"
-    Write-Host "   仓库  : $($rel.html_url)"
-    foreach ($a in $rel.assets) {
-        Write-Host "   资产  : $($a.name)  ($([math]::Round($a.size / 1MB, 1)) MB)"
-        Write-Host "   下载  : $($a.browser_download_url)"
+    # 两条都与 7b 步同源，见那一段的长注释：
+    #   ① `gh api … 2>&1 | ConvertFrom-Json` 不能要 —— stderr 一有输出，`2>&1` 就会在
+    #      `$ErrorActionPreference = 'Stop'` 下抛 NativeCommandError；而且 gh 真失败时
+    #      那串错误文本会被直接喂进 ConvertFrom-Json，报的是「JSON 解析失败」而不是
+    #      「gh 失败了」，看不出真因。所以 stderr 让它照常打到控制台，只管 stdout。
+    #   ② **这一步跑在 Release 已经建好之后**，在这儿抛异常会让一次成功的发布看起来
+    #      像失败。所以照 7b 立下的同一条规矩办：只告警、不改变发布结论。
+    try {
+        $raw = & $gh api "repos/$repo/releases/tags/$tag"
+        if ($LASTEXITCODE -ne 0) {
+            throw "gh api 退出码 $LASTEXITCODE（多为网络或鉴权问题）"
+        }
+        $rel = ($raw -join '') | ConvertFrom-Json
+        Write-Host ""
+        Write-Host "✅ 发布成功！"
+        Write-Host "   仓库  : $($rel.html_url)"
+        foreach ($a in $rel.assets) {
+            Write-Host "   资产  : $($a.name)  ($([math]::Round($a.size / 1MB, 1)) MB)"
+            Write-Host "   下载  : $($a.browser_download_url)"
+        }
+    } catch {
+        Write-Warning "发布验证没跑成：$_"
+        Write-Warning "Release 本身已经建好了（上面那步没报错的话），去仓库页确认一下："
+        Write-Warning "  https://github.com/$repo/releases/tag/$tag"
     }
 } else {
     Write-Host "✅ Release $tag 已创建（无法从 remote 解析仓库地址，请手动确认）。"
@@ -260,5 +280,58 @@ if ($repo) {
         Write-Host "      ✅ latest.json 已提交并推送"
     } else {
         Write-Host "      latest.json 无变化，跳过提交"
+    }
+
+    # ---- 8b. 非 main 分支时：把这份清单也同步到 main ----
+    #
+    # App 的**兜底**更新通道读的是 raw.githubusercontent.com/<owner>/<repo>/main/latest.json
+    # （主通道走 Releases API，与分支无关）。所以测试版在 beta 之类分支上发完之后，
+    # 这份清单必须也落到 main —— 否则 GitHub API 被限流（403）时，App 读到的清单会
+    # 停在旧版本，表现是「明明有更新的测试版，App 却说已是最新」。
+    $branchNow = git rev-parse --abbrev-ref HEAD
+    if ($branchNow -ne 'main') {
+        Write-Host "      同步 latest.json 到 main（兜底通道读的是 main 上那份）..."
+
+        # 这一段里的 git 调用，stderr 上写的全是**正常提示**（切换分支时 git 会往
+        # stderr 写「Switched to branch 'main'」）。而在脚本顶部的
+        # `$ErrorActionPreference = 'Stop'` 下，`git … 2>&1 | Out-Null` 会把那行提示
+        # 包成 NativeCommandError **抛出来** —— git 明明成功了也照抛。
+        #
+        # 2026-09-23 实测（PowerShell 5.1）：带 `2>&1` 必抛、不带 `2>&1` 不抛、
+        # `2>$null` 也抛。所以不是「偶尔失败」，是**必然失败** —— 7b 步上线后发过
+        # 两次测试版（v0.9.4 / v0.9.5），两次都挂在这一行、两次都靠手动补 main。
+        #
+        # 修法：这一段临时放宽成 Continue，成败只看下面的 $LASTEXITCODE（本来就逐个
+        # 查着）。`throw` 不受 ErrorActionPreference 影响，下面那几条判断照常生效。
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            git checkout main 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "git checkout main 失败" }
+            git checkout $branchNow -- latest.json 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "从 $branchNow 取 latest.json 失败" }
+            if (@(git status --porcelain -- latest.json).Count -gt 0) {
+                git add latest.json | Out-Null
+                git commit -m "chore(release): 更新发布清单至 v$Version（同步 $branchNow）" | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "提交到 main 失败" }
+                git push origin main
+                if ($LASTEXITCODE -ne 0) { throw "推送 main 失败" }
+                Write-Host "      ✅ main 上的 latest.json 已同步"
+            } else {
+                Write-Host "      main 上已经是这份，跳过"
+            }
+        } catch {
+            # 发布本身已经成功（tag 与资产都在），别让这一步把它变成「失败」——
+            # 告警 + 把手动命令打出来。
+            Write-Warning "latest.json 同步到 main 失败：$_"
+            Write-Warning ("请手动执行：git checkout main && git checkout $branchNow -- latest.json " +
+                "&& git commit -m 'chore(release): 更新发布清单至 v$Version（同步 $branchNow）' " +
+                "&& git push origin main && git checkout $branchNow")
+        } finally {
+            # 切回原分支这行同样会往 stderr 写提示，所以必须仍在 Continue 下跑，
+            # 跑完再把 ErrorActionPreference 还原（脚本尾部还有别的动作）。
+            git checkout $branchNow 2>&1 | Out-Null
+            $ErrorActionPreference = $prevEap
+        }
     }
 }

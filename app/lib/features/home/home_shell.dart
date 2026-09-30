@@ -11,6 +11,7 @@ import '../../core/motion.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../data/app_repository.dart';
+import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_ringing_screen.dart';
 import '../alarm/alarm_screen.dart';
@@ -29,7 +30,8 @@ class HomeShell extends ConsumerStatefulWidget {
   ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends ConsumerState<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell>
+    with WidgetsBindingObserver {
   late final PageController _controller;
   bool _startupRescheduled = false;
 
@@ -50,6 +52,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
+    // 监听生命周期：切回前台时再推一次小组件快照（见 didChangeAppLifecycleState）。
+    WidgetsBinding.instance.addObserver(this);
     _controller = PageController();
     // 首帧后再请求权限（Activity 就绪后请求才会弹系统对话框）
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -77,14 +81,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     WidgetService.widgetLaunchRequested.addListener(_onWidgetDayRequested);
   }
 
-  /// 首次使用弹「使用帮助」；每次更新后弹「版本更新」简介。
+  /// 首次使用弹「开始使用」；每次更新后弹「版本更新」简介。
+  ///
+  /// 首启弹的是**精简版**（三条），不是完整的「使用帮助」—— 见
+  /// `showGettingStartedDialog` 的说明。
   Future<void> _maybeShowLaunchDialogs() async {
     final sp = await SharedPreferences.getInstance();
     final onboarded = sp.getBool('onboarded') ?? false;
     if (!onboarded) {
       await sp.setBool('onboarded', true);
       await sp.setString('lastSeenVersion', appVersion);
-      if (mounted) showUsageGuideDialog(context);
+      if (mounted) showGettingStartedDialog(context);
       return;
     }
     final lastSeen = sp.getString('lastSeenVersion');
@@ -112,11 +119,27 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AlarmService.ringingAlarm.removeListener(_onRingingChanged);
     AlarmService.openTodoRequested.removeListener(_onTodoRequested);
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetDayRequested);
     _controller.dispose();
     super.dispose();
+  }
+
+  /// 切回前台时再推一次小组件快照。
+  ///
+  /// 冷启动那次已经推过了（见 `initState` 的后帧回调），这里补的是**重试**：
+  /// `WidgetService.push` 是 fire-and-forget，失败只留一条日志（它的 catch 里写得
+  /// 很清楚），而失败的表现是「卡片停在上一次渲染的样子」—— 用户看到的就是
+  /// 「我明明打开过 App，桌面却没变，得重启桌面才行」。
+  ///
+  /// 一条用户反馈（2026-10-01）是这条的起因。它的**根因**没法在原生侧解决：小组件
+  /// 的数据只能由 App 算（原生不查库），所以「装完新版先打开一次 App」这句必须写进
+  /// 更新简介；而这里保证「打开了就该生效」，不让用户卡在一个没有出口的状态里。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _pushWidgetSnapshot();
   }
 
   void _onRingingChanged() {
@@ -171,7 +194,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
     if (!mounted) return;
     await WidgetService.push(
-      schedule: async.value?.toDomain(),
+      // 推的是**整条链**：快照窗口是一个多月，跨时段边界是常态。
+      // 原生侧不受影响 —— 它本来只照着 `days[]` 排版。
+      chain: async.value?.chain,
       settings: ref.read(appSettingsProvider),
       todayTodoCount: todoCount,
     );
@@ -192,16 +217,28 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   Future<void> _tryStartupReschedule() async {
     if (_startupRescheduled) return;
-    final sched = ref.read(activeScheduleProvider).valueOrNull?.toDomain();
+    // 重排要的是**整条链**，不只是当前方案：未来 60 天里可能跨时段边界，
+    // 边界之后那几天的班属于别的方案。
+    final chain = ref.read(activeScheduleProvider).valueOrNull?.chain;
     final alarms = ref.read(customAlarmsProvider).valueOrNull;
     // 待办也要等流到齐再排，理由同前两个：`activeScheduleProvider` 会先
     // `seedIfEmpty`，这几个流非空就说明首启播种已经完成、库可以读了。
     final events = ref.read(eventsProvider).valueOrNull;
-    if (sched == null || alarms == null || events == null) return;
+    if (chain == null || alarms == null || events == null) return;
     _startupRescheduled = true;
-    final overrides =
-        await ref.read(appRepositoryProvider).listShiftAlarmOverrides();
-    AlarmService.reschedule(sched, alarms, overrides: overrides, events: events);
+    final repo = ref.read(appRepositoryProvider);
+    // **先生成、再重排**：重复待办的提醒要按「今天该有的那一条」来排，顺序反了
+    // 会拿上一轮的日期去算。
+    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    final overrides = await repo.listShiftAlarmOverrides();
+    // 待办**重新读一次**：上面那个 `events` 是生成**之前**的快照，直接用它排会漏掉
+    // 刚建出来的那几条（重复待办的提醒走另一条链路，但一次性待办的那几条不能少）。
+    AlarmService.reschedule(
+      chain,
+      alarms,
+      overrides: overrides,
+      events: await repo.listEvents(),
+    );
   }
 
   @override

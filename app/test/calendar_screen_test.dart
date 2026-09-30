@@ -19,9 +19,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/theme/animated_background.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
+import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
@@ -616,13 +618,17 @@ void main() {
   // 编辑器 —— 从日历进来的用户永远看不到 19 种模板。
   // ---------------------------------------------------------------------------
 
-  testWidgets('日历「新增排班」弹「选择你的倒班方式」；按返回键放弃不建方案',
+  testWidgets('日历 → 排班时段 → 管理排班时段 → 新增排班：弹「选择你的倒班方式」；返回键放弃不建方案',
       (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
     expect(await _scheduleCount(db), 1, reason: '进入前只有种子方案');
 
-    // 日历右上角「切换排班」→ 弹层里的「新增排班」
-    await tester.tap(find.byTooltip(L10n.switchSchedule));
+    // 顶栏那颗按钮现在是**只读**的「排班时段」总览（v0.9.14 起不再「切换」——
+    // 它改的只是「没被时段覆盖时的兜底」，时段盖满之后点它什么也不会变），
+    // 底部一个「管理排班时段」跳到排班管理页；新增排班在那页上。
+    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.manageTimeline));
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.addSchedule));
     await tester.pumpAndSettle();
@@ -640,11 +646,13 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  testWidgets('日历「新增排班」选中的模板真的落库，并进入带 id 的编辑器',
+  testWidgets('（同一条新路径）选中的模板真的落库，并进入带 id 的编辑器',
       (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
 
-    await tester.tap(find.byTooltip(L10n.switchSchedule));
+    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.manageTimeline));
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.addSchedule));
     await tester.pumpAndSettle();
@@ -1005,19 +1013,189 @@ void main() {
       ),
     ));
 
+    // ⚠️ **必须挂一套真排班**（v0.9.16 改的）：班次行的高度从这一版起是**逐日算**的，
+    // 而 `hasOverrideHint` 只在「那天有班次」时才参与取大。挂 `chain: null` 的话，
+    // 那一天走的是「这段时间没有排班」那一支，两种输入量出来一模一样 —— 这条用例
+    // 换个写法立刻会变成一句永远为真的空话。（「空白表那天不占这一行」由
+    // `info_card_chain_test.dart` 那条新的用例钉住。）
+    //
+    // 一套单班组、两天一轮的排班：不挂多班组就没有色块那一段的干扰，而每天都排得上
+    // 班次（白 / 休交替），那一行天天在。
+    final chain = ScheduleChain(
+      fallback: ShiftSchedule(
+        name: '两天一轮',
+        anchorDate: DateTime.utc(2026, 1, 1),
+        classes: const [
+          ShiftClass(name: '白班', abbr: '白', startMinute: 480, endMinute: 1080),
+          ShiftClass(name: '休班', abbr: '休', isRest: true),
+        ],
+        cycle: const [0, 1],
+        teamCount: 1,
+        teamNames: const ['我'],
+        teamOffsets: const [0],
+      ),
+    );
     double cardH({required bool hasOverrideHint}) => measureBottomInfoCardHeight(
           context: ctx,
           cardOuterWidth: 420,
-          // 这一条只盯班次行：不挂排班就没有色块那一段的干扰。
-          schedule: null,
+          chain: chain,
           month: DateTime(2026, 9, 1),
           hasTodoHint: false,
           hasOverrideHint: hasOverrideHint,
-        );
+        ).outerHeight;
 
     expect(cardH(hasOverrideHint: true), greaterThan(cardH(hasOverrideHint: false)),
         reason: '这个月有被按天调过的日子时，班次行要按「已调整」胶囊的高度预留 —— '
             '少了这一步，真机上有标记的那天卡片内容会顶出定高');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 信息卡最后那行「本月统计」 ──
+  //
+  // 它填的是卡片**按月定高**留下的那截富余：最满的一天（有法定节假日、农历又占两行
+  // 的日子）正好占满，普通日子空出 32~51dp。**卡片高度一像素都不能为此动** —— 动了
+  // 上面六个格子就跟着抖，而用户明确不要那个抖动。所以判定只能是「这天的富余装得下
+  // 就画」，下面两条一条盯「装不下真的不画、画了真的不裁」，一条盯「数字对不对」。
+
+  /// 往后翻，找到第一个**有法定节假日**的月份（只有这种月份才有富余可填；没有节假日
+  /// 的月份，卡片是按普通日子的高度定的，几乎没有空档）。
+  Future<DateTime> seekHolidayMonth(WidgetTester tester) async {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, 1);
+    for (var i = 0; i < 24; i++) {
+      if (i > 0) {
+        await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+        await tester.pumpAndSettle();
+      }
+      final m = DateTime(start.year, start.month + i, 1);
+      final days = DateTime(m.year, m.month + 1, 0).day;
+      final has = List.generate(days, (k) => lunarOf(DateTime(m.year, m.month, k + 1)))
+          .any((l) => l.isLegalHoliday);
+      if (has) return m;
+    }
+    fail('两年内总该有一个月有法定节假日');
+  }
+
+  /// 点开这一天，并回答「统计行画着没有」。
+  Future<bool> tapDay(WidgetTester tester, int day) async {
+    await tester.tap(find.text('$day').first);
+    await tester.pump();
+    return find.byKey(const Key('info-card-month-tally')).evaluate().isNotEmpty;
+  }
+
+  testWidgets('信息卡「本月统计」：只画在装得下的那天，最满的一天不画', (tester) async {
+    await _pumpCalendar(tester, 'six_crew_three_shift');
+    final m = await seekHolidayMonth(tester);
+
+    final box = find.byKey(const Key('info-card-box'));
+    final content = find.byKey(const Key('info-card-content'));
+    final cardH = tester.getSize(box).height;
+    final inner = cardH - (AppTokens.spaceLg * 2 + 2);
+    final days = DateTime(m.year, m.month + 1, 0).day;
+
+    var maxContent = 0.0;
+    var shown = 0;
+    var hidden = 0;
+    for (var d = 1; d <= days; d++) {
+      final hasTally = await tapDay(tester, d);
+      expect(tester.getSize(box).height, cardH,
+          reason: '$d 日：统计行不许把卡片顶高 —— 顶高一像素，上面六个格子就集体矮一像素');
+      final c = tester.getSize(content).height;
+      maxContent = math.max(maxContent, c);
+      if (hasTally) {
+        shown++;
+        expect(c, lessThanOrEqualTo(inner),
+            reason: '$d 日：画了统计行之后内容 $c 装不进卡片内高 $inner，最后一行会被裁掉');
+      } else {
+        hidden++;
+      }
+    }
+    expect(shown, greaterThan(0),
+        reason: '有节假日的月份里普通日子是有富余的，一天都没画说明判定收得太紧');
+    expect(hidden, greaterThan(0), reason: '最满的那天富余为 0，那天必须不画');
+
+    // 前提：卡片确实紧贴最满的那天（容 2dp 取整余量，与另一条用例同口径）。
+    expect(inner - maxContent, lessThanOrEqualTo(2),
+        reason: '卡片该是紧贴最满那天的；高出太多说明富余被算漏了');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('信息卡「本月统计」：数字就是本月的实际班次天数', (tester) async {
+    await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
+    final m = await seekHolidayMonth(tester);
+    final days = DateTime(m.year, m.month + 1, 0).day;
+
+    String? text;
+    for (var d = 1; d <= days && text == null; d++) {
+      if (await tapDay(tester, d)) {
+        text = tester
+            .widget<Text>(find.byKey(const Key('info-card-month-tally')))
+            .data;
+      }
+    }
+    expect(text, isNotNull, reason: '有节假日的月份里该有画着统计行的日子');
+    expect(text, startsWith(L10n.monthTally));
+
+    final parts = text!.substring(L10n.monthTally.length).trim().split(' · ');
+    expect(parts, isNotEmpty);
+    var total = 0;
+    final labels = <String>[];
+    for (final p in parts) {
+      // 形状是「简称 + 数字」：白12 / 夜8 / 休11（英文是 M12 / N8 / O11）。
+      final match = RegExp(r'^(\D+?)(\d+)$').firstMatch(p);
+      expect(match, isNotNull, reason: '「$p」不符合「简称 + 数字」的形状');
+      labels.add(match!.group(1)!);
+      final n = int.parse(match.group(2)!);
+      expect(n, greaterThan(0), reason: '「$p」是 0 天，那这个班次这个月根本没出现');
+      total += n;
+    }
+    expect(labels.toSet().length, labels.length, reason: '同一个班次不许出现两次');
+    expect(labels.length, greaterThanOrEqualTo(2), reason: '这个模板至少白 / 夜 / 休三种班');
+    expect(total, days,
+        reason: '数的是**整月**（不是到今天为止），每天都有班次，加总该等于这个月的天数');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 换月动画 ──
+
+  testWidgets('换月：进出两版同时在树上，落定后只剩一版', (tester) async {
+    // 换月从前是瞬切。加了位移 + 淡入之后要盯两件事：动画真的起来了（两版同时在
+    // 树上，而不是被同一个键判成「同一个孩子」直接换掉），以及落定之后不留残影
+    // —— 留着的话按 `day-card-N` 找格子会找到两个。
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+    final cell = find.byKey(const ValueKey('day-card-1'));
+    expect(cell, findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+    await tester.pump(); // 起手一帧
+    await tester.pump(AppTokens.durMed ~/ 2); // 动画正中间
+    expect(cell, findsNWidgets(2),
+        reason: '换月动画中途该有新旧两版；只找到一版说明位移/淡入没起来');
+
+    await tester.pumpAndSettle();
+    expect(cell, findsOneWidget, reason: '落定后旧的那版要收干净');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 光晕背景 ──
+
+  testWidgets('日历页挂着光晕背景，且它不是逐帧驱动的', (tester) async {
+    // 这一条盯两件事。
+    // ① 页面确实有那层流光（在此之前整页唯一的流光只出现在响铃界面，日历页是一块
+    //    纯色 —— 满页磨砂没在磨东西）。
+    // ② 它**不是逐帧驱动**的：`pumpAndSettle` 能停下来（下面这行断言为假）就说明
+    //    帧队列空得下来。用 `AnimationController..repeat()` 的话这里永远有待处理帧
+    //    —— 那意味着整页永久不空闲，压在背景上的每一层 `BackdropFilter` 每帧重算。
+    //    日历是长时间停留的一页，所以驱动改成了低频定时器（见 `FlowingBackground`
+    //    类头注：26 秒漂 46dp，逐帧更新每帧只动 0.03dp，纯粹是白烧）。
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+    expect(find.byType(FlowingBackground), findsOneWidget);
+    expect(tester.binding.hasScheduledFrame, isFalse,
+        reason: '背景在逐帧推帧 —— 整页不空闲，每层模糊每帧重算');
 
     await _disposeCalendar(tester);
   });
@@ -1187,6 +1365,39 @@ void main() {
         reason: '空白表下不该弹改班层');
     expect(await db.select(db.shiftDayOverrides).get(), isEmpty,
         reason: '空白表下不该落任何覆盖');
+
+    await _disposeCalendar(tester);
+  });
+
+  // ── 空白表方案：整月一天胶囊都不画，但**也不说「没有排班」** ──
+  //
+  // 这一版把两条判据拆开了，两条各钉一遍（它们曾经被搅在一起）：
+  //   · **画什么** —— 空白表（跟随法定节假日）没有班次定义，格子只画日期与农历，
+  //     不替它断言今天上不上班。2026-09-30 用户原话：「确实不应该显示上班嘛，它
+  //     本质上可能就想当个日历看」。v0.9.15 一度给它合成了「上班 / 休息」两个
+  //     合成班次，那是**拿显示去迁就判据**，已回退。
+  //   · **说不说「没有排班」** —— 判据是「这天有没有班表在管」
+  //     （`ScheduleChain.hasScheduleOn`），空白表**天天都在管**，所以那句指路
+  //     不该出现。v0.9.14 用的正是 `shiftOn == null`，于是只有一套法定班次的人
+  //     整张日历被它盖住 —— 那才是这一对的起因。
+  // 反面（真的没有任何班表时照旧盖）由 `calendar_chain_test` 的
+  // 「其余时间为无 + 没有段」那条罩着。
+  testWidgets('空白表方案：整月一天胶囊都不画，但也不说「没有排班」', (tester) async {
+    await _pumpCalendar(tester, 'day_night_rest_rest', blank: true);
+
+    expect(find.text(L10n.noScheduleHere), findsNothing,
+        reason: '有班表在管（跟随法定节假日），不该说「这段时间没有排班」');
+    expect(find.text(L10n.noSchedule), findsNothing,
+        reason: '信息卡里那句同样不该出现');
+
+    final today = DateTime.now();
+    final daysInMonth = DateTime(today.year, today.month + 1, 0).day;
+    for (var d = 1; d <= daysInMonth; d++) {
+      expect(find.byKey(ValueKey('day-chip-$d'), skipOffstage: false),
+          findsNothing, reason: '$d 日不该画任何班次胶囊 —— 空白表就是一张日历');
+    }
+    // 格子还在（不是一张空网格）：日期与农历照旧。
+    expect(find.byKey(const ValueKey('day-card-1')), findsOneWidget);
 
     await _disposeCalendar(tester);
   });
@@ -1423,6 +1634,25 @@ void main() {
     expect(find.byKey(const Key('info-card-adjusted')), findsOneWidget,
         reason: '小窗里格子窄到画不出胶囊、圆点根本不会出现，'
             '信息卡是唯一还能承载这个标记的地方');
+
+    await _disposeCalendar(tester);
+  });
+
+  // 空白表（跟随法定节假日）在小窗那一档：**不画网格**，信息卡是屏幕上唯一的内容。
+  //
+  // 那两个字（上班 / 休息）在 v0.9.16 撤掉了，而**「没有排班」那句同样不能有** ——
+  // 这是两条判据的分工在小窗上的样子：不替它断言，但也不说它没排班。
+  testWidgets('空白表方案：小窗那一档不写「上班」，也不说「没有排班」', (tester) async {
+    await _pumpCalendar(tester, 'day_night_rest_rest',
+        blank: true, width: 200, height: 400);
+
+    expect(find.byKey(const ValueKey('day-card-8')), findsNothing,
+        reason: '确认这个尺寸确实落进了小窗那一档（网格让位）');
+    expect(find.text(L10n.workday), findsNothing);
+    expect(find.text(L10n.rest), findsNothing);
+    expect(find.text(L10n.noSchedule), findsNothing);
+    // 日期还在（卡片不是空的，只是不再多说什么）。
+    expect(find.text(L10n.monthDay(dateOnly(DateTime.now()))), findsOneWidget);
 
     await _disposeCalendar(tester);
   });

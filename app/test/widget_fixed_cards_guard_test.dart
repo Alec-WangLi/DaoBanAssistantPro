@@ -94,4 +94,112 @@ void main() {
           reason: '$file 的 minHeight 应当是 ${_cellsToDp(h)}dp');
     }
   });
+
+  // 这条是 2026-09-29 用户反馈的护栏：把「前夜改成休班之后，桌面小组件的字**重影**」
+  // （OPPO / vivo 等机型，开发机上复现不出来）。
+  //
+  // 根因在宿主的 **reapply** 路径：桌面收到同一个布局 id 的 RemoteViews 时，不会重新
+  // inflate，而是把整串动作在**已经在的那棵视图树**上重放一遍，而 `AppWidgetHostView`
+  // **不会**替你清空子视图。于是每渲染一次就往同一个容器里再 addView 一个格子，
+  // 分子视图在 FrameLayout / LinearLayout 里**叠在一起**（格子根是 match_parent，
+  // 不是把后者挤开）。内容一样时看不出来（只是稍微糊一点、胶囊深一档），一旦某格的
+  // 内容变了 —— 比如按天改班把「前夜」改成「休班」—— 旧层的字就露出来了。
+  //
+  // 为什么只有部分机型中招：新一些的 AOSP / 启动器会**回收**已加进去的子视图
+  // （`canRecycleView`，Android 12 起进了 CTS），刚好把这个缺陷盖住；旧框架与厂商
+  // 分叉会老老实实再加一个。所以「开发机上没问题」**不能**当作这条不存在。
+  //
+  // `RemoteViews.addView` 的官方文档写的就是这条：宿主可能回收布局，
+  // 要用 `removeAllViews(int)` 清掉已有的子视图。
+  test('每处 addView 的容器都先被 removeAllViews 清过', () {
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    // 取每处 `addView(<容器>, ...)` 的第一个实参（容器表达式）。
+    final containers = RegExp(r'addView\(([^,]+),\s')
+        .allMatches(kt)
+        .map((m) => m.group(1)!.trim())
+        .toList();
+    // 先确认这条护栏自己没瞎：扫不到东西时它必须红，而不是静默通过。
+    expect(containers.length, greaterThanOrEqualTo(4),
+        reason: '只扫到 ${containers.length} 处 addView —— 要么渲染器被重构了，'
+            '要么这条正则匹配不到新的写法，两种情况都要人来重新对一遍');
+    for (final c in containers) {
+      final add = kt.indexOf('addView($c,');
+      final clear = kt.indexOf('removeAllViews($c)');
+      expect(add, greaterThanOrEqualTo(0),
+          reason: '正则取到的容器名 $c 在文件里找不到对应的 addView 调用 —— '
+              '这条护栏自己跟源码对不上了，先修它');
+      // **顺序是这条不变量的一半，别只查「出现过」。** 先加后清同样是坏的：
+      // 那会把刚填进去的子视图又清掉，槽位渲染成空的。而且写成「顺序反了」时
+      // 「文件里出现过 removeAllViews(x)」照样成立 —— 那种检查抓不到它。
+      expect(clear, greaterThanOrEqualTo(0),
+          reason: '容器 $c 被 addView 塞了子视图，却从没被 removeAllViews 清过 —— '
+              '宿主 reapply 时每刷一次就叠一层，症状是内容变化后出现重影');
+      expect(clear, lessThan(add),
+          reason: '容器 $c 的 removeAllViews 出现在了它的 addView **之后** —— '
+              '先加后清会把刚填进去的那份又清掉，槽位渲染成空的');
+    }
+  });
+  // 锚点是**每个实例一份**的落盘状态（「这张卡现在翻到哪个月」）。它的失效方式是
+  // **静默**的：删卡时不清，系统把 widgetId 复用给下一张卡，新卡一上来就停在上一张
+  // 卡翻到的月份上 —— 不报错、不崩，只是「我的小组件怎么是 11 月？」。
+  //
+  // 这条只能扫源码：Kotlin 在这个仓库里没有可跑的测试目标（真机是唯一的眼睛，
+  // 所以它同时出现在实施计划的真机清单里）。
+  test('翻月锚点：删卡要清、键名只有一处拼', () {
+    final base = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/ShiftWidgetBase.kt');
+    expect(base.contains('clearMonthAnchors'), true,
+        reason: 'ShiftWidgetBase.onDeleted 必须清掉被删实例的月份锚点 —— '
+            'widgetId 会被系统复用，不清就是「新卡片继承上一张卡的月份」');
+
+    final store = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetStore.kt');
+    expect(store.contains(r'"month_$widgetId"'), true,
+        reason: '锚点的键名必须由一处拼出来（month_<widgetId>），'
+            '读写各拼一遍迟早会出现「写的和读的不是一个键」这种静默失效');
+  });
+  // 标题行的两枚箭头靠 **id 拼名 + 一个跨语言的常量** 接起来：id 在布局里、
+  // 取它在 Kotlin 里、action 字符串在发送端与接收端各写一遍（Kotlin 之间没有共享通道
+  // 的检查）。这三处任意一处歪掉都是静默的：箭头画出来但点了没反应、或者点了没人接。
+  test('翻月箭头：id 齐全、action 两边一致、requestCode 落在广播池空段', () {
+    final xml = _read('android/app/src/main/res/layout/widget_month_card.xml');
+    for (final id in ['wg_m_prev', 'wg_m_title', 'wg_m_next']) {
+      expect(xml.contains('@+id/$id'), true, reason: '布局里缺 $id');
+    }
+
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    for (final id in ['wg_m_prev', 'wg_m_next']) {
+      expect(kt.contains('R.id.$id'), true, reason: '渲染器没有往 $id 上挂东西');
+    }
+
+    // action：**字面量只许出现在接收端**（它是这条广播的线上格式，值钉在下面），
+    // 发送端必须引用那个常量。
+    //
+    // 别改成「两边各写字面量再比对」：实现上发送端引用的是同一个 `const val`，
+    // 编译器管得着这种引用 —— 唯一会静默失效的写法是**有人在渲染器里手抄一遍字符串**，
+    // 所以这里钉的正是「它是引用、不是手抄」。
+    final rx = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRefreshReceiver.kt');
+    expect(rx.contains('WIDGET_MONTH_STEP'), true, reason: '接收端没有处理翻月 action');
+    expect(rx.contains('com.daoban.shiftassistantpro.WIDGET_MONTH_STEP'), true,
+        reason: 'action 的线上值不许悄悄改');
+    expect(kt.contains('WidgetRefreshReceiver.ACTION_MONTH_STEP'), true,
+        reason: '渲染器必须引用接收端那个常量，不许把 action 字符串再手抄一遍');
+
+    // requestCode：新基数必须落在既有广播池占用**之上**。已知占用（AGENTS 的
+    // 「requestCode 池」那条）：班次闹钟 0..400、自定义闹钟 10000..11000、
+    // 待办提醒 20000..39999、重复待办 40000..41999、选铃声 40071、刷新闹钟 40081。
+    final m = RegExp(r'WIDGET_MONTH_REQ_BASE\s*=\s*([\d_]+)').firstMatch(kt);
+    expect(m, isNotNull, reason: 'WidgetRenderer.kt 里找不到 WIDGET_MONTH_REQ_BASE');
+    final base = int.parse(m!.group(1)!.replaceAll('_', ''));
+    expect(base, greaterThan(42000),
+        reason: '基数 $base 落在既有广播池的号段里 —— 撞号的症状是「点这张卡的箭头、'
+            '那张卡翻页」（Intent.filterEquals 不比 extras）');
+    expect(RegExp(r'WIDGET_MONTH_REQ_BASE\s*\+\s*widgetId\s*\*\s*\d+\s*\+')
+            .hasMatch(kt), true,
+        reason: '编号必须逐实例、逐方向展开（形如 BASE + widgetId * 步长 + 方向），'
+            '两个实例共用一个 requestCode 就会互相翻页');
+  });
 }

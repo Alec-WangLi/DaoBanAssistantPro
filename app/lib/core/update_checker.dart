@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// 更新信息：版本号 + 下载直链 + 是否测试版（预发布）+ APK 资源文件名。
@@ -35,128 +36,154 @@ class UpdateCheckResult {
 
 /// 检查 GitHub 上的最新正式版（0.X.0）与最新测试版（预发布）。
 ///
-/// 仓库为公开，无需鉴权。优先拉取 `/releases` 全列表（未认证限 60 次/小时/IP）；
-/// 若 API 失败（共享 IP 命中限流 403 / 网络异常），回退到仓库内 `latest.json`
-/// 发布清单（`raw.githubusercontent.com` 静态直读，不受 API 限额）。
-/// 按语义版本号自己算出两个「最新」，不依赖 latest 标志（避免缓存/滞后）。
+/// 仓库为公开，无需鉴权。**主通道是仓库根目录的 `latest.json` 发布清单**
+/// （`raw.githubusercontent.com` 静态直读，不占任何限额，且由
+/// `scripts/release.ps1` 每次发版后自动同步到 main）；GitHub API 只作兜底。
+///
+/// 为什么不是 API 优先：未认证的 `/releases` 限 60 次/小时/IP，共享出口很容易
+/// 耗尽（实测常年 403），拿它当主通道等于大部分时间都在走回退。反过来之后，
+/// 两条通道还留在**不同的域名**上 —— 只被墙了一个的网络也是有的，都留着才兜得住。
 class UpdateChecker {
   UpdateChecker._();
 
   static const _owner = 'Alec-WangLi';
   static const _repo = 'DaoBanAssistantPro';
+  static const _timeout = Duration(seconds: 8);
 
-  /// 检查最新版本：优先 GitHub API，失败（限流/网络异常）时回退到发布清单。
+  static final _manifestUri = Uri.parse(
+      'https://raw.githubusercontent.com/$_owner/$_repo/main/latest.json');
+  static final _releasesUri = Uri.parse(
+      'https://api.github.com/repos/$_owner/$_repo/releases?per_page=100');
+
+  /// 取数的接缝：测试换成假的就能完全脱离网络。返回 null 表示网络异常。
+  @visibleForTesting
+  static Future<({int status, String body})?> Function(
+      Uri uri, Duration timeout) fetch = _httpGetText;
+
+  /// 检查最新版本：先读发布清单，不通或内容坏了再走 GitHub API。
   static Future<UpdateCheckResult> checkUpdates() async {
-    final viaApi = await _checkViaApi();
-    if (!viaApi.error) return viaApi;
-    return _checkViaManifest();
+    final viaManifest = await _checkViaManifest();
+    if (!viaManifest.error) return viaManifest;
+    return _checkViaApi();
   }
 
-  /// 主通道：拉取所有 Release，算出最新正式版（非预发布）与最新测试版（预发布）。
-  static Future<UpdateCheckResult> _checkViaApi() async {
-    final uri = Uri.parse(
-        'https://api.github.com/repos/$_owner/$_repo/releases?per_page=100');
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+  /// 主通道：读发布清单。
+  static Future<UpdateCheckResult> _checkViaManifest() async {
+    final body = await _fetchBody(_manifestUri);
+    if (body == null) return const UpdateCheckResult(error: true);
     try {
-      final req = await client.getUrl(uri);
-      req.headers
-        ..set(HttpHeaders.userAgentHeader, 'DaoBanAssistantPro')
-        ..set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
-      final res = await req.close();
-      final body = await res.transform(utf8.decoder).join();
-      if (res.statusCode != 200) {
-        return const UpdateCheckResult(error: true);
-      }
-      final list = jsonDecode(body) as List<dynamic>;
-      UpdateInfo? stable;
-      UpdateInfo? prerelease;
-      for (final item in list) {
-        final m = item as Map<String, dynamic>;
-        if (m['draft'] == true) continue;
-        final tag = (m['tag_name'] as String?) ?? '';
-        final version = tag.startsWith('v') ? tag.substring(1) : tag;
-        if (version.isEmpty) continue;
-        final isPre = m['prerelease'] == true;
-        final (url, assetName) = _apkAsset(m);
-        final info = UpdateInfo(
-          version: version,
-          url: url,
-          isPrerelease: isPre,
-          assetName: assetName,
-        );
-        if (isPre) {
-          if (prerelease == null ||
-              compareVersion(version, prerelease.version) > 0) {
-            prerelease = info;
-          }
-        } else {
-          if (stable == null || compareVersion(version, stable.version) > 0) {
-            stable = info;
-          }
-        }
-      }
-      return UpdateCheckResult(
-        latestStable: stable,
-        latestPrerelease: prerelease,
-      );
+      return parseManifest(body);
     } catch (_) {
       return const UpdateCheckResult(error: true);
-    } finally {
-      client.close(force: true);
     }
   }
 
-  /// 兜底通道：读取仓库根目录 `latest.json` 发布清单
-  ///（`raw.githubusercontent.com` 静态直读，不占 GitHub API 限额）。
-  static Future<UpdateCheckResult> _checkViaManifest() async {
-    final uri = Uri.parse(
-        'https://raw.githubusercontent.com/$_owner/$_repo/main/latest.json');
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+  /// 兜底通道：拉取所有 Release。
+  static Future<UpdateCheckResult> _checkViaApi() async {
+    final body = await _fetchBody(_releasesUri);
+    if (body == null) return const UpdateCheckResult(error: true);
+    try {
+      return parseReleases(body);
+    } catch (_) {
+      return const UpdateCheckResult(error: true);
+    }
+  }
+
+  /// 取 [uri] 的正文；网络异常、非 200 或取回途中出错都返回 null。
+  static Future<String?> _fetchBody(Uri uri) async {
+    ({int status, String body})? res;
+    try {
+      res = await fetch(uri, _timeout);
+    } catch (_) {
+      return null;
+    }
+    if (res == null || res.status != HttpStatus.ok) return null;
+    return res.body;
+  }
+
+  /// 真实取数：GET [uri]，返回状态码与正文。
+  ///
+  /// 两个通道共用这一个函数，因此不设通道专属请求头 —— 发往
+  /// `raw.githubusercontent.com` 的请求头越干净越不容易被挡。
+  static Future<({int status, String body})?> _httpGetText(
+      Uri uri, Duration timeout) async {
+    final client = HttpClient()..connectionTimeout = timeout;
     try {
       final req = await client.getUrl(uri);
       req.headers.set(HttpHeaders.userAgentHeader, 'DaoBanAssistantPro');
       final res = await req.close();
       final body = await res.transform(utf8.decoder).join();
-      if (res.statusCode != 200) return const UpdateCheckResult(error: true);
-      final m = jsonDecode(body) as Map<String, dynamic>;
-
-      UpdateInfo? stable;
-      final s = m['stable'];
-      if (s is Map<String, dynamic>) {
-        final v = (s['version'] as String?) ?? '';
-        if (v.isNotEmpty) {
-          stable = UpdateInfo(
-            version: v,
-            url: (s['url'] as String?) ?? '',
-            isPrerelease: false,
-            assetName: _manifestAsset(s),
-          );
-        }
-      }
-
-      UpdateInfo? prerelease;
-      final p = m['prerelease'];
-      if (p is Map<String, dynamic>) {
-        final v = (p['version'] as String?) ?? '';
-        if (v.isNotEmpty) {
-          prerelease = UpdateInfo(
-            version: v,
-            url: (p['url'] as String?) ?? '',
-            isPrerelease: true,
-            assetName: _manifestAsset(p),
-          );
-        }
-      }
-
-      return UpdateCheckResult(
-        latestStable: stable,
-        latestPrerelease: prerelease,
-      );
+      return (status: res.statusCode, body: body);
     } catch (_) {
-      return const UpdateCheckResult(error: true);
+      return null;
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// 解析发布清单：`stable` / `prerelease` 两个节点各取版本号、直链与资产名。
+  ///
+  /// 通道身份由**它在哪个键下面**决定，不看节点里的 `prerelease` 字段。
+  /// 节点缺失或版本号为空一律当「该通道暂无」，不算错误 —— 清单是发布脚本
+  /// 写的，取不到内容才是错误。
+  @visibleForTesting
+  static UpdateCheckResult parseManifest(String body) {
+    final m = jsonDecode(body) as Map<String, dynamic>;
+    return UpdateCheckResult(
+      latestStable: _manifestChannel(m['stable'], prerelease: false),
+      latestPrerelease: _manifestChannel(m['prerelease'], prerelease: true),
+    );
+  }
+
+  static UpdateInfo? _manifestChannel(Object? node,
+      {required bool prerelease}) {
+    if (node is! Map<String, dynamic>) return null;
+    final v = (node['version'] as String?) ?? '';
+    if (v.isEmpty) return null;
+    return UpdateInfo(
+      version: v,
+      url: (node['url'] as String?) ?? '',
+      isPrerelease: prerelease,
+      assetName: _manifestAsset(node),
+    );
+  }
+
+  /// 解析 `/releases` 列表：跳过草稿，按语义版本号自己算出两个「最新」，
+  /// 不依赖 latest 标志（避免缓存/滞后）。
+  @visibleForTesting
+  static UpdateCheckResult parseReleases(String body) {
+    final list = jsonDecode(body) as List<dynamic>;
+    UpdateInfo? stable;
+    UpdateInfo? prerelease;
+    for (final item in list) {
+      final m = item as Map<String, dynamic>;
+      if (m['draft'] == true) continue;
+      final tag = (m['tag_name'] as String?) ?? '';
+      final version = tag.startsWith('v') ? tag.substring(1) : tag;
+      if (version.isEmpty) continue;
+      final isPre = m['prerelease'] == true;
+      final (url, assetName) = _apkAsset(m);
+      final info = UpdateInfo(
+        version: version,
+        url: url,
+        isPrerelease: isPre,
+        assetName: assetName,
+      );
+      if (isPre) {
+        if (prerelease == null ||
+            compareVersion(version, prerelease.version) > 0) {
+          prerelease = info;
+        }
+      } else {
+        if (stable == null || compareVersion(version, stable.version) > 0) {
+          stable = info;
+        }
+      }
+    }
+    return UpdateCheckResult(
+      latestStable: stable,
+      latestPrerelease: prerelease,
+    );
   }
 
   /// 从清单节点取 APK 资产名（非空字符串才返回）。

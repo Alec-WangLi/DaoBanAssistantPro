@@ -15,6 +15,7 @@ import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/glass_weekday_picker.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
@@ -68,7 +69,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(activeScheduleProvider);
-    final schedule = async.valueOrNull?.toDomain();
+    // 「未来 30 天」按天解析 —— 30 天里跨时段边界比 60 天更常见，只画当前方案
+    // 就会出现「日历上换了、闹钟页没换」。
+    final chain = async.valueOrNull?.chain;
     final alarms =
         ref.watch(customAlarmsProvider).valueOrNull ?? const <CustomAlarm>[];
     final overrides = ref.watch(shiftAlarmOverridesProvider).valueOrNull ??
@@ -78,10 +81,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     final now = DateTime.now();
     final today = dateOnly(now);
     final shiftAlarms = <_ShiftAlarmEntry>[];
-    if (schedule != null) {
+    if (chain != null) {
       for (var i = 0; i < 30; i++) {
         final date = today.add(Duration(days: i));
-        final t = schedule.shiftOn(date);
+        final t = chain.shiftOn(date);
         if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
           continue;
         }
@@ -108,7 +111,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             ),
             const SizedBox(height: 12),
             _sectionTitleRow(context, L10n.upcoming30),
-            Expanded(child: _shiftAlarmSection(context, schedule, shiftAlarms)),
+            Expanded(child: _shiftAlarmSection(context, chain, shiftAlarms)),
             const SizedBox(height: 8),
             _sectionTitleRow(context, L10n.customAlarms),
             Expanded(child: _customAlarmSection(context, alarms)),
@@ -137,9 +140,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     );
   }
 
-  Widget _shiftAlarmSection(BuildContext context, ShiftSchedule? schedule,
+  Widget _shiftAlarmSection(BuildContext context, ShiftSource? chain,
       List<_ShiftAlarmEntry> shiftAlarms) {
-    if (schedule == null) {
+    if (chain == null) {
       return const Center(child: CircularProgressIndicator());
     }
     if (shiftAlarms.isEmpty) {
@@ -178,7 +181,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      // 这是页面上最下面那段列表，而底部按钮条**悬浮**在它上面：不留底部空白
+      // 的话最后一行会被压住（它的删除键点不到）。与待办页同一个常量。
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, kFloatingActionInset),
       physics: const BouncingScrollPhysics(),
       itemCount: alarms.length,
       itemBuilder: (context, i) => _alarmTile(context, alarms[i]),
@@ -383,8 +388,20 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     final isEdit = a != null;
     final now = TimeOfDay.now();
     var time = TimeOfDay(hour: a?.hour ?? now.hour, minute: a?.minute ?? now.minute);
-    var repeatType = a?.repeatType ?? 1; // 0=一次性 1=每天 2=每周
+    // 默认「一次性」：新建自定义闹钟里绝大多数就是「响这一次」，响过之后
+    // `deleteExpiredOnceAlarms` 会把它收走，不用用户自己回来删。编辑既有闹钟时
+    // 当然还是读存下来的那个值。
+    var repeatType = a?.repeatType ?? 0; // 0=一次性 1=每天 2=每周
+    // 用户选的日期，**保持原样不动**（新建时就是今天）。真正会响的那天由
+    // `_onceDate` 派生 —— 时间默认此刻、写「今天」的话那一刻已经过去了，这一条
+    // 既不会响也会被自动删掉（见 `nextOnceDate`）。
+    //
+    // 这里不能「改钟点时就把 `onceDate` 就地改写成结果」：默认值一顺延到明天，
+    // 用户再把钟点往前调回今天，就再也回不到今天了 —— 派生而不是回写，才不会
+    // 把默认值当成用户的选择。
     var onceDate = a?.onceDate ?? dateOnly(DateTime.now());
+    DateTime onceDateAt(int hour, int minute) => nextOnceDate(
+        now: DateTime.now(), chosen: onceDate, hour: hour, minute: minute);
     var weekdays = a?.weekdays ?? 0;
     if (repeatType == 2 && weekdays == 0) {
       weekdays = 1 << (DateTime.now().weekday - 1);
@@ -428,11 +445,14 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(L10n.date),
-                  trailing: Text(L10n.monthDay(onceDate)),
+                  // 这一行写的是**真正会响的那天**（`onceDateAt` 派生），不是用户
+                  // 选的那个原始日期 —— 两者只在「选的那天已经过去」时才不同。
+                  trailing: Text(
+                      L10n.monthDay(onceDateAt(time.hour, time.minute))),
                   onTap: () async {
                     final p = await showGlassDatePicker(
                       context,
-                      initialDate: onceDate,
+                      initialDate: onceDateAt(time.hour, time.minute),
                       firstDate: DateTime(2000),
                       lastDate: DateTime(2100),
                     );
@@ -440,57 +460,13 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                   },
                 ),
               if (repeatType == 2)
-                Wrap(
-                  spacing: AppTokens.gapIconText,
-                  children: List.generate(7, (i) {
-                    final bit = 1 << i;
-                    final selected = (weekdays & bit) != 0;
-                    final isDark =
-                        Theme.of(context).brightness == Brightness.dark;
-                    return GestureDetector(
-                      onTap: () => setState(() {
-                        if (selected) {
-                          weekdays &= ~bit;
-                        } else {
-                          weekdays |= bit;
-                        }
-                      }),
-                      child: AnimatedContainer(
-                        duration: AppTokens.durMed,
-                        curve: Curves.easeOutBack,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppTokens.spaceMd,
-                            vertical: AppTokens.spaceSm),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(AppTokens.radiusL),
-                          color: selected
-                              ? Theme.of(context).colorScheme.primary
-                              : (isDark
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : Colors.white.withValues(alpha: 0.72)),
-                          border: Border.all(
-                            color: selected
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.white.withValues(
-                                    alpha: isDark ? 0.16 : 0.65),
-                          ),
-                        ),
-                        child: Text(
-                          L10n.weekday(i),
-                          // 同上面的分段器：13 档取 w600 的 labelSecondary，
-                          // 选中加粗到 w700 由这里显式给出。
-                          style: AppTokens.labelSecondary.copyWith(
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: selected
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
+                // 与重复待办弹窗共用同一个控件（`core/widgets/glass_weekday_picker.dart`）：
+                // 那段配方原来内联在这里，抄第二份必然抄歪，而抄歪不会报错。
+                // **触觉也由那个控件自己发**（`Haptics.select()`，「选中变了」），
+                // 这里不许再补一记 —— 一次操作震两下比一下信息量更少。
+                GlassWeekdayPicker(
+                  value: weekdays,
+                  onChanged: (v) => setState(() => weekdays = v),
                 ),
             ],
           ),
@@ -510,13 +486,18 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                 // App 唯一那层路由 = 整屏纯黑（与待办那个 bug 同一形状）。
                 final close = dialogCloser(context);
                 final repo = ref.read(appRepositoryProvider);
+                // 一次性闹钟的日期在这里**再派生一次**：用户可能开着窗一直没动，
+                // 那个钟点已经过去了。写库的必须是「下一次出现」，否则这一条不会
+                // 响、还会被 `deleteExpiredOnceAlarms` 收走。
+                final onceAt =
+                    repeatType == 0 ? onceDateAt(time.hour, time.minute) : null;
                 if (isEdit) {
                   await repo.updateCustomAlarm(
                     a,
                     hour: time.hour,
                     minute: time.minute,
                     repeatType: repeatType,
-                    onceDate: repeatType == 0 ? onceDate : null,
+                    onceDate: onceAt,
                     weekdays: repeatType == 2 ? weekdays : 0,
                   );
                 } else {
@@ -524,7 +505,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                     hour: time.hour,
                     minute: time.minute,
                     repeatType: repeatType,
-                    onceDate: repeatType == 0 ? onceDate : null,
+                    onceDate: onceAt,
                     weekdays: repeatType == 2 ? weekdays : 0,
                   );
                 }

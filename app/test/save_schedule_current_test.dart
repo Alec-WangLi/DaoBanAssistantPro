@@ -63,7 +63,7 @@ void main() {
     // 真正的用户可见症状：watchActiveSchedule 不抛错，且仍指向原来的 A。
     final active = await db.watchActiveSchedule().first;
     expect(active, isNotNull);
-    expect(active!.schedule.id, a.id,
+    expect(active!.currentScheduleId, a.id,
         reason: 'makeCurrent:false 不该把新方案 B 变成当前方案');
   });
 
@@ -79,6 +79,6 @@ void main() {
     expect(current.single.id, isNot(a.id));
 
     final active = await db.watchActiveSchedule().first;
-    expect(active!.schedule.id, bId);
+    expect(active!.currentScheduleId, bId);
   });
 }

@@ -33,6 +33,7 @@ import 'package:flutter/material.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../domain/lunar_info.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 
 /// 卡片**内部**的垂直固定开销：上下内边距 `spaceLg`×2 + 描边 1×2（[GlassTile]
@@ -66,6 +67,38 @@ const double _shiftDot = 12;
 const double _otherCrewsLabelGap = 8;
 const double _otherCrewsLabelTop = AppTokens.spaceXs; // 4
 
+/// 底栏信息卡高度的测算结果。
+///
+/// [outerHeight] 是卡片**外框**高度（竖屏 / 短屏非紧凑形态）。[dayContentHeights]
+/// 是本月的逐日内容高度（下标 0 = 1 号，不含卡片内边距与描边），给「这一天还剩多少
+/// 富余」用 —— 卡片里那行「本月统计」就靠它决定画不画（见 [slackOn]）。
+class InfoCardMetrics {
+  const InfoCardMetrics({
+    required this.outerHeight,
+    required this.dayContentHeights,
+  });
+
+  final double outerHeight;
+  final List<double> dayContentHeights;
+
+  /// 卡片**内容区**高度：外框减去上下内边距与描边（与渲染侧同源，见 [_cardChromeV]）。
+  double get innerHeight => outerHeight - _cardChromeV;
+
+  /// [dayOfMonth]（1 起）那天的内容装进卡片之后还剩多少垂直富余。
+  ///
+  /// 这是**卡片高度一个像素都不用动**就能把空白用起来的全部秘密：高度按月定死，
+  /// 富余只有多少之分，没有「卡片跟着当天长」这回事（那会把网格带得一起抖）。
+  ///
+  /// 富余可能为负 —— 逐日用的是**按月闸门**算出来的高度（日期行给「待办徽章」、
+  /// 班次行给「已调整」胶囊各留了一份，见 [measureBottomInfoCardHeight]），它 ≥
+  /// 那天实际渲染出来的高度。也就是说这里偏保守：宁可少画一次，也不裁字。
+  double slackOn(int dayOfMonth) {
+    final i = dayOfMonth - 1;
+    if (i < 0 || i >= dayContentHeights.length) return 0;
+    return innerHeight - dayContentHeights[i];
+  }
+}
+
 /// 底栏信息卡的外框高度（竖屏 / 短屏非紧凑形态）。
 ///
 /// [cardOuterWidth] 是卡片**外框**宽度（还没扣内边距与描边）。[month] 只用到
@@ -75,12 +108,21 @@ const double _otherCrewsLabelTop = AppTokens.spaceXs; // 4
 /// 高度预留（见 [_todoHintH]）。按月而不是按天：按天算的话，点一天卡片高度就
 /// 变一次，上面的网格跟着抖 —— 那正是这个文件要消灭的东西。
 ///
-/// [hasOverrideHint] 同理，管的是班次行尾巴上那颗「已调整」胶囊（见
+/// [hasOverrideHint] 同理，管的是班次行尾巴上那颗「已调班」胶囊（见
 /// [_adjustedBadgeH]）：这个月里有被按天调整过的日子才要预留。也按月。
-double measureBottomInfoCardHeight({
+///
+/// [chain] 而不是 `ShiftSchedule`：跨时段的一个月里，「其他班组」那一行有没有、
+/// 有几行，取决于**那天归哪套方案**（组数不同、色块折的行数也不同）—— 所以它跟着
+/// 逐日循环一起算，不是循环外量一次的固定项。
+///
+/// **高度是「逐日取大」的结果，不是把各项的月内最大值相加。** 后者会把「A 天有
+/// 节假日徽章」「B 天色块折三行」「C 天的农历描述两行」叠成一天的高度，而一个月里
+/// 没有哪天真需要那么高 —— 多出来的部分白占网格。逐日算这一天自己的总和、再取
+/// 最大，才是这个月实际需要的高度。代价只有一个：换月时高度可能变一次。
+InfoCardMetrics measureBottomInfoCardHeight({
   required BuildContext context,
   required double cardOuterWidth,
-  required ShiftSchedule? schedule,
+  required ScheduleChain? chain,
   required DateTime month,
   required bool hasTodoHint,
   required bool hasOverrideHint,
@@ -120,15 +162,10 @@ double measureBottomInfoCardHeight({
     maxLines: 1,
     maxWidth: contentW,
   ).height;
-  // 没有班次的日子走另外两种文案，都可能比班次行矮，取大兜住。
+  // 没有班表在管的日子走另一句文案（「这段时间没有排班」），比班次行矮。
   final noShiftH = measure.text(
     L10n.noSchedule,
     AppTokens.rowSecondary,
-    maxWidth: contentW,
-  ).height;
-  final blankH = measure.text(
-    L10n.rest,
-    AppTokens.labelStrong,
     maxWidth: contentW,
   ).height;
   // 「已调整」胶囊也塞在**这一行**里（班次行尾巴上），就不新占一行。它是这一行
@@ -138,72 +175,145 @@ double measureBottomInfoCardHeight({
   // 就是最高件，而本仓库测试字体走的 Material
   // 行高 1.43（≈ 22.9）反而比它高 —— 界面侧因此看不见差别，那一步由
   // `calendar_screen_test.dart` 里直接量模型的用例钉住。
-  final shiftRowH = [
-    shiftLineH,
-    noShiftH,
-    blankH,
-    _shiftDot,
-    if (hasOverrideHint) _adjustedBadgeH(measure),
-  ].reduce((a, b) => a > b ? a : b);
+  //
+  // ⚠️ **这一行的高度不能一次算好**（v0.9.16 改的）：那一支有三种可能，而
+  // **空白表（跟随法定节假日）那种什么都不写** —— 给它按班次行预留的话，卡片底下
+  // 会白空出约 40dp（用户 2026-09-30 定的口径：「它本质上就是一张日历」）。
+  // 三种可能逐日不同（跨时段的月份里，同一个月既有空白表的日子、也有正常日子），
+  // 所以它和「其他班组」一样进逐日循环。
 
-  final showChips = schedule != null && schedule.teamCount > 1;
+  // 「其他班组」那一行（标签 + 色块）的高度**不能在这里一次算好**：跨方案的月份里，
+  // 有的天归 6 个班组的那套、有的天归 1 个班组的那套 —— 只有归多班组那套的日子才有
+  // 这一行。所以它与「那天归哪套」一起放进逐日循环里量（spec §7）。
+  //
+  // 标签不折行、色块行高也固定，两者与**哪天**无关，只与「那天归哪套」有关 ——
+  // 重复量同一个方案的代价可以忽略（一个月最多两种）。
 
-  // ── 逐日取大：节假日徽章、农历行数、色块折行数 ──
-  var badgeH = 0.0;
-  var lunarH = 0.0;
-  var chipsH = 0.0;
-
-  // 「其他班组」那一行是 `Row[标签, 色块]`，高度取两者的大者。标签不折行，
-  // 它那份是定值，先算好。
-  final otherCrewsLabelH = showChips
-      ? measure
-              .text(L10n.otherCrews, AppTokens.microText)
-              .height +
-          _otherCrewsLabelTop
-      : 0.0;
-  final chipLineH = showChips ? _chipLineH(measure) : 0.0;
-
+  // ── 逐日取大：把**这一天自己**的各项加起来，最后取月内最大的那天 ──
   final days = DateTime(month.year, month.month + 1, 0).day;
+  final dayContentHeights = <double>[];
+  var maxDayContent = 0.0;
+
   for (var d = 1; d <= days; d++) {
     final date = DateTime(month.year, month.month, d);
     final lunar = lunarOf(date);
 
+    // 这一天自己的节假日徽章高度（不是这个月里最高的那个徽章）。图标 16 + 小字
+    // 「法定节假日」12 + 大字节日名 14，外加 3×2 内边距与 1×2 描边。
+    var badgeH = 0.0;
     if (lunar.isLegalHoliday) {
-      // 徽章：图标 16 + 小字「法定节假日」12 + 大字节日名 14，外加 3×2 内边距
-      // 与 1×2 描边。两个字号不同的 span 并排，行高由大的那档决定。
-      final textH = measure.rich(
-        [
-          TextSpan(text: L10n.legalHoliday, style: AppTokens.microLabel),
-          TextSpan(text: lunar.legalHolidayName, style: AppTokens.labelStrong),
-        ],
-        maxLines: 1,
-        maxWidth: contentW,
-      ).height;
-      final h = textH + _chipPadV * 2 + _chipBorder * 2;
-      if (h > badgeH) badgeH = h;
+      final textH = measure
+          .rich(
+            [
+              TextSpan(text: L10n.legalHoliday, style: AppTokens.microLabel),
+              TextSpan(text: lunar.legalHolidayName, style: AppTokens.labelStrong),
+            ],
+            maxLines: 1,
+            maxWidth: contentW,
+          )
+          .height;
+      badgeH = textH + _chipPadV * 2 + _chipBorder * 2;
     }
 
-    final lh = measure.text(
+    final lunarH = measure.text(
       lunar.fullDescription,
       AppTokens.rowSecondary,
       maxLines: 2,
       maxWidth: contentW,
     ).height;
-    if (lh > lunarH) lunarH = lh;
 
+    // 那天归哪套方案 —— 「其他班组」有没有、有几行，都跟着它走。
+    final daySchedule = chain?.scheduleOn(date);
+    final showChips = daySchedule != null && daySchedule.teamCount > 1;
+
+    var chipsH = 0.0;
     if (showChips) {
-      final rows = _chipRows(measure, contentW, schedule, date);
-      final h = math.max(
-          otherCrewsLabelH, rows * chipLineH + (rows - 1) * _chipGapY);
-      if (h > chipsH) chipsH = h;
+      final labelH = measure
+              .text(L10n.otherCrews, AppTokens.microText)
+              .height +
+          _otherCrewsLabelTop;
+      final lineH = _chipLineH(measure);
+      final rows = _chipRows(measure, contentW, daySchedule, date);
+      chipsH = math.max(labelH, rows * lineH + (rows - 1) * _chipGapY);
     }
+
+    // 那一行到底占多少 —— 三种情况各不相同，别退回「一次性算好的常量」：
+    //   · 那天有班次 → 班次行（有覆盖时还挂着「已调班」胶囊）；
+    //   · 那天**有班表在管、只是没有班次定义**（空白表）→ **0**，那一支什么都不写；
+    //   · 那天没有任何班表在管 → 「这段时间没有排班」那一句。
+    // 间距照给：渲染那边那根 `SizedBox(height: spaceMd)` 是无条件的（见
+    // `calendar_screen.dart` 的 `_infoCard`），少了它卡片会矮一截、内容顶出定高。
+    final dayShift = chain?.shiftOn(date);
+    final rowH = dayShift != null
+        ? [
+            shiftLineH,
+            _shiftDot,
+            if (hasOverrideHint) _adjustedBadgeH(measure),
+          ].reduce((a, b) => a > b ? a : b)
+        : (daySchedule == null ? noShiftH : 0.0);
+
+    var dayContent =
+        dateH + _gapAfterDate + lunarH + _gapBetweenSections + rowH;
+    if (badgeH > 0) dayContent += badgeH + _gapAfterBadge;
+    if (showChips) dayContent += _gapBetweenSections + chipsH;
+
+    dayContentHeights.add(dayContent);
+    if (dayContent > maxDayContent) maxDayContent = dayContent;
   }
 
-  var content = dateH + _gapAfterDate + lunarH + _gapBetweenSections + shiftRowH;
-  if (badgeH > 0) content += badgeH + _gapAfterBadge;
-  if (showChips) content += _gapBetweenSections + chipsH;
+  return InfoCardMetrics(
+    outerHeight: maxDayContent + _cardChromeV,
+    dayContentHeights: dayContentHeights,
+  );
+}
 
-  return content + _cardChromeV;
+/// 卡片底部那行「本月统计」，[dayOfMonth] 这天到底画不画。
+///
+/// 比的是**这天的富余**（[InfoCardMetrics.slackOn]）：卡片高度按月定死，富余就是
+/// 那截空白 —— 够就把这截空白用起来，不够就不画。**永远不为这一行去动卡片高度**，
+/// 否则卡片一长，上面六个格子就一起矮（那正是这个文件要消灭的东西）。
+///
+/// [metrics] 为 null 表示右栏 / 横屏那张卡：那种形态下高度跟着内容走，没有「装不下」
+/// 这回事，所以恒为 true。
+///
+/// 判定里留 1dp 容差：量高的取整与渲染的取整不是同一条路，差一两个 dp 就翻脸的话，
+/// 这行会时有时无地闪。宁可退一步不画，也不让它压到内容上。
+bool infoCardTallyFits({
+  required BuildContext context,
+  required InfoCardMetrics? metrics,
+  required String tally,
+  required double cardOuterWidth,
+  required int dayOfMonth,
+}) {
+  if (metrics == null) return true;
+  final h = _measureLine(
+    context: context,
+    text: tally,
+    // 与渲染那一行同一套样式（`_infoCard` 里的 `microText`）。
+    style: AppTokens.microText,
+    maxWidth: cardOuterWidth - _cardChromeH,
+  ).height;
+  return metrics.slackOn(dayOfMonth) >= h + AppTokens.spaceSm + 1;
+}
+
+/// 量卡片内**一段文字**排出来要多高、多宽（给上面那个判定用）。
+///
+/// 与卡片里其它文字走同一套 `DefaultTextStyle` 合并与 `TextScaler`，所以系统字号
+/// 放大后量出来的跟着涨、判定跟着收紧。`maxLines: 2` 与渲染侧一致 —— 班次多、简称
+/// 长的排班会折两行，折行的高度要照量。
+Size _measureLine({
+  required BuildContext context,
+  required String text,
+  required TextStyle style,
+  required double maxWidth,
+  int maxLines = 2,
+}) {
+  final measure = _Measure(
+    def: DefaultTextStyle.of(context),
+    scaler: MediaQuery.textScalerOf(context),
+  );
+  final p = measure.text(text, style, maxLines: maxLines, maxWidth: maxWidth);
+  return Size(p.width, p.height);
 }
 
 /// 单个色块的高度（`Wrap` 里一行的高度）。

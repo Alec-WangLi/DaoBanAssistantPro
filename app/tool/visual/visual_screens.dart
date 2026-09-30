@@ -4,6 +4,7 @@
 // 两边各写一份清单的话，迟早会有一边漏掉某屏，而漏掉是不会报错的。
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
@@ -14,7 +15,9 @@ import 'package:shiftassistantpro/features/calendar/schedule_management_screen.d
 import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
+import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
 import 'visual_harness.dart';
@@ -65,6 +68,28 @@ final List<VisualScreen> visualScreens = [
     slug: '05_todos',
     title: '待办事项',
     build: (db) async => const ScheduleScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「今天有一条重复待办」的待办页：循环标记、标题旁的「重复待办」入口、
+    // 以及已完成的历史那一条（带删除线）都在这屏。
+    slug: '24_todos_recurring',
+    title: '待办 · 含重复项',
+    build: (db) async {
+      await seedRecurringTodo(db);
+      return const ScheduleScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 管理面板是**弹层**（命令式、没有可渲染的 widget），要一层薄壳把它弹出来
+    // —— 与「开始使用」「使用帮助」那两张同一套路。
+    slug: '25_recurring_panel',
+    title: '重复待办 · 管理面板',
+    build: (db) async {
+      await seedRecurringTodo(db);
+      return const _DialogHost(showRecurringTodosDialog);
+    },
     needsOnboardingPrefs: false,
   ),
   (
@@ -214,7 +239,131 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 首启弹的那份（三条），与「我的 → 使用帮助」那份完整说明是**两套内容** ——
+    // 2026-09-23 之前首启弹的是后者，等于把说明书当欢迎页。
+    slug: '17_getting_started',
+    title: '开始使用（首启）',
+    build: (db) async => const _DialogHost(showGettingStartedDialog),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 完整说明。正文从「一整段」改成了「短句 + 圆点」，是最容易在版式上跑偏的
+    // 一处 —— 圆点的对齐、英文条目折行后的缩进，只有看图才知道对不对。
+    slug: '18_usage_guide',
+    title: '使用帮助',
+    build: (db) async => const _DialogHost(showUsageGuideDialog),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // **版本更新**（更新日志）。它是全 app 内容最长的弹窗（十条版本说明），
+    // 也一直是「动作行压在正文上」那条毛病的**最坏样本** —— 而它此前
+    // **从没进过屏单**：2026-10-01 用户报「它底下有个类似蒙版的东西挡住了正文」，
+    // 单测只看得出几何，看不出「正文被齐刷刷切断」有多难看。这一条补上那只眼睛。
+    slug: '34_app_info',
+    title: '版本更新（更新日志）',
+    build: (db) async => const _DialogHost(showChangelogDialog),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「我的 → 桌面」那一行的说明弹层（v0.9.20 新增）。与《使用帮助》里那条
+    // **共用同一份文案**，但它单独有个入口，所以也要单独看一眼。
+    slug: '35_widget_guide',
+    title: '桌面小组件说明',
+    build: (db) async => const _DialogHost(showWidgetGuideDialog),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 多排班表按日期衔接：种子给第二套方案一个时段、边界落在**本月 15 日** ——
+    // 于是同一张图上左半月的格子画第一套、右半月的画第二套。这一屏是检验
+    // 「按天解析」的唯一一只眼睛（单测只看得到断言，看不到「两半张得一样」）。
+    slug: '27_calendar_chained',
+    title: '日历 · 排班衔接',
+    build: (db) async {
+      await seedScheduleChain(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 排班时段那一节：**其余时间 + 两段**，三种日期说法各出现一次
+    //（「其余时间」/「9月15日 ～ 9月30日」/「10月1日 起」），下面接现有的排班表
+    // 列表 —— 一页看完「有哪些班表 + 它们怎么排」，正是这一节并进管理页的理由。
+    slug: '30_management_timeline',
+    title: '排班管理 · 排班时段',
+    build: (db) async {
+      await seedScheduleChain(db);
+      return const ScheduleManagementScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 整月一天班都没有（其余时间设成「无」、又没有段）—— 网格上叠一句指路。
+    // 这一屏要看的是：那句指路盖在网格上居中、不压顶栏与信息卡、两层文字不打
+    // 架，而且网格的日期与农历仍然看得见（它只是叠了一层说明，不是替换）。
+    slug: '31_calendar_no_schedule',
+    title: '日历 · 这段时间没有排班',
+    build: (db) async {
+      await seedNoScheduleAtAll(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 只有一套「法定班次」（跟随法定节假日）：整月每天都画得出「上班 / 休息」，
+    // **不盖指路**（指路只留给真的没有班表的那种）。
+    //
+    // 这一屏要看的是：那两个字压在 40dp 的格子里放不放得下、上班与休息的颜色
+    // 分不分得开、法定节假日那几天红色标记还看不看得见、以及整月一片「上班」
+    // 会不会太吵。2026-09-30 用户反馈的那一整类问题（这种班表被当成「没有排班」）
+    // 此前**没有任何一屏拍得出来**。
+    slug: '32_calendar_blank_schedule',
+    title: '日历 · 法定班次（跟随法定节假日）',
+    build: (db) async {
+      await seedBlankSchedule(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 时段弹层（「添加时段」/ 编辑某一段）。
+    //
+    // **此前没进过屏单** —— 所以「里面那三个标签比同一页打开它的那行还小一档」
+    // 一路没人看见，直到用户 2026-10-01 说「字体是不是好像有点小了」。这条按
+    // 「新界面一律补进屏单」那条规矩补上：弹层是命令式的、没有可渲染 widget，
+    // 得包一层薄壳把它弹出来。
+    slug: '33_span_editor',
+    title: '排班管理 · 时段弹层',
+    build: (db) async => const _SpanEditorHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
+
+/// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 与 `_DialogHost` 同一个套路，差别只在它是 `ConsumerStatefulWidget`：
+/// `showSpanEditor` 要一个 `WidgetRef`。
+class _SpanEditorHost extends ConsumerStatefulWidget {
+  const _SpanEditorHost();
+
+  @override
+  ConsumerState<_SpanEditorHost> createState() => _SpanEditorHostState();
+}
+
+class _SpanEditorHostState extends ConsumerState<_SpanEditorHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showDialog` 要用 `context` 的 `Overlay`。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showSpanEditor(context, ref);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。
 ///
@@ -257,6 +406,37 @@ class _OverridePickerHostState extends State<_OverridePickerHost> {
         currentClass: widget.currentClass,
         canRestore: widget.canRestore,
       );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 命令式弹窗的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 「开始使用」「使用帮助」都是 `showXxxDialog(context)` 这种命令式 API：调一下
+/// 就弹、返回一个 Future，没有可以放进 `home:` 的 widget。这层薄壳在首帧后把它
+/// 弹出来，`build` 只交一个空 `Scaffold` 让弹窗浮在上面（与 `_OverridePickerHost`
+/// 同一套路）。
+class _DialogHost extends StatefulWidget {
+  const _DialogHost(this.show);
+
+  final void Function(BuildContext context) show;
+
+  @override
+  State<_DialogHost> createState() => _DialogHostState();
+}
+
+class _DialogHostState extends State<_DialogHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showDialog` 要用 `context` 的 `Overlay`，而 `initState` 里
+    // context 还没挂进树。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.show(context);
     });
   }
 

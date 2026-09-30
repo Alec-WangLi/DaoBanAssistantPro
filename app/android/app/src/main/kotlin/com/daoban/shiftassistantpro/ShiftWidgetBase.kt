@@ -42,6 +42,10 @@ abstract class ShiftWidgetBase : AppWidgetProvider() {
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        // 先清掉这几个实例的月份锚点：widgetId 会被系统复用，留着就是「新卡片一上来
+        // 停在上一张卡翻到的月份」——静默失效，界面上看不出是哪儿错了。
+        WidgetStore.clearMonthAnchors(context, appWidgetIds)
+
         // 最后一个实例（跨三张卡一起数）被删掉时才取消刷新闹钟 —— 否则桌面上一个
         // 小组件都没有了，它还会一天一次地把自己排回来，永远。
         //

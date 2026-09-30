@@ -6,6 +6,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 
 import '../../core/l10n.dart';
 import '../../data/app_repository.dart';
+import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart';
 import '../widget/widget_service.dart';
 
@@ -109,8 +110,18 @@ DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
 /// 的话，每个午夜班的闹钟都会换号。**「序号」是闹钟在 `shift.alarms` 里的下标**：
 /// 用户在编辑页里调整顺序会让闹钟换号（可接受 —— 编辑之后必然重排、`cancelAll`
 /// 先跑），但**重排本身绝不能重新编号**，否则每次打开 App 都换一批。
+///
+/// 入参是 [ShiftSource] 而不是 `ShiftSchedule`：**「按天衔接」之后，某天归哪套方案
+/// 是那条链自己知道的事**，而这里本来就逐天问一次「今天什么班」—— 换一个源进来
+/// 即可，函数体一个字不用改（除了这一处 `source.shiftOn`）。原生的 id 算式因此
+/// 天生安全：**同一天只归一套方案**，`offset` 相同的两天不可能同时存在。
+///
+/// 一条容易被误报成 bug 的语义：跨时段边界时，落在**前一天**的那条闹钟会排到
+/// 「前一天所属那套方案」的日子里 —— 那是**对的**，闹钟属于那个班次、不属于
+/// 触发日。落哪天由 [shiftAlarmFireAt] 里**班次自己的日期**决定，与「那天归哪套」
+/// 无关，别把它「修」成按触发日解析。
 List<ShiftAlarmPlan> planShiftAlarms(
-  ShiftSchedule schedule, {
+  ShiftSource source, {
   required DateTime from,
   required int days,
   Map<int, bool> overrides = const {},
@@ -119,7 +130,7 @@ List<ShiftAlarmPlan> planShiftAlarms(
   final plans = <ShiftAlarmPlan>[];
   for (var d = 0; d < days; d++) {
     final date = today.add(Duration(days: d));
-    final t = schedule.shiftOn(date);
+    final t = source.shiftOn(date);
     if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
       continue;
     }
@@ -142,6 +153,65 @@ List<ShiftAlarmPlan> planShiftAlarms(
   return plans;
 }
 
+/// 一条重复待办提醒的排定计划。
+///
+/// 队首（[fireAt]）现在排给原生；[repeatTimes] 是它后面还跟着的几次 —— 一起递
+/// 过去，由原生在响完之后**弹队首、续队尾**，所以 App 长期不开也不漏。
+class RecurringAlarmPlan {
+  const RecurringAlarmPlan({
+    required this.seriesId,
+    required this.fireAt,
+    required this.repeatTimes,
+  });
+
+  final int seriesId;
+  final DateTime fireAt;
+
+  /// [fireAt] 之后的下几次触发时刻（升序，不含 [fireAt]）。
+  final List<DateTime> repeatTimes;
+}
+
+/// 纯函数：把系列列表算成要排的提醒。**不碰通知通道、不读时钟**。
+///
+/// 抽出来是为了能直接单测 —— 它错了不会报错，只会**在错的时候提醒**或者
+/// **根本不提醒**，两样都靠界面看不出来（与 [planShiftAlarms] 同一条理由）。
+///
+/// 关键的一条：时刻从 [from] **之后**算起（`upcomingFireTimes` 的语义），不是从
+/// 「当前那一次的日期」算起 —— 下午打开 App 时今天那次早过去了，照那一次排等于
+/// 永远排不上。
+///
+/// 规则**不递给原生**：那一串绝对时刻就是全部，原生只做「弹队首、续队尾」。
+/// 把月份 / 星期掩码 / 提前提醒的偏移照抄一份到 Kotlin 会变成第二份实现，而原生
+/// 在这个仓库里没有可跑的测试目标 —— 两份迟早对不上，症状还是「某天没响」。
+List<RecurringAlarmPlan> planRecurringReminders(
+  List<RecurringTodo> series, {
+  required DateTime from,
+  int days = 180,
+  int cap = 200,
+}) {
+  final out = <RecurringAlarmPlan>[];
+  for (final s in series) {
+    final id = s.id;
+    // 提醒的号是 `_recurringBaseId + 系列 id`，没有 id 就没有稳定的号可排。
+    if (id == null) continue;
+    final times = upcomingFireTimes(
+      s,
+      from: from,
+      // 「没设时间按几点提醒」是提醒层的策略，领域层不知道也不该知道。
+      clockMinute: s.timeMinute ?? allDayReminderHour * 60,
+      days: days,
+      cap: cap,
+    );
+    if (times.isEmpty) continue;
+    out.add(RecurringAlarmPlan(
+      seriesId: id,
+      fireAt: times.first,
+      repeatTimes: times.skip(1).toList(),
+    ));
+  }
+  return out;
+}
+
 /// 某天这个班次**还有没有没响过的**闹钟 —— 闹钟页「未来 30 天」那一行留不留。
 ///
 /// **不能只看第一条**（那是只有一个闹钟时的口径）：首条已响、后面还有时
@@ -151,6 +221,41 @@ List<ShiftAlarmPlan> planShiftAlarms(
 /// 「首条已响、后面还有」与「零点班：起床在前一晚已响」两条是它的护栏。）
 bool hasPendingShiftAlarm(ShiftClass shift, DateTime date, DateTime now) =>
     shift.alarms.any((a) => shiftAlarmFireAt(date, shift, a).isAfter(now));
+
+/// 一次性自定义闹钟该落在哪天：`hour:minute` 的**下一次出现**。
+///
+/// **为什么不能就是「今天」**：新建闹钟时时间默认此刻、日期默认今天，两个默认叠在
+/// 一起，触发时刻在按下「添加」之前就已经过去了。而一次性闹钟的排定判据是
+/// `fire.isAfter(now)`（见 `reschedule`）—— 过去的那一刻直接**不排**，
+/// `deleteExpiredOnceAlarms` 还会在下一次进闹钟页时把它删掉。用户看到的是「加了一
+/// 条、它自己没了」。`repeatType` 的默认值从「每天」改成「一次性」之后（v0.9.6），
+/// 这不是边角情况而是常态，所以日期一律由这里算。
+///
+/// 规则：今天这个钟点还没到就是今天，已经过了就顺延一天；[chosen] 是更晚的日期时
+/// 听用户的（手选了日子的人比默认值清楚）。界面那行「日期」显示的就是它的结果，
+/// 所以卡上写的永远等于真正会响的那天。
+///
+/// 返回的是**日期**（`dateOnly`，与库里 `onceDate` 那一列同形），不是带钟点的时刻：
+/// 钟点单独存在 `hour`/`minute` 两列，排定时由 `reschedule` 现拼
+/// （`DateTime(od.year, od.month, od.day, a.hour, a.minute)`）。
+///
+/// `alarm_screen_test.dart` 里「新建后直接添加」那条用例盯住落点，
+/// `once_alarm_date_test.dart` 在纯函数上把边界逐条钉死。
+DateTime nextOnceDate({
+  required DateTime now,
+  required DateTime chosen,
+  required int hour,
+  required int minute,
+}) {
+  final chosenAt = DateTime(chosen.year, chosen.month, chosen.day, hour, minute);
+  final today = DateTime(now.year, now.month, now.day, hour, minute);
+  // `day + 1` 交给 `DateTime` 归一化（月末、年末都跨得过去），不要自己加 24 小时
+  // —— `Duration` 遇上夏令时会偏一小时。
+  final occurrence = today.isAfter(now)
+      ? today
+      : DateTime(now.year, now.month, now.day + 1, hour, minute);
+  return dateOnly(chosenAt.isAfter(occurrence) ? chosenAt : occurrence);
+}
 
 /// 联动班次闹钟 + 自定义闹钟服务。
 ///
@@ -177,9 +282,19 @@ class AlarmService {
 
   static const _customBaseId = 10000;
 
-  /// 待办提醒的原生 id 基址。三段互不重叠：班次 0..400、自定义 10000..11000、
-  /// 待办 20000..21000（原生侧按这几个区间扫，见 `MainActivity` 的 cancel 分支）。
+  /// 待办提醒的原生 id 基址。
+  ///
+  /// **四段互不重叠**，原生侧按区间扫着取消（见 `MainActivity` 的几个 cancel 分支）：
+  /// 班次 `0..400`、自定义闹钟 `10000..11000`、待办行 `20000..`（留到 39999）、
+  /// 重复待办系列 `40000..41999`。
+  ///
+  /// 为什么把重复待办单列一段：它的号按**系列 id** 算，而待办行的号按**行 id** 算，
+  /// 而行 id 只增不减（`AUTOINCREMENT` 永不复用）—— 两者共用一个自增序列的话，
+  /// 行号迟早会把提醒的号挤出去，越界之后提醒排得下去、谁也取消不掉。
   static const _eventBaseId = 20000;
+
+  /// 重复待办提醒的原生 id 基址（id = `40000 + 系列 id`）。
+  static const _recurringBaseId = 40000;
 
   static Future<void> init() async {
     // 时区库：当前**没有**用它的地方 —— 排定全部走原生（epoch 毫秒）或
@@ -390,6 +505,7 @@ class AlarmService {
     int hour = 0,
     int minute = 0,
     int weekdays = 0,
+    List<DateTime> repeatTimes = const [],
   }) async {
     try {
       await _settingsChannel.invokeMethod('scheduleNativeAlarm', {
@@ -397,10 +513,16 @@ class AlarmService {
         'millis': fireAt.millisecondsSinceEpoch,
         'label': label,
         'detail': detail,
-        'repeatType': repeatType,
+        // **队列优先**：带时刻表时一律发 3（「时刻表驱动」），原生据此走
+        // 「弹队首、续队尾」，而不是自定义闹钟的 nextDaily / nextWeekly 重算 ——
+        // 重复待办的那些边角（月末、多选星期几、夏令时）只在 Dart 侧算得对。
+        'repeatType': repeatTimes.isEmpty ? repeatType : 3,
         'hour': hour,
         'minute': minute,
         'weekdays': weekdays,
+        'repeatTimes': [
+          for (final t in repeatTimes) t.millisecondsSinceEpoch,
+        ],
       });
       await logInfo(
           'scheduleNativeAlarm 成功: id=$id, label=$label, repeatType=$repeatType');
@@ -572,6 +694,21 @@ class AlarmService {
     } catch (_) {}
   }
 
+  /// 「仅震动」——响铃时**不发声**，只有震动。
+  ///
+  /// 它和铃声 URI 存在**同一个** SharedPreferences 键（`ringtoneUri`）里，因为整条
+  /// 链路本来就是一路的字符串：prefs → `AlarmScheduler` 的 Intent extra →
+  /// `AlarmReceiver` → `AlarmRingService` → `AlarmSound`。另加一个布尔开关要同时改
+  /// 这五处、还得改 `AlarmStore` 的开机重排记录，不值当。
+  ///
+  /// 它不可能与真实音源撞上：系统铃声是 `content://`、自选是 `file://`、内置**根本不存**
+  /// 这个键（见 `profile_screen.dart` 写入的四个分支）。
+  ///
+  /// ⚠️ 与 Kotlin 侧的 `AlarmSound.VIBRATE_ONLY` **必须逐字一致**。两边各持一份常量
+  /// 而不是互相 import（Dart 与 Kotlin 之间没有共享常量的通道），所以由
+  /// `test/ringtone_vibrate_only_test.dart` 扫两边源码比对，改单边会当场变红。
+  static const String vibrateOnlyRingtone = 'vibrateOnly';
+
   /// 让用户从系统文件选择器挑一个音频当铃声。
   ///
   /// 原生侧会把选中的文件**复制进应用私有目录**再返回 `file://` 路径 —— 不直接
@@ -659,6 +796,7 @@ class AlarmService {
     DateTime fireAt, {
     required String title,
     required String body,
+    List<DateTime> repeatTimes = const [],
   }) async {
     try {
       await _settingsChannel.invokeMethod('scheduleTodoReminder', {
@@ -666,6 +804,11 @@ class AlarmService {
         'millis': fireAt.millisecondsSinceEpoch,
         'title': title,
         'body': body,
+        // 后续几次的绝对时刻（升序）。**规则不递过去** —— 原生只做「弹队首、
+        // 续队尾」，规则判断全在 Dart 侧（那边有测试）。空数组 = 一次性提醒。
+        'repeatTimes': [
+          for (final t in repeatTimes) t.millisecondsSinceEpoch,
+        ],
       });
     } catch (e) {
       await appendLog('scheduleTodoReminder 失败: $e');
@@ -732,22 +875,29 @@ class AlarmService {
   /// 与其让每个调用点抄一遍，不如在这里读齐。漏传一个参数不会报错，只会让
   /// 那类提醒静默不生效，所以这个「读齐」的动作只该有一份。
   static Future<void> rescheduleAll(AppRepository repo) async {
-    final sched = await repo.getActiveSchedule();
-    if (sched == null) return;
+    // 读的是**整条链**：未来 60 天里可能跨时段边界，边界之后那几天的班属于别的
+    // 方案 —— 只按当前方案排会排到错的班表上，直到冷启动才自愈。
+    final schedules = await repo.getActiveSchedules();
+    if (schedules == null) return;
     await reschedule(
-      sched,
+      schedules.chain,
       await repo.listCustomAlarms(),
       overrides: await repo.listShiftAlarmOverrides(),
       events: await repo.listEvents(),
     );
+    // 重复待办的提醒走独立号段，与上面那条链路互不影响（`reschedule` 里的
+    // 待办那一段会跳过带 `seriesId` 的行）。
+    await rescheduleRecurringReminders(await repo.listRecurringTodos());
   }
 
-  /// 清除并按 [schedule] + [customAlarms] + [events] + [overrides] 重排所有闹钟。
+  /// 清除并按 [source] + [customAlarms] + [events] + [overrides] 重排所有闹钟。
   ///
   /// [overrides] 为按天覆盖（dayNumber → enabled）；值为 false 的日期跳过班次闹钟。
   /// [events] 是要排提醒的待办（`advanceRemindMinutes` 为 null 的跳过）。
+  ///
+  /// [source] 是 [ShiftSource] 而不是 `ShiftSchedule`，理由见 [planShiftAlarms]。
   static Future<void> reschedule(
-    ShiftSchedule schedule,
+    ShiftSource source,
     List<CustomAlarm> customAlarms, {
     int days = _shiftDaysHorizon,
     Map<int, bool> overrides = const {},
@@ -759,7 +909,7 @@ class AlarmService {
     assert(days <= _shiftDaysHorizon,
         'days（$days）不得超过天数窗口 $_shiftDaysHorizon —— 原生 id 会撞号');
     await logInfo(
-        'reschedule: 开始，排班=${schedule.name}，自定义闹钟=${customAlarms.length} 个');
+        'reschedule: 开始，排班=${source.label}，自定义闹钟=${customAlarms.length} 个');
     // 先清掉可能已损坏的排定缓存，再 cancelAll（否则会抛 Missing type parameter）
     try {
       await _plugin.cancelAll();
@@ -781,7 +931,7 @@ class AlarmService {
     //
     // 「哪些天要排、各排几点」由 [planShiftAlarms] 这个纯函数决定（可单测）；
     // 这里只负责把决策落成原生闹钟。id 仍是 `_shiftBaseId + 天数偏移`。
-    for (final plan in planShiftAlarms(schedule,
+    for (final plan in planShiftAlarms(source,
         from: DateTime.now(), days: days, overrides: overrides)) {
       try {
         await scheduleNativeAlarm(
@@ -858,6 +1008,9 @@ class AlarmService {
     await cancelAllTodoReminders();
     final now = DateTime.now();
     for (final e in events) {
+      // **重复待办的「某一次」不在这里排**：它的提醒由系列那一条负责
+      // （`rescheduleRecurringReminders`）。两处都排的话同一次会响两声。
+      if (e.seriesId != null) continue;
       final fireAt = eventReminderTime(e);
       if (fireAt == null || !fireAt.isAfter(now)) continue;
       try {
@@ -874,6 +1027,41 @@ class AlarmService {
         }
       } catch (err) {
         await appendLog('rescheduleEventReminders: 排定失败: $err');
+      }
+    }
+  }
+
+  /// 重排全部重复待办的提醒（与 [rescheduleEventReminders] 分工，见那里的说明）。
+  ///
+  /// 每次都把整条时刻表**重新算一遍**再排：`cancelTodoReminders` 已经把这一段
+  /// 清空了，所以这里排的就是全部 —— 停了、删了的系列自然不会再排上。
+  static Future<void> rescheduleRecurringReminders(
+      List<RecurringTodo> series) async {
+    final plans = planRecurringReminders(series, from: DateTime.now());
+    for (final p in plans) {
+      final s = series.firstWhere((x) => x.id == p.seriesId);
+      final id = _recurringBaseId + p.seriesId;
+      try {
+        if (s.alarmEnabled) {
+          await scheduleNativeAlarm(
+            id,
+            p.fireAt,
+            s.title,
+            detail: s.ruleWithTime,
+            repeatTimes: p.repeatTimes,
+          );
+        } else {
+          await scheduleTodoReminder(
+            id,
+            p.fireAt,
+            title: s.title,
+            // 正文写**规则**不写日期：同一条提醒会跨很多次，写死日期第二次就是错的。
+            body: s.ruleWithTime,
+            repeatTimes: p.repeatTimes,
+          );
+        }
+      } catch (e) {
+        await appendLog('rescheduleRecurringReminders: 排定失败: $e');
       }
     }
   }

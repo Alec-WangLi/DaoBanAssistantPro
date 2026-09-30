@@ -137,14 +137,26 @@ class _ShiftTemplatePickerScreenState
       out.add(const SizedBox(height: 8));
     }
     if (matched.isEmpty && mine.isEmpty) {
+      // 两行：一句「没找到」，一句「那接下来怎么办」。只有前一句时这里是个
+      // 死胡同 —— 而用户是照着搜索框的提示语（「搜索，如…上24休48」）搜过来的。
       out.add(Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        child: Center(
-          child: Text(
-            L10n.noPatternMatch,
-            style: AppTokens.rowPrimary
-                .copyWith(color: AppTokens.inkMuted(context)),
-          ),
+        padding: const EdgeInsets.fromLTRB(8, 28, 8, 24),
+        child: Column(
+          children: [
+            Text(
+              L10n.noPatternMatch,
+              textAlign: TextAlign.center,
+              style: AppTokens.rowPrimary
+                  .copyWith(color: AppTokens.inkMuted(context)),
+            ),
+            const SizedBox(height: AppTokens.spaceXs),
+            Text(
+              L10n.noPatternMatchHint,
+              textAlign: TextAlign.center,
+              style: AppTokens.rowSecondary
+                  .copyWith(color: AppTokens.inkMuted(context)),
+            ),
+          ],
         ),
       ));
     }

@@ -35,6 +35,7 @@ import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/app_theme.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -217,11 +218,20 @@ class VisualApp extends StatelessWidget {
     required this.home,
     this.brightness = Brightness.light,
     this.language = 'zh',
+    this.textScale = 1.0,
   });
 
   final Widget home;
   final Brightness brightness;
   final String language;
+
+  /// 系统字号。默认 1.0（与真机「设置 → 显示 → 字体大小」的默认档一致）。
+  ///
+  /// **这一档必须能改**：全 app 都没有钳制 `textScaler`，而工装此前每一屏都只在
+  /// 1.0× 下出图 —— 于是「系统字号放大之后文字被截」这一类问题在图上**结构性地
+  /// 看不见**（v0.9.9 修的那个日历农历截断就是这么漏掉的）。屏单里有一屏专门
+  /// 跑大字号（见 `render_screens_test.dart`）。
+  final double textScale;
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +247,16 @@ class VisualApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: _applyVisualFonts(base),
+      // 在 `builder` 里套：这个 context 在 App 自己的 `MediaQuery` **之下**，
+      // 在这里 `of(context)` 拿到的是真实那一份，改文字缩放不会顺带把
+      // `size` / `padding` 一起改掉。
+      builder: textScale == 1.0
+          ? null
+          : (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(textScale)),
+                child: child!,
+              ),
       home: home,
     );
   }
@@ -555,6 +575,139 @@ Future<void> seedMyTemplates(AppDatabase db) async {
   ));
 }
 
+/// 给待办页预置一条重复待办（含一条已完成的历史）+ 一条普通待办。
+///
+/// 不预置的话待办页是空态 —— 新加的循环标记、标题旁的「重复待办」入口、
+/// 以及管理面板里的行，一个都拍不到。
+///
+/// 用**每天**那条规则，是为了让「历史 + 当前」两条落在不同的日子上：系列从昨天
+/// 起效，生成器先建昨天那条、标成已完成，再建今天这条。用「每周几」的话两次
+/// occurrence 会是同一天（生成器永远落在「不晚于今天的最近一次」），图上就是两条
+/// 同一天的待办，看着像坏了。
+Future<void> seedRecurringTodo(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final t = DateTime.now();
+  final yesterday = DateTime(t.year, t.month, t.day - 1);
+  final id = await repo.addRecurringTodo(
+    title: '每天交班',
+    repeat: RecurRepeat.daily,
+    startDate: dateOnly(yesterday),
+    timeMinute: 7 * 60,
+    advanceRemindMinutes: 0,
+  );
+  // 先生成「昨天那一条」再勾掉 —— 于是它成了带删除线的历史；再生成今天这条。
+  // （生成器落的是「不晚于今天的那一次」，所以昨天那条必须用 yesterday 当 today
+  // 跑一次才会出现，直接跑今天只会得到一条。）
+  //
+  // 取行时**按 seriesId 过滤**：视觉库自己还预置着几条普通待办，`.single` 会炸
+  //（「Bad state: Too many elements」）。
+  await repo.advanceRecurringTodos(today: dateOnly(yesterday));
+  await repo.setEventCompleted(
+    (await repo.listEvents()).where((e) => e.seriesId == id).single,
+    true,
+  );
+  await repo.advanceRecurringTodos(today: dateOnly(t));
+  await repo.addEvent(
+    title: '交体检报告',
+    date: dateOnly(t),
+    timeMinute: 17 * 60,
+    advanceRemindMinutes: 60,
+  );
+}
+
+/// 让种子库里**已有的第二套方案**带一个生效时段，边界落在**本月中间**。
+///
+/// 于是同一个月的格子左半边画第一套、右半边画第二套 —— 一张图就能看出衔接对不对。
+/// 边界**必须落在本月中间**：落在上月 / 下月时，这一屏什么都看不出来。
+///
+/// 刻意让**第一套（当前）不设时段**：那样切换弹层里它标的是「其余日子」——
+/// 这四个字正是用户要读懂的解析规则（设了时段的按天接管，剩下的才归当前方案），
+/// 而它只有在「当前方案没时段」时才出现。第二套设**两端**，顺带把「最长的那种
+/// 标签会不会挤坏那一行」也拍进去。
+Future<void> seedScheduleChain(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final rows = await repo.listSchedules();
+  if (rows.length < 2) return;
+  final t = DateTime.now();
+
+  // 第三套：让时间线上出现**三种不同的日期说法**（其余时间 / 「～ 止」/「起 ～」）。
+  // 只给这一屏加，不动共享的 `seedVisualDatabase`（那会让别的屏的图都变）。
+  final third = await repo.saveSchedule(
+    name: '新项目部 · 三班倒',
+    anchorDate: dateOnly(t),
+    classes: const [
+      ShiftClass(
+          name: '白班',
+          abbr: '白',
+          startMinute: 480,
+          endMinute: 1080,
+          color: 0xFF4C8DFF),
+      ShiftClass(
+          name: '中班',
+          abbr: '中',
+          startMinute: 1080,
+          endMinute: 1320,
+          color: 0xFFFF9F0A),
+      ShiftClass(name: '夜班', abbr: '夜', startMinute: 1230, endMinute: 1920, color: 0xFF7A5CFF),
+    ],
+    cycle: const [0, 1, 2],
+    makeCurrent: false,
+    teamCount: 3,
+    teamNames: L10n.defaultTeamNames(3),
+    ourTeamIndex: 0,
+    teamOffsets: const [0, 1, 2],
+  );
+
+  // 第一套（当前）**不设段** —— 它是「其余时间」，标签正好是那四个字。
+  await repo.addSpan(
+    rows[1].id,
+    from: DateTime(t.year, t.month, 15),
+    to: DateTime(t.year, t.month + 1, 0), // 本月最后一天
+  );
+  await repo.addSpan(third, from: DateTime(t.year, t.month + 1, 1));
+}
+
+/// 让整个日历**一天班都没有**：把「其余时间」设成无、又不给任何方案时段。
+///
+/// 这是用户点过「设为无」又忘了加段时的样子 —— 也是这一轮唯一会画出一片空白
+/// （带指路）的状态，必须出图看一眼那句指路盖在网格上是什么观感。
+Future<void> seedNoScheduleAtAll(AppDatabase db) async {
+  final repo = AppRepository(db);
+  for (final s in await repo.listSpans()) {
+    await repo.deleteSpan(s.id);
+  }
+  await repo.setRemainingNone();
+}
+
+/// 库里**只剩一套「法定班次」**（跟随法定节假日、没有班次定义）。
+///
+/// 这一屏是 2026-09-30 用户反馈的现场：那种班表在 v0.9.14 里被「这段时间没有
+/// 排班」整月盖住 —— 而它**从没进过屏单**（空白表此前只进过单测，由
+/// `calendar_screen_test` 的 `blank: true` 造出来）。这正是「新界面必须补进屏单」
+/// 那条教训的又一例：单测问得出「有没有指路」，问不出「整张日历被盖住好不好看」。
+///
+/// 形状与编辑器打开「跟随法定节假日」时一致：`cycle` 为空、班组收敛成「我」一个。
+Future<void> seedBlankSchedule(AppDatabase db) async {
+  final repo = AppRepository(db);
+  for (final s in await repo.listSpans()) {
+    await repo.deleteSpan(s.id);
+  }
+  for (final s in await repo.listSchedules()) {
+    await repo.deleteSchedule(s.id);
+  }
+  await repo.saveSchedule(
+    name: L10n.holidayScheduleName,
+    anchorDate: dateOnly(DateTime.now()),
+    classes: const [],
+    cycle: const [],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: [L10n.isEn ? 'Me' : '我'],
+    ourTeamIndex: 0,
+    teamOffsets: const [],
+  );
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -604,6 +757,7 @@ Future<GlobalKey> pumpScreen(
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
   Size size = kVisualSize,
+  double textScale = 1.0,
   Future<void> Function(WidgetTester tester)? beforeCapture,
 }) async {
   // 字体得在 setUpAll 里装好（见 ensureVisualFonts 的说明）。这里只做体检：
@@ -643,6 +797,7 @@ Future<GlobalKey> pumpScreen(
           home: home,
           brightness: brightness,
           language: language,
+          textScale: textScale,
         ),
       ),
     ),
@@ -682,6 +837,7 @@ Future<void> renderScreen(
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
   Size size = kVisualSize,
+  double textScale = 1.0,
   Future<void> Function(WidgetTester tester)? beforeCapture,
 }) async {
   final boundaryKey = await pumpScreen(
@@ -692,6 +848,7 @@ Future<void> renderScreen(
     language: language,
     extraPrefs: extraPrefs,
     size: size,
+    textScale: textScale,
     beforeCapture: beforeCapture,
   );
 

@@ -22,6 +22,7 @@ import androidx.core.content.FileProvider
 import java.io.File
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
@@ -444,25 +445,40 @@ class MainActivity : FlutterActivity() {
                     "playRingtone" -> {
                         try {
                             playingRingtone?.stop()
+                            playingRingtone = null
                             val uriStr = call.argument<String>("uri")
-                            val uri = if (uriStr.isNullOrEmpty()) {
-                                Uri.parse(
-                                    "android.resource://$packageName/raw/alarm_beep"
+                            // 「仅震动」试听：震一下就走。**不能落到下面的
+                            // `Uri.parse("vibrateOnly")` 上** —— 那会当成一个坏音源，
+                            // 被 RingtoneManager 静默忽略或抛异常，用户按了试听
+                            // 什么都不发生，看着就像这个选项坏了。
+                            if (uriStr == AlarmSound.VIBRATE_ONLY) {
+                                val v = getSystemService(VIBRATOR_SERVICE) as Vibrator
+                                v.vibrate(
+                                    VibrationEffect.createOneShot(
+                                        400, VibrationEffect.DEFAULT_AMPLITUDE
+                                    )
                                 )
+                                result.success(null)
                             } else {
-                                Uri.parse(uriStr)
+                                val uri = if (uriStr.isNullOrEmpty()) {
+                                    Uri.parse(
+                                        "android.resource://$packageName/raw/alarm_beep"
+                                    )
+                                } else {
+                                    Uri.parse(uriStr)
+                                }
+                                val rt = RingtoneManager.getRingtone(this, uri)
+                                // 试听走「闹钟音量」，静音/免打扰下也能听到
+                                rt.setAudioAttributes(
+                                    AudioAttributes.Builder()
+                                        .setUsage(AudioAttributes.USAGE_ALARM)
+                                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                        .build()
+                                )
+                                playingRingtone = rt
+                                rt.play()
+                                result.success(null)
                             }
-                            val rt = RingtoneManager.getRingtone(this, uri)
-                            // 试听走「闹钟音量」，静音/免打扰下也能听到
-                            rt.setAudioAttributes(
-                                AudioAttributes.Builder()
-                                    .setUsage(AudioAttributes.USAGE_ALARM)
-                                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                                    .build()
-                            )
-                            playingRingtone = rt
-                            rt.play()
-                            result.success(null)
                         } catch (e: Exception) {
                             result.error("PLAY_RINGTONE_FAILED", e.message, null)
                         }
@@ -519,7 +535,8 @@ class MainActivity : FlutterActivity() {
                             val uri = sp.getString("flutter.ringtoneUri", null)
                             AlarmScheduler.schedule(
                                 this, id, millis, label, uri,
-                                repeatType, hour, minute, weekdays, detail
+                                repeatType, hour, minute, weekdays, detail,
+                                longArrayArg(call, "repeatTimes")
                             )
                             AlarmLog.info(
                                 this,
@@ -612,7 +629,10 @@ class MainActivity : FlutterActivity() {
                             if (id < 0 || title.isEmpty()) {
                                 result.error("BAD_ARGS", "id/title 缺失", null)
                             } else {
-                                AlarmScheduler.scheduleQuiet(this, id, millis, title, body)
+                                AlarmScheduler.scheduleQuiet(
+                                    this, id, millis, title, body,
+                                    longArrayArg(call, "repeatTimes")
+                                )
                                 AlarmLog.info(
                                     this, "scheduleTodoReminder: id=$id, millis=$millis"
                                 )
@@ -623,8 +643,9 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     "cancelAllTodoReminders" -> {
-                        // 与另外两个 cancelAll 一样放后台：一千次 PendingIntent 操作
-                        // 会把主线程卡住（重排时正播着开关动画）。
+                        // 放后台：现在它按落盘清单逐个撤（几百到几千次 PendingIntent
+                        // 操作），再加上一小段旧号段的盲扫兜底 —— 在主线程上会把
+                        // 重排时正播着的开关动画卡住。
                         Thread {
                             try {
                                 AlarmScheduler.cancelTodoReminders(this)
@@ -809,3 +830,19 @@ class MainActivity : FlutterActivity() {
 
 /** 自选的铃声文件超过 [MainActivity] 允许复制的上限。要单独一类错误码，用户才知道该换个文件。 */
 class RingtoneTooLargeException(val bytes: Long) : Exception("ringtone too large: $bytes")
+
+/**
+ * Dart 过通道递来的「时刻表」→ `LongArray`（重复待办的原生续排用）。
+ *
+ * 声明成顶层私有函数而不是 [MainActivity] 的成员：两个 handler 都要用，而它不碰
+ * 任何 Activity 状态。
+ *
+ * 元素一律按 `Number` 取 `toLong()`：标准编解码器把 Dart 的 int 解成
+ * `Integer`（放得下 32 位时）或 `Long`，不一定是哪个。
+ * 字段缺失（老版本 Dart 不传）→ 空数组，语义就是「一次性」。
+ */
+private fun longArrayArg(call: MethodCall, key: String): LongArray {
+    val raw = call.argument<List<*>>(key) ?: return LongArray(0)
+    return raw.mapNotNull { (it as? Number)?.toLong() }.toLongArray()
+}
+

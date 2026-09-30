@@ -39,6 +39,11 @@ object AlarmStore {
         val minute: Int,
         val weekdays: Int,
         val detail: String?,
+        /**
+         * 时刻表驱动（`repeatType == 3`，重复待办）时后面还跟着的几次点火时刻
+         * （升序）。空 = 一次性或按星期重算的普通闹钟。
+         */
+        val repeatTimes: List<Long> = emptyList(),
     )
 
     /**
@@ -52,6 +57,13 @@ object AlarmStore {
         val millis: Long,
         val title: String,
         val body: String,
+        /**
+         * 与 [Entry.repeatTimes] 同理：重复待办的提醒靠它续排，空 = 一次性。
+         *
+         * **必须有它，否则重启之后重复待办就只剩那一次** —— AlarmManager 的记录
+         * 重启即清空，而 BootReceiver 只能照这份清单排回去。
+         */
+        val repeatTimes: List<Long> = emptyList(),
     )
 
     private fun prefs(context: Context) =
@@ -78,6 +90,7 @@ object AlarmStore {
                     minute = o.optInt("minute", 0),
                     weekdays = o.optInt("weekdays", 0),
                     detail = o.optString("detail", "").ifEmpty { null },
+                    repeatTimes = _readRepeatTimes(o),
                 )
             }
         } catch (e: Exception) {
@@ -115,11 +128,31 @@ object AlarmStore {
         }
     }
 
+    /**
+     * 按 id 区间清闹钟清单。
+     *
+     * `AlarmScheduler.cancelTodoReminders` 收尾用：那一趟把待办那两段里的提醒都
+     * 取消了（含响铃那条链路写在 [Entry] 里的），清单也得跟着清 —— 只清安静的
+     * 那一份，下次重启 BootReceiver 会照 [Entry] 把已经取消的闹钟排回来。
+     */
+    @Synchronized
+    fun clearEntries(context: Context, from: Int, to: Int) {
+        try {
+            write(context, all(context).filterNot { it.id in from until to })
+        } catch (ex: Exception) {
+            AlarmLog.error(context, "AlarmStore.clearEntries 失败: ${ex.message}")
+        }
+    }
+
     // ---------- 安静提醒（待办提醒那条链路）----------
     //
     // 与闹钟是**两份独立的清单**：id 段不重叠（闹钟 0..400 / 10000..11000，
-    // 待办提醒 20000..21000），取消路径也各走各的 —— 合成一份反而要在每次取消时
-    // 判断类型，正是容易漏删的地方。
+    // 待办提醒 20000..21999、重复待办 40000..41999），取消路径也各走各的 ——
+    // 合成一份反而要在每次取消时判断类型，正是容易漏删的地方。
+    //
+    // 但**待办那两段横跨两份清单**：同一条待办按「联动闹钟」开关二选一，开的那条
+    // 写在 [Entry] 里、关的那条写在 [Quiet] 里。所以 `cancelTodoReminders` 两份
+    // 都要查、都要清。
 
     @Synchronized
     fun allQuiets(context: Context): List<Quiet> {
@@ -136,6 +169,7 @@ object AlarmStore {
                     millis = millis,
                     title = o.optString("title", ""),
                     body = o.optString("body", ""),
+                    repeatTimes = _readRepeatTimes(o),
                 )
             }
         } catch (e: Exception) {
@@ -186,6 +220,7 @@ object AlarmStore {
                     put("minute", e.minute)
                     put("weekdays", e.weekdays)
                     put("detail", e.detail ?: "")
+                    put("repeatTimes", _toJson(e.repeatTimes))
                 }
             )
         }
@@ -203,9 +238,26 @@ object AlarmStore {
                     put("millis", q.millis)
                     put("title", q.title)
                     put("body", q.body)
+                    put("repeatTimes", _toJson(q.repeatTimes))
                 }
             )
         }
         prefs(context).edit().putString(KEY_QUIET, arr.toString()).apply()
+    }
+
+    /** 时刻表 → JSON 数组（空表也写一个空数组，读的时候不必判 null）。 */
+    private fun _toJson(times: List<Long>): JSONArray =
+        JSONArray().apply { times.forEach { put(it) } }
+
+    /**
+     * 读回时刻表。**只留正数**：0 / 负数不是合法时刻（`millis` 缺失时
+     * `optLong` 会回 0），留着会让 `nextPending` 把它当成一个「很久以前」的
+     * 候选，无害但脏。
+     */
+    private fun _readRepeatTimes(o: JSONObject): List<Long> {
+        val arr = o.optJSONArray("repeatTimes") ?: return emptyList()
+        return (0 until arr.length())
+            .map { arr.optLong(it, 0L) }
+            .filter { it > 0L }
     }
 }

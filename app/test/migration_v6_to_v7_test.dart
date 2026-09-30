@@ -30,6 +30,23 @@ CREATE TABLE shift_class_rows (
 )
 ''';
 
+/// 排班方案表 —— 与上面同一类：**v11→v12 会给它加两列**，而迁移分支一律按
+/// **倒序**跑（`if (from < 12)` 在 `if (from < 7)` 之前），所以从任何更早的版本
+/// 升上来时那两行 `addColumn` 都会执行。真实 v6 库一定有这张表，fixture 就得有。
+/// 列是 v6 形态（team_* 三列早在 v2 就加了、team_offsets 在 v4）—— 只差 v12 那两列。
+const _v6ScheduleTable = '''
+CREATE TABLE shift_schedule_rows (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  anchor_date INTEGER NOT NULL,
+  is_current INTEGER NOT NULL DEFAULT 0,
+  team_count INTEGER NOT NULL DEFAULT 4,
+  team_names TEXT NOT NULL DEFAULT '一班,二班,三班,四班',
+  our_team_index INTEGER NOT NULL DEFAULT 0,
+  team_offsets TEXT NOT NULL DEFAULT ''
+)
+''';
+
 const _v6EventsTable = '''
 CREATE TABLE schedule_events (
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +66,7 @@ void main() {
     raw = sqlite3.sqlite3.openInMemory();
     raw.execute(_v6EventsTable);
     raw.execute(_v6ClassTable);
+    raw.execute(_v6ScheduleTable);
     raw.execute(
       'INSERT INTO schedule_events '
       '(id, title, date, time_minute, advance_remind_minutes, is_completed, '

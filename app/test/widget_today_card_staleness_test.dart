@@ -29,7 +29,7 @@ void main() {
       DateTime(2027, 1, 1, 0, 1),
     ]) {
       final s = buildWidgetSnapshot(
-        schedule: null,
+        chain: null,
         now: d,
         themeMode: 'system',
         accent: 0xFF4F5BE8,
@@ -47,7 +47,7 @@ void main() {
   test('跨过午夜之后，同一个生成时刻的 todayCard.day 不再等于「今天」', () {
     final generated = DateTime(2026, 9, 19, 23, 0);
     final s = buildWidgetSnapshot(
-      schedule: null,
+      chain: null,
       now: generated,
       themeMode: 'system',
       accent: 0xFF4F5BE8,

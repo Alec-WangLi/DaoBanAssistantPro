@@ -14,7 +14,7 @@ import java.time.LocalDate
  * 与 ShiftWidgetBase 分开是为了能单独读懂它 —— 这个类里没有一行涉及
  * 「什么时候刷新」「刷新排在哪」，只有「给我一份快照，我给你一棵 RemoteViews 树」。
  *
- * 三条纪律：
+ * 四条纪律：
  *  1. Kotlin 侧一个中文字面量都不许有。所有文案都来自快照（Dart 侧 `L10n` 产出）。
  *     唯一的例外是占位态那行应用名，它取自 `applicationInfo.loadLabel()`。
  *  2. 明暗一律**显式选资源**，不依赖 `-night` 限定符 —— `RemoteViews` 由宿主进程
@@ -22,8 +22,40 @@ import java.time.LocalDate
  *  3. 布局只用 RemoteViews 白名单里的类：FrameLayout / LinearLayout / RelativeLayout /
  *     GridLayout + TextView / ImageView。**没有 ConstraintLayout**，报的是运行期
  *     `ClassNotFoundException`，不是编译错误。
+ *  4. **往容器里 `addView` 之前必须先 `removeAllViews`**（每一个容器、每一次渲染，
+ *     包括 `continue` 逃掉的那几支）。见下面那条长说明 —— 漏掉它不会报任何错，
+ *     只在部分机型上表现为「内容一变就重影」。
  */
 object WidgetRenderer {
+
+    /*
+     * ── 纪律 4 的长说明：为什么每个容器在 addView 之前都要 removeAllViews ──
+     *
+     * 症状（2026-09-29 用户反馈，几个 OPPO / vivo 用户，开发机上复现不出来）：
+     * 把某天的「前夜」按天改成「休班」之后，桌面小组件上的字**重影**了 ——
+     * 旧班的字压在新班的字上、上一周的日期压在今天的日期上。
+     *
+     * 机制：桌面（宿主）收到与手上那棵视图树**同一个布局 id** 的 RemoteViews 时，
+     * **不会重新 inflate**，而是走 `RemoteViews.reapply(...)`，把整串动作在已有的
+     * 视图树上重放一遍。而 `AppWidgetHostView` 只管换掉旧的**根**视图，**不负责
+     * 清空容器里的子视图**。于是同一个槽位每渲染一次就多一个格子；格子根是
+     * `match_parent`（`widget_strip_cell.xml` / `widget_month_cell.xml`），
+     * 后加的不会把先加的挤开，而是**叠在同一块面积上**。
+     *
+     * 为什么平时看不出来：两层内容完全一样时，合成结果只是略微糊一点、胶囊深一档，
+     * 没人会注意。**只有某一格的内容变了，旧层才露出来** —— 这正是「改了排班才出现」
+     * 的原因，也是它被当成新 bug 的原因（其实一直在叠，只是从前看不见）。
+     *
+     * 为什么只有部分机型：新一些的 AOSP / 启动器会**回收**已加进去的子视图
+     * （`canRecycleView`，Android 12 起进了 CTS），刚好把缺陷盖住；旧框架与厂商分叉
+     * 会老老实实再加一个。所以「我这台上没问题」不能当成这条不存在 —— 它取决于宿主，
+     * 不取决于我们。`RemoteViews.addView` 的官方文档写的就是这条：宿主可能回收布局，
+     * 要用 `removeAllViews(int)` 清掉已有的子视图。
+     *
+     * 护栏：`app/test/widget_fixed_cards_guard_test.dart` 里那条「每处 addView 的容器
+     * 都先被 removeAllViews 清过」，扫的就是本文件。**别为消掉它的红而放宽正则** ——
+     * 它是这条约定唯一的凭据（本文件没有编译期可以依赖的东西）。
+     */
 
     /**
      * dp → px。`RemoteViews` 里的尺寸单位是 px，送给 `WidgetChip` 画位图前要自己乘密度。
@@ -42,9 +74,15 @@ object WidgetRenderer {
      * 互相覆盖 extras。
      *
      * 既有区间（`AlarmScheduler` / `TodoReminderReceiver` 都用 `requestCode = 各自的 id`）：
-     * 班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒 20000..21000，另有
-     * `AlarmRingService` 的通知点击 0 / 1（同样带着 `alarm_label` 打向 `MainActivity`）
-     * 与 `MainActivity.REQ_PICK_RINGTONE = 40071`。取 100000 起，全部避开。
+     * 班次闹钟 0..400、自定义闹钟 10000..11000、待办行提醒 20000..39999、重复待办
+     * 提醒 40000..41999，另有 `AlarmRingService` 的通知点击 0 / 1（同样带着
+     * `alarm_label` 打向 `MainActivity`）与 `MainActivity.REQ_PICK_RINGTONE = 40071`。
+     * 取 100000 起，全部避开。
+     *
+     * （`REQ_PICK_RINGTONE` 那个 40071 与重复待办的号段数值上挨着，但**不是同一个
+     * 池**：它是 `getActivity` 的活动池，这里是 `getBroadcast` 的闹钟池，
+     * `filterEquals` 连目标组件一起比。之所以写下来，是免得下一个人看到两个
+     * 4 万多的号以为撞了。）
      *
      * `WidgetRefreshScheduler.REQ = 40081` **不在此列**：它是 `getBroadcast` 给
      * `WidgetRefreshReceiver` 且 `setAction` 过，目标组件与 `filterEquals` 都不同，
@@ -80,12 +118,52 @@ object WidgetRenderer {
      */
     private const val REQ_SLOTS_PER_WIDGET = 64
 
+    /**
+     * 翻月那两枚箭头的 requestCode 基数。**广播池**，与上面 `WIDGET_REQ_BASE`
+     * （活动池，点格开 App 用 `getActivity`）**是两回事**。
+     *
+     * 900_000 离既有占用都够远：班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒
+     * 20000..39999、重复待办 40000..41999、选铃声 40071、刷新闹钟 40081。
+     *
+     * 编号 = `BASE + widgetId * 4 + dir`（dir：0 = 上月、1 = 下月、2 = 回今天，第 4 档
+     * 留给将来）—— **每个实例、每个方向各一枚**：`Intent.filterEquals` 不比 extras，
+     * 撞号会让两张卡共用一个箭头（点这张、那张翻页）。基数与展开形式由
+     * `widget_fixed_cards_guard_test.dart` 扫源码钉住。
+     */
+    private const val WIDGET_MONTH_REQ_BASE = 900_000
+
     /** 整卡的 requestCode：低位 0 留给「不指定日期」。 */
     private fun rootRequestCode(widgetId: Int): Int = WIDGET_REQ_BASE + widgetId * REQ_SLOTS_PER_WIDGET
 
     /** 第 cell 格的 requestCode。低位 +1 起，避开 `rootRequestCode` 的 0。 */
     private fun cellRequestCode(widgetId: Int, cell: Int): Int =
         WIDGET_REQ_BASE + widgetId * REQ_SLOTS_PER_WIDGET + 1 + cell
+
+    /**
+     * 翻上 / 下月（`delta = ±1`）或回今天（`delta = 0`）：发给 [WidgetRefreshReceiver]
+     * 的**广播**（与上面那个活动池无关，见 [WIDGET_MONTH_REQ_BASE]）。
+     *
+     * 越界不由这里拦：箭头那一侧没得翻时只是画成灰的，但**点击照样挂着** ——
+     * `RemoteViews` 的 `reapply` 只重放新的动作串，**没有任何办法撤掉上一次设过的
+     * 点击**。所以「能不能翻」由接收端判（同一个 [monthCovered]）。
+     */
+    private fun monthStepIntent(context: Context, widgetId: Int, delta: Int): PendingIntent {
+        val dir = when {
+            delta < 0 -> 0
+            delta > 0 -> 1
+            else -> 2      // 点标题 = 回今天
+        }
+        val i = Intent(context, WidgetRefreshReceiver::class.java)
+            .setAction(WidgetRefreshReceiver.ACTION_MONTH_STEP)
+            .putExtra(WidgetRefreshReceiver.EXTRA_WIDGET_ID, widgetId)
+            .putExtra(WidgetRefreshReceiver.EXTRA_DELTA, delta)
+        return PendingIntent.getBroadcast(
+            context,
+            WIDGET_MONTH_REQ_BASE + widgetId * 4 + dir,
+            i,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
 
     /**
      * 打开 App 的 PendingIntent。
@@ -220,6 +298,11 @@ object WidgetRenderer {
         )
 
         for (col in columns.indices) {
+            // **先清空再填** —— 这一句是「内容变了之后小组件重影」的修复，见本文件顶部
+            // 那条 addView 的说明。放在循环开头而不是紧贴 addView：`continue` 逃掉的
+            // 那一支（窗口里没有这天）同样要让容器里**一个子视图都不留**，否则旧格子
+            // 会缩在 GONE 的槽位里，等这个槽位下次填上时又叠一层。
+            v.removeAllViews(columns[col])
             val epoch = monday.plusDays(col.toLong()).toEpochDay()
             val i = snap.days.indexOfFirst { it.day == epoch }
             if (i < 0) {
@@ -275,14 +358,50 @@ object WidgetRenderer {
     }
 
     /**
+     * 那个月能不能画：它的**42 格**（从该月 1 日所在周的周一起连续 42 天）全在快照
+     * 覆盖的范围内。翻月的箭头灰不灰、接收端吞不吞这枚点击，用的都是它。
+     *
+     * 为什么问「42 格」而不是「这个月在 `snap.months` 里」：窗口是按整周对齐的，
+     * 边上那两个月可能**只被蹭到几天** —— 那种月份列在 `months` 里，却画不出一张完整
+     * 的月历（大半格子没数据）。判据必须与「画得出来」严格一致，否则箭头亮着、
+     * 点下去是一张空卡。
+     */
+    internal fun monthCovered(snap: WidgetStore.Snapshot?, firstOfMonth: LocalDate): Boolean {
+        if (snap == null || snap.days.isEmpty()) return false
+        val start = firstOfMonth
+            .minusDays((firstOfMonth.dayOfWeek.value - 1).toLong())
+            .toEpochDay()
+        return start >= snap.days.first().day && start + 41 <= snap.days.last().day
+    }
+
+    /**
+     * 这个实例**现在显示的是哪个月**：锚点 ?? 今天那个月；**锚点那个月要是画不出来
+     * 就当没设**（数据过期 / 被挤到窗口外）。
+     *
+     * ⚠️ **接收端算目标月也走这里**，不许自己去读 `WidgetStore.monthAnchor`：盘上那个
+     * 锚点可能已经是一个渲染端不认的值，两边各判一次就会出现「箭头作用在你没看见的
+     * 那个月」—— 点一下跳到莫名其妙的地方。
+     */
+    internal fun displayedMonth(
+        context: Context,
+        widgetId: Int,
+        snap: WidgetStore.Snapshot?,
+    ): LocalDate {
+        val todayFirst = LocalDate.now().withDayOfMonth(1)
+        val anchored = WidgetStore.monthAnchor(context, widgetId)
+            ?.let { LocalDate.ofEpochDay(it).withDayOfMonth(1) }
+        return if (anchored != null && monthCovered(snap, anchored)) anchored else todayFirst
+    }
+
+    /**
      * 4×5 整月：月份标题 + 周几行 + 6×7 格。
      *
-     * **渲染哪个月由 `LocalDate.now()` 定**，不由快照的生成月定：快照窗口覆盖
-     * 「本月 + 下月」（spec §7.1），跨月那一刻零点那次刷新会重渲染，此时今天已经
-     * 落在新的一个月里 —— 数据早就在窗口里，不需要 App 活着。
+     * **渲染哪个月**由 [displayedMonth] 定（锚点 ?? 今天，锚点画不出来就当没设）——
+     * 不由快照的生成月定，也不需要 App 活着：数据早就在窗口里。
      *
-     * **前导空格**由本月 1 日的星期几现算（周一 = 1）—— 纯日期算术，不是 i18n，
-     * 与不变量 (A) 不冲突。
+     * **42 格是连续 42 天**（v0.9.17 起）：起点是「该月 1 日所在周的周一」，于是月头
+     * 月尾那几格画的是**相邻月份**的日子（日数字走 muted、胶囊照画）——整张卡读起来
+     * 是一段连续的日子。窗口外的格仍然 GONE：**「相邻月」与「没数据」是两回事**。
      *
      * 月份标题从 `snap.months` 里按「年-月」查；**查不到就隐藏标题行**，
      * 绝不借相邻月份的标题顶上。
@@ -295,8 +414,8 @@ object WidgetRenderer {
      * 没班次（空白表方案）那格不画胶囊，与 App 日历格一致（`shift == null` 时那块
      * 根本不画）—— 完整理由见 [weekStrip] 里那条「不能拿 `wg_empty_*` 顶上」。
      *
-     * 不收 `todayIndex`：本卡渲染的是 `LocalDate.now()` 那个月，「今天」是按日期现算的
-     * （见上），拿不到快照里那份下标也用不上。
+     * 不收 `todayIndex`：本卡渲染哪个月由锚点决定、42 格又是连续的日子，「今天」只能
+     * 按日期现算（`epoch == todayEpoch`），快照里那份下标在这里用不上。
      */
     private fun monthCard(
         context: Context,
@@ -318,16 +437,37 @@ object WidgetRenderer {
 
         val today = LocalDate.now()
         val todayEpoch = today.toEpochDay()
+        // 显示哪个月见 `displayedMonth` 的注释（锚点在盘上、但画不出来时按没设处理）。
+        val firstOfMonth = displayedMonth(context, widgetId, snap)
 
-        // ── 月份标题 ──
-        val title = snap.months.firstOrNull { it.y == today.year && it.m == today.monthValue }
+        // ── 标题行：‹ 月份 › ──
+        val title = snap.months.firstOrNull {
+            it.y == firstOfMonth.year && it.m == firstOfMonth.monthValue
+        }
         if (title == null) {
+            // 查不到就隐藏（绝不借相邻月份的标题顶上）—— 既有纪律，不改。
             v.setViewVisibility(R.id.wg_m_title, android.view.View.GONE)
         } else {
             v.setViewVisibility(R.id.wg_m_title, android.view.View.VISIBLE)
             v.setTextViewText(R.id.wg_m_title, title.title)
             v.setTextColor(R.id.wg_m_title, muted)
         }
+        // **箭头永远设点击**，哪怕那一侧没得翻：`RemoteViews` 的 `reapply` 只重放
+        // **新的**动作串，**没有任何办法撤掉上一次设过的点击**（与 v0.9.9 那条
+        // `removeAllViews` 同源：宿主会复用已在的那棵视图树）。所以「到头了」由
+        // **接收端**判 —— 颜色只作提示：能翻 = ink，翻不动 = muted（与标题同档）。
+        v.setTextColor(
+            R.id.wg_m_prev,
+            if (monthCovered(snap, firstOfMonth.minusMonths(1))) ink else muted,
+        )
+        v.setTextColor(
+            R.id.wg_m_next,
+            if (monthCovered(snap, firstOfMonth.plusMonths(1))) ink else muted,
+        )
+        v.setOnClickPendingIntent(R.id.wg_m_prev, monthStepIntent(context, widgetId, -1))
+        v.setOnClickPendingIntent(R.id.wg_m_next, monthStepIntent(context, widgetId, 1))
+        // 点中间的月份文字 = 回今天（已经是今天那个月时是 no-op）。
+        v.setOnClickPendingIntent(R.id.wg_m_title, monthStepIntent(context, widgetId, 0))
 
         // ── 周几行（7 条文案来自快照，原生不做 i18n） ──
         val wdIds = intArrayOf(
@@ -346,51 +486,62 @@ object WidgetRenderer {
             }
         }
 
-        // ── 42 格 ──
-        val firstOfMonth = today.withDayOfMonth(1)
-        val leading = firstOfMonth.dayOfWeek.value - 1   // 周一 = 1 → 前导空格数
-        val daysInMonth = firstOfMonth.lengthOfMonth()
+        // ── 42 格：从「该月 1 日所在周的周一」起**连续** 42 天 ──
+        //
+        // 月头月尾那几格因此画的是**相邻月份**的日子，整张卡读起来是一段连续的日子。
+        // 窗口外的格仍然 GONE —— 「相邻月」（有数据、照画）与「没数据」（挖空）是两回事。
+        val leading = firstOfMonth.dayOfWeek.value - 1   // 周一 = 1 → 前导天数
+        val gridStart = firstOfMonth.minusDays(leading.toLong())
         val slotIds = IntArray(42) { i ->
             context.resources.getIdentifier("wg_m_slot${i + 1}", "id", context.packageName)
         }
 
         for (slot in 0 until 42) {
-            val dayOfMonth = slot - leading + 1
-            if (dayOfMonth < 1 || dayOfMonth > daysInMonth) {
-                // 前导/尾随空格：GONE —— GridLayout 里 GONE 的子视图不参与布局。
-                v.setViewVisibility(slotIds[slot], android.view.View.GONE)
-                continue
-            }
-            val date = firstOfMonth.withDayOfMonth(dayOfMonth)
+            // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
+            // 前面的取舍）。42 格每格都要清 —— 窗外那几格也走这里。
+            v.removeAllViews(slotIds[slot])
+            val date = gridStart.plusDays(slot.toLong())
             val epoch = date.toEpochDay()
             val i = snap.days.indexOfFirst { it.day == epoch }
             if (i < 0) {
-                // 窗口里没有这天（理论上不会发生）。当成空格而不是「没班次」——
-                // 后者会画出一张理直气壮的空格。
+                // 快照没盖到这一天（窗口到头了 / 快照过期）。挖空 —— 画一张理直气壮的
+                // 错日子比空着更糟。
                 v.setViewVisibility(slotIds[slot], android.view.View.GONE)
                 continue
             }
             v.setViewVisibility(slotIds[slot], android.view.View.VISIBLE)
 
-            // 点某一格 → 打开 App 并跳到那天。格子占槽位 1..42（一个实例 64 个槽位）。
+            // 点某一格 → 打开 App 并跳到那天。相邻月的格同样如此（点 8 月 31 日就跳
+            // 8 月 31 日，语义自洽）。格子占槽位 1..42（一个实例 64 个槽位）。
             v.setOnClickPendingIntent(
                 slotIds[slot],
                 launchIntent(context, cellRequestCode(widgetId, slot), epochDay = epoch.toInt()),
             )
 
             val d = snap.days[i]
+            val inMonth = date.year == firstOfMonth.year &&
+                date.monthValue == firstOfMonth.monthValue
             val isToday = epoch == todayEpoch
             val c = RemoteViews(context.packageName, R.layout.widget_month_cell)
 
             // 可见性两个方向都要设满：宿主 `reapply` 只重放新动作，漏设的一边会留着
             // 上一次的状态。
             c.setViewVisibility(R.id.wg_mc_day, android.view.View.VISIBLE)
-            c.setTextViewText(R.id.wg_mc_day, dayOfMonth.toString())
+            c.setTextViewText(R.id.wg_mc_day, date.dayOfMonth.toString())
             // 「今天」只走主色，**不许加粗**（`TextView` 没有 `setTypeface(int)`，
-            // 反射会在宿主进程抛 `ActionException`）。
-            c.setTextColor(R.id.wg_mc_day, if (isToday) snap.accent else ink)
+            // 反射会在宿主进程抛 `ActionException`）。相邻月的日数字走 muted ——
+            // 那是这张卡上唯一表达「这个月从哪天开始」的地方。
+            c.setTextColor(
+                R.id.wg_mc_day,
+                when {
+                    isToday -> snap.accent
+                    inMonth -> ink
+                    else -> muted
+                },
+            )
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块根本不画）。
+            // **相邻月的格照样画**（用户 2026-09-30 选的「日数变灰、胶囊照画」）。
             // **不能**拿 `wg_empty_*` 顶上：`tintedChip` 里 `Paint.setAlpha` 会**覆盖**颜色
             // 字节自带的 alpha（fill 写死 36、stroke 写死 115），`#14000000` 会变成一条 45%
             // 的黑描边环，比 App 的长相响得多。正常排班里「休班」是一个**有颜色的班次定义**
@@ -571,6 +722,8 @@ object WidgetRenderer {
         } else {
             v.setViewVisibility(R.id.wg_tc_crew_row, android.view.View.VISIBLE)
             for (slot in crewSlots.indices) {
+                // 先清空再填，理由与 `weekStrip` 那处逐字相同。
+                v.removeAllViews(crewSlots[slot])
                 if (slot >= crews.size) {
                     v.setViewVisibility(crewSlots[slot], android.view.View.GONE)
                     continue
@@ -623,6 +776,10 @@ object WidgetRenderer {
         // 点击就有一圈「看得见但不响应」的死区（4×3 下各约 34dp）。这条与
         // `weekStrip` / `monthCard` / `empty` / `placeholder` 一致，见那几处的 KDoc。
         v.setOnClickPendingIntent(R.id.wg_ts_root, launchIntent(context, rootRequestCode(widgetId)))
+        // 先清空再填 —— 这一处塞进去的是**整棵今日卡子树**，叠起来比一格重影严重得多：
+        // 槽位是个竖向 LinearLayout，多余的副本会往下排、把卡片撑出外壳后被裁掉。
+        // 完整的机制说明见 `weekStrip` 那处。
+        v.removeAllViews(R.id.wg_ts_slot)
         v.addView(R.id.wg_ts_slot, renderTodayCard(context, snap, todayIndex, widgetId))
         return v
     }

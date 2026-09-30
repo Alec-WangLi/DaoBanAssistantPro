@@ -38,6 +38,7 @@ class L10n {
 
   // 「我的」页分区
   static String get sectionAppearance => t('外观', 'Appearance');
+  static String get sectionDesktop => t('桌面', 'Home screen');
   static String get sectionSchedule => t('排班', 'Schedule');
   static String get sectionAlarm => t('闹钟', 'Alarm');
   static String get sectionData => t('数据', 'Data');
@@ -142,18 +143,34 @@ class L10n {
 
   // 「我的」页其他
   static String get scheduleManagement => t('排班管理', 'Schedule management');
-  static String get scheduleManagementSubtitle => t('管理、编辑你的排班表', 'Manage and edit your schedules');
+  static String get scheduleManagementSubtitle => t(
+      '新建 / 编辑多套排班表，设置各自的生效时段',
+      'Create and edit several schedules, each with its own active period');
+
+  /// 「我的 → 桌面」那一行（打开的是小组件说明弹层）。
+  static String get widgetEntrySubtitle => t(
+      '三张卡怎么加到桌面（小米机型在二级分类里）',
+      'How to add the three cards (Xiaomi hides them in a sub-menu)');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
-  static String get ringtoneSubtitle => t('选择内置、系统或你的铃声', 'Choose a built-in, system, or your own ringtone');
+  static String get ringtoneSubtitle => t('选择内置、系统、你的铃声，或「仅震动」', 'Choose a built-in, system, or your own ringtone, or vibrate only');
   static String get clearReset => t('清空重置', 'Clear & reset');
-  static String get clearResetSubtitle => t('清空排班与日程，恢复默认四班两倒', 'Clear schedules & events, restore default rotation');
+  static String get clearResetSubtitle => t(
+      '排班、日程、闹钟与模板全清掉，回到刚安装的样子',
+      'Clear schedules, events, alarms and templates — back to a fresh install');
   static String get version => t('版本', 'Version');
   static String get changelog => t('版本更新', "What's new");
-  static String get changelogSubtitle => t('查看最近版本的更新内容', 'Release notes for recent versions');
+  static String get changelogSubtitle =>
+      t('这一版改了什么，含最近十版', 'What changed in this version, plus the last ten');
   static String get checkUpdate => t('检查更新', 'Check for update');
-  static String get checkUpdateSubtitle => t('获取正式版与测试版', 'Get stable & beta releases');
+  static String get checkUpdateSubtitle => t(
+      '检查最新正式版 / 测试版（国内网络需开代理）',
+      'Check for the latest stable / beta build (some networks in China need a proxy)');
   static String get alreadyLatest => t('已是最新', 'Up to date');
-  static String get updateCheckFailed => t('检查更新失败（网络异常，请稍后再试）', 'Update check failed (network error), try later');
+  // 连不上 GitHub 不要笼统说「网络异常」—— 国内用户看到这句只会反复重试，
+  // 得直接告诉他要开代理。
+  static String get updateCheckFailed => t(
+      '检查更新失败：连不上 GitHub 服务器。若你在国内，通常需要开启代理或加速器后重试。',
+      'Update check failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
   static String get stableChannel => t('正式版', 'Stable');
   static String get testChannel => t('测试版', 'Beta');
   // 渠道没有发布时的占位。不要复用 `none`（「不设」，说的是「这个可选字段留空」）——
@@ -165,20 +182,42 @@ class L10n {
   static String get testChannelHint => t('抢先体验新功能，可能有小问题', 'Early access to new features, may have minor issues');
   static String get download => t('去下载', 'Download');
   static String get downloadingUpdate => t('正在下载新版本', 'Downloading update');
-  static String get downloadFailed => t('下载失败，请检查网络后重试', 'Download failed, check your connection and retry');
+  static String get downloadFailed => t(
+      '下载失败：连不上 GitHub 服务器。若你在国内，通常需要开启代理或加速器后重试。',
+      'Download failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
   static String get jumpToMonth => t('跳转月份', 'Jump to month');
   static String get usageGuide => t('使用帮助', 'Usage guide');
+  static String get usageGuideSubtitle =>
+      t('每个功能在哪、怎么用', 'Where each feature lives and how to use it');
   static String get viewLog => t('查看日志', 'View log');
   static String get viewLogSubtitle => t('排错时把这里的内容复制给我', 'Copy the log here for debugging');
   static String get confirmResetTitle => t('确认清空重置？', 'Clear & reset?');
-  static String get confirmResetContent => t('将清空所有排班与日程数据，恢复默认「四班两倒」配置。此操作不可撤销。', 'All schedules and events will be cleared and the default rotation restored. This cannot be undone.');
+  static String get confirmResetContent => t(
+      '软件会回到刚安装的样子，清掉：\n'
+      '· 排班表、日程与待办\n'
+      '· 自定义闹钟、你的模板\n'
+      '· 你保存的铃声\n'
+      '外观设置（主题 / 主色调 / 语言 / 高级材质 / 触觉）也一并回到默认。\n'
+      '此操作不可撤销。',
+      'The app goes back to a fresh install. This clears:\n'
+      '· schedules, events and todos\n'
+      '· custom alarms and your templates\n'
+      '· any ringtone you saved\n'
+      'Appearance settings (theme, accent colour, language, advanced material, '
+          'haptics) return to their defaults too.\n'
+      'This cannot be undone.');
   static String get confirmResetAction => t('确认清空', 'Clear');
-  static String get resetDone => t('已清空并恢复默认排班', 'Cleared and restored default schedule');
+  static String get resetDone => t('已恢复到刚安装的样子', 'Back to a fresh install');
   static String get log => t('日志', 'Log');
   static String get noLog => t('（暂无日志）', '(no log)');
   static String get logCopied => t('日志已复制到剪贴板', 'Log copied to clipboard');
   static String get builtinRingtone => t('内置铃声（默认）', 'Built-in (default)');
   static String get builtinRingtoneSubtitle => t('叮咚数字闹钟声', 'Ding-dong digital alarm');
+  static String get vibrateOnlyRingtone => t('仅震动', 'Vibrate only');
+  static String get vibrateOnlyRingtoneSubtitle =>
+      t('只震动，不发出声音', 'Vibrates without making a sound');
+  static String get setVibrateOnlyRingtone =>
+      t('已设为「仅震动」，下次响铃生效', 'Set to "Vibrate only", takes effect next alarm');
   static String get preview => t('试听', 'Preview');
   static String get noRingtones => t('没有读取到系统铃声，请选择内置铃声', 'No system ringtones found, choose the built-in one');
   static String get setBuiltinRingtone => t('已设为内置铃声', 'Set to built-in ringtone');
@@ -206,6 +245,56 @@ class L10n {
   static String get timeOptional => t('时间（可选）', 'Time (optional)');
   static String get advanceRemindOptional => t('提醒（可选）', 'Remind (optional)');
   static String get none => t('不设', 'None');
+
+  // 重复待办
+  static String get repeatNone => t('不重复', 'Does not repeat');
+  static String get repeatDaily => t('每天', 'Every day');
+  static String get repeatWeekly => t('每周', 'Every week');
+  static String get repeatMonthly => t('每月', 'Every month');
+  static String everyWeekOn(List<int> days) {
+    final names = days.map(ruleWeekday).join(isEn ? ', ' : '、');
+    return isEn ? 'Every $names' : '每周$names';
+  }
+
+  /// 重复规则里的星期简写：中文一个字（「三」），英文三个字母（「Wed」）。
+  ///
+  /// **它与 `weekday(i)`（「周三」/「Wed」）是两套，不能混用** —— 规则要拼成
+  /// 「每周一、三、五」，拿「周一」去拼会得到「每周周一、周三、周五」。
+  /// 简写之所以不写成 `weekday(i).substring(1)`：那是在切本地化字符串，换个语言
+  /// 就塌了，而这里本来就该是一份独立的文案。
+  static String ruleWeekday(int i) => isEn
+      ? const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]
+      : const ['一', '二', '三', '四', '五', '六', '日'][i];
+  static String everyMonthOnDay(int d) => t('每月 $d 号', 'Day $d of every month');
+  static String get repeats => t('重复', 'Repeats');
+  static String get startsOn => t('从这天起', 'Starts on');
+  static String get skipThisOccurrence => t('只这一次不要了', 'Skip this one');
+  static String get deleteWholeSeries => t('删除整个重复', 'Delete the whole repeat');
+  static String get deleteRecurringTitle => t('这条待办是重复的', 'This todo repeats');
+  static String deleteRecurringContent(String name) => t(
+      '「$name」会自己按周期出现。你可以只跳过这一次，也可以让它以后都不再出现。',
+      '"$name" comes back on its own. You can skip just this one, or stop it for good.');
+
+  /// 「重复待办」管理面板的入口与标题。
+  static String get recurring => t('重复待办', 'Repeating');
+  static String get recurringEmpty => t(
+      '还没有重复待办。新建待办时把「重复」选上，它就会自己按期出现。',
+      'No repeating todos yet. Pick a repeat when adding one and it comes back on its own.');
+  static String nextTime(String d) => t('下次 $d', 'Next $d');
+  static String get recurringNoCurrent => t(
+      '这个重复现在没有「下一次」（起始日在将来，或这一次刚被你跳过）',
+      'This repeat has no current occurrence right now (it starts later, or you just skipped this one)');
+  static String deleteSeriesContent(String name, int n) => n == 0
+      ? t('「$name」以后不会再自己出现了。', '"$name" will no longer come back on its own.')
+      : t('「$name」以后不会再自己出现了，已经出现的 $n 条（含已完成的历史）也会一起删掉。',
+          '"$name" will no longer come back, and its $n existing entries (including completed history) will be deleted.');
+
+  /// 提醒正文用的规则描述：`每周三 · 09:00`。
+  ///
+  /// **不带日期是有意的**：重复待办的同一条提醒会跨很多次，写死日期第二次就是
+  /// 错的（一次性待办那边相反，正文写的是完整日期，见 `eventReminderBody`）。
+  static String ruleWithTime(String rule, String time) =>
+      time.isEmpty ? rule : '$rule · $time';
 
   /// 「不设」在选择器里的取值。
   ///
@@ -295,6 +384,83 @@ class L10n {
   static String get followHoliday => t('跟随法定节假日（无班次）', 'Follow legal holidays (no shifts)');
   static String get followHolidayHint => t('法定节假日休息，其余按上班', 'Rest on legal holidays, work otherwise');
   static String get holidayScheduleName => t('法定班次', 'Legal-holiday schedule');
+
+  // ── 方案「生效时段」（多排班表按日期衔接） ──
+  //
+  // 三种「空」各有各的说法，别合并：两端都空 = 不在时间线上（**非当前**那套要
+  // 说成「未参与衔接」、当前那套说成「其余日子」），只有起点 = 一直持续，
+  // 只有终点 = 不限起点。
+  //
+  // ⚠️ `effectiveFromDate` / `effectiveUntilDate` / `effectiveRangeSpan` 这三个是
+  // **两个标签函数**（`effectiveRangeLabel` 与 `spanRangeLabel`）共用的日期组合，
+  // 别当成上面那批「编辑器专属」的一起删掉。
+  static String effectiveFromDate(String d) => t('$d 起', 'From $d');
+  static String effectiveUntilDate(String d) => t('到 $d', 'Until $d');
+  static String effectiveRangeSpan(String a, String b) => t('$a ～ $b', '$a – $b');
+  // ── 排班时段（时间线） ──
+  static String get scheduleTimeline => t('排班时段', 'Schedule timeline');
+
+  /// 排班管理页另一节的标题。
+  ///
+  /// 两节各有一个标题（「排班时段」在上、「排班表」在下）：用户 2026-09-30 反馈
+  /// 「有点乱，应该分成两个功能区……现在它们连在一起」。
+  static String get schedulesSection => t('排班表', 'Schedules');
+
+  static String get remainingTime => t('其余时间', 'Other dates');
+  static String get remainingNone => t('无', 'None');
+  static String get remainingHint => t('没被时段覆盖的日子，用「其余时间」那一套。',
+      'Dates not covered by a period use the one under "Other dates".');
+
+  /// 时间线上**一段都没有**时那一行的说法（行标签 + 两种说明）。
+  ///
+  /// 「其余时间」得真有「其余」才立得住：只有一套班表、一个段都没有时，那句
+  /// 「其余时间 · 五班三倒」会被读成「这是默认的意思吗？」（用户原话：
+  /// 「那其实是默认一直都是五班三倒吗？可能让用户看着有点费劲」）。所以那一种
+  /// 情形整行换成「全部日子」，说明也改成直说。
+  ///
+  /// 两种说明分「有兜底班表」与「没有」两版：后者的下一步是**挑一套**，不只是
+  /// 「加一段时段」。
+  static String get allDates => t('全部日子', 'All dates');
+  static String get allDatesHint => t(
+      '还没分段 —— 所有日子都用这套班表。要按日期换班表，就加一段。',
+      'No periods yet — every date uses this one. Add a period to switch by date.');
+  static String get allDatesNoneHint => t(
+      '还没分段 —— 这些天没有排班。挑一套班表，或者加一段时段。',
+      'No periods yet — these dates have no schedule. Pick one, or add a period.');
+
+  /// 排班表列表里的身份标签：**一个段都没有**时，那套就是「正在使用」
+  /// （说「其余时间」等于用「其余」指代「全部」，正是上面那个误解的来源）。
+  static String get inUseNow => t('正在使用', 'In use');
+
+  static String get addSpan => t('添加时段', 'Add a period');
+  static String get setRemainingNone => t('设为无', 'Set to none');
+  static String get manageTimeline => t('管理排班时段', 'Manage the timeline');
+  static String spanConflicts(String name, String range) => t(
+      '与「$name」的 $range 重叠了 —— 一天只能有一套排班，改开一点或先改那一段。',
+      'Overlaps “$name” ($range) — a day can only have one schedule. Adjust the dates or edit that period first.');
+  static String get noScheduleHere => t('这段时间没有排班', 'No schedule for these dates');
+  /// 指路那一层的下一句。**不提「其余时间」这个名字**：指路出现在「整月一天班都
+  /// 没有」时，而那种情形可能**根本没有任何段** —— 那时时间线上那一行写的是
+  /// 「全部日子」（见 [allDates]），照着旧文案去找「其余时间」会找不到。
+  static String get noScheduleHereHint => t(
+      '去「我的 → 排班管理 → 排班时段」里加一段，或者给这些日子挑一套班表',
+      'Add a period under Me → Schedules → Schedule timeline, or pick a schedule for these dates');
+  static String get unusedSchedule => t('未使用', 'Unused');
+  static String get unusedHint =>
+      t('未使用 —— 去上面的「排班时段」把它排进去', 'Unused — put it on the timeline above');
+  static String get onTimeline => t('已排入时段', 'On the timeline');
+
+  // 段本身的两端（弹层里的两行）。
+  static String get spanFrom => t('从', 'From');
+  static String get spanTo => t('到', 'To');
+  static String get spanUnbounded => t('不限', 'Any time');
+  static String get spanForever => t('一直持续', 'Ongoing');
+  /// 段的两端都留空 = 这套方案一直用（不与任何别的段重叠时才有意义）。
+  static String get spanAlways => t('一直', 'Always');
+
+  static String spansTwoSchedules(String name, String d) => t(
+      '这段跨了两套排班的生效边界（$d 起换成「$name」），请分开调整。',
+      'This range spans a schedule boundary (switches to “$name” on $d); adjust them separately.');
 
   /// 打开「跟随法定节假日」会清空班次定义，保存时连带丢掉引用它们的按天覆盖
   /// （`saveSchedule` 的悬空清理）。会真的丢东西时先问一次 —— 切回来恢复的默认
@@ -445,7 +611,10 @@ class L10n {
   static String get pickShiftPatternHint =>
       t('选一个和你班表最像的，建好之后还能随时改', 'Pick the closest one — you can tweak it anytime');
   static String get searchPattern => t('搜索，如「四班三倒」「上24休48」', 'Search, e.g. "4-crew 3-shift"');
-  static String get customPattern => t('我自己排', 'Start from scratch');
+  // 英文原标题是 `Start from scratch`，但这条路并不给空白 —— 它塞一套默认
+  // 四班两倒进去（见 `createScheduleFromTemplatePicker` 里 `?? d.cycle` 那一串），
+  // 中文副标题「从默认四班两倒开始」才是实情。标题跟副标题不能自相矛盾。
+  static String get customPattern => t('我自己排', 'Build my own');
 
   /// 倒班方式列表的分组标题。
   ///
@@ -465,6 +634,17 @@ class L10n {
       };
   static String get customPatternHint => t('从默认四班两倒开始，边看边改', 'Start from the default and edit as you go');
   static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');
+
+  /// 搜索落空时的下一句。
+  ///
+  /// **必须有这一句**：搜索框的提示语教用户「按行话名去搜」（`searchPattern`
+  /// 举的例子就是真别名「上24休48」），所以照做的人完全可能搜不到 —— 内置模板
+  /// 只有 20 种，班表有几百种。从前这里只有 `noPatternMatch` 一行，是个死胡同：
+  /// 搜索框承诺「我们有，你找找」，撞空之后又不告诉他「我们其实没有，选个最像的
+  /// 进去改」。2026-09-23 的「上12休24」反馈就是这么卡住的。
+  static String get noPatternMatchHint => t(
+      '换个说法再搜，或者从下面挑一个最接近的 —— 建好之后时间、几天一轮都能改',
+      'Try another name, or start from the closest one below — times and cycle length are editable afterwards');
   /// 模板卡片底部那行「每天在岗 N 个班组」。
   ///
   /// 中英语序不同（中文把数量放中间、英文放句首），整串交给 [t] ——
@@ -499,10 +679,10 @@ class L10n {
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');
   static String get nextMonth => t('下个月', 'Next month');
-  static String get switchSchedule => t('切换排班', 'Switch schedule');
-  static String get switchScheduleShort => t('切换', 'Switch');
-  static String get manageSchedule => t('管理排班', 'Manage schedules');
-  static String get noSchedule => t('尚未配置排班，请到「我的」页编辑排班。', 'No schedule yet, edit in "Me".');
+  /// 信息卡里那行「这天没排班」。**指路要指对地方** —— 时段现在在
+  /// 「我的 → 排班管理 → 排班时段」，不再是「我的」页上直接编辑排班。
+  static String get noSchedule => t('这段时间没有排班（去「排班时段」加一段）',
+      'No schedule for these dates (add a period under "Schedule timeline")');
   static String get restNoAlarm => t('休息日 · 不响闹钟', 'Rest day · no alarm');
   static String get alarmOff => t('闹钟：未开启', 'Alarm: off');
   static String alarmAt(String time) => isEn ? 'Alarm $time' : '闹钟 $time';
@@ -514,50 +694,146 @@ class L10n {
   static String alarmFirstOfMany(String time, int total) => t(
       '闹钟 $time 等 $total 个', 'Alarm $time (+${total - 1})');
   static String get otherCrews => t('其他班组', 'Other crews');
+
+  /// 信息卡那行「本月统计」的前缀，后面接 `早12 · 午8 · 夜8 · 休6`（班次简称
+  /// 直接取 `ShiftClass.shortLabel`，日历格子里已经在用那一套，中英文各自成立）。
+  static String get monthTally => t('本月', 'This month');
   static String get savedAndRescheduled => t('已保存并重排闹钟', 'Saved & alarms rescheduled');
   static String switchedTo(String name) => isEn ? 'Switched to $name' : '已切换到 $name';
   static List<String> get weekdays => isEn
       ? const ['M', 'T', 'W', 'T', 'F', 'S', 'S']
       : const ['一', '二', '三', '四', '五', '六', '日'];
 
+  // 开始使用（首次启动弹的那份）
+  //
+  // 从前首启直接弹「使用帮助」，而那份是九个条目、一千多字的**说明书** ——
+  // 新用户第一眼需要的是「现在该干什么」，不是「这套软件一共有什么」。
+  // 完整说明一条不删，留在「我的 → 使用帮助」里，这里只讲最要紧的三件。
+  static String get gettingStarted => t('开始使用', 'Getting started');
+  static String get gettingStartedLead => t('三件事先做对，其余的用着用着就懂了',
+      'Three things to get right first — the rest you will pick up as you go');
+  static String get gettingStartedSchedTitle => t('先把班排上', 'Set up your schedule');
+  static String get gettingStartedSchedBody => t(
+      '「我的 → 排班管理 → 新增排班」。里面没有和你一模一样的？选最接近的那个，建好之后时间、几天一轮、几个班组都能改。',
+      'Me → Schedule management → New schedule. Nothing matches yours exactly? Take the closest one — times, cycle length and crew count are all editable afterwards.');
+  static String get gettingStartedPermTitle => t('把权限开齐', 'Turn on the permissions');
+  static String get gettingStartedPermBody => t(
+      '「我的 → 权限」里逐项打开。小米手机还要单独开「后台弹出界面」和「锁屏显示」，不然闹钟到点只响、不弹响铃界面。',
+      'Enable them all under Me → Permissions. On Xiaomi phones also turn on "Open new windows while running in the background" and "Show on Lock screen" — otherwise the alarm only rings and never pops up.');
+  static String get gettingStartedOverrideTitle => t('临时请假或换班', 'A day off, or a swap');
+  static String get gettingStartedOverrideBody => t(
+      '日历上点那天的信息卡，或者长按格子拖选一段 —— 只改这几天，不动整套排班。',
+      'Tap that day\'s info card in the calendar, or long-press a cell and drag to pick a range — it changes just those days and leaves the rotation alone.');
+  static String get gettingStartedMore => t('完整说明在「我的 → 使用帮助」，随时能看',
+      'The full guide lives under Me → Usage guide, whenever you need it');
+
   // 使用帮助（图标化条目）
+  //
+  // 每条正文是一**串短句**而不是一整段：这份说明出现在「我的 → 使用帮助」，
+  // 首启那份精简版看完之后想细看的人才会进来，但仍旧要能扫读 ——
+  // 四五行、括号套括号的一整段是读不进去的。主句在前，细节拆成独立条目。
   static String get guideCalTitle => t('日历', 'Calendar');
-  static String get guideCalDesc => t(
-      '查看每日班次（日期/班次/农历/星期）；法定节假日整段标红、调休上班日带「班」标记；顶栏可切换排班、跳转年月；点某天看详情。要单独改某几天的班（请假、跟同事换班），点底栏信息卡上那行班次、或长按格子拖选一段 —— 被改过的那天有小圆点、信息卡写「已调班」，选择层里可一键「恢复轮转」。',
-      'View daily shifts (date/shift/lunar/weekday); statutory holidays marked red, makeup workdays tagged "班"; switch schedules and jump year/month from the toolbar; tap a day for details. To change just a few days (a day off, or swapping with a colleague), tap the shift row on the info card or long-press a cell and drag to pick a range — an overridden day carries a small dot and reads "Shift changed", and the picker offers "Restore rotation".');
+  static List<String> get guideCalDesc => [
+        t('每天显示日期、班次、农历、星期；点某天看当天详情',
+            'Each day shows date, shift, lunar date and weekday; tap a day for details'),
+        t('法定节假日整段标红，调休上班日带「班」标记',
+            'Statutory holidays are marked red, makeup workdays are tagged "班"'),
+        t('顶栏那颗按钮点开是「排班时段」总览（这段时间在用哪套、今天落在哪一段），左右箭头换月份',
+            'The toolbar button opens the schedule-timeline overview (which schedule is in force, which period today falls in); the arrows change month'),
+        t('要单独改某几天的班（请假、跟同事换班）：点底栏信息卡上那行班次，或长按格子拖选一段',
+            'To change just a few days (a day off, or swapping with a colleague): tap the shift row on the info card, or long-press a cell and drag to pick a range'),
+        t('改过的那天有小圆点、信息卡写「已调班」，选择层里可一键「恢复轮转」',
+            'An overridden day carries a small dot and reads "Shift changed", and the picker offers a one-tap "Restore rotation"'),
+      ];
   static String get guideSchedTitle => t('排班管理', 'Schedule management');
-  static String get guideSchedDesc => t(
-      '「我的 → 排班管理」可新建 / 编辑 / 删除多套排班；新建时先选一个内置倒班方式模板（20 种常见倒班方式，可用关键词搜索），再改班次时间、周期表与各班组周期起始日（各组起始日与周期长度对不上时会提示「撞班」，可一键按周期长度均分）；调好之后可以「存为模板」留着自己下次用（存下的会出现在选择页最上面的「我的模板」里）。打开「跟随法定节假日（无班次）」可得到一张只随节假日休班的空白表。要换成哪一套上场，走日历顶栏的「切换排班」。',
-      'Me → Schedule management: create / edit / delete multiple schedules; start from a built-in shift-pattern template (20 common patterns, searchable), then tweak shift times, the cycle table and each team\'s cycle start date (if those start dates stop matching the cycle length the app flags it and can spread them evenly in one tap). Once it looks right you can "save as template" to reuse it later (saved ones appear under "My templates" at the top of the picker). Turn on "Follow legal holidays (no shifts)" for a blank schedule that simply rests on legal holidays. To change which schedule is active, use "Switch schedule" in the calendar toolbar.');
+  static List<String> get guideSchedDesc => [
+        t('「我的 → 排班管理」分两节：「排班时段」管哪几天用哪套班表，「排班表」管新建 / 编辑 / 删除多套排班',
+            'Me → Schedule management has two sections: "Schedule timeline" decides which schedule covers which dates, and "Schedules" creates / edits / deletes them'),
+        t('新建时先挑一个最像的倒班方式，进去再改时间和轮法',
+            'When creating one, pick the closest pattern first and tweak the times and rotation inside'),
+        t('没有完全一样的，就选最接近的那个改，或选「我自己排」',
+            'Nothing matches exactly? Edit the closest one, or choose "Build my own"'),
+        t('班次时间、几天一轮、各班组周期起始日都能改；各组起始日与几天一轮对不上会提示「撞班」，可一键均分',
+            'Shift times, cycle length and each team\'s cycle start date are all editable; if start dates stop matching the cycle length the app flags it and can spread them evenly in one tap'),
+        t('调好之后「存为模板」，下次新建时直接选',
+            'Once it looks right, "Save as template" and pick it next time you create one'),
+        t('要换哪套上场：在「排班时段」加一段，或改「其余时间」那一行；想只跟着法定节假日休班，开「跟随法定节假日（无班次）」',
+            'To put another schedule in force, add a period under "Schedule timeline" or edit the "Other dates" row; turn on "Follow legal holidays (no shifts)" for a blank schedule that rests on legal holidays'),
+      ];
   static String get guideAlarmTitle => t('闹钟', 'Alarms');
-  static String get guideAlarmDesc => t(
-      '白班/上夜班自动响铃（时间在排班编辑里改）；闹钟页显示未来 30 天、每天可单独开关；也可加自定义闹钟（一次性/每天/每周）。零点班（00:00 上班）的响铃排在上班前 1 小时、也就是前一天晚上，列表里会写明「前一天」。铃声可用内置、系统铃声，或从手机里自选。',
-      'Day/night shifts ring automatically (set the time in schedule editing); the alarm page lists the next 30 days with per-day toggles; add custom alarms (once/daily/weekly). A midnight shift (00:00 start) rings an hour before work starts — the evening before, marked "day before" in the list. Pick a built-in, system or your own ringtone.');
+  static List<String> get guideAlarmDesc => [
+        t('白班、夜班到点自动响铃，时间在排班编辑器里改',
+            'Day and night shifts ring automatically; the times are set in the schedule editor'),
+        t('一个班次最多挂 6 条闹钟，每条可以起名字（「起床」「午休」）',
+            'Each shift can carry up to 6 alarms, each with an optional name ("Wake up", "Nap")'),
+        t('闹钟页列出未来 30 天，每天能单独关',
+            'The alarm page lists the next 30 days, each with its own toggle'),
+        t('也能加自定义闹钟：一次性 / 每天 / 每周',
+            'Add custom alarms too: once / daily / weekly'),
+        t('零点班（00:00 上班）的响铃排在上班前 1 小时，也就是前一天晚上，列表里写明「前一天」',
+            'A midnight shift (00:00 start) rings an hour before work starts — the evening before, marked "day before" in the list'),
+        t('铃声可用内置、系统铃声、从手机里自选，或选「仅震动」只震不响',
+            'Pick a built-in, system or your own ringtone — or "Vibrate only" to ring silently'),
+      ];
   static String get guideTodoTitle => t('待办', 'Todo');
-  static String get guideTodoDesc => t(
-      '记录交班/开会等事件，可设时间与提醒档位（准时 / 提前若干时间），到点会在通知栏弹出提醒，也可以给某条待办开「联动闹钟」，到点像班次闹钟一样全屏响铃；完成后勾选（变暗 + 删除线）。当天有待办时，日历底栏的信息卡上也会显示「N 项待办」。',
-      'Log handover/meeting events with an optional time and a reminder (on time, or some time ahead); a notification appears at that moment; a todo can also ring as a full-screen alarm like a shift does. Tick an item when done (dims + strikethrough). When the selected day has todos, the calendar\'s info card also shows "N todos".');
+  static List<String> get guideTodoDesc => [
+        t('记交班、开会这类事件，可设时间与提醒档位（准时，或提前一段时间）',
+            'Log handover or meeting events with a time and a reminder (on time, or some time ahead)'),
+        t('到点弹通知；给某条开「联动闹钟」会像班次闹钟一样全屏响铃',
+            'A notification appears at that moment; a todo can also ring as a full-screen alarm like a shift does'),
+        t('完成后勾一下（变暗 + 删除线）', 'Tick an item when done (dims + strikethrough)'),
+        t('选中的那天有待办时，日历底栏信息卡会显示「N 项待办」',
+            'When the selected day has todos, the calendar\'s info card shows "N todos"'),
+      ];
   static String get guideAppearanceTitle => t('外观', 'Appearance');
-  static String get guideAppearanceDesc => t(
-      '「我的 → 外观」可切跟随系统/浅色/深色，选 5 种主色调，中英文切换；「高级材质」关掉后全 App 取消背景模糊，省电、低端机更流畅。这里还能关掉「触觉反馈」（切换开关、选中、拖选与改班时的轻微震动，默认开）。',
-      'Me → Appearance: follow the system / light / dark, pick one of 5 accent colours, and switch between Chinese and English. Turning "Advanced material" off removes background blur app-wide — lighter on battery and smoother on low-end devices. Haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change — on by default) can be turned off here too.');
+  static List<String> get guideAppearanceDesc => [
+        t('「我的 → 外观」可切跟随系统 / 浅色 / 深色，选 5 种主色调，中英文切换',
+            'Me → Appearance: follow the system / light / dark, pick one of 5 accent colours, switch between Chinese and English'),
+        t('「高级材质」关掉后全 App 取消背景模糊，省电、低端机更流畅',
+            'Turning "Advanced material" off removes background blur app-wide — lighter on battery and smoother on low-end devices'),
+        t('「触觉反馈」控制开关、选中、拖选与改班时的轻微震动，默认开',
+            'Haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change) is on by default and lives here too'),
+      ];
   static String get guideLayoutTitle =>
       t('横屏 · 宽屏 · 小窗', 'Landscape · wide screens · small windows');
-  static String get guideLayoutDesc => t(
-      '手机横屏、平板与车机等宽屏上，日历改为左右分栏：左边日期网格、右边当天信息；正文限宽居中，不再横向拉满。小米小窗 / 分屏下各页同样可用；窗口很矮（高 < 480dp）时日历只显示今日信息卡 —— 那个尺寸下网格看不清，卡片上仍带「已调班」标记。',
-      'On phone landscape and wide screens (tablets, car head units) the calendar becomes two panes — month grid on the left, day details on the right — and content is centred with a maximum width instead of stretching across. All pages also work in a Xiaomi floating window or split screen; in a very short window (under 480dp tall) the calendar shows only today\'s info card — the grid is unreadable at that size — and the card still carries the "Shift changed" marker.');
+  static List<String> get guideLayoutDesc => [
+        t('手机横屏、平板与车机上日历改成左右分栏：左边日期网格，右边当天信息',
+            'On phone landscape and wide screens (tablets, car head units) the calendar becomes two panes — month grid on the left, day details on the right'),
+        t('正文限宽居中，不再横向拉满', 'Content is centred with a maximum width instead of stretching across'),
+        t('小米小窗 / 分屏下各页同样可用',
+            'Every page also works in a Xiaomi floating window or split screen'),
+        t('窗口很矮（高 < 480dp）时日历只显示今日信息卡 —— 那个尺寸下网格看不清；卡片上仍带「已调班」标记',
+            'In a very short window (under 480dp tall) the calendar shows only today\'s info card — the grid is unreadable at that size — and the card still carries the "Shift changed" marker'),
+      ];
   static String get guideWidgetTitle => t('桌面小组件', 'Home-screen widgets');
-  static String get guideWidgetDesc => t(
-      '三张固定尺寸的卡：本周条（4×1）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历）。放置后不能拉伸，在 App 里改了排班桌面立刻跟着变，点某一天直接跳到那天的日历。小米 / HyperOS 上要进「支持小部件的应用 → 安卓小部件」才找得到（长按桌面空白处 → 添加小部件）。',
-      'Three fixed-size cards: a week strip (4×1), a today card (4×3 — the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar). They cannot be resized once placed, follow any schedule change you make in the app, and tapping a day jumps to that date in the calendar. On Xiaomi / HyperOS they live under "Apps that support widgets → Android widgets" (long-press an empty spot on the home screen → Add widgets).');
+  static List<String> get guideWidgetDesc => [
+        t('三张固定尺寸的卡：本周条（4×1）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历，标题行两边的箭头能翻前后各三个月）',
+            'Three fixed-size cards: a week strip (4×1), a today card (4×3 — the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar whose title arrows step three months either way)'),
+        t('放上去之后不能拉伸', 'They cannot be resized once placed'),
+        t('装完新版先打开一次 App —— 卡片上的班次是上次打开 App 时算好的，不打开就还是旧样子',
+            'Open the app once after an update — the shifts on the card were worked out the last time the app ran, so until then they are the old ones'),
+        t('在 App 里改了排班，桌面立刻跟着变；点某一天直接跳到那天的日历',
+            'They follow any schedule change you make in the app, and tapping a day jumps to that date in the calendar'),
+        t('小米 / HyperOS 要长按桌面空白处 → 添加小部件，进「支持小部件的应用 → 安卓小部件」才找得到',
+            'On Xiaomi / HyperOS they live under "Apps that support widgets → Android widgets" (long-press an empty spot on the home screen → Add widgets)'),
+      ];
   static String get guidePermTitle => t('权限', 'Permissions');
-  static String get guidePermDesc => t(
-      '首次使用务必到「我的 → 权限」开齐：通知、闹钟和提醒（精确闹钟）、显示悬浮窗、全屏通知、自启动、电池优化。小米机型还要在系统的「应用 → 权限 → 其他权限」里额外开「后台弹出界面」和「锁屏显示」——这两项不开，闹钟到点只会响、不会弹出响铃界面；「自启动」不开，重启手机后闹钟要等下次打开 App 才恢复。',
-      'On first use, enable all in Me → Permissions: notifications, alarms & reminders (exact alarm), display over other apps, full-screen notifications, auto-start and battery optimization. On Xiaomi devices also turn on "Open new windows while running in the background" and "Show on Lock screen" under the system app permissions — without them the alarm only rings and never pops up its screen; without auto-start, alarms return only after the next app launch following a reboot.');
+  static List<String> get guidePermDesc => [
+        t('首次使用务必到「我的 → 权限」逐项开齐：通知、闹钟和提醒（精确闹钟）、显示悬浮窗、全屏通知、自启动、电池优化',
+            'On first use, enable all under Me → Permissions: notifications, alarms & reminders (exact alarm), display over other apps, full-screen notifications, auto-start and battery optimization'),
+        t('小米机型还要在系统的「应用 → 权限 → 其他权限」里开「后台弹出界面」和「锁屏显示」',
+            'On Xiaomi devices also turn on "Open new windows while running in the background" and "Show on Lock screen" under the system app permissions'),
+        t('这两项不开，闹钟到点只会响、不会弹出响铃界面',
+            'Without those two the alarm only rings and never pops up its screen'),
+        t('「自启动」不开，重启手机后闹钟要等下次打开 App 才恢复',
+            'Without auto-start, alarms return only after the next app launch following a reboot'),
+      ];
   static String get guideUpdateTitle => t('更新', 'Update');
-  static String get guideUpdateDesc => t(
-      '「我的 → 检查更新」查看最新正式版/测试版，应用内下载并自动拉起安装。',
-      'Me → Check for updates shows the latest stable/beta builds; download and install in-app.');
+  static List<String> get guideUpdateDesc => [
+        t('「我的 → 检查更新」查看最新正式版 / 测试版',
+            'Me → Check for updates shows the latest stable / beta builds'),
+        t('应用内下载并自动拉起安装', 'Download and install in-app'),
+      ];
 
   // 响铃界面
   static String get snooze => t('再睡一会', 'Snooze');
@@ -566,11 +842,14 @@ class L10n {
   // 外观设置
   static String get advancedMaterial => t('高级材质', 'Advanced material');
   static String get advancedMaterialHint => t(
-      '关闭后去除真实背景模糊，模拟低端机效果', 'Turn off to remove real blur and preview the low-end effect');
+      '磨砂玻璃的背景模糊；关掉更省电、低端机更流畅',
+      'Frosted-glass background blur — turn it off to save battery and go '
+          'smoother on low-end devices');
   static String get hapticFeedback => t('触觉反馈', 'Haptic feedback');
   static String get hapticFeedbackHint => t(
-      '切换开关、选中、拖选与改班等状态变化时轻微震动',
-      'A light buzz on state changes — switches, selection, drag-selecting and applying day changes');
+      '开关翻转、选中、拖选与改班时轻微震动（普通点击不震）',
+      'A light buzz when a switch flips, a selection changes, or you drag-select '
+          'and apply a day change (plain taps stay still)');
 
   // 日期格式
   // 英文下月份要带出来：`yyyy M` 会渲染成「2026 9」，读不出是哪个月。

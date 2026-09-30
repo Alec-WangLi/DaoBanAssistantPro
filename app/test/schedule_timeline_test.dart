@@ -1,0 +1,332 @@
+// app/test/schedule_timeline_test.dart
+//
+// 排班管理页顶部那一节「排班时段」。
+//
+// 这一节是「某天归哪套」的**唯一**入口（编辑器那一节在 v0.9.13 拆掉了），所以它
+// 显示错了没有第二个地方能兜住；而它挡在保存前的重叠校验是这一轮重做的**核心
+// 承诺** —— 用户要的是「不许我犯错」，不是「替我选一个」。
+import 'package:drift/drift.dart' show OrderingTerm, driftRuntimeOptions;
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_action_button.dart';
+import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
+import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
+
+/// 建两套方案（A 是「其余时间」）+ 渲染排班管理页。
+Future<AppDatabase> _pump(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(420, 1400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  final raw = sqlite3.sqlite3.openInMemory();
+  final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+  addTearDown(db.close);
+
+  final repo = AppRepository(db);
+  for (final (name, current) in [('四班两倒', true), ('备选A', false)]) {
+    await repo.saveSchedule(
+      name: name,
+      anchorDate: DateTime.utc(2026, 1, 1),
+      classes: [
+        ShiftClass(name: '$name-白', abbr: '白', startMinute: 480, endMinute: 1080),
+      ],
+      cycle: const [0],
+      makeCurrent: current,
+      teamCount: 1,
+      teamNames: const ['我'],
+      teamOffsets: const [0],
+    );
+  }
+
+  await tester.pumpWidget(ProviderScope(
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: const MaterialApp(home: ScheduleManagementScreen()),
+  ));
+  await tester.pumpAndSettle();
+  return db;
+}
+
+DateTime _d(int y, int m, int d) => DateTime.utc(y, m, d);
+
+Future<List<ScheduleSpanRow>> _spans(AppDatabase db) =>
+    (db.select(db.scheduleSpanRows)
+        ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+      .get();
+
+/// 主动拆掉界面并推一下时钟：drift 取消查询流时排的零时长定时器要真的跑掉，
+/// 否则框架报「A Timer is still pending…」（与 `calendar_screen_test` 同一套）。
+Future<void> _dispose(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 20));
+}
+
+/// 弹层里选一天（日期选择层点某天**直接返回**，没有「确定」按钮）。
+Future<void> _pickDay(WidgetTester tester, int day) async {
+  await tester.tap(find.descendant(
+      of: find.byType(BottomSheet), matching: find.text('$day')));
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  setUpAll(() async {
+    await initializeDateFormatting('zh');
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+  });
+  setUp(() {
+    L10n.locale = 'zh';
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('没有段 → 一行「全部日子」（指向当前方案）+「添加时段」', (tester) async {
+    await _pump(tester);
+
+    // 两个小节各有标题（2026-09-30 用户反馈「两件事连在一起」）。
+    expect(find.text(L10n.scheduleTimeline), findsOneWidget);
+    expect(find.text(L10n.schedulesSection), findsOneWidget);
+
+    // **一个段都没有时不说「其余时间」**：没有「这一段」，「其余」就没有着落 ——
+    // 用户原话「它说『其余时间 五班三倒』，那其实是默认一直都是五班三倒吗？」
+    expect(find.text(L10n.remainingTime), findsNothing);
+    expect(find.text(L10n.allDates), findsOneWidget);
+    expect(find.text(L10n.allDatesHint), findsOneWidget);
+    expect(find.text('四班两倒'), findsWidgets, reason: '全部日子指向它');
+    expect(find.text(L10n.addSpan), findsOneWidget);
+
+    // 排班表那一节里，那套的身份标签也是「正在使用」（与上面同一件事的另一种说法）。
+    expect(find.textContaining(L10n.inUseNow), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('有段 → 段行排在「其余时间」下面，按起点升序', (tester) async {
+    final db = await _pump(tester);
+    final repo = AppRepository(db);
+    final rows = await repo.listSchedules();
+    await repo.addSpan(rows[1].id, from: _d(2026, 9, 1), to: _d(2026, 9, 30));
+    await repo.addSpan(rows[1].id, from: _d(2026, 10, 8));
+    await tester.pumpAndSettle();
+
+    // 三行都在，且顺序对：其余时间 → 9/1～9/30 → 10/8 起
+    final labels = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.data ?? '')
+        .where((s) =>
+            s == L10n.remainingTime ||
+            s.startsWith(L10n.monthDay(_d(2026, 9, 1))) ||
+            s.startsWith(L10n.monthDay(_d(2026, 10, 8))))
+        .toList();
+    expect(labels, [
+      L10n.remainingTime,
+      L10n.effectiveRangeSpan(
+          L10n.monthDay(_d(2026, 9, 1)), L10n.monthDay(_d(2026, 9, 30))),
+      L10n.effectiveFromDate(L10n.monthDay(_d(2026, 10, 8))),
+    ]);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('「全部日子」（没段时）能设成「无」，也能设回来', (tester) async {
+    final db = await _pump(tester);
+
+    await tester.tap(find.text(L10n.allDates).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.remainingNone).last);
+    await tester.pumpAndSettle();
+
+    expect((await AppRepository(db).getActiveSchedules())!.currentScheduleId,
+        isNull);
+    // 用 `findsWidgets`：弹层里那个「无」选项可能还挂在关闭动画里。真正的判据
+    // 是上面那句状态断言。
+    expect(find.text(L10n.remainingNone), findsWidgets, reason: '那一行显示「无」');
+    // 没有兜底班表时，说明换成「下一步挑一套」的那一版。
+    expect(find.text(L10n.allDatesNoneHint), findsOneWidget);
+
+    // 再设回来
+    await tester.tap(find.text(L10n.allDates).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('四班两倒').last);
+    await tester.pumpAndSettle();
+    expect((await AppRepository(db).getActiveSchedules())!.currentScheduleId,
+        isNotNull);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('既不是其余时间、也没段的方案带「未使用」', (tester) async {
+    await _pump(tester);
+    // 它是**列表行副标题**里的一段（「未使用 · 1 个班组 · 1月1日」），所以
+    // `find.text` 整串比不中，要用 `textContaining`。
+    expect(find.textContaining(L10n.unusedSchedule), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('加一段与已有的段重叠 → 不让写库，并点名撞了谁', (tester) async {
+    final db = await _pump(tester);
+    final repo = AppRepository(db);
+    final rows = await repo.listSchedules();
+    final now = DateTime.now();
+    await repo.addSpan(rows[1].id,
+        from: DateTime(now.year, now.month, 1),
+        to: DateTime(now.year, now.month + 1, 0));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.addSpan));
+    await tester.pumpAndSettle();
+    // 起 = 本月 15 日（落在已有那一段里）→ 止留空 = 一直持续 → 必然重叠
+    await tester.tap(find.text(L10n.spanFrom));
+    await tester.pumpAndSettle();
+    await _pickDay(tester, 15);
+    await tester.tap(find.text(L10n.save));
+    await tester.pumpAndSettle();
+
+    expect(await _spans(db), hasLength(1), reason: '撞上就不该写库');
+    expect(find.textContaining('重叠了'), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('首尾相接**可以**存（A 到 14 日、新的从 15 日起）', (tester) async {
+    final db = await _pump(tester);
+    final repo = AppRepository(db);
+    final rows = await repo.listSchedules();
+    final now = DateTime.now();
+    await repo.addSpan(rows[1].id,
+        from: DateTime(now.year, now.month, 1),
+        to: DateTime(now.year, now.month, 14));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.addSpan));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.spanFrom));
+    await tester.pumpAndSettle();
+    await _pickDay(tester, 15);
+    await tester.tap(find.text(L10n.save));
+    await tester.pumpAndSettle();
+
+    final spans = await _spans(db);
+    expect(spans, hasLength(2), reason: '相接不算重叠');
+    expect(dayNumber(spans.last.startDate!), dayNumber(DateTime(now.year, now.month, 15)));
+
+    await _dispose(tester);
+  });
+
+  testWidgets('删掉一段之后它就不在时间线上了', (tester) async {
+    final db = await _pump(tester);
+    final repo = AppRepository(db);
+    final rows = await repo.listSchedules();
+    final now = DateTime.now();
+    await repo.addSpan(rows[1].id,
+        from: DateTime(now.year, now.month, 1),
+        to: DateTime(now.year, now.month, 14));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.effectiveRangeSpan(
+        L10n.monthDay(DateTime(now.year, now.month, 1)),
+        L10n.monthDay(DateTime(now.year, now.month, 14)))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.delete));
+    await tester.pumpAndSettle();
+
+    expect(await _spans(db), isEmpty);
+
+    await _dispose(tester);
+  });
+
+  // ── 弹层的那两颗钮（2026-09-30 用户真机反馈）──
+  //
+  // 「取消」当时是**点不动的**：`onPressed: () => dialogCloser(ctx)` —— `dialogCloser`
+  // **返回**一个闭包（惯用法是 `onPressed: dialogCloser(ctx)`），套一层箭头函数
+  // 等于把闭包造出来又扔掉，谁也没调。Dart 允许「返回一个函数的函数」赋给
+  // `void Function()`，所以它**编译得过、不报错、也不关窗** —— 少一条用例就没人
+  // 看得见。全仓同一写法只剩这里与「其余时间」选择层两处，两条各钉一遍。
+  testWidgets('时段弹层的「取消」必须真的关窗', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text(L10n.addSpan));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.spanFrom), findsOneWidget, reason: '弹层开着');
+
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.spanFrom), findsNothing, reason: '点了「取消」必须关窗');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('「全部日子」选择层的「取消」必须真的关窗', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text(L10n.allDates).first);
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.remainingNone), findsOneWidget, reason: '弹层开着（有「无」这一项）');
+
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.remainingNone), findsNothing, reason: '点了「取消」必须关窗');
+
+    await _dispose(tester);
+  });
+
+  // 「删除 / 取消 / 保存」三颗钮原先**紧挨着**（`GlassDialog` 的 actions 是一个
+  // 光秃秃的 `Row`，间隔得各调用点自己给），而全仓其余弹窗都写了
+  // `SizedBox(width: 8)` —— 就这一处漏了，所以真机上看着挤。这条按**几何**钉：
+  // 相邻两颗钮之间至少要有 8dp 空隙。
+  testWidgets('时段弹层三个按钮之间留出了间隔', (tester) async {
+    final db = await _pump(tester);
+    final rows = await AppRepository(db).listSchedules();
+    await AppRepository(db)
+        .addSpan(rows[1].id, from: DateTime.utc(2026, 9, 1), to: DateTime.utc(2026, 9, 30));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.effectiveRangeSpan(
+        L10n.monthDay(_d(2026, 9, 1)), L10n.monthDay(_d(2026, 9, 30)))));
+    await tester.pumpAndSettle();
+
+    double rightOf(String label) => tester
+        .getTopRight(find.widgetWithText(GlassActionButton, label))
+        .dx;
+    double leftOf(String label) =>
+        tester.getTopLeft(find.widgetWithText(GlassActionButton, label)).dx;
+
+    expect(leftOf(L10n.cancel) - rightOf(L10n.delete), greaterThanOrEqualTo(8),
+        reason: '「删除」与「取消」之间要有间隔');
+    expect(leftOf(L10n.save) - rightOf(L10n.cancel), greaterThanOrEqualTo(8),
+        reason: '「取消」与「保存」之间要有间隔');
+
+    await _dispose(tester);
+  });
+
+  // 弹层里那三个标签（排班 / 从 / 到）原本是 `rowSecondary`（13 / w400）—— 比
+  // **打开它的那一行**（同一页时间线上那行，`rowPrimary` 14 / w500）又小又轻一档，
+  // 也是全 App 唯一一处把表单行手写成 13/w400 的弹层（别的弹层走 `ListTile` 默认
+  // 16）。用户 2026-10-01 反馈「添加时段界面里面字体好像有点小」。
+  //
+  // 这不是新规矩：本仓为同一件事已经写过一次注释 —— 编辑器那条「卡片标题与行内标签
+  // 落在统一档位」里写着「迁移时如果只对字号不对字重，会掉到 w400 的 rowSecondary，
+  // 这正是要钉住的」。这条就是给这个弹层补上那颗钉子。
+  testWidgets('添加时段弹层：三个标签用 rowPrimary，与同页那行同档', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text(L10n.addSpan));
+    await tester.pumpAndSettle();
+
+    for (final label in [L10n.schedule, L10n.spanFrom, L10n.spanTo]) {
+      final t = tester.widget<Text>(find.descendant(
+          of: find.byType(GlassDialog), matching: find.text(label)));
+      expect(t.style!.fontSize, AppTokens.rowPrimary.fontSize,
+          reason: '「$label」的字号');
+      expect(t.style!.fontWeight, AppTokens.rowPrimary.fontWeight,
+          reason: '「$label」的字重（掉到 w400 就是这一版修的那个毛病）');
+    }
+
+    await _dispose(tester);
+  });
+}

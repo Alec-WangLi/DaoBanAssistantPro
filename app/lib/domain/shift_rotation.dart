@@ -253,8 +253,23 @@ class ShiftClass {
   String toString() => 'ShiftClass($name, rest=$isRest)';
 }
 
+/// 「某天什么班」的**唯一**查询面 —— 日历、闹钟、桌面小组件都只依赖它。
+///
+/// 抽出来是为了让「单套方案」与「按天衔接的多套方案」（`ScheduleChain`，
+/// 见 `schedule_chain.dart`）在调用点**无法区分**：`planShiftAlarms` /
+/// `AlarmService.reschedule` 从前收的是 `ShiftSchedule`，改成收这个接口之后
+/// 传哪一边都对，而调用点拿到的就是「一个能回答某天什么班的东西」。
+abstract class ShiftSource {
+  /// 某天的班次；那天没有班次（空白表 / 无方案）返回 null。
+  ShiftClass? shiftOn(DateTime date);
+
+  /// 日志用的一行描述。**不是用户可见文案**（Kotlin 的日志串本来就是中文，
+  /// 仓库既有惯例）。
+  String get label;
+}
+
 /// 一套排班方案（班次定义 + 轮换周期 + 多班组）。
-class ShiftSchedule {
+class ShiftSchedule implements ShiftSource {
   const ShiftSchedule({
     required this.name,
     required this.anchorDate,
@@ -304,6 +319,9 @@ class ShiftSchedule {
 
   int get cycleLength => cycle.length;
 
+  @override
+  String get label => name;
+
   /// 我们班组的班次：先查按天覆盖，没有覆盖才按轮转算。
   ///
   /// **覆盖只在 `shiftOn` 这一层生效**，所以四个消费者 —— 日历格子、底栏
@@ -313,6 +331,7 @@ class ShiftSchedule {
   ///
   /// 覆盖下标越界（班次被删、历史脏数据）时**回退到轮转**，不抛异常。
   /// 空白表（无周期）仍返回 null，覆盖不改变这一点。
+  @override
   ShiftClass? shiftOn(DateTime date) {
     final ov = dayOverrides[dayNumber(date)];
     if (ov != null && ov >= 0 && ov < classes.length) return classes[ov];

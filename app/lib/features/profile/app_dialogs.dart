@@ -21,14 +21,13 @@ void showAppInfoDialog(
     builder: (dialogContext) => GlassDialog(
       title: title,
       showClose: true,
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420),
-        child: SingleChildScrollView(
-          child: Text(
-            content,
-            style: AppTokens.rowSecondary.copyWith(height: 1.55),
-          ),
-        ),
+      // **不要再套一层 `ConstrainedBox(420) + SingleChildScrollView`**：那会造出
+      // 第二个、更小的视口，正文仍然在它自己的底边被切断（而且切在按钮上方一点点，
+      // 看着还是像有块板子）。`GlassDialog` 现在自己就是「整块面板高的滚动区 +
+      // 浮在上面的动作行」，交给它就行。
+      content: Text(
+        content,
+        style: AppTokens.rowSecondary.copyWith(height: 1.55),
       ),
       actions: [
         GlassActionButton(
@@ -41,98 +40,153 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.3\n'
-    '· 修好 0.9.2 里漏掉的一类班次：12 小时制的夜班（20:30 上班那种）配一个落在值班时间之内的闹钟，从前会被排到前一天同一钟点 —— 0.9.2 只修好了「00:00 上班」那种写法，这类没修到。现在两种写法都算班次当天\n'
-    '· 修好闹钟页把整行藏早了一点：那天的第一个闹钟响过之后，整行（连同后面还没到的那条）就看不见了，也没法在那行关掉当天剩下的闹钟。现在只要那天还有没响的闹钟，那一行就留着\n'
-    '· 闹钟名字最多 12 个字（太长会把闹钟页那一行撑坏）\n\n'
+const String _changelogZh = 'v0.10.0\n'
+    '· 桌面小组件三张卡都在了：本周条、今日卡、整月。整月那张把上个月下个月连起来画，标题行两边的箭头能翻前后各三个月；在 App 里改了排班，桌面立刻跟着变\n'
+    '· 每个班次最多能挂 6 条闹钟，每条可以起名字 —— 「起床」「午休」分开响\n'
+    '· 排班时段重做：在「排班管理」页的一条时间线上排「哪几天用哪套班表」，两段不许重叠，其余时间可以设成「无」（领导真给休息几天时，不必专门再建一套休息班表）。一套班表还能出现在多段上 —— 9 月临时换、10 月换回来\n'
+    '· 多套班表按日期衔接：日历、闹钟、桌面小组件都按天取「那天归哪套」，翻回历史看到的也是那时的班、不是现在的\n'
+    '· 重复待办：每周三的会到点自己冒出来，勾掉的留成历史；提醒由系统自己续排，App 长期不开也照常响\n'
+    '· 「法定班次」（跟随法定节假日）现在就是一张日历：只画日期与农历，不再替它写「上班 / 休息」\n'
+    '· 日历上能单独改某几天的班（请假、跟同事换班）：点信息卡那行班次，或长按格子拖选一段；改过的那天有标记，也能一键恢复轮转\n'
+    '· 「我的模板」：调好的班表存下来，下次新建排班直接从最上面那组里选\n'
+    '· 闹钟铃声多了一档「仅震动」，也能从手机里自选音频\n'
+    '· 修好一批评测里报上来的毛病：桌面小组件的字重影、系统字号放大后日历文字被截、待办与闹钟列表最后一行被悬浮按钮压住、弹窗按钮跑到左边、弹层里正文被按钮拦腰切断、零点班（00:00 上班）的闹钟排在班次当天而不是上班前一晚……\n'
+    '· 「我的」页的说明重写了一遍，并多了一条「桌面小组件」（怎么加到桌面、装完新版为什么要先打开一次 App）\n'
+    '· 清空重置现在真的回到刚安装的样子：排班、日程、闹钟、模板、你保存的铃声与外观设置一起清掉\n'
+    '\n'
 
-    'v0.9.2\n'
-    '· 新增：每个班次最多可以配 6 个联动闹钟，每条还能起个名字（「起床」「午休」）。响铃标题会写明是哪一条（「白班 · 午休」）；不填名字就还是「白班提醒」\n'
-    '· 修好一个会把闹钟排错天的问题：钟点落在值班时间之内的闹钟（白班的午休、零点班班中那次）从前被排到前一天同一钟点 —— 等于提前二十来小时响。现在这类算班次当天；起床闹钟那种（早于上班、或零点班的前一晚）照旧\n'
-    '· 班次编辑页的闹钟区跟着改了：一条一行（时间 + 名字 + 删除），下面有「添加闹钟」；到 6 个上限时收掉按钮、给一行说明\n'
-    '· 闹钟页「未来 30 天」一个班次当天有几条就列几行，「前一天」那条各自标；日历信息卡写「闹钟 06:30 等 2 个」\n'
-    '· 数据库版本 9 → 10（班次闹钟单独一张表），老数据自动搬过去，配过的闹钟一条不丢（开关关着但时间还留着的也搬）\n\n'
+    'v0.9.19\n'
+    '· 修好弹窗里的按钮跑到左边：上一版为了让小窗（200×400）下「删除 / 取消 / 保存」这种多按钮弹窗不横向溢出，动了弹窗共用的按钮行 —— 结果全 App 的弹窗（版本更新、删除确认、排班时段……）的按钮都变成了靠左。现在恢复靠右，小窗该折行的照样折行\n'
+    '· 编辑排班页底部那颗「保存并重排闹钟」不再垫着一条挡板：它是浮在正文上的，界面滑到它下面时能看见内容从底下穿过去（此前正文到那条按钮带的上沿就被硬切，下面露出一整片平色）。滑到底时最后一张卡会整个抬到按钮上面，不会被压住\n'
+    '\n'
 
-    'v0.9.1\n'
-    '· 修好一个用户反馈的问题：添加待办时快速连点「添加」，整个界面会变黑 —— App 本身没死也没卡住（状态栏还在、也能切走），只是界面被「关到底」了，只能杀掉重开。原因是这类保存要过一小会儿才落定，这段窗口里再点一次就会多存一条待办、并且多关一层 —— 多关掉的那一层正是 App 唯一剩下的主界面。现在连点只存一条，界面也不会再被关空\n'
-    '· 同一道护栏也盖住了另外两条能把界面点黑的路径：「点完添加马上点取消」、以及闹钟弹窗里的「添加 / 保存」\n\n'
+    'v0.9.18\n'
+    '· 桌面小组件那张月历能翻的范围，从「前后各一个月」放宽到「前后各三个月」—— 标题行两边的箭头点一下翻一月。顺带一个好处：你更久不开 App，卡片上的数据也还够用\n'
+    '· 装完新版请先打开一次 App：小组件上的班次是 App 上次运行时算好的，不打开的话卡片还是旧样子（重启桌面也能让它重画，但没必要）。这条从这一版起写进更新说明，免得你以为升级把桌面弄乱了\n'
+    '· 修好待办与闹钟列表的一个毛病：条目多的时候，最后一行会被右下角那颗悬浮按钮（以及闹钟页底部那条按钮条）压住，删除键点不到。现在滑到底能把它绕到按钮上面\n'
+    '· 「排班时段 → 添加时段」那个弹层的字体与同一页对齐了：里面三个标签原来又小又轻一档（13/w400），现在与打开它的那一行一样（14/w500）\n'
+    '· 顺手修掉小窗（200×400）下这个弹层的两处布局毛病：三个按钮挤不下时横向溢出、日期那两行的取值放不下\n'
+    '\n'
 
-    'v0.9.0\n'
-    '· 正式稳定版，归纳 0.8.1 到 0.8.12 的全部更新\n'
-    '· 桌面小组件：三张固定尺寸的卡 —— 本周条（4×1，今天所在这一周）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历）。放置后不能拉伸，在 App 里改了排班桌面立刻跟着变，点某一天直接跳到那天的日历。升级后桌面上原有的旧小组件会消失，需要在桌面重新添加一次（小米 / HyperOS 在「支持小部件的应用 → 安卓小部件」里找）\n'
-    '· 日历上可以单独改某几天的班了：点底栏那行班次、或长按格子拖选一段（可跨周、不跨月），就能给这几天单独指定班次（请假、跟同事换班都行），不动整套排班。被改过的那天格子上有个小圆点、信息卡写着「已调班」，选择层里可一键「恢复轮转」\n'
-    '· 新增「我的模板」：调好一套排班之后，在编辑器右上角点「存为模板」，下次新建排班时直接在「我的模板」里选它，不用每次从头搭\n'
-    '· 新增「五班三倒 · 10 天一轮」模板；触觉反馈（切换开关、选中、拖选与改班时轻微震动，可在「我的 → 外观」里关掉）\n'
-    '· 修好两个用户反馈的问题：① 零点班（00:00 上班）的联动闹钟从前排在班次当天 —— 那会儿班已经结束 15 小时了，现在排在上班前 1 小时（前一天晚上），界面上写明「前一天」；② 把 5 天一轮的排班改成 10 天之后，同一天会出现两个班组上同一个班 —— 现在编辑器的「周期设置」里会点出相撞的两个班组，并给一个按钮按周期长度均分各组的起始日\n'
-    '· 修好「存了模板在新建排班时看不到」：如果这一趟先打开过「新建排班」，之后存的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
-    '· 一批小组件与界面的修复：大卡上「今天」的标记、待办数徽章跟着变、删掉小组件后不再后台刷新；小窗（高 < 480dp）改为只显示今日信息卡；横竖屏与宽屏布局收口；调整班次的选择层重排、色点与信息卡统一成 12dp\n'
-    '· 内置倒班方式模板共 20 种；数据库版本 8 → 9（新增「我的模板」一张表，原有排班与待办一条不丢）\n\n'
+    'v0.9.17\n'
+    '· 桌面小组件那张月历（最大的那张）现在把上个月和下个月的日子连起来一起画了：月头月尾那几格不再是空的，相邻的日数字淡一档、班次照常显示，整张卡读起来是一段连续的日子\n'
+    '· 那张卡的标题行多了左右两个箭头：点一下翻上 / 下月，翻到没有数据的月份那侧会变灰；点中间的月份文字回到今天那个月\n'
+    '· 翻到你关注的月份之后，跨天、跨月都不会把你拽回来 —— 停在你翻到的那个月，直到你自己点回今天\n'
+    '\n'
 
-    'v0.8.12\n'
-    '· 修好「存了模板却在新建排班时看不到」：如果这一趟开 App 时先打开过一次「新建排班」（那时还没有模板），之后存下的模板要等重启 App 才出现 —— 现在每次打开都会重新读\n'
-    '· 存完模板的提示补了一句去哪儿找：「新建排班时可选」\n\n'
-    'v0.8.11\n'
-    '· 新增「我的模板」：调好一套排班之后，在编辑器右上角点「存为模板」，下次新建排班时直接在「我的模板」里选它 —— 自己厂里的班表不用每次从头搭\n'
-    '· 存下的模板可以在选择页点「管理」改名或删除；每张卡片上写着几天一轮、几个班组\n\n'
-    'v0.8.10\n'
-    '· 新增「五班三倒 · 10 天一轮」模板：早班两天、中班两天、休一天、夜班两天，然后休三天。此前只有 5 天一轮的那套，10 天一轮得自己搭 —— 内置模板现在共 20 种\n'
-    '· 修好「把 5 天一轮的排班改成 10 天之后，同一天有两个班组上同一个班」：各组的周期起始日此前不跟着周期长度走。现在编辑器的「周期设置」里会直接点出撞班的两个班组，并给一个按钮把各组起始日按周期长度一键均分（你自己那一组不动）\n\n'
-    'v0.8.9\n'
-    '· 修好零点班（00:00 上班）的联动闹钟排晚了整整一天：响铃设成 23:00 时，以前排在班次当天晚上 23:00 —— 那时这个班已经结束 15 个小时；现在排在「前一天」晚上 23:00，也就是上班前 1 小时。早班、中班这些上班前设响铃的班次不受影响\n'
-    '· 闹钟落在上班前一天的，界面上会写明「前一天」：班次设置里响铃那一块写成「前一天 23:00」并附一行说明，闹钟页的列表和日历信息卡同样标出来 —— 以前只写「23:00」，看不出是哪一天\n\n'
-    'v0.8.8\n'
-    '· 桌面小组件改成三张固定尺寸的卡，放置之后不能再拉伸：本周条（4×1，今天所在这一周的七天）、今日卡（4×3，App 底栏那张信息卡的完整版）、整月（4×5，月份标题 + 周几行 + 42 格）\n'
-    '· 三张卡的视觉跟着 App 的设计语言走：班次胶囊从实心改成淡染底 + 同色描边（那天没班次就不画），去掉「白卡里再套白卡」的双层\n'
-    '· 升级后桌面上原有的旧小组件会消失，需要在桌面重新添加\n\n'
-    'v0.8.7\n'
-    '· 修好桌面小组件上那枚「N 项待办」徽章不跟着变：在 App 里勾掉或新增今天的待办之后，此前要等到下次打开 App 它才更新，现在会跟着一起变\n'
-    '· 内部：推送路径上新加的一处数据库读取补上了错误处理 —— 此前读失败一次会中断整次推送刷新\n';
-const String _changelogEn = 'v0.9.3\n'
-    '· Fixed a class of shifts missed in 0.9.2: a 12-hour night shift (the 20:30-start kind) with an alarm set inside the shift was still scheduled on the previous day at the same clock time — 0.9.2 only fixed the "midnight start" shape. Both shapes now ring on the shift\'s own day\n'
-    '· Fixed the alarm page hiding a day too early: once that day\'s first alarm had rung, the whole row (including alarms still to come that day) disappeared, and the rest of the day could no longer be muted from it. The row now stays as long as some alarm is still coming\n'
-    '· Alarm names are capped at 12 characters (a longer one used to break the alarm page row)\n\n'
+    'v0.9.16\n'
+    '· 「法定班次」（跟随法定节假日）不再写「上班 / 休息」了：这种班表在日历格子、小窗那张信息卡与桌面小组件上都只画日期与农历 —— 法定节假日照旧标红、调休照旧打「班」。它本质上就是一张日历，上一版替它标上「上班」是我想多了\n'
+    '· 顺带：这种班表下信息卡不再为那一行留高度，卡片矮约 16dp，上面六个格子相应高一点\n'
+    '· 上一版改对的那一半照旧：「这段时间没有排班」那句只在真的没有任何班表盖着这些天时才出现 —— 判定它的是「这天有没有班表在管」，与「这天画不画得出东西」从此分开看\n'
+    '\n'
 
-    'v0.9.2\n'
-    '· New: each shift can carry up to 6 linked alarms, and each one can have a name ("Wake up", "Nap"). The ringing screen says which one it is ("Day shift · Nap"); leave the name empty and it stays "Day shift alarm"\n'
-    '· Fixed alarms landing on the wrong day: an alarm whose clock time falls inside the shift (a lunch nap on a day shift, a break during a midnight shift) used to be scheduled on the previous day at the same time — some 20 hours early. Those now ring on the shift\'s own day; wake-up alarms (before the shift, or the night-before case for midnight shifts) are unchanged\n'
-    '· The shift editor\'s alarm section follows: one row per alarm (time + name + delete) with an "Add alarm" button; at the 6-alarm limit the button goes away and a line explains why\n'
-    '· The alarm page lists every alarm a shift has that day, each carrying its own "day before" tag where it applies; the calendar info card reads "Alarm 06:30 (+1)"\n'
-    '· Database version 9 → 10 (alarms get their own table); existing data moves over automatically and no alarm is lost — including times kept on shifts whose alarm switch is off\n\n'
+    'v0.9.15\n'
+    '· 「法定班次」（跟随法定节假日）不再被当成「没有排班」了：这种班表每一天都画得出来 —— 法定节假日写「休息」、其余日子写「上班」，日历格子、小窗那张信息卡与桌面小组件同一个口径。此前只有一套这种班表时，整张日历被「这段时间没有排班」盖住，可你明明是按法定节假日上班的\n'
+    '· 排班管理页分成两节：「排班时段」在上、「排班表」在下，各带一个标题，不再挤成一片\n'
+    '· 一个时段都没有时，那行改说「全部日子」，不再说「其余时间」：「其余」得有「这一段」才有意义，一段都没有时那句话会被读成「这是默认一直用它的意思吗」\n'
+    '· 修好「排班时段」弹层里的「取消」：点了没有任何反应。顺手把「删除 / 取消 / 保存」三颗钮之间补上间隔（原先紧挨着）\n'
+    '· 待办页那个「重复待办」入口挪到了右上角（原来紧贴在标题后面，看着像标题的一部分）\n'
+    '· 修好更新说明里的 markdown 标记：像「两段时间不许重叠」那种加粗写法会原样带上两个星号。更新日志走的是纯文本渲染，标记不会被解析；这回补了一条用例盯着，再混进去就直接失败\n'
+    '· 修好「把每周三改成每周五」这条路径在周三、周四不生效：编辑一个重复待办时会把系列的起始日改写成「当前这一次」的日期，于是「最近的那个周五」被算成早于起始日、静默不对齐\n\n'
 
-    'v0.9.1\n'
-    '· Fixed an issue reported by users: tapping "Add" twice in a row while adding a todo turned the whole screen black — the app itself was neither dead nor frozen (the status bar was still there, you could still switch apps), the UI had simply been dismissed one screen too far, and only killing the app brought it back. The save takes a moment to land, and a second tap inside that window stored a duplicate todo and dismissed an extra screen — that extra one being the app\'s only remaining screen. A rapid double-tap now stores a single todo and leaves the UI alone\n'
-    '· The same guard covers two other ways to black out the screen: tapping "Add" and then "Cancel" right away, and the "Add / Save" buttons in the alarm dialog\n\n'
+    'v0.9.14\n'
+    '· 「排班时段」不再设在排班编辑器里了：现在在「排班管理」页顶部，一条时间线由上到下 —— 头一行是「其余时间」（没被时段覆盖的日子归它管），下面是你排的每一段，点任意一行就能改\n'
+    '· 两段时间不许重叠：一天只能有一套排班。撞上了会告诉你跟哪一段撞的、撞的是哪几天。（从前允许重叠，结果设了两套都占 9 月、出来的是其中一套，说不清为什么）\n'
+    '· 「其余时间」可以设成「无」：两个班表之间领导真给休息几天时，直接留空就行，不必再专门建一套「休息」的班表。那些天在日历上会写一句「这段时间没有排班」，告诉你去哪加一段\n'
+    '· 日历顶栏那个「切换排班」按钮改成了「排班时段」：点开是一张只读的时间线，能看到这段时间在用哪套、今天落在哪一段，要改就点底下的「管理排班时段」。原来那个按钮在时段盖满日子之后就什么也改不动，看着像坏了\n'
+    '· 一套班表现在可以出现在多段上（9 月临时换成别的班表、10 月再换回来），从前那种「一套只占一段」的写法表达不了\n\n'
 
-    'v0.9.0\n'
-    '· Stable release — merges everything from 0.8.1 through 0.8.12\n'
-    '· Home-screen widgets: three fixed-size cards — a week strip (4×1, the current week), a today card (4×3, the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar). They cannot be resized once placed, follow any schedule change you make in the app, and tapping a day jumps to that date in the calendar. After upgrading, the old widget disappears from your home screen — add it again (on Xiaomi / HyperOS it lives under "Apps that support widgets → Android widgets")\n'
-    '· Override individual days on the calendar: tap the shift row in the bottom bar, or long-press a cell and drag to pick a range (across weeks, not months), to give just those days a shift of their own — a day off, or swapping with a colleague — without touching the rest of the rotation. An overridden day carries a small dot in the grid and reads "Shift changed" on the info card, and the picker offers a one-tap "Restore rotation"\n'
-    '· New "My templates": once a schedule looks right, tap "Save as template" in the editor and pick it next time you create one — no more rebuilding your own roster from scratch\n'
-    '· New "5-crew 3-shift · 10-day cycle" template; haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change — turn it off under Me → Appearance)\n'
-    '· Fixed two issues reported by users: (1) shift alarms for midnight shifts (00:00 start) used to be scheduled on the shift\'s own day — by then that shift had been over for 15 hours; they now ring one hour before the shift starts, the evening before, and the UI says so; (2) after changing a 5-day cycle into a 10-day one, two crews ended up on the same shift on the same day — the editor\'s cycle section now names the colliding crews and offers a button that spreads their start dates evenly\n'
-    '· Fixed "saved templates not showing up when creating a schedule": if you had opened "New schedule" earlier in the same session, a template saved afterwards only appeared after restarting the app — the list is now re-read every time\n'
-    '· A batch of widget and UI fixes: the "today" marker on the large card, the todo-count badge keeping up, no more background refresh after you remove the widget; small windows (under 480dp tall) now show only today\'s info card; landscape and wide-screen layouts tightened up; the adjust-shift sheet reworked with the colour dot unified to 12dp\n'
-    '· 20 built-in shift-pattern templates; database version 8 → 9 (one new table for "My templates" — no existing schedules or todos are lost)\n\n'
+    'v0.9.13\n'
+    '· 待办页右上角那个「重复待办」入口重新做了：原来是几个小字，现在是实心主色胶囊（与日历右上角那颗「今天」同一个形态），一眼看得出是个按钮。窄屏上仍只留图标，位置不变\n\n'
 
-    'v0.8.12\n'
-    '· Fixed saved templates not showing up in the picker: if you had opened "New schedule" once earlier in the same app session (back when you had no templates yet), a template saved afterwards only appeared after restarting the app. The list is now re-read every time you open it\n'
-    '· The confirmation shown after saving now says where to find it ("pick it when creating a schedule")\n\n'
-    'v0.8.11\n'
-    '· New "My templates": once a schedule looks right, tap "Save as template" in the editor\'s top-right corner and pick it the next time you create a schedule — no more rebuilding your own roster from scratch\n'
-    '· Saved templates can be renamed or deleted from "Manage" on the picker; each card shows the cycle length and team count\n\n'
-    'v0.8.10\n'
-    '· New "5-crew 3-shift · 10-day cycle" template: two mornings, two afternoons, one off, two nights, then three off. Until now only the 5-day version existed, so a 10-day roster had to be built by hand — there are now 20 built-in templates\n'
-    '· Fixed two crews landing on the same shift on the same day after changing a 5-day cycle into a 10-day one: the crew start dates never followed the cycle length. The editor\'s cycle section now names the two crews that collide and offers a button that spreads every crew start date evenly across the cycle (your own crew stays put)\n\n'
-    'v0.8.9\n'
-    '· Fixed shift alarms for midnight shifts (00:00 start) landing a full day late: an alarm set to 23:00 used to be scheduled for 23:00 on the shift\'s own day — by then that shift had been over for 15 hours. It now rings at 23:00 the day before, one hour before the shift starts. Morning and afternoon shifts, whose alarm already sits before the start, are unaffected\n'
-    '· When an alarm falls the day before a shift the app now says so: the shift editor shows "23:00 (day before)" with a line explaining why, and the alarm list and the calendar info card are tagged the same way — a bare "23:00" never told you which day it was\n\n'
-    'v0.8.8\n'
-    '· The home-screen widget is now three fixed-size cards that cannot be resized once placed: a week strip (4×1 — the seven days of the current week), a today card (4×3 — the full version of the info card at the bottom of the app), and a month view (4×5 — month title, day-of-week row and a 6×7 grid)\n'
-    '· Their look now follows the app\'s design language: shift chips went from solid fills to a tinted background with a matching outline (a day with no shift stays blank), and the "white card inside a white card" double container is gone\n'
-    '· After upgrading, the old widget on your home screen will disappear — you will need to add it again\n\n'
-    'v0.8.7\n'
-    '· Fixed the "N todos" badge on the home-screen widget not keeping up: after you tick off or add a todo for today in the app, the badge used to stay put until the next time you opened the app — it now follows along\n'
-    '· Internal: a database read on the widget-push path gained error handling — one failed read used to abort the whole push refresh\n';
+    'v0.9.12\n'
+    '· 排班表可以「衔接」了：每套方案能设一个生效时段（从几号到几号，两端都可以留空 —— 留空就是「不限起点」或「一直持续」）。日历、闹钟、桌面小组件从此都按天取「那天归哪一套」，翻回历史看到的也是当时的班\n'
+    '· 设在排班编辑器里新的一节「生效时段」（在「班组设置」下面）。没设过时段的方案不参与衔接，一切照旧 —— 升级后什么都不用做\n'
+    '· 顶栏「切换排班」现在写明每套方案管哪些日子：设了时段的写时段；没设时段又正在用的那套标「其余日子」（没被时段覆盖的日子就归它管）\n'
+    '· 日历上长按选一段日子改班时，如果这段跨了两套排班，会提示你分开调整 —— 从前那样只会改到一半，另一半悄没声地不动\n\n'
+
+    'v0.9.11\n'
+    '· 待办能重复了：新建待办时选「每天 / 每周几 / 每月某日」，它就会按时自己出现 —— 不用每周手动建一次。勾掉之后留成历史（带删除线），下一次到点自动来一条新的\n'
+    '· 一个重复待办同时只占一行：永远是「当前这一次」。过期没勾的，下一次到点时就地顺延，不会堆出一串「上周三的会」\n'
+    '· 删一条重复待办时会问一句：是「只这一次不要了」，还是「删除整个重复」—— 前者只是跳过这一次（下次照常出现），后者连它已完成的历史一起删掉\n'
+    '· 待办页右上角多了「重复待办」入口（小窗里只剩图标）：能看到有哪些重复项、各自的下一次是什么时候，能改周期、能停用、能删。停用之后当前那条会留着 —— 那是你还没做的一件事，不替你收走\n'
+    '· 重复待办的提醒由系统自己接着排，App 长期不开也照常响，不是「等你下次打开才补上」\n\n'
+
+;
+
+const String _changelogEn = 'v0.10.0\n'
+    '· All three home-screen cards are in: the week strip, the today card and the month view. The month card draws the neighbouring months as well, its title arrows step three months either way, and any schedule change in the app shows up on the cards\n'
+    '· A shift can now carry up to 6 alarms, each with a name — "Wake up" and "Nap" ring separately\n'
+    '· Schedule periods rebuilt: arrange which schedule covers which dates on a single timeline on the Schedules page. Periods may not overlap, "Other dates" can be set to none (for the days your manager really does give you off, without building a rest schedule), and one schedule can appear in several periods — swap away for September and swap back in October\n'
+    '· Schedules chain by date: the calendar, the alarms and the home-screen cards all work out day by day which schedule a date belongs to, so history shows the schedule that was in force back then\n'
+    '· Repeating todos: a Wednesday meeting shows up on its own, ticking it keeps it as history, and the system re-arms the reminder, so it still rings after the app has been closed for a long while\n'
+    '· A "legal-holiday schedule" (follow the public holidays) is just a calendar now: dates and lunar lines, no invented "Workday / Rest"\n'
+    '· Change a few days on their own (a day off, or swapping with a colleague): tap the shift row on the info card, or long-press a cell and drag. An adjusted day is marked and one tap restores the rotation\n'
+    '· "My templates": save a schedule you like and pick it first next time you create one\n'
+    '· A "Vibrate only" ringtone, and you can pick your own audio file\n'
+    '· Fixed a batch of issues from testing: overlapping text in the widget, calendar text cut off with a large system font, the last row of the todo and alarm lists sitting under the floating button, dialog buttons jumping to the left, dialog text sliced off by the button row, and a midnight shift\'s alarm landing on the shift day instead of the evening before\n'
+    '· The Me page descriptions were rewritten, with a new "Home-screen widgets" entry (how to add the cards, and why an update needs one app launch)\n'
+    '· Clear & reset really does return the app to a fresh install: schedules, events, alarms, templates, the ringtone you saved and the appearance settings all go\n'
+    '\n'
+
+    'v0.9.19\n'
+    '· Fixed dialog buttons moving to the left: the last version changed the shared button row so that dialogs with several buttons (Delete / Cancel / Save) would not overflow in a small window (200×400) — which pushed the actions of every dialog in the app (update notes, delete confirmations, schedule periods…) to the left. They are right-aligned again, and still wrap on narrow windows\n'
+    '· The "Save & reschedule alarms" button at the bottom of the schedule editor no longer sits on a plate: it floats over the page, so content scrolls underneath it (until now the list was cut off at the top edge of that bar with a flat band below it). Scrolling to the end now lifts the last card clear of the button\n'
+    '\n'
+
+    'v0.9.18\n'
+    '· The month widget now steps three months back or forward instead of one: tap the arrows either side of its title. As a bonus, the card keeps working for longer while the app stays closed\n'
+    '· Open the app once after an update: the shifts on the card are worked out the last time the app ran, so until you do, the card still shows the old picture. (Restarting the launcher redraws it too, but that is not needed.) That note now lives in the update notes, so an update never looks like it broke your home screen\n'
+    '· Fixed the end of the todo and alarm lists: once there are enough entries, the last row sat under the floating button (or the button bar on the alarm page) and its delete button could not be tapped. Scrolling to the end now lifts it clear\n'
+    '· The "Add a period" dialog now matches the row that opens it: its three labels were a size and a weight lighter (13/w400) and are now 14/w500, like the rest of the page\n'
+    '· Also fixed two layout faults in that dialog in a small window (200×400): its buttons overflowed sideways, and the date rows could not fit their value\n'
+    '\n'
+
+    'v0.9.17\n'
+    '· The month widget (the largest one) now draws the previous and next month as well: the empty slots at the start and end of the month are gone, the neighbouring days show a lighter date and their shifts as usual, and the whole card reads as one continuous run of days\n'
+    '· Its title row now has a left and a right arrow: tap to step a month back or forward, and the side with no data left greys out; tap the month name in the middle to jump back to today\n'
+    '· Once you have stepped away, a new day or a new month will not drag you back — you stay on the month you picked until you tap back to today\n'
+    '\n'
+
+    'v0.9.16\n'
+    '· A "legal-holiday schedule" (follow the public holidays) no longer writes "Workday / Rest": on the calendar grid, on the info card in a small window and on the home-screen widget it now draws only the date and the lunar line — public holidays are still marked red and makeup workdays still tagged. It really is just a calendar, and labelling those days "Workday" was overreach on my part\n'
+    '· As a result the info card no longer reserves a line for it: the card is about 16dp shorter and the grid above it gains that height\n'
+    '· The half of that change that was right stays: "No schedule for these dates" appears only when no schedule covers those days at all — the test for it is now "is a schedule in force on this day", separate from "does this day draw anything"\n'
+    '\n'
+
+    'v0.9.15\n'
+    '· A "legal-holiday schedule" (follow the public holidays) is no longer treated as "no schedule": every day of one now draws something — "Rest" on a public holiday, "Workday" otherwise, the same on the calendar grid, the info card in a small window, and the home-screen widget. Until now, with only one such schedule, the whole calendar was covered by "No schedule for these dates" while you were in fact working to the public-holiday calendar\n'
+    '· The Schedules page is split into two sections: "Schedule timeline" on top, "Schedules" below, each with its own heading instead of running together\n'
+    '· With no periods at all, that line now reads "All dates" instead of "Other dates" — "other" needs a period to be other than, and on its own the line read like "so is this the default, always?"\n'
+    '· Fixed the Cancel button in the period dialog, which did nothing at all, and put a gap between the Delete / Cancel / Save buttons, which were touching\n'
+    '· The "Repeating" entry on the todo screen moved to the top right corner (it used to sit right after the title, looking like part of it)\n'
+    '· Fixed markdown markers leaking into the update notes: bold text showed up with its two asterisks. The in-app changelog is plain text and never parses markup; a test now fails if any gets in again\n'
+    '· Fixed "change a weekly Wednesday todo to Friday" doing nothing on Wednesdays and Thursdays: editing a repeating todo rewrote the series start date to the current occurrence, so the most recent Friday came out before the start and the alignment was silently skipped\n\n'
+
+    'v0.9.14\n'
+    '· The schedule timeline no longer lives in the schedule editor: it is now the top section of the Schedules page, one line per period from top to bottom — the first line is "Other dates" (which covers whatever no period covers), then each period you placed. Tap any line to edit it\n'
+    '· Periods may not overlap: a day can only belong to one schedule. If they clash, the app names the period you clashed with and the dates involved. (Overlaps used to be allowed, and two schedules both covering September silently resolved to one of them)\n'
+    '· "Other dates" can be set to none: when your manager really does give you a few days off between two schedules, just leave it blank instead of building a "rest" schedule for it. Those days say "No schedule for these dates" on the calendar, pointing at where to add a period\n'
+    '· The calendar\'s "Switch schedule" button is now "Schedule timeline": a read-only overview showing which schedule is in force, which period contains today, and a "Manage the timeline" entry. The old button could not change anything once periods covered the dates, so it looked broken\n'
+    '· A schedule can now appear in several periods (switch away for September, switch back in October) — the old one-period-per-schedule shape could not express that\n\n'
+
+    'v0.9.13\n'
+    '· The "Repeating" entry at the top of the todo screen has been redone: it was a few small characters, and is now a solid accent pill (the same shape as the "Today" button on the calendar), so it reads as a button at a glance. In a narrow window it still shows just the icon, in the same place\n\n'
+
+    'v0.9.12\n'
+    '· Schedules can now be chained: each one can carry an active period (from a date to a date, either end may be left empty — empty means "any time" or "ongoing"). The calendar, the alarms and the home-screen widget now resolve day by day which schedule a date belongs to, and history shows the schedule that was in force back then\n'
+    '· Where to set it: the new "Active period" section in the schedule editor (under "Crews"). Schedules without a period take no part in chaining, so nothing changes until you set one\n'
+    '· The "Switch schedule" sheet now spells out which days each schedule covers: the ones with a period show it, and the one currently in use without a period is marked "Other days" — those are the days it covers\n'
+    '· Adjusting a dragged range of days on the calendar now tells you to adjust separately when the range crosses two schedules, instead of quietly changing only half of it\n\n'
+
+    'v0.9.11\n'
+    '· Todos can repeat now: pick "every day / weekly (choose the days) / monthly (pick a day)" when adding one and it shows up on its own — no more creating it by hand every week. Ticking it keeps it as history (struck through), and the next occurrence arrives on time\n'
+    '· A repeating todo only ever takes one line: the current occurrence. Miss one and it rolls forward in place at the next occurrence, instead of piling up a stack of "last Wednesday\'s meeting"\n'
+    '· Deleting a repeating todo asks which you mean: "skip this one" (the next occurrence still comes) or "delete the whole repeat" (its completed history goes too)\n'
+    '· The todo screen now has a "Repeating" entry (an icon in a small window): see your repeating todos and when each next occurs, and edit / pause / delete them. Pausing keeps the current entry — that is something you have not done yet, and the app will not take it away for you\n'
+    '· Their reminders are re-armed by the system itself, so they still ring after the app has been closed for a long time — not "fixed up the next time you open it"\n\n'
+
+;
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
@@ -170,6 +224,17 @@ void showUpdateDialog(BuildContext context, UpdateCheckResult result) {
       ),
       actions: const [],
     ),
+  );
+}
+
+/// 检查更新失败的提示：说清「连不上 GitHub、国内要开代理」。
+///
+/// 走弹窗而不是 snack —— snack 只停 2 秒，这条提示却要用户读完再去做一件事。
+void showUpdateFailedDialog(BuildContext context) {
+  showAppInfoDialog(
+    context,
+    title: L10n.checkUpdate,
+    content: L10n.updateCheckFailed,
   );
 }
 
@@ -214,8 +279,98 @@ Widget _updateChannelRow(
   );
 }
 
+/// 帮助类弹窗的公共外壳：同一个 [GlassDialog]、同样的滚动上限与「知道了」。
+///
+/// 「开始使用」与「使用帮助」只有内容不同，壳子必须一模一样 —— 各写一套的话
+/// 两个弹窗的圆角、滚动上限、按钮措辞会慢慢漂开。
+void _showHelpDialog(
+  BuildContext context, {
+  required String title,
+  required Widget content,
+}) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black26,
+    builder: (dialogContext) => GlassDialog(
+      title: title,
+      showClose: true,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 420),
+        child: SingleChildScrollView(child: content),
+      ),
+      actions: [
+        GlassActionButton(
+          variant: GlassActionVariant.primary,
+          onPressed: () => Navigator.pop(dialogContext),
+          label: L10n.ok,
+        ),
+      ],
+    ),
+  );
+}
+
+/// 首次启动弹的「开始使用」。
+///
+/// **不要退回成直接弹「使用帮助」**（2026-09-23 改的）：那份是九个条目、
+/// 一千多字的说明书，当欢迎页用等于没写 —— 新用户第一眼要知道的是「现在该
+/// 干什么」。完整说明仍在「我的 → 使用帮助」里，这条路径由最后一句话指出去。
+void showGettingStartedDialog(BuildContext context) {
+  final muted = AppTokens.inkMuted(context);
+  _showHelpDialog(
+    context,
+    title: L10n.gettingStarted,
+    content: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(L10n.gettingStartedLead,
+            style: AppTokens.rowSecondary.copyWith(height: 1.45, color: muted)),
+        const SizedBox(height: 16),
+        _GuideEntry(
+            icon: Icons.edit_calendar_outlined,
+            title: L10n.gettingStartedSchedTitle,
+            lines: [L10n.gettingStartedSchedBody],
+            bulleted: false),
+        const SizedBox(height: 16),
+        _GuideEntry(
+            icon: Icons.shield_outlined,
+            title: L10n.gettingStartedPermTitle,
+            lines: [L10n.gettingStartedPermBody],
+            bulleted: false),
+        const SizedBox(height: 16),
+        _GuideEntry(
+            icon: Icons.touch_app_outlined,
+            title: L10n.gettingStartedOverrideTitle,
+            lines: [L10n.gettingStartedOverrideBody],
+            bulleted: false),
+        const SizedBox(height: 20),
+        const Divider(height: 1),
+        const SizedBox(height: 12),
+        Text(L10n.gettingStartedMore,
+            style: AppTokens.rowSecondary.copyWith(height: 1.45, color: muted)),
+      ],
+    ),
+  );
+}
+
+/// 「我的 → 桌面小组件」那一行的说明弹层。
+///
+/// 正文与《使用帮助》里的同一条目**共用一份文案**（`L10n.guideWidgetDesc`）——
+/// 各写一份的话，改了这边忘了那边，就成了「说明书和 App 说的不一样」。
+/// 弹窗标题已经把「是什么」说了，条目里不再顶一行标题（`title: null`）。
+void showWidgetGuideDialog(BuildContext context) {
+  _showHelpDialog(
+    context,
+    title: L10n.guideWidgetTitle,
+    content: _GuideEntry(
+      icon: Icons.widgets_outlined,
+      title: null,
+      lines: L10n.guideWidgetDesc,
+    ),
+  );
+}
+
 void showUsageGuideDialog(BuildContext context) {
-  final items = [
+  final items = <(IconData, String, List<String>)>[
     (Icons.calendar_month_outlined, L10n.guideCalTitle, L10n.guideCalDesc),
     (Icons.tune_outlined, L10n.guideSchedTitle, L10n.guideSchedDesc),
     (Icons.alarm_outlined, L10n.guideAlarmTitle, L10n.guideAlarmDesc),
@@ -229,74 +384,110 @@ void showUsageGuideDialog(BuildContext context) {
         L10n.guideUpdateDesc),
   ];
 
-  showDialog<void>(
-    context: context,
-    barrierColor: Colors.black26,
-    builder: (context) {
-      final accent = Theme.of(context).colorScheme.primary;
-      final muted = AppTokens.inkMuted(context);
-      return GlassDialog(
-        title: L10n.usageGuide,
-        showClose: true,
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 420),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                for (final it in items) ...[
+  _showHelpDialog(
+    context,
+    title: L10n.usageGuide,
+    content: Column(
+      children: [
+        for (final it in items) ...[
+          _GuideEntry(icon: it.$1, title: it.$2, lines: it.$3),
+          const SizedBox(height: 16),
+        ],
+      ],
+    ),
+  );
+}
+
+/// 帮助弹窗里的一条：图标 + 标题 + 正文行。
+///
+/// [lines] 多于一行时每行前面加一个小圆点（参考条目是多项并列，得能扫）；
+/// 只有一行、且是引导语时把 [bulleted] 关掉 —— 单条正文顶个圆点像没写完的列表。
+class _GuideEntry extends StatelessWidget {
+  const _GuideEntry({
+    required this.icon,
+    required this.title,
+    required this.lines,
+    this.bulleted = true,
+  });
+
+  final IconData icon;
+
+  /// 条目标题。**为空时整行标题不画**（连那 8dp 间距一起）—— 「我的 → 桌面小组件」
+  /// 那个说明弹层只有一份并列的短句，弹窗标题已经说了是什么，条目再顶一行标题
+  /// 就是同一句话说两遍。
+  final String? title;
+  final List<String> lines;
+  final bool bulleted;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final muted = AppTokens.inkMuted(context);
+    final body =
+        AppTokens.rowSecondary.copyWith(height: 1.45, color: muted);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                accent.withValues(alpha: 0.28),
+                accent.withValues(alpha: 0.10),
+              ],
+            ),
+            border: Border.all(color: accent.withValues(alpha: 0.35)),
+          ),
+          child: AppIcon(icon, size: AppTokens.iconMd, color: accent),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (title != null) ...[
+                Text(title!, style: AppTokens.labelStrong),
+                const SizedBox(height: AppTokens.padChipV),
+              ],
+              for (var i = 0; i < lines.length; i++) ...[
+                if (i > 0) const SizedBox(height: AppTokens.spaceXs),
+                if (!bulleted)
+                  Text(lines[i], style: body)
+                else
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 圆点用固定 4dp（设计语言里「被改过的那天」也是这个尺寸），
+                      // 不跟字号缩放 —— 小窗下缩到 1~2px 就等于没有。
+                      // 上边距是把它压到首行文字中线上（spaceSm = 8），
+                      // 7 那种值不上 4px 栅格，会打红 design_tokens_test。
                       Container(
-                        width: 38,
-                        height: 38,
+                        width: 4,
+                        height: 4,
+                        margin: const EdgeInsets.only(top: AppTokens.spaceSm),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              accent.withValues(alpha: 0.28),
-                              accent.withValues(alpha: 0.10),
-                            ],
-                          ),
-                          border: Border.all(
-                              color: accent.withValues(alpha: 0.35)),
-                        ),
-                        child: AppIcon(it.$1,
-                            size: AppTokens.iconMd, color: accent),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(it.$2, style: AppTokens.labelStrong),
-                            const SizedBox(height: AppTokens.padChipV),
-                            Text(it.$3,
-                                style: AppTokens.rowSecondary
-                                    .copyWith(height: 1.45, color: muted)),
-                          ],
+                          color: muted.withValues(alpha: 0.75),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      // 走 Expanded 而不是给整段加「· 」前缀：英文条目会折行，
+                      // 前缀写法的第二行会顶到最左边、看不出是同一条。
+                      Expanded(child: Text(lines[i], style: body)),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                ],
               ],
-            ),
+            ],
           ),
         ),
-        actions: [
-          GlassActionButton(
-            variant: GlassActionVariant.primary,
-            onPressed: () => Navigator.pop(context),
-            label: L10n.ok,
-          ),
-        ],
-      );
-    },
-  );
+      ],
+    );
+  }
 }
 
 /// 关闭更新弹窗后，弹出下载进度弹窗（内部完成下载并自动拉起系统安装器）。

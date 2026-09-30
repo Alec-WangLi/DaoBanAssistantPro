@@ -99,7 +99,7 @@ void main() {
 
     final seen = <int>[];
     final sub = db.watchActiveSchedule().listen((s) {
-      seen.add(s?.toDomain().dayOverrides.length ?? -1);
+      seen.add(s?.currentDomain?.dayOverrides.length ?? -1);
     });
     addTearDown(sub.cancel);
     await pumpEventQueue();
