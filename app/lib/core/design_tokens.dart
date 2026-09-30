@@ -201,6 +201,20 @@ class AppTokens {
   static Color glassBorder(bool isDark) =>
       Colors.white.withValues(alpha: isDark ? 0.16 : 0.90);
 
+  /// **探针专用**：方向性边缘光的配色（左上高光 → 主色 → 暗边）。
+  ///
+  /// 真实液态玻璃的边缘光是**加上去的**（不采样背景），所以它是平背景之上唯一
+  /// 还可能看得见的一层。这个函数与 `glass.dart` 的那两个探针开关配套，
+  /// **不是产品代码** —— 结论出来后要么删、要么按结论重做。
+  ///
+  /// 特意做成三档（亮 / 主色 / 暗）而不是纯白：浅色下页面本身就是近白，
+  /// 纯白的描边会消失在背景里；必须一端亮、一端暗才会有「立体边」的读感。
+  static List<Color> glassRimProbe(bool isDark, Color tint) => <Color>[
+        Colors.white.withValues(alpha: isDark ? 0.75 : 0.95),
+        tint.withValues(alpha: isDark ? 0.35 : 0.50),
+        Colors.black.withValues(alpha: isDark ? 0.45 : 0.20),
+      ];
+
   static List<Color> glassHighlight(bool isDark) => [
         Colors.white.withValues(alpha: isDark ? 0.18 : 0.55),
         Colors.white.withValues(alpha: 0.0),
