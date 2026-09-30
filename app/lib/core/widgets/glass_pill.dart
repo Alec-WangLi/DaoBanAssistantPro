@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import '../glass/glass.dart';
 
 /// 顶部栏那种**紧凑玻璃胶囊**：年月、「今天」，以及各页标题行右侧的动作入口。
 ///
@@ -88,12 +89,16 @@ class GlassPill extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(AppTokens.radiusL),
         onTap: onTap,
-        child: Container(
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          alignment: Alignment.center,
-          decoration: decoration,
-          child: child,
+        child: GlassRim(
+          radius: AppTokens.radiusL,
+          isDark: isDark,
+          child: Container(
+            height: height,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            alignment: Alignment.center,
+            decoration: decoration,
+            child: child,
+          ),
         ),
       ),
     );

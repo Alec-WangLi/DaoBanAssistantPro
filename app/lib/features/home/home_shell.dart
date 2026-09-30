@@ -446,120 +446,124 @@ class _GlassNavBarState extends State<_GlassNavBar> {
         right: false,
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: outerPad),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(capsuleH / 2),
-          child: GlassBlur(
-            sigma: AppTokens.blurPanel,
-            child: Container(
-              height: capsuleH,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(capsuleH / 2),
-                border: Border.all(color: AppTokens.navBorder(isDark)),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: AppTokens.navFill(isDark),
+        child: GlassRim(
+          radius: capsuleH / 2,
+          isDark: isDark,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(capsuleH / 2),
+            child: GlassBlur(
+              sigma: AppTokens.blurPanel,
+              child: Container(
+                height: capsuleH,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(capsuleH / 2),
+                  border: Border.all(color: AppTokens.navBorder(isDark)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: AppTokens.navFill(isDark),
+                  ),
                 ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(_innerPad),
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                  final itemW = c.maxWidth / items.length;
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (d) => _press(d.localPosition.dx, itemW),
-                    onTapUp: (_) => _release(),
-                    onTapCancel: () {},
-                    onHorizontalDragStart: (d) =>
-                        _dragStart(d.localPosition.dx, itemW),
-                    onHorizontalDragUpdate: (d) =>
-                        _dragUpdate(d.localPosition.dx, itemW),
-                    onHorizontalDragEnd: (_) => _release(),
-                    onHorizontalDragCancel: _cancel,
-                    child: Stack(
-                      children: [
-                        // 滑块：平滑吸附到最近功能区，按下放大、松手弹簧回弹
-                        AnimatedPositioned(
-                          key: const Key('nav-highlight'),
-                          duration: _dragging
-                              ? Duration.zero
-                              : AppTokens.durFast,
-                          curve: Curves.easeOutCubic,
-                          left: _visualPage * itemW,
-                          top: 0,
-                          bottom: 0,
-                          width: itemW,
-                          child: AnimatedScale(
-                            scale: _pressed ? 1.22 : 1.0,
-                            duration: AppTokens.durMed,
-                            curve: Curves.easeOutBack,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius:
-                                    BorderRadius.circular(AppTokens.radiusL),
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: AppTokens.accentGradient(activeColor)
-                                      .colors,
-                                ),
-                                border: Border.all(
-                                  color: Colors.white.withValues(
-                                      alpha: isDark ? 0.28 : 0.85),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.12),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
+                child: Padding(
+                  padding: const EdgeInsets.all(_innerPad),
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                    final itemW = c.maxWidth / items.length;
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (d) => _press(d.localPosition.dx, itemW),
+                      onTapUp: (_) => _release(),
+                      onTapCancel: () {},
+                      onHorizontalDragStart: (d) =>
+                          _dragStart(d.localPosition.dx, itemW),
+                      onHorizontalDragUpdate: (d) =>
+                          _dragUpdate(d.localPosition.dx, itemW),
+                      onHorizontalDragEnd: (_) => _release(),
+                      onHorizontalDragCancel: _cancel,
+                      child: Stack(
+                        children: [
+                          // 滑块：平滑吸附到最近功能区，按下放大、松手弹簧回弹
+                          AnimatedPositioned(
+                            key: const Key('nav-highlight'),
+                            duration: _dragging
+                                ? Duration.zero
+                                : AppTokens.durFast,
+                            curve: Curves.easeOutCubic,
+                            left: _visualPage * itemW,
+                            top: 0,
+                            bottom: 0,
+                            width: itemW,
+                            child: AnimatedScale(
+                              scale: _pressed ? 1.22 : 1.0,
+                              duration: AppTokens.durMed,
+                              curve: Curves.easeOutBack,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius:
+                                      BorderRadius.circular(AppTokens.radiusL),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: AppTokens.accentGradient(activeColor)
+                                        .colors,
                                   ),
-                                ],
+                                  border: Border.all(
+                                    color: Colors.white.withValues(
+                                        alpha: isDark ? 0.28 : 0.85),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.12),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        Row(
-                          children: List.generate(items.length, (i) {
-                            final selected = i == selectedIndex;
-                            return Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // 导航项图标：常规态归 iconLg（规格 §3.6，出图对比：
-                                  // 24 在 64dp 胶囊里站得住、20 偏小）。矮屏 52dp
-                                  // 胶囊的竖向预算更小，回落到 iconMd —— 这是原设计
-                                  // （`isShort ? 20 : 22`）「矮屏用小一号图标」的忠实
-                                  // 翻译，属同一角色按布局档位的个别变化：不新增令牌，
-                                  // 也不违背「导航项归 iconLg」。
-                                  AppIcon(
-                                    items[i].$1,
-                                    size: isShort
-                                        ? AppTokens.iconMd
-                                        : AppTokens.iconLg,
-                                    color: selected ? fg : inactiveColor,
-                                  ),
-                                  const SizedBox(height: AppTokens.gapHair),
-                                  Text(
-                                    items[i].$2,
-                                    // 迁移前的基线字号是 10（现为 tinyLabel 11/w400）；
-                                    // 未选中 w500、选中 w700，两个分支都由这里显式给字重，按规格走 copyWith。
-                                    style: AppTokens.tinyLabel.copyWith(
-                                      fontWeight: selected
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
+                          Row(
+                            children: List.generate(items.length, (i) {
+                              final selected = i == selectedIndex;
+                              return Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // 导航项图标：常规态归 iconLg（规格 §3.6，出图对比：
+                                    // 24 在 64dp 胶囊里站得住、20 偏小）。矮屏 52dp
+                                    // 胶囊的竖向预算更小，回落到 iconMd —— 这是原设计
+                                    // （`isShort ? 20 : 22`）「矮屏用小一号图标」的忠实
+                                    // 翻译，属同一角色按布局档位的个别变化：不新增令牌，
+                                    // 也不违背「导航项归 iconLg」。
+                                    AppIcon(
+                                      items[i].$1,
+                                      size: isShort
+                                          ? AppTokens.iconMd
+                                          : AppTokens.iconLg,
                                       color: selected ? fg : inactiveColor,
                                     ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                                    const SizedBox(height: AppTokens.gapHair),
+                                    Text(
+                                      items[i].$2,
+                                      // 迁移前的基线字号是 10（现为 tinyLabel 11/w400）；
+                                      // 未选中 w500、选中 w700，两个分支都由这里显式给字重，按规格走 copyWith。
+                                      style: AppTokens.tinyLabel.copyWith(
+                                        fontWeight: selected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: selected ? fg : inactiveColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),

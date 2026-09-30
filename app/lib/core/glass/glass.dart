@@ -47,11 +47,8 @@ ImageFilter glassFilter(double sigma) => ImageFilter.compose(
 //
 // 结论出来后这一段要么删掉、要么按结论重做。
 
-/// 探针：把 [GlassPanel] 的描边换成方向性边缘光（左上高光 → 主色 → 暗边）。
+/// 探针：给玻璃面叠一圈方向性边缘光（见 [GlassRim]）。
 bool glassProbeRim = false;
-
-/// 探针：给玻璃的填充掺主色（Apple 的 `.tint()` 那一套）。
-bool glassProbeTint = false;
 
 /// 液态玻璃面板。
 ///
@@ -110,22 +107,13 @@ class GlassPanel extends StatelessWidget {
       colors: fill,
     );
     final borderColor = AppTokens.glassBorder(isDark);
-    final primary = Theme.of(context).colorScheme.primary;
 
     Widget panel = Container(
       margin: margin,
       decoration: BoxDecoration(
         borderRadius: borderRadius,
         border: Border.all(color: borderColor, width: 1),
-        gradient: glassProbeTint
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  for (final Color c in fill) Color.lerp(c, primary, 0.40)!,
-                ],
-              )
-            : fillGradient,
+        gradient: fillGradient,
         boxShadow: [AppTokens.glassShadow(isDark)],
       ),
       child: Padding(
@@ -134,21 +122,11 @@ class GlassPanel extends StatelessWidget {
       ),
     );
 
-    if (glassProbeRim && !solid) {
-      panel = Stack(
-        children: <Widget>[
-          panel,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _ProbeRimPainter(
-                  radius: borderRadius.topLeft.x,
-                  colors: AppTokens.glassRimProbe(isDark, primary),
-                ),
-              ),
-            ),
-          ),
-        ],
+    if (!solid) {
+      panel = GlassRim(
+        radius: borderRadius.topLeft.x,
+        isDark: isDark,
+        child: panel,
       );
     }
 
@@ -175,28 +153,70 @@ class GlassPanel extends StatelessWidget {
   }
 }
 
-/// 探针：方向性边缘光。**不是产品代码**（见 `glassProbeRim`）。
+/// 探针：给任意玻璃面叠一圈方向性边缘光。**不是产品代码**（见 [glassProbeRim]）。
 ///
-/// 画在面板**之上**（`foregroundPainter`），而不是拿 `padding` 围一圈 —— 后者会把
-/// 面板缩小 2px、卡片里的文字跟着位移，测出来的差异里混进的是「位移」而不是
-/// 「描边」（第一版就是这么把自己测糊的：整块 90% 的像素都在变，看着像巨大效果）。
+/// 第一轮只打在 `GlassPanel` 上，于是同一屏里只有信息卡有边、顶栏与底栏胶囊没有 ——
+/// 看着像「这张卡被选中了」。观感问题出在**不一致**，不在描边本身，所以做成通用的。
 ///
-/// 为什么不用 `BoxDecoration`：Flutter 既没有渐变描边，也没有渐变版的 `Border`，
-/// 所以走 `CustomPainter` + `LinearGradient.createShader`。
-class _ProbeRimPainter extends CustomPainter {
-  _ProbeRimPainter({required this.radius, required this.colors});
+/// 画在**之上**（`foregroundPainter`），而不是拿 `padding` 围一圈 —— 后者会把面板
+/// 缩小、里面的文字跟着位移，量出来的差异里混进的是「位移」而不是「描边」
+/// （第一版就是这么把自己测糊的：整块 90% 的像素都在变，看着像巨大效果）。
+/// Flutter 既没有渐变描边、也没有渐变版的 `Border`，所以只能走 `CustomPainter`。
+class GlassRim extends StatelessWidget {
+  const GlassRim({
+    super.key,
+    required this.radius,
+    required this.isDark,
+    required this.child,
+  });
+
+  final double radius;
+  final bool isDark;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!glassProbeRim) return child;
+    return Stack(
+      children: <Widget>[
+        child,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _RimPainter(
+                radius: radius,
+                colors: AppTokens.glassRimProbe(isDark),
+                width: AppTokens.glassRimProbeWidth(isDark),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RimPainter extends CustomPainter {
+  _RimPainter({
+    required this.radius,
+    required this.colors,
+    required this.width,
+  });
 
   final double radius;
   final List<Color> colors;
+  final double width;
 
   @override
   void paint(Canvas canvas, Size size) {
     final Rect rect = Offset.zero & size;
-    final RRect rrect =
-        RRect.fromRectAndRadius(rect.deflate(1), Radius.circular(radius));
+    final RRect rrect = RRect.fromRectAndRadius(
+      rect.deflate(width / 2),
+      Radius.circular(radius),
+    );
     final Paint paint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
+      ..strokeWidth = width
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -207,8 +227,8 @@ class _ProbeRimPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ProbeRimPainter old) =>
-      old.radius != radius || old.colors != colors;
+  bool shouldRepaint(_RimPainter old) =>
+      old.radius != radius || old.colors != colors || old.width != width;
 }
 
 /// 液态玻璃圆角容器（无内边距快捷版）。

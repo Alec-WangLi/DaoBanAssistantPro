@@ -201,19 +201,33 @@ class AppTokens {
   static Color glassBorder(bool isDark) =>
       Colors.white.withValues(alpha: isDark ? 0.16 : 0.90);
 
-  /// **探针专用**：方向性边缘光的配色（左上高光 → 主色 → 暗边）。
+  /// **探针专用**：方向性边缘光的配色（左上高光 → 右下收边）。
   ///
-  /// 真实液态玻璃的边缘光是**加上去的**（不采样背景），所以它是平背景之上唯一
-  /// 还可能看得见的一层。这个函数与 `glass.dart` 的那两个探针开关配套，
-  /// **不是产品代码** —— 结论出来后要么删、要么按结论重做。
+  /// 与 `glass.dart` 的探针开关配套，**不是产品代码**。
   ///
-  /// 特意做成三档（亮 / 主色 / 暗）而不是纯白：浅色下页面本身就是近白，
-  /// 纯白的描边会消失在背景里；必须一端亮、一端暗才会有「立体边」的读感。
-  static List<Color> glassRimProbe(bool isDark, Color tint) => <Color>[
-        Colors.white.withValues(alpha: isDark ? 0.75 : 0.95),
-        tint.withValues(alpha: isDark ? 0.35 : 0.50),
-        Colors.black.withValues(alpha: isDark ? 0.45 : 0.20),
-      ];
+  /// 深浅两档**有意不同配方**，这是第一轮探针量出来的：
+  /// 深色下背景暗，白色一端看得见 → 一圈「被点亮的玻璃边」，成立；
+  /// 浅色下背景近白，**白的看不见、只有更暗的才看得见** —— 而更暗的用多了就变成
+  /// 「一个灰框」（第一轮就是这么变差的）。所以浅色这一档改成**只在右下角轻收**：
+  /// 左上仍给白高光（它压在白卡上是「更亮」，仍有意义），右下只压一点点暗，
+  /// 读出来是「一条有厚度的边」而不是「一个框」。
+  ///
+  /// 不再掺主色：第一轮实测主色着色会把卡片洗成一块平色板，且 HIG 明确说
+  /// 「实心填充会破坏液态玻璃的性格」。
+  static List<Color> glassRimProbe(bool isDark) => isDark
+      ? <Color>[
+          Colors.white.withValues(alpha: 0.62),
+          Colors.white.withValues(alpha: 0.22),
+          Colors.white.withValues(alpha: 0.02),
+        ]
+      : <Color>[
+          Colors.white.withValues(alpha: 1.0),
+          Colors.white.withValues(alpha: 0.55),
+          Colors.black.withValues(alpha: 0.10),
+        ];
+
+  /// 探针：边缘光的宽度。深色那档稍宽（暗底上要看得出），浅色那档收窄。
+  static double glassRimProbeWidth(bool isDark) => isDark ? 1.6 : 1.2;
 
   static List<Color> glassHighlight(bool isDark) => [
         Colors.white.withValues(alpha: isDark ? 0.18 : 0.55),

@@ -21,12 +21,14 @@ import 'package:shiftassistantpro/features/home/home_shell.dart';
 
 import 'visual/visual_harness.dart';
 
-/// 三个状态：现状 / 只加边缘光 / 边缘光 + 主色着色。
-const List<String> _states = <String>['off', 'rim', 'tint'];
+/// 第二轮只剩两个状态：现状 / 加边缘光。
+///
+/// 第一轮的「主色着色」已按实测砍掉（它把卡片洗成一块平色板，且 HIG 明确说
+/// 「实心填充会破坏液态玻璃的性格」），所以不再出那一档的图。
+const List<String> _states = <String>['off', 'rim'];
 
 void _applyState(String state) {
-  glassProbeRim = state == 'rim' || state == 'tint';
-  glassProbeTint = state == 'tint';
+  glassProbeRim = state == 'rim';
 }
 
 void main() {
@@ -51,10 +53,7 @@ void main() {
     ]) {
       testWidgets('探针 · $state · ${v.suffix}', (tester) async {
         _applyState(state);
-        addTearDown(() {
-          glassProbeRim = false;
-          glassProbeTint = false;
-        });
+        addTearDown(() => glassProbeRim = false);
 
         final db = await freshDb();
         await renderScreen(
