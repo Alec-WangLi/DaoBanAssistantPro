@@ -38,9 +38,9 @@ const double _lineX = 16; // 黑竖线（模拟胶囊的描边）
 
 /// 关于 [center] 缩放 [scale] 的矩阵。
 Matrix4 _zoomAbout(Offset center, double scale) => Matrix4.identity()
-  ..translate(center.dx, center.dy)
-  ..scale(scale)
-  ..translate(-center.dx, -center.dy);
+  ..translateByDouble(center.dx, center.dy, 0, 1)
+  ..scaleByDouble(scale, scale, 1, 1)
+  ..translateByDouble(-center.dx, -center.dy, 0, 1);
 
 /// 「胶囊」：白底 + 一条 2px 黑竖线。
 class _BarPainter extends CustomPainter {

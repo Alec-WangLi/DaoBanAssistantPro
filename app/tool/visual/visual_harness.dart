@@ -40,6 +40,14 @@ import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+// 插件通道的桩搬到了 `test/support/plugin_channels.dart`（`test/` 下的用例也要
+// 用它 —— 凡是要 pump 主壳的都会撞上「首帧后请求权限」那个没人接的异步异常）。
+// **`import` 给本文件自己用（`pumpScreen` 里要调），`export` 给下游用** ——
+// 两者都要，`export` 不会把名字引进本文件。`export` 必须待在所有声明之前。
+import '../../test/support/plugin_channels.dart';
+
+export '../../test/support/plugin_channels.dart';
+
 /// 渲染画布：6.8" 级别手机的常见逻辑尺寸（K90 Pro Max 一类）。
 const Size kVisualSize = Size(420, 900);
 
@@ -206,24 +214,8 @@ void useLiquidGlassTier() {
 // 测试桩
 // ---------------------------------------------------------------------------
 
-/// 把插件通道挂上空实现。
-///
-/// 测试环境没有原生侧，没人接的 MethodChannel 会抛 MissingPluginException；
-/// 而权限请求这类调用多半是在 `initState` 里 fire-and-forget 出去的，异常
-/// 没有调用者去接，就成了未处理异步错误 —— flutter_test 直接判整个用例失败。
-///
-/// 统一返回 null 等价于「权限一个都没给」，界面落在一个确定的状态上。
-void stubPluginChannels() {
-  final messenger =
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  for (final name in const [
-    'dexterous.com/flutter/local_notifications',
-    'com.daoban.shiftassistantpro/settings',
-  ]) {
-    messenger.setMockMethodCallHandler(
-        MethodChannel(name), (call) async => null);
-  }
-}
+// `stubPluginChannels()` 现在来自 `test/support/plugin_channels.dart`，在本文件
+// 顶上 `export` 出去了（见那里的说明：`test/` 下的用例也要用它）。
 
 // ---------------------------------------------------------------------------
 // 外壳

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
-import '../glass/glass.dart';
 import '../haptics.dart';
 import '../motion.dart';
 
@@ -129,12 +128,6 @@ class _GlassSegmentState extends State<GlassSegment> {
     final activeColor = Theme.of(context).colorScheme.primary;
     final selectedIdx = _preview ?? _committed;
     const inset = AppTokens.padChipV;
-    // 液态档：选中块凸出分段之外成一枚透镜（见下方滑块那段）。
-    // **静止时是 0** —— 于是没按住时与标准档逐像素相同。
-    final bool liquid = liquidGlassActive.value;
-    final double protrude =
-        (_pressed && liquid) ? AppTokens.segmentLensProtrude : 0;
-    final double thumbH = widget.height - inset * 2 + 2 * protrude;
 
     return SizedBox(
       height: widget.height,
@@ -154,70 +147,47 @@ class _GlassSegmentState extends State<GlassSegment> {
             onHorizontalDragCancel: _cancel,
             child: Stack(
               children: [
-                // 玻璃胶囊底 + 液态档的边光。
-                //
-                // 边光套在**胶囊底**这一层（而不是整个件的外面）是有意的：分段
-                // 自己的 Stack 会把后面的兄弟盖上去，而选中块够不到边缘（内缩 inset），
-                // 所以画在底下正合适 —— 这样也不用把整个 build 再包一层、再造一次缩进。
+                // 玻璃胶囊底
                 Positioned.fill(
                   child: IgnorePointer(
-                    child: GlassRim(
-                      radius: widget.height / 2,
-                      isDark: isDark,
-                      // 与底栏胶囊同款的小控件，同样单收一档宽度。
-                      compact: true,
-                      // 「光跟随滑块」：分段自己的 itemW 就是 `宽度 / count`，
-                      // 内缩只在滑块自己的几何里（`inset`），所以 trackPad 传 0 ——
-                      // 传 inset 会让亮带偏右一个 inset。
-                      sliderIndex: _visual + 0.5,
-                      tabCount: widget.count,
-                      trackPad: 0,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(widget.height / 2),
-                          color: AppTokens.glassTint(isDark, true).first,
-                          border: Border.all(
-                            color: AppTokens.glassBorder(isDark),
-                          ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(widget.height / 2),
+                        color: AppTokens.glassTint(isDark, true).first,
+                        border: Border.all(
+                          color: AppTokens.glassBorder(isDark),
                         ),
                       ),
                     ),
                   ),
                 ),
-                // 滑块。液态档下它**凸出分段之外**成一枚透镜：折射只发生在
-                // 「玻璃 ↔ 背景」的边界上，躺在容器里时那条边是「玻璃对玻璃」。
-                // 它本来就没有被裁剪，所以凸出去是天然的。
+                // 滑块
                 AnimatedPositioned(
                   duration: _dragging ? Duration.zero : AppTokens.durFast,
                   curve: Curves.easeOutCubic,
                   left: _visual * itemW + inset,
-                  top: inset - protrude,
-                  bottom: inset - protrude,
+                  top: inset,
+                  bottom: inset,
                   width: itemW - inset * 2,
                   child: QScale(
                     pressed: _pressed,
                     scale: AppTokens.pillGrow,
-                    child: GlassLensGlow(
-                      isDark: isDark,
-                      radius: thumbH / 2,
-                      // 静止时 swell = 0 → 一个像素都不画，与标准档逐像素相同。
-                      swell: protrude > 0 ? 1.0 : 0.0,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(thumbH / 2),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: AppTokens.accentGradient(activeColor).colors,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: activeColor.withValues(alpha: 0.32),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(
+                            (widget.height - inset * 2) / 2),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: AppTokens.accentGradient(activeColor).colors,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: activeColor.withValues(alpha: 0.32),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                     ),
                   ),

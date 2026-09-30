@@ -10,17 +10,26 @@
 
 import 'dart:ui' show ImageFilter;
 
+import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:shiftassistantpro/core/widgets/glass_pill.dart';
+import 'package:shiftassistantpro/core/app_info.dart';
+import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
+
+import 'support/plugin_channels.dart';
 
 /// 装配一个 GlassPanel 并取回它那层 `BackdropFilter` 的 filter。
 ///
@@ -42,6 +51,16 @@ Future<ImageFilter?> _panelFilter(WidgetTester tester) async {
 }
 
 void main() {
+  setUpAll(() async {
+    // 主壳里的日期要 intl 的语言数据，不初始化会抛 `LocaleDataException`
+    // （报在 `MaterialApp` 的 Builder 上，与真因隔了好几层）。
+    await initializeDateFormatting('zh');
+    await initializeDateFormatting('en');
+    // `shotShell` 每次开一个内存库；一个用例里开两次会触发 drift 的重复实例告警，
+    // 那是开发期的提示，不是问题。
+    drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+  });
+
   setUp(() {
     // 每个用例从「标准档」起跑：省电关、液态关。这两个都是模块级标志，
     // 前一个用例把它们打开过就会漏到这一个里。
@@ -219,22 +238,48 @@ void main() {
     });
   });
 
-  /// 把一屏光栅化成原始像素。
-  Future<List<int>> shot(WidgetTester tester) async {
+  /// 把一整块**主壳**光栅化成原始像素。
+  ///
+  /// 样本为什么是主壳、不再是某个玻璃件：**2026-10-01 起液态档只作用于底栏**
+  /// （规格 §2 决策①），别的玻璃面两档本来就该一模一样 —— 继续拿它们当样本，
+  /// 这条守门会变成一句「永远为假」的空话（`GlassPill` 那条就是这么失效的）。
+  Future<List<int>> shotShell(
+    WidgetTester tester, {
+    required bool liquid,
+    Size size = const Size(420, 900),
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    // 主壳首帧后会请求权限；没有桩的话那是个没人接的异步异常，
+    // flutter_test 会把整个用例判失败。
+    stubPluginChannels();
+    // **必须走 prefs，不能只拨模块级标志**：屏幕一 `ref.watch(appSettingsProvider)`
+    // 就会建 notifier、`_load()` 读 prefs，把标志覆盖回去 —— v0.10.1 那两张
+    // 「液态档」基线图与标准档逐字节相同，就是这么来的。
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'onboarded': true,
+      'lastSeenVersion': appVersion,
+      'liquidGlass': liquid,
+    });
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+
     final GlobalKey key = GlobalKey();
-    await tester.pumpWidget(
-      RepaintBoundary(
-        key: key,
-        child: const MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: GlassPill(child: SizedBox(width: 40, height: 18)),
-            ),
-          ),
-        ),
+    await tester.pumpWidget(ProviderScope(
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      child: MaterialApp(
+        home: RepaintBoundary(key: key, child: const HomeShell()),
       ),
-    );
-    await tester.pumpAndSettle();
+    ));
+    // **不能用 pumpAndSettle**：主壳里有一直调度下一帧的动画（背景光晕等），
+    // 它会一直等到超时。逐帧推进既不会挂，结果也是确定性的。
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+    }
+
     final RenderRepaintBoundary boundary =
         key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
     late List<int> bytes;
@@ -246,6 +291,11 @@ void main() {
       image.dispose();
       bytes = data!.buffer.asUint8List().toList();
     });
+
+    // 拆树并推一下时钟：drift 取消查询流时用 `Timer.run` 排了个零时长定时器，
+    // 不推它跑掉，框架会在测试体结束时报「A Timer is still pending」。
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 20));
     return bytes;
   }
 
@@ -257,13 +307,8 @@ void main() {
     // `AppSettingsNotifier._load()` 从 prefs 覆盖了回去 —— 于是**这一档从没被
     // 渲染过一次**，而「出图看差异、差异必须看得见」那道人工验收闸门在差异为 0
     // 时静默通过。没有鉴别的断言，那种失败看起来和成功一模一样。
-    liquidGlassEnabled.value = false;
-    recomputeGlassTiers();
-    final List<int> off = await shot(tester);
-
-    liquidGlassEnabled.value = true;
-    recomputeGlassTiers();
-    final List<int> on = await shot(tester);
+    final List<int> off = await shotShell(tester, liquid: false);
+    final List<int> on = await shotShell(tester, liquid: true);
 
     int differing = 0;
     for (int i = 0; i < off.length; i++) {

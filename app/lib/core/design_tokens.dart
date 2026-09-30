@@ -248,18 +248,6 @@ class AppTokens {
   /// 10 让透镜高 72（胶囊 64），上下各探出 4。
   static const double navLensProtrude = 10;
 
-  /// 液态档：`GlassSegment` 那种分段胶囊的选中块探出多少。
-  ///
-  /// 比分段自身的高度（默认 44）按同一比例折算 —— 与 [navLensProtrude] 对胶囊
-  /// （64）的比例相当（约 15%）。同一个数在两种尺寸上不会都好看，所以分开定。
-  static const double segmentLensProtrude = 6;
-
-  /// 液态档：`GlassSwitch` 的把手按住时探出**轨道**多少。
-  ///
-  /// 比分段那个小 —— 开关本体就小（轨道 28 高）。把手是**均衡放大**过去的，
-  /// 所以凸出量按「轨道内高 + 两倍本值」折算成缩放系数（见 `glass_switch.dart`）。
-  static const double switchLensProtrude = 4;
-
   /// 探针：**滑块附近那一段边缘光**的配色（滑块滑过时玻璃边被点亮）。
   ///
   /// 这不是折射 —— 折射是逐像素扭曲背景，需要 shader，且在平背景上看不见。

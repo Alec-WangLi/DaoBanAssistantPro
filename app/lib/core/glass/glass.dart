@@ -115,19 +115,6 @@ class GlassPanel extends StatelessWidget {
       ),
     );
 
-    // 边光只给**真玻璃**：`!solid` 排掉底部弹层（它们用不透明底），
-    // `blurOn` 排掉 `enableBlur: false` 的那些列表行。后者**连模糊都没有**、
-    // 本来就是一块平的填充，「玻璃边缘的光」与它们自相矛盾 —— 上一版把边光
-    // 套到了它们身上，闹钟页 / 待办页于是变成「一排描了边的框」（用户 2026-10-01
-    // 反馈的「边缘不知道是什么情况，有点丑」）。顺带把省电档也挡在外面。
-    if (!solid && blurOn) {
-      panel = GlassRim(
-        radius: borderRadius.topLeft.x,
-        isDark: isDark,
-        child: panel,
-      );
-    }
-
     if (blurOn && !solid) {
       panel = ClipRRect(
         borderRadius: borderRadius,
@@ -264,67 +251,6 @@ class GlassRim extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// 液态档：给**会动的那块玻璃**（底栏滑块 / `GlassSegment` 的选中块 / `GlassSwitch`
-/// 的把手）套一圈「被光击中的」晕与硬边。
-///
-/// 与 [GlassRim] 的分工：那个铺在静止的玻璃面上，这个跟着会动的实体走。
-/// **本体仍然由调用点的真控件画**（于是动画与配方都是它自己的），这里只加光。
-///
-/// **为什么要凸出容器**（这一条是用户 2026-10-01 指出的，也是整件事的关键）：
-/// 折射只发生在「玻璃 ↔ 背景」的边界上；实体整个躺在容器里时，它的边是
-/// **玻璃对玻璃** —— Apple 那条禁令「玻璃不能采样玻璃」说的就是这件事，那里物理上
-/// 不可能有折射。iOS 的开关把手与标签栏选中态都是**凸出来**的：Macworld 对开关的
-/// 描述是「当你按住并保持时，它变成一个更大、玻璃般的凸起，移动时折射光线」。
-///
-/// [swell] = 0 时**一个像素都不画** —— 那正是「静止时与标准档逐像素相同」的保证。
-class GlassLensGlow extends StatelessWidget {
-  const GlassLensGlow({
-    super.key,
-    required this.isDark,
-    required this.radius,
-    required this.swell,
-    required this.child,
-  });
-
-  final bool isDark;
-
-  /// 本体当前的圆角（跟着鼓起一起变）。
-  final double radius;
-
-  /// 鼓起程度 0..1。
-  final double swell;
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: liquidGlassActive,
-      builder: (BuildContext context, bool on, Widget? child) {
-        if (!on) return child!;
-        return Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            child!,
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: _LensGlowPainter(
-                    radius: radius,
-                    glow: AppTokens.glassRimProbeGlow(isDark),
-                    swell: swell,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-      child: child,
     );
   }
 }
@@ -519,63 +445,6 @@ class _RimPainter extends CustomPainter {
       old.sliderScale != sliderScale ||
       old.lensFill != lensFill ||
       old.lensProtrude != lensProtrude;
-}
-
-/// 会动的那块玻璃外面的一圈光。`swell` 0 → 1 时从「什么都不画」长成完整的一圈。
-class _LensGlowPainter extends CustomPainter {
-  _LensGlowPainter({
-    required this.radius,
-    required this.glow,
-    required this.swell,
-  });
-
-  final double radius;
-  final Color glow;
-  final double swell;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 静止时**一点都不画**。这正是「没按住时与标准档逐像素相同」的那条保证。
-    if (swell <= 0.01) return;
-    final Rect rect = Offset.zero & size;
-    final RRect rrect =
-        RRect.fromRectAndRadius(rect.deflate(1), Radius.circular(radius));
-    final double w = 1.2 * swell;
-    // 晕：粗、模糊、淡 —— 一条硬线读作「描边」，一圈晕才读作「光」。
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = w * 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7)
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            glow.withValues(alpha: 0.60 * swell),
-            glow.withValues(alpha: 0.10 * swell),
-          ],
-        ).createShader(rect),
-    );
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = w
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            glow.withValues(alpha: 0.95 * swell),
-            glow.withValues(alpha: 0.25 * swell),
-          ],
-        ).createShader(rect),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_LensGlowPainter old) =>
-      old.radius != radius || old.swell != swell || old.glow != glow;
 }
 
 /// 液态玻璃圆角容器（无内边距快捷版）。
