@@ -159,4 +159,47 @@ void main() {
         reason: '锚点的键名必须由一处拼出来（month_<widgetId>），'
             '读写各拼一遍迟早会出现「写的和读的不是一个键」这种静默失效');
   });
+  // 标题行的两枚箭头靠 **id 拼名 + 一个跨语言的常量** 接起来：id 在布局里、
+  // 取它在 Kotlin 里、action 字符串在发送端与接收端各写一遍（Kotlin 之间没有共享通道
+  // 的检查）。这三处任意一处歪掉都是静默的：箭头画出来但点了没反应、或者点了没人接。
+  test('翻月箭头：id 齐全、action 两边一致、requestCode 落在广播池空段', () {
+    final xml = _read('android/app/src/main/res/layout/widget_month_card.xml');
+    for (final id in ['wg_m_prev', 'wg_m_title', 'wg_m_next']) {
+      expect(xml.contains('@+id/$id'), true, reason: '布局里缺 $id');
+    }
+
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    for (final id in ['wg_m_prev', 'wg_m_next']) {
+      expect(kt.contains('R.id.$id'), true, reason: '渲染器没有往 $id 上挂东西');
+    }
+
+    // action：**字面量只许出现在接收端**（它是这条广播的线上格式，值钉在下面），
+    // 发送端必须引用那个常量。
+    //
+    // 别改成「两边各写字面量再比对」：实现上发送端引用的是同一个 `const val`，
+    // 编译器管得着这种引用 —— 唯一会静默失效的写法是**有人在渲染器里手抄一遍字符串**，
+    // 所以这里钉的正是「它是引用、不是手抄」。
+    final rx = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRefreshReceiver.kt');
+    expect(rx.contains('WIDGET_MONTH_STEP'), true, reason: '接收端没有处理翻月 action');
+    expect(rx.contains('com.daoban.shiftassistantpro.WIDGET_MONTH_STEP'), true,
+        reason: 'action 的线上值不许悄悄改');
+    expect(kt.contains('WidgetRefreshReceiver.ACTION_MONTH_STEP'), true,
+        reason: '渲染器必须引用接收端那个常量，不许把 action 字符串再手抄一遍');
+
+    // requestCode：新基数必须落在既有广播池占用**之上**。已知占用（AGENTS 的
+    // 「requestCode 池」那条）：班次闹钟 0..400、自定义闹钟 10000..11000、
+    // 待办提醒 20000..39999、重复待办 40000..41999、选铃声 40071、刷新闹钟 40081。
+    final m = RegExp(r'WIDGET_MONTH_REQ_BASE\s*=\s*([\d_]+)').firstMatch(kt);
+    expect(m, isNotNull, reason: 'WidgetRenderer.kt 里找不到 WIDGET_MONTH_REQ_BASE');
+    final base = int.parse(m!.group(1)!.replaceAll('_', ''));
+    expect(base, greaterThan(42000),
+        reason: '基数 $base 落在既有广播池的号段里 —— 撞号的症状是「点这张卡的箭头、'
+            '那张卡翻页」（Intent.filterEquals 不比 extras）');
+    expect(RegExp(r'WIDGET_MONTH_REQ_BASE\s*\+\s*widgetId\s*\*\s*\d+\s*\+')
+            .hasMatch(kt), true,
+        reason: '编号必须逐实例、逐方向展开（形如 BASE + widgetId * 步长 + 方向），'
+            '两个实例共用一个 requestCode 就会互相翻页');
+  });
 }

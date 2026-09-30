@@ -118,12 +118,52 @@ object WidgetRenderer {
      */
     private const val REQ_SLOTS_PER_WIDGET = 64
 
+    /**
+     * 翻月那两枚箭头的 requestCode 基数。**广播池**，与上面 `WIDGET_REQ_BASE`
+     * （活动池，点格开 App 用 `getActivity`）**是两回事**。
+     *
+     * 900_000 离既有占用都够远：班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒
+     * 20000..39999、重复待办 40000..41999、选铃声 40071、刷新闹钟 40081。
+     *
+     * 编号 = `BASE + widgetId * 4 + dir`（dir：0 = 上月、1 = 下月、2 = 回今天，第 4 档
+     * 留给将来）—— **每个实例、每个方向各一枚**：`Intent.filterEquals` 不比 extras，
+     * 撞号会让两张卡共用一个箭头（点这张、那张翻页）。基数与展开形式由
+     * `widget_fixed_cards_guard_test.dart` 扫源码钉住。
+     */
+    private const val WIDGET_MONTH_REQ_BASE = 900_000
+
     /** 整卡的 requestCode：低位 0 留给「不指定日期」。 */
     private fun rootRequestCode(widgetId: Int): Int = WIDGET_REQ_BASE + widgetId * REQ_SLOTS_PER_WIDGET
 
     /** 第 cell 格的 requestCode。低位 +1 起，避开 `rootRequestCode` 的 0。 */
     private fun cellRequestCode(widgetId: Int, cell: Int): Int =
         WIDGET_REQ_BASE + widgetId * REQ_SLOTS_PER_WIDGET + 1 + cell
+
+    /**
+     * 翻上 / 下月（`delta = ±1`）或回今天（`delta = 0`）：发给 [WidgetRefreshReceiver]
+     * 的**广播**（与上面那个活动池无关，见 [WIDGET_MONTH_REQ_BASE]）。
+     *
+     * 越界不由这里拦：箭头那一侧没得翻时只是画成灰的，但**点击照样挂着** ——
+     * `RemoteViews` 的 `reapply` 只重放新的动作串，**没有任何办法撤掉上一次设过的
+     * 点击**。所以「能不能翻」由接收端判（同一个 [monthCovered]）。
+     */
+    private fun monthStepIntent(context: Context, widgetId: Int, delta: Int): PendingIntent {
+        val dir = when {
+            delta < 0 -> 0
+            delta > 0 -> 1
+            else -> 2      // 点标题 = 回今天
+        }
+        val i = Intent(context, WidgetRefreshReceiver::class.java)
+            .setAction(WidgetRefreshReceiver.ACTION_MONTH_STEP)
+            .putExtra(WidgetRefreshReceiver.EXTRA_WIDGET_ID, widgetId)
+            .putExtra(WidgetRefreshReceiver.EXTRA_DELTA, delta)
+        return PendingIntent.getBroadcast(
+            context,
+            WIDGET_MONTH_REQ_BASE + widgetId * 4 + dir,
+            i,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
 
     /**
      * 打开 App 的 PendingIntent。
@@ -400,17 +440,34 @@ object WidgetRenderer {
         // 显示哪个月见 `displayedMonth` 的注释（锚点在盘上、但画不出来时按没设处理）。
         val firstOfMonth = displayedMonth(context, widgetId, snap)
 
-        // ── 月份标题 ──
+        // ── 标题行：‹ 月份 › ──
         val title = snap.months.firstOrNull {
             it.y == firstOfMonth.year && it.m == firstOfMonth.monthValue
         }
         if (title == null) {
+            // 查不到就隐藏（绝不借相邻月份的标题顶上）—— 既有纪律，不改。
             v.setViewVisibility(R.id.wg_m_title, android.view.View.GONE)
         } else {
             v.setViewVisibility(R.id.wg_m_title, android.view.View.VISIBLE)
             v.setTextViewText(R.id.wg_m_title, title.title)
             v.setTextColor(R.id.wg_m_title, muted)
         }
+        // **箭头永远设点击**，哪怕那一侧没得翻：`RemoteViews` 的 `reapply` 只重放
+        // **新的**动作串，**没有任何办法撤掉上一次设过的点击**（与 v0.9.9 那条
+        // `removeAllViews` 同源：宿主会复用已在的那棵视图树）。所以「到头了」由
+        // **接收端**判 —— 颜色只作提示：能翻 = ink，翻不动 = muted（与标题同档）。
+        v.setTextColor(
+            R.id.wg_m_prev,
+            if (monthCovered(snap, firstOfMonth.minusMonths(1))) ink else muted,
+        )
+        v.setTextColor(
+            R.id.wg_m_next,
+            if (monthCovered(snap, firstOfMonth.plusMonths(1))) ink else muted,
+        )
+        v.setOnClickPendingIntent(R.id.wg_m_prev, monthStepIntent(context, widgetId, -1))
+        v.setOnClickPendingIntent(R.id.wg_m_next, monthStepIntent(context, widgetId, 1))
+        // 点中间的月份文字 = 回今天（已经是今天那个月时是 no-op）。
+        v.setOnClickPendingIntent(R.id.wg_m_title, monthStepIntent(context, widgetId, 0))
 
         // ── 周几行（7 条文案来自快照，原生不做 i18n） ──
         val wdIds = intArrayOf(
