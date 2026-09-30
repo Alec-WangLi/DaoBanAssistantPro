@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.1\n'
+const String _changelogZh = 'v0.10.2\n'
+    '· 底栏选中滑块不再比胶囊大 —— 按住时才凸出来成一枚透镜，松手缩回\n'
+    '· 滑块的吸附恢复了磨砂玻璃那种平滑（之前是瞬移）；开关现在能按住拖动；主题模式 / 主色调这些分段选择器也带上了同一层效果\n'
+    '· 修好几处光加错了地方：待办、闹钟列表的每一行都被描了一圈边（那些行本来就没有模糊）\n'
+    '· 使用帮助弹窗底下不再多出一截空白（按钮真正浮在正文上）\n'
+    '· 深色下底栏选中那一格的白字对比度回到达标\n\n'
+    'v0.10.1\n'
     '· 「我的 → 外观」里那颗「高级材质」换成了「液态玻璃」，默认关。打开之后玻璃边缘带上一层光；底栏的选中滑块与开关在你按住时鼓起成一枚透镜 —— 玻璃件凸出容器之外，光才有边可落\n'
     '· 关掉就是现在这个样子（磨砂玻璃），只是名字与说明跟着改了\n'
     '· 内存小于 4GB 的机器一律保持关闭\n\n'
@@ -103,16 +109,17 @@ const String _changelogZh = 'v0.10.1\n'
     'v0.9.13\n'
     '· 待办页右上角那个「重复待办」入口重新做了：原来是几个小字，现在是实心主色胶囊（与日历右上角那颗「今天」同一个形态），一眼看得出是个按钮。窄屏上仍只留图标，位置不变\n\n'
 
-    'v0.9.12\n'
-    '· 排班表可以「衔接」了：每套方案能设一个生效时段（从几号到几号，两端都可以留空 —— 留空就是「不限起点」或「一直持续」）。日历、闹钟、桌面小组件从此都按天取「那天归哪一套」，翻回历史看到的也是当时的班\n'
-    '· 设在排班编辑器里新的一节「生效时段」（在「班组设置」下面）。没设过时段的方案不参与衔接，一切照旧 —— 升级后什么都不用做\n'
-    '· 顶栏「切换排班」现在写明每套方案管哪些日子：设了时段的写时段；没设时段又正在用的那套标「其余日子」（没被时段覆盖的日子就归它管）\n'
-    '· 日历上长按选一段日子改班时，如果这段跨了两套排班，会提示你分开调整 —— 从前那样只会改到一半，另一半悄没声地不动\n\n'
 
 
 ;
 
-const String _changelogEn = 'v0.10.1\n'
+const String _changelogEn = 'v0.10.2\n'
+    '· The tab bar\'s selection slider is no longer larger than the bar at rest — it bulges out into a lens only while you hold it\n'
+    '· The slider snaps smoothly again (it used to jump); the switch can now be dragged; the segmented pickers (theme, accent colour) got the same treatment\n'
+    '· Fixed several places where the rim landed on rows that are not glass at all (the todo and alarm lists were outlined row by row)\n'
+    '· The help dialog no longer leaves a gap below its text — the button now really floats over it\n'
+    '· White text on the selected tab meets contrast requirements again in dark mode\n\n'
+    'v0.10.1\n'
     '· "Advanced material" in Me → Appearance is now "Liquid glass", off by default. Turn it on and the glass gains a lit rim; the tab bar\'s selection slider and the switch swell into a lens while you press them — they bulge out of the container, which is where the light finally has an edge to catch\n'
     '· Off is exactly what you see today (frosted glass); only the name and the wording changed\n'
     '· Devices with under 4GB of RAM always keep it off\n\n'
@@ -175,11 +182,6 @@ const String _changelogEn = 'v0.10.1\n'
     'v0.9.13\n'
     '· The "Repeating" entry at the top of the todo screen has been redone: it was a few small characters, and is now a solid accent pill (the same shape as the "Today" button on the calendar), so it reads as a button at a glance. In a narrow window it still shows just the icon, in the same place\n\n'
 
-    'v0.9.12\n'
-    '· Schedules can now be chained: each one can carry an active period (from a date to a date, either end may be left empty — empty means "any time" or "ongoing"). The calendar, the alarms and the home-screen widget now resolve day by day which schedule a date belongs to, and history shows the schedule that was in force back then\n'
-    '· Where to set it: the new "Active period" section in the schedule editor (under "Crews"). Schedules without a period take no part in chaining, so nothing changes until you set one\n'
-    '· The "Switch schedule" sheet now spells out which days each schedule covers: the ones with a period show it, and the one currently in use without a period is marked "Other days" — those are the days it covers\n'
-    '· Adjusting a dragged range of days on the calendar now tells you to adjust separately when the range crosses two schedules, instead of quietly changing only half of it\n\n'
 
 
 ;
