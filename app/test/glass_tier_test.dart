@@ -367,6 +367,20 @@ void main() {
     await disposeShell(tester);
   });
 
+  testWidgets('静止时透镜正对着选中那一格的中心', (tester) async {
+    // **量纲的护栏。** 弹簧存的是透镜**中心**（格号 + 0.5），而 `_visualPage` 是
+    // **左缘** —— 两套混了一个 0.5 的话，弹簧会把透镜一路拽到胶囊最左边，观感是
+    // 「透镜整枚偏出胶囊左端」。第一版就是这么错的，而且当时那几条手感用例**全都
+    // 照过**（它们只比较相对位移），所以必须有这一条直接量绝对位置的。
+    await pumpShell(tester, liquid: true);
+    final LiquidLens lens = lensOf(tester);
+    const double pad = AppTokens.gapIconText;
+    final double itemW = (lens.size.width - 2 * pad) / 4;
+    expect(lens.shape.centerX, closeTo(pad + 0.5 * itemW, 1),
+        reason: '透镜没坐在第 0 格的中心 —— 多半是「中心 / 左缘」两套量纲混了');
+    await disposeShell(tester);
+  });
+
   testWidgets('点按换页：透镜是滑过去的，不是瞬移过去的', (tester) async {
     await pumpShell(tester, liquid: true);
     final double startX = lensOf(tester).shape.centerX;

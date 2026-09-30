@@ -164,10 +164,16 @@ class _GlassNavBarState extends State<GlassNavBar>
     if (!_dragging) {
       // 位置的目标 = **该去的那一格**，只有升程起来之后才掺进手指的位置。
       // 于是点按换页时透镜照样「滑过去」（标准档今天就是这个行为），只是不提起。
-      final double slotPage = _visualPage;
-      final double fingerPage = _fingerInnerX / _itemW - 0.5;
+      //
+      // ⚠️ **这里一律是「中心」，不是「左缘」。** `_posSpring.value` 存的是透镜
+      // **中心**（静止时 = 格号 + 0.5），而 `_visualPage` 是**左缘** —— 两套混了
+      // 一个 0.5，弹簧会把透镜一路拽到胶囊最左边（实测：透镜整枚偏出胶囊左端
+      // 约 45px）。手指那一侧同理：透镜中心落到手指上 ⇔ `value = 内层x / itemW`。
+      final double slotCenter = _visualPage + 0.5;
+      final double fingerCenter = _fingerInnerX / _itemW;
       final double t = _liftSpring.value.clamp(0.0, 1.0);
-      _posSpring.target = slotPage + (fingerPage - slotPage) * t;
+      _posSpring.target = _clampLensCenter(
+          slotCenter + (fingerCenter - slotCenter) * t);
       _posSpring.step(dt);
     }
 
@@ -185,6 +191,25 @@ class _GlassNavBarState extends State<GlassNavBar>
       _lensVelocityPx = 0;
     }
     if (mounted) setState(() {});
+  }
+
+  /// 把透镜的**中心**夹在胶囊的横向范围内。
+  ///
+  /// 纵向凸出是设计（那是「提起」的信号），**横向不是** —— 按下靠左/靠右时透镜会顶出
+  /// 胶囊两端、被屏幕切掉一截，读起来像 bug 而不像液体。iOS 那颗选中胶囊同样永远
+  /// 在栏内。
+  ///
+  /// 夹紧量用**满升程**的宽度算：跟着当前升程算的话，按下的过程中夹紧量自己会变，
+  /// 观感像被谁推了一下。
+  double _clampLensCenter(double v) {
+    final double half = (_itemW + AppTokens.lensLiftWidth) / 2;
+    final double capsuleW = _itemW * items.length + 2 * _innerPad;
+    final double minV = (half - _innerPad) / _itemW;
+    final double maxV = (capsuleW - half - _innerPad) / _itemW;
+    if (minV > maxV) return v; // 胶囊太窄（小窗），夹不了 —— 那就别夹
+    if (v < minV) return minV;
+    if (v > maxV) return maxV;
+    return v;
   }
 
   void _armHoldTimer() {
@@ -270,7 +295,7 @@ class _GlassNavBarState extends State<GlassNavBar>
     });
     // 拖动是 **1:1 跟手**：位置直接给，弹簧不插一脚 —— 让它插就会拖出一条
     // 橡皮筋尾巴，而「跟手」正是用户要的那种「吸附在手上」。
-    _posSpring.value = p + 0.5;
+    _posSpring.value = _clampLensCenter(p + 0.5);
     _syncTicker();
   }
 
