@@ -23,6 +23,7 @@ import 'package:shiftassistantpro/core/theme/animated_background.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
+import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
@@ -1012,11 +1013,32 @@ void main() {
       ),
     ));
 
+    // ⚠️ **必须挂一套真排班**（v0.9.16 改的）：班次行的高度从这一版起是**逐日算**的，
+    // 而 `hasOverrideHint` 只在「那天有班次」时才参与取大。挂 `chain: null` 的话，
+    // 那一天走的是「这段时间没有排班」那一支，两种输入量出来一模一样 —— 这条用例
+    // 换个写法立刻会变成一句永远为真的空话。（「空白表那天不占这一行」由
+    // `info_card_chain_test.dart` 那条新的用例钉住。）
+    //
+    // 一套单班组、两天一轮的排班：不挂多班组就没有色块那一段的干扰，而每天都排得上
+    // 班次（白 / 休交替），那一行天天在。
+    final chain = ScheduleChain(
+      fallback: ShiftSchedule(
+        name: '两天一轮',
+        anchorDate: DateTime.utc(2026, 1, 1),
+        classes: const [
+          ShiftClass(name: '白班', abbr: '白', startMinute: 480, endMinute: 1080),
+          ShiftClass(name: '休班', abbr: '休', isRest: true),
+        ],
+        cycle: const [0, 1],
+        teamCount: 1,
+        teamNames: const ['我'],
+        teamOffsets: const [0],
+      ),
+    );
     double cardH({required bool hasOverrideHint}) => measureBottomInfoCardHeight(
           context: ctx,
           cardOuterWidth: 420,
-          // 这一条只盯班次行：不挂排班就没有色块那一段的干扰。
-          chain: null,
+          chain: chain,
           month: DateTime(2026, 9, 1),
           hasTodoHint: false,
           hasOverrideHint: hasOverrideHint,
@@ -1347,35 +1369,35 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  // ── 空白表方案：整月画「上班 / 休息」，且**不盖指路** ──
+  // ── 空白表方案：整月一天胶囊都不画，但**也不说「没有排班」** ──
   //
-  // v0.9.14 那层指路的判据是「整月 `shiftOn` 全为 null」，而空白表（跟随法定
-  // 节假日）天天返回 null —— 于是只有一套法定班次的人整张日历被「这段时间没有
-  // 排班」盖住，可用户明明排了班（2026-09-30 真机反馈）。判据改成「整月
-  // `displayShiftOn` 全为 null」之后，空白表那套每天都画得出东西，指路因此只在
-  // **真的没有任何班表**时出现 —— 反面（真没有时照旧盖）由 `calendar_chain_test`
-  // 的「其余时间为无 + 没有段」那条罩着。
-  testWidgets('空白表方案：整月每天都画得出胶囊（上班 / 休息），且不盖指路', (tester) async {
+  // 这一版把两条判据拆开了，两条各钉一遍（它们曾经被搅在一起）：
+  //   · **画什么** —— 空白表（跟随法定节假日）没有班次定义，格子只画日期与农历，
+  //     不替它断言今天上不上班。2026-09-30 用户原话：「确实不应该显示上班嘛，它
+  //     本质上可能就想当个日历看」。v0.9.15 一度给它合成了「上班 / 休息」两个
+  //     合成班次，那是**拿显示去迁就判据**，已回退。
+  //   · **说不说「没有排班」** —— 判据是「这天有没有班表在管」
+  //     （`ScheduleChain.hasScheduleOn`），空白表**天天都在管**，所以那句指路
+  //     不该出现。v0.9.14 用的正是 `shiftOn == null`，于是只有一套法定班次的人
+  //     整张日历被它盖住 —— 那才是这一对的起因。
+  // 反面（真的没有任何班表时照旧盖）由 `calendar_chain_test` 的
+  // 「其余时间为无 + 没有段」那条罩着。
+  testWidgets('空白表方案：整月一天胶囊都不画，但也不说「没有排班」', (tester) async {
     await _pumpCalendar(tester, 'day_night_rest_rest', blank: true);
 
     expect(find.text(L10n.noScheduleHere), findsNothing,
-        reason: '用户排了班（跟随法定节假日），不该说「这段时间没有排班」');
+        reason: '有班表在管（跟随法定节假日），不该说「这段时间没有排班」');
+    expect(find.text(L10n.noSchedule), findsNothing,
+        reason: '信息卡里那句同样不该出现');
 
     final today = DateTime.now();
     final daysInMonth = DateTime(today.year, today.month + 1, 0).day;
-    String? labelOf(int day) {
-      final chip = find.byKey(ValueKey('day-chip-$day'), skipOffstage: false);
-      if (chip.evaluate().isEmpty) return null;
-      return tester
-          .widget<Text>(find.descendant(
-              of: chip, matching: find.byType(Text), skipOffstage: false))
-          .data;
-    }
-
     for (var d = 1; d <= daysInMonth; d++) {
-      expect(labelOf(d), anyOf(L10n.workdayShort, L10n.restShort),
-          reason: '$d 日应当画成「上班」或「休息」（空白表也是排了班的）');
+      expect(find.byKey(ValueKey('day-chip-$d'), skipOffstage: false),
+          findsNothing, reason: '$d 日不该画任何班次胶囊 —— 空白表就是一张日历');
     }
+    // 格子还在（不是一张空网格）：日期与农历照旧。
+    expect(find.byKey(const ValueKey('day-card-1')), findsOneWidget);
 
     await _disposeCalendar(tester);
   });
@@ -1616,23 +1638,27 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  // 空白表（跟随法定节假日）在小窗那一档：**不画网格**，信息卡是屏幕上唯一的
-  // 内容。它原先取的是 `chain.shiftOn`（空白表恒为 null），于是那两个字一个都
-  // 看不到 —— 用户在小窗里点开日历只能看见一个光秃秃的日期。
-  testWidgets('空白表方案：小窗那一档的信息卡也要写出「上班 / 休息」', (tester) async {
+  // 空白表（跟随法定节假日）在小窗那一档：**不画网格**，信息卡是屏幕上唯一的内容。
+  //
+  // 那两个字（上班 / 休息）在 v0.9.16 撤掉了，而**「没有排班」那句同样不能有** ——
+  // 这是两条判据的分工在小窗上的样子：不替它断言，但也不说它没排班。
+  testWidgets('空白表方案：小窗那一档不写「上班」，也不说「没有排班」', (tester) async {
     await _pumpCalendar(tester, 'day_night_rest_rest',
         blank: true, width: 200, height: 400);
 
     expect(find.byKey(const ValueKey('day-card-8')), findsNothing,
         reason: '确认这个尺寸确实落进了小窗那一档（网格让位）');
-    // 今天是 9/30，非节假日 → 「上班」。写法与格子里那个胶囊同一处（`displayShiftOn`）。
-    expect(find.text(L10n.workday), findsOneWidget,
-        reason: '小窗下信息卡是唯一的内容，不能什么都不写');
+    expect(find.text(L10n.workday), findsNothing);
+    expect(find.text(L10n.rest), findsNothing);
+    expect(find.text(L10n.noSchedule), findsNothing);
+    // 日期还在（卡片不是空的，只是不再多说什么）。
+    expect(find.text(L10n.monthDay(dateOnly(DateTime.now()))), findsOneWidget);
 
     await _disposeCalendar(tester);
   });
 
-  testWidgets('400×640 那档小窗不受影响：网格与「已调班」都还在', (tester) async {    // 各机型小窗的默认尺寸，高 640 > 480，**不该**被上面那条规则收走网格。
+  testWidgets('400×640 那档小窗不受影响：网格与「已调班」都还在', (tester) async {
+    // 各机型小窗的默认尺寸，高 640 > 480，**不该**被上面那条规则收走网格。
     final today = dateOnly(DateTime.now());
     final db = await _pumpCalendar(tester, 'day_night_rest_rest',
         width: 400, height: 640);

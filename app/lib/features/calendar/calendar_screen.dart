@@ -14,7 +14,6 @@ import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
-import '../../domain/day_display.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -155,15 +154,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 看不出来（spec §7.1）。跨方案时同名的「休」合并成一个数，本来就该合。
   ///
   /// 没有排班、或整月都没有班次（空白表跟随法定节假日）时返回 null。
-  ///
-  /// 走 `displayShiftOn` 而不是 `shiftOn`：**空白表那套班表的日子也要数** ——
-  /// 它整月都是「上班 / 休息」（见 `domain/day_display.dart`）。
   String? _monthTally(ScheduleChain? chain) {
     if (chain == null) return null;
     final counts = <String, int>{};
     final days = DateTime(_month.year, _month.month + 1, 0).day;
     for (var d = 1; d <= days; d++) {
-      final shift = displayShiftOn(chain, DateTime(_month.year, _month.month, d));
+      final shift = chain.shiftOn(DateTime(_month.year, _month.month, d));
       if (shift == null) continue;
       counts.update(shift.shortLabel, (n) => n + 1, ifAbsent: () => 1);
     }
@@ -878,7 +874,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget _buildGrid(
       BuildContext context, ScheduleChain? chain, double availHeight) {
     final body = _gridBody(context, chain, availHeight);
-    if (!_monthHasNoShift(chain, _month)) return body;
+    if (!_monthHasNoSchedule(chain, _month)) return body;
     final muted = AppTokens.inkMuted(context);
     return Stack(
       children: [
@@ -918,22 +914,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  /// 这个月是不是**一天班都没有**（「其余时间」设成了「无」、又没有任何段覆盖）。
+  /// 这个月是不是**一天班表都没有**（「其余时间」设成了「无」、又没有任何段覆盖）。
   ///
   /// 逐天问一遍：一个月最多 31 次，可以忽略；而判「中点那天」会在跨段边界的
   /// 月份上判错。
   ///
-  /// **判据是「画不出任何东西」，不是「没有班次定义」**：走 `displayShiftOn`，
-  /// 于是空白表（跟随法定节假日）那套算**有东西可画**（整月都是「上班 / 休息」），
-  /// 不再盖指路。v0.9.14 用的正是 `shiftOn == null`，而空白表天天返回 null ——
-  /// 只有一套法定班次的人，整张日历被这层指路盖住（2026-09-30 真机反馈）。
-  bool _monthHasNoShift(ScheduleChain? chain, DateTime month) {
+  /// **判据是「这天有没有班表在管」（`chain.hasScheduleOn`），不是「这天画得出什么」**。
+  /// 两者在空白表（跟随法定节假日）上分家：那套班表**天天都在管**，`shiftOn` 却恒为
+  /// null（它没有班次定义）。用后者就会把「只有一套法定班次」误判成空库、整张日历被
+  /// 这层指路盖住 —— v0.9.14 真机反馈的正是它；v0.9.15 一度改成「给空白表合成一个
+  /// 上班 / 休息班次」来绕开，那是拿**显示**去迁就**判据**，用户当即指出「确实不应该
+  /// 显示上班，它本质上就是一张日历」。判据归判据、显示归显示。
+  bool _monthHasNoSchedule(ScheduleChain? chain, DateTime month) {
     if (chain == null) return true;
     final days = DateTime(month.year, month.month + 1, 0).day;
     for (var d = 1; d <= days; d++) {
-      if (displayShiftOn(chain, DateTime(month.year, month.month, d)) != null) {
-        return false;
-      }
+      if (chain.hasScheduleOn(DateTime(month.year, month.month, d))) return false;
     }
     return true;
   }
@@ -1178,9 +1174,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       cells.add(_dayCell(
           context,
           date,
-          // `displayShiftOn` 而不是 `shiftOn`：空白表（跟随法定节假日）那套的
-          // 每一天也要画（「上班 / 休息」），而 `shiftOn` 对它恒为 null。
-          displayShiftOn(chain, date),
+          // 真值：空白表（跟随法定节假日）那套没有班次定义，这里就是 null ——
+          // 格子只画日期与农历，**不替它断言今天上不上班**（v0.9.16 用户反馈）。
+          // 「有没有班表在管」是另一件事，由 `chain.hasScheduleOn` 回答。
+          chain?.shiftOn(date),
           lunarOf(date),
           cellW,
           cellH,
@@ -1663,13 +1660,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 空白表 / 其他班组」四处全用它。跨时段之后**不能再认「当前方案」** ——
     // 「今天归哪套」是链才知道的事。
     final daySchedule = chain?.scheduleOn(_selected);
-    // 「这天画成什么」—— 走 `displayShiftOn` 而不是 `shiftOn`：空白表（跟随法定
-    // 节假日）也要有东西画（「上班 / 休息」），否则**小窗那一档**（只画精简卡、
-    // 不画网格）连一个「上班」字都看不到，而小窗恰恰是这些天唯一的内容。
+    // 真值：空白表（跟随法定节假日）**没有班次定义**，这里就是 null —— 于是
+    // 信息卡、小窗精简卡都不替它写「上班」。
     //
-    // 真班次与合成班次的区别只剩**完整卡那一支**要判（见下面那句
-    // `!daySchedule.isBlank`：空白表在那里走自己的说法，不写时间与闹钟）。
-    final shift = displayShiftOn(chain, _selected);
+    // 别退回「给空白表合成一个班次」那一版（v0.9.15 试过）：那是拿显示去迁就判据。
+    // 「有没有班表在管」是**另一件事**，由 `chain.hasScheduleOn` 回答（只有
+    // 「整月没有任何班表」时才写「这段时间没有排班」）。
+    final shift = chain?.shiftOn(_selected);
     final isToday = _selected == dateOnly(DateTime.now());
     final muted = AppTokens.inkMuted(context);
     final accent = shift != null
@@ -1918,10 +1915,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         // 剩余宽度会被三等分，最长的时间串（「20:30 – 次日08:30」）反而先
         // 被截掉。并成一段后按「班次名 → 时间 → 闹钟」的顺序从尾部省略，
         // 优先级正好反过来。
-        // **空白表不走这一支**：`shift` 现在可能是一个合成出来的「上班 / 休息」
-        // （`displayShiftOn`），而这一支要写时间与闹钟 —— 空白表两样都没有，
-        // 写出来就是「闹钟：未开启」这种噪音。它在下面那一支里只写两个字。
-        if (shift != null && daySchedule != null && !daySchedule.isBlank)
+        // `shift` 是真值：空白表（跟随法定节假日）这天是 null，走下面「有班表、
+        // 但没班次」那一支（什么都不写）。
+        if (shift != null && daySchedule != null)
           // `GlassPressable` **没有 `onTap`** —— 它只是个按压缩放的视觉包装
           // （`Listener` + `QScale`），点击一律由子 widget 承载。这里用
           // `GestureDetector` 只拿点击：全 app 的按压反馈就是玻璃的 Q 弹缩放，
@@ -1993,14 +1989,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ),
             ),
           )
-        else if (daySchedule != null && daySchedule.isBlank)
-          Text(
-            lunar.isLegalHoliday ? L10n.rest : L10n.workday,
-            style: AppTokens.labelStrong.copyWith(
-              color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
-            ),
-          )
-        else
+        // 判据是「**这天有没有班表在管**」，不是「这天有没有班次」：
+        //   · 「其余时间」是「无」、又没有段覆盖 → 真的没有排班，写那句说明；
+        //   · 有班表在管、只是那天没有班次定义（空白表 = 跟随法定节假日）
+        //     → **什么都不写**。那套班表的语义就是「当日历看」：日期、农历、
+        //       法定节假日标红都在，不替它断言今天上不上班（v0.9.16 用户反馈）。
+        // 写成 `shift == null` 会把第二种误判成第一种 —— 那正是 v0.9.14 用户报的
+        // 「一直弹窗提示这段时间没有排班，可我们是按法定节假日上班的」。
+        else if (daySchedule == null)
           Text(L10n.noSchedule,
               style: AppTokens.rowSecondary.copyWith(color: muted)),
         if (daySchedule != null && daySchedule.teamCount > 1) ...[

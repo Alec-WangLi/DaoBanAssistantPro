@@ -162,15 +162,10 @@ InfoCardMetrics measureBottomInfoCardHeight({
     maxLines: 1,
     maxWidth: contentW,
   ).height;
-  // 没有班次的日子走另外两种文案，都可能比班次行矮，取大兜住。
+  // 没有班表在管的日子走另一句文案（「这段时间没有排班」），比班次行矮。
   final noShiftH = measure.text(
     L10n.noSchedule,
     AppTokens.rowSecondary,
-    maxWidth: contentW,
-  ).height;
-  final blankH = measure.text(
-    L10n.rest,
-    AppTokens.labelStrong,
     maxWidth: contentW,
   ).height;
   // 「已调整」胶囊也塞在**这一行**里（班次行尾巴上），就不新占一行。它是这一行
@@ -180,13 +175,12 @@ InfoCardMetrics measureBottomInfoCardHeight({
   // 就是最高件，而本仓库测试字体走的 Material
   // 行高 1.43（≈ 22.9）反而比它高 —— 界面侧因此看不见差别，那一步由
   // `calendar_screen_test.dart` 里直接量模型的用例钉住。
-  final shiftRowH = [
-    shiftLineH,
-    noShiftH,
-    blankH,
-    _shiftDot,
-    if (hasOverrideHint) _adjustedBadgeH(measure),
-  ].reduce((a, b) => a > b ? a : b);
+  //
+  // ⚠️ **这一行的高度不能一次算好**（v0.9.16 改的）：那一支有三种可能，而
+  // **空白表（跟随法定节假日）那种什么都不写** —— 给它按班次行预留的话，卡片底下
+  // 会白空出约 40dp（用户 2026-09-30 定的口径：「它本质上就是一张日历」）。
+  // 三种可能逐日不同（跨时段的月份里，同一个月既有空白表的日子、也有正常日子），
+  // 所以它和「其他班组」一样进逐日循环。
 
   // 「其他班组」那一行（标签 + 色块）的高度**不能在这里一次算好**：跨方案的月份里，
   // 有的天归 6 个班组的那套、有的天归 1 个班组的那套 —— 只有归多班组那套的日子才有
@@ -243,8 +237,23 @@ InfoCardMetrics measureBottomInfoCardHeight({
       chipsH = math.max(labelH, rows * lineH + (rows - 1) * _chipGapY);
     }
 
+    // 那一行到底占多少 —— 三种情况各不相同，别退回「一次性算好的常量」：
+    //   · 那天有班次 → 班次行（有覆盖时还挂着「已调班」胶囊）；
+    //   · 那天**有班表在管、只是没有班次定义**（空白表）→ **0**，那一支什么都不写；
+    //   · 那天没有任何班表在管 → 「这段时间没有排班」那一句。
+    // 间距照给：渲染那边那根 `SizedBox(height: spaceMd)` 是无条件的（见
+    // `calendar_screen.dart` 的 `_infoCard`），少了它卡片会矮一截、内容顶出定高。
+    final dayShift = chain?.shiftOn(date);
+    final rowH = dayShift != null
+        ? [
+            shiftLineH,
+            _shiftDot,
+            if (hasOverrideHint) _adjustedBadgeH(measure),
+          ].reduce((a, b) => a > b ? a : b)
+        : (daySchedule == null ? noShiftH : 0.0);
+
     var dayContent =
-        dateH + _gapAfterDate + lunarH + _gapBetweenSections + shiftRowH;
+        dateH + _gapAfterDate + lunarH + _gapBetweenSections + rowH;
     if (badgeH > 0) dayContent += badgeH + _gapAfterBadge;
     if (showChips) dayContent += _gapBetweenSections + chipsH;
 

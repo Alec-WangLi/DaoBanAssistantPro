@@ -41,7 +41,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.15\n'
+const String _changelogZh = 'v0.9.16\n'
+    '· 「法定班次」（跟随法定节假日）不再写「上班 / 休息」了：这种班表在日历格子、小窗那张信息卡与桌面小组件上都只画日期与农历 —— 法定节假日照旧标红、调休照旧打「班」。它本质上就是一张日历，上一版替它标上「上班」是我想多了\n'
+    '· 顺带：这种班表下信息卡不再为那一行留高度，卡片矮约 16dp，上面六个格子相应高一点\n'
+    '· 上一版改对的那一半照旧：「这段时间没有排班」那句只在真的没有任何班表盖着这些天时才出现 —— 判定它的是「这天有没有班表在管」，与「这天画不画得出东西」从此分开看\n'
+    '\n'
+
+    'v0.9.15\n'
     '· 「法定班次」（跟随法定节假日）不再被当成「没有排班」了：这种班表每一天都画得出来 —— 法定节假日写「休息」、其余日子写「上班」，日历格子、小窗那张信息卡与桌面小组件同一个口径。此前只有一套这种班表时，整张日历被「这段时间没有排班」盖住，可你明明是按法定节假日上班的\n'
     '· 排班管理页分成两节：「排班时段」在上、「排班表」在下，各带一个标题，不再挤成一片\n'
     '· 一个时段都没有时，那行改说「全部日子」，不再说「其余时间」：「其余」得有「这一段」才有意义，一段都没有时那句话会被读成「这是默认一直用它的意思吗」\n'
@@ -92,11 +98,15 @@ const String _changelogZh = 'v0.9.15\n'
     '· 信息卡底下那截空白用起来了：卡片是按「本月最满的一天」定高的 —— 这样点日期时上面的日历格子不会跟着伸缩 —— 于是普通日子底下会空出三四十 dp。现在那里写一行本月统计，比如「本月 早12 · 午8 · 夜8 · 休6」，一眼看出这个月上了几个什么班。装得下才画：节假日那种最满的日子它自动不出现，卡片高度一个像素都没动\n'
     '· 换月加了一点方向感：往前翻往左滑、往后翻往右滑，顶栏的「年月」跟着一起动；以前是硬切\n\n'
 
-    'v0.9.6\n'
-    '· 新建自定义闹钟的默认重复方式从「每天」改成「一次性」：加一条闹钟十有八九是响这一次，响过之后它自己就消失了，不用你回来删。要天天响的，点一下「每天」\n'
-    '· 修好一个会让一次性闹钟「加了就没」的坑：新建时时间和日期默认都是「此刻」「今天」，两个默认叠在一起，那一刻在按下「添加」之前已经过去了 —— 这种闹钟既不会响，还会在下次进闹钟页时被自动清掉。现在日期取的是这个钟点的下一次出现：今天还没到就是今天，已经过了就顺延到明天；日期那一行写的永远是你真正会听到它的那天\n\n';
+;
 
-const String _changelogEn = 'v0.9.15\n'
+const String _changelogEn = 'v0.9.16\n'
+    '· A "legal-holiday schedule" (follow the public holidays) no longer writes "Workday / Rest": on the calendar grid, on the info card in a small window and on the home-screen widget it now draws only the date and the lunar line — public holidays are still marked red and makeup workdays still tagged. It really is just a calendar, and labelling those days "Workday" was overreach on my part\n'
+    '· As a result the info card no longer reserves a line for it: the card is about 16dp shorter and the grid above it gains that height\n'
+    '· The half of that change that was right stays: "No schedule for these dates" appears only when no schedule covers those days at all — the test for it is now "is a schedule in force on this day", separate from "does this day draw anything"\n'
+    '\n'
+
+    'v0.9.15\n'
     '· A "legal-holiday schedule" (follow the public holidays) is no longer treated as "no schedule": every day of one now draws something — "Rest" on a public holiday, "Workday" otherwise, the same on the calendar grid, the info card in a small window, and the home-screen widget. Until now, with only one such schedule, the whole calendar was covered by "No schedule for these dates" while you were in fact working to the public-holiday calendar\n'
     '· The Schedules page is split into two sections: "Schedule timeline" on top, "Schedules" below, each with its own heading instead of running together\n'
     '· With no periods at all, that line now reads "All dates" instead of "Other dates" — "other" needs a period to be other than, and on its own the line read like "so is this the default, always?"\n'
@@ -147,9 +157,7 @@ const String _changelogEn = 'v0.9.15\n'
     '· The empty space under the info card now says something: the card is sized to the fullest day of the month — that way tapping a day never makes the calendar grid above it resize — which leaves roughly 30-50dp empty on ordinary days. That line now carries a tally of the month, such as "This month  M12 · A8 · N8 · O6", so you can see at a glance how many of each shift you have. It only shows when there is room: on the fullest days (public holidays) it stays out, and the card never grows a pixel for it\n'
     '· Changing months now has a sense of direction: going back slides left, going forward slides right, with the month label travelling along. It used to be an instant swap\n\n'
 
-    'v0.9.6\n'
-    '· New custom alarms now default to "Once" instead of "Daily": an alarm you add is usually a one-off, and once it has rung it clears itself away so you never have to come back and delete it. For one that repeats every day, tap "Daily"\n'
-    '· Fixed a hole that made a one-off alarm vanish the moment you added it: a new alarm defaulted to today at the current time, so that moment had already passed by the time you tapped "Add" — such an alarm never rang, and was quietly deleted the next time you opened the alarm page. The date is now the next time that clock time comes around: today if it is still ahead, tomorrow if it has passed. The date row always shows the day you will actually hear it\n\n';
+;
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

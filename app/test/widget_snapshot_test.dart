@@ -213,13 +213,13 @@ void main() {
     }
   });
 
-  // 空白表（跟随法定节假日）**不是在用的班表里「没有排班」的那一种** ——
-  // 它整月都画得出东西（法定节假日「休息」、其余「上班」）。判据改走
-  // `displayShiftOn`（见 `domain/day_display.dart`），所以：
-  //   · 桌面不再写「还没有排班，点一下去设置」（用户明明排了）；
-  //   · 逐日格子有 `hasShift` + 简称 + 色号，原生一个字都不用改。
-  // 2026-09-30 用户真机反馈的同源处。
-  test('空白表方案：整天画得出「上班 / 休息」，不再报「还没有排班」', () {
+  // 空白表（跟随法定节假日）**既不是「没有排班」，也不是「天天上班」**：
+  //   · `hasSchedule` 为真 —— 桌面不再写「还没有排班，点一下去设置」（用户明明
+  //     有一套在用的班表，卡片该照常画日历）；
+  //   · 逐日的 `hasShift` 为假 —— 那套班表没有班次定义，格子里只画日期、农历与
+  //     法定节假日标红，**不替用户断言今天上不上班**（2026-09-30 用户真机反馈）。
+  // 这两条是同一次反馈的两半，缺一条都会退回到某个已经被报过的毛病上。
+  test('空白表方案：hasSchedule 为真（不当空态），但逐日不画班次', () {
     final blank = ShiftSchedule(
       name: '跟随法定节假日',
       anchorDate: DateTime.utc(2026, 9, 18),
@@ -235,17 +235,16 @@ void main() {
     );
     expect(s['hasSchedule'], true, reason: '有在用的班表，不该是空态');
 
-    // 9/18 是普通工作日 → 上班；2026 国庆 10/1 是法定节假日 → 休息。
-    final workday = _rowOf(s, DateTime(2026, 9, 18));
-    expect(workday['hasShift'], true);
-    expect(workday['shiftName'], L10n.workday);
-    expect(workday['shiftAbbr'], L10n.workdayShort);
-    expect(workday['timeRange'], isNull, reason: '空白表没有钟点，别去凑一个');
-
-    final holiday = _rowOf(s, DateTime(2026, 10, 1));
-    expect(holiday['hasShift'], true);
-    expect(holiday['shiftName'], L10n.rest);
-    expect(holiday['isRest'], true);
+    // 一个普通工作日 + 一个法定节假日（2026 国庆 10/1）：两天的画法都该是「没有班次」。
+    for (final day in [DateTime(2026, 9, 18), DateTime(2026, 10, 1)]) {
+      final row = _rowOf(s, day);
+      expect(row['hasShift'], false, reason: '$day 不该有班次');
+      expect(row['shiftAbbr'], '');
+      expect(row['color'], 0);
+      expect(row['timeRange'], isNull);
+    }
+    // 农历照旧（格子第三行是它，与有没有班次无关）。
+    expect(_rowOf(s, DateTime(2026, 10, 1))['lunarIsHoliday'], true);
   });
 
   test('跨午夜班次的时间串由 L10n.timeRange 产出，不拼前缀', () {

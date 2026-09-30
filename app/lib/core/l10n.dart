@@ -357,15 +357,6 @@ class L10n {
   static String get followHolidayHint => t('法定节假日休息，其余按上班', 'Rest on legal holidays, work otherwise');
   static String get holidayScheduleName => t('法定班次', 'Legal-holiday schedule');
 
-  /// 空白表（法定班次）在**日历格子里**那两个字。
-  ///
-  /// 与 [rest] / [workday] 是同一件事的两个长度：信息卡与小组件的今日卡写全名，
-  /// 格子只有约 40dp 宽（英文全名 `Workday` 塞进去会被缩放糊掉），所以英文按内置
-  /// 模板里那些班次简称的同一条约定取**单字母**（`D` 白班 / `N` 夜班 / `O` 休班…）。
-  /// 中文两字，与模板里「上夜」「下夜」那种双字简称同一个宽度档。
-  static String get restShort => t('休息', 'R');
-  static String get workdayShort => t('上班', 'W');
-
   // ── 方案「生效时段」（多排班表按日期衔接） ──
   //
   // 三种「空」各有各的说法，别合并：两端都空 = 不在时间线上（**非当前**那套要

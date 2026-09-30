@@ -189,6 +189,32 @@ void main() {
         isTrue,
       );
     });
+
+    // hasScheduleOn 与 hasCycle / shiftOn 是**三件不同的事**，这条把三者的分工钉住：
+    //   · shiftOn        —— 这天有没有**班次**（空白表恒为 null）
+    //   · hasScheduleOn  —— 这天有没有**班表在管**（空白表**有**）← 日历那句指路用它
+    //   · hasCycle       —— 链上有没有**班次可挑**的方案（空白表**没有**）← 拖选/改班闸门用它
+    // 搅在一起的代价都是现成的：拿 shiftOn 当 hasScheduleOn，只有一套法定班次的人
+    // 整张日历被「这段时间没有排班」盖住（v0.9.14）；拿 hasCycle 当 hasScheduleOn，
+    // 桌面小组件写「还没有排班」（v0.9.14）；拿 hasScheduleOn 去开拖选闸门，用户
+    // 拖出一片淡染、松手什么也不发生（v0.8.1 有意关掉的那条）。
+    test('hasScheduleOn：空白表那天**也算有班表在管**（与 hasCycle 分家）', () {
+      final blank = ShiftSchedule(
+        name: '法定班次',
+        anchorDate: DateTime.utc(2026, 1, 1),
+        classes: const [],
+        cycle: const [],
+      );
+      final chain = ScheduleChain(fallback: blank, fallbackId: 1);
+      expect(chain.shiftOn(_d(2026, 9, 18)), isNull, reason: '空白表没有班次');
+      expect(chain.hasScheduleOn(_d(2026, 9, 18)), isTrue,
+          reason: '但这天有班表在管 —— 日历据此不盖那句指路');
+      expect(chain.hasCycle, isFalse, reason: '没有班次可挑');
+
+      // 真的没有班表：其余时间为「无」且没有段。
+      const empty = ScheduleChain();
+      expect(empty.hasScheduleOn(_d(2026, 9, 18)), isFalse);
+    });
   });
 
   group('monthHasOverrideHint —— 逐天问「那天归哪套」', () {

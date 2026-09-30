@@ -96,4 +96,52 @@ void main() {
       }),
     ));
   });
+
+  testWidgets('空白表那套：班次行不占高度（那一支什么都不写）', (tester) async {
+    // v0.9.16 定的口径：空白表（跟随法定节假日）**不替用户断言今天上不上班**，
+    // 信息卡那一行因此什么都不写 —— 高度也就不该再为它留着，否则卡片底下白空出
+    // 约 40dp（用户 2026-09-30 原话：「它本质上可能就想当个日历看」）。
+    //
+    // 判据是「**比挂一套真排班的卡片矮**」，不是某个具体数值：字体与系统字号一变
+    // 数值就飘，而这条要守的是「那一行有没有被预留」这件事。
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(builder: (context) {
+        const w = 400.0;
+        InfoCardMetrics measure(ScheduleChain chain) =>
+            measureBottomInfoCardHeight(
+              context: context,
+              cardOuterWidth: w,
+              chain: chain,
+              month: DateTime(2026, 9, 1),
+              hasTodoHint: false,
+              hasOverrideHint: false,
+            );
+
+        // 同一套排班：周期为空 = 空白表。
+        final blank = ShiftSchedule(
+          name: '法定班次',
+          anchorDate: DateTime.utc(2026, 1, 1),
+          classes: const [],
+          cycle: const [],
+          teamCount: 1,
+          teamNames: const ['我'],
+          teamOffsets: const [0],
+        );
+        final blankMonth = measure(ScheduleChain(fallback: blank, fallbackId: 1));
+        final rotatingMonth = measure(ScheduleChain(
+            fallback: _sched('A', 1), fallbackId: 1));
+
+        // 门槛写「至少矮 12dp」而不是「矮一点点」：要证明的是**整整一行没被预留**，
+        // 不是取整抖动。实测这一行在测试字体下 16dp（真机上按 Material 的 1.43 行高
+        // 约 23dp）—— 12 是给字体差异留的余量，仍然远大于任何取整误差。
+        expect(blankMonth.outerHeight,
+            lessThan(rotatingMonth.outerHeight - 12),
+            reason: '空白表那天不写班次行，卡片不该为它留高度');
+        // 逐日也是矮的（不是被某一天拉平）。
+        expect(blankMonth.dayContentHeights.every((h) =>
+            h < rotatingMonth.outerHeight - 1), isTrue);
+        return const SizedBox();
+      }),
+    ));
+  });
 }

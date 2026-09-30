@@ -16,7 +16,6 @@
 library;
 
 import '../../core/l10n.dart';
-import '../../domain/day_display.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -81,10 +80,10 @@ Map<String, Object?> buildWidgetSnapshot({
     // 这样下面减出来的毫秒数才落在用户所在时区的正确钟点上。
     final date = DateTime(window.from.year, window.from.month, window.from.day + i);
     final dayStart = date;
-    // `displayShiftOn` 而不是 `chain?.shiftOn`：空白表（跟随法定节假日）那套的
-    // 每一天也要画（「上班 / 休息」），而 `shiftOn` 对它恒为 null。原生的排版
-    // 逻辑一个字都不用改 —— 它本来就只认 `hasShift` / `shiftAbbr` / `color`。
-    final shift = displayShiftOn(chain, date);
+    // 真值：空白表（跟随法定节假日）没有班次定义，这里就是 null —— 卡片上那格
+    // 只画日期与农历，**不替它断言今天上不上班**（v0.9.16 用户反馈）。
+    // 「这一天有没有班表在管」是另一件事，见顶层 `hasSchedule`。
+    final shift = chain?.shiftOn(date);
 
     // 本地零点也是边界：跨天要翻页。
     final nextMidnight = DateTime(date.year, date.month, date.day + 1);

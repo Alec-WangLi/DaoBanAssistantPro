@@ -113,6 +113,18 @@ class ScheduleChain implements ShiftSource {
     return (fallback, fallbackId);
   }
 
+  /// 那天有没有**任何一套班表在管**（与那天有没有班次**是两件事**）。
+  ///
+  /// 日历上那句「这段时间没有排班」用它判：只要「其余时间」或某一段接住了这一天，
+  /// 就不该说没排班 —— **哪怕那套是空白表**（跟随法定节假日，`cycle` 为空、
+  /// `shiftOn` 对它恒为 null）。空白表那套的语义是「我就当日历用」：格子只画日期与
+  /// 农历、法定节假日标红，不替它断言今天上不上班（v0.9.16 用户反馈：「确实不应该
+  /// 显示上班嘛，它本质上可能就想当个日历看」）。
+  ///
+  /// **别退回 `shiftOn(day) != null`**：那个判据把空白表当空库，于是只有一套法定
+  /// 班次的人整张日历被那句指路盖住（v0.9.14 真机反馈，也正是这一对判据分家的原因）。
+  bool hasScheduleOn(DateTime day) => scheduleOn(day) != null;
+
   @override
   ShiftClass? shiftOn(DateTime day) => scheduleOn(day)?.shiftOn(day);
 
