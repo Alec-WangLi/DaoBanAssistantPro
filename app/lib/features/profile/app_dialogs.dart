@@ -41,12 +41,21 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.14\n'
+const String _changelogZh = 'v0.9.15\n'
+    '· 「法定班次」（跟随法定节假日）不再被当成「没有排班」了：这种班表每一天都画得出来 —— 法定节假日写「休息」、其余日子写「上班」，日历格子、小窗那张信息卡与桌面小组件同一个口径。此前只有一套这种班表时，整张日历被「这段时间没有排班」盖住，可你明明是按法定节假日上班的\n'
+    '· 排班管理页分成两节：「排班时段」在上、「排班表」在下，各带一个标题，不再挤成一片\n'
+    '· 一个时段都没有时，那行改说「全部日子」，不再说「其余时间」：「其余」得有「这一段」才有意义，一段都没有时那句话会被读成「这是默认一直用它的意思吗」\n'
+    '· 修好「排班时段」弹层里的「取消」：点了没有任何反应。顺手把「删除 / 取消 / 保存」三颗钮之间补上间隔（原先紧挨着）\n'
+    '· 待办页那个「重复待办」入口挪到了右上角（原来紧贴在标题后面，看着像标题的一部分）\n'
+    '· 修好更新说明里的 markdown 标记：像「两段时间不许重叠」那种加粗写法会原样带上两个星号。更新日志走的是纯文本渲染，标记不会被解析；这回补了一条用例盯着，再混进去就直接失败\n'
+    '· 修好「把每周三改成每周五」这条路径在周三、周四不生效：编辑一个重复待办时会把系列的起始日改写成「当前这一次」的日期，于是「最近的那个周五」被算成早于起始日、静默不对齐\n\n'
+
+    'v0.9.14\n'
     '· 「排班时段」不再设在排班编辑器里了：现在在「排班管理」页顶部，一条时间线由上到下 —— 头一行是「其余时间」（没被时段覆盖的日子归它管），下面是你排的每一段，点任意一行就能改\n'
-    '· **两段时间不许重叠**：一天只能有一套排班。撞上了会告诉你跟哪一段撞的、撞的是哪几天。（从前允许重叠，结果设了两套都占 9 月、出来的是其中一套，说不清为什么）\n'
+    '· 两段时间不许重叠：一天只能有一套排班。撞上了会告诉你跟哪一段撞的、撞的是哪几天。（从前允许重叠，结果设了两套都占 9 月、出来的是其中一套，说不清为什么）\n'
     '· 「其余时间」可以设成「无」：两个班表之间领导真给休息几天时，直接留空就行，不必再专门建一套「休息」的班表。那些天在日历上会写一句「这段时间没有排班」，告诉你去哪加一段\n'
     '· 日历顶栏那个「切换排班」按钮改成了「排班时段」：点开是一张只读的时间线，能看到这段时间在用哪套、今天落在哪一段，要改就点底下的「管理排班时段」。原来那个按钮在时段盖满日子之后就什么也改不动，看着像坏了\n'
-    '· 一套班表现在可以出现在**多段**上（9 月临时换成别的班表、10 月再换回来），从前那种「一套只占一段」的写法表达不了\n\n'
+    '· 一套班表现在可以出现在多段上（9 月临时换成别的班表、10 月再换回来），从前那种「一套只占一段」的写法表达不了\n\n'
 
     'v0.9.13\n'
     '· 待办页右上角那个「重复待办」入口重新做了：原来是几个小字，现在是实心主色胶囊（与日历右上角那颗「今天」同一个形态），一眼看得出是个按钮。窄屏上仍只留图标，位置不变\n\n'
@@ -62,7 +71,7 @@ const String _changelogZh = 'v0.9.14\n'
     '· 一个重复待办同时只占一行：永远是「当前这一次」。过期没勾的，下一次到点时就地顺延，不会堆出一串「上周三的会」\n'
     '· 删一条重复待办时会问一句：是「只这一次不要了」，还是「删除整个重复」—— 前者只是跳过这一次（下次照常出现），后者连它已完成的历史一起删掉\n'
     '· 待办页右上角多了「重复待办」入口（小窗里只剩图标）：能看到有哪些重复项、各自的下一次是什么时候，能改周期、能停用、能删。停用之后当前那条会留着 —— 那是你还没做的一件事，不替你收走\n'
-    '· 重复待办的提醒由系统自己接着排，**App 长期不开也照常响**，不是「等你下次打开才补上」\n\n'
+    '· 重复待办的提醒由系统自己接着排，App 长期不开也照常响，不是「等你下次打开才补上」\n\n'
 
     'v0.9.10\n'
     '· 桌面小组件（4×5 整月那张）里超过三个字的农历节日名，现在与 App 里的日历显示一致：前三个字加省略号。上一版只改了 App 里的日历，桌面那张卡漏掉了 —— 同一天两个界面显示得不一样\n'
@@ -85,20 +94,23 @@ const String _changelogZh = 'v0.9.14\n'
 
     'v0.9.6\n'
     '· 新建自定义闹钟的默认重复方式从「每天」改成「一次性」：加一条闹钟十有八九是响这一次，响过之后它自己就消失了，不用你回来删。要天天响的，点一下「每天」\n'
-    '· 修好一个会让一次性闹钟「加了就没」的坑：新建时时间和日期默认都是「此刻」「今天」，两个默认叠在一起，那一刻在按下「添加」之前已经过去了 —— 这种闹钟既不会响，还会在下次进闹钟页时被自动清掉。现在日期取的是这个钟点的下一次出现：今天还没到就是今天，已经过了就顺延到明天；日期那一行写的永远是你真正会听到它的那天\n\n'
+    '· 修好一个会让一次性闹钟「加了就没」的坑：新建时时间和日期默认都是「此刻」「今天」，两个默认叠在一起，那一刻在按下「添加」之前已经过去了 —— 这种闹钟既不会响，还会在下次进闹钟页时被自动清掉。现在日期取的是这个钟点的下一次出现：今天还没到就是今天，已经过了就顺延到明天；日期那一行写的永远是你真正会听到它的那天\n\n';
 
-    'v0.9.5\n'
-    '· 新用户第一次打开 App 弹的那个弹窗重做了：从前直接弹整份《使用帮助》（九个条目、上千字），现在只讲三件事 —— 先把班排上、把权限开齐、临时请假或换班怎么操作。完整说明仍在「我的 → 使用帮助」\n'
-    '· 《使用帮助》九条全部改写：从一整段长句改成一条条短句，原先夹在括号里的细节拆出来独立成条，能扫着读了\n'
-    '· 搜索倒班方式没搜到时，不再只写一句「没找到匹配的倒班方式」就结束 —— 补上了下一步：换个说法再搜，或者从下面挑一个最接近的进去改\n'
-    '· 修好一处自相矛盾的文案：「我自己排」的英文标题原标题是 Start from scratch（从零开始），但它其实是给你一套默认的四班两倒起步，中文副标题一直是对的\n\n';
+const String _changelogEn = 'v0.9.15\n'
+    '· A "legal-holiday schedule" (follow the public holidays) is no longer treated as "no schedule": every day of one now draws something — "Rest" on a public holiday, "Workday" otherwise, the same on the calendar grid, the info card in a small window, and the home-screen widget. Until now, with only one such schedule, the whole calendar was covered by "No schedule for these dates" while you were in fact working to the public-holiday calendar\n'
+    '· The Schedules page is split into two sections: "Schedule timeline" on top, "Schedules" below, each with its own heading instead of running together\n'
+    '· With no periods at all, that line now reads "All dates" instead of "Other dates" — "other" needs a period to be other than, and on its own the line read like "so is this the default, always?"\n'
+    '· Fixed the Cancel button in the period dialog, which did nothing at all, and put a gap between the Delete / Cancel / Save buttons, which were touching\n'
+    '· The "Repeating" entry on the todo screen moved to the top right corner (it used to sit right after the title, looking like part of it)\n'
+    '· Fixed markdown markers leaking into the update notes: bold text showed up with its two asterisks. The in-app changelog is plain text and never parses markup; a test now fails if any gets in again\n'
+    '· Fixed "change a weekly Wednesday todo to Friday" doing nothing on Wednesdays and Thursdays: editing a repeating todo rewrote the series start date to the current occurrence, so the most recent Friday came out before the start and the alignment was silently skipped\n\n'
 
-const String _changelogEn = 'v0.9.14\n'
+    'v0.9.14\n'
     '· The schedule timeline no longer lives in the schedule editor: it is now the top section of the Schedules page, one line per period from top to bottom — the first line is "Other dates" (which covers whatever no period covers), then each period you placed. Tap any line to edit it\n'
-    '· **Periods may not overlap**: a day can only belong to one schedule. If they clash, the app names the period you clashed with and the dates involved. (Overlaps used to be allowed, and two schedules both covering September silently resolved to one of them)\n'
+    '· Periods may not overlap: a day can only belong to one schedule. If they clash, the app names the period you clashed with and the dates involved. (Overlaps used to be allowed, and two schedules both covering September silently resolved to one of them)\n'
     '· "Other dates" can be set to none: when your manager really does give you a few days off between two schedules, just leave it blank instead of building a "rest" schedule for it. Those days say "No schedule for these dates" on the calendar, pointing at where to add a period\n'
     '· The calendar\'s "Switch schedule" button is now "Schedule timeline": a read-only overview showing which schedule is in force, which period contains today, and a "Manage the timeline" entry. The old button could not change anything once periods covered the dates, so it looked broken\n'
-    '· A schedule can now appear in **several periods** (switch away for September, switch back in October) — the old one-period-per-schedule shape could not express that\n\n'
+    '· A schedule can now appear in several periods (switch away for September, switch back in October) — the old one-period-per-schedule shape could not express that\n\n'
 
     'v0.9.13\n'
     '· The "Repeating" entry at the top of the todo screen has been redone: it was a few small characters, and is now a solid accent pill (the same shape as the "Today" button on the calendar), so it reads as a button at a glance. In a narrow window it still shows just the icon, in the same place\n\n'
@@ -137,13 +149,7 @@ const String _changelogEn = 'v0.9.14\n'
 
     'v0.9.6\n'
     '· New custom alarms now default to "Once" instead of "Daily": an alarm you add is usually a one-off, and once it has rung it clears itself away so you never have to come back and delete it. For one that repeats every day, tap "Daily"\n'
-    '· Fixed a hole that made a one-off alarm vanish the moment you added it: a new alarm defaulted to today at the current time, so that moment had already passed by the time you tapped "Add" — such an alarm never rang, and was quietly deleted the next time you opened the alarm page. The date is now the next time that clock time comes around: today if it is still ahead, tomorrow if it has passed. The date row always shows the day you will actually hear it\n\n'
-
-    'v0.9.5\n'
-    '· Reworked the dialog shown on first launch: it used to open the entire Usage guide (nine sections, over a thousand characters) — it now covers just three things: setting up your schedule, turning on the permissions, and changing a day or two. The full guide is still under Me → Usage guide\n'
-    '· Rewrote all nine Usage guide sections from long single paragraphs into short scannable lines, pulling the details back out of their parentheses\n'
-    '· Searching for a shift pattern with no matches no longer dead-ends on "No matching pattern" — it now says what to try next: another name, or start from the closest match below\n'
-    '· Fixed a self-contradicting label: the English title for "Build my own" read "Start from scratch", but the route actually starts you off with the default 4-crew rotation — the Chinese subtitle had it right all along\n\n';
+    '· Fixed a hole that made a one-off alarm vanish the moment you added it: a new alarm defaulted to today at the current time, so that moment had already passed by the time you tapped "Add" — such an alarm never rang, and was quietly deleted the next time you opened the alarm page. The date is now the next time that clock time comes around: today if it is still ahead, tomorrow if it has passed. The date row always shows the day you will actually hear it\n\n';
 
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

@@ -290,6 +290,22 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 只有一套「法定班次」（跟随法定节假日）：整月每天都画得出「上班 / 休息」，
+    // **不盖指路**（指路只留给真的没有班表的那种）。
+    //
+    // 这一屏要看的是：那两个字压在 40dp 的格子里放不放得下、上班与休息的颜色
+    // 分不分得开、法定节假日那几天红色标记还看不看得见、以及整月一片「上班」
+    // 会不会太吵。2026-09-30 用户反馈的那一整类问题（这种班表被当成「没有排班」）
+    // 此前**没有任何一屏拍得出来**。
+    slug: '32_calendar_blank_schedule',
+    title: '日历 · 法定班次（跟随法定节假日）',
+    build: (db) async {
+      await seedBlankSchedule(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。

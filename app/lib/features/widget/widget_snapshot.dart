@@ -16,6 +16,7 @@
 library;
 
 import '../../core/l10n.dart';
+import '../../domain/day_display.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -80,7 +81,10 @@ Map<String, Object?> buildWidgetSnapshot({
     // 这样下面减出来的毫秒数才落在用户所在时区的正确钟点上。
     final date = DateTime(window.from.year, window.from.month, window.from.day + i);
     final dayStart = date;
-    final shift = chain?.shiftOn(date);
+    // `displayShiftOn` 而不是 `chain?.shiftOn`：空白表（跟随法定节假日）那套的
+    // 每一天也要画（「上班 / 休息」），而 `shiftOn` 对它恒为 null。原生的排版
+    // 逻辑一个字都不用改 —— 它本来就只认 `hasShift` / `shiftAbbr` / `color`。
+    final shift = displayShiftOn(chain, date);
 
     // 本地零点也是边界：跨天要翻页。
     final nextMidnight = DateTime(date.year, date.month, date.day + 1);
@@ -182,9 +186,11 @@ Map<String, Object?> buildWidgetSnapshot({
     'lang': L10n.locale,
     'themeMode': themeMode,
     'accent': accent,
-    // 「链上有没有一套有周期的方案」—— 只看兜底那套会漏（当前可能是空白表，
-    // 而另一套排得满满当当）。
-    'hasSchedule': chain?.hasCycle ?? false,
+    // 「链上有没有**任何一套在用**的方案」—— 空白表（跟随法定节假日）也算，
+    // 它整月都画得出「上班 / 休息」。原先问的是 `hasCycle`（「有没有班次可挑」，
+    // 那是长按拖选与「调整班次」的闸门口径），于是只有一套法定班次的人，桌面上
+    // 写着「还没有排班，点一下去设置」（2026-09-30 用户反馈的同一类错）。
+    'hasSchedule': chain?.hasAnySchedule ?? false,
     'emptyHint': L10n.widgetEmptyHint,
     'labels': {
       'today': L10n.widgetToday,

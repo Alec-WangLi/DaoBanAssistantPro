@@ -30,7 +30,16 @@ void main() {
     await initializeDateFormatting('zh');
   });
 
-  group('scheduleRoleLabel —— 三种身份', () {
+  group('scheduleRoleLabel —— 四种身份', () {
+    test('一个段都没有 → 「正在使用」（说「其余时间」会被读成「默认？」）', () {
+      // 2026-09-30 用户反馈：「它说『其余时间 五班三倒』，那其实是默认一直都是
+      // 五班三倒吗？」—— 没有「这一段」，「其余」就没有着落。
+      expect(
+          scheduleRoleLabel(_row(isCurrent: true),
+              spanCount: 0, isCurrent: true, hasPeriods: false),
+          L10n.inUseNow);
+    });
+
     test('是「其余时间」→ 其余时间（**哪怕它也在时间线上**）', () {
       expect(scheduleRoleLabel(_row(isCurrent: true), spanCount: 0, isCurrent: true),
           L10n.remainingTime);

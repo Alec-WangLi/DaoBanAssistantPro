@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_action_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
@@ -84,13 +85,23 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('没有段 → 只有「其余时间」一行（指向当前方案）+「添加时段」', (tester) async {
+  testWidgets('没有段 → 一行「全部日子」（指向当前方案）+「添加时段」', (tester) async {
     await _pump(tester);
 
+    // 两个小节各有标题（2026-09-30 用户反馈「两件事连在一起」）。
     expect(find.text(L10n.scheduleTimeline), findsOneWidget);
-    expect(find.text(L10n.remainingTime), findsOneWidget);
-    expect(find.text('四班两倒'), findsWidgets, reason: '其余时间指向它');
+    expect(find.text(L10n.schedulesSection), findsOneWidget);
+
+    // **一个段都没有时不说「其余时间」**：没有「这一段」，「其余」就没有着落 ——
+    // 用户原话「它说『其余时间 五班三倒』，那其实是默认一直都是五班三倒吗？」
+    expect(find.text(L10n.remainingTime), findsNothing);
+    expect(find.text(L10n.allDates), findsOneWidget);
+    expect(find.text(L10n.allDatesHint), findsOneWidget);
+    expect(find.text('四班两倒'), findsWidgets, reason: '全部日子指向它');
     expect(find.text(L10n.addSpan), findsOneWidget);
+
+    // 排班表那一节里，那套的身份标签也是「正在使用」（与上面同一件事的另一种说法）。
+    expect(find.textContaining(L10n.inUseNow), findsOneWidget);
 
     await _dispose(tester);
   });
@@ -122,10 +133,10 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('「其余时间」能设成「无」，也能设回来', (tester) async {
+  testWidgets('「全部日子」（没段时）能设成「无」，也能设回来', (tester) async {
     final db = await _pump(tester);
 
-    await tester.tap(find.text(L10n.remainingTime).first);
+    await tester.tap(find.text(L10n.allDates).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.remainingNone).last);
     await tester.pumpAndSettle();
@@ -135,9 +146,11 @@ void main() {
     // 用 `findsWidgets`：弹层里那个「无」选项可能还挂在关闭动画里。真正的判据
     // 是上面那句状态断言。
     expect(find.text(L10n.remainingNone), findsWidgets, reason: '那一行显示「无」');
+    // 没有兜底班表时，说明换成「下一步挑一套」的那一版。
+    expect(find.text(L10n.allDatesNoneHint), findsOneWidget);
 
     // 再设回来
-    await tester.tap(find.text(L10n.remainingTime).first);
+    await tester.tap(find.text(L10n.allDates).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('四班两倒').last);
     await tester.pumpAndSettle();
@@ -228,4 +241,65 @@ void main() {
     await _dispose(tester);
   });
 
+  // ── 弹层的那两颗钮（2026-09-30 用户真机反馈）──
+  //
+  // 「取消」当时是**点不动的**：`onPressed: () => dialogCloser(ctx)` —— `dialogCloser`
+  // **返回**一个闭包（惯用法是 `onPressed: dialogCloser(ctx)`），套一层箭头函数
+  // 等于把闭包造出来又扔掉，谁也没调。Dart 允许「返回一个函数的函数」赋给
+  // `void Function()`，所以它**编译得过、不报错、也不关窗** —— 少一条用例就没人
+  // 看得见。全仓同一写法只剩这里与「其余时间」选择层两处，两条各钉一遍。
+  testWidgets('时段弹层的「取消」必须真的关窗', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text(L10n.addSpan));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.spanFrom), findsOneWidget, reason: '弹层开着');
+
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.spanFrom), findsNothing, reason: '点了「取消」必须关窗');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('「全部日子」选择层的「取消」必须真的关窗', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text(L10n.allDates).first);
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.remainingNone), findsOneWidget, reason: '弹层开着（有「无」这一项）');
+
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.remainingNone), findsNothing, reason: '点了「取消」必须关窗');
+
+    await _dispose(tester);
+  });
+
+  // 「删除 / 取消 / 保存」三颗钮原先**紧挨着**（`GlassDialog` 的 actions 是一个
+  // 光秃秃的 `Row`，间隔得各调用点自己给），而全仓其余弹窗都写了
+  // `SizedBox(width: 8)` —— 就这一处漏了，所以真机上看着挤。这条按**几何**钉：
+  // 相邻两颗钮之间至少要有 8dp 空隙。
+  testWidgets('时段弹层三个按钮之间留出了间隔', (tester) async {
+    final db = await _pump(tester);
+    final rows = await AppRepository(db).listSchedules();
+    await AppRepository(db)
+        .addSpan(rows[1].id, from: DateTime.utc(2026, 9, 1), to: DateTime.utc(2026, 9, 30));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.effectiveRangeSpan(
+        L10n.monthDay(_d(2026, 9, 1)), L10n.monthDay(_d(2026, 9, 30)))));
+    await tester.pumpAndSettle();
+
+    double rightOf(String label) => tester
+        .getTopRight(find.widgetWithText(GlassActionButton, label))
+        .dx;
+    double leftOf(String label) =>
+        tester.getTopLeft(find.widgetWithText(GlassActionButton, label)).dx;
+
+    expect(leftOf(L10n.cancel) - rightOf(L10n.delete), greaterThanOrEqualTo(8),
+        reason: '「删除」与「取消」之间要有间隔');
+    expect(leftOf(L10n.save) - rightOf(L10n.cancel), greaterThanOrEqualTo(8),
+        reason: '「取消」与「保存」之间要有间隔');
+
+    await _dispose(tester);
+  });
 }

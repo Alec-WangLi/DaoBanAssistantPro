@@ -14,6 +14,7 @@ import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
+import '../../domain/day_display.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -154,12 +155,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 看不出来（spec §7.1）。跨方案时同名的「休」合并成一个数，本来就该合。
   ///
   /// 没有排班、或整月都没有班次（空白表跟随法定节假日）时返回 null。
+  ///
+  /// 走 `displayShiftOn` 而不是 `shiftOn`：**空白表那套班表的日子也要数** ——
+  /// 它整月都是「上班 / 休息」（见 `domain/day_display.dart`）。
   String? _monthTally(ScheduleChain? chain) {
     if (chain == null) return null;
     final counts = <String, int>{};
     final days = DateTime(_month.year, _month.month + 1, 0).day;
     for (var d = 1; d <= days; d++) {
-      final shift = chain.shiftOn(DateTime(_month.year, _month.month, d));
+      final shift = displayShiftOn(chain, DateTime(_month.year, _month.month, d));
       if (shift == null) continue;
       counts.update(shift.shortLabel, (n) => n + 1, ifAbsent: () => 1);
     }
@@ -742,6 +746,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       }
     }
     final byId = {for (final s in schedules) s.id: s};
+    final hasPeriods = spans.isNotEmpty;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -762,7 +767,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 // 底部弹层标题走 `dialogTitle`，与其它弹层同角色。
                 Text(L10n.scheduleTimeline, style: AppTokens.dialogTitle),
                 const SizedBox(height: 4),
-                Text(L10n.remainingHint,
+                // 说法与排班管理页那条时间线**同源**：一个段都没有时不说「其余
+                // 时间」（没有「这一段」，「其余」就没有着落），整行写「全部
+                // 日子」。两处各写一份的话，同一个状态会有两种解释。
+                Text(hasPeriods
+                    ? L10n.remainingHint
+                    : (remaining == null
+                        ? L10n.allDatesNoneHint
+                        : L10n.allDatesHint),
                     style: AppTokens.rowSecondary
                         .copyWith(color: AppTokens.inkMuted(sheetContext))),
                 const SizedBox(height: 8),
@@ -772,7 +784,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     children: [
                       _timelineLine(
                         sheetContext,
-                        label: L10n.remainingTime,
+                        label: hasPeriods ? L10n.remainingTime : L10n.allDates,
                         value: remaining?.schedule.name ?? L10n.remainingNone,
                         mutedValue: remaining == null,
                         // 今天没落在任何段上 → 今天归「其余时间」。
@@ -910,11 +922,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   ///
   /// 逐天问一遍：一个月最多 31 次，可以忽略；而判「中点那天」会在跨段边界的
   /// 月份上判错。
+  ///
+  /// **判据是「画不出任何东西」，不是「没有班次定义」**：走 `displayShiftOn`，
+  /// 于是空白表（跟随法定节假日）那套算**有东西可画**（整月都是「上班 / 休息」），
+  /// 不再盖指路。v0.9.14 用的正是 `shiftOn == null`，而空白表天天返回 null ——
+  /// 只有一套法定班次的人，整张日历被这层指路盖住（2026-09-30 真机反馈）。
   bool _monthHasNoShift(ScheduleChain? chain, DateTime month) {
     if (chain == null) return true;
     final days = DateTime(month.year, month.month + 1, 0).day;
     for (var d = 1; d <= days; d++) {
-      if (chain.shiftOn(DateTime(month.year, month.month, d)) != null) {
+      if (displayShiftOn(chain, DateTime(month.year, month.month, d)) != null) {
         return false;
       }
     }
@@ -1161,7 +1178,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       cells.add(_dayCell(
           context,
           date,
-          chain?.shiftOn(date),
+          // `displayShiftOn` 而不是 `shiftOn`：空白表（跟随法定节假日）那套的
+          // 每一天也要画（「上班 / 休息」），而 `shiftOn` 对它恒为 null。
+          displayShiftOn(chain, date),
           lunarOf(date),
           cellW,
           cellH,
@@ -1644,7 +1663,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 空白表 / 其他班组」四处全用它。跨时段之后**不能再认「当前方案」** ——
     // 「今天归哪套」是链才知道的事。
     final daySchedule = chain?.scheduleOn(_selected);
-    final shift = chain?.shiftOn(_selected);
+    // 「这天画成什么」—— 走 `displayShiftOn` 而不是 `shiftOn`：空白表（跟随法定
+    // 节假日）也要有东西画（「上班 / 休息」），否则**小窗那一档**（只画精简卡、
+    // 不画网格）连一个「上班」字都看不到，而小窗恰恰是这些天唯一的内容。
+    //
+    // 真班次与合成班次的区别只剩**完整卡那一支**要判（见下面那句
+    // `!daySchedule.isBlank`：空白表在那里走自己的说法，不写时间与闹钟）。
+    final shift = displayShiftOn(chain, _selected);
     final isToday = _selected == dateOnly(DateTime.now());
     final muted = AppTokens.inkMuted(context);
     final accent = shift != null
@@ -1893,7 +1918,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         // 剩余宽度会被三等分，最长的时间串（「20:30 – 次日08:30」）反而先
         // 被截掉。并成一段后按「班次名 → 时间 → 闹钟」的顺序从尾部省略，
         // 优先级正好反过来。
-        if (shift != null && daySchedule != null)
+        // **空白表不走这一支**：`shift` 现在可能是一个合成出来的「上班 / 休息」
+        // （`displayShiftOn`），而这一支要写时间与闹钟 —— 空白表两样都没有，
+        // 写出来就是「闹钟：未开启」这种噪音。它在下面那一支里只写两个字。
+        if (shift != null && daySchedule != null && !daySchedule.isBlank)
           // `GlassPressable` **没有 `onTap`** —— 它只是个按压缩放的视觉包装
           // （`Listener` + `QScale`），点击一律由子 widget 承载。这里用
           // `GestureDetector` 只拿点击：全 app 的按压反馈就是玻璃的 Q 弹缩放，

@@ -11,6 +11,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
+import 'package:shiftassistantpro/core/widgets/glass_pill.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
@@ -89,6 +90,27 @@ void main() {
     await tester.tap(find.text(L10n.recurring));
     await _settle(tester);
   }
+
+  // 入口在标题那一行的**最右边**（不是紧贴标题）—— 用户 2026-09-30 反馈
+  // 「可以移到右上角，感觉这样美观一些」。判据走**几何**而不是「有没有
+  // Expanded」：那种断言换个写法照样能过（本仓吃过这种假护栏的亏）。
+  testWidgets('入口靠在标题行的右边缘', (tester) async {
+    await mount(tester);
+
+    final pill = tester.getRect(find.byType(GlassPill));
+    // 页面左右各留 20（`EdgeInsets.fromLTRB(20, 12, 20, 4)`）。
+    //
+    // **判据只有这一条，而且它是有鉴别力的**：改之前（标题走 `Flexible`）胶囊
+    // 紧跟在标题后面，右边缘在 300 上下，离 400 差着一整个标题的宽度。
+    //
+    // 别再补一条「标题与入口之间有空隙」：`getRect(find.text(...))` 量的是
+    // **文字盒**，而 `Expanded` 下那个盒恒等于「胶囊左边减去 8 的间距」——
+    // 贴不贴它都这么宽，量不出任何东西（我第一版就是这么写的，报出来
+    // `Actual: 301` 才发现量的是盒不是字）。
+    expect(pill.right, closeTo(420 - 20, 1), reason: '入口靠右，与页面右边距对齐');
+
+    await _dispose(tester);
+  });
 
   testWidgets('标题旁有入口；点开能看到系列的周期与下一次', (tester) async {
     await seedSeries();

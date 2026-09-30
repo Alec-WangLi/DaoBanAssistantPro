@@ -679,6 +679,35 @@ Future<void> seedNoScheduleAtAll(AppDatabase db) async {
   await repo.setRemainingNone();
 }
 
+/// 库里**只剩一套「法定班次」**（跟随法定节假日、没有班次定义）。
+///
+/// 这一屏是 2026-09-30 用户反馈的现场：那种班表在 v0.9.14 里被「这段时间没有
+/// 排班」整月盖住 —— 而它**从没进过屏单**（空白表此前只进过单测，由
+/// `calendar_screen_test` 的 `blank: true` 造出来）。这正是「新界面必须补进屏单」
+/// 那条教训的又一例：单测问得出「有没有指路」，问不出「整张日历被盖住好不好看」。
+///
+/// 形状与编辑器打开「跟随法定节假日」时一致：`cycle` 为空、班组收敛成「我」一个。
+Future<void> seedBlankSchedule(AppDatabase db) async {
+  final repo = AppRepository(db);
+  for (final s in await repo.listSpans()) {
+    await repo.deleteSpan(s.id);
+  }
+  for (final s in await repo.listSchedules()) {
+    await repo.deleteSchedule(s.id);
+  }
+  await repo.saveSchedule(
+    name: L10n.holidayScheduleName,
+    anchorDate: dateOnly(DateTime.now()),
+    classes: const [],
+    cycle: const [],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: [L10n.isEn ? 'Me' : '我'],
+    ourTeamIndex: 0,
+    teamOffsets: const [],
+  );
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});

@@ -125,6 +125,16 @@ class ScheduleChain implements ShiftSource {
       spans.any((s) => !s.schedule.isBlank) ||
       (fallback != null && !fallback!.isBlank);
 
+  /// 链上有没有**任何一套在用**的方案 —— 空白表也算。
+  ///
+  /// 与 [hasCycle] 的分工，别合并：
+  ///   · [hasCycle] 问「有没有班次可挑」—— 长按拖选与「调整班次」的闸门用它，
+  ///     空白表必须算「没有」（没有班次定义，列不出东西给用户挑）；
+  ///   · 这个问「用户到底排没排班」—— 桌面小组件的空态用它。只有一套法定班次时
+  ///     小组件原先写「还没有排班，点一下去设置」，可用户明明排了（2026-09-30
+  ///     真机反馈那一类错的同源处）。
+  bool get hasAnySchedule => spans.isNotEmpty || fallback != null;
+
   /// 这个月里有没有被**按天改班**调过的日子。
   ///
   /// 日历信息卡的定高要用：班次行尾巴上那颗「已调班」胶囊只在被改过的那天画，

@@ -79,9 +79,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
               child: Row(
                 children: [
-                  // `Flexible` 是兜底：窄窗里「重复待办」那几个字与标题抢宽度，
-                  // 不收缩就是横向溢出（200×400 小窗实测溢出 22px）。
-                  Flexible(
+                  // `Expanded`（而不是 `Flexible`）把入口**推到最右边** —— 用户
+                  // 2026-09-30 反馈「可以移到右上角，感觉这样美观一些」：原先它
+                  // 紧贴在标题右边，看着像标题的一部分。标题此时拿到的是**有界宽**，
+                  // 窄窗里照样省略号收尾（与 `Flexible` 同一层兜底）。
+                  Expanded(
                     child: Text(
                       L10n.titleTodo,
                       style: AppTokens.pageTitle,
@@ -576,7 +578,17 @@ class _EventFields {
         id: s.id,
         title: title,
         repeat: repeat!,
-        startDate: date,
+        // **起点原样带过去，不要写成 `date`**：`date` 是「当前这一次」的日子，
+        // 拿它当起点会让下面那步对齐整个失效 —— `occurrenceOnOrBefore` 有一道
+        // `daysBetween(start, 候选) >= 0` 的闸门（它本来是给生成器用的：不许造出
+        // 起始日之前的行），而「把每周三改成每周五」要回退到**本周之前的那个
+        // 周五**，起点一变成今天，那个周五就早于起点、被判定为「不合法」→ 返回
+        // null → 静默不对齐。
+        //
+        // 症状是**按星期几现形**的：今天若是周三或周四，「最近一个周五」落在
+        // 起点之前，这条路径整天失灵（2026-09-30 跑全套测试时逮到 —— 用例
+        // `recurring_dialog_test` 那条「改成每周五」在周三/周四必红，其余五天绿）。
+        startDate: s.startDate,
         timeMinute: timeMinute,
         advanceRemindMinutes: advance,
         alarmEnabled: alarm,

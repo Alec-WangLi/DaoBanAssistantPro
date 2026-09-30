@@ -357,6 +357,15 @@ class L10n {
   static String get followHolidayHint => t('法定节假日休息，其余按上班', 'Rest on legal holidays, work otherwise');
   static String get holidayScheduleName => t('法定班次', 'Legal-holiday schedule');
 
+  /// 空白表（法定班次）在**日历格子里**那两个字。
+  ///
+  /// 与 [rest] / [workday] 是同一件事的两个长度：信息卡与小组件的今日卡写全名，
+  /// 格子只有约 40dp 宽（英文全名 `Workday` 塞进去会被缩放糊掉），所以英文按内置
+  /// 模板里那些班次简称的同一条约定取**单字母**（`D` 白班 / `N` 夜班 / `O` 休班…）。
+  /// 中文两字，与模板里「上夜」「下夜」那种双字简称同一个宽度档。
+  static String get restShort => t('休息', 'R');
+  static String get workdayShort => t('上班', 'W');
+
   // ── 方案「生效时段」（多排班表按日期衔接） ──
   //
   // 三种「空」各有各的说法，别合并：两端都空 = 不在时间线上（**非当前**那套要
@@ -371,10 +380,39 @@ class L10n {
   static String effectiveRangeSpan(String a, String b) => t('$a ～ $b', '$a – $b');
   // ── 排班时段（时间线） ──
   static String get scheduleTimeline => t('排班时段', 'Schedule timeline');
+
+  /// 排班管理页另一节的标题。
+  ///
+  /// 两节各有一个标题（「排班时段」在上、「排班表」在下）：用户 2026-09-30 反馈
+  /// 「有点乱，应该分成两个功能区……现在它们连在一起」。
+  static String get schedulesSection => t('排班表', 'Schedules');
+
   static String get remainingTime => t('其余时间', 'Other dates');
   static String get remainingNone => t('无', 'None');
   static String get remainingHint => t('没被时段覆盖的日子，用「其余时间」那一套。',
       'Dates not covered by a period use the one under "Other dates".');
+
+  /// 时间线上**一段都没有**时那一行的说法（行标签 + 两种说明）。
+  ///
+  /// 「其余时间」得真有「其余」才立得住：只有一套班表、一个段都没有时，那句
+  /// 「其余时间 · 五班三倒」会被读成「这是默认的意思吗？」（用户原话：
+  /// 「那其实是默认一直都是五班三倒吗？可能让用户看着有点费劲」）。所以那一种
+  /// 情形整行换成「全部日子」，说明也改成直说。
+  ///
+  /// 两种说明分「有兜底班表」与「没有」两版：后者的下一步是**挑一套**，不只是
+  /// 「加一段时段」。
+  static String get allDates => t('全部日子', 'All dates');
+  static String get allDatesHint => t(
+      '还没分段 —— 所有日子都用这套班表。要按日期换班表，就加一段。',
+      'No periods yet — every date uses this one. Add a period to switch by date.');
+  static String get allDatesNoneHint => t(
+      '还没分段 —— 这些天没有排班。挑一套班表，或者加一段时段。',
+      'No periods yet — these dates have no schedule. Pick one, or add a period.');
+
+  /// 排班表列表里的身份标签：**一个段都没有**时，那套就是「正在使用」
+  /// （说「其余时间」等于用「其余」指代「全部」，正是上面那个误解的来源）。
+  static String get inUseNow => t('正在使用', 'In use');
+
   static String get addSpan => t('添加时段', 'Add a period');
   static String get setRemainingNone => t('设为无', 'Set to none');
   static String get manageTimeline => t('管理排班时段', 'Manage the timeline');
@@ -382,9 +420,12 @@ class L10n {
       '与「$name」的 $range 重叠了 —— 一天只能有一套排班，改开一点或先改那一段。',
       'Overlaps “$name” ($range) — a day can only have one schedule. Adjust the dates or edit that period first.');
   static String get noScheduleHere => t('这段时间没有排班', 'No schedule for these dates');
+  /// 指路那一层的下一句。**不提「其余时间」这个名字**：指路出现在「整月一天班都
+  /// 没有」时，而那种情形可能**根本没有任何段** —— 那时时间线上那一行写的是
+  /// 「全部日子」（见 [allDates]），照着旧文案去找「其余时间」会找不到。
   static String get noScheduleHereHint => t(
-      '去「我的 → 排班管理 → 排班时段」里加一段，或者给它设一套「其余时间」',
-      'Add a period under Me → Schedules → Schedule timeline, or give it an "Other dates" schedule');
+      '去「我的 → 排班管理 → 排班时段」里加一段，或者给这些日子挑一套班表',
+      'Add a period under Me → Schedules → Schedule timeline, or pick a schedule for these dates');
   static String get unusedSchedule => t('未使用', 'Unused');
   static String get unusedHint =>
       t('未使用 —— 去上面的「排班时段」把它排进去', 'Unused — put it on the timeline above');
@@ -619,9 +660,6 @@ class L10n {
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');
   static String get nextMonth => t('下个月', 'Next month');
-  static String get switchSchedule => t('切换排班', 'Switch schedule');
-  static String get switchScheduleShort => t('切换', 'Switch');
-  static String get manageSchedule => t('管理排班', 'Manage schedules');
   /// 信息卡里那行「这天没排班」。**指路要指对地方** —— 时段现在在
   /// 「我的 → 排班管理 → 排班时段」，不再是「我的」页上直接编辑排班。
   static String get noSchedule => t('这段时间没有排班（去「排班时段」加一段）',
@@ -681,8 +719,8 @@ class L10n {
             'Each day shows date, shift, lunar date and weekday; tap a day for details'),
         t('法定节假日整段标红，调休上班日带「班」标记',
             'Statutory holidays are marked red, makeup workdays are tagged "班"'),
-        t('顶栏可切换排班、跳转年月',
-            'Switch schedules and jump year/month from the toolbar'),
+        t('顶栏那颗按钮点开是「排班时段」总览（这段时间在用哪套、今天落在哪一段），左右箭头换月份',
+            'The toolbar button opens the schedule-timeline overview (which schedule is in force, which period today falls in); the arrows change month'),
         t('要单独改某几天的班（请假、跟同事换班）：点底栏信息卡上那行班次，或长按格子拖选一段',
             'To change just a few days (a day off, or swapping with a colleague): tap the shift row on the info card, or long-press a cell and drag to pick a range'),
         t('改过的那天有小圆点、信息卡写「已调班」，选择层里可一键「恢复轮转」',
@@ -690,8 +728,8 @@ class L10n {
       ];
   static String get guideSchedTitle => t('排班管理', 'Schedule management');
   static List<String> get guideSchedDesc => [
-        t('「我的 → 排班管理」可新建 / 编辑 / 删除多套排班',
-            'Me → Schedule management: create / edit / delete multiple schedules'),
+        t('「我的 → 排班管理」分两节：「排班时段」管哪几天用哪套班表，「排班表」管新建 / 编辑 / 删除多套排班',
+            'Me → Schedule management has two sections: "Schedule timeline" decides which schedule covers which dates, and "Schedules" creates / edits / deletes them'),
         t('新建时先挑一个最像的倒班方式，进去再改时间和轮法',
             'When creating one, pick the closest pattern first and tweak the times and rotation inside'),
         t('没有完全一样的，就选最接近的那个改，或选「我自己排」',
@@ -700,8 +738,8 @@ class L10n {
             'Shift times, cycle length and each team\'s cycle start date are all editable; if start dates stop matching the cycle length the app flags it and can spread them evenly in one tap'),
         t('调好之后「存为模板」，下次新建时直接选',
             'Once it looks right, "Save as template" and pick it next time you create one'),
-        t('要换哪套上场走日历顶栏的「切换排班」；想只跟着法定节假日休班，开「跟随法定节假日（无班次）」',
-            'To change which schedule is active use "Switch schedule" in the calendar toolbar; turn on "Follow legal holidays (no shifts)" for a blank schedule that rests on legal holidays'),
+        t('要换哪套上场：在「排班时段」加一段，或改「其余时间」那一行；想只跟着法定节假日休班，开「跟随法定节假日（无班次）」',
+            'To put another schedule in force, add a period under "Schedule timeline" or edit the "Other dates" row; turn on "Follow legal holidays (no shifts)" for a blank schedule that rests on legal holidays'),
       ];
   static String get guideAlarmTitle => t('闹钟', 'Alarms');
   static List<String> get guideAlarmDesc => [

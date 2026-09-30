@@ -38,11 +38,18 @@ class ScheduleManagementScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
+                // 两节各带一个标题（2026-09-30 用户反馈：「排班管理页面有点乱，
+                // 应该分成两个功能区……现在它们连在一起，感觉有点混乱」）。
+                // 标题在卡片**外面**、两节同一种写法 —— 一节有标题、另一节没有
+                // 正是「连在一起」的来源。
+                _sectionHeading(context, L10n.scheduleTimeline),
                 _TimelineSection(
                   schedules: schedules,
                   current: current,
                   spans: spans,
                 ),
+                const SizedBox(height: AppTokens.spaceMd),
+                _sectionHeading(context, L10n.schedulesSection),
                 ...schedules.map((s) {
                   final isCurrent = s.id == current?.currentScheduleId;
                   return GlassTile(
@@ -61,10 +68,12 @@ class ScheduleManagementScreen extends ConsumerWidget {
                         ),
                         title: Text(s.name),
                         subtitle: Text(
-                            '${scheduleRoleLabel(s, spanCount: spanCountOf(spans, s.id), isCurrent: isCurrent)} · '
+                            '${scheduleRoleLabel(s, spanCount: spanCountOf(spans, s.id), isCurrent: isCurrent, hasPeriods: spans.isNotEmpty)} · '
                             '${L10n.teamCountN(parseTeamNames(s.teamNames).length)} · '
                             '${L10n.monthDay(s.anchorDate)}'
-                            '${isCurrent ? ' · ${L10n.current}' : ''}'),
+                            // 一个段都没有时左边的标签已经写着「正在使用」了，
+                            // 尾巴上再挂一个「当前」是同一件事说两遍。
+                            '${isCurrent && spans.isNotEmpty ? ' · ${L10n.current}' : ''}'),
                         trailing: GlassDeleteButton(
                           compact: true,
                           onPressed: () => _deleteSchedule(context, ref, s),
@@ -132,10 +141,25 @@ class ScheduleManagementScreen extends ConsumerWidget {
   }
 }
 
+/// 页面级小节标题 —— 两节共用一份写法。
+///
+/// 与「我的」页、闹钟页那两处的 `_sectionTitle` 同形（`fromLTRB(4, 0, 4, 8)` +
+/// 小节标题角色）：三页各写一份迟早有一页走样，但**没有**抽成共享件 —— 这已经是
+/// 页面级标题的第三种复制，等第四种出现时再抽（现在抽要一次改三页，收益只有几行）。
+Widget _sectionHeading(BuildContext context, String title) => Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppTokens.spaceXs, 0, AppTokens.spaceXs, AppTokens.spaceSm),
+      child: Text(title, style: AppTokens.sectionTitle),
+    );
+
 /// 排班管理页顶部那一节「排班时段」。
 ///
 /// 形态与「其余时间」这个概念配套：**永远列出「其余时间」那一行**，没有段时就
 /// 只有它 —— 所以不必为「有没有段」写两套版式（少一个要维护、要出图的状态）。
+///
+/// **但一个段都没有时，那一行的话要换**（2026-09-30）：没有「这一段」，「其余」
+/// 就没有着落 —— 那句「其余时间 · 五班三倒」会被读成「这是默认的意思吗」。
+/// 那一种情形整行写「全部日子」，说明也直说（见 `L10n.allDates*`）。
 ///
 /// 行按**起点升序**（起点为空排最前），与 `compareSpansByStart`、与解析规则同一条
 /// 口径 —— 三处不一致的话，「界面上看到的顺序」与「提示里点名的那个」会对不上。
@@ -155,6 +179,7 @@ class _TimelineSection extends ConsumerWidget {
     final muted = AppTokens.inkMuted(context);
     final byId = {for (final s in schedules) s.id: s};
     final remaining = current?.current;
+    final hasPeriods = spans.isNotEmpty;
 
     return GlassTile(
       enableBlur: false,
@@ -163,17 +188,24 @@ class _TimelineSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(L10n.scheduleTimeline, style: AppTokens.sectionTitle),
-          const SizedBox(height: AppTokens.spaceXs),
-          Text(L10n.remainingHint,
-              style: AppTokens.rowSecondary.copyWith(color: muted)),
+          Text(
+            hasPeriods
+                ? L10n.remainingHint
+                : (remaining == null
+                    ? L10n.allDatesNoneHint
+                    : L10n.allDatesHint),
+            style: AppTokens.rowSecondary.copyWith(color: muted),
+          ),
           const SizedBox(height: AppTokens.spaceXs),
           _row(
             context,
-            label: L10n.remainingTime,
+            label: hasPeriods ? L10n.remainingTime : L10n.allDates,
             value: remaining?.schedule.name ?? L10n.remainingNone,
             mutedValue: remaining == null,
-            onTap: () => showRemainingPicker(context, ref),
+            onTap: () => showRemainingPicker(context, ref,
+                // 弹层标题跟着那一行的说法走：一个段都没有时写「全部日子」，
+                // 否则「其余时间」（与行标签同源，别各写一份）。
+                label: hasPeriods ? L10n.remainingTime : L10n.allDates),
           ),
           for (final span in spans)
             _row(
@@ -250,11 +282,15 @@ class _TimelineSection extends ConsumerWidget {
   }
 }
 
-/// 「其余时间」用哪一套 —— 选一套，或者「无」。
+/// 「其余时间」（一个段都没有时是「全部日子」）用哪一套 —— 选一套，或者「无」。
 ///
 /// 「无」是这个模型里**唯一**能到达「没有默认」的入口（删掉一套方案时仍然自动
 /// 把其余时间交给列表里的第一套，否则删掉默认那套会让整张日历变空）。
-Future<void> showRemainingPicker(BuildContext context, WidgetRef ref) async {
+Future<void> showRemainingPicker(
+  BuildContext context,
+  WidgetRef ref, {
+  String? label,
+}) async {
   final schedules = await ref.read(schedulesProvider.future);
   if (!context.mounted) return;
   final currentId =
@@ -264,7 +300,7 @@ Future<void> showRemainingPicker(BuildContext context, WidgetRef ref) async {
     context: context,
     barrierColor: Colors.black26,
     builder: (dialogContext) => GlassDialog(
-      title: L10n.remainingTime,
+      title: label ?? L10n.remainingTime,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -309,7 +345,11 @@ Future<void> showRemainingPicker(BuildContext context, WidgetRef ref) async {
       ),
       actions: [
         GlassActionButton(
-          onPressed: () => dialogCloser(dialogContext),
+          // `dialogCloser` **返回**闭包，所以这里直接把它当成 `onPressed`。
+          // **别写成 `() => dialogCloser(context)`** —— 那等于把闭包造出来又扔掉，
+          // 点了没反应（Dart 允许「返回函数的函数」赋给 `void Function()`，所以
+          // 既编译得过、也不报错）。v0.9.14 这一节就是栽在这上面。
+          onPressed: dialogCloser(dialogContext),
           label: L10n.cancel,
         ),
       ],
@@ -395,7 +435,10 @@ Future<void> showSpanEditor(
           ],
         ),
         actions: [
-          if (existing != null)
+          // 三颗钮的间隔**得自己给**（`GlassDialog` 的 actions 是一个光秃秃的
+          // `Row`，它不插间隔）—— 全仓其余弹窗都写了这一行，这一节当初漏了，
+          // 真机上三颗钮贴着，用户直接反馈「间隔太紧凑」（2026-09-30）。
+          if (existing != null) ...[
             GlassActionButton(
               variant: GlassActionVariant.danger,
               label: L10n.delete,
@@ -406,10 +449,13 @@ Future<void> showSpanEditor(
                 if (dialogContext.mounted) dialogCloser(dialogContext)();
               },
             ),
+            const SizedBox(width: 8),
+          ],
           GlassActionButton(
-            onPressed: () => dialogCloser(dialogContext),
+            onPressed: dialogCloser(dialogContext),
             label: L10n.cancel,
           ),
+          const SizedBox(width: 8),
           GlassActionButton(
             variant: GlassActionVariant.primary,
             label: L10n.save,

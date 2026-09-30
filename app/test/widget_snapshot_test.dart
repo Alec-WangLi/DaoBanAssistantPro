@@ -213,7 +213,13 @@ void main() {
     }
   });
 
-  test('空白表方案（schedule 非 null 但 isBlank）也算「没有排班」', () {
+  // 空白表（跟随法定节假日）**不是在用的班表里「没有排班」的那一种** ——
+  // 它整月都画得出东西（法定节假日「休息」、其余「上班」）。判据改走
+  // `displayShiftOn`（见 `domain/day_display.dart`），所以：
+  //   · 桌面不再写「还没有排班，点一下去设置」（用户明明排了）；
+  //   · 逐日格子有 `hasShift` + 简称 + 色号，原生一个字都不用改。
+  // 2026-09-30 用户真机反馈的同源处。
+  test('空白表方案：整天画得出「上班 / 休息」，不再报「还没有排班」', () {
     final blank = ShiftSchedule(
       name: '跟随法定节假日',
       anchorDate: DateTime.utc(2026, 9, 18),
@@ -227,7 +233,19 @@ void main() {
       accent: 0xFF4F5BE8,
       todayTodoCount: 0,
     );
-    expect(s['hasSchedule'], false);
+    expect(s['hasSchedule'], true, reason: '有在用的班表，不该是空态');
+
+    // 9/18 是普通工作日 → 上班；2026 国庆 10/1 是法定节假日 → 休息。
+    final workday = _rowOf(s, DateTime(2026, 9, 18));
+    expect(workday['hasShift'], true);
+    expect(workday['shiftName'], L10n.workday);
+    expect(workday['shiftAbbr'], L10n.workdayShort);
+    expect(workday['timeRange'], isNull, reason: '空白表没有钟点，别去凑一个');
+
+    final holiday = _rowOf(s, DateTime(2026, 10, 1));
+    expect(holiday['hasShift'], true);
+    expect(holiday['shiftName'], L10n.rest);
+    expect(holiday['isRest'], true);
   });
 
   test('跨午夜班次的时间串由 L10n.timeRange 产出，不拼前缀', () {

@@ -1347,6 +1347,39 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  // ── 空白表方案：整月画「上班 / 休息」，且**不盖指路** ──
+  //
+  // v0.9.14 那层指路的判据是「整月 `shiftOn` 全为 null」，而空白表（跟随法定
+  // 节假日）天天返回 null —— 于是只有一套法定班次的人整张日历被「这段时间没有
+  // 排班」盖住，可用户明明排了班（2026-09-30 真机反馈）。判据改成「整月
+  // `displayShiftOn` 全为 null」之后，空白表那套每天都画得出东西，指路因此只在
+  // **真的没有任何班表**时出现 —— 反面（真没有时照旧盖）由 `calendar_chain_test`
+  // 的「其余时间为无 + 没有段」那条罩着。
+  testWidgets('空白表方案：整月每天都画得出胶囊（上班 / 休息），且不盖指路', (tester) async {
+    await _pumpCalendar(tester, 'day_night_rest_rest', blank: true);
+
+    expect(find.text(L10n.noScheduleHere), findsNothing,
+        reason: '用户排了班（跟随法定节假日），不该说「这段时间没有排班」');
+
+    final today = DateTime.now();
+    final daysInMonth = DateTime(today.year, today.month + 1, 0).day;
+    String? labelOf(int day) {
+      final chip = find.byKey(ValueKey('day-chip-$day'), skipOffstage: false);
+      if (chip.evaluate().isEmpty) return null;
+      return tester
+          .widget<Text>(find.descendant(
+              of: chip, matching: find.byType(Text), skipOffstage: false))
+          .data;
+    }
+
+    for (var d = 1; d <= daysInMonth; d++) {
+      expect(labelOf(d), anyOf(L10n.workdayShort, L10n.restShort),
+          reason: '$d 日应当画成「上班」或「休息」（空白表也是排了班的）');
+    }
+
+    await _disposeCalendar(tester);
+  });
+
   // ── 长按落在本月之外的空白格 ──
   //
   // 选星期表头那一条：`_dateFromPosition` 的 `row < 0` 分支（表头中心 y ≈ 13，
@@ -1583,8 +1616,23 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  testWidgets('400×640 那档小窗不受影响：网格与「已调班」都还在', (tester) async {
-    // 各机型小窗的默认尺寸，高 640 > 480，**不该**被上面那条规则收走网格。
+  // 空白表（跟随法定节假日）在小窗那一档：**不画网格**，信息卡是屏幕上唯一的
+  // 内容。它原先取的是 `chain.shiftOn`（空白表恒为 null），于是那两个字一个都
+  // 看不到 —— 用户在小窗里点开日历只能看见一个光秃秃的日期。
+  testWidgets('空白表方案：小窗那一档的信息卡也要写出「上班 / 休息」', (tester) async {
+    await _pumpCalendar(tester, 'day_night_rest_rest',
+        blank: true, width: 200, height: 400);
+
+    expect(find.byKey(const ValueKey('day-card-8')), findsNothing,
+        reason: '确认这个尺寸确实落进了小窗那一档（网格让位）');
+    // 今天是 9/30，非节假日 → 「上班」。写法与格子里那个胶囊同一处（`displayShiftOn`）。
+    expect(find.text(L10n.workday), findsOneWidget,
+        reason: '小窗下信息卡是唯一的内容，不能什么都不写');
+
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('400×640 那档小窗不受影响：网格与「已调班」都还在', (tester) async {    // 各机型小窗的默认尺寸，高 640 > 480，**不该**被上面那条规则收走网格。
     final today = dateOnly(DateTime.now());
     final db = await _pumpCalendar(tester, 'day_night_rest_rest',
         width: 400, height: 640);

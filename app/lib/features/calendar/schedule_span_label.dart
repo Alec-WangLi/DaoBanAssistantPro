@@ -9,7 +9,9 @@ import '../../data/app_repository.dart';
 
 /// 一套方案在**排班管理列表**里的身份标签。
 ///
-/// **三种身份，别合并**：
+/// **四种身份，别合并**：
+///  · [`isCurrent`] **且一个段都没有** → 「正在使用」。这一档是 2026-09-30 补的：
+///    没有段时「其余时间」指的其实是**全部**，用户会读成「这是默认的意思吗」；
 ///  · [`isCurrent`] → 「其余时间」（它管的正是没被时段覆盖的那些天）；
 ///  · 被时段引用了（`spanCount > 0`）→ 「已排入时段」；
 ///  · 都不是 → 「未使用」（它不在时间线上，日历上永远不会出现）。
@@ -20,10 +22,10 @@ String scheduleRoleLabel(
   ShiftScheduleRow s, {
   required int spanCount,
   required bool isCurrent,
+  bool hasPeriods = true,
 }) {
-  if (isCurrent) return L10n.remainingTime;
-  if (spanCount > 0) return L10n.onTimeline;
-  return L10n.unusedSchedule;
+  if (!isCurrent) return spanCount > 0 ? L10n.onTimeline : L10n.unusedSchedule;
+  return hasPeriods ? L10n.remainingTime : L10n.inUseNow;
 }
 
 /// 这套方案被**多少段**引用 —— [scheduleRoleLabel] 要用。
