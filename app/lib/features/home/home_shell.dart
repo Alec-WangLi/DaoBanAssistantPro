@@ -446,153 +446,170 @@ class _GlassNavBarState extends State<_GlassNavBar> {
         right: false,
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: outerPad),
-        child: GlassRim(
-          radius: capsuleH / 2,
-          isDark: isDark,
-          // 底栏是小控件，同一圈宽度在这里相对更显眼，单收一档。
-          compact: true,
-          // 「光跟随滑块」：光源位置 + 轨道几何，交给 painter 按实际尺寸换算。
-          // 1.22 与下面那张 AnimatedScale 的按下缩放是同一个值（本仓既有的字面量）。
-          sliderIndex: _visualPage + 0.5,
-          tabCount: items.length,
-          trackPad: _innerPad,
-          sliderScale: _pressed ? 1.22 : 1.0,
-          // 探针：透镜凸出胶囊、本体由 GlassRim 画在胶囊之下（见那边的说明）。
-          // 凸出量 0 = 不凸，等于原来那个躺在胶囊里的滑块。
-          lensFill: activeColor,
-          lensProtrude: AppTokens.navLensProtrude,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(capsuleH / 2),
-            child: GlassBlur(
-              sigma: AppTokens.blurPanel,
-              child: Container(
-                height: capsuleH,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(capsuleH / 2),
-                  border: Border.all(color: AppTokens.navBorder(isDark)),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: AppTokens.navFill(isDark),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(_innerPad),
-                  child: LayoutBuilder(
-                    builder: (context, c) {
-                    final itemW = c.maxWidth / items.length;
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapDown: (d) => _press(d.localPosition.dx, itemW),
-                      onTapUp: (_) => _release(),
-                      onTapCancel: () {},
-                      onHorizontalDragStart: (d) =>
-                          _dragStart(d.localPosition.dx, itemW),
-                      onHorizontalDragUpdate: (d) =>
-                          _dragUpdate(d.localPosition.dx, itemW),
-                      onHorizontalDragEnd: (_) => _release(),
-                      onHorizontalDragCancel: _cancel,
-                      child: Stack(
-                        children: [
-                          // 滑块：平滑吸附到最近功能区，按下放大、松手弹簧回弹
-                          AnimatedPositioned(
-                            key: const Key('nav-highlight'),
-                            duration: _dragging
-                                ? Duration.zero
-                                : AppTokens.durFast,
-                            curve: Curves.easeOutCubic,
-                            left: _visualPage * itemW,
-                            top: 0,
-                            bottom: 0,
-                            width: itemW,
-                            child: AnimatedScale(
-                              scale: _pressed ? 1.22 : 1.0,
-                              duration: AppTokens.durMed,
-                              curve: Curves.easeOutBack,
-                              child: Container(
-                                // 探针下把外观全摘掉 —— 那一档的滑块由 GlassRim 画在
-                                // 胶囊**之下**、并凸出胶囊之外（见那边的说明）。
-                                // 用「摘装饰」而不是「不渲染」：探测脚本靠
-                                // `nav-highlight` 这个 key 找它的位置来起手拖动。
-                                decoration: BoxDecoration(
-                                  borderRadius:
-                                      BorderRadius.circular(AppTokens.radiusL),
-                                  gradient: liquidGlassActive.value
-                                      ? null
-                                      : LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: AppTokens
-                                              .accentGradient(activeColor)
-                                              .colors,
-                                        ),
-                                  border: liquidGlassActive.value
-                                      ? null
-                                      : Border.all(
-                                          color: Colors.white.withValues(
-                                              alpha: isDark ? 0.28 : 0.85),
-                                        ),
-                                  boxShadow: liquidGlassActive.value
-                                      ? null
-                                      : <BoxShadow>[
-                                          BoxShadow(
-                                            color: Colors.black
-                                                .withValues(alpha: 0.12),
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
+        child: TweenAnimationBuilder<double>(
+          // 位置：与标准档那张 `AnimatedPositioned` **同一套时长曲线**（拖动中
+          // 零时长跟手）—— 上一版 painter 读的是原始 `_visualPage`，于是标准档
+          // 滑过去、液态档瞬移（用户反馈的第 6 条）。
+          tween: Tween<double>(begin: 0, end: _visualPage),
+          duration: _dragging ? Duration.zero : AppTokens.durFast,
+          curve: Curves.easeOutCubic,
+          builder: (context, page, _) => TweenAnimationBuilder<double>(
+            // 鼓起：与标准档那张 `AnimatedScale` 同一套（durMed / easeOutBack）。
+            tween: Tween<double>(begin: 0, end: _pressed ? 1.0 : 0.0),
+            duration: AppTokens.durMed,
+            curve: Curves.easeOutBack,
+            builder: (context, swell, __) => GlassRim(
+              radius: capsuleH / 2,
+              isDark: isDark,
+              // 底栏是小控件，同一圈宽度在这里相对更显眼，单收一档。
+              compact: true,
+              // 「光跟随滑块」：光源位置 + 轨道几何，交给 painter 按实际尺寸换算。
+              // 1.22 与下面那张 AnimatedScale 的按下缩放是同一个值（本仓既有的字面量）。
+              sliderIndex: page + 0.5,
+              tabCount: items.length,
+              trackPad: _innerPad,
+              sliderScale: 1 + 0.22 * swell,
+              // 探针：透镜凸出胶囊、本体由 GlassRim 画在胶囊之下（见那边的说明）。
+              // 凸出量 0 = 不凸，等于原来那个躺在胶囊里的滑块。
+              lensFill: activeColor,
+              // 凸出量跟着 `swell` 走：**静止时是 0** —— 上一版写死成
+              // `AppTokens.navLensProtrude`，于是没按住的时候滑块就比胶囊大
+              // （用户 2026-10-01 反馈的第 1 条）。
+              lensProtrude: AppTokens.navLensProtrude * swell.clamp(0.0, 1.0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(capsuleH / 2),
+                child: GlassBlur(
+                  sigma: AppTokens.blurPanel,
+                  child: Container(
+                    height: capsuleH,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(capsuleH / 2),
+                      border: Border.all(color: AppTokens.navBorder(isDark)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: AppTokens.navFill(isDark),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(_innerPad),
+                      child: LayoutBuilder(
+                        builder: (context, c) {
+                        final itemW = c.maxWidth / items.length;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTapDown: (d) => _press(d.localPosition.dx, itemW),
+                          onTapUp: (_) => _release(),
+                          onTapCancel: () {},
+                          onHorizontalDragStart: (d) =>
+                              _dragStart(d.localPosition.dx, itemW),
+                          onHorizontalDragUpdate: (d) =>
+                              _dragUpdate(d.localPosition.dx, itemW),
+                          onHorizontalDragEnd: (_) => _release(),
+                          onHorizontalDragCancel: _cancel,
+                          child: Stack(
+                            children: [
+                              // 滑块：平滑吸附到最近功能区，按下放大、松手弹簧回弹
+                              AnimatedPositioned(
+                                key: const Key('nav-highlight'),
+                                duration: _dragging
+                                    ? Duration.zero
+                                    : AppTokens.durFast,
+                                curve: Curves.easeOutCubic,
+                                left: _visualPage * itemW,
+                                top: 0,
+                                bottom: 0,
+                                width: itemW,
+                                child: AnimatedScale(
+                                  scale: _pressed ? 1.22 : 1.0,
+                                  duration: AppTokens.durMed,
+                                  curve: Curves.easeOutBack,
+                                  child: Container(
+                                    // 探针下把外观全摘掉 —— 那一档的滑块由 GlassRim 画在
+                                    // 胶囊**之下**、并凸出胶囊之外（见那边的说明）。
+                                    // 用「摘装饰」而不是「不渲染」：探测脚本靠
+                                    // `nav-highlight` 这个 key 找它的位置来起手拖动。
+                                    decoration: BoxDecoration(
+                                      borderRadius:
+                                          BorderRadius.circular(AppTokens.radiusL),
+                                      gradient: liquidGlassActive.value
+                                          ? null
+                                          : LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: AppTokens
+                                                  .accentGradient(activeColor)
+                                                  .colors,
+                                            ),
+                                      border: liquidGlassActive.value
+                                          ? null
+                                          : Border.all(
+                                              color: Colors.white.withValues(
+                                                  alpha: isDark ? 0.28 : 0.85),
+                                            ),
+                                      boxShadow: liquidGlassActive.value
+                                          ? null
+                                          : <BoxShadow>[
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withValues(alpha: 0.12),
+                                                blurRadius: 10,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          Row(
-                            children: List.generate(items.length, (i) {
-                              final selected = i == selectedIndex;
-                              return Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // 导航项图标：常规态归 iconLg（规格 §3.6，出图对比：
-                                    // 24 在 64dp 胶囊里站得住、20 偏小）。矮屏 52dp
-                                    // 胶囊的竖向预算更小，回落到 iconMd —— 这是原设计
-                                    // （`isShort ? 20 : 22`）「矮屏用小一号图标」的忠实
-                                    // 翻译，属同一角色按布局档位的个别变化：不新增令牌，
-                                    // 也不违背「导航项归 iconLg」。
-                                    AppIcon(
-                                      items[i].$1,
-                                      size: isShort
-                                          ? AppTokens.iconMd
-                                          : AppTokens.iconLg,
-                                      color: selected ? fg : inactiveColor,
+                              Row(
+                                children: List.generate(items.length, (i) {
+                                  final selected = i == selectedIndex;
+                                  return Expanded(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        // 导航项图标：常规态归 iconLg（规格 §3.6，出图对比：
+                                        // 24 在 64dp 胶囊里站得住、20 偏小）。矮屏 52dp
+                                        // 胶囊的竖向预算更小，回落到 iconMd —— 这是原设计
+                                        // （`isShort ? 20 : 22`）「矮屏用小一号图标」的忠实
+                                        // 翻译，属同一角色按布局档位的个别变化：不新增令牌，
+                                        // 也不违背「导航项归 iconLg」。
+                                        AppIcon(
+                                          items[i].$1,
+                                          size: isShort
+                                              ? AppTokens.iconMd
+                                              : AppTokens.iconLg,
+                                          color: selected ? fg : inactiveColor,
+                                        ),
+                                        const SizedBox(height: AppTokens.gapHair),
+                                        Text(
+                                          items[i].$2,
+                                          // 迁移前的基线字号是 10（现为 tinyLabel 11/w400）；
+                                          // 未选中 w500、选中 w700，两个分支都由这里显式给字重，按规格走 copyWith。
+                                          style: AppTokens.tinyLabel.copyWith(
+                                            fontWeight: selected
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                            color: selected ? fg : inactiveColor,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: AppTokens.gapHair),
-                                    Text(
-                                      items[i].$2,
-                                      // 迁移前的基线字号是 10（现为 tinyLabel 11/w400）；
-                                      // 未选中 w500、选中 w700，两个分支都由这里显式给字重，按规格走 copyWith。
-                                      style: AppTokens.tinyLabel.copyWith(
-                                        fontWeight: selected
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                        color: selected ? fg : inactiveColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
+                                  );
+                                }),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    );
-                  },
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
+            ),
           ),
         ),
-      ),
       ),
       ),
     );

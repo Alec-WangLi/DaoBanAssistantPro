@@ -38,7 +38,10 @@ typedef VisualScreen = ({
 /// **把档位标志覆盖回去**。这条坑真踩过 —— v0.10.1 收口时那四张「液态档」图
 /// 与各自的标准档**逐字节相同**，等于这一档从没被渲染过。
 Map<String, Object> screenExtraPrefs(String slug) => switch (slug) {
-      '36_home_shell_liquid' || '37_profile_liquid' =>
+      '36_home_shell_liquid' ||
+      '37_profile_liquid' ||
+      '38_alarm_liquid' ||
+      '39_todos_liquid' =>
         const <String, Object>{'liquidGlass': true},
       _ => const <String, Object>{},
     };
@@ -363,6 +366,22 @@ final List<VisualScreen> visualScreens = [
     slug: '37_profile_liquid',
     title: '我的 · 液态玻璃',
     build: (db) async => const ProfileScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 列表行是 `enableBlur: false` 的**平填充**，不是玻璃 —— 液态档**不该**给它们
+    // 加边光。上一版加了，闹钟页 / 待办页于是变成「一排描了边的框」（用户
+    // 2026-10-01 反馈的「边缘不知道是什么情况，有点丑」）。这两屏是那条判据的
+    // 常驻护栏。
+    slug: '38_alarm_liquid',
+    title: '闹钟 · 液态玻璃',
+    build: (db) async => const AlarmScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    slug: '39_todos_liquid',
+    title: '待办 · 液态玻璃',
+    build: (db) async => const ScheduleScreen(),
     needsOnboardingPrefs: false,
   ),
 ];

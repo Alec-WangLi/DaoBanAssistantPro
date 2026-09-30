@@ -844,6 +844,11 @@ class L10n {
   static String get liquidGlassHint => t(
       '玻璃边缘带光、按下时鼓起成透镜；关掉更省电',
       'A lit rim on the glass, controls swell while you press — off saves battery');
+
+  /// 低内存机器上那一行改说这句（开关同时置灰）。
+  static String get liquidGlassUnsupportedHint => t(
+      '这台设备内存较小，始终使用磨砂玻璃',
+      'Low-memory device — frosted glass is always used');
   static String get hapticFeedback => t('触觉反馈', 'Haptic feedback');
   static String get hapticFeedbackHint => t(
       '开关翻转、选中、拖选与改班时轻微震动（普通点击不震）',

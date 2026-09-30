@@ -290,10 +290,13 @@ void _showHelpDialog(
     builder: (dialogContext) => GlassDialog(
       title: title,
       showClose: true,
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420),
-        child: SingleChildScrollView(child: content),
-      ),
+      // **不要再套 `ConstrainedBox(maxHeight: …) + SingleChildScrollView`。**
+      // 它造出**第二个更小的视口**：正文在那个高度就结束，面板底下空一截，
+      // 用户读成「按钮没浮起来、底下压着一层蒙版」（2026-10-01 反馈）。
+      // `GlassDialog` 自己的内容区就铺满面板、并负责滚动，动作行由它用
+      // `Positioned` 浮在上面 —— 这里只要把 content 原样交给它。
+      // （v0.10.0 从 `showAppInfoDialog` 里拆掉的就是这两层，这个调用点当时漏了。）
+      content: content,
       actions: [
         GlassActionButton(
           variant: GlassActionVariant.primary,

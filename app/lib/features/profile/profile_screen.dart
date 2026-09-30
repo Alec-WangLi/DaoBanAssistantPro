@@ -122,7 +122,14 @@ class ProfileScreen extends ConsumerWidget {
                             Text(L10n.liquidGlass,
                                 style: AppTokens.labelStrong),
                             const SizedBox(height: AppTokens.gapHair),
-                            Text(L10n.liquidGlassHint,
+                            Text(
+                                // 低内存机器上这一档被 `!lowEndDevice` 挡掉：
+                                // 开关置灰 + 换一句说明。**不能让它看着能开、
+                                // 开了什么也不发生** —— 那比直接说不可用更糟
+                                // （spec §1 的成功标准：回落并说明原因、不静默无反应）。
+                                lowEndDevice
+                                    ? L10n.liquidGlassUnsupportedHint
+                                    : L10n.liquidGlassHint,
                                 style: AppTokens.microText
                                     .copyWith(color: AppTokens.inkMuted(context))),
                           ],
@@ -130,6 +137,7 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                       GlassSwitch(
                         value: settings.liquidGlass,
+                        enabled: !lowEndDevice,
                         onChanged: (v) => ref
                             .read(appSettingsProvider.notifier)
                             .setLiquidGlass(v),
