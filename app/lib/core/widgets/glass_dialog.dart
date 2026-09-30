@@ -31,7 +31,7 @@ VoidCallback dialogCloser(BuildContext context) {
 ///
 /// 用于统一各处的弹窗风格（待办、闹钟、确认、日志等）。
 /// [showClose] 为 true 时，标题栏右上角显示玻璃 ✕ 关闭按钮（适合单操作弹窗）。
-class GlassDialog extends StatelessWidget {
+class GlassDialog extends StatefulWidget {
   const GlassDialog({
     super.key,
     required this.title,
@@ -46,9 +46,28 @@ class GlassDialog extends StatelessWidget {
   final bool showClose;
 
   @override
+  State<GlassDialog> createState() => _GlassDialogState();
+}
+
+class _GlassDialogState extends State<GlassDialog> {
+  /// 标题与内容之间、以及正文与动作行之间的间距。
+  static const double _gap = 16;
+
+  /// 动作行的高度 —— **量出来的**，首帧先用这个估值顶上。
+  ///
+  /// 为什么不写成常量：窄窗里三颗按钮会**折行**（`Wrap`），行高因此是 40 或 88
+  /// 两档，而正文的底部留白必须正好等于它 —— 猜错就是「滑到底最后一行还压在
+  /// 按钮下面」。量一次、之后每次布局都对。
+  double _actionsH = 40;
+
+  final GlobalKey _actionsKey = GlobalKey();
+
+  @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
     final surface = Theme.of(context).colorScheme.surface;
+    final hasActions = widget.actions.isNotEmpty;
+    if (hasActions) _scheduleMeasure();
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
@@ -89,14 +108,14 @@ class GlassDialog extends StatelessWidget {
                 const SizedBox(width: AppTokens.gapIconTextLg),
                 Expanded(
                   child: Text(
-                    title,
+                    widget.title,
                     style: AppTokens.dialogTitle,
                   ),
                 ),
-                if (showClose) const _GlassCloseButton(),
+                if (widget.showClose) const _GlassCloseButton(),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: _gap),
             // 内容过长时**卡内滚动**，而不是把弹窗撑到屏幕外。
             //
             // 这里曾经是 `LayoutBuilder` + `ConstrainedBox(maxHeight - 100)`：
@@ -108,41 +127,106 @@ class GlassDialog extends StatelessWidget {
             // 点保存没反应、待办也没出现」就是这个（像素采样：面板底边 y≈1486，
             // 而按钮画在 1458~1595）。
             //
-            // `Flexible` 让内容只吃「标题行与按钮行之外剩下多少」，不够就在卡内
-            // 滚动，底部按钮因此**永远在面板里、永远点得到**。
-            Flexible(
-              child: SingleChildScrollView(child: content),
-            ),
-            if (actions.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              // **`Align` + `Wrap`，两个都不能少**（2026-10-01 用户真机反馈
-              // 「好多按钮都跑到左边去了」，一查就是这个位置）。
-              //
-              // 外层 `Align` 负责**靠右**：它没有 sizeFactor 时会撑满可用宽度，
-              // 于是里面那块有富余可以对齐。`Wrap` 自己**收缩到内容宽度**，而上面的
-              // Column 是 `crossAxisAlignment.start` —— 光有 `Wrap` 的话，它连同
-              // `WrapAlignment.end` 一起被贴到左边（`end` 在「自己就是内容那么宽」
-              // 时不起任何作用），全 app 二十来个弹窗会一起靠左。
-              //
-              // 内层 `Wrap` 负责**窄窗不溢出**：按钮一多（「删除 / 取消 / 保存」），
-              // `Row(mainAxisAlignment: end)` 在 200×400 那档直接横向溢出 23px
-              // （弹层内宽只剩约 112dp），`Wrap` 排不下时折到第二行，折完每行同样贴右。
-              // **别为了靠右退回 `Row`** —— 那会把 v0.9.18 修掉的那条溢出放回来；
-              // 两条都有用例钉着（`test/glass_dialog_test.dart`）。
-              Align(
-                alignment: Alignment.centerRight,
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  runSpacing: 8,
-                  children: actions,
-                ),
-              ),
-            ],
+            // `Flexible` 让内容只吃「标题行之外剩下多少」，不够就在卡内滚动，
+            // 底部按钮因此**永远在面板里、永远点得到**。
+            Flexible(child: _body(hasActions)),
           ],
         ),
         ),
       ),
     );
+  }
+
+  /// 内容区 + **浮在它上面**的动作行。
+  ///
+  /// 2026-10-01 真机反馈：「版本更新和使用帮助这两个界面……它底下有个类似蒙版的
+  /// 东西，我们要的是让它悬浮在上边」。此前动作行是 `Column` 里的一个兄弟，内容区的
+  /// 视口**到它的上沿就结束了** —— 滚动时正文被齐刷刷切断、下面是一片空面板，
+  /// 读起来就像有块板子压着正文。走这个件的每个弹窗都中招（版本更新 / 使用帮助 /
+  /// 检查更新 / 重复待办管理 / 我的模板 / 日志），内容越长越明显。
+  ///
+  /// 现在：内容区的视口铺满整块面板（标题以下到底边），动作行用 `Positioned` 浮在
+  /// 它上面；内容自己留一段 `_actionsH + _gap` 的底部空白，于是
+  /// **滑到底时最后一行整个在按钮之上**，中途滚动的正文则从胶囊底下穿过去
+  /// （按钮是玻璃的，压在上面的字会被磨一下，正是要的「悬浮」观感）。
+  ///
+  /// 短弹窗（删除确认、添加时段那种）表现与从前一模一样：内容没长到那儿，
+  /// 那段留白正好就是动作行原来的位置。
+  Widget _body(bool hasActions) {
+    // **留白要加在滚动视图「里面」**（`padding:`），不能拿 `Padding` 包在外面 ——
+    // 包在外面等于把视口本身截短 56，正文照样在按钮上沿被切断（第一版就是这么写的，
+    // 量出来和改之前一模一样）。加在里面只是**滚动内容多出一截**，
+    // 视口仍是整个面板的高度。
+    // 宽度同样要显式撑满：`SingleChildScrollView` 在松宽度约束下会收缩到内容宽度
+    // （短正文只有 200 宽），视口也就跟着窄 —— 那样**只有左边那一条能拖动**
+    // （上下滑动要靠视口接收手势），面板右边一大片滑不动。
+    final scroll = SizedBox(
+      width: double.infinity,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: hasActions ? _actionsH + _gap : 0),
+        child: widget.content,
+      ),
+    );
+    if (!hasActions) return scroll;
+
+    // **宽度要显式撑满**：`Stack` 的宽度取自「非定位孩子里最宽的那个」，而
+    // `SingleChildScrollView` 在松宽度约束下会**收缩到内容宽度** —— 短正文
+    // （「删掉之后这几天就没有排班了。」）只有 200 宽，于是整块正文连同浮在
+    // 上面的动作行一起被挤成 200，按钮被迫折成三行、还靠不了右。
+    // `double.infinity` 在 Column 的松约束下解析成可用宽度，正好。
+    return SizedBox(
+      width: double.infinity,
+      child: Stack(
+        children: [
+          scroll,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            // `Align` + `Wrap` **两个都不能少**（2026-10-01 用户真机反馈「好多按钮
+            // 都跑到左边去了」，一查就是这个位置）：
+            //
+            // · 外层 `Align` 负责**靠右** —— 它没有 sizeFactor 时会撑满可用宽度，
+            //   里面那块才有富余可以对齐。`Wrap` 自己**收缩到内容宽度**，而外层
+            //   Column 是 `crossAxisAlignment.start`，光有 `Wrap` 的话它连同
+            //   `WrapAlignment.end` 一起被贴到左边（`end` 在「自己就是内容那么宽」
+            //   时不起任何作用），全 app 二十来个弹窗会一起靠左。
+            // · 内层 `Wrap` 负责**窄窗不溢出** —— `Row(mainAxisAlignment: end)` 在
+            //   200×400 那档直接横向溢出 23px（弹层内宽只剩约 112dp），`Wrap`
+            //   排不下时折到第二行，折完每行同样贴右。
+            //
+            // **别为了靠右退回 `Row`**，也别为了别的便利把它挪出 `Align`；
+            // 两条都有几何用例钉着（`test/glass_dialog_test.dart`）。
+            child: KeyedSubtree(
+              key: _actionsKey,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  runSpacing: 8,
+                  children: widget.actions,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 量一次动作行的高度，变了就重排。
+  ///
+  /// 放在帧后而不是 `LayoutBuilder` 里：动作行与正文是两个孩子，**各自布局一次**
+  /// 就能拿到自己的高度，不需要互相约束；量到之后下一帧把留白对齐即可（首帧用
+  /// 估值 40，弹窗这时候还在入场动画里，看不出来）。
+  void _scheduleMeasure() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box = _actionsKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) return;
+      final h = box.size.height;
+      if ((h - _actionsH).abs() > 0.5) setState(() => _actionsH = h);
+    });
   }
 }
 

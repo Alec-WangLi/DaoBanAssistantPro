@@ -21,14 +21,13 @@ void showAppInfoDialog(
     builder: (dialogContext) => GlassDialog(
       title: title,
       showClose: true,
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420),
-        child: SingleChildScrollView(
-          child: Text(
-            content,
-            style: AppTokens.rowSecondary.copyWith(height: 1.55),
-          ),
-        ),
+      // **不要再套一层 `ConstrainedBox(420) + SingleChildScrollView`**：那会造出
+      // 第二个、更小的视口，正文仍然在它自己的底边被切断（而且切在按钮上方一点点，
+      // 看着还是像有块板子）。`GlassDialog` 现在自己就是「整块面板高的滚动区 +
+      // 浮在上面的动作行」，交给它就行。
+      content: Text(
+        content,
+        style: AppTokens.rowSecondary.copyWith(height: 1.55),
       ),
       actions: [
         GlassActionButton(
@@ -331,6 +330,23 @@ void showGettingStartedDialog(BuildContext context) {
   );
 }
 
+/// 「我的 → 桌面小组件」那一行的说明弹层。
+///
+/// 正文与《使用帮助》里的同一条目**共用一份文案**（`L10n.guideWidgetDesc`）——
+/// 各写一份的话，改了这边忘了那边，就成了「说明书和 App 说的不一样」。
+/// 弹窗标题已经把「是什么」说了，条目里不再顶一行标题（`title: null`）。
+void showWidgetGuideDialog(BuildContext context) {
+  _showHelpDialog(
+    context,
+    title: L10n.guideWidgetTitle,
+    content: _GuideEntry(
+      icon: Icons.widgets_outlined,
+      title: null,
+      lines: L10n.guideWidgetDesc,
+    ),
+  );
+}
+
 void showUsageGuideDialog(BuildContext context) {
   final items = <(IconData, String, List<String>)>[
     (Icons.calendar_month_outlined, L10n.guideCalTitle, L10n.guideCalDesc),
@@ -373,7 +389,11 @@ class _GuideEntry extends StatelessWidget {
   });
 
   final IconData icon;
-  final String title;
+
+  /// 条目标题。**为空时整行标题不画**（连那 8dp 间距一起）—— 「我的 → 桌面小组件」
+  /// 那个说明弹层只有一份并列的短句，弹窗标题已经说了是什么，条目再顶一行标题
+  /// 就是同一句话说两遍。
+  final String? title;
   final List<String> lines;
   final bool bulleted;
 
@@ -408,8 +428,10 @@ class _GuideEntry extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: AppTokens.labelStrong),
-              const SizedBox(height: AppTokens.padChipV),
+              if (title != null) ...[
+                Text(title!, style: AppTokens.labelStrong),
+                const SizedBox(height: AppTokens.padChipV),
+              ],
               for (var i = 0; i < lines.length; i++) ...[
                 if (i > 0) const SizedBox(height: AppTokens.spaceXs),
                 if (!bulleted)

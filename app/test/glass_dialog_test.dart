@@ -37,10 +37,20 @@ const double _panelBorder = 1;
 /// 面板**内容**的右缘：按钮该贴到的那条线。
 double _contentRight(Rect panel) => panel.right - _panelBorder - _panelPad;
 
-Widget _dialogWith(List<Widget> actions) => GlassDialog(
+Widget _dialogWith(List<Widget> actions, {Widget? content}) => GlassDialog(
       title: '删除排班',
-      content: const Text('删掉之后这几天就没有排班了。'),
+      content: content ?? const Text('删掉之后这几天就没有排班了。'),
       actions: actions,
+    );
+
+/// 长到必须滚的内容：末行带 key，用来断言「滑到底时它整个在按钮之上」。
+Widget _longContent() => Column(
+      key: const Key('long-content'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < 40; i++) Text('第 $i 行内容，这一段是用来把弹窗撑到必须滚动的。'),
+        const Text('末行', key: Key('last-line')),
+      ],
     );
 
 /// 三颗按钮的弹窗 —— 全 app 真正的形态（删除 / 取消 / 保存）。
@@ -60,7 +70,7 @@ List<Widget> _threeActions() => [
       ),
     ];
 
-Future<void> _open(WidgetTester tester, Size size) async {
+Future<void> _open(WidgetTester tester, Size size, {Widget? content}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -74,7 +84,7 @@ Future<void> _open(WidgetTester tester, Size size) async {
             onPressed: () => showDialog<void>(
               context: context,
               barrierColor: Colors.black26,
-              builder: (_) => _dialogWith(_threeActions()),
+              builder: (_) => _dialogWith(_threeActions(), content: content),
             ),
             child: const Text('open'),
           ),
@@ -137,5 +147,60 @@ void main() {
 
     expect(rects[L10n.save]!.right, closeTo(_contentRight(panel), 0.5),
         reason: '折行之后最后一行同样要贴右');
+  });
+
+  // ---------------------------------------------------------------------------
+  // 动作行浮在正文上
+  // ---------------------------------------------------------------------------
+  //
+  // 用户 2026-10-01 真机反馈：「版本更新和使用帮助这两个界面，不也有胶囊按钮吗？
+  // 它底下有个类似蒙版的东西，我们要的是让它悬浮在上边。」
+  //
+  // 那块「蒙版」是内容区**在动作行上沿被硬切**：`Column[标题, 可滚内容, 动作行]`
+  // 里内容区的视口到按钮就结束了，滚动时正文被齐刷刷切断、下面是面板底部的空白 ——
+  // 读起来就像有块板子压着正文。走同一个件的**每个**弹窗都中招（版本更新 / 使用帮助 /
+  // 检查更新 / 重复待办管理 / 我的模板 / 日志），内容越长越明显。
+  //
+  // 修法：内容区铺满整块面板、动作行浮在它上面，内容自己留一段等于按钮高的底部空白。
+  group('动作行浮在正文上', () {
+    Finder scrollView() => find.byType(SingleChildScrollView);
+
+    testWidgets('内容的视口铺到面板底边（不再在按钮上沿被切断）', (tester) async {
+      await _open(tester, const Size(420, 900), content: _longContent());
+
+      final panel = _panel(tester);
+      final view = tester.getRect(scrollView().first);
+      // 反面：改之前这里等于「动作行的上沿」—— 面板底边再往上「按钮行 + 两处 16 间距」，
+      // 那段差就是用户看到的那条硬边。
+      expect(view.bottom, closeTo(panel.bottom - _panelBorder - 16, 0.5),
+          reason: '内容区要一直铺到面板底边 —— 停在按钮行上沿就是那块「蒙版」');
+      expect(view.bottom, greaterThan(_action(tester, L10n.save).top),
+          reason: '内容要伸到按钮**下面**去，而不是到它上沿就停');
+    });
+
+    testWidgets('滑到底：最后一行整个抬到按钮之上', (tester) async {
+      await _open(tester, const Size(420, 900), content: _longContent());
+
+      await tester.drag(scrollView().first, const Offset(0, -4000));
+      await tester.pumpAndSettle();
+
+      final last = tester.getRect(find.byKey(const Key('last-line')));
+      final save = _action(tester, L10n.save);
+      expect(last.bottom, lessThanOrEqualTo(save.top - 8),
+          reason: '滑到底之后最后一行要整个在按钮之上（留 8 的让位）—— 不然它被按钮压着看不全');
+      expect(last.top, greaterThan(0), reason: '末行确实在屏幕上，不是滚过头了');
+    });
+
+    testWidgets('短内容与从前一致：正文与按钮之间仍是 16 的间距', (tester) async {
+      await _open(tester, const Size(420, 900));
+
+      final view = tester.getRect(scrollView().first);
+      final text = tester.getRect(find.text('删掉之后这几天就没有排班了。'));
+      final save = _action(tester, L10n.save);
+      expect(save.top - text.bottom, closeTo(16, 1),
+          reason: '短弹窗里按钮就贴着正文下方 16 —— 浮起来之后这条间距不该变');
+      expect(view.bottom, greaterThan(save.top),
+          reason: '内容区的视口同样铺到面板底边（只是内容没长到那儿）');
+    });
   });
 }

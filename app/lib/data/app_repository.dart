@@ -330,7 +330,13 @@ class AppRepository {
 
   Future<void> ensureSeeded() => seedIfEmpty(db);
 
-  /// 清空全部数据（排班方案 + 班次 + 日程 + 按天闹钟覆盖 + 按天改班覆盖），并恢复默认「四班两倒」。
+  /// 清空**全部业务数据**，并恢复默认「四班两倒」。
+  ///
+  /// 2026-10-01 用户定：「清空重置，顾名思义，就是让软件回到第一次安装时的状态」——
+  /// 所以这里连同**自定义闹钟**与**我的模板**一起清掉（此前只清了排班那半边）。
+  /// 库以外的几样（外观设置、首启标记、我保存的铃声文件、原生已排的闹钟、桌面
+  /// 小组件快照）不在这一层，由「我的 → 清空重置」那条链路一并做掉
+  /// （`profile_screen.dart` 的 `_confirmReset`）。
   Future<void> clearAll() async {
     await db.transaction(() async {
       await db.delete(db.scheduleEvents).go();
@@ -349,6 +355,10 @@ class AppRepository {
       // 这里只清系列本身；漏了的话，下次打开 App 生成器会照着老系列再建出行来，
       // 用户看到的就是「清空重置之后待办又冒出来了」。
       await db.delete(db.recurringSeriesRows).go();
+      // 这两张与排班表没有外键关系，此前被漏掉：用户重置完发现自定义闹钟还在响、
+      // 攒的模板还在「新建排班」里，会当成 bug（2026-10-01 反馈）。
+      await db.delete(db.customAlarms).go();
+      await db.delete(db.customTemplates).go();
     });
     await seedIfEmpty(db);
   }

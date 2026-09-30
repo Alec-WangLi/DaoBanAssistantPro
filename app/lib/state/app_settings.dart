@@ -131,4 +131,18 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     final sp = await SharedPreferences.getInstance();
     await sp.setBool('hapticsEnabled', value);
   }
+
+  /// 把外观这一组**在内存里**拨回默认（跟随系统 / 首个主色调 / 中文 / 高级材质开 /
+  /// 触觉开），并同步那几个模块级标志。
+  ///
+  /// 仅供「清空重置 = 回到第一次安装」用（`profile_screen.dart` 的 `_confirmReset`）。
+  /// **它不写 SharedPreferences**：那条链路紧接着就 `prefs.clear()` 把这一组连同
+  /// 铃声、首启标记、小组件快照一起抹掉 —— 在两边各写一份键名，迟早会漏掉一个。
+  void resetToDefaults() {
+    L10n.locale = 'zh';
+    advancedMaterialDisabled = false;
+    hapticsDisabled = false;
+    recomputeGlassBlur();
+    state = const AppSettings();
+  }
 }

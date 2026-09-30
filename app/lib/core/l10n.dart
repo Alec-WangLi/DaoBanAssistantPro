@@ -38,6 +38,7 @@ class L10n {
 
   // 「我的」页分区
   static String get sectionAppearance => t('外观', 'Appearance');
+  static String get sectionDesktop => t('桌面', 'Home screen');
   static String get sectionSchedule => t('排班', 'Schedule');
   static String get sectionAlarm => t('闹钟', 'Alarm');
   static String get sectionData => t('数据', 'Data');
@@ -142,16 +143,28 @@ class L10n {
 
   // 「我的」页其他
   static String get scheduleManagement => t('排班管理', 'Schedule management');
-  static String get scheduleManagementSubtitle => t('管理、编辑你的排班表', 'Manage and edit your schedules');
+  static String get scheduleManagementSubtitle => t(
+      '新建 / 编辑多套排班表，设置各自的生效时段',
+      'Create and edit several schedules, each with its own active period');
+
+  /// 「我的 → 桌面」那一行（打开的是小组件说明弹层）。
+  static String get widgetEntrySubtitle => t(
+      '三张卡怎么加到桌面（小米机型在二级分类里）',
+      'How to add the three cards (Xiaomi hides them in a sub-menu)');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
   static String get ringtoneSubtitle => t('选择内置、系统、你的铃声，或「仅震动」', 'Choose a built-in, system, or your own ringtone, or vibrate only');
   static String get clearReset => t('清空重置', 'Clear & reset');
-  static String get clearResetSubtitle => t('清空排班与日程，恢复默认四班两倒', 'Clear schedules & events, restore default rotation');
+  static String get clearResetSubtitle => t(
+      '排班、日程、闹钟与模板全清掉，回到刚安装的样子',
+      'Clear schedules, events, alarms and templates — back to a fresh install');
   static String get version => t('版本', 'Version');
   static String get changelog => t('版本更新', "What's new");
-  static String get changelogSubtitle => t('查看最近版本的更新内容', 'Release notes for recent versions');
+  static String get changelogSubtitle =>
+      t('这一版改了什么，含最近十版', 'What changed in this version, plus the last ten');
   static String get checkUpdate => t('检查更新', 'Check for update');
-  static String get checkUpdateSubtitle => t('获取正式版与测试版', 'Get stable & beta releases');
+  static String get checkUpdateSubtitle => t(
+      '检查最新正式版 / 测试版（国内网络需开代理）',
+      'Check for the latest stable / beta build (some networks in China need a proxy)');
   static String get alreadyLatest => t('已是最新', 'Up to date');
   // 连不上 GitHub 不要笼统说「网络异常」—— 国内用户看到这句只会反复重试，
   // 得直接告诉他要开代理。
@@ -174,12 +187,27 @@ class L10n {
       'Download failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
   static String get jumpToMonth => t('跳转月份', 'Jump to month');
   static String get usageGuide => t('使用帮助', 'Usage guide');
+  static String get usageGuideSubtitle =>
+      t('每个功能在哪、怎么用', 'Where each feature lives and how to use it');
   static String get viewLog => t('查看日志', 'View log');
   static String get viewLogSubtitle => t('排错时把这里的内容复制给我', 'Copy the log here for debugging');
   static String get confirmResetTitle => t('确认清空重置？', 'Clear & reset?');
-  static String get confirmResetContent => t('将清空所有排班与日程数据，恢复默认「四班两倒」配置。此操作不可撤销。', 'All schedules and events will be cleared and the default rotation restored. This cannot be undone.');
+  static String get confirmResetContent => t(
+      '软件会回到刚安装的样子，清掉：\n'
+      '· 排班表、日程与待办\n'
+      '· 自定义闹钟、你的模板\n'
+      '· 你保存的铃声\n'
+      '外观设置（主题 / 主色调 / 语言 / 高级材质 / 触觉）也一并回到默认。\n'
+      '此操作不可撤销。',
+      'The app goes back to a fresh install. This clears:\n'
+      '· schedules, events and todos\n'
+      '· custom alarms and your templates\n'
+      '· any ringtone you saved\n'
+      'Appearance settings (theme, accent colour, language, advanced material, '
+          'haptics) return to their defaults too.\n'
+      'This cannot be undone.');
   static String get confirmResetAction => t('确认清空', 'Clear');
-  static String get resetDone => t('已清空并恢复默认排班', 'Cleared and restored default schedule');
+  static String get resetDone => t('已恢复到刚安装的样子', 'Back to a fresh install');
   static String get log => t('日志', 'Log');
   static String get noLog => t('（暂无日志）', '(no log)');
   static String get logCopied => t('日志已复制到剪贴板', 'Log copied to clipboard');
@@ -814,11 +842,14 @@ class L10n {
   // 外观设置
   static String get advancedMaterial => t('高级材质', 'Advanced material');
   static String get advancedMaterialHint => t(
-      '关闭后去除真实背景模糊，模拟低端机效果', 'Turn off to remove real blur and preview the low-end effect');
+      '磨砂玻璃的背景模糊；关掉更省电、低端机更流畅',
+      'Frosted-glass background blur — turn it off to save battery and go '
+          'smoother on low-end devices');
   static String get hapticFeedback => t('触觉反馈', 'Haptic feedback');
   static String get hapticFeedbackHint => t(
-      '切换开关、选中、拖选与改班等状态变化时轻微震动',
-      'A light buzz on state changes — switches, selection, drag-selecting and applying day changes');
+      '开关翻转、选中、拖选与改班时轻微震动（普通点击不震）',
+      'A light buzz when a switch flips, a selection changes, or you drag-select '
+          'and apply a day change (plain taps stay still)');
 
   // 日期格式
   // 英文下月份要带出来：`yyyy M` 会渲染成「2026 9」，读不出是哪个月。

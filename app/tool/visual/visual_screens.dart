@@ -256,6 +256,24 @@ final List<VisualScreen> visualScreens = [
     needsOnboardingPrefs: false,
   ),
   (
+    // **版本更新**（更新日志）。它是全 app 内容最长的弹窗（十条版本说明），
+    // 也一直是「动作行压在正文上」那条毛病的**最坏样本** —— 而它此前
+    // **从没进过屏单**：2026-10-01 用户报「它底下有个类似蒙版的东西挡住了正文」，
+    // 单测只看得出几何，看不出「正文被齐刷刷切断」有多难看。这一条补上那只眼睛。
+    slug: '34_app_info',
+    title: '版本更新（更新日志）',
+    build: (db) async => const _DialogHost(showChangelogDialog),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「我的 → 桌面」那一行的说明弹层（v0.9.20 新增）。与《使用帮助》里那条
+    // **共用同一份文案**，但它单独有个入口，所以也要单独看一眼。
+    slug: '35_widget_guide',
+    title: '桌面小组件说明',
+    build: (db) async => const _DialogHost(showWidgetGuideDialog),
+    needsOnboardingPrefs: false,
+  ),
+  (
     // 多排班表按日期衔接：种子给第二套方案一个时段、边界落在**本月 15 日** ——
     // 于是同一张图上左半月的格子画第一套、右半月的画第二套。这一屏是检验
     // 「按天解析」的唯一一只眼睛（单测只看得到断言，看不到「两半张得一样」）。

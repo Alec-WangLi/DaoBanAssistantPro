@@ -182,6 +182,21 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
+            _sectionTitle(context, L10n.sectionDesktop),
+            GlassTile(
+              enableBlur: false,
+              padding: EdgeInsets.zero,
+              child: GlassPressable(
+                child: ListTile(
+                  leading: const Icon(Icons.widgets_outlined),
+                  title: Text(L10n.guideWidgetTitle),
+                  subtitle: Text(L10n.widgetEntrySubtitle),
+                  trailing: const Icon(Icons.chevron_right_outlined),
+                  onTap: () => showWidgetGuideDialog(context),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionAlarm),
             _RingtoneTile(onPick: () => _showRingtonePicker(context, ref)),
             const SizedBox(height: 16),
@@ -234,6 +249,7 @@ class ProfileScreen extends ConsumerWidget {
                     child: ListTile(
                       leading: const Icon(Icons.help_outlined),
                       title: Text(L10n.usageGuide),
+                      subtitle: Text(L10n.usageGuideSubtitle),
                       onTap: () => showUsageGuideDialog(context),
                     ),
                   ),
@@ -299,7 +315,19 @@ class ProfileScreen extends ConsumerWidget {
 
     if (confirmed == true) {
       final repo = ref.read(appRepositoryProvider);
+      // 「清空重置」= **回到第一次安装的样子**（2026-10-01 用户定）。库以外还有几样
+      // 也得跟着回去，此前漏了：
+      //   · 我保存的铃声文件（留在应用目录里，谁也再看不到它，白占空间）
+      //   · 外观那一组设置（主题 / 主色调 / 语言 / 高级材质 / 触觉）
+      //   · 首启标记与小组件快照（都在同一份 SharedPreferences 里）
+      // 至于原生已排的班次闹钟、通知与待办提醒：`rescheduleAll` 按刚重置好的空库
+      // 重排一遍，等于全撤（它自己会先 cancelAll）。
       await repo.clearAll();
+      await AlarmService.clearRingtoneFile();
+      final sp = await SharedPreferences.getInstance();
+      await sp.clear();
+      ref.read(appSettingsProvider.notifier).resetToDefaults();
+      // **放在清 prefs 之后**：这一步会把上面几样一起算进推给桌面的快照里。
       await AlarmService.rescheduleAll(repo);
       if (context.mounted) {
         showGlassSnack(context, L10n.resetDone, icon: Icons.check_circle_outlined);
