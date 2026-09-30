@@ -226,8 +226,22 @@ class AppTokens {
           Colors.black.withValues(alpha: 0.10),
         ];
 
-  /// 探针：边缘光的宽度。深色那档稍宽（暗底上要看得出），浅色那档收窄。
-  static double glassRimProbeWidth(bool isDark) => isDark ? 1.6 : 1.2;
+  /// 探针：边缘光的宽度。
+  ///
+  /// 深色那档稍宽（暗底上要看得出）。**底栏胶囊走 [compact]**：同一个宽度在小控件上
+  /// 相对更显眼，第二轮出图时它那一圈明显比别处重，所以单独收窄。
+  static double glassRimProbeWidth(bool isDark, {bool compact = false}) {
+    if (compact) return isDark ? 1.1 : 0.9;
+    return isDark ? 1.6 : 1.2;
+  }
+
+  /// 探针：**滑块附近那一段边缘光**的配色（滑块滑过时玻璃边被点亮）。
+  ///
+  /// 这不是折射 —— 折射是逐像素扭曲背景，需要 shader，且在平背景上看不见。
+  /// 这是「光的响应」：光源（滑块）靠近玻璃边时，那边的边亮起来。平背景上能被
+  /// 看见的只有这一类。
+  static Color glassRimProbeGlow(bool isDark) =>
+      Colors.white.withValues(alpha: isDark ? 0.95 : 0.85);
 
   static List<Color> glassHighlight(bool isDark) => [
         Colors.white.withValues(alpha: isDark ? 0.18 : 0.55),

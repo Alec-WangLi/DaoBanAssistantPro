@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show BlurStyle, ImageFilter, MaskFilter;
 
 import 'package:flutter/material.dart';
 
@@ -168,11 +168,31 @@ class GlassRim extends StatelessWidget {
     required this.radius,
     required this.isDark,
     required this.child,
+    this.compact = false,
+    this.sliderIndex,
+    this.tabCount,
+    this.trackPad = 0,
+    this.sliderScale = 1,
   });
 
   final double radius;
   final bool isDark;
   final Widget child;
+
+  /// 小控件（底栏胶囊）用更细的一圈。
+  final bool compact;
+
+  /// 滑块中心位置，**以「功能区」为单位**（第 2 格的中间 = 1.5）。null = 不做光的响应。
+  final double? sliderIndex;
+
+  /// 功能区个数。
+  final int? tabCount;
+
+  /// 胶囊内边距（滑块轨道两侧的留白），用来把 [sliderIndex] 换算成真实像素。
+  final double trackPad;
+
+  /// 滑块当前的缩放（按下时 >1），让亮边跟得上它的大小。
+  final double sliderScale;
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +206,12 @@ class GlassRim extends StatelessWidget {
               painter: _RimPainter(
                 radius: radius,
                 colors: AppTokens.glassRimProbe(isDark),
-                width: AppTokens.glassRimProbeWidth(isDark),
+                width: AppTokens.glassRimProbeWidth(isDark, compact: compact),
+                glow: AppTokens.glassRimProbeGlow(isDark),
+                sliderIndex: sliderIndex,
+                tabCount: tabCount,
+                trackPad: trackPad,
+                sliderScale: sliderScale,
               ),
             ),
           ),
@@ -196,16 +221,31 @@ class GlassRim extends StatelessWidget {
   }
 }
 
+/// 边缘光 + 「光跟随滑块」。
+///
+/// 后半段**不是折射** —— 折射是逐像素扭曲背景（要 shader，且在平背景上看不见）。
+/// 这里做的是「光的响应」：光源（滑块）经过时，它附近那一段玻璃边亮起来，
+/// 滑块自己也带一圈被光击中的边。平背景上能被看见的只有这一类。
 class _RimPainter extends CustomPainter {
   _RimPainter({
     required this.radius,
     required this.colors,
     required this.width,
+    required this.glow,
+    this.sliderIndex,
+    this.tabCount,
+    this.trackPad = 0,
+    this.sliderScale = 1,
   });
 
   final double radius;
   final List<Color> colors;
   final double width;
+  final Color glow;
+  final double? sliderIndex;
+  final int? tabCount;
+  final double trackPad;
+  final double sliderScale;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -214,21 +254,112 @@ class _RimPainter extends CustomPainter {
       rect.deflate(width / 2),
       Radius.circular(radius),
     );
-    final Paint paint = Paint()
+    final Paint stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width;
+
+    canvas.drawRRect(
+      rrect,
+      stroke
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          stops: const <double>[0.0, 0.45, 1.0],
+          colors: colors,
+        ).createShader(rect),
+    );
+
+    final double? index = sliderIndex;
+    final int? count = tabCount;
+    if (index == null || count == null || count <= 1 || size.width <= 0) return;
+
+    final double itemW = (size.width - 2 * trackPad) / count;
+    final double centerX = trackPad + index * itemW;
+
+    // ① 玻璃边在滑块那一带亮起来：横向一条**窄**亮带。
+    //    第一版做成 ±0.16 的宽带，结果和底色融了、看不出「跟着走」—— 收窄才有指向性。
+    final double h = (centerX / size.width).clamp(0.0, 1.0);
+    const double band = 0.085;
+    double lo = h - band;
+    if (lo < 0) lo = 0;
+    double hi = h + band;
+    if (hi > 1) hi = 1;
+    if (hi - lo > 0.02) {
+      double mid = h;
+      if (mid < lo + 0.01) mid = lo + 0.01;
+      if (mid > hi - 0.01) mid = hi - 0.01;
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = width * 1.4
+          // 边缘光也要有晕 —— 一条硬线读作「描边」，一圈晕才读作「光」。
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3)
+          ..shader = LinearGradient(
+            colors: <Color>[
+              glow.withValues(alpha: 0),
+              glow,
+              glow.withValues(alpha: 0),
+            ],
+            stops: <double>[lo, mid, hi],
+          ).createShader(rect),
+      );
+    }
+
+    // ② 滑块自身：**一圈被光击中的晕 + 一条硬边**。
+    //
+    // 只有硬边的时候读作「这个控件加了描边」；加了外圈模糊的晕之后才读作
+    // 「光聚在这里」—— 这一层是整个效果里最接近「折射」的观感来源。
+    final double sliderW = itemW * sliderScale;
+    final double sliderH = size.height - 2 * trackPad;
+    final RRect sliderRRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(centerX, size.height / 2),
+        width: sliderW,
+        height: sliderH,
+      ),
+      Radius.circular(sliderH / 2),
+    );
+    final Paint sliderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = width
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        stops: const <double>[0.0, 0.45, 1.0],
-        colors: colors,
+        colors: <Color>[
+          glow.withValues(alpha: 0.95),
+          glow.withValues(alpha: 0.25),
+        ],
       ).createShader(rect);
-    canvas.drawRRect(rrect, paint);
+    // 晕：粗、模糊、淡
+    canvas.drawRRect(
+      sliderRRect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width * 3
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6)
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            glow.withValues(alpha: 0.55),
+            glow.withValues(alpha: 0.10),
+          ],
+        ).createShader(rect),
+    );
+    // 硬边压在晕上
+    canvas.drawRRect(sliderRRect, sliderPaint);
   }
 
   @override
   bool shouldRepaint(_RimPainter old) =>
-      old.radius != radius || old.colors != colors || old.width != width;
+      old.radius != radius ||
+      old.colors != colors ||
+      old.width != width ||
+      old.sliderIndex != sliderIndex ||
+      old.tabCount != tabCount ||
+      old.trackPad != trackPad ||
+      old.sliderScale != sliderScale;
 }
 
 /// 液态玻璃圆角容器（无内边距快捷版）。

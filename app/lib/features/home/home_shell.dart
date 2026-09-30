@@ -449,6 +449,14 @@ class _GlassNavBarState extends State<_GlassNavBar> {
         child: GlassRim(
           radius: capsuleH / 2,
           isDark: isDark,
+          // 底栏是小控件，同一圈宽度在这里相对更显眼，单收一档。
+          compact: true,
+          // 「光跟随滑块」：光源位置 + 轨道几何，交给 painter 按实际尺寸换算。
+          // 1.22 与下面那张 AnimatedScale 的按下缩放是同一个值（本仓既有的字面量）。
+          sliderIndex: _visualPage + 0.5,
+          tabCount: items.length,
+          trackPad: _innerPad,
+          sliderScale: _pressed ? 1.22 : 1.0,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(capsuleH / 2),
             child: GlassBlur(
