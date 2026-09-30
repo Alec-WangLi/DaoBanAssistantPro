@@ -70,22 +70,45 @@ void main() {
     expect(s.value, closeTo(3.5, 0.05));
   });
 
-  test('落回时间与标准档的 durFast 相当', () {
-    // 这一条钉的是**用户 2026-10-01 反馈的第 6 条**：「滑块的吸附速度很僵硬，
-    // 没有之前标准磨砂玻璃状态下那种缓慢优雅」—— 标准档滑过去用的就是
-    // `durFast`。弹簧的落回时间必须与它相当，慢出一截就是那条反馈回头。
-    //
-    // 它同时也是那两个参数的**唯一**有效护栏：`design_tokens` 里那张表是按
-    // 「与实现同一套离散格式」扫出来的，连续解的理论公式在这儿会把人带偏
-    // （照理论填的 ω=46.3 / ζ=0.72 过冲实测是 0）。
-    final s = LiquidLensSpring(target: 100)..value = 0;
-    final int steps = AppTokens.durFast.inMilliseconds ~/ 16;
-    for (int i = 0; i < steps; i++) {
-      s.step(const Duration(milliseconds: 16));
+  /// 从 0 出发、**最后一次**离开目标 2% 用了多少毫秒（按 8ms 一帧 = 120Hz 跑）。
+  ///
+  /// **必须是「最后一次」**：欠阻尼弹簧会在过冲之前先穿过目标，量「第一次进到
+  /// 容差内」得到的是「冲上去那一刻」而不是整定时间 —— 第一版就这么量错了，
+  /// 差了两倍多（ω=12.6 量成 248ms，实际是 460 上下）。
+  double settleMs(double omega, double zeta) {
+    const Duration dt = Duration(milliseconds: 8);
+    final s = LiquidLensSpring(target: 1, omega: omega, zeta: zeta);
+    double last = 0;
+    for (int i = 0; i < 500; i++) {
+      s.step(dt);
+      if ((s.value - 1).abs() >= 0.02) last = (i + 1) * 8.0;
     }
-    expect((s.value - 100).abs() / 100, lessThan(0.05),
-        reason: '过了 durFast（${AppTokens.durFast.inMilliseconds}ms）还差得远 —— '
-            '吸附会比标准档慢一截');
+    return last;
+  }
+
+  test('位置滑过去约 200ms —— **比标准档慢一档**（用户 2026-10-04 选的）', () {
+    // ⚠️ **这条判据与上一版相反**：上一版钉的是「与标准档的 durFast（120ms）相当」，
+    // 那是照用户反馈第 6 条「没有标准档那种缓慢优雅」定的。2026-10-04 用户说
+    // 「点按吸附过去太快，不够优雅」，于是挑了慢一档。**反馈变了，判据跟着变** ——
+    // 别把旧那条当成「原本的契约」。
+    final double ms = settleMs(AppTokens.lensSlideOmega, AppTokens.lensSlideZeta);
+    expect(ms, inInclusiveRange(160, 300),
+        reason: '位置滑过去是 ${ms}ms，不是「慢一档」那档（目标 200ms 上下）');
+    expect(ms, greaterThan(AppTokens.durFast.inMilliseconds.toDouble() + 40),
+        reason: '还是跟标准档一样快 —— 那就退回上一版的毛病了');
+  });
+
+  test('提起与落下是两条不同的弹簧：落下明显更从容', () {
+    // Apple 自己的数字（UIKitCore 逆向）：Lift ζ=0.625 / response 0.27s、
+    // Unlift ζ=0.7 / response 0.5s。**两条方向不同是有意的** —— 提起要跟手、
+    // 落下要从容。用户说「太快、不够优雅」时，我用的是一条 ω=38 的弹簧（快一倍）。
+    final double lift = settleMs(AppTokens.lensLiftOmega, AppTokens.lensLiftZeta);
+    final double drop = settleMs(AppTokens.lensDropOmega, AppTokens.lensDropZeta);
+    // ignore: avoid_print
+    print('[probe] 弹簧整定：提起 ${lift}ms / 落下 ${drop}ms');
+    expect(lift, inInclusiveRange(160, 400), reason: '提起是 ${lift}ms —— 不该拖沓也不该窜');
+    expect(drop, inInclusiveRange(320, 650), reason: '落下是 ${drop}ms —— 要「从容」');
+    expect(drop, greaterThan(lift * 1.3), reason: '落下没有比提起更从容 —— 那就白分两条了');
   });
 
   group('透镜几何', () {
@@ -339,14 +362,86 @@ void main() {
     return worst;
   }
 
-  testWidgets('光谱环走色相：透镜上至少有像素的色相离主色 30° 以上', (tester) async {
+  /// 在某一列上数「带色相」的连续行数 —— 就是那一圈彩边的**厚度**。
+  ///
+  /// 沿透镜竖直中轴那一列往下扫：那里正好横穿透镜**上沿**那一段环。
+  int ringThickness(List<int> px, int x, Color accent) {
+    final double base = HSLColor.fromColor(accent).hue;
+    int count = 0;
+    bool started = false;
+    for (int y = 0; y < canvas.height.toInt(); y++) {
+      final int i = (y * canvas.width.toInt() + x) * 4;
+      bool hit = false;
+      if (px[i + 3] >= 128) {
+        final HSLColor c =
+            HSLColor.fromColor(Color.fromARGB(px[i + 3], px[i], px[i + 1], px[i + 2]));
+        if (c.saturation >= 0.25) {
+          double d = (c.hue - base).abs() % 360;
+          if (d > 180) d = 360 - d;
+          hit = d > 25;
+        }
+      }
+      if (hit) {
+        count++;
+        started = true;
+      } else if (started) {
+        break; // 连续的一段结束
+      }
+    }
+    return count;
+  }
+
+  testWidgets('彩边只在**动**的时候亮：静止时一个彩色像素都没有', (tester) async {
+    // 用户 2026-10-04：「彩虹边缘在滑块静态时不应该出现。只有运动起来的时候，
+    // 它才会跟光线发生这些折射反应」。
+    const accent = Color(0xFF12B5A5);
+    final List<int> still = await shotLens(tester, lift: 1, accent: accent);
+    expect(maxHueDelta(still, accent), lessThan(12),
+        reason: '静止（速度 0）时还有彩色 —— 那圈彩虹不该出现');
+  });
+
+  testWidgets('动起来就走色相：速度满档时至少有像素离主色 30° 以上', (tester) async {
     // teal（色相约 174°）。本体那层染色无论多浓，色相都贴着主色（偏离 ≈ 0）——
     // 只有真**走了色相**的环才会把它顶到 30° 以上。所以这条不是「有没有画东西」，
     // 它分得开「走色相的环」与「给主色加了个亮边」。
     const accent = Color(0xFF12B5A5);
-    final List<int> px = await shotLens(tester, lift: 1, accent: accent);
+    final List<int> px = await shotLens(tester,
+        lift: 1, accent: accent, velocity: AppTokens.lensVelocityRef);
     expect(maxHueDelta(px, accent), greaterThan(30),
-        reason: '整枚透镜的色相都贴着主色 —— 那是「给主色加了个亮边」，不是走色相');
+        reason: '动了却不走色相 —— 那是「给主色加了个亮边」，不是走色相');
+  });
+
+  /// 带色相（离主色 > 25°）的像素总数 —— 彩边的**面积**。
+  ///
+  /// 用得比的「厚度」稳：周长一样，面积随线宽线性涨，而且基数是几百而不是个位数。
+  int ringArea(List<int> px, Color accent) {
+    final double base = HSLColor.fromColor(accent).hue;
+    int n = 0;
+    for (int i = 0; i < px.length; i += 4) {
+      if (px[i + 3] < 128) continue;
+      final HSLColor c = HSLColor.fromColor(
+          Color.fromARGB(px[i + 3], px[i], px[i + 1], px[i + 2]));
+      if (c.saturation < 0.25) continue;
+      double d = (c.hue - base).abs() % 360;
+      if (d > 180) d = 360 - d;
+      if (d > 25) n++;
+    }
+    return n;
+  }
+
+  testWidgets('彩边比上一版更宽（3px → 4.5px）', (tester) async {
+    // 用户：「现在彩虹边缘的宽度太细了，不太容易察觉，需要再稍微加宽一点点」。
+    // 量**面积**而不是「有没有」—— 3px 那版也过得了上面那条。
+    const accent = Color(0xFF12B5A5);
+    final List<int> px = await shotLens(tester,
+        lift: 1, accent: accent, velocity: AppTokens.lensVelocityRef);
+    final int area = ringArea(px, accent);
+    // ignore: avoid_print
+    print('[probe] 彩边面积 = $area 像素（厚度 ${ringThickness(px, 60, accent)}px）');
+    // 标定过：3px 那版量到 **132**，4.5px 这版 **229**（厚度 2 → 3）。阈值取两者之间，
+    // 所以退回 3px 会让这条变红。
+    expect(area, greaterThanOrEqualTo(180),
+        reason: '彩边的面积不够 —— 加宽没生效（3px 那版是 132）');
   });
 
   test('几何在任何尺寸 × 任何速度下都画得出东西（参数化扫一遍）', () {
@@ -384,5 +479,51 @@ void main() {
         }
       }
     }
+  });
+
+  group('图标被透镜边缘影响', () {
+    const double half = 50; // 透镜半宽
+    ({double scaleX, double scaleY, double dx}) at(double iconX, double lensX) =>
+        lensIconWarp(
+            iconCenterX: iconX, lensCenterX: lensX, lensHalfWidth: half);
+
+    test('透镜正中的图标几乎不变形（厚透镜中间是平的）', () {
+      final w = at(100, 100); // t = 0
+      expect(w.scaleX, closeTo(1, 0.01));
+      expect(w.scaleY, closeTo(1, 0.01));
+      expect(w.dx.abs(), lessThan(0.2));
+    });
+
+    test('正好在透镜边缘的图标变形最大', () {
+      final w = at(150, 100); // t = 1
+      expect(1 - w.scaleX, closeTo(AppTokens.lensIconPinch, 0.01));
+      expect(w.dx, closeTo(AppTokens.lensIconPush, 0.1));
+    });
+
+    test('离透镜一个半宽以外的图标完全不动', () {
+      // 这一条是「不影响显示」的保证：只有边缘那一圈有值。
+      final w = at(250, 100); // t = 3
+      expect(w.scaleX, 1.0);
+      expect(w.scaleY, 1.0);
+      expect(w.dx, 0.0);
+    });
+
+    test('推的方向永远朝远离透镜中心的那一侧', () {
+      expect(at(150, 100).dx, greaterThan(0)); // 图标在右 → 往右推
+      expect(at(50, 100).dx, lessThan(0)); // 图标在左 → 往左推
+    });
+
+    test('边缘两侧对称', () {
+      final left = at(50, 100), right = at(150, 100);
+      expect(left.scaleX, closeTo(right.scaleX, 1e-9));
+      expect(left.dx, closeTo(-right.dx, 1e-9));
+    });
+
+    test('半宽非正（退化档）时什么都不做，不抛异常', () {
+      final w = lensIconWarp(
+          iconCenterX: 10, lensCenterX: 0, lensHalfWidth: 0);
+      expect(w.scaleX, 1.0);
+      expect(w.dx, 0.0);
+    });
   });
 }

@@ -22,7 +22,14 @@ class LiquidLensSpring {
     required this.target,
     this.value = 0,
     this.velocity = 0,
+    this.omega = AppTokens.lensSlideOmega,
+    this.zeta = AppTokens.lensSlideZeta,
   });
+
+  /// 固有频率（rad/s）与阻尼比。**可写** —— 提起与落下用两条不同的弹簧，
+  /// 调用点在两个相位之间改这两个数（Apple 自己也是这么分的，见令牌表的说明）。
+  double omega;
+  double zeta;
 
   /// 当前位置与速度。都是公开可写的 —— 拖动时调用点会**直接**按住它们跟手走
   /// （那时不该再让弹簧插一脚），松手再交回给 [step]。
@@ -56,8 +63,7 @@ class LiquidLensSpring {
         (dt.inMicroseconds < maxStep.inMicroseconds ? dt.inMicroseconds
             : maxStep.inMicroseconds) /
             1e6;
-    const double omega = AppTokens.lensOmega;
-    const double damping = 2 * AppTokens.lensZeta * omega;
+    final double damping = 2 * zeta * omega;
     final double a =
         -omega * omega * (value - target) - damping * velocity;
     velocity += a * capped;
@@ -349,6 +355,7 @@ class _LensShadowPainter extends CustomPainter {
   @override
   bool shouldRepaint(_LensShadowPainter old) =>
       old.lift != lift ||
+      old.origin != origin ||
       old.shape.centerX != shape.centerX ||
       old.shape.width != shape.width ||
       old.shape.height != shape.height ||
@@ -383,16 +390,19 @@ class _LensBodyPainter extends CustomPainter {
         ..shader =
             AppTokens.accentGradient(accent).createShader(p.getBounds()),
     );
-    _paintSpectralRing(canvas, p);
+    // 静止时**连画都不画**：不是「画一层透明的」，而是这一整趟省掉。
+    if (shape.stretch > 0.02) _paintSpectralRing(canvas, p);
     // 白色高光芯压在环上 —— **这一层是「读作光」的关键**：一条纯彩色的环读起来是
     // 「贴了一圈彩虹贴纸」，而「一圈被点亮的玻璃边」需要一条白芯把颜色挤到两侧去。
     canvas.drawPath(
       p,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
+        ..strokeWidth = AppTokens.lensRingCoreWidth
         ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.85),
     );
+    // 白芯**不跟速度走**：它不是折射，是这块玻璃自己的边（标准档那枚滑块也有一条
+    // 同样明度的白边）。收掉它的话静止时透镜就没有轮廓了。
     _paintRefractedCapsuleEdge(canvas);
   }
 
@@ -475,7 +485,9 @@ class _LensBodyPainter extends CustomPainter {
       final double toward =
           (1 + math.cos((t * 360 - 225) * math.pi / 180)) / 2;
       colors.add(HSLColor.fromAHSL(
-        0.05 + 0.75 * toward * toward, // 只有左上那一段亮着，其余渐隐
+        // 只有左上那一段亮着、其余渐隐；**再整体乘上速度** —— 静止时一个彩色
+        // 像素都没有（用户 2026-10-04：「彩虹边缘在静态时不应该出现」）。
+        (0.05 + 0.75 * toward * toward) * shape.stretch,
         (base.hue + 300 * t) % 360, // 走色相，但绕回主色
         base.saturation.clamp(0.55, 0.95),
         0.66,
@@ -486,9 +498,9 @@ class _LensBodyPainter extends CustomPainter {
       lensPath,
       Paint()
         ..style = PaintingStyle.stroke
-        // 比白芯（1.0）宽 —— 画完之后白芯压在中线上，颜色挤到两侧各约 1px，
-        // 那正是「色边」的宽度。
-        ..strokeWidth = 3
+        // 比白芯宽得多 —— 画完之后白芯压在中线上，颜色挤到两侧去，那正是
+        // 「色边」的宽度。3 → 4.5（用户 2026-10-04：「太细了，不太容易察觉」）。
+        ..strokeWidth = AppTokens.lensRingWidth
         ..shader = SweepGradient(
           colors: colors,
           stops: stops,
@@ -600,4 +612,35 @@ class CapsuleRimPainter extends CustomPainter {
       old.sliderIndex != sliderIndex ||
       old.tabCount != tabCount ||
       old.trackPad != trackPad;
+}
+
+/// 一枚图标（连同它下面那行文字）被**透镜边缘**影响的那一帧。
+///
+/// **峰值在边缘、不在中心**（用户 2026-10-04 指出的）：厚透镜**中间是平的**、
+/// 只有边缘那圈曲率在折光 —— 一块平板玻璃压上去什么都不扭曲。所以图标躺在透镜
+/// 正中时几乎不变形，进到内部之后反而看得清；只有**透镜的边缘（那圈彩边）扫过
+/// 它**的时候才被挤一下。开源实现里那个 `circle` 衰减曲线的注释写的就是这件事
+/// （「峰值在 rim，做那种利落的压缩环」）。
+///
+/// 纯函数，好单测。返回的是要套在这个图标上的仿射参数：
+/// 横向压扁 / 纵向拉长（面积近似守恒 = 「被挤过去」），再朝远离透镜中心的方向推。
+({double scaleX, double scaleY, double dx}) lensIconWarp({
+  required double iconCenterX,
+  required double lensCenterX,
+  required double lensHalfWidth,
+}) {
+  // 半宽非正（还没布局 / 退化档）就什么都不做 —— 别让调用点去判。
+  if (lensHalfWidth <= 0) return (scaleX: 1.0, scaleY: 1.0, dx: 0.0);
+  // t = 到透镜中心的距离 ÷ 半宽。**t = 1 就是透镜的边缘。**
+  final double t = (iconCenterX - lensCenterX).abs() / lensHalfWidth;
+  final double u = (t - 1) / AppTokens.lensIconRingSigma;
+  final double w = math.exp(-u * u);
+  // 权重小到看不见就别造一个几乎恒等的矩阵 —— 那会让这个图标每帧都重绘。
+  if (w < 0.01) return (scaleX: 1.0, scaleY: 1.0, dx: 0.0);
+  final double pinch = AppTokens.lensIconPinch * w;
+  return (
+    scaleX: 1 - pinch,
+    scaleY: 1 + pinch,
+    dx: (iconCenterX >= lensCenterX ? 1 : -1) * AppTokens.lensIconPush * w,
+  );
 }

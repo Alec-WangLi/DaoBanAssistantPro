@@ -101,6 +101,13 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// 透镜当前的形变速度（px/s），带了低通 —— 原始帧间差分抖得厉害。
   double _lensVelocityPx = 0;
 
+  /// **每一帧只敲这一根**：透镜那一层（透镜本体 / 边光 / 图标扭曲）听它重建，
+  /// 胶囊与它的 `BackdropFilter` 不跟着动。
+  ///
+  /// 以前 `_onTick` 里是 `setState(() {})` —— 于是每帧整个底栏重建一遍，而这一帧
+  /// 真正变的只有透镜。用户 2026-10-04 说拖动时「感觉帧率有点卡顿」。
+  final ValueNotifier<int> _lensTick = ValueNotifier<int>(0);
+
   PageController get controller => widget.controller;
   List<(IconData, String)> get items => widget.items;
 
@@ -128,6 +135,7 @@ class _GlassNavBarState extends State<GlassNavBar>
     // 而 `Ticker` 留着会一直调度下一帧（`pumpAndSettle` 永远等不到停）。
     _holdTimer?.cancel();
     _ticker?.dispose();
+    _lensTick.dispose();
     super.dispose();
   }
 
@@ -159,6 +167,14 @@ class _GlassNavBarState extends State<GlassNavBar>
         _lastTick == null ? AppTokens.lensMaxStep : elapsed - _lastTick!;
     _lastTick = elapsed;
 
+    // **提起与落下用两条不同的弹簧**（Apple 自己的数字：Lift 快、Unlift 从容）。
+    // 弹簧自己不会「换档」，所以在这里按目标显式切 —— 只改加速度，速度连续，
+    // 不会在切换的那一帧跳一下。
+    final bool lifting = _liftTarget > 0.5;
+    _liftSpring.omega =
+        lifting ? AppTokens.lensLiftOmega : AppTokens.lensDropOmega;
+    _liftSpring.zeta =
+        lifting ? AppTokens.lensLiftZeta : AppTokens.lensDropZeta;
     _liftSpring.target = _liftTarget;
     _liftSpring.step(dt);
 
@@ -193,7 +209,7 @@ class _GlassNavBarState extends State<GlassNavBar>
       _ticker?.stop();
       _lensVelocityPx = 0;
     }
-    if (mounted) setState(() {});
+    if (mounted) _lensTick.value++;
   }
 
   /// 把透镜的**中心**夹在胶囊的横向范围内。
@@ -568,16 +584,6 @@ class _GlassNavBarState extends State<GlassNavBar>
             builder: (context, c) {
               final Size capsuleSize = Size(c.maxWidth, capsuleH);
               final double itemW = (c.maxWidth - 2 * _innerPad) / items.length;
-              final double lift = _liftSpring.value.clamp(0.0, 1.0);
-              final LiquidLensShape shape = LiquidLensShape.of(
-                itemW: itemW,
-                capsuleH: capsuleH,
-                pad: _innerPad,
-                // 弹簧存的是**中心**（静止时 = 格号 + 0.5），形状要的是左缘。
-                centerPage: _posSpring.value - 0.5,
-                lift: lift,
-                velocity: _lensVelocityPx,
-              );
               return SizedBox(
                 height: capsuleH,
                 child: Stack(
@@ -613,14 +619,18 @@ class _GlassNavBarState extends State<GlassNavBar>
                     // 静止时透镜（高 52）够不到它，所以照旧看得见。
                     Positioned.fill(
                       child: IgnorePointer(
-                        child: CustomPaint(
-                          painter: CapsuleRimPainter(
-                            radius: capsuleH / 2,
-                            isDark: isDark,
-                            compact: true,
-                            sliderIndex: _posSpring.value,
-                            tabCount: items.length,
-                            trackPad: _innerPad,
+                        // 只重建这一层 —— 里面的 `sliderIndex` 每帧都在动。
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: _lensTick,
+                          builder: (context, _, __) => CustomPaint(
+                            painter: CapsuleRimPainter(
+                              radius: capsuleH / 2,
+                              isDark: isDark,
+                              compact: true,
+                              sliderIndex: _posSpring.value,
+                              tabCount: items.length,
+                              trackPad: _innerPad,
+                            ),
                           ),
                         ),
                       ),
@@ -628,12 +638,30 @@ class _GlassNavBarState extends State<GlassNavBar>
                     // ② 透镜：会凸出胶囊、会形变、边缘带光谱环。
                     Positioned.fill(
                       child: IgnorePointer(
-                        child: LiquidLens(
-                          size: capsuleSize,
-                          shape: shape,
-                          lift: lift,
-                          isDark: isDark,
-                          accent: activeColor,
+                        // **同样只重建这一层。** 形状在这里算，不在 `_buildLiquid`
+                        // 里算 —— 那个函数每帧不再跑（见 `_lensTick` 的说明）。
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: _lensTick,
+                          builder: (context, _, __) {
+                            final double lift =
+                                _liftSpring.value.clamp(0.0, 1.0);
+                            return LiquidLens(
+                              size: capsuleSize,
+                              shape: LiquidLensShape.of(
+                                itemW: itemW,
+                                capsuleH: capsuleH,
+                                pad: _innerPad,
+                                // 弹簧存的是**中心**（静止时 = 格号 + 0.5），
+                                // 形状要的是左缘。
+                                centerPage: _posSpring.value - 0.5,
+                                lift: lift,
+                                velocity: _lensVelocityPx,
+                              ),
+                              lift: lift,
+                              isDark: isDark,
+                              accent: activeColor,
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -662,8 +690,9 @@ class _GlassNavBarState extends State<GlassNavBar>
                                   _dragUpdate(d.localPosition.dx, tw),
                               onHorizontalDragEnd: (_) => _release(),
                               onHorizontalDragCancel: _cancel,
-                              child: _iconsRow(
-                                  isShort, fg, inactiveColor, selectedIndex),
+                              child: _iconsRow(isShort, fg, inactiveColor,
+                                  selectedIndex,
+                                  lensItemW: itemW, lensPad: _innerPad),
                             );
                           },
                         ),
@@ -682,36 +711,79 @@ class _GlassNavBarState extends State<GlassNavBar>
 
   /// 图标 + 文字那一行。**两棵树共用同一份** —— 它在两档里本来就该一模一样，
   /// 各写一份迟早会长出差异。
+  ///
+  /// [lensItemW] 给值时 = 液态档：每一格按**透镜边缘**的位置做一次仿射变换
+  /// （用户 2026-10-04：「滑块的彩虹边缘碰到图标时，图标和文字也应该适当扭曲」）。
+  /// 标准档传 null，**一个变换都不套**（也就不会多出一层 widget）。
   Widget _iconsRow(
-      bool isShort, Color fg, Color inactiveColor, int selectedIndex) {
+    bool isShort,
+    Color fg,
+    Color inactiveColor,
+    int selectedIndex, {
+    double? lensItemW,
+    double lensPad = 0,
+  }) {
     return Row(
       children: List.generate(items.length, (i) {
         final selected = i == selectedIndex;
-        return Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // 导航项图标：常规态归 iconLg（规格 §3.6，出图对比：24 在 64dp
-              // 胶囊里站得住、20 偏小）。矮屏 52dp 胶囊的竖向预算更小，回落到
-              // iconMd —— 这是原设计（`isShort ? 20 : 22`）「矮屏用小一号图标」
-              // 的忠实翻译，属同一角色按布局档位的个别变化：不新增令牌，
-              // 也不违背「导航项归 iconLg」。
-              AppIcon(
-                items[i].$1,
-                size: isShort ? AppTokens.iconMd : AppTokens.iconLg,
+        final Widget cell = Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // 导航项图标：常规态归 iconLg（规格 §3.6，出图对比：24 在 64dp
+            // 胶囊里站得住、20 偏小）。矮屏 52dp 胶囊的竖向预算更小，回落到
+            // iconMd —— 这是原设计（`isShort ? 20 : 22`）「矮屏用小一号图标」
+            // 的忠实翻译，属同一角色按布局档位的个别变化：不新增令牌，
+            // 也不违背「导航项归 iconLg」。
+            AppIcon(
+              items[i].$1,
+              size: isShort ? AppTokens.iconMd : AppTokens.iconLg,
+              color: selected ? fg : inactiveColor,
+            ),
+            const SizedBox(height: AppTokens.gapHair),
+            Text(
+              items[i].$2,
+              // 迁移前的基线字号是 10（现为 tinyLabel 11/w400）；
+              // 未选中 w500、选中 w700，两个分支都由这里显式给字重，按规格走 copyWith。
+              style: AppTokens.tinyLabel.copyWith(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 color: selected ? fg : inactiveColor,
               ),
-              const SizedBox(height: AppTokens.gapHair),
-              Text(
-                items[i].$2,
-                // 迁移前的基线字号是 10（现为 tinyLabel 11/w400）；
-                // 未选中 w500、选中 w700，两个分支都由这里显式给字重，按规格走 copyWith。
-                style: AppTokens.tinyLabel.copyWith(
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? fg : inactiveColor,
-                ),
-              ),
+            ),
             ],
+        );
+        final double? itemW = lensItemW;
+        if (itemW == null) return Expanded(child: cell);
+
+        // 这一格的中心在**胶囊局部坐标**里的位置 —— 与 `LiquidLensShape` 用的是
+        // 同一套坐标（都从胶囊左缘量起），所以两个数可以直接相减。
+        final double iconCenterX = lensPad + (i + 0.5) * itemW;
+        // 透镜的半宽用**满升程**那个值：它随升程只变 ~5%，不值得每帧再算一次；
+        // 而且 `lensIconWarp` 的权重本来就是一条软的钟形。
+        final double halfWidth = (itemW + AppTokens.lensLiftWidth) / 2;
+
+        return Expanded(
+          child: ValueListenableBuilder<int>(
+            valueListenable: _lensTick,
+            // `child` 传进来：每帧只重建外面那层 `Transform`，
+            // 图标与文字这两个 widget 本身不重建。
+            child: cell,
+            builder: (context, _, Widget? child) {
+              final ({double scaleX, double scaleY, double dx}) warp =
+                  lensIconWarp(
+                iconCenterX: iconCenterX,
+                lensCenterX: lensPad + _posSpring.value * itemW,
+                lensHalfWidth: halfWidth,
+              );
+              // 恒等就别套 —— 少一层 `Transform`，也少一次重绘。
+              if (warp.scaleX == 1.0 && warp.dx == 0.0) return child!;
+              return Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..translateByDouble(warp.dx, 0, 0, 1)
+                  ..scaleByDouble(warp.scaleX, warp.scaleY, 1, 1),
+                child: child,
+              );
+            },
           ),
         );
       }),
