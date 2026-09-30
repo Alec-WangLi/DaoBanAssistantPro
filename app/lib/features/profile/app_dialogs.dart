@@ -40,7 +40,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.4\n'
+const String _changelogZh = 'v0.10.5\n'
+    '· 底栏滑块的手感重调：提起与落下用上了两条不同的弹簧（落下明显更从容），点按之后滑过去也慢了一档\n'
+    '· 那圈彩色折射光现在只在动的时候亮 —— 完全停下时一个彩色像素都没有；同时加宽了一圈\n'
+    '· 滑块边缘扫过图标时，图标与它下面的字会被轻轻挤一下（被罩在透镜正中时几乎不变，所以照样看得清）\n'
+    '· 头大尾小那个形变更容易出现了 —— 不用滑那么快\n'
+    '· 底栏每一帧只重画透镜那一层，不再整条重建\n\n'
+
+    'v0.10.4\n'
     '· 修好窄窗口下的一处严重问题：拖动底栏滑块时它会整个消失、还一闪一没（窗口宽度不够时那个形状算不出来）\n'
     '· 点待办提醒的通知切到待办页时，底栏滑块也跟着走过去（之前页面翻过去了、滑块还留在原处）\n\n'
 
@@ -100,17 +107,16 @@ const String _changelogZh = 'v0.10.4\n'
     '· 上一版改对的那一半照旧：「这段时间没有排班」那句只在真的没有任何班表盖着这些天时才出现 —— 判定它的是「这天有没有班表在管」，与「这天画不画得出东西」从此分开看\n'
     '\n'
 
-    'v0.9.15\n'
-    '· 「法定班次」（跟随法定节假日）不再被当成「没有排班」了：这种班表每一天都画得出来 —— 法定节假日写「休息」、其余日子写「上班」，日历格子、小窗那张信息卡与桌面小组件同一个口径。此前只有一套这种班表时，整张日历被「这段时间没有排班」盖住，可你明明是按法定节假日上班的\n'
-    '· 排班管理页分成两节：「排班时段」在上、「排班表」在下，各带一个标题，不再挤成一片\n'
-    '· 一个时段都没有时，那行改说「全部日子」，不再说「其余时间」：「其余」得有「这一段」才有意义，一段都没有时那句话会被读成「这是默认一直用它的意思吗」\n'
-    '· 修好「排班时段」弹层里的「取消」：点了没有任何反应。顺手把「删除 / 取消 / 保存」三颗钮之间补上间隔（原先紧挨着）\n'
-    '· 待办页那个「重复待办」入口挪到了右上角（原来紧贴在标题后面，看着像标题的一部分）\n'
-    '· 修好更新说明里的 markdown 标记：像「两段时间不许重叠」那种加粗写法会原样带上两个星号。更新日志走的是纯文本渲染，标记不会被解析；这回补了一条用例盯着，再混进去就直接失败\n'
-    '· 修好「把每周三改成每周五」这条路径在周三、周四不生效：编辑一个重复待办时会把系列的起始日改写成「当前这一次」的日期，于是「最近的那个周五」被算成早于起始日、静默不对齐\n\n'
 ;
 
-const String _changelogEn = 'v0.10.4\n'
+const String _changelogEn = 'v0.10.5\n'
+    '· Reshaped the tab pill: lifting and dropping now use two different springs (the drop is noticeably more unhurried), and a tap slides it across one notch slower\n'
+    '· The prismatic rim now only lights up while the pill is moving — nothing coloured at all when it is still — and it is a bit wider\n'
+    '· As the rim sweeps past an icon, the icon and its label get a slight squeeze (almost none when the pill sits right on top, so it stays readable)\n'
+    '· The head-big tail-small stretch shows up sooner — no need to drag as fast\n'
+    '· The tab bar now repaints only the lens layer each frame, not the whole bar\n\n'
+
+    'v0.10.4\n'
     '· Fixed a serious bug in narrow windows: the tab pill could vanish entirely — and flicker — while you dragged it\n'
     '· Tapping a todo reminder now carries the tab pill along when the app jumps to the todo page (previously the page moved but the pill stayed put)\n\n'
 
@@ -170,14 +176,6 @@ const String _changelogEn = 'v0.10.4\n'
     '· The half of that change that was right stays: "No schedule for these dates" appears only when no schedule covers those days at all — the test for it is now "is a schedule in force on this day", separate from "does this day draw anything"\n'
     '\n'
 
-    'v0.9.15\n'
-    '· A "legal-holiday schedule" (follow the public holidays) is no longer treated as "no schedule": every day of one now draws something — "Rest" on a public holiday, "Workday" otherwise, the same on the calendar grid, the info card in a small window, and the home-screen widget. Until now, with only one such schedule, the whole calendar was covered by "No schedule for these dates" while you were in fact working to the public-holiday calendar\n'
-    '· The Schedules page is split into two sections: "Schedule timeline" on top, "Schedules" below, each with its own heading instead of running together\n'
-    '· With no periods at all, that line now reads "All dates" instead of "Other dates" — "other" needs a period to be other than, and on its own the line read like "so is this the default, always?"\n'
-    '· Fixed the Cancel button in the period dialog, which did nothing at all, and put a gap between the Delete / Cancel / Save buttons, which were touching\n'
-    '· The "Repeating" entry on the todo screen moved to the top right corner (it used to sit right after the title, looking like part of it)\n'
-    '· Fixed markdown markers leaking into the update notes: bold text showed up with its two asterisks. The in-app changelog is plain text and never parses markup; a test now fails if any gets in again\n'
-    '· Fixed "change a weekly Wednesday todo to Friday" doing nothing on Wednesdays and Thursdays: editing a repeating todo rewrote the series start date to the current occurrence, so the most recent Friday came out before the start and the alignment was silently skipped\n\n'
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
