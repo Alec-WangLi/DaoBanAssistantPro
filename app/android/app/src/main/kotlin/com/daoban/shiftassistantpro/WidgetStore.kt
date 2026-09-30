@@ -164,6 +164,53 @@ object WidgetStore {
         }
     }
 
+    // ── 每个实例「现在翻到哪个月」 ────────────────────────────────────────────
+    //
+    // 与快照同一个 SharedPreferences 文件、另一批键。
+
+    /**
+     * 锚点：那个月 **1 日**的 epochDay；没有这条 = 跟随今天。
+     *
+     * 为什么落盘而不是放内存：`RemoteViews` **没有进程内状态**（卡片是宿主进程里的
+     * 一棵视图树，我们自己的进程可能根本没起来）。所以「翻到哪个月」必须和快照一样
+     * 存下来 —— 这也正是「翻月不需要 App 活着」这条性质的全部依据。
+     *
+     * **存绝对值，不存「相对今天的偏移」**：偏移会让跨天把用户翻到的那个月一起挪走
+     * （今天进 10 月，他翻到的「9 月」就变成了「10 月」）。
+     */
+    @Synchronized
+    fun monthAnchor(context: Context, widgetId: Int): Long? {
+        val v = prefs(context).getLong(monthKey(widgetId), NO_ANCHOR)
+        return if (v == NO_ANCHOR) null else v
+    }
+
+    /** 传 null = 清掉（回今天）。 */
+    @Synchronized
+    fun setMonthAnchor(context: Context, widgetId: Int, epochDayOfFirst: Long?) {
+        val e = prefs(context).edit()
+        if (epochDayOfFirst == null) {
+            e.remove(monthKey(widgetId))
+        } else {
+            e.putLong(monthKey(widgetId), epochDayOfFirst)
+        }
+        e.apply()
+    }
+
+    /** 删卡时清掉。不清的话系统把 widgetId 复用给新卡时，新卡会继承上一张卡的月份。 */
+    @Synchronized
+    fun clearMonthAnchors(context: Context, widgetIds: IntArray) {
+        if (widgetIds.isEmpty()) return
+        val e = prefs(context).edit()
+        for (id in widgetIds) e.remove(monthKey(id))
+        e.apply()
+    }
+
+    /** 键名只在这里拼一次 —— 读、写、清三处各拼一遍，迟早会有一个地方拼歪。 */
+    private fun monthKey(widgetId: Int) = "month_$widgetId"
+
+    /** `getLong` 的缺省值：SharedPreferences 没有「返回 null 的 long」这种取法。 */
+    private const val NO_ANCHOR = Long.MIN_VALUE
+
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 

@@ -140,4 +140,23 @@ void main() {
               '先加后清会把刚填进去的那份又清掉，槽位渲染成空的');
     }
   });
+  // 锚点是**每个实例一份**的落盘状态（「这张卡现在翻到哪个月」）。它的失效方式是
+  // **静默**的：删卡时不清，系统把 widgetId 复用给下一张卡，新卡一上来就停在上一张
+  // 卡翻到的月份上 —— 不报错、不崩，只是「我的小组件怎么是 11 月？」。
+  //
+  // 这条只能扫源码：Kotlin 在这个仓库里没有可跑的测试目标（真机是唯一的眼睛，
+  // 所以它同时出现在实施计划的真机清单里）。
+  test('翻月锚点：删卡要清、键名只有一处拼', () {
+    final base = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/ShiftWidgetBase.kt');
+    expect(base.contains('clearMonthAnchors'), true,
+        reason: 'ShiftWidgetBase.onDeleted 必须清掉被删实例的月份锚点 —— '
+            'widgetId 会被系统复用，不清就是「新卡片继承上一张卡的月份」');
+
+    final store = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetStore.kt');
+    expect(store.contains(r'"month_$widgetId"'), true,
+        reason: '锚点的键名必须由一处拼出来（month_<widgetId>），'
+            '读写各拼一遍迟早会出现「写的和读的不是一个键」这种静默失效');
+  });
 }
