@@ -44,17 +44,22 @@ Matrix4 _zoomAbout(Offset center, double scale) => Matrix4.identity()
 
 /// 「胶囊」：白底 + 一条 2px 黑竖线。
 class _BarPainter extends CustomPainter {
+  const _BarPainter([this.lineX = _lineX]);
+
+  /// 竖线所在的列。默认是第一条用例那套素材的位置。
+  final double lineX;
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFFFFFFF));
     canvas.drawRect(
-      Rect.fromLTWH(_lineX - 1, 0, 2, size.height),
+      Rect.fromLTWH(lineX - 1, 0, 2, size.height),
       Paint()..color = const Color(0xFF000000),
     );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(_BarPainter old) => old.lineX != lineX;
 }
 
 /// 光栅化「胶囊 + 透镜」，返回整张图的灰度矩阵（行优先）。
@@ -72,7 +77,7 @@ Future<List<int>> _render(WidgetTester tester, ImageFilter? lensFilter) async {
         textDirection: TextDirection.ltr,
         child: Stack(
           children: <Widget>[
-            SizedBox.expand(child: CustomPaint(painter: _BarPainter())),
+            const SizedBox.expand(child: CustomPaint(painter: _BarPainter())),
             Positioned(
               left: _lens.left,
               top: _lens.top,
@@ -204,7 +209,7 @@ void main() {
                     borderRadius: BorderRadius.circular(9),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                      child: CustomPaint(painter: _BarPainter()),
+                      child: const CustomPaint(painter: _BarPainter()),
                     ),
                   ),
                 ),
@@ -277,5 +282,264 @@ void main() {
     // 放大时必须被搬走 —— 否则「透镜弯掉胶囊」这件事在真实分层下不成立。
     expect(zoomed, lessThan(flat - 2),
         reason: '镜头没看到胶囊（只看到页面）—— 不放大 $flat，2× $zoomed');
+  });
+
+  // 第三条：**矩阵的中心是在根坐标里、还是在 `BackdropFilter` 自己的局部坐标里？**
+  //
+  // 为什么非问不可：`LiquidLens` 把自己的画布向外扩了 24px（`_lensCanvasPad`），
+  // 于是 `BackdropFilter` 的局部原点与胶囊/屏幕的原点差了一个 (24, 24)。两处
+  // 用错一个，透镜的放大中心就偏 24px —— 观感是「鼓包不在透镜正中」。
+  //
+  // 素材照旧，但把透镜放到一个有偏移的位置上：画布 100×60，透镜放在 (20, 10)、
+  // 40×40；黑线画在根坐标 x = 44。
+  //   · 中心按**根坐标**算（C = 40）→ 线搬到 40 + 4×2 = 48
+  //   · 中心按**局部坐标**算（同一个 C 在根坐标里其实是 60）→ 线搬到 28
+  // 两个答案都在透镜内、且相隔 20px，分得开。
+  testWidgets('探针：放大中心是根坐标还是局部坐标', (tester) async {
+    const Size canvasSize = Size(100, 60);
+    const Rect lensBox = Rect.fromLTWH(20, 10, 40, 40);
+
+    Future<int> shot(double centerX) async {
+      tester.view.physicalSize = canvasSize;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final key = GlobalKey();
+      await tester.pumpWidget(RepaintBoundary(
+        key: key,
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox.fromSize(
+              size: canvasSize,
+              child: Stack(children: <Widget>[
+                const Positioned.fill(child: CustomPaint(painter: _BarPainter(44))),
+                Positioned.fromRect(
+                  rect: lensBox,
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.matrix(
+                        _zoomAbout(Offset(centerX, 30), 2).storage,
+                        filterQuality: FilterQuality.high,
+                      ),
+                      child: const ColoredBox(color: Color(0x00000000)),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final boundary =
+          key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      late int darkest;
+      await tester.runAsync(() async {
+        final ui.Image image = await boundary.toImage(pixelRatio: 1.0);
+        final int w = image.width;
+        final data =
+            (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+        image.dispose();
+        int best = -1, bestV = 256;
+        const int row = 20;
+        for (int x = lensBox.left.toInt(); x < lensBox.right.toInt(); x++) {
+          final int v = data.getUint8((row * w + x) * 4);
+          if (v < bestV) {
+            bestV = v;
+            best = x;
+          }
+        }
+        darkest = best;
+      });
+      return darkest;
+    }
+
+    final int found = await shot(40);
+    // ignore: avoid_print
+    print('[probe] 透镜内的黑线落在 x = $found（根坐标解释 → 48；局部坐标解释 → 28）');
+    expect(found, anyOf(closeTo(48, 3), closeTo(28, 3)),
+        reason: '黑线跑到透镜外了 —— 探针的几何没设对');
+  });
+
+  // 第四条：**`Transform.translate` 会不会把 backdrop 的坐标空间一起搬走？**
+  //
+  // 为什么这是 Task 6 的成败所在：`LiquidLens` 把自己的画布向外扩了 24px，它
+  // **不知道自己在屏幕上的绝对位置**。如果滤镜空间永远是「根坐标」，那矩阵中心
+  // 就没法写（差一个未知的胶囊原点）；如果 `Transform` 能把空间搬过来，就能用
+  // `Transform.translate(-origin)` 让**局部坐标 == 滤镜坐标**，问题消失。
+  //
+  // 几何：画布 100×60；一个 `Positioned.fill` 的格子里套 `Transform.translate(-20,-10)`，
+  // 再套一个 100×60 的盒子（于是这个盒子的**局部原点落在根坐标 (−20,−10)**）。
+  // 黑线画在根坐标 x = 44 → 在盒子局部坐标里是 64。
+  //   · 空间被搬走了（局部）→ 传中心 (60,40) 时，线搬到局部 68 → 根 48
+  //   · 空间还是根坐标     → 同一个中心 (60,40) 在根坐标里，线搬到根 68
+  // 48 与 68 相隔 20px，分得开。
+  testWidgets('探针：Transform 会不会把 backdrop 的坐标空间一起搬走', (tester) async {
+    const Size canvasSize = Size(100, 60);
+
+    Future<int> shot() async {
+      tester.view.physicalSize = canvasSize;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final key = GlobalKey();
+      await tester.pumpWidget(RepaintBoundary(
+        key: key,
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox.fromSize(
+              size: canvasSize,
+              child: Stack(children: <Widget>[
+                const Positioned.fill(child: CustomPaint(painter: _BarPainter(44))),
+                Positioned.fill(
+                  child: Transform.translate(
+                    offset: const Offset(-20, -10),
+                    child: OverflowBox(
+                      alignment: Alignment.topLeft,
+                      minWidth: 0,
+                      maxWidth: double.infinity,
+                      minHeight: 0,
+                      maxHeight: double.infinity,
+                      child: SizedBox.fromSize(
+                        size: canvasSize,
+                        child: ClipRect(
+                          child: BackdropFilter(
+                            filter: ImageFilter.matrix(
+                              _zoomAbout(const Offset(60, 40), 2).storage,
+                              filterQuality: FilterQuality.high,
+                            ),
+                            child: const ColoredBox(color: Color(0x00000000)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final boundary =
+          key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      late int darkest;
+      await tester.runAsync(() async {
+        final ui.Image image = await boundary.toImage(pixelRatio: 1.0);
+        final int w = image.width;
+        final data =
+            (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+        image.dispose();
+        int best = -1, bestV = 256;
+        const int row = 20;
+        for (int x = 0; x < w; x++) {
+          final int v = data.getUint8((row * w + x) * 4);
+          if (v < bestV) {
+            bestV = v;
+            best = x;
+          }
+        }
+        darkest = best;
+      });
+      return darkest;
+    }
+
+    final int found = await shot();
+    // ignore: avoid_print
+    print('[probe] 线落在根坐标 x = $found（空间被搬走 → 48；仍是根坐标 → 68）');
+    // **结论：`Transform` 搬不动滤镜的坐标空间。**
+    // 这条与下面那条一起，解释了 Task 6 为什么**没有**用 `ImageFilter.matrix`
+    // 去放大透镜底下的东西：既然坐标空间永远是根坐标，透镜就必须知道自己在屏幕上
+    // 的绝对位置 —— 而底栏外面还套着一层会动的 `QScale`。改成了自己画那条被折射
+    // 的边（见 `liquid_lens.dart` 的 `_paintRefractedCapsuleEdge`）。
+    expect(found, closeTo(28, 3),
+        reason: '空间该是根坐标（中心 (60,40) 与线 (44) 都在根坐标里算，线落 28）。'
+            '若这条变了，说明引擎改了滤镜坐标空间的语义 —— 那时放大层可以重新考虑');
+  });
+
+  // 第五条（决定 Task 6 怎么做）：`BackdropGroup` + `BackdropFilter.grouped`
+  // 会不会把滤镜的坐标空间限定到**组自己的局部坐标**？
+  //
+  // 如果是，Task 6 就有了干净的落法：把组设在底栏那一层，`LiquidLens` 用自己
+  // 的局部坐标当滤镜坐标 —— 既不必知道屏幕绝对位置，也不受外层 `QScale`
+  // 那类动画变换的影响。如果还不是，那就只剩「自己去量绝对位置」这条路。
+  //
+  // 几何：画布 100×60；组放在根坐标 (20,10)、40×40。黑线在根坐标 x = 44
+  // → 组内局部 x = 24。矩阵中心传**组内中心** (20,20)。
+  //   · 空间是组内局部 → 线搬到局部 28 → 根 48
+  //   · 空间还是根坐标 → 线搬到根 68
+  testWidgets('探针：BackdropGroup 会不会把滤镜空间限定到组内', (tester) async {
+    const Size canvasSize = Size(100, 60);
+    const Rect groupRect = Rect.fromLTWH(20, 10, 40, 40);
+
+
+    tester.view.physicalSize = canvasSize;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final key = GlobalKey();
+    await tester.pumpWidget(RepaintBoundary(
+      key: key,
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox.fromSize(
+            size: canvasSize,
+            child: Stack(children: <Widget>[
+              const Positioned.fill(child: CustomPaint(painter: _BarPainter(44))),
+              Positioned.fromRect(
+                rect: groupRect,
+                child: BackdropGroup(
+                  child: ClipRect(
+                    child: BackdropFilter.grouped(
+
+                      filter: ImageFilter.matrix(
+                        _zoomAbout(const Offset(20, 20), 2).storage,
+                        filterQuality: FilterQuality.high,
+                      ),
+                      child: const ColoredBox(color: Color(0x00000000)),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final boundary =
+        key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    late int darkest;
+    await tester.runAsync(() async {
+      final ui.Image image = await boundary.toImage(pixelRatio: 1.0);
+      final int w = image.width;
+      final int h = image.height;
+      final data = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+      image.dispose();
+      int best = -1, bestV = 256;
+      final int row = h ~/ 2;
+      for (int x = groupRect.left.toInt(); x < groupRect.right.toInt(); x++) {
+        final int v = data.getUint8((row * w + x) * 4);
+        if (v < bestV) { bestV = v; best = x; }
+      }
+      darkest = best;
+    });
+
+    // ignore: avoid_print
+    print('[probe] 线落在根坐标 x = $darkest（组内局部 → 48；仍是根坐标 → 68）');
+    // **结论：`BackdropGroup` 只改「采样到哪一片」，改不了坐标空间 —— 它救不了
+    // 这条路。** 与上一条一起构成 Task 6 改道自己画的依据。
+    expect(darkest, isNot(closeTo(48, 3)),
+        reason: '空间变成组内局部了 —— 那放大层这条路就重新可走，'
+            'liquid_lens.dart 里那段说明要跟着改');
   });
 }

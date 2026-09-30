@@ -181,15 +181,11 @@ void main() {
   const Size capsule = Size(120, 64);
 
   /// 把「一枚透镜盖在一块胶囊底上」光栅化成原始 RGBA。
-  ///
-  /// [lineAtX] >= 0 时在胶囊底上画一条 2px 黑竖线（放大层的用例要用）。
   Future<List<int>> shotLens(
     WidgetTester tester, {
     required double lift,
     required Color accent,
     double velocity = 0,
-    double magnifyScale = 1.0,
-    int lineAtX = -1,
   }) async {
     tester.view.physicalSize = canvas;
     tester.view.devicePixelRatio = 1.0;
@@ -219,12 +215,7 @@ void main() {
                 top: top,
                 width: capsule.width,
                 height: capsule.height,
-                child: ColoredBox(
-                  color: const Color(0xFFF5F6FA),
-                  child: lineAtX < 0
-                      ? null
-                      : CustomPaint(painter: LinePainter(lineAtX)),
-                ),
+                child: const ColoredBox(color: Color(0xFFF5F6FA)),
               ),
               Positioned(
                 left: 0,
@@ -237,7 +228,6 @@ void main() {
                   lift: lift,
                   isDark: false,
                   accent: accent,
-                  magnifyScale: magnifyScale,
                 ),
               ),
             ]),
@@ -280,20 +270,38 @@ void main() {
     expect(alphaAt(px, 60, top - 2), 0);
     expect(alphaAt(px, 60, top + capsule.height.toInt() + 1), 0);
   });
-}
 
-/// 胶囊底上一条 2px 黑竖线（放大层的用例要用）。白底 —— 放大时才看得出位移。
-class LinePainter extends CustomPainter {
-  const LinePainter(this.x);
-  final int x;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFFFFFFF));
-    canvas.drawRect(Rect.fromLTWH(x - 1, 0, 2, size.height),
-        Paint()..color = const Color(0xFF000000));
+  /// 在某一列上、画布 y ∈ [from, to] 这一段里找最亮的那一行。
+  int brightestRow(List<int> px, int x, int from, int to) {
+    int best = -1, bestV = -1;
+    for (int y = from; y <= to; y++) {
+      final int v = px[(y * canvas.width.toInt() + x) * 4];
+      if (v > bestV) {
+        bestV = v;
+        best = y;
+      }
+    }
+    return best;
   }
 
-  @override
-  bool shouldRepaint(LinePainter old) => old.x != x;
+  testWidgets('胶囊那条边被透镜折进去：亮带落在胶囊上沿之下', (tester) async {
+    // 这一条替掉了计划里的「放大层」。原方案（`ImageFilter.matrix` 放大背景）
+    // 被四条探针否掉：滤镜的坐标空间永远是**根坐标**，而 `LiquidLens` 不知道
+    // 自己在屏幕上的绝对位置，底栏外面还套着一层会动的 `QScale`。
+    // 换成自己画那条被折射的边 —— 在 1px 的宽度上读起来是同一件事。
+    final int top = ((canvas.height - capsule.height) / 2).round();
+    final px = await shotLens(tester,
+        lift: 1, accent: const Color(0xFF12B5A5));
+    expect(brightestRow(px, 60, top, top + 10), greaterThan(top + 1),
+        reason: '透镜中心那一列上，最亮的还是胶囊上沿本身 —— 那条边没被折进去');
+  });
+
+  testWidgets('没凸出时没有这条折线（对照组）', (tester) async {
+    // 缺了这条，上面那条可能只是「透镜自己的白描边正好落在下面一点」。
+    final int top = ((canvas.height - capsule.height) / 2).round();
+    final px = await shotLens(tester,
+        lift: 0, accent: const Color(0xFF12B5A5));
+    expect(brightestRow(px, 60, top, top + 10), lessThanOrEqualTo(top + 1),
+        reason: '还没凸出就把胶囊的边折了 —— 静止时本该什么都不发生');
+  });
 }

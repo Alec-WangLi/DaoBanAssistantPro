@@ -223,7 +223,6 @@ class LiquidLens extends StatelessWidget {
     required this.lift,
     required this.isDark,
     required this.accent,
-    this.magnifyScale = 1.0,
   });
 
   /// 它依附的那块胶囊的完整尺寸（局部坐标的边界，原点在胶囊左上角）。
@@ -240,12 +239,6 @@ class LiquidLens extends StatelessWidget {
 
   /// 主色：本体的渐变与（Task 7 的）光谱环都锚在它上面。
   final Color accent;
-
-  /// 放大倍率。1.0 = 不放大。
-  ///
-  /// Task 5 只声明它、**不用它** —— 放大层是 Task 6 的事，那一条有自己的红测试
-  /// 要先把「不放大」这个状态证伪。
-  final double magnifyScale;
 
   @override
   Widget build(BuildContext context) {
@@ -382,6 +375,54 @@ class _LensBodyPainter extends CustomPainter {
         ..strokeWidth = 1
         ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.85),
     );
+    _paintRefractedCapsuleEdge(canvas);
+  }
+
+  /// 胶囊那条边被透镜**折进去**。
+  ///
+  /// 真实折射应该是逐像素把底下的东西扭曲 —— 那要 shader，而且**要透镜在屏幕上的
+  /// 绝对位置**（`ImageFilter.matrix` 的坐标空间永远是根坐标，四条探针验过：
+  /// `Positioned` 的偏移、`Transform.translate`、`BackdropGroup` 都搬不动它）。
+  /// 底栏外面又套着一层会动的 `QScale`，所以那条路不划算。
+  ///
+  /// 换成**自己画**：透镜凸出胶囊时，胶囊那条边在透镜里不再是直线，而是朝透镜
+  /// 中心鼓一段。在 1px 的宽度上，这与真折射读起来是同一件事，而且完全可控。
+  void _paintRefractedCapsuleEdge(Canvas canvas) {
+    final double cy = shape.centerY;
+    final double rl = shape.leftRadius;
+    final double rr = shape.rightRadius;
+    // 两个端头圆都够得着胶囊上下沿才有边可折。够不着 = 没凸出，那就什么都不画
+    // （静止时透镜躺平在胶囊里，走的就是这一支）。
+    if (rl <= cy || rr <= cy) return;
+
+    // 透镜轮廓与胶囊上下沿的两个交点。（轮廓关于中轴上下对称，所以上下沿共用
+    // 同一对 x。）
+    final double sL = math.sqrt(rl * rl - cy * cy);
+    final double sR = math.sqrt(rr * rr - cy * cy);
+    final double xL = shape.centerX - shape.width / 2 + rl - sL;
+    final double xR = shape.centerX + shape.width / 2 - rr + sR;
+    if (xR - xL < 4) return;
+
+    // 鼓多少：凸出越多越明显，但封顶 —— 鼓过头就成了「透镜里有个钩子」。
+    final double bow = math.min(8, (rl - cy) * 0.9 + 3);
+    final Paint stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = Colors.white.withValues(alpha: isDark ? 0.45 : 0.62);
+    for (final bool top in <bool>[true, false]) {
+      final double edgeY = top ? 0 : shape.capsuleH;
+      // 路径按**胶囊局部坐标**建，画之前搬回画布坐标 —— 与 `_lensPath` 同一套
+      // （漏掉这一步，折线会整条画到胶囊上头 24px 去，而且**只看图不太看得出来**：
+      // 那条线会落在透镜凸出的顶部，读起来像一圈高光，不像「边被折了」）。
+      canvas.drawPath(
+        (Path()
+              ..moveTo(xL, edgeY)
+              ..quadraticBezierTo(
+                  shape.centerX, edgeY + (top ? bow : -bow), xR, edgeY))
+            .shift(origin),
+        stroke,
+      );
+    }
   }
 
   @override
