@@ -177,7 +177,7 @@ class GlassBlur extends StatelessWidget {
       builder: (context, disabled, child) {
         if (disabled) return child!;
         return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+          filter: glassFilter(sigma),
           child: child!,
         );
       },

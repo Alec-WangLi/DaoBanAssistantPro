@@ -155,10 +155,9 @@ Future<void> ensureVisualFonts() async {
       ? '[visual] 字体就绪：Roboto + MaterialIcons + ${loadedCjkFont!}'
       : '[visual] 字体缺 ${missing.join(" / ")}，缺的部分会渲染成方块');
 
-  // 「高级材质」若被关掉，玻璃退化成不透明填充，看不出真实观感。
-  advancedMaterialDisabled = false;
-  lowEndDevice = false;
-  recomputeGlassBlur();
+  // 玻璃拨到默认的「标准」档再出图 —— 否则看到的是省电档那个不透明填充，
+  // 不是真实观感。
+  useStandardGlassTier();
 
   // 每个用例各建一个内存库是有意为之（互不污染），drift 的「重复建库」告警
   // 在这个用法下纯属噪音。
@@ -179,6 +178,22 @@ ThemeData _applyVisualFonts(ThemeData theme) {
     primaryTextTheme: theme.primaryTextTheme
         .apply(fontFamily: latin, fontFamilyFallback: cjk),
   );
+}
+
+// ---------------------------------------------------------------------------
+// 玻璃档位
+// ---------------------------------------------------------------------------
+
+/// 把玻璃拨到「标准」档（默认档）：省电关、液态关。
+///
+/// 出图与对比度审计的**默认状态**，由 `ensureVisualFonts()` 调一次。不拨的话，
+/// 低端机自动降级会让玻璃退化成不透明填充，拍出来的不是真实观感。
+///
+/// 阶段 2 会有一个与它并列的 `useLiquidGlassTier()`。
+void useStandardGlassTier() {
+  lowEndDevice = false;
+  advancedMaterialDisabled = false;
+  recomputeGlassBlur();
 }
 
 

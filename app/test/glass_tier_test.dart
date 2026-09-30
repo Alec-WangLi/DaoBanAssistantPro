@@ -21,10 +21,10 @@ import 'package:shiftassistantpro/core/glass/glass.dart';
 /// 下面那条 `isNot(blur)` 会过 —— 所以调用点必须先断言它非空，别让空值蒙混过去。
 Future<ImageFilter?> _panelFilter(WidgetTester tester) async {
   await tester.pumpWidget(
-    MaterialApp(
+    const MaterialApp(
       home: Scaffold(
         body: Center(
-          child: GlassPanel(child: const SizedBox(width: 40, height: 40)),
+          child: GlassPanel(child: SizedBox(width: 40, height: 40)),
         ),
       ),
     ),
@@ -56,10 +56,10 @@ void main() {
     const double lr = 0.2126;
     const double lg = 0.7152;
     const double lb = 0.0722;
-    final double invSat = 1 - s;
+    const double invSat = 1 - s;
     expect(
       AppTokens.glassSaturation,
-      ColorFilter.matrix(<double>[
+      const ColorFilter.matrix(<double>[
         invSat * lr + s, invSat * lg, invSat * lb, 0, 0, // R
         invSat * lr, invSat * lg + s, invSat * lb, 0, 0, // G
         invSat * lr, invSat * lg, invSat * lb + s, 0, 0, // B
@@ -97,5 +97,57 @@ void main() {
       ),
       reason: '复合出来的不是「该有的模糊 × 该有的饱和度」',
     );
+  });
+
+  testWidgets('标准档：GlassBlur 的 filter 也是「模糊 + 饱和度」的复合',
+      (tester) async {
+    const sigma = 8.0;
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: <Widget>[
+              ColoredBox(color: Color(0xFF7A8A9A)),
+              GlassBlur(
+                sigma: sigma,
+                child: SizedBox(width: 40, height: 40),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final backdrop =
+        tester.widget<BackdropFilter>(find.byType(BackdropFilter));
+    expect(
+      backdrop.filter,
+      ImageFilter.compose(
+        outer: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+        inner: AppTokens.glassSaturation,
+      ),
+    );
+  });
+
+  testWidgets('省电档：GlassBlur 直接返回 child，一层 filter 都不套',
+      (tester) async {
+    // 省电档的地基：`glassBlurDisabled` 时**短路**。改成「照常套一层、
+    // 只是内容透明」之类的写法，低内存机器就白付一次 backdrop 抓取 ——
+    // 而那正是这一档存在的理由。
+    lowEndDevice = true;
+    recomputeGlassBlur();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: GlassBlur(
+            sigma: 8,
+            child: SizedBox(width: 40, height: 40),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(BackdropFilter), findsNothing);
   });
 }
