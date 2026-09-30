@@ -30,6 +30,19 @@ typedef VisualScreen = ({
   bool needsOnboardingPrefs,
 });
 
+/// 某些屏需要额外的 prefs。用一张**按 slug 查的小表**，而不是往 [VisualScreen]
+/// 记录里加字段 —— 只有两屏要它，为它去改三十条记录不划算。
+///
+/// 液态档那两屏必须走 prefs（而不是只调 `useLiquidGlassTier()`）：屏幕一
+/// `ref.watch(appSettingsProvider)` 就会建 notifier → `_load()` 读 prefs →
+/// **把档位标志覆盖回去**。这条坑真踩过 —— v0.10.1 收口时那四张「液态档」图
+/// 与各自的标准档**逐字节相同**，等于这一档从没被渲染过。
+Map<String, Object> screenExtraPrefs(String slug) => switch (slug) {
+      '36_home_shell_liquid' || '37_profile_liquid' =>
+        const <String, Object>{'liquidGlass': true},
+      _ => const <String, Object>{},
+    };
+
 final List<VisualScreen> visualScreens = [
   (
     slug: '00_home_shell',
@@ -335,6 +348,21 @@ final List<VisualScreen> visualScreens = [
     slug: '33_span_editor',
     title: '排班管理 · 时段弹层',
     build: (db) async => const _SpanEditorHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 液态玻璃档（「我的 → 外观」里那颗开关，默认关）。要拍它是因为这一档的观感
+    // 从来没在**正式代码路径**下被看过（见 `screenExtraPrefs` 的说明）。
+    // 它同时也是对比度审计的覆盖对象 —— 那正是这条当初漏掉的地方。
+    slug: '36_home_shell_liquid',
+    title: '主壳 · 液态玻璃',
+    build: (db) async => const HomeShell(),
+    needsOnboardingPrefs: true,
+  ),
+  (
+    slug: '37_profile_liquid',
+    title: '我的 · 液态玻璃',
+    build: (db) async => const ProfileScreen(),
     needsOnboardingPrefs: false,
   ),
 ];

@@ -11,8 +11,13 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/widgets/glass_pill.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
@@ -212,5 +217,59 @@ void main() {
       final SharedPreferences sp = await SharedPreferences.getInstance();
       expect(sp.getBool('liquidGlass'), isTrue);
     });
+  });
+
+  /// 把一屏光栅化成原始像素。
+  Future<List<int>> shot(WidgetTester tester) async {
+    final GlobalKey key = GlobalKey();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: key,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: GlassPill(child: SizedBox(width: 40, height: 18)),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final RenderRepaintBoundary boundary =
+        key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    late List<int> bytes;
+    // 取像要在真实异步区里（伪造时钟区里的 future 不会完成）。
+    await tester.runAsync(() async {
+      final ui.Image image = await boundary.toImage(pixelRatio: 1.0);
+      final ByteData? data =
+          await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      image.dispose();
+      bytes = data!.buffer.asUint8List().toList();
+    });
+    return bytes;
+  }
+
+  testWidgets('液态档**真的画了东西**：关 / 开两态的光栅化像素必须不同',
+      (tester) async {
+    // 这条守卫的来由，值得完整写下来：
+    // v0.10.1 收口时，工装里的 `36_home_shell_liquid_*` / `37_profile_liquid_*`
+    // 与各自的标准档图**逐字节相同**（md5 实测）。根因是档位标志被
+    // `AppSettingsNotifier._load()` 从 prefs 覆盖了回去 —— 于是**这一档从没被
+    // 渲染过一次**，而「出图看差异、差异必须看得见」那道人工验收闸门在差异为 0
+    // 时静默通过。没有鉴别的断言，那种失败看起来和成功一模一样。
+    liquidGlassEnabled.value = false;
+    recomputeGlassTiers();
+    final List<int> off = await shot(tester);
+
+    liquidGlassEnabled.value = true;
+    recomputeGlassTiers();
+    final List<int> on = await shot(tester);
+
+    int differing = 0;
+    for (int i = 0; i < off.length; i++) {
+      if (off[i] != on[i]) differing++;
+    }
+    expect(differing, greaterThan(0),
+        reason: '开了液态玻璃却一个像素都没变 —— 这一档没有真的生效');
   });
 }

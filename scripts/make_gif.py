@@ -6,9 +6,13 @@
 读不出来。GIF 是成本最低的补法 —— 不需要视频、不需要播放器、GitHub 的 README
 直接就能播。
 
-帧从哪来：`app/tool/probe_liquid_test.dart` 的 `renderFrames()`（临时探针里），
-落到 `app/build/visual/frames/<prefix>NNN.png`。以后要正式用于更新简介，就把
-`renderFrames` 挪进 `app/tool/visual/`，让 `make_update_images.py` 之类来调。
+帧从哪来：`app/tool/gif/render_gifs_test.dart` 调 `renderFrames()`
+（在 `app/tool/visual/visual_harness.dart` 里）逐帧出图，落到
+`app/build/visual/frames/<prefix>NNN.png`。
+
+**素材与护栏分开**：逐帧那条线放在 `tool/gif/` 而**不**放进 `tool/visual/` ——
+后者那 270+ 条是回归护栏，前者是产出素材（更新简介、商店页），跑法与用途都不同，
+混在一起会让护栏的条数随「这次要不要出动图」浮动。
 
 用法：
     python scripts/make_gif.py --prefix drag_rim_ --out work/gif/nav-rim.gif

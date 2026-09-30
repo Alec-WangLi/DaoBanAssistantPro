@@ -17,8 +17,6 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
-import 'package:shiftassistantpro/features/home/home_shell.dart';
-import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
 import 'visual_harness.dart';
@@ -64,7 +62,10 @@ void main() {
           brightness: variant.brightness,
           language: variant.language,
           size: variant.size,
-          extraPrefs: screen.needsOnboardingPrefs ? onboardingPrefs : const {},
+          extraPrefs: <String, Object>{
+            ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
+            ...screenExtraPrefs(screen.slug),
+          },
         );
       });
     }
@@ -219,47 +220,4 @@ void main() {
       },
     );
   });
-
-  // ── 液态玻璃档 ──────────────────────────────────────────────────────────
-  //
-  // 这一档是**可选**的（「我的 → 外观」里那个开关，默认关）：它给玻璃叠一层边缘光，
-  // 并让底栏滑块与开关在**按住时**鼓起成透镜。上面那些屏拍的全是标准档 ——
-  // 默认档由 `useStandardGlassTier()`（`ensureVisualFonts` 里调的）保证，
-  // 这里单出液态档，**两个档位各留一张底片**。
-  //
-  // 为什么必须进屏单：这几处的观感是五轮实测才收敛的 —— 白光照白底在浅色下
-  // 结构性地看不见、透镜不凸出容器就谈不上折射 —— 而每一轮都只有「看图」能判断。
-  // 没有屏单，下一次改动就没有眼睛。
-  for (final ({String suffix, Brightness brightness}) v
-      in <({String suffix, Brightness brightness})>[
-    (suffix: 'light', brightness: Brightness.light),
-    (suffix: 'dark', brightness: Brightness.dark),
-  ]) {
-    visualTest('主壳 · 液态玻璃 · ${v.suffix}', (tester) async {
-      failOnOverflow(tester);
-      final db = await freshDb();
-      useLiquidGlassTier();
-      await renderScreen(
-        tester,
-        name: '36_home_shell_liquid_${v.suffix}',
-        home: const HomeShell(),
-        overrides: <Override>[databaseProvider.overrideWithValue(db)],
-        extraPrefs: onboardingPrefs,
-        brightness: v.brightness,
-      );
-    });
-
-    visualTest('我的 · 液态玻璃 · ${v.suffix}', (tester) async {
-      failOnOverflow(tester);
-      final db = await freshDb();
-      useLiquidGlassTier();
-      await renderScreen(
-        tester,
-        name: '37_profile_liquid_${v.suffix}',
-        home: const ProfileScreen(),
-        overrides: <Override>[databaseProvider.overrideWithValue(db)],
-        brightness: v.brightness,
-      );
-    });
-  }
 }
