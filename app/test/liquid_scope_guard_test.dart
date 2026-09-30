@@ -72,13 +72,13 @@ void main() {
       _readers(exempt: false),
       <String>[
         'lib/core/glass/glass.dart',
-        'lib/features/home/home_shell.dart',
+        'lib/features/home/glass_nav_bar.dart',
       ],
       reason: '去掉豁免后应**恰好**命中这两处（定义处 + 底栏）：\n'
           '  少命中 = 扫描 / 匹配 / 剥壳坏了，上一条守门会变成永远为真的空话；\n'
           '  多命中 = 真有文件在允许的位置之外读了它（上一条也该同时红）。\n'
-          '  底栏在 v0.10.3 的 Task 8 搬进 `glass_nav_bar.dart` 之后，'
-          '这里要跟着换成那个文件名 —— 这条自证本来就是要跟着现实走的。',
+          '  底栏在 Task 2 从 `home_shell.dart` 搬进了 `glass_nav_bar.dart` —— '
+          '这条自证本来就是要跟着现实走的，它红过一次，改的就是这里。',
     );
   });
 }
