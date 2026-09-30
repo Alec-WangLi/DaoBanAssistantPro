@@ -239,6 +239,12 @@ class _GlassNavBarState extends State<GlassNavBar>
       _visualPage = page;
       _previewIndex = null;
     });
+    // **透镜也要跟着走。** 它的位置是弹簧算的，而这里刚把 `_visualPage` 改了 ——
+    // 不改弹簧的目标、也不把 Ticker 拉起来（那时它多半已经停了），透镜就会
+    // **永远停在原来那一格**：页面翻过去了、滑块还在旧地方。
+    // 标准档那条路有 `AnimatedPositioned` 替它演，这一档没有，所以必须显式接上。
+    _posSpring.target = page + 0.5;
+    _syncTicker();
   }
 
   int _indexForDx(double dx, double itemW) {

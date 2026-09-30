@@ -23,6 +23,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/app_info.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
@@ -488,5 +489,26 @@ void main() {
     }
     expect(differing, greaterThan(0),
         reason: '开了液态玻璃却一个像素都没变 —— 这一档没有真的生效');
+  });
+
+  testWidgets('外部程序化切页：透镜也跟着走（不是只改了高亮）', (tester) async {
+    // 待办提醒的通知被点开时会 `jumpToPage` 到待办页。标准档那条路有
+    // `AnimatedPositioned` 替它演，液态档**没有** —— 透镜的位置是弹簧算的，
+    // 而 `_syncFromController` 只写了 `_visualPage`、既没改弹簧的目标、也没把
+    // Ticker 拉起来（那时它多半已经停了）→ **透镜会永远停在原来那一格**。
+    //
+    // 这条与 `home_shell_nav_test` 那条互补：那条量的是**高亮**，这条量的是**透镜**。
+    addTearDown(() => AlarmService.openTodoRequested.value = false);
+    await pumpShell(tester, liquid: true);
+    final double before = lensOf(tester).shape.centerX;
+
+    AlarmService.openTodoRequested.value = true;
+    for (int i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+    }
+
+    expect(lensOf(tester).shape.centerX, greaterThan(before + 20),
+        reason: '页面翻过去了、透镜还停在原处');
+    await disposeShell(tester);
   });
 }
