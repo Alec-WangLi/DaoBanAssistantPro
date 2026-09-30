@@ -4,7 +4,6 @@ import android.appwidget.AppWidgetManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import java.time.LocalDate
 
 /**
  * 小组件那两条广播的落点：**刷新**（三张卡一起重画）与**翻月**（只有月历那张）。
