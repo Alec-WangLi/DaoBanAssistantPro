@@ -41,7 +41,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.16\n'
+const String _changelogZh = 'v0.9.17\n'
+    '· 桌面小组件那张月历（最大的那张）现在把上个月和下个月的日子连起来一起画了：月头月尾那几格不再是空的，相邻的日数字淡一档、班次照常显示，整张卡读起来是一段连续的日子\n'
+    '· 那张卡的标题行多了左右两个箭头：点一下翻上 / 下月，翻到没有数据的月份那侧会变灰；点中间的月份文字回到今天那个月\n'
+    '· 翻到你关注的月份之后，跨天、跨月都不会把你拽回来 —— 停在你翻到的那个月，直到你自己点回今天\n'
+    '\n'
+
+    'v0.9.16\n'
     '· 「法定班次」（跟随法定节假日）不再写「上班 / 休息」了：这种班表在日历格子、小窗那张信息卡与桌面小组件上都只画日期与农历 —— 法定节假日照旧标红、调休照旧打「班」。它本质上就是一张日历，上一版替它标上「上班」是我想多了\n'
     '· 顺带：这种班表下信息卡不再为那一行留高度，卡片矮约 16dp，上面六个格子相应高一点\n'
     '· 上一版改对的那一半照旧：「这段时间没有排班」那句只在真的没有任何班表盖着这些天时才出现 —— 判定它的是「这天有没有班表在管」，与「这天画不画得出东西」从此分开看\n'
@@ -94,13 +100,15 @@ const String _changelogZh = 'v0.9.16\n'
     '· 这层光是按最慢的节奏推进的，不是每帧重画：它 26 秒才漂 46dp，逐帧画每帧只动 0.03dp、没人看得出来，却会让整页永远不空闲、把压在背景上的每一层模糊拖着每帧重算\n'
     '· 「我的 → 外观 → 高级材质」关掉时，这层光会停下 —— 那个开关的意思就是「这台机器不做贵的合成」，不该一边关模糊一边还在推背景\n\n'
 
-    'v0.9.7\n'
-    '· 信息卡底下那截空白用起来了：卡片是按「本月最满的一天」定高的 —— 这样点日期时上面的日历格子不会跟着伸缩 —— 于是普通日子底下会空出三四十 dp。现在那里写一行本月统计，比如「本月 早12 · 午8 · 夜8 · 休6」，一眼看出这个月上了几个什么班。装得下才画：节假日那种最满的日子它自动不出现，卡片高度一个像素都没动\n'
-    '· 换月加了一点方向感：往前翻往左滑、往后翻往右滑，顶栏的「年月」跟着一起动；以前是硬切\n\n'
-
 ;
 
-const String _changelogEn = 'v0.9.16\n'
+const String _changelogEn = 'v0.9.17\n'
+    '· The month widget (the largest one) now draws the previous and next month as well: the empty slots at the start and end of the month are gone, the neighbouring days show a lighter date and their shifts as usual, and the whole card reads as one continuous run of days\n'
+    '· Its title row now has a left and a right arrow: tap to step a month back or forward, and the side with no data left greys out; tap the month name in the middle to jump back to today\n'
+    '· Once you have stepped away, a new day or a new month will not drag you back — you stay on the month you picked until you tap back to today\n'
+    '\n'
+
+    'v0.9.16\n'
     '· A "legal-holiday schedule" (follow the public holidays) no longer writes "Workday / Rest": on the calendar grid, on the info card in a small window and on the home-screen widget it now draws only the date and the lunar line — public holidays are still marked red and makeup workdays still tagged. It really is just a calendar, and labelling those days "Workday" was overreach on my part\n'
     '· As a result the info card no longer reserves a line for it: the card is about 16dp shorter and the grid above it gains that height\n'
     '· The half of that change that was right stays: "No schedule for these dates" appears only when no schedule covers those days at all — the test for it is now "is a schedule in force on this day", separate from "does this day draw anything"\n'
@@ -152,10 +160,6 @@ const String _changelogEn = 'v0.9.16\n'
     '· The calendar no longer sits on a flat colour: a very slow drift of light moves behind it (a full lap takes 26 seconds). The frosted cards now have something to frost — until now the only place with that drifting light was the ringing screen, so on the calendar the glass showed nothing but its highlight and hairline border. It is subtle in the light theme (the cells are almost solid white, so the light mostly shows between them and through the info card) and clearly visible in the dark one\n'
     '· That layer advances at the slowest pace rather than being redrawn every frame: it travels 46dp in 26 seconds, so per-frame it would move 0.03dp — invisible, while keeping the whole page permanently busy and forcing every blur above it to recompute each frame\n'
     '· With "Advanced materials" switched off under Me → Appearance, the light stops — that switch means "this device does not do expensive compositing", so it should not keep pushing a background while the blur is off\n\n'
-
-    'v0.9.7\n'
-    '· The empty space under the info card now says something: the card is sized to the fullest day of the month — that way tapping a day never makes the calendar grid above it resize — which leaves roughly 30-50dp empty on ordinary days. That line now carries a tally of the month, such as "This month  M12 · A8 · N8 · O6", so you can see at a glance how many of each shift you have. It only shows when there is room: on the fullest days (public holidays) it stays out, and the card never grows a pixel for it\n'
-    '· Changing months now has a sense of direction: going back slides left, going forward slides right, with the month label travelling along. It used to be an instant swap\n\n'
 
 ;
 
