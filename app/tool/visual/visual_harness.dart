@@ -188,12 +188,17 @@ ThemeData _applyVisualFonts(ThemeData theme) {
 ///
 /// 出图与对比度审计的**默认状态**，由 `ensureVisualFonts()` 调一次。不拨的话，
 /// 低端机自动降级会让玻璃退化成不透明填充，拍出来的不是真实观感。
-///
-/// 阶段 2 会有一个与它并列的 `useLiquidGlassTier()`。
 void useStandardGlassTier() {
   lowEndDevice = false;
-  advancedMaterialDisabled = false;
-  recomputeGlassBlur();
+  liquidGlassEnabled.value = false;
+  recomputeGlassTiers();
+}
+
+/// 把玻璃拨到「液态」档。给液态档的屏单与对比度审计用。
+void useLiquidGlassTier() {
+  lowEndDevice = false;
+  liquidGlassEnabled.value = true;
+  recomputeGlassTiers();
 }
 
 
@@ -925,4 +930,62 @@ Future<int> currentScheduleId(AppDatabase db) async {
         ..where((s) => s.isCurrent.equals(true)))
       .getSingle();
   return row.id;
+}
+
+// ---------------------------------------------------------------------------
+// 逐帧出图（供 scripts/make_gif.py 合成动图）
+// ---------------------------------------------------------------------------
+
+/// 逐帧出图，供 `scripts/make_gif.py` 合成 GIF（见长期记忆
+/// `prefer-gifs-for-feature-demos`：关键功能展示优先用动图）。
+///
+/// 与 [renderScreen] 的区别是它**故意不稳住** —— 动画必须还在走才拍得成动图。
+/// [onFrame] 在每帧取像**之前**调用，用来推进手势 / 切换状态；每帧之后按 [step]
+/// 推进时钟。产物落 `build/visual/frames/<prefix>NNN.png`。
+///
+/// 两个坑写进 `make_gif.py` 里了：**不要抖动**（会毁掉 GIF 的压缩率）、
+/// **`disposal=2`**（防残影）。
+Future<void> renderFrames(
+  WidgetTester tester, {
+  required String prefix,
+  required Widget home,
+  required List<Override> overrides,
+  required int count,
+  Duration step = const Duration(milliseconds: 80),
+  Brightness brightness = Brightness.light,
+  Size size = kVisualSize,
+  Map<String, Object> extraPrefs = const {},
+  Future<void> Function(WidgetTester tester, int frame)? onFrame,
+}) async {
+  final GlobalKey key = await pumpScreen(
+    tester,
+    home: home,
+    overrides: overrides,
+    brightness: brightness,
+    size: size,
+    extraPrefs: extraPrefs,
+  );
+  final boundary =
+      key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+
+  final Directory dir = Directory('$kVisualOutDir/frames');
+  dir.createSync(recursive: true);
+
+  for (int i = 0; i < count; i++) {
+    if (onFrame != null) await onFrame(tester, i);
+    final File file =
+        File('${dir.path}/$prefix${i.toString().padLeft(3, '0')}.png');
+    // 取像与写盘必须在真实异步区里（伪造时钟区里的 future 不会完成）——
+    // 同 [renderScreen]。
+    await tester.runAsync(() async {
+      final ui.Image image = await boundary.toImage(pixelRatio: kVisualDpr);
+      final ByteData? data =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      await file.writeAsBytes(data!.buffer.asUint8List(), flush: true);
+    });
+    await tester.pump(step);
+  }
+  stdout.writeln('[gif] $count 帧 → ${dir.path}/$prefix*.png');
+  await teardownVisual(tester);
 }

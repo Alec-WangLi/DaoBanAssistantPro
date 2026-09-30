@@ -119,20 +119,20 @@ class ProfileScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(L10n.advancedMaterial,
+                            Text(L10n.liquidGlass,
                                 style: AppTokens.labelStrong),
                             const SizedBox(height: AppTokens.gapHair),
-                            Text(L10n.advancedMaterialHint,
+                            Text(L10n.liquidGlassHint,
                                 style: AppTokens.microText
                                     .copyWith(color: AppTokens.inkMuted(context))),
                           ],
                         ),
                       ),
                       GlassSwitch(
-                        value: settings.advancedMaterial,
+                        value: settings.liquidGlass,
                         onChanged: (v) => ref
                             .read(appSettingsProvider.notifier)
-                            .setAdvancedMaterial(v),
+                            .setLiquidGlass(v),
                       ),
                     ],
                   ),

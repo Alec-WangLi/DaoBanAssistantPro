@@ -4,20 +4,29 @@ import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
 
-/// 低端机自动降级标志（物理内存 < 4GB，main() 设置）。
+/// 低端机自动降级标志（物理内存 < 4GB，main() 设置）。**语义不变**：强制省电档。
 bool lowEndDevice = false;
 
-/// 用户手动关闭「高级材质」标志（「我的 → 外观」开关控制）。
-bool advancedMaterialDisabled = false;
+/// 「我的 → 外观 → 液态玻璃」开关（默认关）。用户意愿。
+final ValueNotifier<bool> liquidGlassEnabled = ValueNotifier<bool>(false);
 
-/// 玻璃真实模糊总开关（低端机自动 + 用户手动 取或）。
+/// 省电档生效中。**只由 [lowEndDevice] 触发** —— 用户不能手动选它。
 /// 用 ValueNotifier 让开关变更时所有玻璃组件实时重建。
 final ValueNotifier<bool> glassBlurDisabled = ValueNotifier<bool>(false);
 
-/// 重新计算 [glassBlurDisabled]（main() 与「高级材质」开关变更时调用）。
-void recomputeGlassBlur() {
-  final disabled = lowEndDevice || advancedMaterialDisabled;
-  glassBlurDisabled.value = disabled;
+/// 液态档生效中。
+///
+/// 判据只有两个条件，**没有 shader 能力检查** —— 因为这个档里没有 shader：
+/// 实测折射在平背景上 ≤1/255（本 App 的底色是刻意的极简黑白），
+/// 看得见的那一层是「加色」的边缘光与透镜，而它用 `CustomPainter` 就够。
+/// 于是计划里那条 shader 构建链、以及 Impeller / GLES / Windows 三个坑，
+/// 一个都不用碰。
+final ValueNotifier<bool> liquidGlassActive = ValueNotifier<bool>(false);
+
+/// 重新计算两个档位（main() 与「外观」开关变更时调用）。
+void recomputeGlassTiers() {
+  glassBlurDisabled.value = lowEndDevice;
+  liquidGlassActive.value = !lowEndDevice && liquidGlassEnabled.value;
 }
 
 /// 玻璃的完整 filter：**模糊 + 真实饱和度**，合成一个 filter 而不是叠两层
@@ -33,22 +42,6 @@ ImageFilter glassFilter(double sigma) => ImageFilter.compose(
       outer: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
       inner: AppTokens.glassSaturation,
     );
-
-// ---------------------------------------------------------------------------
-// 探针（临时，不是产品代码）
-// ---------------------------------------------------------------------------
-//
-// 要回答的问题：**在不碰标准档的前提下，靠「加色」的那一层（边缘光 / 主色着色）
-// 能不能让液态档明显好看？**
-//
-// 为什么值得单独探：实测已证折射在平背景上看不见（≤1/255，见台账）。而边缘光与
-// 着色是**加上去的**、不采样背景，所以它是平背景上唯一还可能看得见的一层 ——
-// 但「可能」不等于「能」，得看图。
-//
-// 结论出来后这一段要么删掉、要么按结论重做。
-
-/// 探针：给玻璃面叠一圈方向性边缘光（见 [GlassRim]）。
-bool glassProbeRim = false;
 
 /// 液态玻璃面板。
 ///
@@ -153,15 +146,13 @@ class GlassPanel extends StatelessWidget {
   }
 }
 
-/// 探针：给任意玻璃面叠一圈方向性边缘光。**不是产品代码**（见 [glassProbeRim]）。
+/// 液态档：给玻璃面叠一圈方向性边缘光 + 跟随滑块的透镜。
 ///
-/// 第一轮只打在 `GlassPanel` 上，于是同一屏里只有信息卡有边、顶栏与底栏胶囊没有 ——
-/// 看着像「这张卡被选中了」。观感问题出在**不一致**，不在描边本身，所以做成通用的。
-///
-/// 画在**之上**（`foregroundPainter`），而不是拿 `padding` 围一圈 —— 后者会把面板
-/// 缩小、里面的文字跟着位移，量出来的差异里混进的是「位移」而不是「描边」
-/// （第一版就是这么把自己测糊的：整块 90% 的像素都在变，看着像巨大效果）。
-/// Flutter 既没有渐变描边、也没有渐变版的 `Border`，所以只能走 `CustomPainter`。
+/// **这一层就是「液态玻璃」的全部**。它不采样背景（折射只发生在「玻璃 ↔ 背景」的
+/// 边界上，而本 App 的底色是刻意的极简黑白 —— 实测采样类的效果在这里 ≤1/255），
+/// 靠的是**加色**：边缘光、透镜的凸起与光晕。浅色下白光看不见，所以那一档的配方
+/// 是「左上高光 + 右下轻收」的立体边；深色下才是被点亮的玻璃边。
+/// 配方见 `AppTokens.glassRimProbe*`（名字里的 Probe 是历史，值与调法是量的结果）。
 class GlassRim extends StatelessWidget {
   const GlassRim({
     super.key,
@@ -199,12 +190,22 @@ class GlassRim extends StatelessWidget {
   /// 透镜的填充色（通常传主色）。
   final Color? lensFill;
 
-  /// 透镜凸出胶囊多少。**0 = 不凸**（等于原来那个躺在胶囊里的滑块）。
+  /// 透镜凸出容器多少。**0 = 不凸**（等于原来那个躺在胶囊里的滑块）。
   final double lensProtrude;
 
   @override
   Widget build(BuildContext context) {
-    if (!glassProbeRim) return child;
+    // 液态档才叠这一层。用 ValueListenableBuilder 而不是读一次布尔值 ——
+    // 「外观」里那个开关一翻，全 app 的玻璃面都要跟着重建。
+    return ValueListenableBuilder<bool>(
+      valueListenable: liquidGlassActive,
+      builder: (BuildContext context, bool on, Widget? child) =>
+          on ? _lit() : child!,
+      child: child,
+    );
+  }
+
+  Widget _lit() {
     return Stack(
       // **必须 Clip.none**：透镜要能画到胶囊外面去。
       // 默认的 hardEdge 会把溢出的部分裁掉，那就退回「光只能在胶囊内部打转」，

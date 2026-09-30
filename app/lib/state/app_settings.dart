@@ -15,7 +15,7 @@ class AppSettings {
     this.themeMode = AppThemeMode.system,
     this.accentIndex = 0,
     this.language = 'zh',
-    this.advancedMaterial = true,
+    this.liquidGlass = false,
     this.hapticsEnabled = true,
   });
 
@@ -27,8 +27,12 @@ class AppSettings {
   /// 'zh' 或 'en'。
   final String language;
 
-  /// 高级材质：true=真实背景模糊（默认），false=模拟低端机（去模糊）。
-  final bool advancedMaterial;
+  /// 液态玻璃：true=边缘光 + 跟随滑块的透镜（默认关，且低内存机器一律不给）。
+  ///
+  /// **默认为关是有意的**：这个档会增加合成开销，不能让从没选过它的人静默吃上。
+  /// 旧名「高级材质」（true=真实背景模糊）的键留在 prefs 里不管 ——
+  /// 换新键天然就是「一次性重置」，不必另加标记（加标记才容易踩到「每次启动都重置」）。
+  final bool liquidGlass;
 
   /// 触觉反馈：true=状态改变与不可逆动作时轻微震动（默认），false=完全不震。
   final bool hapticsEnabled;
@@ -39,14 +43,14 @@ class AppSettings {
     AppThemeMode? themeMode,
     int? accentIndex,
     String? language,
-    bool? advancedMaterial,
+    bool? liquidGlass,
     bool? hapticsEnabled,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
       accentIndex: accentIndex ?? this.accentIndex,
       language: language ?? this.language,
-      advancedMaterial: advancedMaterial ?? this.advancedMaterial,
+      liquidGlass: liquidGlass ?? this.liquidGlass,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
     );
   }
@@ -68,12 +72,12 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       final modeName = sp.getString('themeMode');
       final accentIndex = sp.getInt('accentIndex');
       final language = sp.getString('language') ?? 'zh';
-      final advancedMaterial = sp.getBool('advancedMaterial') ?? true;
+      final liquidGlass = sp.getBool('liquidGlass') ?? false;
       final hapticsEnabled = sp.getBool('hapticsEnabled') ?? true;
       L10n.locale = language;
-      advancedMaterialDisabled = !advancedMaterial;
+      liquidGlassEnabled.value = liquidGlass;
       hapticsDisabled = !hapticsEnabled;
-      recomputeGlassBlur();
+      recomputeGlassTiers();
       state = AppSettings(
         themeMode: AppThemeMode.values.firstWhere(
           (m) => m.name == modeName,
@@ -81,7 +85,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
         ),
         accentIndex: accentIndex ?? 0,
         language: language,
-        advancedMaterial: advancedMaterial,
+        liquidGlass: liquidGlass,
         hapticsEnabled: hapticsEnabled,
       );
     } catch (_) {
@@ -109,12 +113,12 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     await sp.setString('language', language);
   }
 
-  Future<void> setAdvancedMaterial(bool value) async {
-    advancedMaterialDisabled = !value;
-    recomputeGlassBlur();
-    state = state.copyWith(advancedMaterial: value);
+  Future<void> setLiquidGlass(bool value) async {
+    liquidGlassEnabled.value = value;
+    recomputeGlassTiers();
+    state = state.copyWith(liquidGlass: value);
     final sp = await SharedPreferences.getInstance();
-    await sp.setBool('advancedMaterial', value);
+    await sp.setBool('liquidGlass', value);
   }
 
   Future<void> setHapticsEnabled(bool value) async {
@@ -132,7 +136,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     await sp.setBool('hapticsEnabled', value);
   }
 
-  /// 把外观这一组**在内存里**拨回默认（跟随系统 / 首个主色调 / 中文 / 高级材质开 /
+  /// 把外观这一组**在内存里**拨回默认（跟随系统 / 首个主色调 / 中文 / 液态玻璃关 /
   /// 触觉开），并同步那几个模块级标志。
   ///
   /// 仅供「清空重置 = 回到第一次安装」用（`profile_screen.dart` 的 `_confirmReset`）。
@@ -140,9 +144,9 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
   /// 铃声、首启标记、小组件快照一起抹掉 —— 在两边各写一份键名，迟早会漏掉一个。
   void resetToDefaults() {
     L10n.locale = 'zh';
-    advancedMaterialDisabled = false;
+    liquidGlassEnabled.value = false;
     hapticsDisabled = false;
-    recomputeGlassBlur();
+    recomputeGlassTiers();
     state = const AppSettings();
   }
 }

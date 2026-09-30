@@ -197,13 +197,13 @@ class L10n {
       '· 排班表、日程与待办\n'
       '· 自定义闹钟、你的模板\n'
       '· 你保存的铃声\n'
-      '外观设置（主题 / 主色调 / 语言 / 高级材质 / 触觉）也一并回到默认。\n'
+      '外观设置（主题 / 主色调 / 语言 / 液态玻璃 / 触觉）也一并回到默认。\n'
       '此操作不可撤销。',
       'The app goes back to a fresh install. This clears:\n'
       '· schedules, events and todos\n'
       '· custom alarms and your templates\n'
       '· any ringtone you saved\n'
-      'Appearance settings (theme, accent colour, language, advanced material, '
+      'Appearance settings (theme, accent colour, language, liquid glass, '
           'haptics) return to their defaults too.\n'
       'This cannot be undone.');
   static String get confirmResetAction => t('确认清空', 'Clear');
@@ -789,8 +789,8 @@ class L10n {
   static List<String> get guideAppearanceDesc => [
         t('「我的 → 外观」可切跟随系统 / 浅色 / 深色，选 5 种主色调，中英文切换',
             'Me → Appearance: follow the system / light / dark, pick one of 5 accent colours, switch between Chinese and English'),
-        t('「高级材质」关掉后全 App 取消背景模糊，省电、低端机更流畅',
-            'Turning "Advanced material" off removes background blur app-wide — lighter on battery and smoother on low-end devices'),
+        t('「液态玻璃」给玻璃边缘加光、滑块与开关按下时鼓起成透镜；关掉更省电',
+            '"Liquid glass" lights up the glass rim, and the slider and switch swell into a lens while you press them — turn it off to save battery'),
         t('「触觉反馈」控制开关、选中、拖选与改班时的轻微震动，默认开',
             'Haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change) is on by default and lives here too'),
       ];
@@ -840,11 +840,10 @@ class L10n {
   static String get swipeUpToDismiss => t('上滑关闭', 'Swipe up to dismiss');
 
   // 外观设置
-  static String get advancedMaterial => t('高级材质', 'Advanced material');
-  static String get advancedMaterialHint => t(
-      '磨砂玻璃的背景模糊；关掉更省电、低端机更流畅',
-      'Frosted-glass background blur — turn it off to save battery and go '
-          'smoother on low-end devices');
+  static String get liquidGlass => t('液态玻璃', 'Liquid glass');
+  static String get liquidGlassHint => t(
+      '玻璃边缘带光、按下时鼓起成透镜；关掉更省电',
+      'A lit rim on the glass, controls swell while you press — off saves battery');
   static String get hapticFeedback => t('触觉反馈', 'Haptic feedback');
   static String get hapticFeedbackHint => t(
       '开关翻转、选中、拖选与改班时轻微震动（普通点击不震）',

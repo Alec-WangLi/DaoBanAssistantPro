@@ -517,7 +517,7 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                                 decoration: BoxDecoration(
                                   borderRadius:
                                       BorderRadius.circular(AppTokens.radiusL),
-                                  gradient: glassProbeRim
+                                  gradient: liquidGlassActive.value
                                       ? null
                                       : LinearGradient(
                                           begin: Alignment.topLeft,
@@ -526,13 +526,13 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                                               .accentGradient(activeColor)
                                               .colors,
                                         ),
-                                  border: glassProbeRim
+                                  border: liquidGlassActive.value
                                       ? null
                                       : Border.all(
                                           color: Colors.white.withValues(
                                               alpha: isDark ? 0.28 : 0.85),
                                         ),
-                                  boxShadow: glassProbeRim
+                                  boxShadow: liquidGlassActive.value
                                       ? null
                                       : <BoxShadow>[
                                           BoxShadow(

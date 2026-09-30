@@ -39,7 +39,7 @@ class _GlassSwitchState extends State<GlassSwitch> {
         widget.activeColor ?? Theme.of(context).colorScheme.primary;
     final double thumbSize = widget.height - 6;
 
-    // ── 探针（见 `glass.dart` 的 glassProbeRim）────────────────────────────
+    // ── 探针（见 `glass.dart` 的 liquidGlassActive.value）────────────────────────────
     // 把手**凸出轨道**、并且做成真玻璃。原来它是一个 22dp 的**不透明白圆**、
     // 顶满轨道内高 —— 于是它的边是「玻璃对玻璃 / 玻璃对轨道填充」，而折射只发生在
     // 「玻璃 ↔ 背景」的边界上（Apple 那条「玻璃不能采样玻璃」）。
@@ -48,7 +48,7 @@ class _GlassSwitchState extends State<GlassSwitch> {
     // 保持时，它变成一个更大、玻璃般的凸起，移动时折射光线」—— 静止时把手是正常
     // 大小（iOS 26 只是把它从圆形改成了「更宽的椭圆」）。做成静止就变大会显得发胀。
     // 这也与导航滑块一致：那个也是按住才放大。
-    final bool probe = glassProbeRim;
+    final bool probe = liquidGlassActive.value;
     const double innerPad = AppTokens.padChipV;
     final double innerW = widget.width - 2 * innerPad;
     final double innerH = widget.height - 2 * innerPad;

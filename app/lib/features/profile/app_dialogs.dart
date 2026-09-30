@@ -40,7 +40,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.0\n'
+const String _changelogZh = 'v0.10.1\n'
+    '· 「我的 → 外观」里那颗「高级材质」换成了「液态玻璃」，默认关。打开之后玻璃边缘带上一层光；底栏的选中滑块与开关在你按住时鼓起成一枚透镜 —— 玻璃件凸出容器之外，光才有边可落\n'
+    '· 关掉就是现在这个样子（磨砂玻璃），只是名字与说明跟着改了\n'
+    '· 内存小于 4GB 的机器一律保持关闭\n\n'
+    'v0.10.0\n'
     '· 桌面小组件三张卡都在了：本周条、今日卡、整月。整月那张把上个月下个月连起来画，标题行两边的箭头能翻前后各三个月；在 App 里改了排班，桌面立刻跟着变\n'
     '· 每个班次最多能挂 6 条闹钟，每条可以起名字 —— 「起床」「午休」分开响\n'
     '· 排班时段重做：在「排班管理」页的一条时间线上排「哪几天用哪套班表」，两段不许重叠，其余时间可以设成「无」（领导真给休息几天时，不必专门再建一套休息班表）。一套班表还能出现在多段上 —— 9 月临时换、10 月换回来\n'
@@ -105,16 +109,14 @@ const String _changelogZh = 'v0.10.0\n'
     '· 顶栏「切换排班」现在写明每套方案管哪些日子：设了时段的写时段；没设时段又正在用的那套标「其余日子」（没被时段覆盖的日子就归它管）\n'
     '· 日历上长按选一段日子改班时，如果这段跨了两套排班，会提示你分开调整 —— 从前那样只会改到一半，另一半悄没声地不动\n\n'
 
-    'v0.9.11\n'
-    '· 待办能重复了：新建待办时选「每天 / 每周几 / 每月某日」，它就会按时自己出现 —— 不用每周手动建一次。勾掉之后留成历史（带删除线），下一次到点自动来一条新的\n'
-    '· 一个重复待办同时只占一行：永远是「当前这一次」。过期没勾的，下一次到点时就地顺延，不会堆出一串「上周三的会」\n'
-    '· 删一条重复待办时会问一句：是「只这一次不要了」，还是「删除整个重复」—— 前者只是跳过这一次（下次照常出现），后者连它已完成的历史一起删掉\n'
-    '· 待办页右上角多了「重复待办」入口（小窗里只剩图标）：能看到有哪些重复项、各自的下一次是什么时候，能改周期、能停用、能删。停用之后当前那条会留着 —— 那是你还没做的一件事，不替你收走\n'
-    '· 重复待办的提醒由系统自己接着排，App 长期不开也照常响，不是「等你下次打开才补上」\n\n'
 
 ;
 
-const String _changelogEn = 'v0.10.0\n'
+const String _changelogEn = 'v0.10.1\n'
+    '· "Advanced material" in Me → Appearance is now "Liquid glass", off by default. Turn it on and the glass gains a lit rim; the tab bar\'s selection slider and the switch swell into a lens while you press them — they bulge out of the container, which is where the light finally has an edge to catch\n'
+    '· Off is exactly what you see today (frosted glass); only the name and the wording changed\n'
+    '· Devices with under 4GB of RAM always keep it off\n\n'
+    'v0.10.0\n'
     '· All three home-screen cards are in: the week strip, the today card and the month view. The month card draws the neighbouring months as well, its title arrows step three months either way, and any schedule change in the app shows up on the cards\n'
     '· A shift can now carry up to 6 alarms, each with a name — "Wake up" and "Nap" ring separately\n'
     '· Schedule periods rebuilt: arrange which schedule covers which dates on a single timeline on the Schedules page. Periods may not overlap, "Other dates" can be set to none (for the days your manager really does give you off, without building a rest schedule), and one schedule can appear in several periods — swap away for September and swap back in October\n'
@@ -179,12 +181,6 @@ const String _changelogEn = 'v0.10.0\n'
     '· The "Switch schedule" sheet now spells out which days each schedule covers: the ones with a period show it, and the one currently in use without a period is marked "Other days" — those are the days it covers\n'
     '· Adjusting a dragged range of days on the calendar now tells you to adjust separately when the range crosses two schedules, instead of quietly changing only half of it\n\n'
 
-    'v0.9.11\n'
-    '· Todos can repeat now: pick "every day / weekly (choose the days) / monthly (pick a day)" when adding one and it shows up on its own — no more creating it by hand every week. Ticking it keeps it as history (struck through), and the next occurrence arrives on time\n'
-    '· A repeating todo only ever takes one line: the current occurrence. Miss one and it rolls forward in place at the next occurrence, instead of piling up a stack of "last Wednesday\'s meeting"\n'
-    '· Deleting a repeating todo asks which you mean: "skip this one" (the next occurrence still comes) or "delete the whole repeat" (its completed history goes too)\n'
-    '· The todo screen now has a "Repeating" entry (an icon in a small window): see your repeating todos and when each next occurs, and edit / pause / delete them. Pausing keeps the current entry — that is something you have not done yet, and the app will not take it away for you\n'
-    '· Their reminders are re-armed by the system itself, so they still ring after the app has been closed for a long time — not "fixed up the next time you open it"\n\n'
 
 ;
 

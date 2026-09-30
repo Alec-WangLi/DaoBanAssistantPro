@@ -94,7 +94,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'themeMode': 'dark',
       'accentIndex': 3,
-      'advancedMaterial': false,
+      'liquidGlass': true,
       'hapticsEnabled': false,
       'ringtoneUri': 'file:///ringtone/mine.mp3',
       'ringtoneTitle': '我的铃声',
@@ -157,9 +157,9 @@ void main() {
     final settings = container.read(appSettingsProvider);
     expect(settings.themeMode, AppThemeMode.system);
     expect(settings.accentIndex, 0);
-    expect(settings.advancedMaterial, isTrue);
+    expect(settings.liquidGlass, isFalse);
     expect(settings.hapticsEnabled, isTrue);
-    expect(advancedMaterialDisabled, isFalse);
+    expect(liquidGlassEnabled.value, isFalse);
     expect(hapticsDisabled, isFalse);
 
     // SharedPreferences 整份清掉：外观那几个键、铃声、首启标记、小组件快照都在里面

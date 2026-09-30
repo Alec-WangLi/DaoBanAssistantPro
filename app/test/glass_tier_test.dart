@@ -12,6 +12,8 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 
@@ -36,10 +38,11 @@ Future<ImageFilter?> _panelFilter(WidgetTester tester) async {
 
 void main() {
   setUp(() {
-    // 每个用例从「标准档」起跑：省电档关。全局标志不重置的话，
-    // 前一个用例把它打开过就会漏到这一个里。
+    // 每个用例从「标准档」起跑：省电关、液态关。这两个都是模块级标志，
+    // 前一个用例把它们打开过就会漏到这一个里。
     lowEndDevice = false;
-    recomputeGlassBlur();
+    liquidGlassEnabled.value = false;
+    recomputeGlassTiers();
   });
 
   test('glassSaturation 就是 spec 写的 Rec.709 保亮度矩阵（s = 1.2）', () {
@@ -135,7 +138,7 @@ void main() {
     // 只是内容透明」之类的写法，低内存机器就白付一次 backdrop 抓取 ——
     // 而那正是这一档存在的理由。
     lowEndDevice = true;
-    recomputeGlassBlur();
+    recomputeGlassTiers();
 
     await tester.pumpWidget(
       const MaterialApp(
@@ -149,5 +152,65 @@ void main() {
     );
 
     expect(find.byType(BackdropFilter), findsNothing);
+  });
+
+  group('档位判据（标准 / 液态两档可选；省电只由低内存自动进）', () {
+    test('默认 = 标准档：两个开关都不动', () {
+      recomputeGlassTiers();
+      expect(liquidGlassActive.value, isFalse);
+      expect(glassBlurDisabled.value, isFalse);
+    });
+
+    test('液态玻璃打开 → 液态档', () {
+      liquidGlassEnabled.value = true;
+      recomputeGlassTiers();
+      expect(liquidGlassActive.value, isTrue);
+      expect(glassBlurDisabled.value, isFalse);
+    });
+
+    test('低内存机器：省电档是**地板**，液态打不开', () {
+      // 这一条钉住「省电只由低内存自动进」那句话。判据写成一个「与」，
+      // 漏掉 !lowEndDevice 那一项，低内存机器就会同时吃到省电与液态 ——
+      // 那是「又糊又贵」的最坏组合。
+      lowEndDevice = true;
+      liquidGlassEnabled.value = true;
+      recomputeGlassTiers();
+      expect(glassBlurDisabled.value, isTrue, reason: '低内存机器一律糊');
+      expect(liquidGlassActive.value, isFalse, reason: '省电档是地板，液态不该生效');
+    });
+
+    test('用户关掉液态玻璃 → 回落**标准**档，不是回落省电档', () {
+      liquidGlassEnabled.value = false;
+      lowEndDevice = false;
+      recomputeGlassTiers();
+      expect(liquidGlassActive.value, isFalse);
+      expect(glassBlurDisabled.value, isFalse,
+          reason: '关掉液态要回磨砂玻璃；回落到省电档是另一回事');
+    });
+  });
+
+  group('设置的迁移保证', () {
+    test('默认关；**旧键不该让液态档静默打开**', () async {
+      // 老库里存的键叫 advancedMaterial（旧语义：true = 真实模糊，默认 true）。
+      // 若沿用那个键，所有从没碰过它的人升级后都会静默吃上液态档 ——
+      // 换新键（liquidGlass，默认 false）就是「一次性重置」，且结构上不会
+      // 踩到「每次启动都重置」那个坑。
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'advancedMaterial': true,
+      });
+      final AppSettingsNotifier notifier = AppSettingsNotifier();
+      await pumpEventQueue();
+      expect(notifier.state.liquidGlass, isFalse);
+      expect(liquidGlassEnabled.value, isFalse);
+    });
+
+    test('写下去的是新键', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final AppSettingsNotifier notifier = AppSettingsNotifier();
+      await pumpEventQueue();
+      await notifier.setLiquidGlass(true);
+      final SharedPreferences sp = await SharedPreferences.getInstance();
+      expect(sp.getBool('liquidGlass'), isTrue);
+    });
   });
 }
