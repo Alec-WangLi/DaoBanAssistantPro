@@ -28,23 +28,35 @@ import '../../domain/shift_rotation.dart';
 const int kWidgetSnapshotVersion = 2;
 
 /// 窗口的**最大**天数。真正用多少由 [widgetWindow] 算：
-/// 「本月 + 下月」最多 62 天，再加本周一到月末最多 6 天补齐 → 68。
-const int kWidgetSnapshotMaxDays = 68;
+/// 「上月 + 本月 + 下月」三个月，各自的最坏情况 31 天，再加两端补齐整周最多各 6 天
+/// → 6 + 31 + 31 + 31 + 6 = 105。取 112 留余量，由下面的断言兜住。
+const int kWidgetSnapshotMaxDays = 112;
 
-/// 快照窗口：`[min(本月 1 日, 今天所在周的周一), 下月最后一天]`。
+/// 快照窗口：`[上月 1 日所在周的周一, 下月最后一天所在周的周日]`。
 ///
-/// 为什么不是「今天起 N 天」：月历要本月完整 + 前后补齐格，且**跨月那一刻**
-/// （10 月 1 日零点）原生手上必须有 10 月的数据 —— 跨天刷新只能对表右移，
-/// 变不出新月份，窗口里不预装下月的话桌面就是一张空月。
-/// 起点取「本周一」是为了 4×1 本周条（今天可能是周日，本周一在 6 天前）。
+/// 为什么是**整周对齐的三个月**（v0.9.17 改的，原来只到「下月最后一天」）：
+/// 月历小组件现在要画**连续的 42 天**，并且能翻到上 / 下月 —— 那张卡能画的每一格
+/// 都必须有数据。一条用例（`widget_snapshot_test.dart` 的「窗口覆盖…完整 42 格」）
+/// 把这条性质钉住了，改窗口时它会先红。
+///
+/// 仍然**含窗口里已经过去的天**：本周条要画得出「上周日~本周六」那种跨月的周，
+/// 而翻到上个月时那整月本来就是过去的。
 ({DateTime from, DateTime to}) widgetWindow(DateTime now) {
   final today = dateOnly(now); // UTC 纯日期，年月日即本地日历日
-  final monthStart = DateTime(today.year, today.month, 1);
-  final weekMonday =
-      DateTime(today.year, today.month, today.day - (today.weekday - 1));
-  final from = monthStart.isBefore(weekMonday) ? monthStart : weekMonday;
-  // `DateTime(y, m + 2, 0)` = 下个月的最后一天（Dart 会把 day=0 归一成上月末）。
-  final to = DateTime(today.year, today.month + 2, 0);
+  // Dart 会把越界的 month 归一：month-1 = 0 → 去年 12 月，month+1 = 13 → 明年 1 月。
+  final prevFirst = DateTime(today.year, today.month - 1, 1);
+  final nextFirst = DateTime(today.year, today.month + 1, 1);
+  final from = DateTime(
+      prevFirst.year, prevFirst.month, prevFirst.day - (prevFirst.weekday - 1));
+  // **终点是「下月 1 日所在周的周一 + 41 天」，不是「下月最后一天所在周的周日」**：
+  // 那张卡画的是**连续 42 天**，起点是「该月 1 日所在周的周一」，而下月自己的 42 格
+  // 会越过「下月最后一天所在的那个周日」。反例很好找 —— 下月是 2 月（28 天、1 日是
+  // 周日）时，它的 42 格一直排到 3/8，而「2 月最后一天所在周的周日」是 3/1，
+  // 差了整整一周。周一起步 42 天必然落在周日（41 mod 7 = 6），所以这里不用再对齐。
+  final nextGridStart = DateTime(nextFirst.year, nextFirst.month,
+      nextFirst.day - (nextFirst.weekday - 1));
+  final to = DateTime(nextGridStart.year, nextGridStart.month,
+      nextGridStart.day + 41);
   return (from: from, to: to);
 }
 

@@ -64,7 +64,7 @@ void main() {
 
   setUp(() => L10n.locale = 'zh');
 
-  test('窗口 = [min(本月1日, 本周一), 下月最后一天]，且恒包含今天', () {
+  test('窗口 = [上月1日所在周的周一, 下月1日所在周的周一 + 41 天]，且恒包含今天', () {
     for (final now in [
       DateTime(2026, 9, 20, 10),
       DateTime(2026, 10, 1, 0, 5), // 跨月当天
@@ -82,13 +82,22 @@ void main() {
       final first = days.first['day'] as int;
       final last = days.last['day'] as int;
 
-      final monthStart = dayNumber(DateTime(now.year, now.month, 1));
-      final weekMonday =
-          dayNumber(DateTime(now.year, now.month, now.day - (now.weekday - 1)));
-      expect(first, monthStart < weekMonday ? monthStart : weekMonday,
-          reason: '窗口起点应当是「本月1日」与「本周一」里更早的那个（now=$now）');
-      expect(last, dayNumber(DateTime(now.year, now.month + 2, 0)),
-          reason: '窗口终点应当是本月的下一个月最后一天（now=$now）');
+      // v0.9.17 起窗口是**整周对齐的三个月**（原先是 [min(本月1日, 本周一), 下月末]）。
+      // 终点不是「下月的最后一天」：月历那张卡画**连续 42 天**，下月自己的 42 格会
+      // 越过「下月最后一天所在的那个周日」（下月是 2 月时要排到 3/8，而那个周日是
+      // 3/1）—— 盖不住的话那个月就翻不过去。见 `widgetWindow` 的注释。
+      final prevFirst = DateTime(now.year, now.month - 1, 1);
+      final nextFirst = DateTime(now.year, now.month + 1, 1);
+      final from = DateTime(prevFirst.year, prevFirst.month,
+          prevFirst.day - (prevFirst.weekday - 1));
+      final nextGridStart = DateTime(nextFirst.year, nextFirst.month,
+          nextFirst.day - (nextFirst.weekday - 1));
+      final to = DateTime(nextGridStart.year, nextGridStart.month,
+          nextGridStart.day + 41);
+      expect(first, dayNumber(from),
+          reason: '窗口起点应当是上月 1 日所在周的周一（now=$now）');
+      expect(last, dayNumber(to),
+          reason: '窗口终点应当是下月 1 日所在周的周一 + 41 天（now=$now）');
 
       // 恒包含今天，且 day 逐日递增
       final today = dayNumber(now);
@@ -97,7 +106,7 @@ void main() {
       for (var i = 1; i < days.length; i++) {
         expect(days[i]['day'], (days[i - 1]['day'] as int) + 1);
       }
-      expect(days.length, lessThanOrEqualTo(68));
+      expect(days.length, lessThanOrEqualTo(kWidgetSnapshotMaxDays));
 
       // 月份表必须一路滚到窗口终点的那个月 —— 年末那条（now = 2026-12-31）因此
       // 必须给出 2027-1，而不是停在 12 月。原生日历的月份标题是「查不到就隐藏
@@ -150,11 +159,12 @@ void main() {
     expect((s['weekdays']! as List).length, 7);
     expect((s['weekdays']! as List).first, L10n.weekday(0));
 
-    // 2026-10-01 是周四 → 窗口从 9/28（周一）起、到 11/30 止，覆盖 9/10/11 三个月
+    // 2026-10-01 → 窗口从 8/31（上月 1 日所在周的周一）起、到 12/6（下月 1 日所在周的
+    // 周一 + 41 天）止，所以覆盖 8/9/10/11/12 **五**个月（整周对齐会蹭到边上两个月）。
     final months = (s['months']! as List).cast<Map>();
     expect(months.map((m) => '${m['y']}-${m['m']}').toList(),
-        ['2026-9', '2026-10', '2026-11']);
-    expect(months.first['title'], L10n.yearMonth(DateTime(2026, 9)));
+        ['2026-8', '2026-9', '2026-10', '2026-11', '2026-12']);
+    expect(months.first['title'], L10n.yearMonth(DateTime(2026, 8)));
   });
 
   test('月历格子的农历走 cellLabel：超长节日名截到 3 个字，与 App 日历一致', () {
@@ -210,6 +220,59 @@ void main() {
       expect(m['hasShift'], false);
       expect(m['timeRange'], isNull);
       expect(m['color'], 0);
+    }
+  });
+
+  // ── 窗口是「翻月」的地基 ──
+  //
+  // 能翻多远完全由窗口决定：某个月的 42 格只要有一格落在窗口外，那个月就翻不过去
+  // （原生按同一条判据把箭头变灰、接收端直接吞掉点击）。所以这条性质不是「锦上添花
+  // 的断言」—— 它是 v0.9.17 那个功能的**前提**，写成用例才不会在以后被悄悄改小。
+  test('窗口覆盖「上月 / 本月 / 下月」三个月的完整 42 格', () {
+    // 取几个刁钻的日子：年初、年末、1 日在周日、1 日在周一、5 行月与 6 行月都有。
+    final samples = [
+      DateTime(2026, 1, 15),
+      DateTime(2026, 12, 31),
+      DateTime(2026, 3, 1),
+      DateTime(2026, 8, 31),
+      DateTime(2026, 11, 1),
+      DateTime(2027, 2, 28),
+    ];
+    for (final now in samples) {
+      final w = widgetWindow(now);
+      final from = dayNumber(w.from);
+      final to = dayNumber(w.to);
+      for (final delta in const [-1, 0, 1]) {
+        // 那个月的 42 格：从「1 日所在周的周一」起连续 42 天（与原生同一条算法）。
+        final first = DateTime(now.year, now.month + delta, 1);
+        final start = DateTime(
+            first.year, first.month, first.day - (first.weekday - 1));
+        for (var i = 0; i < 42; i++) {
+          final d = DateTime(start.year, start.month, start.day + i);
+          final n = dayNumber(d);
+          expect(n >= from && n <= to, true,
+              reason: '$now 的窗口没盖住 ${first.year}-${first.month} 的第 $i 格'
+                  '（$d）—— 那个月就翻不过去了');
+        }
+      }
+    }
+  });
+
+  test('窗口长度不超过 kWidgetSnapshotMaxDays', () {
+    for (final now in [
+      DateTime(2026, 1, 15),
+      DateTime(2026, 7, 31),
+      DateTime(2026, 12, 31),
+    ]) {
+      final w = widgetWindow(now);
+      final n = dayNumber(w.to) - dayNumber(w.from) + 1;
+      expect(n, lessThanOrEqualTo(kWidgetSnapshotMaxDays),
+          reason: '窗口 $n 天，超过上限 $kWidgetSnapshotMaxDays —— '
+              '改了窗口算法就要同步改上限（生成快照那边有同样的断言）');
+      // 顺手挡住「窗口被改回两个月」：三个月里最短的一种组合是「2 月(28) + 3 月(31) +
+      // 4 月(30)」，两端刚好都不需要补齐 → 89 天。写 84 是给闰年/补齐留的余量，
+      // 同时远大于任何两个月组合（最多 31 + 31 + 6 + 6 = 74）。
+      expect(n, greaterThanOrEqualTo(84), reason: '窗口只有 $n 天，装不下三个月');
     }
   });
 
@@ -303,12 +366,18 @@ void main() {
     expect(d0['shiftName'], '全天班');
     expect(d0['timeRange'], L10n.timeRange('08:00', '24:00', true));
 
-    // 结束「边界」＝次日零点。窗口最后一天（10/31）的同一个 24 小时班结束在
-    // 11/1 00:00；若误按跨午夜那条 +1 天，会跑到 11/2 00:00，`b.last` 会露馅。
+    // 结束「边界」＝次日零点。**窗口最后一天**那个 24 小时班结束在它的次日 00:00；
+    // 若误按跨午夜那条 +1 天，会再往后跑一天，`b.last` 会露馅。
+    //
+    // 这里**不要去写死某个月份的最后一天**：窗口是 v0.9.17 起变宽的三个月，写死
+    // 10/31 就变成「窗口中间某天」的断言了（那正是它上一版会红的原因）。按窗口现算。
     final b = (s['boundaries']! as List).cast<int>();
     expect(b.contains(DateTime(2026, 9, 19).millisecondsSinceEpoch), true);
-    expect(b.last, DateTime(2026, 11, 1).millisecondsSinceEpoch,
-        reason: '10/31 的 24 小时班结束在 11/1 00:00；误加一天会变成 11/2');
+    final lastDay = widgetWindow(DateTime(2026, 9, 18, 10)).to;
+    expect(b.last,
+        DateTime(lastDay.year, lastDay.month, lastDay.day + 1)
+            .millisecondsSinceEpoch,
+        reason: '窗口最后一天的 24 小时班结束在次日 00:00；误加一天会再往后一天');
   });
 
   test('按天改班反映到快照里（快照走 shiftOn，不是 teamShift）', () {
