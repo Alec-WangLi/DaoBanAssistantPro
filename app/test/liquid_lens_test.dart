@@ -68,4 +68,106 @@ void main() {
         reason: '过了 durFast（${AppTokens.durFast.inMilliseconds}ms）还差得远 —— '
             '吸附会比标准档慢一截');
   });
+
+  group('透镜几何', () {
+    const double itemW = 85, capsuleH = 64, pad = 6;
+
+    LiquidLensShape at({double lift = 0, double velocity = 0, double page = 0}) =>
+        LiquidLensShape.of(
+            itemW: itemW,
+            capsuleH: capsuleH,
+            pad: pad,
+            centerPage: page,
+            lift: lift,
+            velocity: velocity);
+
+    test('静止：是一枚胶囊（两端半径相等、且等于高的一半）', () {
+      final s = at();
+      expect(s.width, closeTo(itemW, 0.01));
+      expect(s.height, closeTo(capsuleH - 2 * pad, 0.01));
+      expect(s.leftRadius, closeTo(s.rightRadius, 0.001));
+      expect(s.leftRadius, closeTo(s.height / 2, 0.001));
+    });
+
+    test('按住：高度 = 基准 + 2 × navLensProtrude（凸出胶囊）', () {
+      final s = at(lift: 1);
+      expect(s.height,
+          closeTo(capsuleH - 2 * pad + 2 * AppTokens.navLensProtrude, 0.01));
+      expect(s.height, greaterThan(capsuleH), reason: '按住时要高于胶囊才叫凸出');
+    });
+
+    test('拖动：沿运动方向拉伸、垂直方向压缩（面积近似守恒）', () {
+      final s = at(lift: 1, velocity: AppTokens.lensVelocityRef);
+      expect(s.width, greaterThan(itemW));
+      expect(s.height,
+          lessThan(capsuleH - 2 * pad + 2 * AppTokens.navLensProtrude));
+    });
+
+    test('拖动：前缘比后缘圆（向右拖时右端半径更大），向左拖镜像', () {
+      final right = at(lift: 1, velocity: AppTokens.lensVelocityRef);
+      expect(right.rightRadius, greaterThan(right.leftRadius));
+
+      final left = at(lift: 1, velocity: -AppTokens.lensVelocityRef);
+      expect(left.leftRadius, greaterThan(left.rightRadius));
+    });
+
+    test('窄窗：两端圆不许重叠（外公切线必须存在），且形状仍闭合', () {
+      // 工装的小窗是 200×400：可用宽 = 200 − 2×16 = 168，扣掉 pad ×2 后
+      // trackW = 156，n = 4 → itemW = 39；而按住时透镜高 60 —— **宽比高还小**。
+      // 水平胶囊在「宽 < 高」时数学上不成立（两个端头圆会重叠、外公切线不存在），
+      // 这不是假想的，是算出来的。
+      final s = LiquidLensShape.of(
+          itemW: 39,
+          capsuleH: 64,
+          pad: 6,
+          centerPage: 1,
+          lift: 1,
+          velocity: 0);
+      expect(s.leftRadius + s.rightRadius, lessThanOrEqualTo(s.width + 0.001),
+          reason: '两个端头圆重叠了 —— 外公切线不存在，Path 会画出乱形');
+      expect(s.toPath().getBounds().isEmpty, isFalse);
+    });
+
+    test('轮廓落在该落的框里：竖直居中于胶囊中轴，宽度就是 width', () {
+      // 这条钉住 `toPath()` 的坐标约定 —— 按住时 height > capsuleH，
+      // 若按自己的 height/2 居中，凸出会全部跑到下面去。
+      final s = at(lift: 1);
+      final bounds = s.toPath().getBounds();
+      expect(bounds.center.dy, closeTo(capsuleH / 2, 0.01), reason: '没竖直居中');
+      expect(bounds.center.dx, closeTo(s.centerX, 0.01));
+      expect(bounds.width, closeTo(s.width, 0.5));
+      expect(bounds.height, closeTo(s.height, 0.5));
+    });
+
+    test('外壳连成一片：两枚端头圆之间的空隙被切线填上了', () {
+      // 反面是「两个端头圆各画一个圈、中间没接上」—— 包围盒照样对，但中间是空的。
+      //
+      // **探针必须落在两圆之间的空隙里**，不能取形状正中央：拉伸时前缘圆变大，
+      // 正中央其实落在**前缘圆内部**，两个圈分开画也照样判真（第一版就是这么
+      // 写错的，靠下面第一条断言才看得出来）。
+      //
+      // 空隙的中点（在水平中轴上）：`c1.dx + rl` 与 `c2.dx − rr` 的均值，
+      // 展开后 = `centerX + leftRadius − rightRadius`。
+      final s = at(lift: 1, velocity: AppTokens.lensVelocityRef);
+      expect(s.rightRadius, greaterThan(s.leftRadius),
+          reason: '这一档本该是「前缘大、后缘小」（向右拖 → 右端是前缘），'
+              '不然空隙不存在、这条白测');
+
+      final double probeX = s.centerX + s.leftRadius - s.rightRadius;
+      final double distanceToLeftCap =
+          (probeX - (s.centerX - s.width / 2 + s.leftRadius)).abs();
+      final double distanceToRightCap =
+          (probeX - (s.centerX + s.width / 2 - s.rightRadius)).abs();
+      expect(distanceToLeftCap, greaterThan(s.leftRadius),
+          reason: '探针落进了左端圆里 —— 那样 `contains` 为真什么都说明不了');
+      expect(distanceToRightCap, greaterThan(s.rightRadius),
+          reason: '探针落进了右端圆里 —— 同上');
+
+      final p = s.toPath();
+      expect(p.contains(Offset(probeX, s.centerY)), isTrue,
+          reason: '两圆之间的空隙是空的 —— 外公切线没把它们连起来');
+      expect(p.contains(Offset(s.centerX, s.centerY - s.height / 2 - 2)), isFalse,
+          reason: '形状外面那个点被判成在里面 —— 外壳封错了');
+    });
+  });
 }

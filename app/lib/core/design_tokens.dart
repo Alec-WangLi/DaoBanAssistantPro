@@ -113,6 +113,19 @@ class AppTokens {
   /// 掉帧时表现会从「慢一点」变成「抖」。
   static const Duration lensMaxStep = Duration(milliseconds: 48);
 
+  /// 透镜按住时比静止宽多少（逻辑 px）。
+  ///
+  /// 与 [navLensProtrude]（10，纵向）**同量级是有意的**：透镜是一枚「鼓起来的
+  /// 水滴」，不是一张「被拉长成条」的贴纸 —— 纵横两个方向一起长，才读得出体积。
+  static const double lensLiftWidth = 10;
+
+  /// 拖动时形状拉伸的**归一化速度**（px/s）。
+  ///
+  /// 速度到这个值时拉伸达到满档（宽 +20%、高 −12%）；再快也不更多 ——
+  /// 甩得越猛形状越夸张并不是更真，只是更闹。1500 约等于「一格（≈85px）
+  /// 在 55ms 内划过」，是手指正常快拖的量级。
+  static const double lensVelocityRef = 1500;
+
   // ── 排版：角色令牌 ──
   //
   // 令牌即完整样式（字号 + 字重 + 行高）。界面层只写角色名，不写 fontSize /
