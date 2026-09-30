@@ -27,6 +27,7 @@ import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
+import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import 'support/plugin_channels.dart';
@@ -238,12 +239,12 @@ void main() {
     });
   });
 
-  /// 把一整块**主壳**光栅化成原始像素。
+  /// 按给定的液态档设置 pump 一次主壳，返回包着它那个 `RepaintBoundary` 的 key。
   ///
-  /// 样本为什么是主壳、不再是某个玻璃件：**2026-10-01 起液态档只作用于底栏**
-  /// （规格 §2 决策①），别的玻璃面两档本来就该一模一样 —— 继续拿它们当样本，
-  /// 这条守门会变成一句「永远为假」的空话（`GlassPill` 那条就是这么失效的）。
-  Future<List<int>> shotShell(
+  /// **液态档必须走 prefs、不能只拨模块级标志**：屏幕一 `ref.watch(appSettingsProvider)`
+  /// 就会建 notifier、`_load()` 读 prefs，把标志覆盖回去 —— v0.10.1 那两张
+  /// 「液态档」基线图与标准档逐字节相同，就是这么来的。
+  Future<GlobalKey> pumpShell(
     WidgetTester tester, {
     required bool liquid,
     Size size = const Size(420, 900),
@@ -255,9 +256,6 @@ void main() {
     // 主壳首帧后会请求权限；没有桩的话那是个没人接的异步异常，
     // flutter_test 会把整个用例判失败。
     stubPluginChannels();
-    // **必须走 prefs，不能只拨模块级标志**：屏幕一 `ref.watch(appSettingsProvider)`
-    // 就会建 notifier、`_load()` 读 prefs，把标志覆盖回去 —— v0.10.1 那两张
-    // 「液态档」基线图与标准档逐字节相同，就是这么来的。
     SharedPreferences.setMockInitialValues(<String, Object>{
       'onboarded': true,
       'lastSeenVersion': appVersion,
@@ -279,7 +277,27 @@ void main() {
     for (int i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 40));
     }
+    return key;
+  }
 
+  /// 拆树并推一下时钟：drift 取消查询流时用 `Timer.run` 排了个零时长定时器，
+  /// 不推它跑掉，框架会在测试体结束时报「A Timer is still pending」。
+  Future<void> disposeShell(WidgetTester tester) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+
+  /// 把一整块**主壳**光栅化成原始像素。
+  ///
+  /// 样本为什么是主壳、不再是某个玻璃件：**2026-10-01 起液态档只作用于底栏**
+  /// （规格 §2 决策①），别的玻璃面两档本来就该一模一样 —— 继续拿它们当样本，
+  /// 这条守门会变成一句「永远为假」的空话（`GlassPill` 那条就是这么失效的）。
+  Future<List<int>> shotShell(
+    WidgetTester tester, {
+    required bool liquid,
+    Size size = const Size(420, 900),
+  }) async {
+    final GlobalKey key = await pumpShell(tester, liquid: liquid, size: size);
     final RenderRepaintBoundary boundary =
         key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
     late List<int> bytes;
@@ -291,13 +309,153 @@ void main() {
       image.dispose();
       bytes = data!.buffer.asUint8List().toList();
     });
-
-    // 拆树并推一下时钟：drift 取消查询流时用 `Timer.run` 排了个零时长定时器，
-    // 不推它跑掉，框架会在测试体结束时报「A Timer is still pending」。
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 20));
+    await disposeShell(tester);
     return bytes;
   }
+
+  /// 从底栏 `.85` 处（第 3 格）按下要用的位置。
+  Offset lastTab(WidgetTester tester) {
+    final Rect nav = tester.getRect(find.byKey(const Key('glass-nav-bar')));
+    return Offset(nav.left + nav.width * 0.85, nav.center.dy);
+  }
+
+  LiquidLens lensOf(WidgetTester tester) =>
+      tester.widget<LiquidLens>(find.byType(LiquidLens));
+
+  testWidgets('交互契约两档一致：按住期间页面不动、松手才提交', (tester) async {
+    // 这一条钉的是用户 2026-10-01 那句话的可断言形式：「点一下滑块自动过来、然后
+    // 切页；长按滑块自动吸附，**松开滑块时**才切到它最终所在的那个区域」。
+    //
+    // 视觉可以不同，**提交时机不许不同**。
+    Future<(List<int>, int)> run({required bool liquid}) async {
+      await pumpShell(tester, liquid: liquid);
+      final PageController c =
+          tester.widget<PageView>(find.byType(PageView)).controller!;
+      final TestGesture g = await tester.startGesture(lastTab(tester));
+      final List<int> during = <int>[];
+      for (int i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 40)); // 共 400ms
+        during.add(c.page!.round());
+      }
+      await g.up();
+      for (int i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+      }
+      final int after = c.page!.round();
+      await disposeShell(tester);
+      return (during, after);
+    }
+
+    final (List<int> stdDuring, int stdAfter) = await run(liquid: false);
+    final (List<int> liqDuring, int liqAfter) = await run(liquid: true);
+
+    expect(stdDuring, everyElement(0), reason: '按住期间页面就不该动');
+    expect(liqDuring, stdDuring, reason: '两档按住期间的页面位置不一样');
+    expect(stdAfter, 3, reason: '松手要落在滑块最终所在的那一格');
+    expect(liqAfter, stdAfter, reason: '两档的提交终值不一样 —— 液态档换的应该只有视觉');
+  });
+
+  testWidgets('标准档的底栏树里没有透镜', (tester) async {
+    await pumpShell(tester, liquid: false);
+    expect(find.byType(LiquidLens), findsNothing, reason: '标准档里混进了液态档的元素');
+    await disposeShell(tester);
+  });
+
+  testWidgets('液态档的底栏树里有透镜', (tester) async {
+    await pumpShell(tester, liquid: true);
+    expect(find.byType(LiquidLens), findsOneWidget);
+    await disposeShell(tester);
+  });
+
+  testWidgets('点按换页：透镜是滑过去的，不是瞬移过去的', (tester) async {
+    await pumpShell(tester, liquid: true);
+    final double startX = lensOf(tester).shape.centerX;
+    final TestGesture g = await tester.startGesture(lastTab(tester));
+    // **必须先把 `kPressTimeout` 等过去**（100ms）：这个 GestureDetector 同时挂着
+    // tap 与横向拖动两个识别器，`onTapDown` 要等竞技场裁决才触发 —— 只泵 30ms 的话
+    // 手势压根还没开始，量到的当然是「没动」。110ms 时 `_press` 刚跑、升程的闸门
+    // （lensHoldDelay）还没开，正是「开始滑、但还没提起」的那一刻。
+    for (int i = 0; i < 11; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    final double midX = lensOf(tester).shape.centerX;
+    await g.up();
+    for (int i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+    }
+    final double endX = lensOf(tester).shape.centerX;
+
+    expect(midX, greaterThan(startX + 5), reason: '按下之后透镜没动 —— 那是瞬移');
+    expect(midX, lessThan(endX - 5), reason: '按下就到位了 —— 那不叫滑过去');
+    await disposeShell(tester);
+  });
+
+  testWidgets('点按不提起：全程高度不超过胶囊', (tester) async {
+    await pumpShell(tester, liquid: true);
+    // 用透镜自己的 `size.height`（= 胶囊高），**不要用 `getRect(导航栏)`** ——
+    // 底栏外面套着 `QScale`，按下时整棵被放大 6%，`getRect` 量到的不是胶囊高。
+    final double capsuleH = lensOf(tester).size.height;
+    final TestGesture g = await tester.startGesture(lastTab(tester));
+    for (int i = 0; i < 3; i++) {
+      // 3 × 30ms = 90ms < lensHoldDelay(110ms)
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(lensOf(tester).shape.height, lessThanOrEqualTo(capsuleH + 0.5),
+          reason: '快速点按不该把透镜提起来 —— 凸出胶囊是「按住」的专属信号');
+    }
+    await g.up();
+    await disposeShell(tester);
+  });
+
+  testWidgets('按住才提起：超过 lensHoldDelay 之后高度必须超过胶囊', (tester) async {
+    await pumpShell(tester, liquid: true);
+    final double capsuleH = lensOf(tester).size.height;
+    final TestGesture g = await tester.startGesture(lastTab(tester));
+    for (int i = 0; i < 20; i++) {
+      // 600ms
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(lensOf(tester).shape.height, greaterThan(capsuleH + 2),
+        reason: '按住 600ms 了还没凸出胶囊');
+    await g.up();
+    await disposeShell(tester);
+  });
+
+  testWidgets('短屏：几何按矮胶囊（52）算，凸出仍然成立', (tester) async {
+    await pumpShell(tester, liquid: true, size: const Size(900, 420));
+    final double capsuleH = lensOf(tester).size.height;
+    expect(capsuleH, closeTo(52, 1), reason: '这一档的胶囊该是 52 高');
+    final TestGesture g = await tester.startGesture(lastTab(tester));
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(lensOf(tester).shape.height, greaterThan(capsuleH + 2),
+        reason: '矮屏下没凸出 —— 几何多半照抄了 64 的结论');
+    await g.up();
+    await disposeShell(tester);
+  });
+
+  testWidgets('点按被取消（竖直滑走）：透镜落回，不许卡在提起状态', (tester) async {
+    await pumpShell(tester, liquid: true);
+    final double capsuleH = lensOf(tester).size.height;
+    final Rect nav = tester.getRect(find.byKey(const Key('glass-nav-bar')));
+    final TestGesture g = await tester.startGesture(nav.center);
+    // 600ms：先等 `kPressTimeout`（100ms）让 onTapDown 触发，再等
+    // `lensHoldDelay`（110ms）让升程的闸门开，剩下才是升程真正爬起来的时间。
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(lensOf(tester).shape.height, greaterThan(capsuleH),
+        reason: '这一步该是提起的');
+
+    await g.moveBy(const Offset(0, -80)); // 竖直滑走 → 点按被取消
+    await g.up();
+    for (int i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(lensOf(tester).shape.height, closeTo(capsuleH - 12, 1),
+        reason: '_pressed 卡在 true —— 透镜永远提着凸在外面');
+    await disposeShell(tester);
+  });
 
   testWidgets('液态档**真的画了东西**：关 / 开两态的光栅化像素必须不同',
       (tester) async {
