@@ -40,7 +40,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.3\n'
+const String _changelogZh = 'v0.10.4\n'
+    '· 修好窄窗口下的一处严重问题：拖动底栏滑块时它会整个消失、还一闪一没（窗口宽度不够时那个形状算不出来）\n'
+    '· 点待办提醒的通知切到待办页时，底栏滑块也跟着走过去（之前页面翻过去了、滑块还留在原处）\n\n'
+
+    'v0.10.3\n'
     '· 底栏滑块重做：按住它时会吸附到手指上、放大成一枚真的玻璃滴，拖得越快形状拉得越长，松手带一点回弹地落回那一格\n'
     '· 它的边缘现在有一圈跟着主色调走的彩色折射光；凸出胶囊时，胶囊那条边会在它里面被折进去\n'
     '· 点一下照旧：滑块滑过去、切页，不提起 —— 凸起是「按住」专属的\n'
@@ -104,16 +108,13 @@ const String _changelogZh = 'v0.10.3\n'
     '· 待办页那个「重复待办」入口挪到了右上角（原来紧贴在标题后面，看着像标题的一部分）\n'
     '· 修好更新说明里的 markdown 标记：像「两段时间不许重叠」那种加粗写法会原样带上两个星号。更新日志走的是纯文本渲染，标记不会被解析；这回补了一条用例盯着，再混进去就直接失败\n'
     '· 修好「把每周三改成每周五」这条路径在周三、周四不生效：编辑一个重复待办时会把系列的起始日改写成「当前这一次」的日期，于是「最近的那个周五」被算成早于起始日、静默不对齐\n\n'
-
-    'v0.9.14\n'
-    '· 「排班时段」不再设在排班编辑器里了：现在在「排班管理」页顶部，一条时间线由上到下 —— 头一行是「其余时间」（没被时段覆盖的日子归它管），下面是你排的每一段，点任意一行就能改\n'
-    '· 两段时间不许重叠：一天只能有一套排班。撞上了会告诉你跟哪一段撞的、撞的是哪几天。（从前允许重叠，结果设了两套都占 9 月、出来的是其中一套，说不清为什么）\n'
-    '· 「其余时间」可以设成「无」：两个班表之间领导真给休息几天时，直接留空就行，不必再专门建一套「休息」的班表。那些天在日历上会写一句「这段时间没有排班」，告诉你去哪加一段\n'
-    '· 日历顶栏那个「切换排班」按钮改成了「排班时段」：点开是一张只读的时间线，能看到这段时间在用哪套、今天落在哪一段，要改就点底下的「管理排班时段」。原来那个按钮在时段盖满日子之后就什么也改不动，看着像坏了\n'
-    '· 一套班表现在可以出现在多段上（9 月临时换成别的班表、10 月再换回来），从前那种「一套只占一段」的写法表达不了\n\n'
 ;
 
-const String _changelogEn = 'v0.10.3\n'
+const String _changelogEn = 'v0.10.4\n'
+    '· Fixed a serious bug in narrow windows: the tab pill could vanish entirely — and flicker — while you dragged it\n'
+    '· Tapping a todo reminder now carries the tab pill along when the app jumps to the todo page (previously the page moved but the pill stayed put)\n\n'
+
+    'v0.10.3\n'
     '· The tab pill has been rebuilt: hold it and it sticks to your finger, swelling into a real droplet of glass that stretches the faster you drag and springs back into place when you let go\n'
     '· Its rim now carries a prismatic edge that follows your accent colour, and the bar edge bends through it while lifted\n'
     '· A tap still just slides the pill across and switches pages; lifting belongs to holding\n'
@@ -177,13 +178,6 @@ const String _changelogEn = 'v0.10.3\n'
     '· The "Repeating" entry on the todo screen moved to the top right corner (it used to sit right after the title, looking like part of it)\n'
     '· Fixed markdown markers leaking into the update notes: bold text showed up with its two asterisks. The in-app changelog is plain text and never parses markup; a test now fails if any gets in again\n'
     '· Fixed "change a weekly Wednesday todo to Friday" doing nothing on Wednesdays and Thursdays: editing a repeating todo rewrote the series start date to the current occurrence, so the most recent Friday came out before the start and the alignment was silently skipped\n\n'
-
-    'v0.9.14\n'
-    '· The schedule timeline no longer lives in the schedule editor: it is now the top section of the Schedules page, one line per period from top to bottom — the first line is "Other dates" (which covers whatever no period covers), then each period you placed. Tap any line to edit it\n'
-    '· Periods may not overlap: a day can only belong to one schedule. If they clash, the app names the period you clashed with and the dates involved. (Overlaps used to be allowed, and two schedules both covering September silently resolved to one of them)\n'
-    '· "Other dates" can be set to none: when your manager really does give you a few days off between two schedules, just leave it blank instead of building a "rest" schedule for it. Those days say "No schedule for these dates" on the calendar, pointing at where to add a period\n'
-    '· The calendar\'s "Switch schedule" button is now "Schedule timeline": a read-only overview showing which schedule is in force, which period contains today, and a "Manage the timeline" entry. The old button could not change anything once periods covered the dates, so it looked broken\n'
-    '· A schedule can now appear in several periods (switch away for September, switch back in October) — the old one-period-per-schedule shape could not express that\n\n'
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
