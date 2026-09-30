@@ -318,14 +318,50 @@ object WidgetRenderer {
     }
 
     /**
+     * 那个月能不能画：它的**42 格**（从该月 1 日所在周的周一起连续 42 天）全在快照
+     * 覆盖的范围内。翻月的箭头灰不灰、接收端吞不吞这枚点击，用的都是它。
+     *
+     * 为什么问「42 格」而不是「这个月在 `snap.months` 里」：窗口是按整周对齐的，
+     * 边上那两个月可能**只被蹭到几天** —— 那种月份列在 `months` 里，却画不出一张完整
+     * 的月历（大半格子没数据）。判据必须与「画得出来」严格一致，否则箭头亮着、
+     * 点下去是一张空卡。
+     */
+    internal fun monthCovered(snap: WidgetStore.Snapshot?, firstOfMonth: LocalDate): Boolean {
+        if (snap == null || snap.days.isEmpty()) return false
+        val start = firstOfMonth
+            .minusDays((firstOfMonth.dayOfWeek.value - 1).toLong())
+            .toEpochDay()
+        return start >= snap.days.first().day && start + 41 <= snap.days.last().day
+    }
+
+    /**
+     * 这个实例**现在显示的是哪个月**：锚点 ?? 今天那个月；**锚点那个月要是画不出来
+     * 就当没设**（数据过期 / 被挤到窗口外）。
+     *
+     * ⚠️ **接收端算目标月也走这里**，不许自己去读 `WidgetStore.monthAnchor`：盘上那个
+     * 锚点可能已经是一个渲染端不认的值，两边各判一次就会出现「箭头作用在你没看见的
+     * 那个月」—— 点一下跳到莫名其妙的地方。
+     */
+    internal fun displayedMonth(
+        context: Context,
+        widgetId: Int,
+        snap: WidgetStore.Snapshot?,
+    ): LocalDate {
+        val todayFirst = LocalDate.now().withDayOfMonth(1)
+        val anchored = WidgetStore.monthAnchor(context, widgetId)
+            ?.let { LocalDate.ofEpochDay(it).withDayOfMonth(1) }
+        return if (anchored != null && monthCovered(snap, anchored)) anchored else todayFirst
+    }
+
+    /**
      * 4×5 整月：月份标题 + 周几行 + 6×7 格。
      *
-     * **渲染哪个月由 `LocalDate.now()` 定**，不由快照的生成月定：快照窗口覆盖
-     * 「本月 + 下月」（spec §7.1），跨月那一刻零点那次刷新会重渲染，此时今天已经
-     * 落在新的一个月里 —— 数据早就在窗口里，不需要 App 活着。
+     * **渲染哪个月**由 [displayedMonth] 定（锚点 ?? 今天，锚点画不出来就当没设）——
+     * 不由快照的生成月定，也不需要 App 活着：数据早就在窗口里。
      *
-     * **前导空格**由本月 1 日的星期几现算（周一 = 1）—— 纯日期算术，不是 i18n，
-     * 与不变量 (A) 不冲突。
+     * **42 格是连续 42 天**（v0.9.17 起）：起点是「该月 1 日所在周的周一」，于是月头
+     * 月尾那几格画的是**相邻月份**的日子（日数字走 muted、胶囊照画）——整张卡读起来
+     * 是一段连续的日子。窗口外的格仍然 GONE：**「相邻月」与「没数据」是两回事**。
      *
      * 月份标题从 `snap.months` 里按「年-月」查；**查不到就隐藏标题行**，
      * 绝不借相邻月份的标题顶上。
@@ -338,8 +374,8 @@ object WidgetRenderer {
      * 没班次（空白表方案）那格不画胶囊，与 App 日历格一致（`shift == null` 时那块
      * 根本不画）—— 完整理由见 [weekStrip] 里那条「不能拿 `wg_empty_*` 顶上」。
      *
-     * 不收 `todayIndex`：本卡渲染的是 `LocalDate.now()` 那个月，「今天」是按日期现算的
-     * （见上），拿不到快照里那份下标也用不上。
+     * 不收 `todayIndex`：本卡渲染哪个月由锚点决定、42 格又是连续的日子，「今天」只能
+     * 按日期现算（`epoch == todayEpoch`），快照里那份下标在这里用不上。
      */
     private fun monthCard(
         context: Context,
@@ -361,9 +397,13 @@ object WidgetRenderer {
 
         val today = LocalDate.now()
         val todayEpoch = today.toEpochDay()
+        // 显示哪个月见 `displayedMonth` 的注释（锚点在盘上、但画不出来时按没设处理）。
+        val firstOfMonth = displayedMonth(context, widgetId, snap)
 
         // ── 月份标题 ──
-        val title = snap.months.firstOrNull { it.y == today.year && it.m == today.monthValue }
+        val title = snap.months.firstOrNull {
+            it.y == firstOfMonth.year && it.m == firstOfMonth.monthValue
+        }
         if (title == null) {
             v.setViewVisibility(R.id.wg_m_title, android.view.View.GONE)
         } else {
@@ -389,54 +429,62 @@ object WidgetRenderer {
             }
         }
 
-        // ── 42 格 ──
-        val firstOfMonth = today.withDayOfMonth(1)
-        val leading = firstOfMonth.dayOfWeek.value - 1   // 周一 = 1 → 前导空格数
-        val daysInMonth = firstOfMonth.lengthOfMonth()
+        // ── 42 格：从「该月 1 日所在周的周一」起**连续** 42 天 ──
+        //
+        // 月头月尾那几格因此画的是**相邻月份**的日子，整张卡读起来是一段连续的日子。
+        // 窗口外的格仍然 GONE —— 「相邻月」（有数据、照画）与「没数据」（挖空）是两回事。
+        val leading = firstOfMonth.dayOfWeek.value - 1   // 周一 = 1 → 前导天数
+        val gridStart = firstOfMonth.minusDays(leading.toLong())
         val slotIds = IntArray(42) { i ->
             context.resources.getIdentifier("wg_m_slot${i + 1}", "id", context.packageName)
         }
 
         for (slot in 0 until 42) {
             // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
-            // 前面的取舍）。42 格每格都要清 —— 前导/尾随空格那两支也走这里。
+            // 前面的取舍）。42 格每格都要清 —— 窗外那几格也走这里。
             v.removeAllViews(slotIds[slot])
-            val dayOfMonth = slot - leading + 1
-            if (dayOfMonth < 1 || dayOfMonth > daysInMonth) {
-                // 前导/尾随空格：GONE —— GridLayout 里 GONE 的子视图不参与布局。
-                v.setViewVisibility(slotIds[slot], android.view.View.GONE)
-                continue
-            }
-            val date = firstOfMonth.withDayOfMonth(dayOfMonth)
+            val date = gridStart.plusDays(slot.toLong())
             val epoch = date.toEpochDay()
             val i = snap.days.indexOfFirst { it.day == epoch }
             if (i < 0) {
-                // 窗口里没有这天（理论上不会发生）。当成空格而不是「没班次」——
-                // 后者会画出一张理直气壮的空格。
+                // 快照没盖到这一天（窗口到头了 / 快照过期）。挖空 —— 画一张理直气壮的
+                // 错日子比空着更糟。
                 v.setViewVisibility(slotIds[slot], android.view.View.GONE)
                 continue
             }
             v.setViewVisibility(slotIds[slot], android.view.View.VISIBLE)
 
-            // 点某一格 → 打开 App 并跳到那天。格子占槽位 1..42（一个实例 64 个槽位）。
+            // 点某一格 → 打开 App 并跳到那天。相邻月的格同样如此（点 8 月 31 日就跳
+            // 8 月 31 日，语义自洽）。格子占槽位 1..42（一个实例 64 个槽位）。
             v.setOnClickPendingIntent(
                 slotIds[slot],
                 launchIntent(context, cellRequestCode(widgetId, slot), epochDay = epoch.toInt()),
             )
 
             val d = snap.days[i]
+            val inMonth = date.year == firstOfMonth.year &&
+                date.monthValue == firstOfMonth.monthValue
             val isToday = epoch == todayEpoch
             val c = RemoteViews(context.packageName, R.layout.widget_month_cell)
 
             // 可见性两个方向都要设满：宿主 `reapply` 只重放新动作，漏设的一边会留着
             // 上一次的状态。
             c.setViewVisibility(R.id.wg_mc_day, android.view.View.VISIBLE)
-            c.setTextViewText(R.id.wg_mc_day, dayOfMonth.toString())
+            c.setTextViewText(R.id.wg_mc_day, date.dayOfMonth.toString())
             // 「今天」只走主色，**不许加粗**（`TextView` 没有 `setTypeface(int)`，
-            // 反射会在宿主进程抛 `ActionException`）。
-            c.setTextColor(R.id.wg_mc_day, if (isToday) snap.accent else ink)
+            // 反射会在宿主进程抛 `ActionException`）。相邻月的日数字走 muted ——
+            // 那是这张卡上唯一表达「这个月从哪天开始」的地方。
+            c.setTextColor(
+                R.id.wg_mc_day,
+                when {
+                    isToday -> snap.accent
+                    inMonth -> ink
+                    else -> muted
+                },
+            )
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块根本不画）。
+            // **相邻月的格照样画**（用户 2026-09-30 选的「日数变灰、胶囊照画」）。
             // **不能**拿 `wg_empty_*` 顶上：`tintedChip` 里 `Paint.setAlpha` 会**覆盖**颜色
             // 字节自带的 alpha（fill 写死 36、stroke 写死 115），`#14000000` 会变成一条 45%
             // 的黑描边环，比 App 的长相响得多。正常排班里「休班」是一个**有颜色的班次定义**
