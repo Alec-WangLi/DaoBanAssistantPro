@@ -368,6 +368,9 @@ class _LensBodyPainter extends CustomPainter {
         ..shader =
             AppTokens.accentGradient(accent).createShader(p.getBounds()),
     );
+    _paintSpectralRing(canvas, p);
+    // 白色高光芯压在环上 —— **这一层是「读作光」的关键**：一条纯彩色的环读起来是
+    // 「贴了一圈彩虹贴纸」，而「一圈被点亮的玻璃边」需要一条白芯把颜色挤到两侧去。
     canvas.drawPath(
       p,
       Paint()
@@ -435,4 +438,46 @@ class _LensBodyPainter extends CustomPainter {
       old.origin != origin ||
       old.isDark != isDark ||
       old.accent != accent;
+  /// 光谱环：沿透镜轮廓走一圈**色相**，透明度峰值钉在左上。
+  ///
+  /// **为什么是「画」而不是「算」**：色散只把**已经存在**的颜色分开 —— 主色是青的，
+  /// 折射出来的还是青的，变不出彩虹。iOS 底栏那圈彩虹来自它背后那块彩色背景
+  /// （照片、图标、彩色内容），而本 App 的底色是刻意的极简黑白。想在这里看见彩色，
+  /// 只能画出来。这也正是 `liquid_glass_widgets` 给 iOS 26 那档校准**主动把色散关成
+  /// 0** 的原因（它自己的注释写着「真实的 iOS UI 玻璃几乎没有虹彩」）—— 我们比它
+  /// 更显眼，因为我们是**刻意**让它显眼的。
+  ///
+  /// 颜色锚在 `accent` 的**色相**上：绕一圈走 300°，于是它既「五颜六色」又始终
+  /// 属于这个主题。
+  void _paintSpectralRing(Canvas canvas, Path lensPath) {
+    const int steps = 12;
+    final HSLColor base = HSLColor.fromColor(accent);
+    final List<Color> colors = <Color>[];
+    final List<double> stops = <double>[];
+    for (int i = 0; i <= steps; i++) {
+      final double t = i / steps;
+      // `SweepGradient` 的角度从 **+x（正右）** 起算、屏幕上顺时针。左上约 225°。
+      final double toward =
+          (1 + math.cos((t * 360 - 225) * math.pi / 180)) / 2;
+      colors.add(HSLColor.fromAHSL(
+        0.05 + 0.75 * toward * toward, // 只有左上那一段亮着，其余渐隐
+        (base.hue + 300 * t) % 360, // 走色相，但绕回主色
+        base.saturation.clamp(0.55, 0.95),
+        0.66,
+      ).toColor());
+      stops.add(t);
+    }
+    canvas.drawPath(
+      lensPath,
+      Paint()
+        ..style = PaintingStyle.stroke
+        // 比白芯（1.0）宽 —— 画完之后白芯压在中线上，颜色挤到两侧各约 1px，
+        // 那正是「色边」的宽度。
+        ..strokeWidth = 3
+        ..shader = SweepGradient(
+          colors: colors,
+          stops: stops,
+        ).createShader(lensPath.getBounds()),
+    );
+  }
 }

@@ -304,4 +304,33 @@ void main() {
     expect(brightestRow(px, 60, top, top + 10), lessThanOrEqualTo(top + 1),
         reason: '还没凸出就把胶囊的边折了 —— 静止时本该什么都不发生');
   });
+
+  /// 透镜范围内，色相离 [from] 最远的那个像素偏了多少度。
+  ///
+  /// 只算**饱和度 > 0.25 且不透明**的像素：白色高光芯与那条被折射的边都是低饱和的，
+  /// 它们的色相是不稳的（数值噪声），算进来会让这条断言变成抽奖。
+  double maxHueDelta(List<int> px, Color from) {
+    final double base = HSLColor.fromColor(from).hue;
+    double worst = 0;
+    for (int i = 0; i < px.length; i += 4) {
+      if (px[i + 3] < 128) continue;
+      final HSLColor c = HSLColor.fromColor(
+          Color.fromARGB(px[i + 3], px[i], px[i + 1], px[i + 2]));
+      if (c.saturation < 0.25) continue;
+      double d = (c.hue - base).abs() % 360;
+      if (d > 180) d = 360 - d;
+      if (d > worst) worst = d;
+    }
+    return worst;
+  }
+
+  testWidgets('光谱环走色相：透镜上至少有像素的色相离主色 30° 以上', (tester) async {
+    // teal（色相约 174°）。本体那层染色无论多浓，色相都贴着主色（偏离 ≈ 0）——
+    // 只有真**走了色相**的环才会把它顶到 30° 以上。所以这条不是「有没有画东西」，
+    // 它分得开「走色相的环」与「给主色加了个亮边」。
+    const accent = Color(0xFF12B5A5);
+    final List<int> px = await shotLens(tester, lift: 1, accent: accent);
+    expect(maxHueDelta(px, accent), greaterThan(30),
+        reason: '整枚透镜的色相都贴着主色 —— 那是「给主色加了个亮边」，不是走色相');
+  });
 }
