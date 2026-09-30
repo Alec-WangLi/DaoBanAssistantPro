@@ -413,100 +413,88 @@ class _GlassNavBarState extends State<GlassNavBar>
               tween: Tween<double>(begin: 0, end: _pressed ? 1.0 : 0.0),
               duration: AppTokens.durMed,
               curve: Curves.easeOutBack,
-              builder: (context, swell, __) => GlassRim(
-                radius: capsuleH / 2,
-                isDark: isDark,
-                // 底栏是小控件，同一圈宽度在这里相对更显眼，单收一档。
-                compact: true,
-                sliderIndex: page + 0.5,
-                tabCount: items.length,
-                trackPad: _innerPad,
-                sliderScale: 1 + 0.22 * swell,
-                lensFill: activeColor,
-                lensProtrude: AppTokens.navLensProtrude * swell.clamp(0.0, 1.0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(capsuleH / 2),
-                  child: GlassBlur(
-                    sigma: AppTokens.blurPanel,
-                    child: Container(
-                      height: capsuleH,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(capsuleH / 2),
-                        border: Border.all(color: AppTokens.navBorder(isDark)),
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: AppTokens.navFill(isDark),
-                        ),
+              builder: (context, swell, __) => ClipRRect(
+                borderRadius: BorderRadius.circular(capsuleH / 2),
+                child: GlassBlur(
+                  sigma: AppTokens.blurPanel,
+                  child: Container(
+                    height: capsuleH,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(capsuleH / 2),
+                      border: Border.all(color: AppTokens.navBorder(isDark)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: AppTokens.navFill(isDark),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(_innerPad),
-                        child: LayoutBuilder(
-                          builder: (context, c) {
-                            final itemW = c.maxWidth / items.length;
-                            return GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTapDown: (d) =>
-                                  _press(d.localPosition.dx, itemW),
-                              onTapUp: (_) => _release(),
-                              onTapCancel: _onTapCancel,
-                              onHorizontalDragStart: (d) =>
-                                  _dragStart(d.localPosition.dx, itemW),
-                              onHorizontalDragUpdate: (d) =>
-                                  _dragUpdate(d.localPosition.dx, itemW),
-                              onHorizontalDragEnd: (_) => _release(),
-                              onHorizontalDragCancel: _cancel,
-                              child: Stack(
-                                children: [
-                                  // 滑块：平滑吸附到最近功能区，按下放大、松手弹簧回弹
-                                  AnimatedPositioned(
-                                    key: const Key('nav-highlight'),
-                                    duration: _dragging
-                                        ? Duration.zero
-                                        : AppTokens.durFast,
-                                    curve: Curves.easeOutCubic,
-                                    left: _visualPage * itemW,
-                                    top: 0,
-                                    bottom: 0,
-                                    width: itemW,
-                                    child: AnimatedScale(
-                                      scale: _pressed ? 1.22 : 1.0,
-                                      duration: AppTokens.durMed,
-                                      curve: Curves.easeOutBack,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                              AppTokens.radiusL),
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                            colors: AppTokens
-                                                .accentGradient(activeColor)
-                                                .colors,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white.withValues(
-                                                alpha: isDark ? 0.28 : 0.85),
-                                          ),
-                                          boxShadow: <BoxShadow>[
-                                            BoxShadow(
-                                              color: Colors.black
-                                                  .withValues(alpha: 0.12),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(_innerPad),
+                      child: LayoutBuilder(
+                        builder: (context, c) {
+                          final itemW = c.maxWidth / items.length;
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapDown: (d) =>
+                                _press(d.localPosition.dx, itemW),
+                            onTapUp: (_) => _release(),
+                            onTapCancel: _onTapCancel,
+                            onHorizontalDragStart: (d) =>
+                                _dragStart(d.localPosition.dx, itemW),
+                            onHorizontalDragUpdate: (d) =>
+                                _dragUpdate(d.localPosition.dx, itemW),
+                            onHorizontalDragEnd: (_) => _release(),
+                            onHorizontalDragCancel: _cancel,
+                            child: Stack(
+                              children: [
+                                // 滑块：平滑吸附到最近功能区，按下放大、松手弹簧回弹
+                                AnimatedPositioned(
+                                  key: const Key('nav-highlight'),
+                                  duration: _dragging
+                                      ? Duration.zero
+                                      : AppTokens.durFast,
+                                  curve: Curves.easeOutCubic,
+                                  left: _visualPage * itemW,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: itemW,
+                                  child: AnimatedScale(
+                                    scale: _pressed ? 1.22 : 1.0,
+                                    duration: AppTokens.durMed,
+                                    curve: Curves.easeOutBack,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(
+                                            AppTokens.radiusL),
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: AppTokens
+                                              .accentGradient(activeColor)
+                                              .colors,
                                         ),
+                                        border: Border.all(
+                                          color: Colors.white.withValues(
+                                              alpha: isDark ? 0.28 : 0.85),
+                                        ),
+                                        boxShadow: <BoxShadow>[
+                                          BoxShadow(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.12),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                  _iconsRow(isShort, fg, inactiveColor,
-                                      selectedIndex),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+                                ),
+                                _iconsRow(isShort, fg, inactiveColor,
+                                    selectedIndex),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -580,6 +568,25 @@ class _GlassNavBarState extends State<GlassNavBar>
                                 colors: AppTokens.navFill(isDark),
                               ),
                             ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // ①b 边光 + 「光跟随滑块」。
+                    //
+                    // 放在透镜**之下**是有意的：透镜是浮在胶囊**之上**的一枚玻璃，
+                    // 它盖住的那段边光本来就该被它盖住。而亮带打在胶囊那 1px 描边上，
+                    // 静止时透镜（高 52）够不到它，所以照旧看得见。
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: CapsuleRimPainter(
+                            radius: capsuleH / 2,
+                            isDark: isDark,
+                            compact: true,
+                            sliderIndex: _posSpring.value,
+                            tabCount: items.length,
+                            trackPad: _innerPad,
                           ),
                         ),
                       ),
