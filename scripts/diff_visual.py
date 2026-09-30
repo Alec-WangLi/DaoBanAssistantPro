@@ -68,6 +68,9 @@ def main() -> int:
     args = ap.parse_args()
 
     names = sorted(f for f in os.listdir(args.baseline) if f.endswith(".png"))
+    # `extra` 要拿**没过滤过的**基线清单算，否则 `--filter` 一开，其余每一张
+    # 都会被报成「当前目录多出来的」—— 一条会把人带偏的诊断。
+    baseline_all = set(names)
     if args.filter:
         names = [n for n in names if args.filter in n]
 
@@ -91,7 +94,7 @@ def main() -> int:
 
     # 只在当前目录、不在基线里的（新增的屏）
     extra = sorted(f for f in os.listdir(args.current)
-                   if f.endswith(".png") and f not in set(names))
+                   if f.endswith(".png") and f not in baseline_all)
 
     print(f"比了 {len(names) - len(missing)} 张：{len(identical)} 张逐像素相同，"
           f"{len(differing)} 张有差异")
