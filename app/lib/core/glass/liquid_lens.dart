@@ -168,17 +168,32 @@ class LiquidLensShape {
     final Offset c2 = Offset(centerX + width / 2 - rr, cy);
     final double d = c2.dx - c1.dx;
 
-    // 外公切线：两端半径到切点的那条单位向量 m 满足 `(c2 − c1) · m = rl − rr`，
-    // 于是 `m.x = (rl − rr) / d`、`m.y = ±√(1 − m.x²)`。
+    // **退化档：`宽 <= 高`**（独立审查抓出来的 Critical）。
     //
-    // `d` 可能为 0 —— 窄窗下 `width == min(高,宽)`，两端半径已经撑满整个宽度，
-    // 两圆同心且 rl == rr，形状就是一个**正圆**。这一档单开一条 `addOval`：
-    // 走通用分支的话，左端那段圆弧的扫描角正好是 **2π**，而 **`Path.arcTo` 在
-    // 扫描角为 ±2π 时什么都不画**（实测：整个路径是空的、`getBounds()` 退化成
-    // `Rect.zero`）。这条分支同时避开了 `(rl − rr) / 0` 的 0/0。
-    if (d.abs() < 1e-9) {
+    // 这时水平胶囊**数学上不成立**：前后缘半径之差（`0.35·s·_cap`）恰好等于圆心距
+    // `d`（`width − rl − rr`），于是 `mx` 正好是 **1** —— 外公切线塌成一条**竖线**，
+    // 而右端那段圆弧的扫描角正好是 **2π**。**`Path.arcTo` 在扫描角为 2π 时什么都不
+    // 画**（`sky_engine/lib/ui/painting.dart` 的文档写着），实测整条路径面积为 0、
+    // `getBounds()` 退化成 `Rect.zero`：**透镜整个消失**，而死区边界由浮点舍入决定 ——
+    // 表现是拖动中**一闪一没**。
+    //
+    // 哪些尺寸会掉进来：`itemW + 10·lift <= 52 + 20·lift`，也就是 `itemW` 小于约 62
+    // 的窗口。**200×400 那个工装档（itemW 39）在 lift=1 时一半的速度都在死区里。**
+    //
+    // 改成**竖直的胶囊**：两端是半径 `宽/2` 的半圆、沿中轴上下错开，中间用矩形连起来。
+    // 宽度与高度都保住了 —— 于是「按住时凸出胶囊」这个信号在窄窗里照样成立，
+    // 比退成一枚圆团更好（圆团会把高度一起丢掉）。
+    //
+    // 用 `addOval + addRect` 而不是 `arcTo`：这一档本来就是「两圆 + 中间一片」，
+    // 直接拼出来既短，也不会再踩 2π 那个坑。
+    if (width <= height) {
+      final double r = width / 2;
+      final double gap = height / 2 - r;
       return Path()
-        ..addOval(Rect.fromCircle(center: Offset(centerX, cy), radius: _cap));
+        ..addOval(Rect.fromCircle(center: Offset(centerX, cy - gap), radius: r))
+        ..addOval(Rect.fromCircle(center: Offset(centerX, cy + gap), radius: r))
+        ..addRect(Rect.fromLTRB(
+            centerX - r, cy - gap, centerX + r, cy + gap));
     }
 
     final double mx = ((rl - rr) / d).clamp(-1.0, 1.0);

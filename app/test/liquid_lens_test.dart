@@ -348,4 +348,41 @@ void main() {
     expect(maxHueDelta(px, accent), greaterThan(30),
         reason: '整枚透镜的色相都贴着主色 —— 那是「给主色加了个亮边」，不是走色相');
   });
+
+  test('几何在任何尺寸 × 任何速度下都画得出东西（参数化扫一遍）', () {
+    // **实测撞出来的 Critical**（独立审查抓的，我漏了）：
+    // 端头半径取 `min(高, 宽)/2` 之后，只要 **宽 <= 高**，前后缘半径之差就
+    // **恰好等于**圆心距 —— `mx` 正好是 1，外公切线塌成一条竖线，右端那段圆弧的
+    // 扫描角正好是 **2π**，而 **`Path.arcTo` 在扫描角为 2π 时什么都不画**
+    // （`sky_engine/lib/ui/painting.dart` 的文档写着）。于是整条路径面积为 0：
+    // **透镜整个消失**，而且死区的边界由浮点舍入决定 —— 表现是拖动中**一闪一没**。
+    //
+    // 它落在哪些尺寸上：「宽 <= 高」即 `itemW + 10·lift <= 52 + 20·lift`，
+    // 也就是 **itemW 小于约 62** 的窗口 —— 200×400 那个工装档（itemW 39）在
+    // lift=1 时**一半的速度**都落在死区里。而按面积算，工装那份窄窗图里透镜
+    // 贡献 0 像素。
+    //
+    // 原来那条窄窗用例只喂了 `velocity: 0`，正好落在 `d == 0` 那一个点上
+    // （那条有 `addOval` 兜底），所以它是绿的。
+    for (final double itemW in <double>[39, 45, 55, 60, 62, 64, 85, 90]) {
+      for (final double capsuleH in <double>[52, 64]) {
+        for (final double lift in <double>[0, 0.5, 1]) {
+          for (double v = 0; v <= 1500; v += 25) {
+            final LiquidLensShape s = LiquidLensShape.of(
+                itemW: itemW,
+                capsuleH: capsuleH,
+                pad: 6,
+                centerPage: 1,
+                lift: lift,
+                velocity: v);
+            final ctx = 'itemW=$itemW 胶囊高=$capsuleH lift=$lift v=$v';
+            expect(s.toPath().getBounds().isEmpty, isFalse,
+                reason: '$ctx —— 路径是空的（面积为零），透镜整个画不出来');
+            expect(s.toPath().contains(Offset(s.centerX, s.centerY)), isTrue,
+                reason: '$ctx —— 形状正中央不在路径内，等于没画');
+          }
+        }
+      }
+    }
+  });
 }

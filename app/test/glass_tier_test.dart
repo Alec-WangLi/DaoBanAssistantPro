@@ -29,6 +29,7 @@ import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
+import 'package:shiftassistantpro/core/motion.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import 'support/plugin_channels.dart';
@@ -509,6 +510,40 @@ void main() {
 
     expect(lensOf(tester).shape.centerX, greaterThan(before + 20),
         reason: '页面翻过去了、透镜还停在原处');
+    await disposeShell(tester);
+  });
+
+  testWidgets('标准档：点按被取消（竖直滑走）之后不再算按住', (tester) async {
+    // 与液态档那条同源：`onTapCancel` 原来是个**空回调**，`_pressed` 会永远卡在
+    // true —— 标准档下只是胶囊一直大 6%（大概没人注意过）。
+    //
+    // 两棵树接的是**同一个** `_onTapCancel`，但此前只有液态档那条用例 ——
+    // 把标准档那一处改回 `() {}`，不会有任何用例变红。
+    await pumpShell(tester, liquid: false);
+    bool pressed() => tester
+        .widget<QScale>(find.descendant(
+            of: find.byKey(const Key('glass-nav-bar')),
+            matching: find.byType(QScale)))
+        .pressed;
+
+    final Rect nav = tester.getRect(find.byKey(const Key('glass-nav-bar')));
+    final TestGesture g = await tester.startGesture(nav.center);
+    for (int i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 30)); // 过 kPressTimeout
+    }
+    expect(pressed(), isTrue, reason: '按下了却没进入按住态');
+
+    // **竖直滑走不会取消点按** —— 这个 detector 只挂了 tap 与**横向**拖动两个
+    // 识别器，竖直方向没人跟它抢竞技场，于是松手时 onTapUp 照样触发、onTapCancel
+    // 压根不来（第一版这么写，把 onTapCancel 改回空回调也照样绿，等于没有鉴别力）。
+    //
+    // 真正能让 onTapCancel 落地的路径是**指针被系统取消**：按住之后被别的 App /
+    // 来电 / 系统手势接管。那时拖动识别器还没赢（没超过 slop），
+    // `onHorizontalDragCancel` 不会来，只有 onTapCancel —— 空回调的话
+    // `_pressed` 就永远卡在 true。
+    await g.cancel();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(pressed(), isFalse, reason: '_pressed 卡在 true —— 胶囊会一直大 6%');
     await disposeShell(tester);
   });
 }

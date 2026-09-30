@@ -9,6 +9,7 @@
 // 这次抽取是**纯搬移**，行为一字不变（验收是工装出图逐像素相同）。
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -179,10 +180,12 @@ class _GlassNavBarState extends State<GlassNavBar>
 
     // 速度取**位置的真实帧间差分**，不是弹簧自己的 `velocity`：拖动时弹簧压根
     // 没参与（位置是 1:1 给的），它自己的速度恒为 0，形变就永远不会发生。
-    final double seconds = dt.inMicroseconds / 1e6;
-    final double raw = seconds <= 0
-        ? 0
-        : (_posSpring.value - _lastLensCenter) * _itemW / seconds;
+    // 分母给一个**下限**：两帧时间戳几乎相同时（极小正 dt）`raw` 会冲高。
+    // 现在后果被 `LiquidLensShape` 的 `clamp(0,1)` 吸收了（最多满拉伸一帧），
+    // 不是 bug —— 但加了它之后这条算式**确定性地不依赖调度器的抖动**。
+    final double seconds = math.max(
+        dt.inMicroseconds / 1e6, AppTokens.lensMaxStep.inMicroseconds / 1e6);
+    final double raw = (_posSpring.value - _lastLensCenter) * _itemW / seconds;
     _lensVelocityPx = _lensVelocityPx * 0.6 + raw * 0.4;
     _lastLensCenter = _posSpring.value;
 
@@ -635,8 +638,15 @@ class _GlassNavBarState extends State<GlassNavBar>
                       ),
                     ),
                     // ③ 图标 + 手势。
+                    //
+                    // **外面这层 `ClipRRect` 是为了与标准档对齐**：标准档的
+                    // `GestureDetector` 在胶囊的 `ClipRRect` **里面**，胶囊圆角外那
+                    // 一小块会穿透到页面内容；液态档若不加，那两块角区就会选中 tab。
+                    // 差异只有两端约 26×26，但「两档一字不差」是这一版的硬约束。
                     Positioned.fill(
-                      child: Padding(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(capsuleH / 2),
+                        child: Padding(
                         padding: const EdgeInsets.all(_innerPad),
                         child: LayoutBuilder(
                           builder: (context, t) {
@@ -656,6 +666,7 @@ class _GlassNavBarState extends State<GlassNavBar>
                                   isShort, fg, inactiveColor, selectedIndex),
                             );
                           },
+                        ),
                         ),
                       ),
                     ),

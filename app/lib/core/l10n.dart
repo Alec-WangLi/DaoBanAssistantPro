@@ -846,9 +846,11 @@ class L10n {
   /// ⚠️ **它必须说的只有底栏**（v0.10.3）：液态档自 2026-10-01 起只作用于底部导航栏，
   /// 别的玻璃面两档一模一样。上一版写的是「玻璃边缘带光、按下时鼓起成透镜」——
   /// 那是全局描述，在现在这个范围下是**假的**（卡片、顶部胶囊、开关上都没有那圈光了）。
+  /// ⚠️ **长度是量的**：420dp 下这一行只放得下约 21 个汉字，多一个字就折行、
+  /// 把「我的」页整体推下去一行（改文案时工装那 27 张差异屏里有 7 张就是它）。
   static String get liquidGlassHint => t(
-      '底栏滑块按住时提起成透镜、边缘带彩边；关掉是磨砂玻璃',
-      'The tab pill lifts into a prismatic lens while held; off is frosted glass');
+      '按住底栏滑块提起成透镜；关掉是磨砂玻璃',
+      'Hold the tab pill to lift it into a lens; off is frosted glass');
 
   /// 低内存机器上那一行改说这句（开关同时置灰）。
   static String get liquidGlassUnsupportedHint => t(

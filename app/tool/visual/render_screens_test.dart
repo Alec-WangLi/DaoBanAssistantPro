@@ -231,29 +231,39 @@ void main() {
   // 时序不能省：这个 `GestureDetector` 同时挂着 tap 与横向拖动两个识别器，
   // `onTapDown` 要等竞技场裁决（`kPressTimeout` = 100ms）才触发；升程的闸门
   // （`lensHoldDelay` = 110ms）再晚一点。先按 30ms 一帧推够这两段，再拖。
-  visualTest('底栏 · 液态 · 按住拖到一半', (tester) async {
-    failOnOverflow(tester);
-    final db = await freshDb();
-    await renderScreen(
-      tester,
-      name: '40_nav_lens_dragging',
-      home: const HomeShell(),
-      overrides: <Override>[databaseProvider.overrideWithValue(db)],
-      // 液态档必须走 prefs —— 只拨模块标志会被 `_load()` 覆盖回去（v0.10.1 踩过）。
-      extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
-      beforeCapture: (t) async {
-        final Rect nav = t.getRect(find.byKey(const Key('glass-nav-bar')));
-        final TestGesture g = await t.startGesture(
-            Offset(nav.left + nav.width * 0.25, nav.center.dy));
-        addTearDown(g.up); // 取像之后不松手会留下一个未完成的指针
-        for (int i = 0; i < 12; i++) {
-          await t.pump(const Duration(milliseconds: 30));
-        }
-        for (int i = 0; i < 8; i++) {
-          await g.moveBy(const Offset(12, 0));
-          await t.pump(const Duration(milliseconds: 16));
-        }
-      },
-    );
-  });
+  // **五档变体全出**，不是只出手机那一张。
+  //
+  // 这条屏一开始只渲了 420×900 一张 —— 于是**小窗 200×400 那一档从头到尾没被
+  // 「看过」**，而窄窗恰好是「透镜整个画不出来」那个 Critical 的现场（工装出图的
+  // 意义就在这里；AGENTS.md 里「没有屏单 = 没有眼睛」已经记过两次，这是第三次）。
+  for (final variant in visualVariants) {
+    visualTest('底栏 · 液态 · 按住拖到一半 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '40_nav_lens_dragging_${variant.suffix}',
+        home: const HomeShell(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        // 液态档必须走 prefs —— 只拨模块标志会被 `_load()` 覆盖回去（v0.10.1 踩过）。
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        beforeCapture: (t) async {
+          final Rect nav = t.getRect(find.byKey(const Key('glass-nav-bar')));
+          final TestGesture g = await t.startGesture(
+              Offset(nav.left + nav.width * 0.25, nav.center.dy));
+          addTearDown(g.up); // 取像之后不松手会留下一个未完成的指针
+          for (int i = 0; i < 12; i++) {
+            await t.pump(const Duration(milliseconds: 30));
+          }
+          for (int i = 0; i < 8; i++) {
+            await g.moveBy(const Offset(12, 0));
+            await t.pump(const Duration(milliseconds: 16));
+          }
+        },
+      );
+    });
+  }
 }
