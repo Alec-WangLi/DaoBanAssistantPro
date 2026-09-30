@@ -57,6 +57,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// （它是 Expanded），名字框与删除钮要保持可点 —— 这条由视觉工装出图核对。
   static const double _alarmLabelFieldWidth = 120;
 
+  /// 底部那颗「保存并重排闹钟」胶囊的高度：M3 的 `FilledButton` 默认值，
+  /// 探针在 420×900 与 200×400 两档下量到的都是它。**只用来算投影的圆角**
+  /// （胶囊的圆角恒为高度的一半），所以系统字号把它撑得更高时投影会小一圈 ——
+  /// 2~4px 的差在 blur 14 的投影里看不出来，不值得为它去量一次布局。
+  static const double _saveButtonHeight = 48;
+
   bool _loaded = false;
   bool _notFound = false;
   bool _saving = false;
@@ -261,6 +267,14 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // 正文一直铺到屏幕底、从底部那颗胶囊**下面穿过去**（与首页导航胶囊同一套
+      // 写法：`extendBody` + 按钮条自己不画任何底色）。
+      //
+      // 不加这个的话，正文会停在按钮条的上沿被**硬切**（探针实测：卡片正好在距屏底
+      // 80 处齐刷刷断掉），下面露出一整片平色 —— 用户 2026-10-01 真机反馈的
+      // 「单独加了一层蒙板挡住」就是它。`bottomNavigationBar` 本身没错，错的是
+      // 正文到那里就没了；`extendBody` 让它继续铺下去，而浮动层照旧画在上面。
+      extendBody: true,
       appBar: AppBar(
         title: Text(L10n.editSchedule),
         actions: [
@@ -293,8 +307,14 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       AppTokens.spaceLg,
                       AppTokens.spaceSm,
                       AppTokens.spaceLg,
-                      // 底部要给悬浮胶囊让位；短屏胶囊更矮，留白同步收。
-                      AppLayout.of(context).isShort ? 56 : 100),
+                      // 底部要给悬浮胶囊让位。旧版这里是 `isShort ? 56 : 100` 的
+                      // 分档 —— 那是按「正文到按钮条上沿就被切掉」的老结构算的，
+                      // `extendBody` 之后正文伸到屏幕底，56 那一档（小窗）就不够了：
+                      // 最后一行正好塞在胶囊底下。
+                      //
+                      // **叠上系统栏**：按钮条包在 `SafeArea` 里、会跟着手势条一起
+                      // 上移，这里的留白必须跟着（见 `kFloatingSaveInset` 的注释）。
+                      MediaQuery.paddingOf(context).bottom + kFloatingSaveInset),
                   children: [
                     _previewStrip(context),
                     _headerCard(context),
@@ -311,6 +331,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   ],
                 ),
                 ),
+      // 按钮条**不画底色**（只有那颗胶囊自己），这样正文从下面穿过去时看得见。
+      // 位置仍在屏底、仍是浮层：`bottomNavigationBar` 在 Scaffold 的层序里就在
+      // 正文之上，只是从这一版起正文不再被它截断。
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -325,10 +348,27 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                   maxWidth: AppLayout.maxContentWidth),
-              child: FilledButton.icon(
-                onPressed: _saving ? null : _save,
-                icon: const Icon(Icons.check_outlined),
-                label: Text(L10n.saveAndReschedule),
+              // 胶囊是**浮在正文上**的，给它一层投影 —— 不然正文从它底下穿过去时，
+              // 实心胶囊看着像贴上去的一张纸。配方取自 `GlassButton` 的 primary
+              // 那一档（全 app「悬浮的主操作」用的是同一套），圆角与按钮同形
+              // （M3 的 `FilledButton` 是胶囊，圆角恒为高度的一半）。
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: AppTokens.pillOf(_saveButtonHeight),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.30),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: const Icon(Icons.check_outlined),
+                  label: Text(L10n.saveAndReschedule),
+                ),
               ),
             ),
           ),

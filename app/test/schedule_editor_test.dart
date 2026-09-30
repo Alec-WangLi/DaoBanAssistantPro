@@ -170,10 +170,12 @@ Future<_FakeRepository> _pumpEditor(
   WidgetTester tester,
   ShiftSchedule domain, {
   ShiftSchedule? active,
+  // 默认给足高度，让周期里的每一行都真的被构建出来（`find` 才找得到）。
+  // 底部那颗悬浮胶囊的用例要的是**真机比例**的视口（正文真的溢出、真的能滚），
+  // 传 `Size(420, 900)` / `Size(200, 400)`。
+  Size size = const Size(900, 4600),
 }) async {
-  // 编辑器是一整页长列表：给足高度，让周期里的每一行都真的被构建出来，
-  // 否则 ListView 只会懒构建视口内的那几行，find 就找不到。
-  tester.view.physicalSize = const Size(900, 4600);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -1423,5 +1425,77 @@ void main() {
     await tester.tap(find.text(L10n.saveAndReschedule));
     await tester.pumpAndSettle();
     expect(repo.saved!.classes.first.alarms, hasLength(maxAlarmsPerShift));
+  });
+
+  // ---------------------------------------------------------------------------
+  // 底部那颗悬浮的「保存并重排闹钟」胶囊
+  // ---------------------------------------------------------------------------
+  //
+  // 用户 2026-10-01 真机反馈：「『保存并重排闹钟』按钮其实是一个悬浮胶囊。界面划过
+  // 它下面的时候，下面应该是透明的，但你现在单独加了一层蒙板挡住…… 之前这个按键
+  // 可能会挡住下面的东西，所以可以让界面上滑的时候多上滑一点点。」
+  //
+  // 那块「蒙板」就是 `Scaffold.bottomNavigationBar` 本身：它**不是浮在正文上**的，
+  // 正文到它的上沿就被硬切（实测卡片正好在距屏底 80 处齐刷刷断掉），下面露出一整片
+  // 平色。修法是 `extendBody: true`（与首页导航胶囊同一套写法）—— 正文一直铺到屏幕
+  // 底、从胶囊下面穿过去，再把底部留白补足。
+  //
+  // 两条用例钉住两头，缺一条就有一种错法能溜过去：
+  //   ① 正文铺到屏幕底 —— 少了它，板子回来了也没人知道；
+  //   ② 滑到底最后一张卡整个抬到胶囊之上、那块地方真的点得到 —— 少了它，
+  //      `extendBody` 一开就会把最后一行塞到胶囊底下。
+  group('底部悬浮胶囊', () {
+    Finder saveButton() =>
+        find.widgetWithText(FilledButton, L10n.saveAndReschedule);
+
+    testWidgets('正文铺到屏幕底：内容从胶囊下面穿过去，不再被一块板子硬切',
+        (tester) async {
+      await _pumpEditor(tester, _domain(), size: const Size(420, 900));
+
+      final list = tester.getRect(find.byType(ListView).first);
+      final save = tester.getRect(saveButton());
+      // 反面：`bottomNavigationBar` 那版这里量出来是 820（= 屏高 900 − 按钮条 80），
+      // 与胶囊上沿 836 之间那段就是用户看到的「蒙板」。
+      expect(list.bottom, closeTo(900, 0.5),
+          reason: '正文要一直铺到屏幕底（extendBody）；停在 820 就是那条硬切板子还在');
+      expect(list.bottom, greaterThan(save.top),
+          reason: '正文要伸到胶囊**下面**去，而不是到它上沿就停');
+    });
+
+    for (final size in const [Size(420, 900), Size(200, 400)]) {
+      testWidgets('滑到底：最后一张卡整个抬到胶囊之上，那块地方真的点得到（$size）',
+          (tester) async {
+        await _pumpEditor(tester, _domain(), size: size);
+
+        await tester.drag(find.byType(ListView).first, const Offset(0, -8000));
+        await tester.pumpAndSettle();
+
+        final save = tester.getRect(saveButton());
+        final card = tester.getRect(find.byType(GlassTile).last);
+        expect(card.bottom, lessThanOrEqualTo(save.top - 8),
+            reason: '滑到底之后最后一张卡要整个在胶囊之上（留 8 的让位）—— '
+                '不然它的底部压在胶囊下面，点不到');
+
+        // 光有几何还不够，还要证明那块地方**真的点得到**：判据是命中路径里能看到
+        // 列表自己的渲染对象 —— 胶囊盖上去的话，那一点会命中胶囊、路径里不会出现
+        // ListView。（`小窗 200×400` 那一档正是 `isShort ? 56` 那份旧留白会栽的地方：
+        // 开 `extendBody` 之后留白 56 < 按钮条 80，最后一行正好塞在胶囊底下。）
+        final listRender = tester.renderObject(find.byType(ListView).first);
+        final hit =
+            tester.hitTestOnBinding(Offset(card.center.dx, card.bottom - 6));
+        final reachedList = hit.path.any((entry) {
+          // `HitTestEntry.target` 静态类型是 `HitTestTarget`，命中的其实全是
+          // RenderObject（这条路全是渲染对象）。
+          RenderObject? o = entry.target as RenderObject?;
+          while (o != null) {
+            if (identical(o, listRender)) return true;
+            o = o.parent;
+          }
+          return false;
+        });
+        expect(reachedList, isTrue,
+            reason: '卡片底边那一点要落在列表内容上（命中路径里不该只有胶囊）');
+      });
+    }
   });
 }

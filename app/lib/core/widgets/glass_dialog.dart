@@ -115,15 +115,27 @@ class GlassDialog extends StatelessWidget {
             ),
             if (actions.isNotEmpty) ...[
               const SizedBox(height: 16),
-              // **`Wrap` 而不是 `Row`**：按钮一多（「删除 / 取消 / 保存」那种），窄窗口
-              // 里 `Row` 会直接横向溢出 —— 200×400 那档实测溢 23px（那一档的弹层内宽
-              // 只剩约 112dp）。`Wrap` 排不下时自动折到第二行，正常宽度下与 `Row`
-              // 完全一样（**各调用点自己给的 `SizedBox(width: 8)` 照旧生效**）。
-              // 这是公共件上的修法：三个按钮的弹窗不止一处，别各自去改。
-              Wrap(
-                alignment: WrapAlignment.end,
-                runSpacing: 8,
-                children: actions,
+              // **`Align` + `Wrap`，两个都不能少**（2026-10-01 用户真机反馈
+              // 「好多按钮都跑到左边去了」，一查就是这个位置）。
+              //
+              // 外层 `Align` 负责**靠右**：它没有 sizeFactor 时会撑满可用宽度，
+              // 于是里面那块有富余可以对齐。`Wrap` 自己**收缩到内容宽度**，而上面的
+              // Column 是 `crossAxisAlignment.start` —— 光有 `Wrap` 的话，它连同
+              // `WrapAlignment.end` 一起被贴到左边（`end` 在「自己就是内容那么宽」
+              // 时不起任何作用），全 app 二十来个弹窗会一起靠左。
+              //
+              // 内层 `Wrap` 负责**窄窗不溢出**：按钮一多（「删除 / 取消 / 保存」），
+              // `Row(mainAxisAlignment: end)` 在 200×400 那档直接横向溢出 23px
+              // （弹层内宽只剩约 112dp），`Wrap` 排不下时折到第二行，折完每行同样贴右。
+              // **别为了靠右退回 `Row`** —— 那会把 v0.9.18 修掉的那条溢出放回来；
+              // 两条都有用例钉着（`test/glass_dialog_test.dart`）。
+              Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  runSpacing: 8,
+                  children: actions,
+                ),
               ),
             ],
           ],

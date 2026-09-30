@@ -41,7 +41,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.18\n'
+const String _changelogZh = 'v0.9.19\n'
+    '· 修好弹窗里的按钮跑到左边：上一版为了让小窗（200×400）下「删除 / 取消 / 保存」这种多按钮弹窗不横向溢出，动了弹窗共用的按钮行 —— 结果全 App 的弹窗（版本更新、删除确认、排班时段……）的按钮都变成了靠左。现在恢复靠右，小窗该折行的照样折行\n'
+    '· 编辑排班页底部那颗「保存并重排闹钟」不再垫着一条挡板：它是浮在正文上的，界面滑到它下面时能看见内容从底下穿过去（此前正文到那条按钮带的上沿就被硬切，下面露出一整片平色）。滑到底时最后一张卡会整个抬到按钮上面，不会被压住\n'
+    '\n'
+
+    'v0.9.18\n'
     '· 桌面小组件那张月历能翻的范围，从「前后各一个月」放宽到「前后各三个月」—— 标题行两边的箭头点一下翻一月。顺带一个好处：你更久不开 App，卡片上的数据也还够用\n'
     '· 装完新版请先打开一次 App：小组件上的班次是 App 上次运行时算好的，不打开的话卡片还是旧样子（重启桌面也能让它重画，但没必要）。这条从这一版起写进更新说明，免得你以为升级把桌面弄乱了\n'
     '· 修好待办与闹钟列表的一个毛病：条目多的时候，最后一行会被右下角那颗悬浮按钮（以及闹钟页底部那条按钮条）压住，删除键点不到。现在滑到底能把它绕到按钮上面\n'
@@ -97,15 +102,14 @@ const String _changelogZh = 'v0.9.18\n'
     '· 桌面小组件（4×5 整月那张）里超过三个字的农历节日名，现在与 App 里的日历显示一致：前三个字加省略号。上一版只改了 App 里的日历，桌面那张卡漏掉了 —— 同一天两个界面显示得不一样\n'
     '· 顺带补了几条自查用例：桌面小组件「先清空再填」的顺序、以及更新日志固定 10 条这两件长期规则，此前只靠人记，现在漏了会直接测试失败\n\n'
 
-    'v0.9.9\n'
-    '· 修好桌面小组件的字重影：把某天的班按天改成休班之后，有的手机上小组件的旧内容会压在新内容上（日期、班次、周几叠成一团）。成因是小组件每次刷新都往同一个格子里再叠一份、从来不先清空 —— 多数手机上系统会替你清掉，所以一直没露出来，只在 OPPO / vivo 这类机型上现形\n'
-    '· 闹钟铃声多了一档「仅震动」：不想被响醒的时候选它，到点只震动、一点声音都没有。在「我的 → 闹钟铃声」里，与内置铃声并排；那一行现在也会显示当前选的是哪一档（从前永远是一句固定提示），因为这一档设没设成功光靠听是确认不了的\n'
-    '· 修好系统字号调大之后日历显示不全：农历那一行会被截成「财…」「地…」（节日名比「初一」长），周标题那一行还会挤进下面的格子。现在格子里的字一律缩到放得下、不再截断；超过三个字的节日名在格子里显示前三个字加省略号，信息卡里仍写完整的\n'
-    '· 顺带给视觉工装加了一档「大字号」的屏 —— 此前每一屏都只在默认字号下出图，「系统字号放大之后文字被截」这类问题在图上根本看不见（这一轮的日历截断就是这么漏掉的）\n\n'
-
 ;
 
-const String _changelogEn = 'v0.9.18\n'
+const String _changelogEn = 'v0.9.19\n'
+    '· Fixed dialog buttons moving to the left: the last version changed the shared button row so that dialogs with several buttons (Delete / Cancel / Save) would not overflow in a small window (200×400) — which pushed the actions of every dialog in the app (update notes, delete confirmations, schedule periods…) to the left. They are right-aligned again, and still wrap on narrow windows\n'
+    '· The "Save & reschedule alarms" button at the bottom of the schedule editor no longer sits on a plate: it floats over the page, so content scrolls underneath it (until now the list was cut off at the top edge of that bar with a flat band below it). Scrolling to the end now lifts the last card clear of the button\n'
+    '\n'
+
+    'v0.9.18\n'
     '· The month widget now steps three months back or forward instead of one: tap the arrows either side of its title. As a bonus, the card keeps working for longer while the app stays closed\n'
     '· Open the app once after an update: the shifts on the card are worked out the last time the app ran, so until you do, the card still shows the old picture. (Restarting the launcher redraws it too, but that is not needed.) That note now lives in the update notes, so an update never looks like it broke your home screen\n'
     '· Fixed the end of the todo and alarm lists: once there are enough entries, the last row sat under the floating button (or the button bar on the alarm page) and its delete button could not be tapped. Scrolling to the end now lifts it clear\n'
@@ -160,12 +164,6 @@ const String _changelogEn = 'v0.9.18\n'
     'v0.9.10\n'
     '· Lunar festival names longer than three characters now read the same on the 4×5 month widget as they do in the app\'s calendar (first three characters plus an ellipsis). The last version only fixed the in-app calendar and missed that card, so the same day looked different in the two places\n'
     '· A couple of long-standing rules now have failing tests behind them instead of living in someone\'s memory: the widget clearing each slot before filling it, and the changelog keeping exactly 10 entries\n\n'
-
-    'v0.9.9\n'
-    '· Fixed overlapping text in the home-screen widget: after changing a day\'s shift to a rest day, on some phones the old content was drawn on top of the new one (dates, shifts and weekdays piling up). The widget added a fresh copy into the same slot on every refresh without clearing it first — most launchers clear it for us, which is why it only showed up on OPPO / vivo devices\n'
-    '· Added a "Vibrate only" ringtone: the alarm vibrates without making a sound. Pick it in Me → Alarm ringtone, next to the built-in one. That row now also shows which option is active (it used to show a fixed hint) — with this option you cannot confirm it by ear until the next alarm rings\n'
-    '· Fixed the calendar being cut off with a large system font: the lunar line was truncated to "财…" / "地…" (festival names are longer than "初一"), and the weekday row bled into the grid below. Text in the cells now shrinks to fit instead of being cut off; festival names longer than three characters show their first three plus an ellipsis in the grid, and stay complete in the info card\n'
-    '· The visual harness now renders a large-font screen too. Every screen used to be captured at the default font size only, so "text cut off when the system font is enlarged" was structurally invisible in the images — which is how this round\'s calendar truncation slipped through\n\n'
 
 ;
 
