@@ -841,9 +841,14 @@ class L10n {
 
   // 外观设置
   static String get liquidGlass => t('液态玻璃', 'Liquid glass');
+  /// 「我的 → 外观 → 液态玻璃」那一行的副标题。
+  ///
+  /// ⚠️ **它必须说的只有底栏**（v0.10.3）：液态档自 2026-10-01 起只作用于底部导航栏，
+  /// 别的玻璃面两档一模一样。上一版写的是「玻璃边缘带光、按下时鼓起成透镜」——
+  /// 那是全局描述，在现在这个范围下是**假的**（卡片、顶部胶囊、开关上都没有那圈光了）。
   static String get liquidGlassHint => t(
-      '玻璃边缘带光、按下时鼓起成透镜；关掉更省电',
-      'A lit rim on the glass, controls swell while you press — off saves battery');
+      '底栏滑块按住时提起成透镜、边缘带彩边；关掉是磨砂玻璃',
+      'The tab pill lifts into a prismatic lens while held; off is frosted glass');
 
   /// 低内存机器上那一行改说这句（开关同时置灰）。
   static String get liquidGlassUnsupportedHint => t(

@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.2\n'
+const String _changelogZh = 'v0.10.3\n'
+    '· 底栏滑块重做：按住它时会吸附到手指上、放大成一枚真的玻璃滴，拖得越快形状拉得越长，松手带一点回弹地落回那一格\n'
+    '· 它的边缘现在有一圈跟着主色调走的彩色折射光；凸出胶囊时，胶囊那条边会在它里面被折进去\n'
+    '· 点一下照旧：滑块滑过去、切页，不提起 —— 凸起是「按住」专属的\n'
+    '· 关掉液态玻璃时，磨砂玻璃的观感与上一版逐像素一致\n\n'
+
+    'v0.10.2\n'
     '· 底栏选中滑块不再比胶囊大 —— 按住时才凸出来成一枚透镜，松手缩回\n'
     '· 滑块的吸附恢复了磨砂玻璃那种平滑（之前是瞬移）；开关现在能按住拖动；主题模式 / 主色调这些分段选择器也带上了同一层效果\n'
     '· 修好几处光加错了地方：待办、闹钟列表的每一行都被描了一圈边（那些行本来就没有模糊）\n'
@@ -105,15 +111,15 @@ const String _changelogZh = 'v0.10.2\n'
     '· 「其余时间」可以设成「无」：两个班表之间领导真给休息几天时，直接留空就行，不必再专门建一套「休息」的班表。那些天在日历上会写一句「这段时间没有排班」，告诉你去哪加一段\n'
     '· 日历顶栏那个「切换排班」按钮改成了「排班时段」：点开是一张只读的时间线，能看到这段时间在用哪套、今天落在哪一段，要改就点底下的「管理排班时段」。原来那个按钮在时段盖满日子之后就什么也改不动，看着像坏了\n'
     '· 一套班表现在可以出现在多段上（9 月临时换成别的班表、10 月再换回来），从前那种「一套只占一段」的写法表达不了\n\n'
-
-    'v0.9.13\n'
-    '· 待办页右上角那个「重复待办」入口重新做了：原来是几个小字，现在是实心主色胶囊（与日历右上角那颗「今天」同一个形态），一眼看得出是个按钮。窄屏上仍只留图标，位置不变\n\n'
-
-
-
 ;
 
-const String _changelogEn = 'v0.10.2\n'
+const String _changelogEn = 'v0.10.3\n'
+    '· The tab pill has been rebuilt: hold it and it sticks to your finger, swelling into a real droplet of glass that stretches the faster you drag and springs back into place when you let go\n'
+    '· Its rim now carries a prismatic edge that follows your accent colour, and the bar edge bends through it while lifted\n'
+    '· A tap still just slides the pill across and switches pages; lifting belongs to holding\n'
+    '· With liquid glass off, the frosted look is pixel-identical to the previous version\n\n'
+
+    'v0.10.2\n'
     '· The tab bar\'s selection slider is no longer larger than the bar at rest — it bulges out into a lens only while you hold it\n'
     '· The slider snaps smoothly again (it used to jump); the switch can now be dragged; the segmented pickers (theme, accent colour) got the same treatment\n'
     '· Fixed several places where the rim landed on rows that are not glass at all (the todo and alarm lists were outlined row by row)\n'
@@ -178,14 +184,7 @@ const String _changelogEn = 'v0.10.2\n'
     '· "Other dates" can be set to none: when your manager really does give you a few days off between two schedules, just leave it blank instead of building a "rest" schedule for it. Those days say "No schedule for these dates" on the calendar, pointing at where to add a period\n'
     '· The calendar\'s "Switch schedule" button is now "Schedule timeline": a read-only overview showing which schedule is in force, which period contains today, and a "Manage the timeline" entry. The old button could not change anything once periods covered the dates, so it looked broken\n'
     '· A schedule can now appear in several periods (switch away for September, switch back in October) — the old one-period-per-schedule shape could not express that\n\n'
-
-    'v0.9.13\n'
-    '· The "Repeating" entry at the top of the todo screen has been redone: it was a few small characters, and is now a solid accent pill (the same shape as the "Today" button on the calendar), so it reads as a button at a glance. In a narrow window it still shows just the icon, in the same place\n\n'
-
-
-
 ;
-
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
 void showChangelogDialog(BuildContext context) {

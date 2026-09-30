@@ -2,7 +2,7 @@
 //
 // 逐帧出图 → `scripts/make_gif.py` 合成动图。
 //
-// **为什么不放在 `tool/visual/`**：那里的 270 条是**回归护栏**（把界面出图留档、供
+// **为什么不放在 `tool/visual/`**：那里的 300 条是**回归护栏**（把界面出图留档、供
 // 人工审阅与前后对比），这里是**产出素材**（更新简介、商店页要用的动图）。两者的产物
 // 与跑法都不同，混在一起会让护栏的条数随「这次要不要出动图」浮动。
 //
@@ -11,8 +11,8 @@
 //
 // 跑法：
 //   flutter test tool/gif/render_gifs_test.dart
-//   python scripts/make_gif.py --prefix drag_liquid_dark_ --out work/gif/nav.gif \
-//       --crop 0,1490,840,1840 --width 620 --fps 13 --colors 96
+//   python scripts/make_gif.py --prefix drag_liquid_dark_ --out work/gif/nav-drag.gif \
+//       --crop 0,1540,840,1800 --width 620 --fps 13 --colors 96
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +31,23 @@ const List<({String suffix, Brightness brightness})> _modes =
   (suffix: 'dark', brightness: Brightness.dark),
 ];
 
+/// **液态档必须走 prefs**，不能只调 `useLiquidGlassTier()`：屏幕一
+/// `ref.watch(appSettingsProvider)` 就会建 notifier、`_load()` 读 prefs，把那个
+/// 模块级标志覆盖回去 —— v0.10.1 出过这个岔子：工装那两张「液态档」基线图与标准档
+/// **逐字节相同**，而「出图看差异、差异必须看得见」那道人工闸门在差异为 0 时静默通过。
+/// 这条动图脚本当年也中过同一个招：拍出来的其实是标准档。
+final Map<String, Object> _liquidPrefs = <String, Object>{
+  ...onboardingPrefs,
+  'liquidGlass': true,
+};
+
+/// 底栏上「沿宽度 [f] 那一带」的位置。**按几何算、不靠 widget key** ——
+/// `nav-highlight` 那个 key 只存在于标准档的树上（液态档那枚滑块已经换成透镜了）。
+Offset _navAt(WidgetTester tester, double f) {
+  final Rect nav = tester.getRect(find.byKey(const Key('glass-nav-bar')));
+  return Offset(nav.left + nav.width * f, nav.center.dy);
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh');
@@ -44,11 +61,10 @@ void main() {
     return db;
   }
 
-  // ① 底栏滑块被按住拖动：透镜**凸出胶囊**、边缘光跟着滑块走。
+  // ① 底栏滑块被按住拖动：透镜**凸出胶囊**、形状跟着速度拉伸、光谱环跟着走。
   //    凸起只在按住时发生，静止帧拍不到。
   for (final ({String suffix, Brightness brightness}) v in _modes) {
     testWidgets('底栏拖动 · ${v.suffix}', (tester) async {
-      useLiquidGlassTier();
       final db = await freshDb();
       late TestGesture gesture;
       bool released = false;
@@ -57,14 +73,13 @@ void main() {
         prefix: 'drag_liquid_${v.suffix}_',
         home: const HomeShell(),
         overrides: <Override>[databaseProvider.overrideWithValue(db)],
-        extraPrefs: onboardingPrefs,
+        extraPrefs: _liquidPrefs,
         brightness: v.brightness,
         count: 44,
         step: const Duration(milliseconds: 70),
         onFrame: (tester, i) async {
           if (i == 0) {
-            gesture = await tester.startGesture(
-                tester.getCenter(find.byKey(const Key('nav-highlight'))));
+            gesture = await tester.startGesture(_navAt(tester, 0.15));
             // 幂等：帧 26 已经松过手的话这里不能再 `up()`（指针已抬起，
             // TestGesture 会断言失败）。
             addTearDown(() {
@@ -75,7 +90,7 @@ void main() {
           } else if (i < 26) {
             await gesture.moveBy(const Offset(4, 0)); // 往右拖约一格
           } else if (i == 26) {
-            await gesture.up(); // 松手 → 吸附、回弹、页面跟过去
+            await gesture.up(); // 松手 → 弹簧落回、页面跟过去
             released = true;
           }
         },
@@ -83,16 +98,43 @@ void main() {
     });
   }
 
-  // ② 开关按一下：把手**按住时鼓起**成透镜、松手缩回并翻过去。
+  // ② 点按换页：透镜**滑过去**、**不提起**。
+  //
+  //    与 ① 是一对反例：同样是从一格到另一格，① 是「按住吸附 + 放大 + 形变」，
+  //    ② 是「不提起、纯粹滑过去」—— 这正是用户 2026-10-01 那条交互契约的两半。
+  for (final ({String suffix, Brightness brightness}) v in _modes) {
+    testWidgets('点按换页 · ${v.suffix}', (tester) async {
+      final db = await freshDb();
+      await renderFrames(
+        tester,
+        prefix: 'tap_liquid_${v.suffix}_',
+        home: const HomeShell(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        extraPrefs: _liquidPrefs,
+        brightness: v.brightness,
+        count: 30,
+        step: const Duration(milliseconds: 40),
+        onFrame: (tester, i) async {
+          if (i != 0) return;
+          await tester.tapAt(_navAt(tester, 0.85));
+        },
+      );
+    });
+  }
+
+  // ③ 开关按一下：把手**按住时鼓起**、松手缩回并翻过去。
+  //
+  //    注意它现在拍的是**标准档**的开关 —— v0.10.3 把液态效果收拢到底栏之后，
+  //    开关上那一版已经删掉了（`liquid_scope_guard_test` 守着）。留着这条是因为
+  //    更新简介里那个「Q 弹」的通用说法要用到它。
   for (final ({String suffix, Brightness brightness}) v in _modes) {
     testWidgets('开关按一下 · ${v.suffix}', (tester) async {
-      useLiquidGlassTier();
       final db = await freshDb();
       late TestGesture gesture;
       bool released = false;
       await renderFrames(
         tester,
-        prefix: 'switch_liquid_${v.suffix}_',
+        prefix: 'switch_${v.suffix}_',
         home: const _SwitchBoard(),
         overrides: <Override>[databaseProvider.overrideWithValue(db)],
         brightness: v.brightness,

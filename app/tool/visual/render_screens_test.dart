@@ -16,6 +16,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
@@ -217,6 +218,41 @@ void main() {
       beforeCapture: (t) async {
         await t.tap(find.byIcon(Icons.timeline));
         await settleVisual(t);
+      },
+    );
+  });
+
+  // 底栏 · 液态 · 按住拖到一半。
+  //
+  // **静止帧拍不到这一档的全部** —— 凸出胶囊、沿运动方向拉伸、光谱环与那条被折射的
+  // 边，都只在**按住**的时候才发生（松手就没了）。所以要起手拖动、**拖到一半停住**
+  // 再取像。
+  //
+  // 时序不能省：这个 `GestureDetector` 同时挂着 tap 与横向拖动两个识别器，
+  // `onTapDown` 要等竞技场裁决（`kPressTimeout` = 100ms）才触发；升程的闸门
+  // （`lensHoldDelay` = 110ms）再晚一点。先按 30ms 一帧推够这两段，再拖。
+  visualTest('底栏 · 液态 · 按住拖到一半', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '40_nav_lens_dragging',
+      home: const HomeShell(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      // 液态档必须走 prefs —— 只拨模块标志会被 `_load()` 覆盖回去（v0.10.1 踩过）。
+      extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+      beforeCapture: (t) async {
+        final Rect nav = t.getRect(find.byKey(const Key('glass-nav-bar')));
+        final TestGesture g = await t.startGesture(
+            Offset(nav.left + nav.width * 0.25, nav.center.dy));
+        addTearDown(g.up); // 取像之后不松手会留下一个未完成的指针
+        for (int i = 0; i < 12; i++) {
+          await t.pump(const Duration(milliseconds: 30));
+        }
+        for (int i = 0; i < 8; i++) {
+          await g.moveBy(const Offset(12, 0));
+          await t.pump(const Duration(milliseconds: 16));
+        }
       },
     );
   });
