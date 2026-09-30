@@ -30,7 +30,8 @@ class HomeShell extends ConsumerStatefulWidget {
   ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends ConsumerState<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell>
+    with WidgetsBindingObserver {
   late final PageController _controller;
   bool _startupRescheduled = false;
 
@@ -51,6 +52,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
+    // 监听生命周期：切回前台时再推一次小组件快照（见 didChangeAppLifecycleState）。
+    WidgetsBinding.instance.addObserver(this);
     _controller = PageController();
     // 首帧后再请求权限（Activity 就绪后请求才会弹系统对话框）
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -116,11 +119,27 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AlarmService.ringingAlarm.removeListener(_onRingingChanged);
     AlarmService.openTodoRequested.removeListener(_onTodoRequested);
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetDayRequested);
     _controller.dispose();
     super.dispose();
+  }
+
+  /// 切回前台时再推一次小组件快照。
+  ///
+  /// 冷启动那次已经推过了（见 `initState` 的后帧回调），这里补的是**重试**：
+  /// `WidgetService.push` 是 fire-and-forget，失败只留一条日志（它的 catch 里写得
+  /// 很清楚），而失败的表现是「卡片停在上一次渲染的样子」—— 用户看到的就是
+  /// 「我明明打开过 App，桌面却没变，得重启桌面才行」。
+  ///
+  /// 一条用户反馈（2026-10-01）是这条的起因。它的**根因**没法在原生侧解决：小组件
+  /// 的数据只能由 App 算（原生不查库），所以「装完新版先打开一次 App」这句必须写进
+  /// 更新简介；而这里保证「打开了就该生效」，不让用户卡在一个没有出口的状态里。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _pushWidgetSnapshot();
   }
 
   void _onRingingChanged() {

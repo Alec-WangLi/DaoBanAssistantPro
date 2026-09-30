@@ -145,4 +145,43 @@ void main() {
     expect(rows.single.title, '交体检报告');
     await _dispose(tester);
   });
+
+  // ── 底部那颗「新建」按钮不能挡住最后一行的删除键（2026-10-01 用户反馈）──
+  //
+  // 待办页的「新建」是**悬浮**在列表之上的按钮，而删除键也贴右边 —— 待办一多，
+  // 最后一行正好落在它下面，「删除」就点不到了。症状是**静默**的：界面上看不出
+  // 「还得再往上滑一点」，用户只知道「点了没反应」。
+  //
+  // 判据走**几何**而不是「列表的 padding 是多少」：后者换个写法（比如把留白挪进
+  // 某一项的 margin）就失效了，而这条要守的是「那一行到底点不点得到」。
+  testWidgets('待办建很多条时：最后一行的删除键不被「新建」按钮挡住', (tester) async {
+    // 条数要**真的撑破视口**（夹具是 420×1200，一行约 74 → 12 条根本滚不动，
+    // 那样这条用例会变成一句永远为真的空话：第一版就是这么写的，把留白改回 96
+    // 照样绿）。24 条确保能滚到底。
+    final today = dateOnly(DateTime.now());
+    for (var i = 0; i < 24; i++) {
+      await repo.addEvent(title: '待办 $i', date: today);
+    }
+    await mount(tester);
+
+    // 滑到用户能滑到的最下面那一屏。
+    await tester.drag(find.byType(ListView), const Offset(0, -8000));
+    await _settle(tester);
+
+    final fab = tester.getRect(find.byIcon(Icons.add_outlined));
+    final buttons = find.byType(GlassDeleteButton);
+    final last = tester.getRect(buttons.last);
+
+    expect(last.bottom, lessThanOrEqualTo(fab.top),
+        reason: '最后一行那颗删除键的底边（${last.bottom}）应当在「新建」按钮的'
+            '顶边（${fab.top}）之上 —— 被压住就点不到了');
+
+    // **主判据**：在它自己的中心做一次命中测试，它必须真的在命中路径里。
+    // 只断言几何的话，「被别的层吃掉手势」这类照样漏。
+    final hit = tester.hitTestOnBinding(last.center);
+    expect(hit.path.any((e) => e.target == tester.renderObject(buttons.last)), isTrue,
+        reason: '删除键的中心得真的打得中 —— 被 FAB 盖住时命中的是 FAB');
+
+    await _dispose(tester);
+  });
 }

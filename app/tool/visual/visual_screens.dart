@@ -4,6 +4,7 @@
 // 两边各写一份清单的话，迟早会有一边漏掉某屏，而漏掉是不会报错的。
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
@@ -306,7 +307,45 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 时段弹层（「添加时段」/ 编辑某一段）。
+    //
+    // **此前没进过屏单** —— 所以「里面那三个标签比同一页打开它的那行还小一档」
+    // 一路没人看见，直到用户 2026-10-01 说「字体是不是好像有点小了」。这条按
+    // 「新界面一律补进屏单」那条规矩补上：弹层是命令式的、没有可渲染 widget，
+    // 得包一层薄壳把它弹出来。
+    slug: '33_span_editor',
+    title: '排班管理 · 时段弹层',
+    build: (db) async => const _SpanEditorHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
+
+/// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 与 `_DialogHost` 同一个套路，差别只在它是 `ConsumerStatefulWidget`：
+/// `showSpanEditor` 要一个 `WidgetRef`。
+class _SpanEditorHost extends ConsumerStatefulWidget {
+  const _SpanEditorHost();
+
+  @override
+  ConsumerState<_SpanEditorHost> createState() => _SpanEditorHostState();
+}
+
+class _SpanEditorHostState extends ConsumerState<_SpanEditorHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showDialog` 要用 `context` 的 `Overlay`。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showSpanEditor(context, ref);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
 
 /// 「调整班次」选择层的宿主 —— **只为工装存在，不进 `lib/`**。
 ///

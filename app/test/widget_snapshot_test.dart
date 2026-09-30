@@ -64,7 +64,7 @@ void main() {
 
   setUp(() => L10n.locale = 'zh');
 
-  test('窗口 = [上月1日所在周的周一, 下月1日所在周的周一 + 41 天]，且恒包含今天', () {
+  test('窗口 = [−3月1日所在周的周一, +3月1日所在周的周一 + 41 天]，且恒包含今天', () {
     for (final now in [
       DateTime(2026, 9, 20, 10),
       DateTime(2026, 10, 1, 0, 5), // 跨月当天
@@ -82,12 +82,13 @@ void main() {
       final first = days.first['day'] as int;
       final last = days.last['day'] as int;
 
-      // v0.9.17 起窗口是**整周对齐的三个月**（原先是 [min(本月1日, 本周一), 下月末]）。
-      // 终点不是「下月的最后一天」：月历那张卡画**连续 42 天**，下月自己的 42 格会
-      // 越过「下月最后一天所在的那个周日」（下月是 2 月时要排到 3/8，而那个周日是
-      // 3/1）—— 盖不住的话那个月就翻不过去。见 `widgetWindow` 的注释。
-      final prevFirst = DateTime(now.year, now.month - 1, 1);
-      final nextFirst = DateTime(now.year, now.month + 1, 1);
+      // v0.9.18 起窗口是**整周对齐的七个月（前后各 3 个）**（先是三个月，再往前
+      // 是 [min(本月1日, 本周一), 下月末]）。终点不是「最后一个月的最后一天」：
+      // 月历那张卡画**连续 42 天**，那个月自己的 42 格会越过「它最后一天所在的那个
+      // 周日」（该月是 2 月时要排到 3/8，而那个周日是 3/1）—— 盖不住它那个月就翻
+      // 不过去。见 `widgetWindow` 的注释。
+      final prevFirst = DateTime(now.year, now.month - 3, 1);
+      final nextFirst = DateTime(now.year, now.month + 3, 1);
       final from = DateTime(prevFirst.year, prevFirst.month,
           prevFirst.day - (prevFirst.weekday - 1));
       final nextGridStart = DateTime(nextFirst.year, nextFirst.month,
@@ -95,9 +96,9 @@ void main() {
       final to = DateTime(nextGridStart.year, nextGridStart.month,
           nextGridStart.day + 41);
       expect(first, dayNumber(from),
-          reason: '窗口起点应当是上月 1 日所在周的周一（now=$now）');
+          reason: '窗口起点应当是「本月 −3 个月」1 日所在周的周一（now=$now）');
       expect(last, dayNumber(to),
-          reason: '窗口终点应当是下月 1 日所在周的周一 + 41 天（now=$now）');
+          reason: '窗口终点应当是「本月 +3 个月」1 日所在周的周一 + 41 天（now=$now）');
 
       // 恒包含今天，且 day 逐日递增
       final today = dayNumber(now);
@@ -159,12 +160,15 @@ void main() {
     expect((s['weekdays']! as List).length, 7);
     expect((s['weekdays']! as List).first, L10n.weekday(0));
 
-    // 2026-10-01 → 窗口从 8/31（上月 1 日所在周的周一）起、到 12/6（下月 1 日所在周的
-    // 周一 + 41 天）止，所以覆盖 8/9/10/11/12 **五**个月（整周对齐会蹭到边上两个月）。
+    // 2026-10-01 → 窗口从 6/29（−3 月的 1 日 7/1 是周三 → 所在周的周一）起、到
+    // 2027-02-07（+3 月的 1 日 2027/1/1 是周五 → 周一 12/28 + 41 天）止，覆盖
+    // **九**个月（整周对齐会蹭到两端各一个多月）。
     final months = (s['months']! as List).cast<Map>();
-    expect(months.map((m) => '${m['y']}-${m['m']}').toList(),
-        ['2026-8', '2026-9', '2026-10', '2026-11', '2026-12']);
-    expect(months.first['title'], L10n.yearMonth(DateTime(2026, 8)));
+    expect(months.map((m) => '${m['y']}-${m['m']}').toList(), [
+      '2026-6', '2026-7', '2026-8', '2026-9', '2026-10',
+      '2026-11', '2026-12', '2027-1', '2027-2',
+    ]);
+    expect(months.first['title'], L10n.yearMonth(DateTime(2026, 6)));
   });
 
   test('月历格子的农历走 cellLabel：超长节日名截到 3 个字，与 App 日历一致', () {
@@ -228,7 +232,7 @@ void main() {
   // 能翻多远完全由窗口决定：某个月的 42 格只要有一格落在窗口外，那个月就翻不过去
   // （原生按同一条判据把箭头变灰、接收端直接吞掉点击）。所以这条性质不是「锦上添花
   // 的断言」—— 它是 v0.9.17 那个功能的**前提**，写成用例才不会在以后被悄悄改小。
-  test('窗口覆盖「上月 / 本月 / 下月」三个月的完整 42 格', () {
+  test('窗口覆盖「−3 ~ +3 个月」七个月的完整 42 格', () {
     // 取几个刁钻的日子：年初、年末、1 日在周日、1 日在周一、5 行月与 6 行月都有。
     final samples = [
       DateTime(2026, 1, 15),
@@ -242,7 +246,7 @@ void main() {
       final w = widgetWindow(now);
       final from = dayNumber(w.from);
       final to = dayNumber(w.to);
-      for (final delta in const [-1, 0, 1]) {
+      for (final delta in const [-3, -2, -1, 0, 1, 2, 3]) {
         // 那个月的 42 格：从「1 日所在周的周一」起连续 42 天（与原生同一条算法）。
         final first = DateTime(now.year, now.month + delta, 1);
         final start = DateTime(
@@ -269,10 +273,10 @@ void main() {
       expect(n, lessThanOrEqualTo(kWidgetSnapshotMaxDays),
           reason: '窗口 $n 天，超过上限 $kWidgetSnapshotMaxDays —— '
               '改了窗口算法就要同步改上限（生成快照那边有同样的断言）');
-      // 顺手挡住「窗口被改回两个月」：三个月里最短的一种组合是「2 月(28) + 3 月(31) +
-      // 4 月(30)」，两端刚好都不需要补齐 → 89 天。写 84 是给闰年/补齐留的余量，
-      // 同时远大于任何两个月组合（最多 31 + 31 + 6 + 6 = 74）。
-      expect(n, greaterThanOrEqualTo(84), reason: '窗口只有 $n 天，装不下三个月');
+      // 下界按「七个最短的月」算：单个月最少 28 天，七个 28 天是 196 —— 实际不可能
+      // 连着七个 2 月，但下界只要挡住「被人改回三个月」（那最坏才 105）就够，所以取
+      // 一个离两档都远的数：190。
+      expect(n, greaterThanOrEqualTo(190), reason: '窗口只有 $n 天，装不下七个月');
     }
   });
 

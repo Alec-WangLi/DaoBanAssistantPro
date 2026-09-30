@@ -115,8 +115,14 @@ class GlassDialog extends StatelessWidget {
             ),
             if (actions.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              // **`Wrap` 而不是 `Row`**：按钮一多（「删除 / 取消 / 保存」那种），窄窗口
+              // 里 `Row` 会直接横向溢出 —— 200×400 那档实测溢 23px（那一档的弹层内宽
+              // 只剩约 112dp）。`Wrap` 排不下时自动折到第二行，正常宽度下与 `Row`
+              // 完全一样（**各调用点自己给的 `SizedBox(width: 8)` 照旧生效**）。
+              // 这是公共件上的修法：三个按钮的弹窗不止一处，别各自去改。
+              Wrap(
+                alignment: WrapAlignment.end,
+                runSpacing: 8,
                 children: actions,
               ),
             ],

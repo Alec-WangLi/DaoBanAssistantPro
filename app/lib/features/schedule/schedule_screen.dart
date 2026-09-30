@@ -145,7 +145,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                      // 底部留白走 `kFloatingActionInset`：这一页的「新建」按钮是
+                      // **悬浮**在列表之上的，96 那一档下最后一行会被它压住
+                      // （删除键点不到 —— 2026-10-01 用户反馈）。
+                      padding: const EdgeInsets.fromLTRB(
+                          16, 8, 16, kFloatingActionInset),
                       itemCount: events.length,
                       itemBuilder: (context, i) {
                         final e = events[i];

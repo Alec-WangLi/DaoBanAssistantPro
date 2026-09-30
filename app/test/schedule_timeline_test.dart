@@ -12,8 +12,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_action_button.dart';
+import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
@@ -299,6 +301,31 @@ void main() {
         reason: '「删除」与「取消」之间要有间隔');
     expect(leftOf(L10n.save) - rightOf(L10n.cancel), greaterThanOrEqualTo(8),
         reason: '「取消」与「保存」之间要有间隔');
+
+    await _dispose(tester);
+  });
+
+  // 弹层里那三个标签（排班 / 从 / 到）原本是 `rowSecondary`（13 / w400）—— 比
+  // **打开它的那一行**（同一页时间线上那行，`rowPrimary` 14 / w500）又小又轻一档，
+  // 也是全 App 唯一一处把表单行手写成 13/w400 的弹层（别的弹层走 `ListTile` 默认
+  // 16）。用户 2026-10-01 反馈「添加时段界面里面字体好像有点小」。
+  //
+  // 这不是新规矩：本仓为同一件事已经写过一次注释 —— 编辑器那条「卡片标题与行内标签
+  // 落在统一档位」里写着「迁移时如果只对字号不对字重，会掉到 w400 的 rowSecondary，
+  // 这正是要钉住的」。这条就是给这个弹层补上那颗钉子。
+  testWidgets('添加时段弹层：三个标签用 rowPrimary，与同页那行同档', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text(L10n.addSpan));
+    await tester.pumpAndSettle();
+
+    for (final label in [L10n.schedule, L10n.spanFrom, L10n.spanTo]) {
+      final t = tester.widget<Text>(find.descendant(
+          of: find.byType(GlassDialog), matching: find.text(label)));
+      expect(t.style!.fontSize, AppTokens.rowPrimary.fontSize,
+          reason: '「$label」的字号');
+      expect(t.style!.fontWeight, AppTokens.rowPrimary.fontWeight,
+          reason: '「$label」的字重（掉到 w400 就是这一版修的那个毛病）');
+    }
 
     await _dispose(tester);
   });

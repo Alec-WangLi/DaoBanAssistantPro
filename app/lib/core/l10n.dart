@@ -779,9 +779,11 @@ class L10n {
       ];
   static String get guideWidgetTitle => t('桌面小组件', 'Home-screen widgets');
   static List<String> get guideWidgetDesc => [
-        t('三张固定尺寸的卡：本周条（4×1）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历）',
-            'Three fixed-size cards: a week strip (4×1), a today card (4×3 — the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar)'),
+        t('三张固定尺寸的卡：本周条（4×1）、今日卡（4×3，底栏那张信息卡的完整版）、整月（4×5，42 格月历，标题行两边的箭头能翻前后各三个月）',
+            'Three fixed-size cards: a week strip (4×1), a today card (4×3 — the full version of the info card at the bottom of the app) and a month view (4×5, a 42-cell calendar whose title arrows step three months either way)'),
         t('放上去之后不能拉伸', 'They cannot be resized once placed'),
+        t('装完新版先打开一次 App —— 卡片上的班次是上次打开 App 时算好的，不打开就还是旧样子',
+            'Open the app once after an update — the shifts on the card were worked out the last time the app ran, so until then they are the old ones'),
         t('在 App 里改了排班，桌面立刻跟着变；点某一天直接跳到那天的日历',
             'They follow any schedule change you make in the app, and tapping a day jumps to that date in the calendar'),
         t('小米 / HyperOS 要长按桌面空白处 → 添加小部件，进「支持小部件的应用 → 安卓小部件」才找得到',

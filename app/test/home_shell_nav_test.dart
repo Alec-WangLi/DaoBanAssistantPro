@@ -9,6 +9,7 @@
 import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -98,6 +99,38 @@ void main() {
         reason: '高亮滑块必须跟着走 —— 页面翻过去了、高亮还停在原处就是这里出的问题');
     expect(AlarmService.openTodoRequested.value, isFalse,
         reason: '请求位要清掉，否则每次重建都会再跳一次');
+
+    await _disposeShell(tester);
+  });
+
+  // 一条用户反馈（2026-10-01）的兜底：「装完新版之后，桌面小组件要重启（桌面）才
+  // 恢复正常」。根因是**数据只能由 App 算**（原生不查库），所以装完新版确实得先
+  // 打开一次 App —— 这句会写进更新简介。但「我打开了、卡片却没变」不该是个死局：
+  // 推快照是 fire-and-forget，失败只留一条日志（`WidgetService.push` 的 catch），
+  // 下一次触发可能要等到改排班或重启桌面。所以切回前台时再推一次，等于给一次重试。
+  testWidgets('从后台切回前台时再推一次小组件快照', (tester) async {
+    const channel = MethodChannel('com.daoban.shiftassistantpro/settings');
+    final calls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    await _pumpShell(tester);
+
+    // 先退后台，再把计数器清了 —— 冷启动那次推送（首帧后）也已经发生，别把它算进来。
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await _pumpFrames(tester, frames: 4);
+    calls.clear();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await _pumpFrames(tester);
+
+    expect(calls.where((m) => m == 'widgetPushSnapshot'), isNotEmpty,
+        reason: '切回前台要重推一次快照 —— 这是「打开过 App 卡片却没变」的兜底');
 
     await _disposeShell(tester);
   });

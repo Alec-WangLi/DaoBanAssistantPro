@@ -41,7 +41,15 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.17\n'
+const String _changelogZh = 'v0.9.18\n'
+    '· 桌面小组件那张月历能翻的范围，从「前后各一个月」放宽到「前后各三个月」—— 标题行两边的箭头点一下翻一月。顺带一个好处：你更久不开 App，卡片上的数据也还够用\n'
+    '· 装完新版请先打开一次 App：小组件上的班次是 App 上次运行时算好的，不打开的话卡片还是旧样子（重启桌面也能让它重画，但没必要）。这条从这一版起写进更新说明，免得你以为升级把桌面弄乱了\n'
+    '· 修好待办与闹钟列表的一个毛病：条目多的时候，最后一行会被右下角那颗悬浮按钮（以及闹钟页底部那条按钮条）压住，删除键点不到。现在滑到底能把它绕到按钮上面\n'
+    '· 「排班时段 → 添加时段」那个弹层的字体与同一页对齐了：里面三个标签原来又小又轻一档（13/w400），现在与打开它的那一行一样（14/w500）\n'
+    '· 顺手修掉小窗（200×400）下这个弹层的两处布局毛病：三个按钮挤不下时横向溢出、日期那两行的取值放不下\n'
+    '\n'
+
+    'v0.9.17\n'
     '· 桌面小组件那张月历（最大的那张）现在把上个月和下个月的日子连起来一起画了：月头月尾那几格不再是空的，相邻的日数字淡一档、班次照常显示，整张卡读起来是一段连续的日子\n'
     '· 那张卡的标题行多了左右两个箭头：点一下翻上 / 下月，翻到没有数据的月份那侧会变灰；点中间的月份文字回到今天那个月\n'
     '· 翻到你关注的月份之后，跨天、跨月都不会把你拽回来 —— 停在你翻到的那个月，直到你自己点回今天\n'
@@ -95,14 +103,17 @@ const String _changelogZh = 'v0.9.17\n'
     '· 修好系统字号调大之后日历显示不全：农历那一行会被截成「财…」「地…」（节日名比「初一」长），周标题那一行还会挤进下面的格子。现在格子里的字一律缩到放得下、不再截断；超过三个字的节日名在格子里显示前三个字加省略号，信息卡里仍写完整的\n'
     '· 顺带给视觉工装加了一档「大字号」的屏 —— 此前每一屏都只在默认字号下出图，「系统字号放大之后文字被截」这类问题在图上根本看不见（这一轮的日历截断就是这么漏掉的）\n\n'
 
-    'v0.9.8\n'
-    '· 日历页的背景不再是死板的纯色：加了一层极慢的流光（26 秒才挪一小段）。压在上面的磨砂卡片这下「有东西可磨」了 —— 在这之前整页只有响铃界面有那层光，日历是一块平色，玻璃只看得见高光与白描边。浅色主题下它很轻（格子几乎是实心白，光主要从格子缝里和信息卡的磨砂上透出来），深色主题下更明显\n'
-    '· 这层光是按最慢的节奏推进的，不是每帧重画：它 26 秒才漂 46dp，逐帧画每帧只动 0.03dp、没人看得出来，却会让整页永远不空闲、把压在背景上的每一层模糊拖着每帧重算\n'
-    '· 「我的 → 外观 → 高级材质」关掉时，这层光会停下 —— 那个开关的意思就是「这台机器不做贵的合成」，不该一边关模糊一边还在推背景\n\n'
-
 ;
 
-const String _changelogEn = 'v0.9.17\n'
+const String _changelogEn = 'v0.9.18\n'
+    '· The month widget now steps three months back or forward instead of one: tap the arrows either side of its title. As a bonus, the card keeps working for longer while the app stays closed\n'
+    '· Open the app once after an update: the shifts on the card are worked out the last time the app ran, so until you do, the card still shows the old picture. (Restarting the launcher redraws it too, but that is not needed.) That note now lives in the update notes, so an update never looks like it broke your home screen\n'
+    '· Fixed the end of the todo and alarm lists: once there are enough entries, the last row sat under the floating button (or the button bar on the alarm page) and its delete button could not be tapped. Scrolling to the end now lifts it clear\n'
+    '· The "Add a period" dialog now matches the row that opens it: its three labels were a size and a weight lighter (13/w400) and are now 14/w500, like the rest of the page\n'
+    '· Also fixed two layout faults in that dialog in a small window (200×400): its buttons overflowed sideways, and the date rows could not fit their value\n'
+    '\n'
+
+    'v0.9.17\n'
     '· The month widget (the largest one) now draws the previous and next month as well: the empty slots at the start and end of the month are gone, the neighbouring days show a lighter date and their shifts as usual, and the whole card reads as one continuous run of days\n'
     '· Its title row now has a left and a right arrow: tap to step a month back or forward, and the side with no data left greys out; tap the month name in the middle to jump back to today\n'
     '· Once you have stepped away, a new day or a new month will not drag you back — you stay on the month you picked until you tap back to today\n'
@@ -155,11 +166,6 @@ const String _changelogEn = 'v0.9.17\n'
     '· Added a "Vibrate only" ringtone: the alarm vibrates without making a sound. Pick it in Me → Alarm ringtone, next to the built-in one. That row now also shows which option is active (it used to show a fixed hint) — with this option you cannot confirm it by ear until the next alarm rings\n'
     '· Fixed the calendar being cut off with a large system font: the lunar line was truncated to "财…" / "地…" (festival names are longer than "初一"), and the weekday row bled into the grid below. Text in the cells now shrinks to fit instead of being cut off; festival names longer than three characters show their first three plus an ellipsis in the grid, and stay complete in the info card\n'
     '· The visual harness now renders a large-font screen too. Every screen used to be captured at the default font size only, so "text cut off when the system font is enlarged" was structurally invisible in the images — which is how this round\'s calendar truncation slipped through\n\n'
-
-    'v0.9.8\n'
-    '· The calendar no longer sits on a flat colour: a very slow drift of light moves behind it (a full lap takes 26 seconds). The frosted cards now have something to frost — until now the only place with that drifting light was the ringing screen, so on the calendar the glass showed nothing but its highlight and hairline border. It is subtle in the light theme (the cells are almost solid white, so the light mostly shows between them and through the info card) and clearly visible in the dark one\n'
-    '· That layer advances at the slowest pace rather than being redrawn every frame: it travels 46dp in 26 seconds, so per-frame it would move 0.03dp — invisible, while keeping the whole page permanently busy and forcing every blur above it to recompute each frame\n'
-    '· With "Advanced materials" switched off under Me → Appearance, the light stops — that switch means "this device does not do expensive compositing", so it should not keep pushing a background while the blur is off\n\n'
 
 ;
 

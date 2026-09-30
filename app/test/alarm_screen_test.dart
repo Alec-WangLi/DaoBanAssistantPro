@@ -19,6 +19,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_button.dart';
+import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
@@ -308,7 +310,49 @@ void main() {
 
     await _dispose(tester);
   });
+
+  // 与待办页同一个毛病（2026-10-01 用户报的是待办，这里是同一处的另一半）：
+  // 底部那条「新建 / 测试」按钮条是 **floatingActionButton**、悬浮在页面最下面
+  // 那段列表（自定义闹钟）之上，而删除键也贴右边 —— 闹钟一多，最后一行就被压住。
+  //
+  // 判据同样是**几何 + 命中测试**：只看「列表 padding 是多少」换个写法就失效。
+  testWidgets('自定义闹钟建很多条时：最后一行的删除键不被底部按钮条挡住',
+      (tester) async {
+    final db = await _pumpAlarmScreen(
+      tester,
+      name: '早班',
+      startMinute: 8 * 60,
+      endMinute: 16 * 60,
+      alarms: const [],
+    );
+    // 条数要真的撑破那段列表的视口（少了他就滚不动，这条用例会变成永远为真的空话）。
+    for (var i = 0; i < 16; i++) {
+      await AppRepository(db).addCustomAlarm(hour: 6, minute: i, repeatType: 1);
+    }
+    await _settle(tester);
+
+    // 滚到底：自定义闹钟那段是页面上**最后**一个列表。
+    await tester.drag(find.byType(ListView).last, const Offset(0, -8000));
+    await _settle(tester);
+
+    final barTop =
+        tester.getRect(find.widgetWithText(GlassButton, L10n.newAlarm)).top;
+    final buttons = find.byType(GlassDeleteButton);
+    final last = tester.getRect(buttons.last);
+
+    expect(last.bottom, lessThanOrEqualTo(barTop),
+        reason: '最后一行那颗删除键的底边（${last.bottom}）应当在按钮条的顶边'
+            '（$barTop）之上 —— 被压住就点不到了');
+
+    final hit = tester.hitTestOnBinding(last.center);
+    expect(hit.path.any((e) => e.target == tester.renderObject(buttons.last)),
+        isTrue,
+        reason: '删除键的中心得真的打得中 —— 被按钮条盖住时命中的是按钮条');
+
+    await _dispose(tester);
+  });
 }
+
 
 /// 与 `AlarmScreen` 里那个私有 `_fmt` 同一形状（`HH:mm`）。
 String _fmtClock(int minutes) =>

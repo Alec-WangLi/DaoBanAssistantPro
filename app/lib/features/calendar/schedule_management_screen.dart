@@ -228,58 +228,18 @@ class _TimelineSection extends ConsumerWidget {
     );
   }
 
-  /// 一行：[左边是这一段的日期 / 「其余时间」] + [右边它指向的方案名] + 箭头。
+  /// 时间线上的一行：[左边是日期 / 「其余时间」] + [右边它指向的方案名] + 箭头。
   ///
-  /// **手搓 `Row` 而不是 `ListTile`**：`ListTile` 的 `trailing` 在 200dp 小窗下会
-  /// 横向溢出（`minLeadingWidth`/`horizontalTitleGap` 先吃掉一块，剩下给 trailing
-  /// 的还不够放一个名字加箭头）—— 工装的小窗那一屏就是这么红的。手搓的这版
-  /// 两边都是 flex，各自省略号，任何宽度都不溢。
-  ///
-  /// 点击用 `GestureDetector` 承载（`GlassPressable` **没有 `onTap`**，它只是个
-  /// 按压缩放的包装）—— 与日历信息卡那行班次同一套写法。
+  /// 实现见文件末尾的 [_labelValueRow]（时段弹层里那行也用它 —— 两处同一份）。
   Widget _row(
     BuildContext context, {
     required String label,
     required String value,
     required bool mutedValue,
     required VoidCallback onTap,
-  }) {
-    final muted = AppTokens.inkMuted(context);
-    return GlassPressable(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.rowPrimary),
-              ),
-              const SizedBox(width: AppTokens.spaceSm),
-              Flexible(
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: mutedValue
-                      ? AppTokens.rowSecondary.copyWith(color: muted)
-                      : AppTokens.labelStrong,
-                ),
-              ),
-              const SizedBox(width: AppTokens.gapIconText),
-              Icon(Icons.chevron_right_outlined,
-                  size: AppTokens.iconSm, color: muted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  }) =>
+      _labelValueRow(context,
+          label: label, value: value, mutedValue: mutedValue, onTap: onTap);
 }
 
 /// 「其余时间」（一个段都没有时是「全部日子」）用哪一套 —— 选一套，或者「无」。
@@ -407,16 +367,17 @@ Future<void> showSpanEditor(
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(L10n.schedule, style: AppTokens.rowSecondary),
-              trailing: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 140),
-                child: Text(picked.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.labelStrong),
-              ),
+            // 与时间线上那几行**同一份**实现（`_labelValueRow`）：标签走
+            // `rowPrimary`（14/w500）—— 打开这个弹层的那一行也是它。此前这里是
+            // `ListTile` + `rowSecondary`（13/w400），两个毛病叠在一起：字小一档
+            // （用户 2026-10-01 反馈「字体有点小」），而且**窄弹层里 ListTile 的
+            // trailing 会吃掉整行宽度、当场抛断言** —— 后者是补进屏单当天抓到的
+            // （200×400 那一屏）。
+            _labelValueRow(
+              dialogContext,
+              label: L10n.schedule,
+              value: picked.name,
+              mutedValue: false,
               onTap: () async {
                 final chosen = await showGlassOptionPicker<ShiftScheduleRow>(
                   dialogContext,
@@ -506,27 +467,16 @@ Widget _spanDateRow(
   ValueChanged<DateTime?> onChanged,
 ) {
   final muted = AppTokens.inkMuted(context);
-  return ListTile(
-    contentPadding: EdgeInsets.zero,
-    title: Text(label, style: AppTokens.rowSecondary),
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value == null ? emptyText : L10n.monthDay(value),
-          style: value == null
-              ? AppTokens.rowSecondary.copyWith(color: muted)
-              : AppTokens.labelStrong,
-        ),
-        if (value != null)
-          IconButton(
-            onPressed: () => onChanged(null),
-            icon: const Icon(Icons.close_outlined),
-            iconSize: AppTokens.iconSm,
-            color: muted,
-          ),
-      ],
-    ),
+  // 与时间线、与同一个弹层里「排班」那行**同一份**实现（`_labelValueRow`）。
+  //
+  // 这里原来是 `ListTile` + 一排 `trailing`（日期 + 清空钮）—— 同样的两个毛病：
+  // 窄弹层里 `ListTile` 先吃掉 `minLeadingWidth` + `horizontalTitleGap` 那 56，
+  // 剩下给 trailing 的放不下，**200×400 那一屏实测溢出 23px**（补进屏单当天抓到）。
+  return _labelValueRow(
+    context,
+    label: label,
+    value: value == null ? emptyText : L10n.monthDay(value),
+    mutedValue: value == null,
     onTap: () async {
       final picked = await showGlassDatePicker(
         context,
@@ -534,5 +484,76 @@ Widget _spanDateRow(
       );
       if (picked != null) onChanged(picked);
     },
+    // 有值时给一颗清空钮（「留空 = 不限」是这一行的第二个动作）；没值时回到默认箭头。
+    trailing: value == null
+        ? null
+        : IconButton(
+            onPressed: () => onChanged(null),
+            icon: const Icon(Icons.close_outlined),
+            iconSize: AppTokens.iconSm,
+            color: muted,
+          ),
+  );
+}
+
+/// 「左边一个标签、右边一个取值、尾巴一个箭头」的一行 —— **手搓 `Row` 而不是
+/// `ListTile`**。
+///
+/// 为什么不用 `ListTile`：它的 `trailing` 在窄窗口里会**吃掉整行宽度** ——
+/// `minLeadingWidth`（默认 40）与 `horizontalTitleGap`（默认 16）先拿走一块，
+/// 再给 trailing 一个 `ConstrainedBox(maxWidth: 140)`，200 宽的弹层里就超了，
+/// 框架直接抛 `Trailing widget consumes the entire tile width`。手搓这版两边都是
+/// flex（`Expanded` + `Flexible`）、各自省略号，任何宽度都不溢。
+///
+/// 这条是**两次踩出来的**：先是排班管理页那条时间线（v0.9.14 工装的小窗那一屏
+/// 红了），再是时段弹层里那行 —— 后者到 2026-10-01 才现形，因为那一屏此前**根本
+/// 不在屏单里**（补上 `33_span_editor` 的当天它就抛了断言）。
+///
+/// 点击用 `GestureDetector` 承载（`GlassPressable` **没有 `onTap`**，它只是个
+/// 按压缩放的包装）—— 与日历信息卡那行班次同一套写法。
+Widget _labelValueRow(
+  BuildContext context, {
+  required String label,
+  required String value,
+  required bool mutedValue,
+  required VoidCallback onTap,
+  Widget? trailing,
+}) {
+  final muted = AppTokens.inkMuted(context);
+  return GlassPressable(
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTokens.rowPrimary),
+            ),
+            const SizedBox(width: AppTokens.spaceSm),
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: mutedValue
+                    ? AppTokens.rowSecondary.copyWith(color: muted)
+                    : AppTokens.labelStrong,
+              ),
+            ),
+            const SizedBox(width: AppTokens.gapIconText),
+            // 默认给一个「点进去」的箭头；时段那两行传自己的尾部（有值时是清空钮）。
+            trailing ??
+                Icon(Icons.chevron_right_outlined,
+                    size: AppTokens.iconSm, color: muted),
+          ],
+        ),
+      ),
+    ),
   );
 }

@@ -28,24 +28,28 @@ import '../../domain/shift_rotation.dart';
 const int kWidgetSnapshotVersion = 2;
 
 /// 窗口的**最大**天数。真正用多少由 [widgetWindow] 算：
-/// 「上月 + 本月 + 下月」三个月，各自的最坏情况 31 天，再加两端补齐整周最多各 6 天
-/// → 6 + 31 + 31 + 31 + 6 = 105。取 112 留余量，由下面的断言兜住。
-const int kWidgetSnapshotMaxDays = 112;
+/// 「−3 ~ +3 个月」共七个月，各自按 31 天算 → 217，再加末端那 42 格多出来的 41 天
+/// 与起点补齐整周最多 6 天 = 231。取 240 留余量，由下面的断言兜住。
+/// （2020–2035 逐日实算过，最坏就是 231。）
+const int kWidgetSnapshotMaxDays = 240;
 
-/// 快照窗口：`[上月 1 日所在周的周一, 下月 1 日所在周的周一 + 41 天]`。
+/// 快照窗口：`[−3月1日所在周的周一, +3月1日所在周的周一 + 41 天]`。
 ///
-/// 为什么是**整周对齐的三个月**（v0.9.17 改的，原来只到「下月最后一天」）：
-/// 月历小组件现在要画**连续的 42 天**，并且能翻到上 / 下月 —— 那张卡能画的每一格
-/// 都必须有数据。一条用例（`widget_snapshot_test.dart` 的「窗口覆盖…完整 42 格」）
-/// 把这条性质钉住了，改窗口时它会先红。
+/// 为什么是**整周对齐的七个月**（v0.9.18 从三个月放宽的）：月历小组件画的是**连续的
+/// 42 天**，并且能翻月 —— 那张卡能画的每一格都必须有数据，**能翻多远就等于窗口装了
+/// 几个月**。放到 ±3 之后，往前能看一个季度，而且「多久不开 App 卡片才会退化」也从
+/// 约一个月拉到约三个月。一条用例（`widget_snapshot_test.dart` 的「窗口覆盖…完整
+/// 42 格」）把这条性质钉住了，改窗口时它会先红。
+///
+/// 代价只有快照 JSON 的大小（约 40–50 KB，一天约 140 字节），**协议版本不动**。
 ///
 /// 仍然**含窗口里已经过去的天**：本周条要画得出「上周日~本周六」那种跨月的周，
-/// 而翻到上个月时那整月本来就是过去的。
+/// 而翻到过去那几个月时那些天本来就是过去的。
 ({DateTime from, DateTime to}) widgetWindow(DateTime now) {
   final today = dateOnly(now); // UTC 纯日期，年月日即本地日历日
-  // Dart 会把越界的 month 归一：month-1 = 0 → 去年 12 月，month+1 = 13 → 明年 1 月。
-  final prevFirst = DateTime(today.year, today.month - 1, 1);
-  final nextFirst = DateTime(today.year, today.month + 1, 1);
+  // Dart 会把越界的 month 归一：month-3 = 0 → 去年 12 月，month+3 = 16 → 明年 4 月。
+  final prevFirst = DateTime(today.year, today.month - 3, 1);
+  final nextFirst = DateTime(today.year, today.month + 3, 1);
   final from = DateTime(
       prevFirst.year, prevFirst.month, prevFirst.day - (prevFirst.weekday - 1));
   // **终点是「下月 1 日所在周的周一 + 41 天」，不是「下月最后一天所在周的周日」**：

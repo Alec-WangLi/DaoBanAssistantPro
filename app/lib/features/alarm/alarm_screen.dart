@@ -181,7 +181,9 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      // 这是页面上最下面那段列表，而底部按钮条**悬浮**在它上面：不留底部空白
+      // 的话最后一行会被压住（它的删除键点不到）。与待办页同一个常量。
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, kFloatingActionInset),
       physics: const BouncingScrollPhysics(),
       itemCount: alarms.length,
       itemBuilder: (context, i) => _alarmTile(context, alarms[i]),
