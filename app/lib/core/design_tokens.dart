@@ -163,6 +163,19 @@ class AppTokens {
         ],
       );
 
+  // ── 真实饱和度：玻璃后面那层背景的处理 ──
+  /// Rec.709 保亮度饱和度矩阵，s = 1.2。中性灰保持不动（三行各自加和为 1）。
+  ///
+  /// 玻璃**被看穿的背景**不只是变糊，还更浓、更艳 —— 这是真实液态玻璃最可辨识的
+  /// 特征之一（除折射外）。以前这条是用 [glassTint] / [glassSurface] 那层白渐变
+  /// **近似**的（见 `glass.dart` 的效果构成注释），现在是真的；所以那两个函数在
+  /// `blurOn` 那一支的 alpha 要跟着收，否则一个提饱和、一个加白变淡，两相抵消。
+  ///
+  /// 走 SDK 的 [ColorFilter.saturation] 而不是手抄那 20 个数：它的算式
+  /// （`invSat * luminance + saturation`）与手抄那份**逐位相同**，但不会抄错。
+  /// 不是 `const`（那是个 factory），所以只能是 `static final`。
+  static final ColorFilter glassSaturation = ColorFilter.saturation(1.2);
+
   // ── 玻璃配方（统一，两档：glassTint 胶囊/按钮、glassSurface 卡片/面板） ──
   // 顶层 alpha 更高；blurOn=false（低端机/关高级材质）时整体更实。
   static List<Color> glassTint(bool isDark, bool blurOn) => isDark

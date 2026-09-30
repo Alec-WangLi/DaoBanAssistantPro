@@ -20,6 +20,20 @@ void recomputeGlassBlur() {
   glassBlurDisabled.value = disabled;
 }
 
+/// 玻璃的完整 filter：**模糊 + 真实饱和度**，合成一个 filter 而不是叠两层
+/// `BackdropFilter`（两层 = 两次 backdrop 抓取）。
+///
+/// `ImageFilter.compose` 的语义是 `result = outer(inner(source))`，所以这里是
+/// 「先把背景提饱和、再糊」（`sky_engine/lib/ui/painting.dart` 的 compose 文档）。
+///
+/// 为什么要有这个函数、而不是各处直接写 `ImageFilter.blur`：它是**唯一**一处
+/// 「背景怎么处理」的装配点 —— 阶段 2 的液态档要在这里按档位分叉。散着写的话，
+/// 那一步就得满仓库找 `BackdropFilter`。
+ImageFilter glassFilter(double sigma) => ImageFilter.compose(
+      outer: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+      inner: AppTokens.glassSaturation,
+    );
+
 /// 液态玻璃面板。
 ///
 /// 效果构成（与调研结论一致）：
@@ -96,7 +110,7 @@ class GlassPanel extends StatelessWidget {
       panel = ClipRRect(
         borderRadius: borderRadius,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+          filter: glassFilter(blurSigma),
           child: panel,
         ),
       );
