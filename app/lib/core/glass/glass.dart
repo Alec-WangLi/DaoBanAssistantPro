@@ -198,6 +198,10 @@ class GlassRim extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!glassProbeRim) return child;
     return Stack(
+      // **必须 Clip.none**：滑块要能凸出胶囊画到外面去（见 `_RimPainter` 的②）。
+      // 默认的 hardEdge 会把溢出的部分裁掉，那就退回到「光只能在胶囊内部打转」，
+      // 而折射恰恰只发生在「玻璃 ↔ 背景」的边界上。
+      clipBehavior: Clip.none,
       children: <Widget>[
         child,
         Positioned.fill(
@@ -306,12 +310,16 @@ class _RimPainter extends CustomPainter {
       );
     }
 
-    // ② 滑块自身：**一圈被光击中的晕 + 一条硬边**。
+    // ② 滑块自身：**凸出于胶囊**的一枚透镜 —— 一圈被光击中的晕 + 一条硬边。
     //
-    // 只有硬边的时候读作「这个控件加了描边」；加了外圈模糊的晕之后才读作
-    // 「光聚在这里」—— 这一层是整个效果里最接近「折射」的观感来源。
+    // ⚠️ 这里的高度**故意大于胶囊**。滑块若整个躺在胶囊里，它的边是「玻璃对玻璃」，
+    // 而折射只发生在「玻璃 ↔ 背景」的边界上（Apple 自己那条禁令「玻璃不能采样玻璃」
+    // 说的就是这件事）。iOS 26 的开关与标签栏选中态都是**凸出容器**的：
+    // 「按住时它变成一个更大、玻璃般的凸起，移动时折射光线」（Macworld 对开关的描述）。
+    // 凸出来之后，那圈亮边才有一条真实的边界可以依附。
+    const double lensProtrude = 7;
     final double sliderW = itemW * sliderScale;
-    final double sliderH = size.height - 2 * trackPad;
+    final double sliderH = size.height - 2 * trackPad + 2 * lensProtrude;
     final RRect sliderRRect = RRect.fromRectAndRadius(
       Rect.fromCenter(
         center: Offset(centerX, size.height / 2),
@@ -337,12 +345,12 @@ class _RimPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = width * 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7)
         ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            glow.withValues(alpha: 0.55),
+            glow.withValues(alpha: 0.60),
             glow.withValues(alpha: 0.10),
           ],
         ).createShader(rect),
