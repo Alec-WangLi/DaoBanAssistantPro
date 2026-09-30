@@ -173,6 +173,8 @@ class GlassRim extends StatelessWidget {
     this.tabCount,
     this.trackPad = 0,
     this.sliderScale = 1,
+    this.lensFill,
+    this.lensProtrude = 0,
   });
 
   final double radius;
@@ -194,16 +196,26 @@ class GlassRim extends StatelessWidget {
   /// 滑块当前的缩放（按下时 >1），让亮边跟得上它的大小。
   final double sliderScale;
 
+  /// 透镜的填充色（通常传主色）。
+  final Color? lensFill;
+
+  /// 透镜凸出胶囊多少。**0 = 不凸**（等于原来那个躺在胶囊里的滑块）。
+  final double lensProtrude;
+
   @override
   Widget build(BuildContext context) {
     if (!glassProbeRim) return child;
     return Stack(
-      // **必须 Clip.none**：滑块要能凸出胶囊画到外面去（见 `_RimPainter` 的②）。
-      // 默认的 hardEdge 会把溢出的部分裁掉，那就退回到「光只能在胶囊内部打转」，
+      // **必须 Clip.none**：透镜要能画到胶囊外面去。
+      // 默认的 hardEdge 会把溢出的部分裁掉，那就退回「光只能在胶囊内部打转」，
       // 而折射恰恰只发生在「玻璃 ↔ 背景」的边界上。
       clipBehavior: Clip.none,
       children: <Widget>[
-        child,
+        // ① 透镜**本体**：画在 child **之下**。
+        //
+        // 位置放在下面是有意的：child 里是胶囊（半透明填充 + 被裁剪的模糊），
+        // 透镜压在它下面 → 胶囊内的部分会透过玻璃透出来（正是「玻璃后面有东西」的
+        // 观感），探出胶囊的那圈则是清晰的一枚玻璃；而图标在 child 里，仍压在透镜之上。
         Positioned.fill(
           child: IgnorePointer(
             child: CustomPaint(
@@ -216,6 +228,29 @@ class GlassRim extends StatelessWidget {
                 tabCount: tabCount,
                 trackPad: trackPad,
                 sliderScale: sliderScale,
+                lensFill: lensFill,
+                lensProtrude: lensProtrude,
+                paintCore: true,
+              ),
+            ),
+          ),
+        ),
+        child,
+        // ② 边缘光与光晕：画在 child **之上**。
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _RimPainter(
+                radius: radius,
+                colors: AppTokens.glassRimProbe(isDark),
+                width: AppTokens.glassRimProbeWidth(isDark, compact: compact),
+                glow: AppTokens.glassRimProbeGlow(isDark),
+                sliderIndex: sliderIndex,
+                tabCount: tabCount,
+                trackPad: trackPad,
+                sliderScale: sliderScale,
+                lensFill: lensFill,
+                lensProtrude: lensProtrude,
               ),
             ),
           ),
@@ -240,6 +275,9 @@ class _RimPainter extends CustomPainter {
     this.tabCount,
     this.trackPad = 0,
     this.sliderScale = 1,
+    this.lensFill,
+    this.lensProtrude = 0,
+    this.paintCore = false,
   });
 
   final double radius;
@@ -250,6 +288,11 @@ class _RimPainter extends CustomPainter {
   final int? tabCount;
   final double trackPad;
   final double sliderScale;
+  final Color? lensFill;
+  final double lensProtrude;
+
+  /// true = 只画透镜本体（下面那一趟）；false = 只画边缘光与光晕（上面那一趟）。
+  final bool paintCore;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -279,6 +322,52 @@ class _RimPainter extends CustomPainter {
 
     final double itemW = (size.width - 2 * trackPad) / count;
     final double centerX = trackPad + index * itemW;
+
+    // 透镜的几何。**高度故意大于胶囊** —— 滑块原来只有 `capsuleH - 2 * trackPad`
+    // 高、整个躺在胶囊里，它的边是「玻璃对玻璃」，而折射只发生在「玻璃 ↔ 背景」的
+    // 边界上（Apple 那条禁令「玻璃不能采样玻璃」说的就是这件事）。iOS 26 的开关与
+    // 标签栏选中态都是**凸出容器**的：「按住时它变成一个更大、玻璃般的凸起，移动时
+    // 折射光线」（Macworld 对开关的描述）。凸出来，那圈亮边才有一条真实的边界可依附。
+    final double lensW = itemW * sliderScale;
+    final double lensH = size.height - 2 * trackPad + 2 * lensProtrude;
+    final RRect lensRRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(centerX, size.height / 2),
+        width: lensW,
+        height: lensH,
+      ),
+      Radius.circular(lensH / 2),
+    );
+
+    // 下面那一趟只画透镜**本体** —— 它被压在 `child` 之下（于是胶囊内的部分透过
+    // 半透明填充透出来、探出胶囊的部分是清晰的一枚玻璃），画完就结束。
+    if (paintCore) {
+      // 没给填充色就不画本体（调用点一定会给）。**这里不放兜底色** ——
+      // `lib/core/glass` 在令牌守门的扫描范围内，一个 `Color(0x…)` 字面量就让它红。
+      final Color? base = lensFill;
+      if (base == null) return;
+      final Color fill = base;
+      canvas.drawRRect(
+        lensRRect,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              fill,
+              Color.lerp(fill, Colors.black, 0.18)!,
+            ],
+          ).createShader(lensRRect.outerRect),
+      );
+      canvas.drawRRect(
+        lensRRect,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Colors.white.withValues(alpha: 0.55),
+      );
+      return;
+    }
 
     // ① 玻璃边在滑块那一带亮起来：横向一条**窄**亮带。
     //    第一版做成 ±0.16 的宽带，结果和底色融了、看不出「跟着走」—— 收窄才有指向性。
@@ -310,38 +399,12 @@ class _RimPainter extends CustomPainter {
       );
     }
 
-    // ② 滑块自身：**凸出于胶囊**的一枚透镜 —— 一圈被光击中的晕 + 一条硬边。
+    // ② 透镜的**边缘光**：一圈被光击中的晕 + 一条硬边。
     //
-    // ⚠️ 这里的高度**故意大于胶囊**。滑块若整个躺在胶囊里，它的边是「玻璃对玻璃」，
-    // 而折射只发生在「玻璃 ↔ 背景」的边界上（Apple 自己那条禁令「玻璃不能采样玻璃」
-    // 说的就是这件事）。iOS 26 的开关与标签栏选中态都是**凸出容器**的：
-    // 「按住时它变成一个更大、玻璃般的凸起，移动时折射光线」（Macworld 对开关的描述）。
-    // 凸出来之后，那圈亮边才有一条真实的边界可以依附。
-    const double lensProtrude = 7;
-    final double sliderW = itemW * sliderScale;
-    final double sliderH = size.height - 2 * trackPad + 2 * lensProtrude;
-    final RRect sliderRRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(centerX, size.height / 2),
-        width: sliderW,
-        height: sliderH,
-      ),
-      Radius.circular(sliderH / 2),
-    );
-    final Paint sliderPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = width
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: <Color>[
-          glow.withValues(alpha: 0.95),
-          glow.withValues(alpha: 0.25),
-        ],
-      ).createShader(rect);
-    // 晕：粗、模糊、淡
+    // 只有硬边的时候读作「这个控件加了描边」；加了外圈模糊的晕之后才读作
+    // 「光聚在这里」—— 这一层是整个效果里最接近「折射」的观感来源。
     canvas.drawRRect(
-      sliderRRect,
+      lensRRect,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = width * 3
@@ -355,8 +418,20 @@ class _RimPainter extends CustomPainter {
           ],
         ).createShader(rect),
     );
-    // 硬边压在晕上
-    canvas.drawRRect(sliderRRect, sliderPaint);
+    canvas.drawRRect(
+      lensRRect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            glow.withValues(alpha: 0.95),
+            glow.withValues(alpha: 0.25),
+          ],
+        ).createShader(rect),
+    );
   }
 
   @override
@@ -367,7 +442,9 @@ class _RimPainter extends CustomPainter {
       old.sliderIndex != sliderIndex ||
       old.tabCount != tabCount ||
       old.trackPad != trackPad ||
-      old.sliderScale != sliderScale;
+      old.sliderScale != sliderScale ||
+      old.lensFill != lensFill ||
+      old.lensProtrude != lensProtrude;
 }
 
 /// 液态玻璃圆角容器（无内边距快捷版）。

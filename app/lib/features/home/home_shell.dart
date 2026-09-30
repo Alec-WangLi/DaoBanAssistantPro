@@ -457,6 +457,10 @@ class _GlassNavBarState extends State<_GlassNavBar> {
           tabCount: items.length,
           trackPad: _innerPad,
           sliderScale: _pressed ? 1.22 : 1.0,
+          // 探针：透镜凸出胶囊、本体由 GlassRim 画在胶囊之下（见那边的说明）。
+          // 凸出量 0 = 不凸，等于原来那个躺在胶囊里的滑块。
+          lensFill: activeColor,
+          lensProtrude: AppTokens.navLensProtrude,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(capsuleH / 2),
             child: GlassBlur(
@@ -506,26 +510,38 @@ class _GlassNavBarState extends State<_GlassNavBar> {
                               duration: AppTokens.durMed,
                               curve: Curves.easeOutBack,
                               child: Container(
+                                // 探针下把外观全摘掉 —— 那一档的滑块由 GlassRim 画在
+                                // 胶囊**之下**、并凸出胶囊之外（见那边的说明）。
+                                // 用「摘装饰」而不是「不渲染」：探测脚本靠
+                                // `nav-highlight` 这个 key 找它的位置来起手拖动。
                                 decoration: BoxDecoration(
                                   borderRadius:
                                       BorderRadius.circular(AppTokens.radiusL),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: AppTokens.accentGradient(activeColor)
-                                        .colors,
-                                  ),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(
-                                        alpha: isDark ? 0.28 : 0.85),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.12),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
+                                  gradient: glassProbeRim
+                                      ? null
+                                      : LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: AppTokens
+                                              .accentGradient(activeColor)
+                                              .colors,
+                                        ),
+                                  border: glassProbeRim
+                                      ? null
+                                      : Border.all(
+                                          color: Colors.white.withValues(
+                                              alpha: isDark ? 0.28 : 0.85),
+                                        ),
+                                  boxShadow: glassProbeRim
+                                      ? null
+                                      : <BoxShadow>[
+                                          BoxShadow(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.12),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
                                 ),
                               ),
                             ),
