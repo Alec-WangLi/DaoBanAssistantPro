@@ -40,7 +40,22 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.9.19\n'
+const String _changelogZh = 'v0.10.0\n'
+    '· 桌面小组件三张卡都在了：本周条、今日卡、整月。整月那张把上个月下个月连起来画，标题行两边的箭头能翻前后各三个月；在 App 里改了排班，桌面立刻跟着变\n'
+    '· 每个班次最多能挂 6 条闹钟，每条可以起名字 —— 「起床」「午休」分开响\n'
+    '· 排班时段重做：在「排班管理」页的一条时间线上排「哪几天用哪套班表」，两段不许重叠，其余时间可以设成「无」（领导真给休息几天时，不必专门再建一套休息班表）。一套班表还能出现在多段上 —— 9 月临时换、10 月换回来\n'
+    '· 多套班表按日期衔接：日历、闹钟、桌面小组件都按天取「那天归哪套」，翻回历史看到的也是那时的班、不是现在的\n'
+    '· 重复待办：每周三的会到点自己冒出来，勾掉的留成历史；提醒由系统自己续排，App 长期不开也照常响\n'
+    '· 「法定班次」（跟随法定节假日）现在就是一张日历：只画日期与农历，不再替它写「上班 / 休息」\n'
+    '· 日历上能单独改某几天的班（请假、跟同事换班）：点信息卡那行班次，或长按格子拖选一段；改过的那天有标记，也能一键恢复轮转\n'
+    '· 「我的模板」：调好的班表存下来，下次新建排班直接从最上面那组里选\n'
+    '· 闹钟铃声多了一档「仅震动」，也能从手机里自选音频\n'
+    '· 修好一批评测里报上来的毛病：桌面小组件的字重影、系统字号放大后日历文字被截、待办与闹钟列表最后一行被悬浮按钮压住、弹窗按钮跑到左边、弹层里正文被按钮拦腰切断、零点班（00:00 上班）的闹钟排在班次当天而不是上班前一晚……\n'
+    '· 「我的」页的说明重写了一遍，并多了一条「桌面小组件」（怎么加到桌面、装完新版为什么要先打开一次 App）\n'
+    '· 清空重置现在真的回到刚安装的样子：排班、日程、闹钟、模板、你保存的铃声与外观设置一起清掉\n'
+    '\n'
+
+    'v0.9.19\n'
     '· 修好弹窗里的按钮跑到左边：上一版为了让小窗（200×400）下「删除 / 取消 / 保存」这种多按钮弹窗不横向溢出，动了弹窗共用的按钮行 —— 结果全 App 的弹窗（版本更新、删除确认、排班时段……）的按钮都变成了靠左。现在恢复靠右，小窗该折行的照样折行\n'
     '· 编辑排班页底部那颗「保存并重排闹钟」不再垫着一条挡板：它是浮在正文上的，界面滑到它下面时能看见内容从底下穿过去（此前正文到那条按钮带的上沿就被硬切，下面露出一整片平色）。滑到底时最后一张卡会整个抬到按钮上面，不会被压住\n'
     '\n'
@@ -97,13 +112,24 @@ const String _changelogZh = 'v0.9.19\n'
     '· 待办页右上角多了「重复待办」入口（小窗里只剩图标）：能看到有哪些重复项、各自的下一次是什么时候，能改周期、能停用、能删。停用之后当前那条会留着 —— 那是你还没做的一件事，不替你收走\n'
     '· 重复待办的提醒由系统自己接着排，App 长期不开也照常响，不是「等你下次打开才补上」\n\n'
 
-    'v0.9.10\n'
-    '· 桌面小组件（4×5 整月那张）里超过三个字的农历节日名，现在与 App 里的日历显示一致：前三个字加省略号。上一版只改了 App 里的日历，桌面那张卡漏掉了 —— 同一天两个界面显示得不一样\n'
-    '· 顺带补了几条自查用例：桌面小组件「先清空再填」的顺序、以及更新日志固定 10 条这两件长期规则，此前只靠人记，现在漏了会直接测试失败\n\n'
-
 ;
 
-const String _changelogEn = 'v0.9.19\n'
+const String _changelogEn = 'v0.10.0\n'
+    '· All three home-screen cards are in: the week strip, the today card and the month view. The month card draws the neighbouring months as well, its title arrows step three months either way, and any schedule change in the app shows up on the cards\n'
+    '· A shift can now carry up to 6 alarms, each with a name — "Wake up" and "Nap" ring separately\n'
+    '· Schedule periods rebuilt: arrange which schedule covers which dates on a single timeline on the Schedules page. Periods may not overlap, "Other dates" can be set to none (for the days your manager really does give you off, without building a rest schedule), and one schedule can appear in several periods — swap away for September and swap back in October\n'
+    '· Schedules chain by date: the calendar, the alarms and the home-screen cards all work out day by day which schedule a date belongs to, so history shows the schedule that was in force back then\n'
+    '· Repeating todos: a Wednesday meeting shows up on its own, ticking it keeps it as history, and the system re-arms the reminder, so it still rings after the app has been closed for a long while\n'
+    '· A "legal-holiday schedule" (follow the public holidays) is just a calendar now: dates and lunar lines, no invented "Workday / Rest"\n'
+    '· Change a few days on their own (a day off, or swapping with a colleague): tap the shift row on the info card, or long-press a cell and drag. An adjusted day is marked and one tap restores the rotation\n'
+    '· "My templates": save a schedule you like and pick it first next time you create one\n'
+    '· A "Vibrate only" ringtone, and you can pick your own audio file\n'
+    '· Fixed a batch of issues from testing: overlapping text in the widget, calendar text cut off with a large system font, the last row of the todo and alarm lists sitting under the floating button, dialog buttons jumping to the left, dialog text sliced off by the button row, and a midnight shift\'s alarm landing on the shift day instead of the evening before\n'
+    '· The Me page descriptions were rewritten, with a new "Home-screen widgets" entry (how to add the cards, and why an update needs one app launch)\n'
+    '· Clear & reset really does return the app to a fresh install: schedules, events, alarms, templates, the ringtone you saved and the appearance settings all go\n'
+    '\n'
+
+    'v0.9.19\n'
     '· Fixed dialog buttons moving to the left: the last version changed the shared button row so that dialogs with several buttons (Delete / Cancel / Save) would not overflow in a small window (200×400) — which pushed the actions of every dialog in the app (update notes, delete confirmations, schedule periods…) to the left. They are right-aligned again, and still wrap on narrow windows\n'
     '· The "Save & reschedule alarms" button at the bottom of the schedule editor no longer sits on a plate: it floats over the page, so content scrolls underneath it (until now the list was cut off at the top edge of that bar with a flat band below it). Scrolling to the end now lifts the last card clear of the button\n'
     '\n'
@@ -159,10 +185,6 @@ const String _changelogEn = 'v0.9.19\n'
     '· Deleting a repeating todo asks which you mean: "skip this one" (the next occurrence still comes) or "delete the whole repeat" (its completed history goes too)\n'
     '· The todo screen now has a "Repeating" entry (an icon in a small window): see your repeating todos and when each next occurs, and edit / pause / delete them. Pausing keeps the current entry — that is something you have not done yet, and the app will not take it away for you\n'
     '· Their reminders are re-armed by the system itself, so they still ring after the app has been closed for a long time — not "fixed up the next time you open it"\n\n'
-
-    'v0.9.10\n'
-    '· Lunar festival names longer than three characters now read the same on the 4×5 month widget as they do in the app\'s calendar (first three characters plus an ellipsis). The last version only fixed the in-app calendar and missed that card, so the same day looked different in the two places\n'
-    '· A couple of long-standing rules now have failing tests behind them instead of living in someone\'s memory: the widget clearing each slot before filling it, and the changelog keeping exactly 10 entries\n\n'
 
 ;
 

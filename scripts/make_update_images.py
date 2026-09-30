@@ -367,8 +367,7 @@ def main():
               f'  {os.path.getsize(p) // 1024} KB')
 
 
-if __name__ == '__main__':
-    main()
+# 入口在文件末尾：三组（v080 / v090 / v0100）共用一个 argv 分派。
 
 
 # ---------------------------------------------------------------------------
@@ -576,3 +575,146 @@ def main_v090():
         img.save(p, optimize=True)
         print(f'docs/images/{name}  {img.size[0]}x{img.size[1]}'
               f'  {os.path.getsize(p) // 1024} KB')
+
+
+# ---------------------------------------------------------------------------
+# v0.10.0 那一组（评论区「更新简介」用；六张）
+#
+# 五张是应用自己渲染的界面（`app/build/visual/`，与回归工装同源），只有桌面
+# 月历那张是真机桌面截图（`raw/v0100-widgets.png`）—— 小组件走原生
+# RemoteViews，工装画不出来。
+# ---------------------------------------------------------------------------
+
+def cover_0100():
+    """更新说明首图：这一版最重要的五件事。"""
+    W, H = 1400, 1140
+    img = _gradient(W, H)
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 96), '倒班助手 Pro', font=_font('msyhbd.ttc', 60),
+           fill=INK_SUB, anchor='ma')
+    d.text((W / 2, 178), 'v0.10.0　正式稳定版', font=_font('msyhbd.ttc', 96),
+           fill=INK, anchor='ma')
+    d.text((W / 2, 312), '归纳 v0.9.1 ~ v0.9.20 二十个测试版的全部更新',
+           font=_font('msyh.ttc', 34), fill=INK_SUB, anchor='ma')
+
+    items = [
+        ('桌面小组件三张卡都在了',
+         '本周条 / 今日卡 / 整月；整月那张连月显示，箭头能翻前后各三个月'),
+        ('多套班表按日期衔接',
+         '哪几天用哪套排成一条时间线；日历、闹钟、桌面都按天跟着走'),
+        ('一个班次最多 6 条闹钟，每条能起名字',
+         '「起床」「午休」分开响；零点班的响铃排在上班前一晚'),
+        ('重复待办：到点自己冒出来',
+         '每周三的会不用再手动建；勾掉的留成历史，提醒由系统续排'),
+        ('一批评测反馈的修复',
+         '小组件字重影、列表最后一行被按钮压住、弹窗按钮跑到左边……'),
+    ]
+    y = 414
+    for i, (head, tail) in enumerate(items):
+        _panel(img, (150, y, W - 150, y + 116))
+        d.ellipse((186, y + 40, 222, y + 76), fill=ACCENT)
+        d.text((204, y + 58), str(i + 1), font=_font('msyhbd.ttc', 26),
+               fill=INK, anchor='mm')
+        d.text((256, y + 22), head, font=_font('msyhbd.ttc', 36), fill=INK)
+        d.text((256, y + 70), tail, font=_font('msyh.ttc', 27), fill=INK_SUB)
+        y += 140
+    return img.convert('RGB')
+
+
+def spans_0100():
+    return _pair(
+        '多套排班表：哪几天用哪套，一条时间线排好',
+        '排班时段重做 —— 两段不许重叠，「其余时间」还可以设成「无」',
+        '30_management_timeline_light.png', '27_calendar_chained_light.png',
+        '① 排班时段', '② 日历按天解析',
+        ['① 「排班管理」页顶部就是时间线：头一行是「其余时间」，下面是你排的每一段。',
+         '② 两段时间不许重叠（撞上会点名是哪一段、哪几天）；「其余时间」可以设成「无」。',
+         '③ 日历、闹钟、桌面小组件都按天取「那天归哪套」—— 翻回历史看到的也是那时的班。',
+         '④ 一套班表还能出现在多段上：9 月临时换、10 月再换回来。'],
+        base=VIS)
+
+
+def alarms_0100():
+    return _pair(
+        '一个班次最多挂 6 条闹钟，每条能起名字',
+        '「起床」和「午休」分开响；零点班的响铃排在上班前一晚',
+        '22_editor_alarm_max_light_scrolled.png', '06_alarm_light.png',
+        '① 班次设置里', '② 闹钟列表',
+        ['① 给这个班挂几条闹钟，每条一个钟点、一个名字（名字可留空）。',
+         '② 闹钟页列出未来 30 天每一天的班次闹钟，每条能单独关。',
+         '③ 落在哪一天是算出来的：钟点落在值班时间内按当天，晚于上班钟点则按前一天；',
+         '　　列表与日历信息卡上都写明「前一天」。'],
+        base=VIS)
+
+
+def recurring_0100():
+    return _single(
+        '重复待办：每周三的会，到点自己冒出来',
+        '选「每天 / 每周几 / 每月某日」，勾掉的留成历史，下一次到点自动来一条',
+        '24_todos_recurring_light.png',
+        ['① 列表里每次只占一行 —— 永远是「当前这一次」，不会堆出一串上周的会。',
+         '② 勾掉之后留成历史（带删除线）；过期没勾的下一次到点就地顺延。',
+         '③ 提醒由系统自己接着排，App 长期不开也照常响。'],
+        dev_w=430, base=VIS)
+
+
+def blank_0100():
+    return _single(
+        '「法定班次」（跟随法定节假日）就是一张日历',
+        '用户反馈：这种班表本来就不该标「上班 / 休息」',
+        '32_calendar_blank_schedule_light.png',
+        ['① 只画日期与农历 —— 法定节假日照旧标红、调休照旧打「班」小标记。',
+         '② 上面那句「这段时间没有排班」只在真的没有任何班表盖着这些天时才出现。'],
+        dev_w=430, base=VIS)
+
+
+def widgets_0100():
+    """桌面月历那一张卡：连月显示 + 能翻前后各三个月。
+
+    素材 `raw/v0100-widgets.png` 是**真机桌面截图**（Redmi K90 Pro Max，裁到卡片
+    区域、半尺寸入库）—— 小组件走原生 RemoteViews，工装画不出来，只能真机拍。
+    """
+    dev = _device('v0100-widgets.png', 620)
+    W = 1400
+    H = 250 + dev.height + 40 + 46 * 3 + 40
+    img = _gradient(W, H)
+    _title(img, '桌面月历那张：连月显示 + 能翻前后各三个月',
+           '点标题两边的箭头翻月，点中间的月份回到今天')
+    img.alpha_composite(dev, ((W - dev.width) // 2, 250))
+    d = ImageDraw.Draw(img)
+    y = 250 + dev.height + 40
+    for line in [
+        '① 月头月尾把相邻月份的日子连起来一起画（相邻的日数字淡一档、班次照常显示）。',
+        '② 标题行 ‹ › 翻月，能翻前后各三个月；没有数据的那一侧箭头变灰。',
+        '③ 在 App 里改了排班，桌面立刻跟着变；装完新版要先打开一次 App 才会重画。',
+    ]:
+        d.text((W / 2, y), line, font=_font('msyh.ttc', 26), fill=INK_SUB,
+               anchor='ma')
+        y += 46
+    return img.convert('RGB')
+
+
+JOBS_0100 = [
+    ('v0100-cover.png', cover_0100),
+    ('v0100-spans.png', spans_0100),
+    ('v0100-alarms.png', alarms_0100),
+    ('v0100-recurring.png', recurring_0100),
+    ('v0100-blank.png', blank_0100),
+    ('v0100-widgets.png', widgets_0100),
+]
+
+
+def main_v0100():
+    """只出 v0.10.0 那一组。"""
+    for name, fn in JOBS_0100:
+        p = os.path.join(OUT, name)
+        img = fn()
+        img.save(p, optimize=True)
+        print(f'docs/images/{name}  {img.size[0]}x{img.size[1]}'
+              f'  {os.path.getsize(p) // 1024} KB')
+
+
+if __name__ == '__main__':
+    import sys
+    _group = sys.argv[1] if len(sys.argv) > 1 else 'v080'
+    {'v080': main, 'v090': main_v090, 'v0100': main_v0100}[_group]()
