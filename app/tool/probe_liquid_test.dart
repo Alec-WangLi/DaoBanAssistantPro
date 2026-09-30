@@ -19,10 +19,13 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
+import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 
 import 'visual/visual_harness.dart';
 
@@ -135,6 +138,78 @@ void main() {
     );
   });
 
+  // 「我的」页有两颗开关（高级材质 / 触觉），是看开关把手最省事的一屏。
+  for (final String state in _states) {
+    for (final ({String suffix, Brightness brightness}) v
+        in <({String suffix, Brightness brightness})>[
+      (suffix: 'light', brightness: Brightness.light),
+      (suffix: 'dark', brightness: Brightness.dark),
+    ]) {
+      testWidgets('探针 · $state · 我的页 · ${v.suffix}', (tester) async {
+        _applyState(state);
+        addTearDown(() => glassProbeRim = false);
+
+        final db = await freshDb();
+        await renderScreen(
+          tester,
+          name: 'probe_profile_${state}_${v.suffix}',
+          home: const ProfileScreen(),
+          overrides: <Override>[databaseProvider.overrideWithValue(db)],
+          brightness: v.brightness,
+        );
+      });
+    }
+  }
+
+  // 开关特写：放在整页里找太糊，单出一板看得清「开 / 关」两态。
+  for (final String state in _states) {
+    for (final ({String suffix, Brightness brightness}) v
+        in <({String suffix, Brightness brightness})>[
+      (suffix: 'light', brightness: Brightness.light),
+      (suffix: 'dark', brightness: Brightness.dark),
+    ]) {
+      testWidgets('探针 · $state · 开关特写 · ${v.suffix}', (tester) async {
+        _applyState(state);
+        addTearDown(() => glassProbeRim = false);
+        final db = await freshDb();
+        await renderScreen(
+          tester,
+          name: 'probe_switch_${state}_${v.suffix}',
+          home: const _SwitchBoard(),
+          overrides: <Override>[databaseProvider.overrideWithValue(db)],
+          brightness: v.brightness,
+        );
+      });
+    }
+  }
+
+  // 按住中的开关：凸起只在按住时发生（照 iOS），静止帧拍不到它。
+  for (final ({String suffix, Brightness brightness}) v
+      in <({String suffix, Brightness brightness})>[
+    (suffix: 'light', brightness: Brightness.light),
+    (suffix: 'dark', brightness: Brightness.dark),
+  ]) {
+    testWidgets('探针 · rim · 开关按住中 · ${v.suffix}', (tester) async {
+      glassProbeRim = true;
+      addTearDown(() => glassProbeRim = false);
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: 'probe_switchheld_rim_${v.suffix}',
+        home: const _SwitchBoard(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: v.brightness,
+        // 按住不放 —— 松手就缩回去了。
+        beforeCapture: (tester) async {
+          final g = await tester.startGesture(
+              tester.getCenter(find.byKey(const ValueKey<bool>(true))));
+          addTearDown(() => g.up());
+          await tester.pump(const Duration(milliseconds: 16));
+        },
+      );
+    });
+  }
+
   // 「按住滑动」的中途帧：滑块正被拖着、放大着，且没松手 —— 光的响应只在
   // 这个状态下才画得出来，静止帧看不见它。off / rim 各出一张做对比。
   for (final String state in _states) {
@@ -173,6 +248,38 @@ void main() {
       (suffix: 'light', brightness: Brightness.light),
       (suffix: 'dark', brightness: Brightness.dark),
     ]) {
+  // 动图：按一下开关 —— 把手**按住时鼓起**、松手缩回并翻过去。
+  // 这个效果只存在于「按住的那几百毫秒」里，静止图拍不出来，正是动图的用武之地。
+  testWidgets('动图 · rim · 开关按一下', (tester) async {
+    glassProbeRim = true;
+    addTearDown(() => glassProbeRim = false);
+    final db = await freshDb();
+    late TestGesture g;
+    bool released = false;
+    await renderFrames(
+      tester,
+      prefix: 'switch_rim_',
+      home: const _SwitchBoard(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      count: 30,
+      step: const Duration(milliseconds: 60),
+      onFrame: (tester, i) async {
+        if (i == 0) {
+          g = await tester.startGesture(
+              tester.getCenter(find.byKey(const ValueKey<bool>(true))));
+          addTearDown(() {
+            if (!released) return g.up();
+            return Future<void>.value();
+          });
+        } else if (i == 14) {
+          await g.up();
+          released = true;
+        }
+        await tester.pump(const Duration(milliseconds: 16));
+      },
+    );
+  });
+
       testWidgets('动图 · $state · 底栏拖动 · ${v.suffix}', (tester) async {
         _applyState(state);
         addTearDown(() => glassProbeRim = false);
@@ -211,5 +318,33 @@ void main() {
         );
       });
     }
+  }
+}
+
+/// 开关特写用的板子：一行「开」一行「关」，落在中性的页面底色上 ——
+/// 单看开关本身，不被整页其它玻璃面干扰。
+class _SwitchBoard extends StatelessWidget {
+  const _SwitchBoard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            for (final bool v in <bool>[true, false])
+              Padding(
+                padding: const EdgeInsets.all(AppTokens.space2xl),
+                child: GlassSwitch(
+                  key: ValueKey<bool>(v),
+                  value: v,
+                  onChanged: (bool _) {},
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
