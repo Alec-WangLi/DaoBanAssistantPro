@@ -168,6 +168,33 @@ void main() {
     await _dispose(tester);
   });
 
+  testWidgets('面板里删除**取消**：什么都不删（返回值被当成确认是迁移最容易丢的一条）',
+      (tester) async {
+    // Review Focus 第 1 条。把 21 处 `showDialog` 换成 `showGlassDialog` 时，每一处的
+    // 泛型与 `await` 之后的用法必须原样保留 —— 丢了就是「点了取消却当成确认」，
+    // **不报错**（`false` 与「没返回」在 `if (ok == true)` 之外长得一样）。
+    // 上面那条只走了「确认」一侧，这条补上「取消」那一侧。
+    await seedSeries();
+    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    expect((await repo.listEvents()).length, 1);
+    await mount(tester);
+    await openPanel(tester);
+
+    await tester.tap(find.descendant(
+        of: find.byType(GlassDialog),
+        matching: find.byType(GlassDeleteButton)));
+    await _settle(tester);
+    // 取消钮**限定在最上面那个弹窗里** —— 面板自己也是个 `GlassDialog`。
+    await tester.tap(find.descendant(
+        of: find.byType(GlassDialog).last, matching: find.text(L10n.cancel)));
+    await _settle(tester);
+
+    expect(await repo.listRecurringTodos(), isNotEmpty,
+        reason: '点了「取消」，系列却没了 —— 返回值被当成了确认');
+    expect(await repo.listEvents(), isNotEmpty, reason: '点了「取消」，它的行却没了');
+    await _dispose(tester);
+  });
+
   testWidgets('一条都没有时给一行空态说明', (tester) async {
     await mount(tester);
     await openPanel(tester);

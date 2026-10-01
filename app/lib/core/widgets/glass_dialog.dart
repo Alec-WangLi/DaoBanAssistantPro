@@ -358,7 +358,12 @@ class _GlassOverlayRoute<T> extends PopupRoute<T> {
     Animation<double> animation,
     Animation<double> secondaryAnimation,
   ) =>
-      builder(context);
+      // ⚠️ **`SafeArea` 不能省。** SDK 的 `DialogRoute` 默认 `useSafeArea: true`，
+      // 在 `dialog.dart` 里把 page 包进 `SafeArea`；`Dialog` 自己**不**避让系统栏
+      // （它只处理键盘的 `viewInsets`）。漏了这一层，21 处迁移过去的弹窗就全都不再
+      // 避让状态栏 / 手势条 / 横屏挖孔 —— 这是**独立审查抓出来的真 regression**
+      // （这条路由第一版没有它）。`glass_overlay_test` 有一条钉住。
+      SafeArea(child: builder(context));
 
   @override
   Widget buildTransitions(
@@ -410,11 +415,42 @@ Future<T?> showGlassSheet<T>({
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black26,
     isScrollControlled: isScrollControlled,
-    builder: (BuildContext sheetContext) {
-      final Widget panel = builder(sheetContext);
-      final Animation<double>? route = ModalRoute.of(sheetContext)?.animation;
-      if (route == null) return panel; // 理论上不会，防御一下
-      return GlassMaterialize(animation: route, child: panel);
-    },
+    builder: (BuildContext sheetContext) =>
+        _SheetEntrance(child: builder(sheetContext)),
   );
+}
+
+/// 弹层的**入场**凝聚：自己跑一次就停。
+///
+/// ⚠️ **不能拿弹层路由自己的动画驱动它。** `ModalBottomSheetRoute` 把「下拉关闭」的
+/// 手势**直接写进同一个 controller**（SDK 的 `bottom_sheet.dart` 里
+/// `animationController.value -= primaryDelta / childHeight`）—— 跟着它走的话，
+/// 把弹层往下拖三成，面板就被缩到 0.95、糊 σ6、**只剩三成不透明**：一次正常的下拉
+/// 手势把面板弄得半透明。（**独立审查抓出来的**，规格里写的也正是「凝聚叠在面板上
+/// 即可」—— 它只要求入场。）
+class _SheetEntrance extends StatefulWidget {
+  const _SheetEntrance({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SheetEntrance> createState() => _SheetEntranceState();
+}
+
+class _SheetEntranceState extends State<_SheetEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: AppTokens.durGlassIn,
+  )..forward();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      GlassMaterialize(animation: _c, child: widget.child);
 }

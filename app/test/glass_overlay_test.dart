@@ -22,6 +22,7 @@ void main() {
   Future<Future<bool?>> openMinimal(
     WidgetTester tester, {
     bool dismissible = true,
+    double contentHeight = 40,
   }) async {
     late BuildContext host;
     await tester.pumpWidget(MaterialApp(
@@ -34,10 +35,10 @@ void main() {
     return showGlassDialog<bool>(
       context: host,
       barrierDismissible: dismissible,
-      builder: (BuildContext _) => const GlassDialog(
+      builder: (BuildContext _) => GlassDialog(
         title: '标题',
-        content: SizedBox(height: 40),
-        actions: <Widget>[],
+        content: SizedBox(height: contentHeight),
+        actions: const <Widget>[],
       ),
     );
   }
@@ -163,6 +164,31 @@ void main() {
     expect(blur, findsNothing, reason: '落定之后还留着常驻的模糊层');
   });
 
+  testWidgets('弹窗避开系统栏（原 `showDialog` 默认就避，自写路由第一版漏了它）',
+      (tester) async {
+    // SDK 的 `DialogRoute` 默认 `useSafeArea: true`（`dialog.dart` 里把 page 包进
+    // `SafeArea`），而 `Dialog` 自己**不**避让 —— 所以那条自写路由漏了这一层时，
+    // 21 处迁移过去的弹窗全都不再避让状态栏 / 手势条。**独立审查抓出来的真 regression。**
+    tester.view.physicalSize = const Size(420 * 2, 900 * 2);
+    tester.view.devicePixelRatio = 2.0;
+    tester.view.padding = const FakeViewPadding(top: 120, bottom: 80); // 逻辑 60 / 40
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    // ⚠️ **内容必须撑得足够高**：面板是**垂直居中**的，短面板的顶边本来就远在
+    // 内边距之下 —— 那样这条断言恒真、没有鉴别力（第一版就是这么写的，反向验证
+    // 拿掉 `SafeArea` 它照样绿）。撑高之后顶边由「安全区 + `insetPadding`」决定。
+    await openMinimal(tester, contentHeight: 2000);
+    await tester.pumpAndSettle();
+
+    final Rect panel = tester.getRect(find.byKey(const Key('glass-dialog-panel')));
+    expect(panel.top, greaterThanOrEqualTo(60 - 0.5),
+        reason: '弹窗顶到状态栏里去了（面板顶 ${panel.top}，状态栏 60）');
+    expect(panel.bottom, lessThanOrEqualTo(900 - 40 + 0.5),
+        reason: '弹窗压到手势条下面去了（面板底 ${panel.bottom}，手势条从 860 起）');
+  });
+
   testWidgets('弹层：入场时带着凝聚，落定之后收干净', (tester) async {
     // 弹层与弹窗那一支的差别：**保留 Material 自带的「从底下升上来」**，凝聚叠在面板上
     // —— 所以这里不自己写路由，而是用**弹层自己的路由动画**驱动 `GlassMaterialize`。
@@ -191,6 +217,46 @@ void main() {
     expect(blur, findsNothing, reason: '弹层落定之后还留着常驻的模糊层');
 
     Navigator.of(tester.element(find.byType(GlassPanel))).pop();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('弹层：往下拖关闭时**不该**被压暗（凝聚只在入场那一下）', (tester) async {
+    // `ModalBottomSheetRoute` 把「下拉关闭」的手势**直接写进路由自己的 animation**
+    // （SDK：`animationController.value -= primaryDelta / childHeight`）。如果那层凝聚
+    // 跟着路由动画走，把弹层往下拖三成就会把面板压到三成不透明 —— **独立审查抓出来的**。
+    // 所以凝聚改由一个自己的一次性控制器驱动，只跑入场。
+    late BuildContext host;
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Builder(builder: (BuildContext c) {
+        host = c;
+        return const SizedBox.expand();
+      }),
+    ));
+    showGlassSheet<void>(
+      context: host,
+      builder: (BuildContext _) =>
+          const GlassPanel(solid: true, child: SizedBox(height: 200)),
+    );
+    await tester.pumpAndSettle();
+    final Finder blur = find.descendant(
+        of: find.byType(GlassMaterialize), matching: find.byType(ImageFiltered));
+    expect(blur, findsNothing, reason: '前提错了：入场那层还没收干净');
+
+    final TestGesture drag =
+        await tester.startGesture(tester.getCenter(find.byType(GlassPanel)));
+    final Rect before = tester.getRect(find.byType(GlassPanel));
+    // 分步拖（一步 120px 走不出像样的拖动更新）。
+    for (int i = 0; i < 12; i++) {
+      await drag.moveBy(const Offset(0, 10));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final Rect after = tester.getRect(find.byType(GlassPanel));
+    expect(after.top, greaterThan(before.top + 20),
+        reason: '前提错了：这一拖没把弹层拖下去 —— 那这条用例测不到东西');
+    expect(blur, findsNothing,
+        reason: '下拉时弹层被重新压暗/糊上了 —— 那层凝聚跟着下拉手势走了');
+    await drag.up();
     await tester.pumpAndSettle();
   });
 }

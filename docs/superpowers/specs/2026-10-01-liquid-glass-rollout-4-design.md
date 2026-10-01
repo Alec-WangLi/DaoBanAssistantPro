@@ -69,7 +69,7 @@ v0.10.12 装上真机之后，用户提了两件事：
 ### 3.2 弹窗：统一入口 + 凝聚 / 消散
 
 **现状**：`lib/` 里 **21 处 `showDialog`**（8 个文件）+ **8 处 `showModalBottomSheet`**
-（5 个文件），共 **29 个实心面板**，全部自己写 `barrierColor: Colors.black26`。入场只有
+（5 个文件），共 **29 个实心面板**，绝大多数自己写 `barrierColor: Colors.black26`。入场只有
 `DialogRoute` 自带的 150ms 淡入 —— 读起来像一张不透明卡片被点亮，而不是一块玻璃凝出来。
 
 **新入口**（放在 `lib/core/widgets/glass_dialog.dart`）：
@@ -105,6 +105,12 @@ Future<T?> showGlassSheet<T>({
 > 订正（实施时发现）：最初数的是 `showDialog<`，**21 处里有两处不带泛型**（`showDialog(`），
 > 所以真实数是 **21** 不是 19；弹层那边同理 —— 「9」把一行**注释**也数进去了，真实是
 > **8 处调用**。两族加起来 **29** 个面板，不是 28。
+>
+> 还有一条是**独立审查**发现的：上面那句「**全部**自己写 `black26`」也不实 —— 有 **4 处**
+> （`shift_template_picker_screen` 的模板管理 / 改名 / 删除、`schedule_editor_screen` 的
+> 「存为模板」）**根本没写 `barrierColor`**，走的是 Material 默认的 `Colors.black54`。
+> 统一入口把它们归一成 `black26`（与 AGENTS.md 那条「弹窗遮罩统一 black26，不能太暗」
+> 一致）—— 但**那是一次行为改动**，这四个弹窗的遮罩比从前淡了一档。
 
 **底部弹层**：`showGlassSheet` 用同一份 `GlassMaterialize`，但**保留 Material 自带的
 「从底下升上来」** —— 那是弹层该有的动作，凝聚叠在面板上即可。

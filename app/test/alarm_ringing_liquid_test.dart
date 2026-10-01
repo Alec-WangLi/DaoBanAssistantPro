@@ -26,11 +26,15 @@ void main() {
   const double trackH = 190;
 
   /// 装配响铃页；[dragTo] > 0 时把滑块拖到那个进度并**按住不放**。
+  ///
+  /// [frameStep] 决定「出帧间隔」—— 同一个手指速度下 16ms 与 8ms 各跑一遍，
+  /// 用来钉「形变与帧率无关」（见最后那条用例）。
   Future<void> pumpRinging(
     WidgetTester tester, {
     double dragTo = 0,
     Size size = const Size(420, 900),
     bool liquid = true,
+    Duration frameStep = const Duration(milliseconds: 16),
   }) async {
     liquidGlassActive.value = liquid;
     addTearDown(() => liquidGlassActive.value = false);
@@ -59,10 +63,13 @@ void main() {
     }
     // ⚠️ 前 18px（`kTouchSlop`）是空走的：总位移要算成 `18 + 轨道高 × 进度`。
     final double total = 18 + trackH * dragTo;
-    const int steps = 40;
+    // 步数按「总时长固定 640ms」折算 —— 这样 16ms 与 8ms 出帧是**同一个手指速度**，
+    // 只有帧率不同（那才是要量的东西）。
+    final int steps =
+        (640 / frameStep.inMilliseconds).round(); // 16ms → 40；8ms → 80
     for (int i = 0; i < steps; i++) {
       await g.moveBy(Offset(0, -total / steps));
-      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(frameStep);
     }
   }
 
@@ -133,5 +140,27 @@ void main() {
     expect(std.size, liquidSize,
         reason: '两档药丸尺寸不一致（标准 ${std.size} / 液态 $liquidSize）—— '
             '切档位时控件会跳一下');
+  });
+
+  // 帧率无关性：**拆成两条用例**量（同一条用例里连拖两遍会互相干扰 —— 实测两个落点
+  // 差了 77px，量到的根本不是同一段位移）。
+  double? stretch60;
+  double? stretch120;
+
+  testWidgets('形变 @60Hz（基准）', (tester) async {
+    await pumpRinging(tester, dragTo: 0.5);
+    stretch60 = shapeOf(tester).stretch;
+    expect(stretch60, greaterThan(0.3),
+        reason: '前提错了：这一拖根本没积起形变（$stretch60）');
+  });
+
+  testWidgets('形变 @120Hz：与 60Hz 同一个手指速度，形变该差不多', (tester) async {
+    await pumpRinging(tester, dragTo: 0.5,
+        frameStep: const Duration(milliseconds: 8));
+    stretch120 = shapeOf(tester).stretch;
+    expect(stretch60, isNotNull, reason: '基准那条没跑');
+    expect((stretch60! - stretch120!).abs(), lessThan(0.12),
+        reason: '同一个手指速度，60Hz 算出 $stretch60、120Hz 算出 $stretch120 —— '
+            '帧率一变形变就差一档（速度还在用「每帧位移 × 60」算？）');
   });
 }

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
@@ -65,7 +66,19 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   late final AnimationController _thumbLift;
 
   /// 手指的竖向速度（px/s，**向上为正** = 关闭方向）。形变跟着它走。
+  ///
+  /// ⚠️ **它由「位置的帧间差分 ÷ 真实帧间隔」算出来**（见 `_dismissSlider` 的
+  /// builder），**不能**写成 `-delta.dy * 60` —— 那是假定 60Hz：120Hz 上每帧位移只有
+  /// 一半、算出来的速度也只有一半，形变（头大尾轻）就欠一档。同一条 v0.10.6 在底栏上
+  /// 修过（当时是 `max(dt, 16ms)` 那个地板把 120Hz 的速度减了一半）。
   double _thumbVelocity = 0;
+
+  /// 拖动中（速度只在拖动时算；松手之后由弹簧接管，那时不该再形变）。
+  bool _sliderDragging = false;
+
+  /// 上一帧的进度与帧时刻 —— 算速度用。
+  double _lastDragProgress = 0;
+  Duration? _lastFrameStamp;
 
   double _bodyDragDy = 0;
 
@@ -108,18 +121,22 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
 
   void _onSliderDragStart(DragStartDetails d) {
     _thumbLift.forward();
+    _sliderDragging = true;
+    // 速度走「位置的帧间差分」，所以起手时把上一次的位置与帧戳清掉 ——
+    // 不清的话第一帧会拿上一轮拖动留下的值去算，冒出一个假的速度。
+    _lastDragProgress = _slide.value;
+    _lastFrameStamp = null;
+    _thumbVelocity = 0;
   }
 
   void _onSliderDragUpdate(DragUpdateDetails d, double trackHeight) {
     // 直接设值 → 圆钮 1:1 跟随手指，无延迟。
     final v = (_slide.value - d.delta.dy / trackHeight).clamp(0.0, 1.0);
     _slide.value = v;
-    // 形变要的是**速度**（px/s）。手势事件约 60Hz，`delta.dy` 是这一帧的位移，
-    // 负号把「手指向上（关闭方向）」定成正 —— 头大尾小要朝着运动方向。
-    _thumbVelocity = -d.delta.dy * 60;
   }
 
   void _onSliderDragEnd(DragEndDetails d) {
+    _sliderDragging = false;
     _thumbLift.reverse();
     _thumbVelocity = 0;
     if (_slide.value >= _armThreshold) {
@@ -409,6 +426,32 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
       animation: Listenable.merge(<Listenable>[_slide, _thumbLift]),
       builder: (context, _) {
         final p = _slide.value.clamp(0.0, 1.0);
+        // 速度：**位置的帧间差分 ÷ 真实的帧间隔**，与底栏 / 分段器 / 开关同一套
+        // （`lensVelocityStep`，一处实现、带低通）。**别退回 `delta × 60`** ——
+        // 那假定 60Hz，120Hz 上形变会欠一档。详见 `_thumbVelocity`。
+        if (_sliderDragging) {
+          final Duration stamp =
+              SchedulerBinding.instance.currentSystemFrameTimeStamp;
+          // ⚠️ **只在帧戳真的变了的时候才算。** 同一帧里 rebuild 多次是常态
+          // （`_slide` 与 `_thumbLift` 各会通知一次），第二遍进来时位移已经被上
+          // 一遍吃掉了、算出来是 0 —— 而低通会把它当真的（`0.6 × 上一帧`），
+          // 速度一路塌向 0、形变也就没了。**这一条是拿「同一段位移、两种帧率」
+          // 的用例量出来的**（120Hz 那一路塌到 0.002）。
+          if (stamp != _lastFrameStamp) {
+            final Duration? prev = _lastFrameStamp;
+            _lastFrameStamp = stamp;
+            if (prev != null) {
+              _thumbVelocity = lensVelocityStep(
+                // 这里的「一格」就是整条轨道：进度差 × 轨道高 = 位移（px）。
+                deltaPage: p - _lastDragProgress,
+                itemW: trackHeight,
+                dt: stamp - prev,
+                previous: _thumbVelocity,
+              );
+            }
+            _lastDragProgress = p;
+          }
+        }
         final armed = p >= _armThreshold;
         final thumbBottom = p * (trackHeight - thumbH);
         // ⚠️ **色带要**贴住药丸的底边**，不是「按进度铺满轨道」**。原来写的是
