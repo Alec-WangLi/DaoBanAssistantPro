@@ -39,7 +39,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.14\n'
+const String _changelogZh = 'v0.10.15\n'
+    '· 日历上那枚选中的方块，在「液态玻璃」档下变成一枚真的玻璃透镜：按住时四面鼓出来、底下浮起一层影子\n'
+    '· 拖动时它跟着手指的方向拉长、变扁，边上带一圈彩色折射光（停下就没了）\n'
+    '· 它扫过哪一天，那一天的字（日期 / 班次 / 农历）就被它的边缘轻轻挤一下\n'
+    '· 液态玻璃关着的时候，日历与之前一模一样（一个像素都没动）\n\n'
+
+    'v0.10.14\n'
     '· 修好上一版带进来的一处问题：弹窗会顶到状态栏 / 手势条里（21 个弹窗都受影响）\n'
     '· 底部弹层往下拖着要关掉时，不再被压暗、发糊\n'
     '· 响铃页那枚「上滑关闭」的形变在高刷新率屏幕上不再只有一半（同一个拖动速度应当有同一个形状）\n'
@@ -95,20 +101,15 @@ const String _changelogZh = 'v0.10.14\n'
     '· 120Hz 屏幕上「速度被算成一半」的毛病修好了（拖动时形状大小不稳就是它）\n'
     '\n'
 
-    'v0.10.5\n'
-    '· 底栏滑块的手感重调：提起与落下用上了两条不同的弹簧（落下明显更从容），点按之后滑过去也慢了一档\n'
-    '· 那圈彩色折射光现在只在动的时候亮 —— 完全停下时一个彩色像素都没有；同时加宽了一圈\n'
-    '· 滑块边缘扫过图标时，图标与它下面的字会被轻轻挤一下（被罩在透镜正中时几乎不变，所以照样看得清）\n'
-    '· 头大尾小那个形变更容易出现了 —— 不用滑那么快\n'
-    '· 底栏每一帧只重画透镜那一层，不再整条重建\n\n'
-
-    '· 点待办提醒的通知切到待办页时，底栏滑块也跟着走过去（之前页面翻过去了、滑块还留在原处）\n\n'
-
-
-
 ;
 
-const String _changelogEn = 'v0.10.14\n'
+const String _changelogEn = 'v0.10.15\n'
+    '· The selected day block on the calendar becomes a real glass lens in the Liquid Glass tier: it bulges out on all four sides while held, with a lifted shadow\n'
+    '· While you drag it stretches along the direction of travel and flattens, with a prismatic rim that only shows while it is moving\n'
+    '· As it sweeps over a day, that day text (date / shift / lunar) gets a slight squeeze at its edge\n'
+    '· With Liquid Glass off the calendar is pixel-for-pixel what it was\n\n'
+
+    'v0.10.14\n'
     '· Fixed a regression from the previous version: dialogs could sit under the status bar or gesture bar (21 of them were affected)\n'
     '· A bottom sheet no longer dims and blurs while you drag it down to dismiss it\n'
     '· The ringing screen pill deforms correctly on high-refresh-rate screens (the same drag speed now gives the same shape)\n'
@@ -163,17 +164,6 @@ const String _changelogEn = 'v0.10.14\n'
     '· The pill’s shape now eases along a spring instead of snapping straight to the raw speed\n'
     '· Fixed the speed being computed as half its real value on 120Hz displays (that was the shape wobbling as you dragged)\n'
     '\n'
-
-    'v0.10.5\n'
-    '· Reshaped the tab pill: lifting and dropping now use two different springs (the drop is noticeably more unhurried), and a tap slides it across one notch slower\n'
-    '· The prismatic rim now only lights up while the pill is moving — nothing coloured at all when it is still — and it is a bit wider\n'
-    '· As the rim sweeps past an icon, the icon and its label get a slight squeeze (almost none when the pill sits right on top, so it stays readable)\n'
-    '· The head-big tail-small stretch shows up sooner — no need to drag as fast\n'
-    '· The tab bar now repaints only the lens layer each frame, not the whole bar\n\n'
-
-    '· Tapping a todo reminder now carries the tab pill along when the app jumps to the todo page (previously the page moved but the pill stayed put)\n\n'
-
-
 
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
