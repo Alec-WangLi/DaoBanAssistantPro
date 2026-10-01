@@ -78,8 +78,21 @@ def main() -> int:
     duration_ms = int(round(1000 / args.fps))
     # `disposal=2`（每帧回到背景色再画下一帧）：不做的话，帧间只有局部变化时
     # 会留下上一帧的残影 —— GIF 的透明处理很容易踩这个。
-    # 调色板从**第一帧**建、全片共用：逐帧各自量化会让颜色在播放中抖。
-    palette = frames[0].quantize(colors=args.colors, method=Image.MEDIANCUT)
+    #
+    # 调色板**全片共用**：逐帧各自量化会让颜色在播放中抖。
+    #
+    # ⚠️ **取样不能只用第一帧。** 入场动画的第一帧常常是空白 / 加载态，那张图算出来的
+    # 调色板只有一两种颜色，后面每一帧都会被量化成同一片色 —— 于是 `optimize` 认为
+    # 帧帧相同、把整段合并成**一帧**，GIF 变成一张静图（弹窗凝聚那条就这么栽过：
+    # 22 帧出来只有 1 帧、1 KB）。取首 / 中 / 末三帧拼一张来算。
+    sample = frames[0]
+    if len(frames) > 2:
+        picks = [frames[0], frames[len(frames) // 2], frames[-1]]
+        montage = Image.new('RGB', (sample.width, sample.height * len(picks)))
+        for i, f in enumerate(picks):
+            montage.paste(f, (0, i * sample.height))
+        sample = montage
+    palette = sample.quantize(colors=args.colors, method=Image.MEDIANCUT)
     # **不做抖动。** 抖动会往平色区里撒噪点，而 GIF 的压缩全靠大片相同像素 ——
     # 一抖就把体积抬上去（实测同一段 680x194、44 帧：抖动 1567 KB，不抖 300 KB 级）。
     # 界面截图本来就是平色，抖动换不来观感，只换来体积。
