@@ -114,6 +114,7 @@ class LiquidLensShape {
     required this.capsuleH,
     required this.stretch,
     required this.motion,
+    required this.motionAngleDeg,
     required this.movingRight,
     required this.rimScale,
     required this.cornerR,
@@ -146,6 +147,7 @@ class LiquidLensShape {
     double? stretch,
     double? stretchY,
     double? motion,
+    double motionAngleDeg = spectralSweepRestAnchor,
     LiquidLensMetrics? metrics,
     double cornerR = double.infinity,
   }) {
@@ -195,6 +197,7 @@ class LiquidLensShape {
       capsuleH: capsuleH,
       stretch: s,
       motion: glow,
+      motionAngleDeg: motionAngleDeg,
       movingRight: velocity > 0,
       rimScale: m.rimScale,
       cornerR: cornerR,
@@ -220,6 +223,16 @@ class LiquidLensShape {
   /// 和 [stretch] 分家是刻意的：形变要跟速度走（头大尾小），环却要「一动就满」。
   /// 喂同一个量就只能二选一 —— 而用户 2026-10-01 两次说的正是这两件事。
   final double motion;
+
+  /// 光谱环／光晕的**亮峰在哪个方位**（度；0 = 正右，顺时针）。
+  ///
+  /// 默认 [spectralSweepRestAnchor]（225° = 左上）—— 那正是「光是从左上来的」，
+  /// 也是四个既有调用点今天的样子。日历那枚块**飞过网格**时传的是运动方向：
+  /// 前缘亮一档、尾缘暗一档（用户 2026-10-01 在方格子做不了「头大尾轻」之后
+  /// 挑的那条路 —— 轮廓一个像素都不动，方向由光来承担）。
+  ///
+  /// 转的**只是亮峰在哪儿**：色相序列与 floor/span 都不动，所以最暗那一侧仍然有色。
+  final double motionAngleDeg;
 
   /// 这一帧是否在向右移动（决定哪一端是「前缘」）。静止时为 false，
   /// 但那时两端半径相等，所以取哪一边都一样。
@@ -763,6 +776,7 @@ class _LensGlowPainter extends CustomPainter {
           floor: 0.36,
           span: 0.64,
           pow2: false,
+          anchorDeg: shape.motionAngleDeg,
           // 与里面那两层再错一个色相：三层叠起来才是「摊开的光谱」。
           hueLag: -12,
         ).createShader(p.getBounds()),
@@ -779,7 +793,9 @@ class _LensGlowPainter extends CustomPainter {
       old.shape.height != shape.height ||
       old.shape.leftRadius != shape.leftRadius ||
       old.shape.rightRadius != shape.rightRadius ||
-      old.shape.motion != shape.motion;
+      old.shape.motion != shape.motion ||
+      // 亮峰换了一侧也要重画：几何一模一样、光的方向在转（日历那枚块滑行时）。
+      old.shape.motionAngleDeg != shape.motionAngleDeg;
 }
 
 /// 胶囊那条边被透镜**折进去**的那一帧几何。纯函数 —— `null` = 这一帧不画。
@@ -961,6 +977,8 @@ class _LensBodyPainter extends CustomPainter {
       // **`motion` 必须比**：形状可以一模一样而环的明暗在变（同样的几何、
       // 速度从 0 到 60）。漏掉它，环就会卡在上一帧的亮度上不动。
       old.shape.motion != shape.motion ||
+      // 同上：亮峰换侧而几何不变时也必须重画。
+      old.shape.motionAngleDeg != shape.motionAngleDeg ||
       old.origin != origin ||
       old.isDark != isDark ||
       old.accent != accent ||
@@ -996,6 +1014,7 @@ class _LensBodyPainter extends CustomPainter {
           floor: 0.36,
           span: 0.64,
           pow2: false,
+          anchorDeg: shape.motionAngleDeg,
           hueLag: -30,
         ).createShader(b),
     );
@@ -1012,6 +1031,7 @@ class _LensBodyPainter extends CustomPainter {
           floor: 0.40,
           span: 0.60,
           pow2: false,
+          anchorDeg: shape.motionAngleDeg,
           hueLag: 22,
         ).createShader(b),
     );
@@ -1048,16 +1068,25 @@ class _LensBodyPainter extends CustomPainter {
           floor: 0.58,
           span: 0.42,
           pow2: true,
+          // 亮峰跟着这一帧的方向走（不给就是 225°，与既有四个调用点一致）。
+          anchorDeg: shape.motionAngleDeg,
         ).createShader(lensPath.getBounds()),
     );
   }
 }
 
+/// 那圈光谱**不给方向**时的锚点（度）：225° = 左上。
+///
+/// 理由见 [spectralSweep]（「光是从左上来的」）。它现在是一个常量而不是写死在
+/// 算式里的数，是因为日历那枚块滑行时要让亮峰**跟着运动方向走** ——
+/// 而**不给方向的调用点必须一个像素都不变**，所以默认值就是它。
+const double spectralSweepRestAnchor = 225;
+
 /// 沿透镜轮廓走一圈的**色相**渐变 —— 光谱环、两层光晕、外溢那一层共用同一份。
 ///
 /// `SweepGradient` 的角度从 **+x（正右）** 起算、屏幕上顺时针，于是
-/// `t = 0` 是右边、`0.25` 下、`0.5` 左、`0.75` 上。亮度峰值锚在 **225°（左上）**，
-/// 因为光是从左上来的。
+/// `t = 0` 是右边、`0.25` 下、`0.5` 左、`0.75` 上。亮度峰值默认锚在 **225°（左上）**
+/// （[spectralSweepRestAnchor]），因为光是从左上来的。
 ///
 /// **[floor] / [span] 决定「最暗那个方向有多亮」，而这一对数是踩过坑的。**
 /// 原先是 `0.06 + 0.86·toward²`，`toward` 峰值锚在 225° **且又平方一次** ——
@@ -1070,6 +1099,11 @@ class _LensBodyPainter extends CustomPainter {
 /// 「彩边四面八方都有颜色」。
 ///
 /// [hueLag] 是相对主色的整体色相偏移，用来把两层光晕**错开成光谱**。
+///
+/// [anchorDeg] 是**亮峰在哪个方位**。给它一个运动方向，那圈光就朝前亮、朝后暗
+/// （日历那枚块飞过网格时用的就是它）。转的**只是亮峰在哪儿**：色相序列、[floor] /
+/// [span] 一个字不动 —— 而且因为最暗那一侧仍有 [floor]，转起来**不会**把某一侧
+/// 转成空的（那正是上面那个坑）。
 SweepGradient spectralSweep({
   required Color accent,
   required double alpha,
@@ -1077,6 +1111,7 @@ SweepGradient spectralSweep({
   required double span,
   required bool pow2,
   double hueLag = 0,
+  double anchorDeg = spectralSweepRestAnchor,
   int steps = 24,
 }) {
   final HSLColor base = HSLColor.fromColor(accent);
@@ -1084,7 +1119,8 @@ SweepGradient spectralSweep({
   final List<double> stops = <double>[];
   for (int i = 0; i <= steps; i++) {
     final double t = i / steps;
-    final double toward = (1 + math.cos((t * 360 - 225) * math.pi / 180)) / 2;
+    final double toward =
+        (1 + math.cos((t * 360 - anchorDeg) * math.pi / 180)) / 2;
     final double w = pow2 ? toward * toward : toward;
     colors.add(HSLColor.fromAHSL(
       (floor + span * w).clamp(0.0, 1.0) * alpha,

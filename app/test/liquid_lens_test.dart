@@ -400,6 +400,7 @@ void main() {
     double velocity = 0,
     double? stretch,
     double? motion,
+    double? motionAngleDeg,
     List<Color>? fill,
     bool showRingCore = true,
     bool showRefractedEdge = true,
@@ -420,6 +421,7 @@ void main() {
         velocity: velocity,
         stretch: stretch,
         motion: motion,
+        motionAngleDeg: motionAngleDeg ?? spectralSweepRestAnchor,
         metrics: metrics);
     final double top = (canvas.height - capsule.height) / 2;
     await tester.pumpWidget(RepaintBoundary(
@@ -861,6 +863,146 @@ void main() {
       expect(diffNear(on, off, e.value), greaterThan(0),
           reason: '${e.key}边一个像素都没被彩边影响 —— 彩边又被锚在左上那一侧了');
     }
+  });
+
+  // ── 光谱的锚点：光**有方向** ─────────────────────────────────────────────
+  //
+  // 这一族的光原先一律锚在 225°（左上），因为「光是从左上来的」。日历那枚选中块
+  // 飞过网格时（点「今天」那种）要它的一圈彩边**朝运动方向让位**：前缘亮一档、
+  // 尾缘暗一档 —— 用户 2026-10-01 在方格子做不了「头大尾轻」之后挑的那条路。
+  // 转的只是**亮峰在哪儿**，色相序列一个字不动（那是装饰，不携带方向）。
+  group('光谱的锚点（光有方向）', () {
+    const Color accent = Color(0xFF12B5A5);
+
+    /// 扫掠渐变里**最亮**（alpha 最大）那一段落在哪个方位，单位度。
+    /// 约定与 `spectralSweep` 一致：0 = 正右，顺时针（90 = 正下、180 = 正左）。
+    double brightestDeg(SweepGradient g) {
+      int best = 0;
+      for (int i = 1; i < g.colors.length; i++) {
+        if (g.colors[i].a > g.colors[best].a) best = i;
+      }
+      return g.stops![best] * 360;
+    }
+
+    /// 两个方位之间最短的那段夹角（0° 与 360° 是同一个方向）。
+    double angleGap(double a, double b) {
+      final double d = (a - b).abs() % 360;
+      return d > 180 ? 360 - d : d;
+    }
+
+    SweepGradient sweep({double? anchorDeg}) => spectralSweep(
+        accent: accent,
+        alpha: 1,
+        floor: 0.58,
+        span: 0.42,
+        pow2: true,
+        anchorDeg: anchorDeg ?? spectralSweepRestAnchor);
+
+    test('不给 anchorDeg：还锚在 225°（光从左上来）—— 既有四个调用点一个字都不许变',
+        () {
+      expect(angleGap(brightestDeg(sweep()), 225), lessThan(8));
+      expect(spectralSweepRestAnchor, 225);
+    });
+
+    test('给了 anchorDeg：亮峰就落在那个方位', () {
+      for (final double deg in <double>[0, 90, 180, 270]) {
+        expect(angleGap(brightestDeg(sweep(anchorDeg: deg)), deg), lessThan(8),
+            reason: '$deg° 那一档的亮峰没落在 $deg°');
+      }
+    });
+
+    test('方位转了、**颜色没转**：色相序列与默认那一档逐值相同', () {
+      final SweepGradient a = sweep();
+      final SweepGradient b = sweep(anchorDeg: 0);
+      expect(b.colors.length, a.colors.length);
+      for (int i = 0; i < a.colors.length; i++) {
+        expect(HSLColor.fromColor(b.colors[i]).hue,
+            closeTo(HSLColor.fromColor(a.colors[i]).hue, 0.01),
+            reason: '第 $i 段色相跟着锚点一起转了 —— 转的只该是亮峰在哪儿');
+      }
+      // 而亮度确实变了（否则上面那条就是一句空话：两档完全一样）。
+      expect(brightestDeg(a), isNot(closeTo(brightestDeg(b), 1)));
+    });
+
+    test('形状带着光的方向：默认就是静止那一档', () {
+      final LiquidLensShape sh = LiquidLensShape.of(
+          itemW: 120, capsuleH: 64, pad: 0, centerPage: 0, lift: 0, velocity: 0);
+      expect(sh.motionAngleDeg, spectralSweepRestAnchor,
+          reason: '默认不是 225° 就等于把四个既有调用点的画面一起改了');
+    });
+
+    test('形状带着光的方向：给了就用它', () {
+      final LiquidLensShape sh = LiquidLensShape.of(
+          itemW: 120,
+          capsuleH: 64,
+          pad: 0,
+          centerPage: 0,
+          lift: 0,
+          velocity: 0,
+          motionAngleDeg: 42);
+      expect(sh.motionAngleDeg, 42);
+    });
+
+    testWidgets('光真的落在**前缘那一侧**：锚在右时右边那点比锚在左时亮', (tester) async {
+      // ⚠️ 三条量法上的讲究，都是踩出来的：
+      // ① **两帧的几何必须逐像素钉住**（`stretch: 0`）：速度一给，形变就跟着来
+      //    （`stretch` 不给时按速度现推）—— 不钉住的话形状自己就宽了 24px，
+      //    对照帧根本不在同一块地方（既有那几条用 `velocity: 1` 配 `stretch` 显式
+      //    传值，就是这个道理）。第二版写漏了它，量出来左右一模一样。
+      // ② **几何还要左右对称地落在画布里**：`lift: 1 / stretch: 1` 时透镜宽 154、
+      //    左缘跑到 x = −17（画布外），左右两半根本不对称 —— 第一版按左右半画布
+      //    求和，永远得出「左边更多」。改成在离轮廓 8px 的两个对称探针上量。
+      // ③ **不能拿「左右两半谁更亮」当判据**：那圈色相沿轮廓走 300°，某一侧可能
+      //    正好绕回主色，与底色几乎一样 —— v0.10.7 那条教训。这里比的是**同一个
+      //    探针点在两种锚点下的「落了多少光」**（同一方位的色相是一样的，只有
+      //    亮度不同），色相被消掉了。
+      const double noStretch = 0;
+      final List<int> off = await shotLens(tester,
+          lift: 0, accent: accent, velocity: 1, stretch: noStretch);
+      Future<List<int>> anchored(double deg) => shotLens(tester,
+          lift: 0,
+          accent: accent,
+          velocity: AppTokens.lensVelocityRef,
+          stretch: noStretch,
+          motionAngleDeg: deg);
+
+      /// 探针处「落了多少光」：与不画环那一帧的差异总量。
+      int lit(List<int> on, Offset c, {int r = 8}) {
+        int sum = 0;
+        for (int y = (c.dy - r).round(); y <= (c.dy + r).round(); y++) {
+          for (int x = (c.dx - r).round(); x <= (c.dx + r).round(); x++) {
+            if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) {
+              continue;
+            }
+            final int i = (y * canvas.width.toInt() + x) * 4;
+            int d = 0;
+            for (int c2 = 0; c2 < 3; c2++) {
+              final int v = (on[i + c2] - off[i + c2]).abs();
+              if (v > d) d = v;
+            }
+            sum += d;
+          }
+        }
+        return sum;
+      }
+
+      const Offset rightProbe = Offset(112, 60); // 右缘往里 8px
+      const Offset leftProbe = Offset(8, 60); // 左缘往里 8px
+
+      final List<int> onRight = await anchored(0);
+      final List<int> onLeft = await anchored(180);
+      final int rightLitByRight = lit(onRight, rightProbe);
+      final int rightLitByLeft = lit(onLeft, rightProbe);
+      final int leftLitByLeft = lit(onLeft, leftProbe);
+      final int leftLitByRight = lit(onRight, leftProbe);
+
+      expect(rightLitByRight, greaterThan(rightLitByLeft * 1.2),
+          reason: '锚在正右，右边那点却没比锚在左时更亮'
+              '（锚右 $rightLitByRight / 锚左 $rightLitByLeft）—— 锚点没接进绘制里');
+      expect(leftLitByLeft, greaterThan(leftLitByRight * 1.2),
+          reason: '锚在正左，左边那点却没更亮'
+              '（锚左 $leftLitByLeft / 锚右 $leftLitByRight）');
+    });
   });
 
   testWidgets('光晕往**外**也散一点：轮廓之外也受影响', (tester) async {
