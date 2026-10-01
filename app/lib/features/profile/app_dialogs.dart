@@ -39,7 +39,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.17\n'
+const String _changelogZh = 'v0.10.18\n'
+    '· 长按拖选一段日子时，那层逐格的淡色小方块换成了一条连着的水带：同一周内是一整条，格子之间的缝也盖住了\n'
+    '· 按住那一下它会四面鼓起来、像水一样漫上来；拖动时末端淌到新的一格，它探进哪一格、那一格的字就被轻轻挤一下\n'
+    '· 水带的两端是圆的；跨周时那两头切平（月历里跨周不是相邻的格子，是从最右列跳到下一行的最左列）\n'
+    '· 液态玻璃关着的时候，拖选与之前一模一样（逐格淡色方块，一个像素都没动）\n\n'
+
+    'v0.10.17\n'
     '· 日历上那枚选中的块，点别的日期、再点「今天」时，现在是飞回去的：飞的时候一圈彩色折射光亮起来，形状按飞行的方向拉长、变扁\n'
     '· 它飞过哪几格，那几格的字就被轻轻挤一下（之前被挤的是终点那一格 —— 块还在半路上，终点就已经先动了）\n'
     '· 落定之后这些自己收回去，静止时与之前一样\n'
@@ -90,15 +96,15 @@ const String _changelogZh = 'v0.10.17\n'
     '· 开关改成玻璃轨道：开着的时候玻璃里透着一层主色；按住时那枚钮会纵向拉长（宽度不变，参考 iOS 26）\n'
     '· 关掉液态玻璃时，这两处与之前一模一样\n'
     '\n'
-
-    'v0.10.8\n'
-    '· 底栏滑块那圈彩色的范围收紧了：外面那层从伸出约 33px 收到约 12px，里面也收了一半 —— 之前散得太开，像一片光雾\n'
-    '· 彩边改成渐入渐出：手一动约 0.2 秒亮起来，手停下约 0.4 秒淡下去，不再是一动就「啪」地出现、一停就突然没了\n'
-    '· 静止时依旧一点彩色都没有\n'
-    '\n'
 ;
 
-const String _changelogEn = 'v0.10.17\n'
+const String _changelogEn = 'v0.10.18\n'
+    '· Long-pressing to select a run of days now draws one continuous water band instead of a pale block per cell — within a week it is a single strip that covers the gaps between cells\n'
+    '· Pressing swells it on all four sides, like water rising; dragging lets the tip flow into the next cell, and the day it reaches gets a slight squeeze\n'
+    '· The band ends are round; where it wraps to the next week the two ends are cut flat (in a month grid a week wrap is not an adjacent cell)\n'
+    '· With Liquid Glass off, selection is exactly as before (a pale block per cell, pixel for pixel)\n\n'
+
+    'v0.10.17\n'
     '· The calendar selection block now flies back when you tap another date and then Today: a prismatic rim lights up on the way, and the shape stretches along its direction of travel\n'
     '· The days it sweeps over get a slight squeeze (before, the squeeze sat on the destination while the block was still in mid-air)\n'
     '· All of it settles back once it lands — at rest it looks exactly as before\n'
@@ -148,12 +154,6 @@ const String _changelogEn = 'v0.10.17\n'
     '· A segment’s selected block is now a glass droplet: it lifts when held, follows your drag, and carries a rim of chromatic light\n'
     '· Switches are now a glass track, tinted with the accent when on; press and the knob stretches vertically (same width, after iOS 26)\n'
     '· With liquid glass off, both look exactly as they did before\n'
-    '\n'
-
-    'v0.10.8\n'
-    '· The coloured rim on the tab pill is much tighter: the outer spread went from about 33px to about 12px, and the inner one came in by half — it used to read as a haze of light rather than glass\n'
-    '· The rim now fades in and out: about 0.2s to light up when you start moving, about 0.4s to fade when you stop, instead of snapping on and off\n'
-    '· Still nothing coloured at all while the pill is at rest\n'
     '\n'
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
