@@ -111,6 +111,41 @@ void main() {
     expect(drop, greaterThan(lift * 1.3), reason: '落下没有比提起更从容 —— 那就白分两条了');
   });
 
+  test('同一段位移在任何帧率下算出同一个速度（16ms 地板会让它差近一倍）', () {
+    // 120Hz 每帧 2.5px ≡ 60Hz 每帧 5px ≡ **300px/s**。两路必须给出同一个速度。
+    //
+    // 破坏它的是 `_onTick` 里原来的 `max(dt, 16ms)` 地板：16ms 正好是**一帧 60Hz**，
+    // 于是在 120Hz 上 dt 被抬到 16ms、速度被算成真实值的一半（156 vs 300）；
+    // 而帧间隔一旦在 8.33 / 16.7 之间跳（可变刷新率），同一根手指就算出两个
+    // 拉伸量 —— 用户 2026-10-05 说的「像帧率不够」有一半来自这里。
+    // 这台机器正是 120Hz，所以这个地板**一直在生效**。
+    //
+    // **反向验证**：把地板加回 `lensVelocityStep`，这条立刻红（120Hz 那路掉到 156）。
+    const double itemW = 90;
+    double steady(double pxPerFrame, Duration dt) {
+      double v = 0;
+      for (int i = 0; i < 40; i++) {
+        v = lensVelocityStep(
+            deltaPage: pxPerFrame / itemW, itemW: itemW, dt: dt, previous: v);
+      }
+      return v;
+    }
+
+    final double at120 = steady(2.5, const Duration(microseconds: 8333));
+    final double at60 = steady(5.0, const Duration(microseconds: 16667));
+    expect(at120, closeTo(300, 1));
+    expect(at60, closeTo(300, 1));
+    expect((at120 - at60).abs() / at60, lessThan(0.02),
+        reason: '120Hz 算出 $at120、60Hz 算出 $at60 —— 速度跟帧率绑在一起了');
+  });
+
+  test('dt 为 0 时返回上一帧的值（不拿假 dt 去凑，也不抛）', () {
+    expect(
+        lensVelocityStep(
+            deltaPage: 0.5, itemW: 90, dt: Duration.zero, previous: 42),
+        42);
+  });
+
   group('透镜几何', () {
     const double itemW = 85, capsuleH = 64, pad = 6;
 
@@ -151,6 +186,77 @@ void main() {
 
       final left = at(lift: 1, velocity: -AppTokens.lensVelocityRef);
       expect(left.leftRadius, greaterThan(left.rightRadius));
+    });
+
+    test('拖动时凸出不许被形变吃掉：满升程 + 任何速度下都高于胶囊', () {
+      // 用户 2026-10-05 报「形状变化僵硬」，底下其实是一个**几何缺陷**。
+      //
+      // 原式是 `(基准 + 2·凸出·lift) × (1 − squash·s)` —— 压扁**乘在凸出上**。
+      // 实测（扫出来的）：squash 还是 0.12 的版本里，lift=1 / 700px/s 时透镜高
+      // **63.4**，而胶囊高 **64**：**透镜整个沉回胶囊里面**，按住拖动时
+      // 「一枚浮起来的玻璃滴」直接掉回「一枚躺着药丸」——「按住」这个动作的
+      // 全部读感就在那零点几个像素上。
+      //
+      // 修法是让外扩**加在压扁之后的基准上**，不许与形变相乘。
+      for (double v = 0; v <= 2000; v += 25) {
+        final s = at(lift: 1, velocity: v);
+        expect(s.height, greaterThan(capsuleH),
+            reason: 'lift=1 / v=$v 时透镜高 ${s.height} ≤ 胶囊高 $capsuleH —— '
+                '沉回胶囊里了，「提起」的信号没了');
+      }
+    });
+
+    test('凸出量恒等于 2×navLensProtrude，**与速度无关**（乘法顺序的守卫）', () {
+      // 上面那条只断言「还高于胶囊」—— 它**抓不住乘法顺序**：squash 从 0.12 收到
+      // 0.08 之后，就算把乘法顺序改回去，满速下也还剩 66.2 > 64，照样绿。
+      // （第一版就是这么写的，反向验证时才现形。）
+      //
+      // 真正的不变量是**差值**：外扩是加在压扁之后的基准上的，所以
+      // 「lift=1 的高 − lift=0 的高」恒等于 2×protrude，**跟 s 一点关系都没有**。
+      // 乘进去的话这个差会随 s 缩水（`20 × (1 − squash·s)`）。
+      for (final double s in <double>[0.0, 0.25, 0.5, 0.75, 1.0]) {
+        final double v = s * AppTokens.lensVelocityRef;
+        final up = at(lift: 1, velocity: v);
+        final down = at(lift: 0, velocity: v);
+        expect(up.height - down.height,
+            closeTo(2 * AppTokens.navLensProtrude, 0.001),
+            reason: 's=$s 时凸出只剩 ${up.height - down.height} —— '
+                '压扁又乘在凸出上了');
+      }
+    });
+
+    test('折边：按住时**任何速度下**都画得出来（它原来在高速下整个消失）', () {
+      // 这条钉的是一个「洞」，不是手感：原早退条件是「**两个端头半径都**大于胶囊
+      // 半高」，而速度一上来后缘半径（`×(1 − 0.35·stretch)`）必然先掉下去 ——
+      // 于是整条折边被一票否决。实测 lift=1 时超过约 150px/s 它就完全消失，
+      // 而常态拖动是 300~1000px/s：**这个效果只在「按住而且手指不动」时存在**，
+      // 恰好是唯一不会去拖的状态。用户说的「僵硬、像帧率不够」有一半来自这个
+      // 忽有忽无的开关。
+      for (double v = 0; v <= 2000; v += 25) {
+        final e = refractedCapsuleEdge(at(lift: 1, velocity: v));
+        expect(e, isNotNull, reason: 'lift=1 / v=$v —— 折边不画了');
+        expect(e!.xR - e.xL, greaterThan(10),
+            reason: 'lift=1 / v=$v 跨度只有 ${e.xR - e.xL}');
+        expect(e.fade, greaterThan(0.2),
+            reason: 'lift=1 / v=$v 淡入只剩 ${e.fade} —— 太淡就等于没有');
+      }
+    });
+
+    test('折边：没按住时一定不画（对照组）', () {
+      // 缺了这条，上面那条可能因为别的原因变绿（例如门被开得过宽）。
+      for (double v = 0; v <= 2000; v += 50) {
+        expect(refractedCapsuleEdge(at(lift: 0, velocity: v)), isNull,
+            reason: 'lift=0 / v=$v —— 没凸出就把胶囊的边折了');
+      }
+    });
+
+    test('折边：凸出越多越鼓、越实（不是开关）', () {
+      // 「不再啪地出现」的可断言形式：淡入是**连续**的，不是 0/1。
+      final mid = refractedCapsuleEdge(at(lift: 0.8, velocity: 0))!;
+      final full = refractedCapsuleEdge(at(lift: 1, velocity: 0))!;
+      expect(mid.fade, lessThan(full.fade),
+          reason: '凸出更少却一样实 —— 那是开关，回到「啪地出现」了');
+      expect(mid.bow, lessThan(full.bow));
     });
 
     test('窄窗：两端圆不许重叠（外公切线必须存在），且形状仍闭合', () {
@@ -224,6 +330,7 @@ void main() {
     required double lift,
     required Color accent,
     double velocity = 0,
+    double? stretch,
   }) async {
     tester.view.physicalSize = canvas;
     tester.view.devicePixelRatio = 1.0;
@@ -237,7 +344,8 @@ void main() {
         pad: 0,
         centerPage: 0,
         lift: lift,
-        velocity: velocity);
+        velocity: velocity,
+        stretch: stretch);
     final double top = (canvas.height - capsule.height) / 2;
     await tester.pumpWidget(RepaintBoundary(
       key: key,
@@ -442,6 +550,39 @@ void main() {
     // 所以退回 3px 会让这条变红。
     expect(area, greaterThanOrEqualTo(180),
         reason: '彩边的面积不够 —— 加宽没生效（3px 那版是 132）');
+  });
+
+  testWidgets('彩边「一动就满」：形状一模一样时，60px/s 已和满速一样亮', (tester) async {
+    // 用户 2026-10-05：「彩色边缘不明显，还是恢复成一动就直接达到满效果吧。
+    // 现在是跟随速度越快效果才越明显，但这样几乎看不出来。本来它这个效果范围
+    // 就不大，所以还是直接生效到最大效果吧。」
+    //
+    // 原来环的亮度是 `× stretch`（= 速度 / lensVelocityRef）—— 要甩到满速才满亮，
+    // 而常态拖动就在那个数上下，于是它长期停在半亮，等于一直是淡的。现在门换成了
+    // `motion`：`lensRingFullSpeed`（60px/s）就封顶。
+    //
+    // **把 `stretch` 固定成 0 是关键**：形状因此完全不动、周长没有变化，三次取样
+    // 之间**只有门在变**。不固定的话，「v 大 → 形状被拉长 → 周长更大 → 面积更大」
+    // 会让这条断言变成一个恒真的空话。
+    //
+    // **反向验证**：把 `_paintSpectralRing` 的乘数改回 `shape.stretch`，这条立刻红
+    // （60px/s 那档会掉到近乎 0）。
+    const accent = Color(0xFF12B5A5);
+    final List<int> still =
+        await shotLens(tester, lift: 1, accent: accent, stretch: 0);
+    final List<int> slow = await shotLens(tester,
+        lift: 1, accent: accent, velocity: AppTokens.lensRingFullSpeed,
+        stretch: 0);
+    final List<int> fast = await shotLens(tester,
+        lift: 1, accent: accent, velocity: AppTokens.lensVelocityRef * 3,
+        stretch: 0);
+
+    expect(ringArea(still, accent), 0, reason: '静止时还有彩色 —— 那圈彩虹不该出现');
+    expect(ringArea(slow, accent), greaterThan(0), reason: '动起来了却不亮');
+    expect(ringArea(slow, accent),
+        greaterThanOrEqualTo((ringArea(fast, accent) * 0.95).round()),
+        reason: '60px/s 还没到满效果（${ringArea(slow, accent)} vs '
+            '${ringArea(fast, accent)}）—— 门又在跟速度大小走了');
   });
 
   test('几何在任何尺寸 × 任何速度下都画得出东西（参数化扫一遍）', () {

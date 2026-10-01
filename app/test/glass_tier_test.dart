@@ -289,17 +289,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 20));
   }
 
-  /// 把一整块**主壳**光栅化成原始像素。
+  /// 把某个 key 那层 `RepaintBoundary` 光栅化成原始 RGBA。
   ///
-  /// 样本为什么是主壳、不再是某个玻璃件：**2026-10-01 起液态档只作用于底栏**
-  /// （规格 §2 决策①），别的玻璃面两档本来就该一模一样 —— 继续拿它们当样本，
-  /// 这条守门会变成一句「永远为假」的空话（`GlassPill` 那条就是这么失效的）。
-  Future<List<int>> shotShell(
-    WidgetTester tester, {
-    required bool liquid,
-    Size size = const Size(420, 900),
-  }) async {
-    final GlobalKey key = await pumpShell(tester, liquid: liquid, size: size);
+  /// 单独抽出来，是因为有几条用例要在 [`disposeShell`] **之前**先量一次几何
+  /// （`tester.getRect` 在树拆掉之后就找不到了）。
+  ///
+  /// ⚠️ 它**必须声明在 `shotShell` 前面** —— Dart 的局部函数不像字段那样可以
+  /// 先用后声明（写了会报 `referenced_before_declaration`）。
+  Future<List<int>> rasterize(WidgetTester tester, GlobalKey key) async {
     final RenderRepaintBoundary boundary =
         key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
     late List<int> bytes;
@@ -311,6 +308,21 @@ void main() {
       image.dispose();
       bytes = data!.buffer.asUint8List().toList();
     });
+    return bytes;
+  }
+
+  /// 把一整块**主壳**光栅化成原始像素。
+  ///
+  /// 样本为什么是主壳、不再是某个玻璃件：**2026-10-01 起液态档只作用于底栏**
+  /// （规格 §2 决策①），别的玻璃面两档本来就该一模一样 —— 继续拿它们当样本，
+  /// 这条守门会变成一句「永远为假」的空话（`GlassPill` 那条就是这么失效的）。
+  Future<List<int>> shotShell(
+    WidgetTester tester, {
+    required bool liquid,
+    Size size = const Size(420, 900),
+  }) async {
+    final GlobalKey key = await pumpShell(tester, liquid: liquid, size: size);
+    final List<int> bytes = await rasterize(tester, key);
     await disposeShell(tester);
     return bytes;
   }
@@ -490,6 +502,63 @@ void main() {
     }
     expect(differing, greaterThan(0),
         reason: '开了液态玻璃却一个像素都没变 —— 这一档没有真的生效');
+  });
+
+  /// 主壳光栅化图里某个像素的红通道（[shotShell] 是 420×900、DPR 1.0）。
+  ///
+  /// 只取红通道：参与比较的几个值都是中性灰（白 / 黑 / 底色），三通道一起看是噪音。
+  int redAt(List<int> px, int x, int y, {required Size size}) =>
+      px[(y * size.width.toInt() + x) * 4];
+
+  testWidgets('浅色档：胶囊左右两条边必须是同一个值（边光是**竖直**的，不是对角）',
+      (tester) async {
+    // 用户 2026-10-05：「浅色模式下底部胶囊的边缘镜片效果左边很浅，几乎看不清
+    // 胶囊，右边有镜片效果。……要不要去掉我们背景的渐变色？」
+    //
+    // 先排除背景：胶囊**外侧**左右两边实测都是 `rgb(254,247,255)`，一模一样 ——
+    // 光晕没在左右制造任何亮度差（而且 `FlowingBackground` 只在日历页与响铃页，
+    // 底栏四个 tab 里另外三个根本没有它）。差全在边光自己身上，所以**不该去动背景**。
+    //
+    // 根因：`AppTokens.glassRimProbe()` 配的是 `topLeft → bottomRight` 的**对角**
+    // 线性渐变。这套配方是照**近方形卡片**量的（在卡片上读作「左上高光 + 右下收边」），
+    // 可底栏胶囊是 372×64（约 6:1），渐变轴几乎就是水平的 —— 于是退化成
+    // **左端纯白、右端 10% 黑**。左边那圈 α=1.0 的纯白既压在近白的底上看不见，
+    // 又把胶囊自己那条 14% 的深色轮廓线整个盖掉，所以「几乎看不清胶囊」。
+    //
+    // 改成竖直轴之后 t 只跟 **y** 有关：左右两个端头在同一个 y 上拿到的是**同一个
+    // 颜色**，与宽高比无关。取样点取胶囊竖直中点（两端都落在 t = 0.5，那一段是
+    // 透明的），于是两边必须同值。
+    //
+    // **反向验证**：把轴改回 `topLeft → bottomRight`，这条立刻红（实测 251 vs 203）。
+    const Size size = Size(420, 900);
+    final GlobalKey key = await pumpShell(tester, liquid: true, size: size);
+    final Rect nav = tester.getRect(find.byKey(const Key('glass-nav-bar')));
+    final List<int> px = await rasterize(tester, key);
+    // 胶囊比 nav 那条边内缩 `_outerPad`（24）。取「最暗的那一个像素」当这条边的读数
+    // —— 描边与边光都只有 1px 上下，钉死某一个 x 会被抗锯齿的相位差骗到。
+    final int capL = (nav.left + 24).round();
+    final int capR = (nav.right - 24).round() - 1;
+    final int y = (nav.bottom - 32).round();
+    int darkest(int from, int to) {
+      int v = 255;
+      for (int x = from; x <= to; x++) {
+        v = v < redAt(px, x, y, size: size) ? v : redAt(px, x, y, size: size);
+      }
+      return v;
+    }
+
+    // 左边只取胶囊内缩 6px 以内：那里是 `_innerPad`，透镜（在选中那一格里）够不到。
+    final int left = darkest(capL, capL + 5);
+    final int right = darkest(capR - 5, capR);
+    final int outside = redAt(px, capL - 6, y, size: size); // 胶囊外的页面底色
+
+    expect((left - right).abs(), lessThanOrEqualTo(4),
+        reason: '左右两条边差 $left vs $right —— 边光又在按对角走了（胶囊是 6:1，'
+            '对角轴会退化成「左白右黑」）');
+    expect(outside - left, greaterThanOrEqualTo(20),
+        reason: '左缘比底色只暗 ${outside - left} 级，几乎看不见 —— '
+            '浅色档的白色端又盖过胶囊自己的轮廓线了');
+    await disposeShell(tester);
   });
 
   testWidgets('外部程序化切页：透镜也跟着走（不是只改了高亮）', (tester) async {

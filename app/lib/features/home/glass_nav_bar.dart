@@ -9,7 +9,6 @@
 // 这次抽取是**纯搬移**，行为一字不变（验收是工装出图逐像素相同）。
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -72,6 +71,14 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// 升程 0..1。它同时管三件事：放大、凸出胶囊、以及「跟不跟手」。
   late final LiquidLensSpring _liftSpring;
 
+  /// 形变强度 0..1。**它自己走一条弹簧**，不直接用瞬时速度。
+  ///
+  /// 瞬时速度是一根毛刺：直接拿它当形变，观感就是「起步啪一下到满、停下啪一下
+  /// 归零」—— 用户 2026-10-05 说的「僵硬、不够丝滑」有一半来自这里。过一条弹簧
+  /// 就有了惯性和回弹：起步时冲一点、停下时拖一条尾巴。参数见
+  /// `AppTokens.lensStretchOmega`。
+  late final LiquidLensSpring _stretchSpring;
+
   /// 升程的**目标**：按住够久、或者已经在拖，才提起。
   ///
   /// 这一条是**交互契约**的一部分（用户 2026-10-01）：点一下只是「滑块自动过来
@@ -121,6 +128,11 @@ class _GlassNavBarState extends State<GlassNavBar>
       value: _committedIndex + 0.5,
     );
     _liftSpring = LiquidLensSpring(target: 0);
+    _stretchSpring = LiquidLensSpring(
+      target: 0,
+      omega: AppTokens.lensStretchOmega,
+      zeta: AppTokens.lensStretchZeta,
+    );
     _ticker = createTicker(_onTick);
     // 外部程序化切页（点了待办提醒的通知 → 跳到待办页）不经过这里的手势处理，
     // 所以还要听控制器：不听的话页面已经翻过去了、底部高亮还停在原来那一格。
@@ -145,8 +157,10 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// 整个 widget 测试套件都会在 `pumpAndSettle` 上超时（v0.9.8 的日历背景光晕
   /// 就是这么一次红 46 条）。
   void _syncTicker() {
-    final bool needed =
-        _pressed || !_posSpring.isAtRest || !_liftSpring.isAtRest;
+    final bool needed = _pressed ||
+        !_posSpring.isAtRest ||
+        !_liftSpring.isAtRest ||
+        !_stretchSpring.isAtRest;
     final Ticker? t = _ticker;
     if (t == null) return;
     if (needed) {
@@ -163,8 +177,8 @@ class _GlassNavBarState extends State<GlassNavBar>
     // 第一帧没有上一帧可比 —— 按「一帧」算。用 `lensMaxStep` 而不是另写一个
     // 字面量：它本来就是「一步最多积分多久」，语义正好，也过得了令牌守门
     // （`lib/features/home/` 在扫描范围内，时长字面量会打红）。
-    final Duration dt =
-        _lastTick == null ? AppTokens.lensMaxStep : elapsed - _lastTick!;
+    final bool first = _lastTick == null;
+    final Duration dt = first ? AppTokens.lensMaxStep : elapsed - _lastTick!;
     _lastTick = elapsed;
 
     // **提起与落下用两条不同的弹簧**（Apple 自己的数字：Lift 快、Unlift 从容）。
@@ -196,16 +210,35 @@ class _GlassNavBarState extends State<GlassNavBar>
 
     // 速度取**位置的真实帧间差分**，不是弹簧自己的 `velocity`：拖动时弹簧压根
     // 没参与（位置是 1:1 给的），它自己的速度恒为 0，形变就永远不会发生。
-    // 分母给一个**下限**：两帧时间戳几乎相同时（极小正 dt）`raw` 会冲高。
-    // 现在后果被 `LiquidLensShape` 的 `clamp(0,1)` 吸收了（最多满拉伸一帧），
-    // 不是 bug —— 但加了它之后这条算式**确定性地不依赖调度器的抖动**。
-    final double seconds = math.max(
-        dt.inMicroseconds / 1e6, AppTokens.lensMaxStep.inMicroseconds / 1e6);
-    final double raw = (_posSpring.value - _lastLensCenter) * _itemW / seconds;
-    _lensVelocityPx = _lensVelocityPx * 0.6 + raw * 0.4;
+    //
+    // ⚠️ **分母不许再设地板。** 原来是 `max(dt, 16ms)`，本意是防「除以一个极小的
+    // dt」—— 可 16ms 正好是**一帧 60Hz**。在这台 120Hz 机器上 dt ≈ 8.33ms，被 max
+    // 抬到 16ms，于是**算出来的速度恒为真实值的一半**；而帧间隔一旦在 8.33 / 16.7
+    // 之间跳（可变刷新率），同一个手指速度会算出**两个不同的拉伸量** —— 那就是
+    // 用户 2026-10-05 说的「像帧率不够」。算式搬进了 `lensVelocityStep`（纯函数，
+    // 帧率无关性由 `test/liquid_lens_test.dart` 直接断言）。
+    //
+    // 第一帧跳过：那时 `_lastLensCenter` 还是初值，差值不是「位移」。
+    if (!first) {
+      _lensVelocityPx = lensVelocityStep(
+        deltaPage: _posSpring.value - _lastLensCenter,
+        itemW: _itemW,
+        dt: dt,
+        previous: _lensVelocityPx,
+      );
+    }
     _lastLensCenter = _posSpring.value;
 
-    if (!_pressed && _posSpring.isAtRest && _liftSpring.isAtRest) {
+    // 形变走它自己那条弹簧：目标是归一化瞬时速度，但**真正拿去画的是弹簧的值**。
+    // 于是起步冲一点、停下拖一条尾巴 —— 那才是「Q 弹」而不是「跟一个数字走」。
+    _stretchSpring.target =
+        (_lensVelocityPx.abs() / AppTokens.lensVelocityRef).clamp(0.0, 1.0);
+    _stretchSpring.step(dt);
+
+    if (!_pressed &&
+        _posSpring.isAtRest &&
+        _liftSpring.isAtRest &&
+        _stretchSpring.isAtRest) {
       _ticker?.stop();
       _lensVelocityPx = 0;
     }
@@ -656,6 +689,9 @@ class _GlassNavBarState extends State<GlassNavBar>
                                 centerPage: _posSpring.value - 0.5,
                                 lift: lift,
                                 velocity: _lensVelocityPx,
+                                // 形变**走弹簧**，不是瞬时速度：起步冲一点、
+                                // 停下拖一条尾巴。越界由形状那边 clamp。
+                                stretch: _stretchSpring.value,
                               ),
                               lift: lift,
                               isDark: isDark,

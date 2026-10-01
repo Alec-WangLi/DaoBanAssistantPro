@@ -71,6 +71,32 @@ class LiquidLensSpring {
   }
 }
 
+/// 一帧的透镜速度（px/s，带符号）：**位置的真实帧间差分 ÷ 真实 dt**，再走一道低通。
+///
+/// 抽成纯函数，是为了让「**同一段位移在任何帧率下都算出同一个速度**」这条性质
+/// 可以被直接断言 —— 它原来是被破坏的。
+///
+/// 破坏它的是分母上那个 `max(dt, 16ms)` 地板（本意只是防「除以一个极小的 dt」）：
+/// **16ms 正好是一帧 60Hz**，于是在 120Hz（dt ≈ 8.33ms）上 dt 被抬到 16ms，
+/// 算出来的速度**恒为真实值的一半**；而帧间隔一旦在 8.33 / 16.7 之间跳
+/// （可变刷新率），同一个手指速度会算出两个不同的拉伸量 —— 那就是用户
+/// 2026-10-05 说的「像帧率不够」。ticker 的时间戳不会是 0；真为 0 就返回上一帧的值，
+/// 别拿一个假的 dt 去凑。
+///
+/// [deltaPage] 是位置变化，单位是「格」（与 [LiquidLensSpring.value] 同一套）。
+double lensVelocityStep({
+  required double deltaPage,
+  required double itemW,
+  required Duration dt,
+  required double previous,
+}) {
+  final double seconds = dt.inMicroseconds / 1e6;
+  if (seconds <= 0) return previous;
+  final double raw = deltaPage * itemW / seconds;
+  // 低通：原始帧间差分抖得厉害（拖动时位置是 1:1 从指针事件给的，事件不按帧到达）。
+  return previous * 0.6 + raw * 0.4;
+}
+
 /// 透镜在**胶囊局部坐标**里的一帧几何。纯数据 + 纯函数，不依赖任何 widget。
 ///
 /// 坐标原点 = 胶囊的左上角；`y = capsuleH / 2` 是竖直中轴。
@@ -84,13 +110,19 @@ class LiquidLensShape {
     required this.height,
     required this.capsuleH,
     required this.stretch,
+    required this.motion,
     required this.movingRight,
   });
 
   /// 从手势状态算出这一帧的形状。
   ///
   /// [centerPage] 以「格」为单位、可为小数（跟手时是连续值）；[lift] 是升程
-  /// 0..1；[velocity] 是 px/s，**带符号**（正 = 向右）。
+  /// 0..1；[velocity] 是 px/s，**带符号**（正 = 向右），只用来定方向与光谱环的门。
+  /// [stretch] 是形变强度 0..1；不给就按瞬时速度现推（单测与「没有弹簧」的调用点
+  /// 走这条），给了就用它 —— 底栏那条**弹簧驱动**的形变走这条。
+  ///
+  /// **两者必须分开**（2026-10-05）：形变要跟速度走（那是头大尾小），但环要的是
+  /// 「一动就满」—— 拿同一个量喂两处，就只能二选一。
   factory LiquidLensShape.of({
     required double itemW,
     required double capsuleH,
@@ -98,20 +130,32 @@ class LiquidLensShape {
     required double centerPage,
     required double lift,
     required double velocity,
+    double? stretch,
   }) {
-    // 速度归一化到 0..1：拉伸与压缩都用它，所以「甩多快」只有一个量。
-    final double s =
-        (velocity.abs() / AppTokens.lensVelocityRef).clamp(0.0, 1.0);
+    // 形变强度 0..1：拉伸与压缩都用它一个量。
+    final double s = (stretch ?? (velocity.abs() / AppTokens.lensVelocityRef))
+        .clamp(0.0, 1.0);
+    // 光谱环的门：**「动不动」，不是「多快」**（用户 2026-10-05：「一动就直接达到
+    // 满效果」）。60px/s 就封顶，那以下按比例淡入只是为了慢速收尾时不眨一下。
+    final double motion =
+        (velocity.abs() / AppTokens.lensRingFullSpeed).clamp(0.0, 1.0);
     return LiquidLensShape._(
       centerX: pad + (centerPage + 0.5) * itemW,
-      // 外扩取**横向与纵向同量级**（见 lensLiftWidth 的说明）；
-      // 再叠速度带来的拉伸与压缩 —— 沿运动方向拉长、垂直方向压扁，
-      // 近似面积守恒，读起来才像液体而不是橡皮。
-      width: (itemW + AppTokens.lensLiftWidth * lift) * (1 + 0.20 * s),
-      height: (capsuleH - 2 * pad + 2 * AppTokens.navLensProtrude * lift) *
-          (1 - 0.12 * s),
+      // 外扩与形变都**加在/乘在基准尺寸上，不互相乘** —— 见下面 height 的说明。
+      // 外扩仍取横向与纵向同量级（见 lensLiftWidth 的说明）：纵横一起长才读得出体积。
+      width: itemW * (1 + AppTokens.lensStretch * s) +
+          AppTokens.lensLiftWidth * lift,
+      // ⚠️ **凸出必须加在「压扁之后」的基准上，不许乘进形变里。**
+      //
+      // 原式 `(基准 + 2·凸出·lift) × (1 − 0.12·s)` 把压扁乘在了凸出上：lift=1 /
+      // 700px/s 时高 63.4，而胶囊高 64 —— 透镜整个沉回胶囊里面，按住拖动时
+      // 「一枚浮起来的玻璃滴」直接掉回「一枚躺着药丸」。**「按住」这个动作的全部
+      // 读感就在那零点几个像素上。** 实测见 `test/liquid_lens_test.dart` 的扫描。
+      height: (capsuleH - 2 * pad) * (1 - AppTokens.lensSquash * s) +
+          2 * AppTokens.navLensProtrude * lift,
       capsuleH: capsuleH,
       stretch: s,
+      motion: motion,
       movingRight: velocity > 0,
     );
   }
@@ -127,8 +171,14 @@ class LiquidLensShape {
   /// 它所依附的胶囊的高度。`toPath()` 竖直居中于它的中轴。
   final double capsuleH;
 
-  /// 归一化速度 0..1，决定端头的不对称程度。
+  /// 归一化形变强度 0..1，决定端头的不对称程度。
   final double stretch;
+
+  /// 光谱环的门 0..1 —— **「在动」的程度，不是「多快」**。
+  ///
+  /// 和 [stretch] 分家是刻意的：形变要跟速度走（头大尾小），环却要「一动就满」。
+  /// 喂同一个量就只能二选一 —— 而用户 2026-10-05 两次说的正是这两件事。
+  final double motion;
 
   /// 这一帧是否在向右移动（决定哪一端是「前缘」）。静止时为 false，
   /// 但那时两端半径相等，所以取哪一边都一样。
@@ -363,6 +413,50 @@ class _LensShadowPainter extends CustomPainter {
       old.shape.rightRadius != shape.rightRadius;
 }
 
+/// 胶囊那条边被透镜**折进去**的那一帧几何。纯函数 —— `null` = 这一帧不画。
+///
+/// **为什么要有这个函数**：这段逻辑原先整个住在 painter 里，于是它的失败方式
+/// （在哪些 (lift, 速度) 上不画）**只有出图才看得见**。抽出来之后它可以被扫一遍
+/// 参数空间 —— 而扫出来的是一个硬缺陷：
+///
+/// 原早退条件是「**两个端头半径都**大于胶囊半高」，可速度一上来后缘半径
+/// （`×(1 − 0.35·stretch)`）必然先掉下去，于是**整条折边被一票否决**。实测
+/// lift=1 时超过约 150px/s 它就完全消失，而常态拖动是 300~1000px/s ——
+/// 也就是说这个效果**只在「按住而且手指不动」时存在**，恰好是唯一不会去拖的状态。
+///
+/// 现在两处都改成连续的：
+///   · 门开在「**至少一端**够到」（`reach = max(rl, rr) − cy > 0`）；
+///   · 够不到的那一端把半径**钳到刚好相切**，交点连续地退化成 0，而不是整条不画；
+///   · 再按 [AppTokens.lensEdgeFade] 让不透明度**随凸出量淡入** —— 于是它既不会
+///     在高速下开天窗，也不会「啪」地出现或消失。
+({double xL, double xR, double bow, double fade})? refractedCapsuleEdge(
+    LiquidLensShape shape) {
+  final double cy = shape.centerY;
+  final double rl = shape.leftRadius;
+  final double rr = shape.rightRadius;
+
+  // 凸出量取**较大的那一端**：前缘总是先够到，后缘因为被压扁会晚一步。
+  final double reach = math.max(rl, rr) - cy;
+  if (reach <= 0) return null;
+
+  // 钳到相切：`r = cy` 时 `sqrt(r² − cy²) = 0`，端点落在端头圆的竖直切线上。
+  // 于是 r 从 cy 上方往下掉时，那一端是**连续地往回收**，不是整条消失。
+  final double sL = math.sqrt(math.max(0, rl * rl - cy * cy));
+  final double sR = math.sqrt(math.max(0, rr * rr - cy * cy));
+  final double xL = shape.centerX - shape.width / 2 + rl - sL;
+  final double xR = shape.centerX + shape.width / 2 - rr + sR;
+  // 纯防御：可达区间（lift ≥ 0.6）里这个跨度约 35~74，够不着。
+  if (xR - xL < 2) return null;
+
+  return (
+    xL: xL,
+    xR: xR,
+    // 鼓多少：凸出越多越明显，但封顶 —— 鼓过头就成了「透镜里有个钩子」。
+    bow: math.min(8, reach * 0.9 + 3),
+    fade: (reach / AppTokens.lensEdgeFade).clamp(0.0, 1.0),
+  );
+}
+
 /// 透镜本体：主色**半透明**渐变 + 一圈白描边。
 ///
 /// **用的就是标准档那枚滑块的同一套配方**（`AppTokens.accentGradient`）。这一条
@@ -391,7 +485,8 @@ class _LensBodyPainter extends CustomPainter {
             AppTokens.accentGradient(accent).createShader(p.getBounds()),
     );
     // 静止时**连画都不画**：不是「画一层透明的」，而是这一整趟省掉。
-    if (shape.stretch > 0.02) _paintSpectralRing(canvas, p);
+    // 门用 `motion`（「在动」）而不是 `stretch`（「多快」）—— 见 `motion` 的说明。
+    if (shape.motion > 0.05) _paintSpectralRing(canvas, p);
     // 白色高光芯压在环上 —— **这一层是「读作光」的关键**：一条纯彩色的环读起来是
     // 「贴了一圈彩虹贴纸」，而「一圈被点亮的玻璃边」需要一条白芯把颜色挤到两侧去。
     canvas.drawPath(
@@ -415,28 +510,21 @@ class _LensBodyPainter extends CustomPainter {
   ///
   /// 换成**自己画**：透镜凸出胶囊时，胶囊那条边在透镜里不再是直线，而是朝透镜
   /// 中心鼓一段。在 1px 的宽度上，这与真折射读起来是同一件事，而且完全可控。
+  ///
+  /// 这一帧**画不画、画多鼓、多淡**全由 [refractedCapsuleEdge] 那个纯函数定
+  /// （它是可单测的，说明也在那边）。
   void _paintRefractedCapsuleEdge(Canvas canvas) {
-    final double cy = shape.centerY;
-    final double rl = shape.leftRadius;
-    final double rr = shape.rightRadius;
-    // 两个端头圆都够得着胶囊上下沿才有边可折。够不着 = 没凸出，那就什么都不画
-    // （静止时透镜躺平在胶囊里，走的就是这一支）。
-    if (rl <= cy || rr <= cy) return;
+    final ({double xL, double xR, double bow, double fade})? e =
+        refractedCapsuleEdge(shape);
+    if (e == null) return;
 
-    // 透镜轮廓与胶囊上下沿的两个交点。（轮廓关于中轴上下对称，所以上下沿共用
-    // 同一对 x。）
-    final double sL = math.sqrt(rl * rl - cy * cy);
-    final double sR = math.sqrt(rr * rr - cy * cy);
-    final double xL = shape.centerX - shape.width / 2 + rl - sL;
-    final double xR = shape.centerX + shape.width / 2 - rr + sR;
-    if (xR - xL < 4) return;
-
-    // 鼓多少：凸出越多越明显，但封顶 —— 鼓过头就成了「透镜里有个钩子」。
-    final double bow = math.min(8, (rl - cy) * 0.9 + 3);
     final Paint stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = Colors.white.withValues(alpha: isDark ? 0.45 : 0.62);
+      // 乘 `fade`：凸出 0 → lensEdgeFade 走 0 → 满。**这是「不再啪地出现」的
+      // 全部依据** —— 门一开就给满亮度的话，观感还是断的。
+      ..color = Colors.white
+          .withValues(alpha: (isDark ? 0.45 : 0.62) * e.fade);
     for (final bool top in <bool>[true, false]) {
       final double edgeY = top ? 0 : shape.capsuleH;
       // 路径按**胶囊局部坐标**建，画之前搬回画布坐标 —— 与 `_lensPath` 同一套
@@ -444,9 +532,9 @@ class _LensBodyPainter extends CustomPainter {
       // 那条线会落在透镜凸出的顶部，读起来像一圈高光，不像「边被折了」）。
       canvas.drawPath(
         (Path()
-              ..moveTo(xL, edgeY)
+              ..moveTo(e.xL, edgeY)
               ..quadraticBezierTo(
-                  shape.centerX, edgeY + (top ? bow : -bow), xR, edgeY))
+                  shape.centerX, edgeY + (top ? e.bow : -e.bow), e.xR, edgeY))
             .shift(origin),
         stroke,
       );
@@ -460,6 +548,9 @@ class _LensBodyPainter extends CustomPainter {
       old.shape.height != shape.height ||
       old.shape.leftRadius != shape.leftRadius ||
       old.shape.rightRadius != shape.rightRadius ||
+      // **`motion` 必须比**：形状可以一模一样而环的明暗在变（同样的几何、
+      // 速度从 0 到 60）。漏掉它，环就会卡在上一帧的亮度上不动。
+      old.shape.motion != shape.motion ||
       old.origin != origin ||
       old.isDark != isDark ||
       old.accent != accent;
@@ -485,9 +576,11 @@ class _LensBodyPainter extends CustomPainter {
       final double toward =
           (1 + math.cos((t * 360 - 225) * math.pi / 180)) / 2;
       colors.add(HSLColor.fromAHSL(
-        // 只有左上那一段亮着、其余渐隐；**再整体乘上速度** —— 静止时一个彩色
-        // 像素都没有（用户 2026-10-04：「彩虹边缘在静态时不应该出现」）。
-        (0.05 + 0.75 * toward * toward) * shape.stretch,
+        // 只有左上那一段亮着、其余渐隐。**整体乘的是「动不动」而不是「多快」**：
+        // 原来乘 `stretch`（= 速度 / 700），于是得甩到满速才满亮、常态拖动只在
+        // 半亮上下 —— 用户 2026-10-05：「彩色边缘不明显，还是恢复成一动就直接
+        // 达到满效果吧」。门一放开，峰值就是唯一的调节钮，0.80 → 0.92。
+        (0.06 + 0.86 * toward * toward) * shape.motion,
         (base.hue + 300 * t) % 360, // 走色相，但绕回主色
         base.saturation.clamp(0.55, 0.95),
         0.66,
@@ -558,9 +651,18 @@ class CapsuleRimPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = width
+        // **轴是竖直的，不是对角。** 对角那版（`topLeft → bottomRight`）在近方形的
+        // 卡片上读作「左上高光 + 右下收边」—— 它本来就是照卡片量的；但在 6:1 的
+        // 底栏胶囊上渐变轴几乎就是水平的，于是退化成**左端纯白、右端 10% 黑**。
+        // 实测（浅色 / 液态档 / 底栏）：左缘 `rgb(251,250,251)`、
+        // 右缘 `rgb(203,199,204)` —— 就是用户报的「左边很浅、几乎看不清胶囊，
+        // 右边有镜片效果」。
+        //
+        // 竖直之后 t 只跟 **y** 有关，**左右结构性地完全一致**，且与宽高比无关。
+        // 别改回对角 —— `test/glass_tier_test.dart` 里有一条光栅化护栏钉着。
         ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           stops: const <double>[0.0, 0.45, 1.0],
           colors: AppTokens.glassRimProbe(isDark),
         ).createShader(rect),

@@ -40,7 +40,15 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.5\n'
+const String _changelogZh = 'v0.10.6\n'
+    '· 浅色下底栏胶囊的左右两边现在一样清楚（之前左边那圈白光把轮廓盖掉了，看着像只有右边有镜片）\n'
+    '· 底栏那圈彩色折射光改成一动就满 —— 之前要滑得很快才明显，正常拖动基本看不出来\n'
+    '· 按住拖动时滑块不再随着速度沉回胶囊，「按住」那个凸起全程都在\n'
+    '· 滑块的形变改了走弹簧，起步与停下更顺，不再跟着速度硬切\n'
+    '· 120Hz 屏幕上「速度被算成一半」的毛病修好了（拖动时形状大小不稳就是它）\n'
+    '\n'
+
+    'v0.10.5\n'
     '· 底栏滑块的手感重调：提起与落下用上了两条不同的弹簧（落下明显更从容），点按之后滑过去也慢了一档\n'
     '· 那圈彩色折射光现在只在动的时候亮 —— 完全停下时一个彩色像素都没有；同时加宽了一圈\n'
     '· 滑块边缘扫过图标时，图标与它下面的字会被轻轻挤一下（被罩在透镜正中时几乎不变，所以照样看得清）\n'
@@ -101,15 +109,17 @@ const String _changelogZh = 'v0.10.5\n'
     '· 翻到你关注的月份之后，跨天、跨月都不会把你拽回来 —— 停在你翻到的那个月，直到你自己点回今天\n'
     '\n'
 
-    'v0.9.16\n'
-    '· 「法定班次」（跟随法定节假日）不再写「上班 / 休息」了：这种班表在日历格子、小窗那张信息卡与桌面小组件上都只画日期与农历 —— 法定节假日照旧标红、调休照旧打「班」。它本质上就是一张日历，上一版替它标上「上班」是我想多了\n'
-    '· 顺带：这种班表下信息卡不再为那一行留高度，卡片矮约 16dp，上面六个格子相应高一点\n'
-    '· 上一版改对的那一半照旧：「这段时间没有排班」那句只在真的没有任何班表盖着这些天时才出现 —— 判定它的是「这天有没有班表在管」，与「这天画不画得出东西」从此分开看\n'
-    '\n'
-
 ;
 
-const String _changelogEn = 'v0.10.5\n'
+const String _changelogEn = 'v0.10.6\n'
+    '· In light mode both ends of the tab capsule are equally visible now (a white rim used to erase the outline on the left, so only the right end looked like glass)\n'
+    '· The prismatic rim is at full strength the moment the pill moves — before, you had to drag very fast to see it at all\n'
+    '· While you hold and drag, the pill no longer sinks back inside the capsule, so the lifted bump stays for the whole drag\n'
+    '· The pill’s shape now eases along a spring instead of snapping straight to the raw speed\n'
+    '· Fixed the speed being computed as half its real value on 120Hz displays (that was the shape wobbling as you dragged)\n'
+    '\n'
+
+    'v0.10.5\n'
     '· Reshaped the tab pill: lifting and dropping now use two different springs (the drop is noticeably more unhurried), and a tap slides it across one notch slower\n'
     '· The prismatic rim now only lights up while the pill is moving — nothing coloured at all when it is still — and it is a bit wider\n'
     '· As the rim sweeps past an icon, the icon and its label get a slight squeeze (almost none when the pill sits right on top, so it stays readable)\n'
@@ -168,12 +178,6 @@ const String _changelogEn = 'v0.10.5\n'
     '· The month widget (the largest one) now draws the previous and next month as well: the empty slots at the start and end of the month are gone, the neighbouring days show a lighter date and their shifts as usual, and the whole card reads as one continuous run of days\n'
     '· Its title row now has a left and a right arrow: tap to step a month back or forward, and the side with no data left greys out; tap the month name in the middle to jump back to today\n'
     '· Once you have stepped away, a new day or a new month will not drag you back — you stay on the month you picked until you tap back to today\n'
-    '\n'
-
-    'v0.9.16\n'
-    '· A "legal-holiday schedule" (follow the public holidays) no longer writes "Workday / Rest": on the calendar grid, on the info card in a small window and on the home-screen widget it now draws only the date and the lunar line — public holidays are still marked red and makeup workdays still tagged. It really is just a calendar, and labelling those days "Workday" was overreach on my part\n'
-    '· As a result the info card no longer reserves a line for it: the card is about 16dp shorter and the grid above it gains that height\n'
-    '· The half of that change that was right stays: "No schedule for these dates" appears only when no schedule covers those days at all — the test for it is now "is a schedule in force on this day", separate from "does this day draw anything"\n'
     '\n'
 
 ;

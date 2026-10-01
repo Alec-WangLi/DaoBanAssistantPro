@@ -266,4 +266,49 @@ void main() {
       );
     });
   }
+
+  // 底栏 · 液态 · **正在动**（手指还在走的那一刻）。
+  //
+  // 与上面那条 `40_nav_lens_dragging` 是**故意的反例**，两条缺一不可：
+  // 那一条在 `beforeCapture` 之后会被 `settleVisual`（60 帧）稳住，而手指停在原地
+  // —— 于是透镜速度衰减到 0。**光谱环、折边、形变全都由速度驱动**，所以那一屏拍到的
+  // 其实是「按住但静止」，恰好是这个档位唯一一切都正常的那个状态。
+  // **用户 2026-10-05 说的「彩色边缘看不出来」因此从没在任何一张图上现形过。**
+  //
+  // 靠 `settleAfterCapture: false` 取「还在动」的那一帧。速度**故意取慢的**：
+  // 每帧 16ms 走 5px = **312px/s**，比一格 90px 走 290ms —— 一次不紧不慢的正常拖动。
+  //
+  // 为什么不取快的（750px/s 那种）：旧代码的环亮度是 `× clamp(v / 700)`，**在快的那
+  // 一端它本来就是满的** —— 拍快了这条屏单刚好盖住要看的那个变化。用户说的
+  // 「看不出来」发生在 200~400px/s 这一段：旧代码在那里只有三成亮度，新的是一来就满。
+  for (final variant in visualVariants) {
+    visualTest('底栏 · 液态 · 正在动 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '41_nav_lens_moving_${variant.suffix}',
+        home: const HomeShell(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        settleAfterCapture: false,
+        beforeCapture: (t) async {
+          final Rect nav = t.getRect(find.byKey(const Key('glass-nav-bar')));
+          final TestGesture g = await t.startGesture(
+              Offset(nav.left + nav.width * 0.2, nav.center.dy));
+          addTearDown(g.up);
+          for (int i = 0; i < 12; i++) {
+            await t.pump(const Duration(milliseconds: 30)); // 过长按闸门
+          }
+          for (int i = 0; i < 12; i++) {
+            await g.moveBy(const Offset(5, 0));
+            await t.pump(const Duration(milliseconds: 16));
+          }
+        },
+      );
+    });
+  }
 }

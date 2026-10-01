@@ -771,6 +771,7 @@ Future<GlobalKey> pumpScreen(
   Size size = kVisualSize,
   double textScale = 1.0,
   Future<void> Function(WidgetTester tester)? beforeCapture,
+  bool settleAfterCapture = true,
 }) async {
   // 字体得在 setUpAll 里装好（见 ensureVisualFonts 的说明）。这里只做体检：
   // 忘了调用时给一句明确的话，而不是让图片出来全是方块再回头猜。
@@ -818,7 +819,14 @@ Future<GlobalKey> pumpScreen(
 
   if (beforeCapture != null) {
     await beforeCapture(tester);
-    await settleVisual(tester);
+    // ⚠️ **默认要稳住，但有些屏必须不稳住。**
+    //
+    // `settleVisual` 会推 60 帧；`beforeCapture` 里按住不放的那根手指**停在原地**，
+    // 于是透镜速度衰减到 0 —— 而**光谱环、折边、形变全都由速度驱动**。
+    // `40_nav_lens_dragging` 就是这么渲染的：它拍到的其实是「按住但静止」，
+    // 恰好是这个档位唯一一切都正常的那个状态。**那一屏至今没拍到过彩虹边。**
+    // 要拍「真的在动」必须传 `settleAfterCapture: false`。
+    if (settleAfterCapture) await settleVisual(tester);
   }
   return boundaryKey;
 }
@@ -851,6 +859,7 @@ Future<void> renderScreen(
   Size size = kVisualSize,
   double textScale = 1.0,
   Future<void> Function(WidgetTester tester)? beforeCapture,
+  bool settleAfterCapture = true,
 }) async {
   final boundaryKey = await pumpScreen(
     tester,
@@ -862,6 +871,7 @@ Future<void> renderScreen(
     size: size,
     textScale: textScale,
     beforeCapture: beforeCapture,
+    settleAfterCapture: settleAfterCapture,
   );
 
   final boundary =
