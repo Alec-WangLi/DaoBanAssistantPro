@@ -28,6 +28,7 @@ import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_lens.dart';
+import 'package:shiftassistantpro/features/calendar/calendar_range_band.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/info_card_metrics.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
@@ -1957,6 +1958,93 @@ void main() {
           findsNothing);
       expect(find.ancestor(of: block, matching: find.byType(Positioned)),
           findsWidgets);
+      await _disposeCalendar(tester);
+    });
+  });
+
+  // ── 液态档那条水带（长按拖选）────────────────────────────────────────
+  //
+  // 今天那层是**逐格各画一块** 14% 圆角方，格子之间 4px 的缝谁也盖不住 —— 所以
+  // 「连成一条」在今天的结构里做不到：带子只能是网格之上的一层（与那枚单格块同层位）。
+  group('液态档那条水带', () {
+    /// 那一格的内容有没有被透镜挤（`Transform` 只在液态档、且只在非恒等时套）。
+    bool warped(WidgetTester tester, int day) => tester.any(find.descendant(
+        of: find.byKey(ValueKey('day-card-$day')),
+        matching: find.byType(Transform)));
+
+    testWidgets('液态档：多选态不画逐格淡染，改用一枚带子', (tester) async {
+      await _pumpCalendar(tester, 'day_night_rest_rest', liquid: true);
+      await longPressDragCell(tester, _rangeFirstDay, 1, midDrag: () async {
+        expect(find.byKey(const ValueKey('day-range-10')), findsNothing,
+            reason: '液态档还在逐格画淡染 —— 那就不叫「连成一条」了');
+        expect(find.byType(CalendarRangeBand), findsOneWidget);
+      });
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('标准档：还是逐格淡染（对照组，一个字没改）', (tester) async {
+      await _pumpCalendar(tester, 'day_night_rest_rest');
+      await longPressDragCell(tester, _rangeFirstDay, 1, midDrag: () async {
+        expect(find.byKey(const ValueKey('day-range-10')), findsOneWidget);
+        expect(find.byType(CalendarRangeBand), findsNothing);
+      });
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('只挤**流动那一端**：带子内部那些格不套 Transform', (tester) async {
+      await _pumpCalendar(tester, 'day_night_rest_rest', liquid: true);
+      // 长按 8 日 → 往下拖一格（到 15 日）→ 再往右拖半格。
+      //
+      // ⚠️ 后半截是必需的：挤压场只够到一格的半径，末端**停在格正中**时连它自己
+      // 那一格都不套 Transform（t≈0）。要它挤，末端得卡在**两格之间** ——
+      // 既有的「挤字只变换绘制」那条也是这么拖的（半格）。
+      final Offset start = tester
+          .getCenter(find.byKey(const ValueKey('day-card-$_rangeFirstDay')));
+      final TestGesture g = await tester.startGesture(start);
+      await tester.pump(const Duration(milliseconds: 600)); // 过长按判定
+      await g.moveBy(const Offset(0, 60)); // 下一行 → 末端 15 日
+      await tester.pump();
+      // ⚠️ 34 而不是 28（半格）：格宽 56.6、半格是 28.3 —— 走 28 那一步还**差 0.3px
+      // 没跨过格界**，焦点仍停在 15 日，末端一动不动（第一版就是这么写的，量不到东西）。
+      await g.moveBy(const Offset(34, 0)); // 跨过格界 → 焦点到 16 日、末端淌过去
+      // ⚠️ 推**三帧**：ticker 的第一帧在下一帧才跑，一帧之后末端还停在原处 ——
+      // 那时场心正好压在 15 日正中（`t≈0`，什么都不套），这条就测不到东西。
+      for (int i = 0; i < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(warped(tester, 15) || warped(tester, 16), isTrue,
+          reason: '流动那一端旁边那几格没被挤 —— 挤压场没跟着末端走');
+      expect(warped(tester, 10), isFalse,
+          reason: '带子内部（已经圈住的日子）也被挤了 —— spec §4.5：那里面不该动');
+      expect(warped(tester, 11), isFalse, reason: '同上（再往深一格）');
+
+      await g.up();
+      await tester.pumpAndSettle();
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('长按落在周标题上：不进入多选态、一层带子都不画', (tester) async {
+      await _pumpCalendar(tester, 'day_night_rest_rest', liquid: true);
+      // 周标题那一行：它的中心落在 `_weekdayH` 之内 → `_dateFromPosition` 给出
+      // 负的行号 → `date == null` → 范围态保持为空。（别拿格子的 top 减几像素去凑 ——
+      // 格高是按剩余空间算的，减多少才落在标题行里得靠算。）
+      final TestGesture g = await tester
+          .startGesture(tester.getCenter(find.text(L10n.weekdays.first)));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.byType(CalendarRangeBand), findsNothing);
+      await g.up();
+      await tester.pumpAndSettle();
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('松手之后静止：带子收干净、没有待处理的帧', (tester) async {
+      await _pumpCalendar(tester, 'day_night_rest_rest', liquid: true);
+      await longPressDragCell(tester, _rangeFirstDay, 1);
+      expect(find.byType(CalendarRangeBand), findsNothing,
+          reason: '松手之后带子还挂着（那时该已经弹选择层了）');
+      // 常驻动画会让整套 widget 测试在 `pumpAndSettle` 上集体超时（v0.9.8 的老账）。
+      expect(tester.binding.hasScheduledFrame, isFalse);
       await _disposeCalendar(tester);
     });
   });

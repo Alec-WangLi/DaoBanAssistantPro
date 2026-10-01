@@ -25,6 +25,8 @@ import '../alarm/alarm_service.dart';
 import '../widget/widget_service.dart';
 import 'info_card_metrics.dart';
 import 'calendar_lens.dart';
+import 'calendar_range_band.dart';
+import 'range_band.dart';
 import 'schedule_management_screen.dart';
 import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
@@ -119,6 +121,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 长按拖选：起点与当前终点（null = 不在范围选择态）。
   DateTime? _rangeAnchor;
   DateTime? _rangeFocus;
+
+  /// 多选态那枚带子**这一帧淌到了哪儿**（格坐标，含鼓出）。
+  ///
+  /// 挤字的场要用它，而场必须跟着**淌着的那一点**走：停在「末端吸附到的那一格」的
+  /// 中心等于不挤（那一格的 `t` 恒为 0）。带子每帧把位置回调上来（`onTipPos`）。
+  double? _rangeTipPos;
 
   /// 底栏信息卡高度的**上一次**计算结果。
   ///
@@ -350,16 +358,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 本月网格占几行（含月初的空格）。
   int get _weekRows => (_leading + _daysInMonth + 6) ~/ 7;
 
-  /// 选中日期在网格中的槽位矩形；不在本月返回 null。
-  Rect? _selectedRect(double cellW, double cellH) {
+  /// 某个日期在网格中的槽位矩形；不在本月返回 null。
+  ///
+  /// 多选态那条水带也用它 —— 它要的是「会动的那一头在哪一格」。
+  Rect? _cellRect(DateTime date, double cellW, double cellH) {
     final first = DateTime(_month.year, _month.month, 1);
-    final index = daysBetween(first, _selected) + _leading;
+    final index = daysBetween(first, date) + _leading;
     if (index < _leading || index >= _leading + _daysInMonth) return null;
     final row = index ~/ 7;
     final col = index % 7;
     return Rect.fromLTWH(
         _hPad + col * cellW, _weekdayH + row * cellH, cellW, cellH);
   }
+
+  Rect? _selectedRect(double cellW, double cellH) =>
+      _cellRect(_selected, cellW, cellH);
 
   /// 手指位置 → 那一格的日期（越界 / 空格 / 不是本月都返回 null）。
   DateTime? _dateFromPosition(Offset pos, double cellW, double cellH) {
@@ -1103,6 +1116,27 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         // 「这一帧块在哪儿」，而那正是它更新出来的。
         _syncBlockFlight(showBlock, Offset(blockLeft, blockTop), cellW, cellH);
 
+        // ── 多选态那条水带（只有液态档画）────────────────────────────────
+        // 长按的落点（anchor）固定不动，动的是 focus —— 往回拖时它就是**起端**。
+        final DateTime? bandAnchor = _rangeAnchor;
+        final DateTime? bandFocus = _rangeFocus;
+        final bool bandVisible = bandAnchor != null && bandFocus != null;
+        final bool showBand = bandVisible && liquidGlassActive.value;
+        final Rect? bandTipRect =
+            bandVisible ? _cellRect(bandFocus, cellW, cellH) : null;
+        // 挤字的场中心 = **淌着的末端**（还没收到第一帧回调时退回它吸附到的那一格）。
+        //
+        // ⚠️ `tipPos` 量的是那一端的**格边**（`k` = 第 k 格的右/左缘），所以场心要
+        // **再加半格**才是那一格的中心 —— 少这半格，场会偏在格的边上，连末端自己
+        // 那一格都被挤（出图上当场看得见）。
+        final double bandTipCol =
+            bandTipRect == null ? 0 : (bandTipRect.left - _hPad) / cellW;
+        final Offset? bandWarpCenter = !showBand || bandTipRect == null
+            ? null
+            : Offset(
+                _hPad + ((_rangeTipPos ?? bandTipCol) + 0.5) * cellW,
+                bandTipRect.center.dy);
+
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapDown: (d) {
@@ -1217,6 +1251,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               _dragActive = false;
               _rangeAnchor = date;
               _rangeFocus = date;
+              // 上一段拖选留下的末端位置不许漏到这一段来（场会先歪一帧）。
+              _rangeTipPos = null;
             });
             // 进入多选态那一下**更明显**，好跟后面每进一格的轻震分开（spec §4.3）。
             // 放在 `setState` 之外：它的回调必须同步且无副作用，触觉是副作用。
@@ -1265,18 +1301,51 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     children: [
                       _weekdayRow(context, cellW),
                       ..._dayRows(context, cellW, cellH, chain,
-                          // 液态档才有：那枚块**当前的中心**（格子层坐标）。
+                          // 液态档才有：透镜**当前的中心**（格子层坐标）。
                           // 「内容被它挤」用得到，标准档传 null（一层都不算）。
                           //
-                          // ⚠️ 取 `_flightPos`（这一帧真的在哪儿）而不是目标格 ——
-                          // 滑行时块正从别的格子上面扫过去，被挤的该是它底下的那几格。
-                          lensCenter: showBlock && liquidGlassActive.value
-                              ? Offset(_flightPos.dx + cellW / 2,
-                                  _flightPos.dy + cellH / 2)
-                              : null),
+                          // 两种情形各有一个中心：
+                          // · 多选态 → **会动的那一头**那一格（带子内部是已经圈住的
+                          //   日子，把它们也挤了就不像「水正在漫过来」）；
+                          // · 滑行/按住 → `_flightPos`（这一帧那枚块真的在哪儿，
+                          //   而不是它的目标格 —— 滑行时被挤的该是它底下的那几格）。
+                          lensCenter: !liquidGlassActive.value
+                              ? null
+                              : showBand
+                                  ? bandWarpCenter
+                                  : (showBlock
+                                      ? Offset(_flightPos.dx + cellW / 2,
+                                          _flightPos.dy + cellH / 2)
+                                      : null)),
                     ],
                   ),
                 ),
+                // 水带画在**网格之上、那枚块之下**：它是一层（逐格淡染盖不住格与格之间
+                // 那 4px 的缝），而那枚「今天/选中的一天」始终压在最上面。
+                if (showBand)
+                  Positioned.fill(
+                    child: CalendarRangeBand(
+                      size: Size(2 * _hPad + 7 * cellW,
+                          _weekdayH + _weekRows * cellH),
+                      cellW: cellW,
+                      cellH: cellH,
+                      hPad: _hPad,
+                      weekdayH: _weekdayH,
+                      runs: rangeRowRuns(
+                          from: bandAnchor, to: bandFocus, month: _month),
+                      movingEnd: daysBetween(bandAnchor, bandFocus) >= 0,
+                      tipCell:
+                          ((bandTipRect!.left - _hPad) / cellW).round(),
+                      accent: Theme.of(context).colorScheme.primary,
+                      isDark: Theme.of(context).brightness == Brightness.dark,
+                      // 末端淌到哪儿了：只记下来 + 重建（挤字的场要用）。
+                      // 带子只在动的时候回调，所以这不会变成常驻的每帧重建。
+                      onTipPos: (double v) {
+                        if (!mounted) return;
+                        setState(() => _rangeTipPos = v);
+                      },
+                    ),
+                  ),
                 if (showBlock) _blockPlacement(context, cellW, cellH, blockLeft, blockTop),
               ],
             ),
@@ -1366,7 +1435,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           blockDate != null && isSameDay(date, blockDate),
           chain?.scheduleOn(date)?.dayOverrides.containsKey(dayNumber(date)) ??
               false,
-          _rangeAnchor != null &&
+          // 逐格那层 14% 淡染：**液态档由那条带子取代**（标准档一个字没改）。
+          !liquidGlassActive.value &&
+              _rangeAnchor != null &&
               _rangeFocus != null &&
               _inSelectedRange(date),
           warp: warp));
