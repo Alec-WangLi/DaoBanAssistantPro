@@ -438,6 +438,9 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                   children: [
                     // 轨道
                     Container(
+                      // 给测试一个抓手：几何用例要拿它的底边与药丸的底边对
+                      // （「药丸贴住轨道底」那条）。与 `glass-dialog-panel` 同一套路。
+                      key: const Key('ring-dismiss-track'),
                       width: _trackWidth,
                       height: trackHeight,
                       decoration: BoxDecoration(
@@ -464,6 +467,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(_trackWidth / 2),
                         child: Container(
+                          key: const Key('ring-dismiss-fill'),
                           width: _trackWidth,
                           height: fillHeight,
                           decoration: BoxDecoration(
