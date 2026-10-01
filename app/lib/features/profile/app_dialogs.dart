@@ -39,7 +39,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.16\n'
+const String _changelogZh = 'v0.10.17\n'
+    '· 日历上那枚选中的块，点别的日期、再点「今天」时，现在是飞回去的：飞的时候一圈彩色折射光亮起来，形状按飞行的方向拉长、变扁\n'
+    '· 它飞过哪几格，那几格的字就被轻轻挤一下（之前被挤的是终点那一格 —— 块还在半路上，终点就已经先动了）\n'
+    '· 落定之后这些自己收回去，静止时与之前一样\n'
+    '· 拖动那枚块时，形状是「开」出来的，不再一下拉满（与底栏滑块同一套手感）\n\n'
+
+    'v0.10.16\n'
     '· 修好上一版带进来的一处问题：拖完日历上那枚选中的块、再点一下日期，它会自己抽一下（陈旧的速度被反复灌回来）\n'
     '· 按住那枚块不动时，它的形变现在会自己收回去（之前会一直挂着）\n\n'
 
@@ -90,16 +96,15 @@ const String _changelogZh = 'v0.10.16\n'
     '· 彩边改成渐入渐出：手一动约 0.2 秒亮起来，手停下约 0.4 秒淡下去，不再是一动就「啪」地出现、一停就突然没了\n'
     '· 静止时依旧一点彩色都没有\n'
     '\n'
-
-    'v0.10.7\n'
-    '· 底栏滑块那圈彩色边缘重做成一层折射光晕：不再是贴在边上的那条彩带，而是从边缘往玻璃里化开、也往外面散一点的一层光\n'
-    '· 彩色不再是只有左边和上边有 —— 之前另外三个方向几乎是空的，现在四面八方都有颜色，左上略亮\n'
-    '· 静止时依然一个彩色像素都没有\n'
-    '\n'
-
 ;
 
-const String _changelogEn = 'v0.10.16\n'
+const String _changelogEn = 'v0.10.17\n'
+    '· The calendar selection block now flies back when you tap another date and then Today: a prismatic rim lights up on the way, and the shape stretches along its direction of travel\n'
+    '· The days it sweeps over get a slight squeeze (before, the squeeze sat on the destination while the block was still in mid-air)\n'
+    '· All of it settles back once it lands — at rest it looks exactly as before\n'
+    '· While dragging, the shape blooms instead of snapping to full (the same feel as the tab bar pill)\n\n'
+
+    'v0.10.16\n'
     '· Fixed a regression from the previous version: after dragging the calendar selection block, tapping a day made it stretch and flash once (a stale drag velocity was re-applied)\n'
     '· Holding the block still now lets its stretch relax (it used to stay stretched)\n\n'
 
@@ -150,13 +155,6 @@ const String _changelogEn = 'v0.10.16\n'
     '· The rim now fades in and out: about 0.2s to light up when you start moving, about 0.4s to fade when you stop, instead of snapping on and off\n'
     '· Still nothing coloured at all while the pill is at rest\n'
     '\n'
-
-    'v0.10.7\n'
-    '· The tab pill’s coloured edge is now a refractive halo — light spreading into the glass and a little beyond it, instead of a ribbon stuck along the rim\n'
-    '· The colour now wraps the whole rim: before, only the left and top had any (the lower right was essentially empty)\n'
-    '· Still nothing coloured at all while the pill is at rest\n'
-    '\n'
-
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

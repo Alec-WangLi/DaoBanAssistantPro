@@ -25,6 +25,7 @@ import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
+import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
 
@@ -430,6 +431,40 @@ void main() {
           } else if (i == 49) {
             await g.up(); // 没到 0.7 的阈值 → 弹回去
             released = true;
+          }
+        },
+      );
+    });
+  }
+
+  // ⑧ 日历那枚选中块**飞回去**（v0.10.17）。用户 2026-10-01 的原话：「点击当月的
+  //    其他日期之后，再点『今天』，返回的动画也应该像底部导航栏点击时那样，加上
+  //    该有的光晕，以及『头大尾轻』之类的特效。现在看起来还是以前那种效果。」
+  //
+  //    时间轴：先点到远处那一格（它自己也飞一下）→ 稳住 → 点「今天」飞回来
+  //    （约 14 帧）→ 落定之后彩边还要**渐灭**约 400ms。前后都留着，才看得出
+  //    「动的时候亮、停下来才收」。
+  for (final v in _modes) {
+    testWidgets('日历 · 点「今天」飞回去 · ${v.suffix}', (WidgetTester tester) async {
+      final db = await freshDb();
+      final int today = DateTime.now().day;
+      final int other = today >= 15 ? today - 10 : today + 10; // 一定在 1..25 里
+      await renderFrames(
+        tester,
+        prefix: 'calendar_flight_${v.suffix}_',
+        home: const CalendarScreen(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        extraPrefs: _liquidPrefs,
+        brightness: v.brightness,
+        count: 46,
+        // ⚠️ **有弹簧的动图必须 16ms 一帧**（`LiquidLensSpring.step` 把每帧积分
+        // 封顶在 16ms）：喂 55ms 一帧整段动画会慢 3.4 倍。
+        step: const Duration(milliseconds: 16),
+        onFrame: (WidgetTester t, int i) async {
+          if (i == 0) {
+            await t.tap(find.byKey(ValueKey('day-card-$other')));
+          } else if (i == 18) {
+            await t.tap(find.byIcon(Icons.today_outlined));
           }
         },
       );

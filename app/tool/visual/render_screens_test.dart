@@ -135,6 +135,15 @@ void main() {
         home: const CalendarScreen(),
         overrides: <Override>[databaseProvider.overrideWithValue(db)],
         extraPrefs: <String, Object>{'liquidGlass': true},
+        // ⚠️ **「在动」的那一档不许 `settleVisual`**：它推 60 帧，而手指停住不动
+        // → 速度衰减到 0 → 拍出来的其实是「按住但静止」，**形变与彩边一个都看不到**。
+        // 这正是 v0.10.6 在底栏上踩过的那个坑（`40_nav_lens_dragging` 当年就是这么
+        // 拍的）；「拖动中」这一屏要是也稳稳地拍，等于什么都没拍。
+        //
+        // ⚠️ 但**「按住」那一档要留着**：少推那 60 帧，页面底下那层极慢的光晕背景
+        // 就停在另一个相位上，整屏每处都差几个灰度 —— 逐张比基线时会变成一屏
+        // 「12% 的像素变了」的假差异（第一版两者都关，`49` 就是这么被误报的）。
+        settleAfterCapture: dragBy == 0,
         beforeCapture: (WidgetTester t) async {
           // 起点取今天那一格（选中块默认落在今天）；不能找 `calendar-selection-block`
           // 的**位置**去按 —— 那枚块在拖动中会跟着走，而起点得是格子。
@@ -155,6 +164,35 @@ void main() {
       );
     });
   }
+
+  // 点「今天」那一跳的**中途**（v0.10.17）。用户 2026-10-01 报的就是这一下：
+  // 「点完别的日期再点今天，返回的动画还是以前那种效果」—— 位置由
+  // `AnimatedPositioned` 隐式走时，速度恒为 0、挤压场盯着终点，于是既没有彩边、
+  // 也没有形变、块飞过的格子一点反应都没有。静止帧拍不到这一档，必须真点。
+  visualTest('日历 · 液态档选中块 · 点「今天」飞回去', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    useLiquidGlassTier();
+    final int today = DateTime.now().day;
+    final int other = today >= 15 ? today - 10 : today + 10; // 一定在 1..25 里
+    await renderScreen(
+      tester,
+      name: '51_calendar_lens_flight',
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      extraPrefs: <String, Object>{'liquidGlass': true},
+      settleAfterCapture: false,
+      beforeCapture: (WidgetTester t) async {
+        await t.tap(find.byKey(ValueKey('day-card-$other')));
+        await settleVisual(t); // 先落到远处那一格
+        await t.tap(find.byIcon(Icons.today_outlined));
+        // 5 帧（80ms）≈ 飞了大半：块卡在格子之间，彩边亮着、底下几格正被挤。
+        for (int i = 0; i < 5; i++) {
+          await t.pump(const Duration(milliseconds: 16));
+        }
+      },
+    );
+  });
 
   visualTest('日历 · 点开某天', (tester) async {
     failOnOverflow(tester);
