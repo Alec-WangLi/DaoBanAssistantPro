@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
@@ -258,20 +259,27 @@ class LiquidLensShape {
     // 哪些尺寸会掉进来：`itemW + 10·lift <= 52 + 20·lift`，也就是 `itemW` 小于约 62
     // 的窗口。**200×400 那个工装档（itemW 39）在 lift=1 时一半的速度都在死区里。**
     //
-    // 改成**竖直的胶囊**：两端是半径 `宽/2` 的半圆、沿中轴上下错开，中间用矩形连起来。
+    // 改成**竖直的胶囊**：把上面那套闭式解整体转 90°（见 `_verticalTwoRadius`）。
     // 宽度与高度都保住了 —— 于是「按住时凸出胶囊」这个信号在窄窗里照样成立，
     // 比退成一枚圆团更好（圆团会把高度一起丢掉）。
     //
-    // 用 `addOval + addRect` 而不是 `arcTo`：这一档本来就是「两圆 + 中间一片」，
-    // 直接拼出来既短，也不会再踩 2π 那个坑。
+    // 这条构造**天然带两个半径**，所以竖直档也读前后缘（头大尾轻在竖着的时候照样
+    // 画得出来）—— 上一版是「上圆 + 下圆 + 中矩形」并起来的，那两个半径在那儿
+    // 是算了但没用。
+    //
+    // ⚠️ **上一版并三个子路径还有个更贵的代价**：填色对，**描边会把三段边界全画
+    // 出来**，包括互相重叠的内部接缝。四层光谱全是描边，于是在钮的内部留下横线
+    // 与内侧弧 —— 用户 2026-10-01：「彩边穿到滑块里边了，而且还不规则，也不贴边」。
+    // 转出来的是一条**闭合子路径**，没有这个问题。
     if (width <= height) {
-      final double r = width / 2;
-      final double gap = height / 2 - r;
-      return Path()
-        ..addOval(Rect.fromCircle(center: Offset(centerX, cy - gap), radius: r))
-        ..addOval(Rect.fromCircle(center: Offset(centerX, cy + gap), radius: r))
-        ..addRect(Rect.fromLTRB(
-            centerX - r, cy - gap, centerX + r, cy + gap));
+      return _verticalTwoRadius(
+        centerX: centerX,
+        cy: cy,
+        w: width,
+        h: height,
+        rTop: leftRadius,
+        rBot: rightRadius,
+      );
     }
 
     final double mx = ((rl - rr) / d).clamp(-1.0, 1.0);
@@ -419,6 +427,56 @@ class LiquidLens extends StatelessWidget {
 /// 观感就是「一圈描边糊在轮廓外」。
 Path _lensPath(LiquidLensShape shape, Offset origin) =>
     shape.toPath().shift(origin);
+
+/// **竖直**的两半径胶囊 —— 用的是同一套闭式解，只是把那个横着的形状整体转 90°。
+///
+/// 重推一遍外公切线（把 x/y 换过来）容易在符号上出错，转置则天然精确。而且转出来的
+/// 是**一条闭合子路径** —— 原先那版 `addOval × 2 + addRect` 是三条，填色没问题，
+/// **描边会把内部接缝也画出来**（四层光谱全是描边）。
+///
+/// [rTop] 收 `leftRadius`、[rBot] 收 `rightRadius`：转过去之后，局部坐标的「左端」
+/// 落在屏幕的**上端**。于是向右拖时（前缘在右、后缘在左）读作「下大上小」。
+Path _verticalTwoRadius({
+  required double centerX,
+  required double cy,
+  required double w,
+  required double h,
+  required double rTop,
+  required double rBot,
+}) {
+  // 局部坐标系里「宽 = 转过去之后的高、高 = 转过去之后的宽」。
+  final double len = h;
+  final double thick = w;
+  final double cx0 = len / 2;
+  final double cy0 = thick / 2;
+  final Offset c1 = Offset(cx0 - len / 2 + rTop, cy0);
+  final Offset c2 = Offset(cx0 + len / 2 - rBot, cy0);
+  // ⚠️ **圆心距要钳一个正的下限。** 两个**等半径**的圆、圆心距又恰好等于 `2r` 时
+  // （形状是个正圆）`d = 0`，而 `(rTop − rBot) / d` 就是 `0 / 0`。钳住之后
+  // `mx = 0`、`my = 1`、`theta = π/2`：外公切线是一条竖直线、两端圆弧各扫 π ——
+  // 精确，也不碰 `arcTo` 扫过 2π 那个坑（见 `toPath()` 顶上那段）。
+  final double d = math.max(0.01, c2.dx - c1.dx);
+  final double mx = ((rTop - rBot) / d).clamp(-1.0, 1.0);
+  final double my = math.sqrt(math.max(0.0, 1 - mx * mx));
+  final double theta = math.atan2(my, mx);
+
+  final Path p = Path()
+    ..moveTo(c1.dx + rTop * mx, cy0 - rTop * my)
+    ..lineTo(c2.dx + rBot * mx, cy0 - rBot * my)
+    ..arcTo(Rect.fromCircle(center: c2, radius: rBot), -theta, 2 * theta, false)
+    ..lineTo(c1.dx + rTop * mx, cy0 + rTop * my)
+    ..arcTo(Rect.fromCircle(center: c1, radius: rTop), theta,
+        2 * (math.pi - theta), false)
+    ..close();
+
+  // 局部 (x, y) → 屏幕 (centerX − (y − cy0), cy + (x − cx0))
+  return p.transform(Float64List.fromList(<double>[
+    0, 1, 0, 0, //
+    -1, 0, 0, 0, //
+    0, 0, 1, 0, //
+    centerX + cy0, cy - cx0, 0, 1,
+  ]));
+}
 
 class _LensClipper extends CustomClipper<Path> {
   const _LensClipper({required this.shape, required this.origin});
