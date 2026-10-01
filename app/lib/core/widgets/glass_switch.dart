@@ -219,6 +219,24 @@ class _GlassSwitchState extends State<GlassSwitch>
             _toggle();
           },
           onTapCancel: _lens.tapCancel,
+          // **拖动**（用户 2026-10-01：「长按想拖动的时候，它拖不动，好像没有加这个
+          // 动作」）。松手时钮落在哪一端就切到哪一端；拖回原处则什么都不做。
+          //
+          // **不设「必须先按住 110ms」的闸门**：那个闸门只管「拉长」这个视觉，
+          // 不该管能不能拖。`press` 那边仍然是 `moveToSlot: false`、控制器仍然是
+          // `followFinger: false` —— 点按不挪钮，只有真横向拖起来才走。
+          onHorizontalDragStart: (DragStartDetails d) {
+            _lens.setItemW(itemW);
+            _lens.dragStart(d.localPosition.dx);
+          },
+          onHorizontalDragUpdate: (DragUpdateDetails d) {
+            _lens.setItemW(itemW);
+            _lens.dragUpdate(d.localPosition.dx);
+          },
+          onHorizontalDragEnd: (DragEndDetails _) {
+            if (_lens.release() != (widget.value ? 1 : 0)) _toggle();
+          },
+          onHorizontalDragCancel: _lens.cancel,
           child: const SizedBox.expand(),
         ),
       ),

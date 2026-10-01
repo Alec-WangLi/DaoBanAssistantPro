@@ -18,12 +18,14 @@ import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 
 void main() {
-  Future<void> pumpSwitch(
+  /// 返回**这次会话里 `onChanged` 收到的值**（拨了几次、拨成什么）。
+  Future<List<bool>> pumpSwitch(
     WidgetTester tester, {
     required bool liquid,
     bool value = false,
     bool enabled = true,
   }) async {
+    final List<bool> calls = <bool>[];
     liquidGlassActive.value = liquid;
     addTearDown(() => liquidGlassActive.value = false);
     await tester.pumpWidget(MaterialApp(
@@ -33,13 +35,17 @@ void main() {
             builder: (BuildContext context, StateSetter setState) => GlassSwitch(
               value: value,
               enabled: enabled,
-              onChanged: (bool v) => setState(() => value = v),
+              onChanged: (bool v) {
+                calls.add(v);
+                setState(() => value = v);
+              },
             ),
           ),
         ),
       ),
     ));
     await tester.pumpAndSettle();
+    return calls;
   }
 
   LiquidLens lensOf(WidgetTester tester) =>
@@ -112,5 +118,85 @@ void main() {
   testWidgets('标准档：树上没有透镜（两棵树真的分开了）', (tester) async {
     await pumpSwitch(tester, liquid: false);
     expect(find.byType(LiquidLens), findsNothing);
+  });
+
+  // ── 拖动（v0.10.10）─────────────────────────────────────────────────────
+  //
+  // 用户 2026-10-01：「长按想拖动的时候，它拖不动，好像没有加这个动作」。
+  // 原来那个 `GestureDetector` 只有 tap 三件套，一个拖动识别器都没挂。
+
+  testWidgets('按住拖到另一端松手：值翻转', (tester) async {
+    final List<bool> calls = await pumpSwitch(tester, liquid: true);
+    final Rect box = tester.getRect(find.byType(GlassSwitch));
+    late TestGesture g;
+    bool released = false;
+    g = await tester.startGesture(box.centerLeft + const Offset(18, 0));
+    addTearDown(() {
+      if (!released) return g.up();
+      return Future<void>.value();
+    });
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    // ⚠️ **要算上 `kTouchSlop`（18px）**：拖动识别器赢下竞技场之前那 18px 是空走的
+    // （探针实测：+30 只有 12px 真的推到了钮上，`centerX` 15.5 → 25.5，没过中点）。
+    // 拖 +50 → 有效位移 32px，钮到右端并夹住 → `_page` = 1。
+    for (int i = 0; i < 20; i++) {
+      await g.moveBy(const Offset(2.5, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    released = true;
+    await tester.pumpAndSettle();
+    expect(calls, <bool>[true], reason: '拖到另一端松手没有把值拨过去');
+  });
+
+  testWidgets('按住拖一点点又拖回原处松手：值不变', (tester) async {
+    final List<bool> calls = await pumpSwitch(tester, liquid: true);
+    final Rect box = tester.getRect(find.byType(GlassSwitch));
+    late TestGesture g;
+    bool released = false;
+    g = await tester.startGesture(box.centerLeft + const Offset(18, 0));
+    addTearDown(() {
+      if (!released) return g.up();
+      return Future<void>.value();
+    });
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    // 出去 25px（扣掉 slop 只剩 7px 真的推到了钮上）、再原路拖回来。
+    for (int i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(2.5, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    for (int i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(-2.5, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    released = true;
+    await tester.pumpAndSettle();
+    expect(calls, isEmpty, reason: '拖出去又拖回来，值不该变');
+  });
+
+  testWidgets('点按仍然只拨一下，钮不跟着手指跑（v0.10.9 那条契约）', (tester) async {
+    // 接拖动最容易把这一条弄坏：`followFinger` / `moveToSlot` 一旦放开，
+    // 在**开着**的那枚开关左半边按住，钮会先跳到左边再跳回来。
+    await pumpSwitch(tester, liquid: true, value: true);
+    final Rect box = tester.getRect(find.byType(GlassSwitch));
+    final double atRest = lensOf(tester).shape.centerX;
+
+    final TestGesture g =
+        await tester.startGesture(box.centerLeft + const Offset(10, 0));
+    addTearDown(g.up);
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30)); // 按住不放
+    }
+    // 钮心在胶囊局部坐标 3 + 1.5×25 = 40.5（右端）；左端是 3 + 0.5×25 = 15.5。
+    expect(lensOf(tester).shape.centerX, closeTo(atRest, 0.5),
+        reason: '在左半边按住，钮跑到左边去了 —— 它只该在值真的变了之后才滑');
+    expect(atRest, greaterThan(30), reason: '前提错了：开着的时候钮应当在右端');
+    // 不在这里显式松手：`addTearDown` 会收掉它（再 up 一次会撞上
+    // TestGesture 的 `_isDown` 断言）。
   });
 }
