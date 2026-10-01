@@ -74,14 +74,14 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// 形变强度 0..1。**它自己走一条弹簧**，不直接用瞬时速度。
   ///
   /// 瞬时速度是一根毛刺：直接拿它当形变，观感就是「起步啪一下到满、停下啪一下
-  /// 归零」—— 用户 2026-10-05 说的「僵硬、不够丝滑」有一半来自这里。过一条弹簧
+  /// 归零」—— 用户 2026-10-01 说的「僵硬、不够丝滑」有一半来自这里。过一条弹簧
   /// 就有了惯性和回弹：起步时冲一点、停下时拖一条尾巴。参数见
   /// `AppTokens.lensStretchOmega`。
   late final LiquidLensSpring _stretchSpring;
 
   /// 彩边与光晕的**亮度** 0..1。同样走一条自己的弹簧。
   ///
-  /// 用户 2026-10-07：「彩边出现得太突然了。我的手不动它时没有，一动它就突然出来
+  /// 用户 2026-10-01：「彩边出现得太突然了。我的手不动它时没有，一动它就突然出来
   /// 了……以及咱们手停下来的时候，也得有点过渡，不要突然就没了。」直接拿瞬时速度
   /// 当亮度，就是一个一两帧内被跨过去的开关；过一条弹簧才有渐入渐出。
   ///
@@ -122,7 +122,7 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// 胶囊与它的 `BackdropFilter` 不跟着动。
   ///
   /// 以前 `_onTick` 里是 `setState(() {})` —— 于是每帧整个底栏重建一遍，而这一帧
-  /// 真正变的只有透镜。用户 2026-10-04 说拖动时「感觉帧率有点卡顿」。
+  /// 真正变的只有透镜。用户 2026-10-01 说拖动时「感觉帧率有点卡顿」。
   final ValueNotifier<int> _lensTick = ValueNotifier<int>(0);
 
   PageController get controller => widget.controller;
@@ -233,7 +233,7 @@ class _GlassNavBarState extends State<GlassNavBar>
     // dt」—— 可 16ms 正好是**一帧 60Hz**。在这台 120Hz 机器上 dt ≈ 8.33ms，被 max
     // 抬到 16ms，于是**算出来的速度恒为真实值的一半**；而帧间隔一旦在 8.33 / 16.7
     // 之间跳（可变刷新率），同一个手指速度会算出**两个不同的拉伸量** —— 那就是
-    // 用户 2026-10-05 说的「像帧率不够」。算式搬进了 `lensVelocityStep`（纯函数，
+    // 用户 2026-10-01 说的「像帧率不够」。算式搬进了 `lensVelocityStep`（纯函数，
     // 帧率无关性由 `test/liquid_lens_test.dart` 直接断言）。
     //
     // 第一帧跳过：那时 `_lastLensCenter` 还是初值，差值不是「位移」。
@@ -780,7 +780,7 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// 各写一份迟早会长出差异。
   ///
   /// [lensItemW] 给值时 = 液态档：每一格按**透镜边缘**的位置做一次仿射变换
-  /// （用户 2026-10-04：「滑块的彩虹边缘碰到图标时，图标和文字也应该适当扭曲」）。
+  /// （用户 2026-10-01：「滑块的彩虹边缘碰到图标时，图标和文字也应该适当扭曲」）。
   /// 标准档传 null，**一个变换都不套**（也就不会多出一层 widget）。
   Widget _iconsRow(
     bool isShort,
