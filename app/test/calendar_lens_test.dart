@@ -129,4 +129,50 @@ void main() {
     await tester.pumpAndSettle(); // 有常驻动画的话这里直接超时
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
+
+  testWidgets('横向速度拉宽压矮、纵向速度拉高收窄', (tester) async {
+    await mount(tester,
+        liftTarget: 1, dragging: true, velocity: const Offset(600, 0));
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final LiquidLensShape x = shapeOf(tester);
+    await mount(tester,
+        liftTarget: 1, dragging: true, velocity: const Offset(0, 600));
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final LiquidLensShape y = shapeOf(tester);
+    expect(x.width, greaterThan(y.width), reason: '横着拖那份没有拉宽');
+    expect(y.height, greaterThan(x.height), reason: '竖着拖那份没有拉高');
+  });
+
+  testWidgets('环是渐入渐出的，不是一动就满', (tester) async {
+    await mount(tester,
+        liftTarget: 1, dragging: true, velocity: const Offset(600, 0));
+    await tester.pump(const Duration(milliseconds: 110));
+    final double early = shapeOf(tester).motion;
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(early, lessThan(0.9), reason: '彩边一上来就满 —— 渐入那条弹簧没接上');
+    expect(shapeOf(tester).motion, greaterThan(0.95));
+  });
+
+  testWidgets('松手之后速度衰减到 0、环熄灭（静止时一点彩色都没有）',
+      (tester) async {
+    await mount(tester,
+        liftTarget: 1, dragging: true, velocity: const Offset(600, 0));
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    // 松手：目标翻 0、不再喂速度（外面那一帧把最后的速度交回来）。
+    await mount(tester, liftTarget: 0, velocity: const Offset(600, 0));
+    for (int i = 0; i < 80; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(shapeOf(tester).motion, closeTo(0, 0.02));
+    expect(shapeOf(tester).width,
+        closeTo(box.width - 2 * AppTokens.gapHair, 0.5));
+  });
 }

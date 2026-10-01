@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -68,6 +70,11 @@ class _CalendarLensState extends State<CalendarLens>
   /// 里的 `target: 0`，于是按住时挂上来的这一枚**目标永远是 0**、升程一动不动。
   late final LiquidLensSpring _lift;
 
+  /// 光谱环／光晕的门。**它走自己的一条弹簧**（亮起 ω=26、熄灭 ω=12，与底栏同一套）——
+  /// 直接拿速度当门的话，拖动启动那一帧彩边是「啪」地亮起来的（v0.10.8 的老毛病）；
+  /// 而熄灭要比亮起慢，不然停手那一下颜色会「啪」地没。
+  late final LiquidLensSpring _ring;
+
   /// 拖动速度的低通值（松手之后逐帧衰减到 0）。
   double _vx = 0;
   double _vy = 0;
@@ -86,6 +93,19 @@ class _CalendarLensState extends State<CalendarLens>
       omega: _liftOmegaFor(widget.liftTarget > 0),
       zeta: _liftZetaFor(widget.liftTarget > 0),
     );
+    _ring = LiquidLensSpring(
+      target: 0,
+      omega: AppTokens.lensUnlitOmega,
+      zeta: AppTokens.lensUnlitZeta,
+    );
+    // 挂载时就把这一帧的速度吃进来 —— 与 `didUpdateWidget` 那条同一个道理：
+    // **不能只更新读**。只读更新那一侧的话，带着速度挂上来的这一枚（切档位、
+    // 重建）会停在「没在动」上，彩边永远不亮。
+    if (widget.dragging) {
+      _vx = widget.velocity.dx;
+      _vy = widget.velocity.dy;
+    }
+    _retargetRing();
     // ⚠️ **首次挂载也要推帧。** 只在 `didUpdateWidget` 里起 ticker 是不够的：
     // 挂上来的第一帧没有任何人推，弹簧就永远停在初值上。
     _syncTicker();
@@ -97,6 +117,17 @@ class _CalendarLensState extends State<CalendarLens>
       up ? AppTokens.lensLiftOmega : AppTokens.lensDropOmega;
   static double _liftZetaFor(bool up) =>
       up ? AppTokens.lensLiftZeta : AppTokens.lensDropZeta;
+
+  /// 环的门：**「动不动」，不是「多快」**（60px/s 就封顶）—— 那以下按比例淡入
+  /// 只是为了慢速收尾时不眨一下；而**渐变本身**由 [_ring] 那条弹簧给。
+  void _retargetRing() {
+    final bool moving =
+        math.max(_vx.abs(), _vy.abs()) > AppTokens.lensRingFullSpeed;
+    _ring
+      ..target = moving ? 1 : 0
+      ..omega = moving ? AppTokens.lensLitOmega : AppTokens.lensUnlitOmega
+      ..zeta = moving ? AppTokens.lensLitZeta : AppTokens.lensUnlitZeta;
+  }
 
   @override
   void didUpdateWidget(CalendarLens old) {
@@ -117,6 +148,7 @@ class _CalendarLensState extends State<CalendarLens>
       _vx = widget.velocity.dx;
       _vy = widget.velocity.dy;
     }
+    _retargetRing();
     _syncTicker();
   }
 
@@ -125,7 +157,8 @@ class _CalendarLensState extends State<CalendarLens>
   /// ⚠️ 日历页吃过大亏（v0.9.8）：常驻动画让帧队列永远非空，整套 widget 测试在
   /// `pumpAndSettle` 上集体超时。停的条件要把**参与动画的每一个量**都列上。
   void _syncTicker() {
-    final bool busy = !_lift.isAtRest || _vx.abs() > 1 || _vy.abs() > 1;
+    final bool busy =
+        !_lift.isAtRest || !_ring.isAtRest || _vx.abs() > 1 || _vy.abs() > 1;
     if (busy) {
       if (_ticker == null) {
         _lastStamp = Duration.zero;
@@ -149,9 +182,12 @@ class _CalendarLensState extends State<CalendarLens>
     _lastStamp = elapsed;
 
     _lift.step(dt);
+    _ring.step(dt);
     if (!widget.dragging) {
       _vx *= 0.72;
       _vy *= 0.72;
+      // 速度衰减到门以下时环开始熄灭（熄灭那条比亮起慢得多，见 [_retargetRing]）。
+      _retargetRing();
     }
     if (mounted) setState(() {});
     _syncTicker();
@@ -177,7 +213,7 @@ class _CalendarLensState extends State<CalendarLens>
       // 二维：按速度分量各拉各的（横着拖拉宽压矮、竖着拖拉高收窄）。
       stretch: (_vx.abs() / CalendarLens.velocityRef).clamp(0.0, 1.0),
       stretchY: (_vy.abs() / CalendarLens.velocityRef).clamp(0.0, 1.0),
-      motion: 0, // 环那一层下一步接（它要走自己的渐入渐出弹簧）
+      motion: _ring.value.clamp(0.0, 1.0),
       metrics: LiquidLensMetrics(
         protrude: CalendarLens.protrude,
         liftWidth: CalendarLens.liftWidth,
