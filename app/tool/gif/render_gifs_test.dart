@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/widgets/glass_check.dart';
 import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
@@ -274,8 +275,44 @@ void main() {
     );
   });
 
+  // ⑤ 待办打勾 · 标准档 / 液态档。
+  //
+  //    用户 2026-10-01：「我看别的设计语言都是用打勾的样式……弄完之后打勾，给一个
+  //    删除线表达」。这一条拍的是**勾本身怎么长出来**（描出来 + 底色晕开），
+  //    以及液态档下按住时那枚滴凸出来。
+  //
+  //    两档各出一条：`GlassCheck` 读的是模块级档位标志，一条片子只能是一个档位。
+  for (final bool liquid in <bool>[false, true]) {
+    testWidgets('待办打勾 · ${liquid ? '液态档' : '标准档'}',
+        (WidgetTester tester) async {
+      // 档位是**模块级标志**，会在用例之间残留 —— 上一条 `switch_liquid_` 刚把它
+      // 点亮，不给标准档显式拨回去的话，这一条拍出来的其实是液态档（两条片子会
+      // **逐字节相同**）。
+      if (liquid) {
+        useLiquidGlassTier();
+      } else {
+        useStandardGlassTier();
+      }
+      await renderFrames(
+        tester,
+        prefix: 'check_${liquid ? 'liquid' : 'std'}_',
+        home: const _CheckGifHost(),
+        overrides: const <Override>[],
+        count: 70,
+        // **16ms 一帧**：勾与升程都走弹簧，`LiquidLensSpring.step` 把每帧积分
+        // 封顶在 `lensMaxStep`（16ms）—— 喂更长的帧整段动画会变慢。
+        step: const Duration(milliseconds: 16),
+        onFrame: (WidgetTester t, int i) async {
+          if (i == 6) {
+            await t.tap(find.byType(GlassCheck).first); // 勾上
+          } else if (i == 44) {
+            await t.tap(find.byType(GlassCheck).first); // 再点一下取消
+          }
+        },
+      );
+    });
+  }
 }
-
 /// 开关特写用的板子：一行「开」一行「关」，落在中性的页面底色上 ——
 /// 单看开关本身，不被整页其它玻璃面干扰。
 class _SwitchBoard extends StatelessWidget {
@@ -329,6 +366,31 @@ class _SegmentGifHost extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// 三枚待办的勾（拍「勾出来」那一刻；最后一枚按住看液态档那枚滴凸出去）。
+class _CheckGifHost extends StatelessWidget {
+  const _CheckGifHost();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              GlassCheck(value: false, onChanged: _ignore),
+              SizedBox(height: AppTokens.space2xl),
+              GlassCheck(value: true, onChanged: _ignore),
+              SizedBox(height: AppTokens.space2xl),
+              GlassCheck(value: false, onChanged: _ignore),
+            ],
+          ),
+        ),
+      );
+
+  static void _ignore(bool _) {}
 }
 
 /// 三枚开关（液态档下拍「按住拉长」）。
