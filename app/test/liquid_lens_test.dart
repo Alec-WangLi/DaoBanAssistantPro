@@ -1318,4 +1318,77 @@ void main() {
       expect(x.height, lessThan(44 + 20));
     });
   });
+
+  // ── 挤字的二维版 ────────────────────────────────────────────────────────
+  //
+  // 一维版只认 x（底栏 / 分段器那种「一排」的控件）。日历的格子**四面八方都相邻**，
+  // 所以「到透镜中心的距离」要换成椭圆归一化距离、把「被挤」的方向换成径向。
+  // 一维版必须是它在 `dy = 0` 时的特例 —— 底栏那四处一个字都不改，靠的就是这条。
+  group('二维挤字（lensIconWarp2d）', () {
+    test('dy = 0 时与一维版逐点相同', () {
+      for (final double dx in <double>[0, 12, 34, 60, 90]) {
+        final ({double scaleX, double scaleY, double dx}) a = lensIconWarp(
+            iconCenterX: 60 + dx, lensCenterX: 60, lensHalfWidth: 44);
+        final ({
+          double scaleRadial,
+          double scaleTangent,
+          double dx,
+          double dy,
+          double angle
+        }) b = lensIconWarp2d(
+            itemCenterX: 60 + dx,
+            itemCenterY: 100,
+            lensCenterX: 60,
+            lensCenterY: 100,
+            lensHalfWidth: 44,
+            lensHalfHeight: 44);
+        expect(b.scaleRadial, closeTo(a.scaleX, 1e-9));
+        expect(b.scaleTangent, closeTo(a.scaleY, 1e-9));
+        expect(b.dx, closeTo(a.dx, 1e-9));
+        expect(b.dy, closeTo(0, 1e-9));
+        expect(b.angle, closeTo(0, 1e-9));
+      }
+    });
+
+    test('正中心不挤（t = 0 权重见底，恒等就不套变换）', () {
+      final r = lensIconWarp2d(
+          itemCenterX: 100,
+          itemCenterY: 100,
+          lensCenterX: 100,
+          lensCenterY: 100,
+          lensHalfWidth: 44,
+          lensHalfHeight: 44);
+      expect(r.scaleRadial, 1.0);
+      expect(r.dx, 0.0);
+      expect(r.dy, 0.0);
+    });
+
+    test('峰值在边缘（t = 1 正好落在透镜轮廓上）', () {
+      double pinchAt(double t) => 1 -
+          lensIconWarp2d(
+                  itemCenterX: 44 * t,
+                  itemCenterY: 0,
+                  lensCenterX: 0,
+                  lensCenterY: 0,
+                  lensHalfWidth: 44,
+                  lensHalfHeight: 44)
+              .scaleRadial;
+      expect(pinchAt(1), greaterThan(pinchAt(0.6)));
+      expect(pinchAt(1), greaterThan(pinchAt(1.4)));
+    });
+
+    test('纯竖直偏移：方向朝上、沿径向压扁、垂直方向拉长', () {
+      final r = lensIconWarp2d(
+          itemCenterX: 0,
+          itemCenterY: 40,
+          lensCenterX: 0,
+          lensCenterY: 0,
+          lensHalfWidth: 44,
+          lensHalfHeight: 44);
+      expect(r.angle, closeTo(math.pi / 2, 1e-6));
+      expect(r.scaleRadial, lessThan(1));
+      expect(r.scaleTangent, greaterThan(1));
+      expect(r.dy, greaterThan(0));
+    });
+  });
 }

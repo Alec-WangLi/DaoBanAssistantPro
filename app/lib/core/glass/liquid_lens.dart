@@ -1192,3 +1192,70 @@ class CapsuleRimPainter extends CustomPainter {
     dx: (iconCenterX >= lensCenterX ? 1 : -1) * AppTokens.lensIconPush * w,
   );
 }
+
+/// [lensIconWarp] 的**二维版** —— 给**四面八方都相邻**的格子用（日历的月历网格）。
+///
+/// 一维版只认 x（底栏与分段器那种「一排」的控件），日历里透镜是**二维**走的：
+/// 它斜着穿过两格中间时，右边那格的日期被往右挤、下面那格的被往下挤。所以两件事
+/// 要换：
+///   · **距离**换成**椭圆归一化距离** `t = √(((cx−lx)/hw)² + ((cy−ly)/hh)²)` ——
+///     `t = 1` 仍然正好落在透镜轮廓上（与一维版同一个语义，权重也是同一条钟形）；
+///   · **方向**换成**径向**：沿「格子中心 → 透镜中心」的反方向压扁 + 推开，即
+///     `angle = atan2(dy, dx)`，调用点按
+///     `translate(dx,dy) ∘ rotate(angle) ∘ scale(scaleRadial, scaleTangent) ∘ rotate(−angle)`
+///     拼矩阵。
+///
+/// **一维版是它在 `dy = 0` 时的特例**（`angle = 0`、两个缩放与位移逐一相等）——
+/// 底栏那四处一个字都不改，靠的就是这条，`liquid_lens_test` 里有用例逐点比。
+///
+/// 纯函数，好单测。`hw` / `hh` 传**满升程 + 满形变**时的半宽半高：一维版也是这么
+/// 干的（「它随升程只变一点点，而权重本来就是一条软的钟形」）。
+({double scaleRadial, double scaleTangent, double dx, double dy, double angle})
+    lensIconWarp2d({
+  required double itemCenterX,
+  required double itemCenterY,
+  required double lensCenterX,
+  required double lensCenterY,
+  required double lensHalfWidth,
+  required double lensHalfHeight,
+}) {
+  // 半宽半高非正（还没布局 / 退化档）就什么都不做 —— 别让调用点去判。
+  if (lensHalfWidth <= 0 || lensHalfHeight <= 0) {
+    return (
+      scaleRadial: 1.0,
+      scaleTangent: 1.0,
+      dx: 0.0,
+      dy: 0.0,
+      angle: 0.0,
+    );
+  }
+  final double ddx = itemCenterX - lensCenterX;
+  final double ddy = itemCenterY - lensCenterY;
+  // 椭圆归一化距离：**除以各自的半轴**再取模长 —— t = 1 就是透镜的那圈轮廓。
+  final double t = math.sqrt(
+      (ddx / lensHalfWidth) * (ddx / lensHalfWidth) +
+          (ddy / lensHalfHeight) * (ddy / lensHalfHeight));
+  final double u = (t - 1) / AppTokens.lensIconRingSigma;
+  final double w = math.exp(-u * u);
+  // 权重小到看不见就别造一个几乎恒等的矩阵 —— 那会让这一格每帧都重绘。
+  if (w < 0.01) {
+    return (
+      scaleRadial: 1.0,
+      scaleTangent: 1.0,
+      dx: 0.0,
+      dy: 0.0,
+      angle: 0.0,
+    );
+  }
+  final double pinch = AppTokens.lensIconPinch * w;
+  final double push = AppTokens.lensIconPush * w;
+  final double angle = math.atan2(ddy, ddx);
+  return (
+    scaleRadial: 1 - pinch, // 沿径向压扁
+    scaleTangent: 1 + pinch, // 垂直方向拉长
+    // 朝**远离透镜中心**的方向推。`dy = 0` 时 cos/sin 恰好给出与一维版同号的位移。
+    dx: push * math.cos(angle),
+    dy: push * math.sin(angle),
+    angle: angle,
+  );
+}
