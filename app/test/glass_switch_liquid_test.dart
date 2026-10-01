@@ -12,11 +12,16 @@
 // 不光栅化：那几件事在这里是「接线对不对」，形状与配色本身由 `liquid_lens_test`
 // 那 60 多条守着。
 
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens_metrics.dart';
+import 'package:shiftassistantpro/core/theme/app_theme.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/core/widgets/liquid_track.dart';
 
@@ -250,5 +255,142 @@ void main() {
     expect(atRest, greaterThan(30), reason: '前提错了：开着的时候钮应当在右端');
     // 不在这里显式松手：`addTearDown` 会收掉它（再 up 一次会撞上
     // TestGesture 的 `_isDown` 断言）。
+  });
+
+  // ── 轨道色跟着滴走（v0.10.13）─────────────────────────────────────────────
+  //
+  // 用户 2026-10-01：「开着的时候，背景是蓝色；关上的时候背景是空的……拖动的时候，
+  // 能不能也把背景色的变化做出来？」原先那层色读的是 `widget.value` —— 那个值在
+  // 松手那一刻才翻，于是**整段拖动颜色一动不动、松手才跳一下**（而滴还在弹簧上
+  // 慢慢滑，两者根本不同步）。
+  //
+  // 这里量的是**光栅化像素**，不是接线：那件事的判据就是「拖动中滴左边有色、
+  // 右边没有色」——只看「传了个函数进去」证明不了它跟着走。
+
+  const int rw = 200; // 画布 200×120，开关 56×30 居中 → 盒子 x ∈ [72, 128]
+  const int rh = 120;
+
+  /// 光栅化一枚开关（可先做一段手势），返回 RGBA 像素。
+  Future<List<int>> raster(
+    WidgetTester tester, {
+    bool value = false,
+    List<bool>? calls,
+    Future<void> Function(WidgetTester t)? before,
+  }) async {
+    liquidGlassActive.value = true;
+    addTearDown(() => liquidGlassActive.value = false);
+
+    tester.view.physicalSize = const Size(rw * 1.0, rh * 1.0);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final GlobalKey key = GlobalKey();
+    bool v = value;
+    await tester.pumpWidget(RepaintBoundary(
+      key: key,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        // 用**真主题**：主色纱的蓝度由它定，默认的 Material 紫算出来差一倍多。
+        theme: buildLightTheme(),
+        home: Material(
+          child: Center(
+            child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) =>
+                  GlassSwitch(
+                value: v,
+                onChanged: (bool x) {
+                  calls?.add(x);
+                  setState(() => v = x);
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    if (before != null) await before(tester);
+
+    late List<int> px;
+    await tester.runAsync(() async {
+      final RenderRepaintBoundary b =
+          key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final ui.Image img = await b.toImage(pixelRatio: 1.0);
+      final ByteData? d =
+          await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+      img.dispose();
+      px = d!.buffer.asUint8List().toList();
+    });
+    return px;
+  }
+
+  /// 某一点的「蓝度」= b − r。轨道被主色染上之后它会显著大于 0；没染就是 0 上下。
+  int blueness(List<int> px, int x, int y) {
+    final int i = (y * rw + x) * 4;
+    return px[i + 2] - px[i];
+  }
+
+  testWidgets('拖动中：轨道色跟着**滴的位置**走，而不是等松手才跳', (tester) async {
+    final List<bool> calls = <bool>[];
+    late TestGesture g;
+    bool released = false;
+    final List<int> px = await raster(
+      tester,
+      calls: calls,
+      before: (WidgetTester t) async {
+        g = await t.startGesture(const Offset(90, 60));
+        addTearDown(() {
+          if (released) return Future<void>.value();
+          return g.up();
+        });
+        for (int i = 0; i < 20; i++) {
+          await t.pump(const Duration(milliseconds: 30)); // 过按住闸门
+        }
+        // 拖 +32.5px。⚠️ **要扣掉 `kTouchSlop`（18px）** —— 识别器赢下竞技场之前
+        // 那 18px 是空走的，所以有效位移 14.5px = 0.58 格。
+        for (int i = 0; i < 13; i++) {
+          await g.moveBy(const Offset(2.5, 0));
+          await t.pump(const Duration(milliseconds: 16));
+        }
+      },
+    );
+
+    expect(calls, isEmpty,
+        reason: '前提错了：这一拖把值翻过去了，这条用例就证明不了「跟着位置走」');
+
+    // 采样点都在胶囊里、也都在滴的两侧之外：
+    // 滴心 = 3 + 0.58×25 + 12.5 = 30（全局 102），半宽 13.5 → 占 [88.5, 115.5]；
+    // 色带的边界在 36.5，过渡带是 [24, 49]（全局 [96, 121]）。
+    final int left = blueness(px, 80, 60);
+    final int right = blueness(px, 122, 60);
+    expect(left, greaterThan(20), reason: '滴左边的轨道一点色都没有（蓝度 $left）');
+    expect(left - right, greaterThan(20),
+        reason: '两端一样蓝（左 $left / 右 $right）—— 那是「整条一起淡」，'
+            '不是「跟着滴漫过去」');
+    expect(right, lessThan(12), reason: '滴右边的轨道也被染上了（蓝度 $right）');
+
+    await g.up();
+    released = true;
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('静止：关 = 一点色都没有；开 = 左端有色（过渡带扫出了轨道外）',
+      (tester) async {
+    // 两个端点都得是干净的 —— 色带边界是从轨道**外面**扫到**外面**的。
+    // 关着的时候滴停在左端（占全局 75~100），所以只能量右端。
+    //
+    // ⚠️ **这一条没有「老 vs 新」的鉴别力**（把输入换回读 `widget.value` 它照样绿 ——
+    // 老写法在两个端点上也成立），它守的是**新实现的端点**：过渡带一旦只扫到轨道
+    // 中间，「开着」那一档的右端就会永远缺一截色。有鉴别力的是上一条。
+    final List<int> off = await raster(tester);
+    expect(blueness(off, 122, 60), lessThan(12),
+        reason: '关着的时候轨道右端就有色（${blueness(off, 122, 60)}）');
+
+    // 开着的时候滴停在右端（占 100~125），所以只能量左端。
+    final List<int> on = await raster(tester, value: true);
+    expect(blueness(on, 80, 60), greaterThan(20),
+        reason: '开着的时候轨道左端没有色（${blueness(on, 80, 60)}）—— '
+            '过渡带没有扫到轨道外面去');
   });
 }

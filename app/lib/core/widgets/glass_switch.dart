@@ -223,8 +223,10 @@ class _GlassSwitchState extends State<GlassSwitch>
         showRingCore: false,
         // 这一层是**底栏特有**的读法，46px 宽的轨道上它是几道乱线（样图实测）。
         showRefractedEdge: false,
-        // 「已打开」= 玻璃里叠一层主色淡染。
-        trackTint: widget.value ? accent.withValues(alpha: 0.35) : null,
+        // 「已打开」= 玻璃里叠一层主色淡染。**浓度跟着滴的位置走**（见
+        // `LiquidTrack.trackTint` 的说明）—— 原先读的是 `widget.value`，那只能在
+        // 松手那一刻跳一下，而滴还在弹簧上慢慢滑。
+        trackTint: (double t) => accent.withValues(alpha: 0.35 * t),
         contentBuilder: (BuildContext context, double itemW) => GestureDetector(
           behavior: HitTestBehavior.opaque,
           // ⚠️ **先 `setItemW`**：不给的话控制器里的每格宽度还是默认的 1，
