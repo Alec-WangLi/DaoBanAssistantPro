@@ -340,6 +340,20 @@ class LiquidLens extends StatelessWidget {
           ),
         ),
       ),
+      // ①b 外溢光晕：**同样在裁剪之外** —— 本体画不到轮廓外面（那正是「只往内散」
+      // 的实现方式），所以往外那一份只能单开一层。
+      Positioned(
+        left: -m,
+        top: -m,
+        width: box.width,
+        height: box.height,
+        child: IgnorePointer(
+          child: CustomPaint(
+            painter: _LensGlowPainter(
+                shape: shape, origin: origin, lift: lift, accent: accent),
+          ),
+        ),
+      ),
       // ② 本体：被轮廓裁住。
       Positioned(
         left: -m,
@@ -411,6 +425,63 @@ class _LensShadowPainter extends CustomPainter {
       old.shape.height != shape.height ||
       old.shape.leftRadius != shape.leftRadius ||
       old.shape.rightRadius != shape.rightRadius;
+}
+
+/// **外溢光晕**：透镜轮廓**之外**那一圈彩色。
+///
+/// 必须是单独一层：本体挂在 `ClipPath` 底下，外面根本画不出来 —— 那正是「只往内散」
+/// 的实现方式。这一层与浮起阴影同一层位（都在裁剪之外）。
+///
+/// 用户 2026-10-06：「往外也散一点」。真的折射会在玻璃边外侧留下一条亮边，
+/// 代价是那枚水滴的轮廓会被一圈很淡的颜色裹住 —— 那是**有意**的。
+///
+/// 门与光谱环**共用**（`motion`）：不按就不散，静止时轮廓外一个彩色像素都没有。
+class _LensGlowPainter extends CustomPainter {
+  const _LensGlowPainter({
+    required this.shape,
+    required this.origin,
+    required this.lift,
+    required this.accent,
+  });
+
+  final LiquidLensShape shape;
+  final Offset origin;
+  final double lift;
+  final Color accent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (shape.motion <= 0.05) return;
+    final Path p = _lensPath(shape, origin);
+    canvas.drawPath(
+      p,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = AppTokens.lensGlowWidth
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, AppTokens.lensGlowBlur)
+        ..shader = spectralSweep(
+          accent: accent,
+          alpha: 0.40,
+          floor: 0.36,
+          span: 0.64,
+          pow2: false,
+          // 与里面那两层再错一个色相：三层叠起来才是「摊开的光谱」。
+          hueLag: -12,
+        ).createShader(p.getBounds()),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LensGlowPainter old) =>
+      old.lift != lift ||
+      old.accent != accent ||
+      old.origin != origin ||
+      old.shape.centerX != shape.centerX ||
+      old.shape.width != shape.width ||
+      old.shape.height != shape.height ||
+      old.shape.leftRadius != shape.leftRadius ||
+      old.shape.rightRadius != shape.rightRadius ||
+      old.shape.motion != shape.motion;
 }
 
 /// 胶囊那条边被透镜**折进去**的那一帧几何。纯函数 —— `null` = 这一帧不画。
@@ -486,15 +557,22 @@ class _LensBodyPainter extends CustomPainter {
     );
     // 静止时**连画都不画**：不是「画一层透明的」，而是这一整趟省掉。
     // 门用 `motion`（「在动」）而不是 `stretch`（「多快」）—— 见 `motion` 的说明。
-    if (shape.motion > 0.05) _paintSpectralRing(canvas, p);
+    if (shape.motion > 0.05) {
+      // 顺序要紧：**光晕在下、彩线在上**。反过来的话那条细线会浮在光晕外面，
+      // 又读回「贴了一层彩带」。
+      _paintHalo(canvas, p);
+      _paintSpectralRing(canvas, p);
+    }
     // 白色高光芯压在环上 —— **这一层是「读作光」的关键**：一条纯彩色的环读起来是
     // 「贴了一圈彩虹贴纸」，而「一圈被点亮的玻璃边」需要一条白芯把颜色挤到两侧去。
+    // 浅色 0.85 → 0.70、宽 1.2 → 1.0（2026-10-06）：它自己也是一条硬边，收一档
+    // 免得又把「彩带」的读感带回来。
     canvas.drawPath(
       p,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = AppTokens.lensRingCoreWidth
-        ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.85),
+        ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.70),
     );
     // 白芯**不跟速度走**：它不是折射，是这块玻璃自己的边（标准档那枚滑块也有一条
     // 同样明度的白边）。收掉它的话静止时透镜就没有轮廓了。
@@ -554,7 +632,56 @@ class _LensBodyPainter extends CustomPainter {
       old.origin != origin ||
       old.isDark != isDark ||
       old.accent != accent;
-  /// 光谱环：沿透镜轮廓走一圈**色相**，透明度峰值钉在左上。
+  /// **折射光晕**：同一条扫掠渐变，画得又宽又糊 —— 这是「光晕」而不是「彩带」的
+  /// 全部来源。
+  ///
+  /// 用户 2026-10-06：「现在给我的感觉就像在这个滑块的边缘加了一层彩带一样。
+  /// 我们想要的是加一层折射的光晕。」拆开就是四件事：等宽 → 从边缘**向内衰减**、
+  /// 等亮 → 亮在边缘、**硬边** → 糊开、贴在表面 → 在玻璃**里面**。这一层办后三件，
+  /// [AppTokens.lensRingWidth] 那条细线办「边缘那一下」。
+  ///
+  /// 它挂在本体那层 `ClipPath` 底下，所以外半边被裁掉 —— **只往轮廓里面散**。
+  /// 往外那一份由 [_LensGlowPainter] 单开一层负责（本体画不到轮廓外面）。
+  ///
+  /// 两层、色相各偏一点（−30° 与 +22°）：真色散会把光谱**摊开**，同一处边缘能
+  /// 同时看到相邻的两个色调。一层的话仍然只是「一个颜色一个位置」。
+  void _paintHalo(Canvas canvas, Path p) {
+    final Rect b = p.getBounds();
+    canvas.drawPath(
+      p,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = AppTokens.lensHaloWidth
+        ..maskFilter =
+            const MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloBlur)
+        ..shader = spectralSweep(
+          accent: accent,
+          alpha: 0.46,
+          floor: 0.36,
+          span: 0.64,
+          pow2: false,
+          hueLag: -30,
+        ).createShader(b),
+    );
+    canvas.drawPath(
+      p,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = AppTokens.lensHaloInnerWidth
+        ..maskFilter =
+            const MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloInnerBlur)
+        ..shader = spectralSweep(
+          accent: accent,
+          alpha: 0.56,
+          floor: 0.40,
+          span: 0.60,
+          pow2: false,
+          hueLag: 22,
+        ).createShader(b),
+    );
+  }
+
+  /// 光谱环：沿透镜轮廓走一圈**色相**，左上略亮。
   ///
   /// **为什么是「画」而不是「算」**：色散只把**已经存在**的颜色分开 —— 主色是青的，
   /// 折射出来的还是青的，变不出彩虹。iOS 底栏那圈彩虹来自它背后那块彩色背景
@@ -566,40 +693,70 @@ class _LensBodyPainter extends CustomPainter {
   /// 颜色锚在 `accent` 的**色相**上：绕一圈走 300°，于是它既「五颜六色」又始终
   /// 属于这个主题。
   void _paintSpectralRing(Canvas canvas, Path lensPath) {
-    const int steps = 12;
-    final HSLColor base = HSLColor.fromColor(accent);
-    final List<Color> colors = <Color>[];
-    final List<double> stops = <double>[];
-    for (int i = 0; i <= steps; i++) {
-      final double t = i / steps;
-      // `SweepGradient` 的角度从 **+x（正右）** 起算、屏幕上顺时针。左上约 225°。
-      final double toward =
-          (1 + math.cos((t * 360 - 225) * math.pi / 180)) / 2;
-      colors.add(HSLColor.fromAHSL(
-        // 只有左上那一段亮着、其余渐隐。**整体乘的是「动不动」而不是「多快」**：
-        // 原来乘 `stretch`（= 速度 / 700），于是得甩到满速才满亮、常态拖动只在
-        // 半亮上下 —— 用户 2026-10-05：「彩色边缘不明显，还是恢复成一动就直接
-        // 达到满效果吧」。门一放开，峰值就是唯一的调节钮，0.80 → 0.92。
-        (0.06 + 0.86 * toward * toward) * shape.motion,
-        (base.hue + 300 * t) % 360, // 走色相，但绕回主色
-        base.saturation.clamp(0.55, 0.95),
-        0.66,
-      ).toColor());
-      stops.add(t);
-    }
     canvas.drawPath(
       lensPath,
       Paint()
         ..style = PaintingStyle.stroke
-        // 比白芯宽得多 —— 画完之后白芯压在中线上，颜色挤到两侧去，那正是
-        // 「色边」的宽度。3 → 4.5（用户 2026-10-04：「太细了，不太容易察觉」）。
         ..strokeWidth = AppTokens.lensRingWidth
-        ..shader = SweepGradient(
-          colors: colors,
-          stops: stops,
+        ..shader = spectralSweep(
+          accent: accent,
+          // **整体乘的是「动不动」而不是「多快」**（用户 2026-10-05：「彩色边缘
+          // 不明显，还是恢复成一动就直接达到满效果吧」）。乘的是 `motion` 而不是
+          // `stretch` —— 形变要跟速度走，彩边只问「在不在动」。
+          alpha: shape.motion,
+          // 底面 0.58：原来是 `0.06 + 0.86·toward²`，右下那两个方向实际只有
+          // 0.06~0.08 —— 等于没有颜色（用户 2026-10-06：「只有左边和上边有彩边，
+          // 右边和下边缘都没有」）。抬上来之后**四面八方都有色**，左上只是略亮。
+          floor: 0.58,
+          span: 0.42,
+          pow2: true,
         ).createShader(lensPath.getBounds()),
     );
   }
+}
+
+/// 沿透镜轮廓走一圈的**色相**渐变 —— 光谱环、两层光晕、外溢那一层共用同一份。
+///
+/// `SweepGradient` 的角度从 **+x（正右）** 起算、屏幕上顺时针，于是
+/// `t = 0` 是右边、`0.25` 下、`0.5` 左、`0.75` 上。亮度峰值锚在 **225°（左上）**，
+/// 因为光是从左上来的。
+///
+/// **[floor] / [span] 决定「最暗那个方向有多亮」，而这一对数是踩过坑的。**
+/// 原先是 `0.06 + 0.86·toward²`，`toward` 峰值锚在 225° **且又平方一次** ——
+/// 代进八个方位：左上 **0.92** / 左 0.69 / 上 0.69 / 右上 0.28 / 左下 0.28 /
+/// 右 **0.08** / 下 **0.08** / 右下 **0.06**。后三档等于没有颜色。
+///
+/// 用户 2026-10-06 报的「不管往左滑还是往右滑，感觉只有左边和上边有彩边」就是它，
+/// 而且**与往哪边滑无关**（用户观察到的正是这一点）—— 这圈颜色画在**固定的屏幕
+/// 方位**上，不跟运动方向走。护栏在 `test/liquid_lens_test.dart` 的
+/// 「彩边四面八方都有颜色」。
+///
+/// [hueLag] 是相对主色的整体色相偏移，用来把两层光晕**错开成光谱**。
+SweepGradient spectralSweep({
+  required Color accent,
+  required double alpha,
+  required double floor,
+  required double span,
+  required bool pow2,
+  double hueLag = 0,
+  int steps = 24,
+}) {
+  final HSLColor base = HSLColor.fromColor(accent);
+  final List<Color> colors = <Color>[];
+  final List<double> stops = <double>[];
+  for (int i = 0; i <= steps; i++) {
+    final double t = i / steps;
+    final double toward = (1 + math.cos((t * 360 - 225) * math.pi / 180)) / 2;
+    final double w = pow2 ? toward * toward : toward;
+    colors.add(HSLColor.fromAHSL(
+      (floor + span * w).clamp(0.0, 1.0) * alpha,
+      (base.hue + hueLag + 300 * t) % 360, // 走色相，但绕回主色
+      base.saturation.clamp(0.55, 0.95),
+      0.66,
+    ).toColor());
+    stops.add(t);
+  }
+  return SweepGradient(colors: colors, stops: stops);
 }
 
 /// 胶囊那一圈**方向性边光** + 「光跟随滑块」的窄亮带。

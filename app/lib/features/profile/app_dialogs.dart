@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.6\n'
+const String _changelogZh = 'v0.10.7\n'
+    '· 底栏滑块那圈彩色边缘重做成一层折射光晕：不再是贴在边上的那条彩带，而是从边缘往玻璃里化开、也往外面散一点的一层光\n'
+    '· 彩色不再是只有左边和上边有 —— 之前另外三个方向几乎是空的，现在四面八方都有颜色，左上略亮\n'
+    '· 静止时依然一个彩色像素都没有\n'
+    '\n'
+
+    'v0.10.6\n'
     '· 浅色下底栏胶囊的左右两边现在一样清楚（之前左边那圈白光把轮廓盖掉了，看着像只有右边有镜片）\n'
     '· 底栏那圈彩色折射光改成一动就满 —— 之前要滑得很快才明显，正常拖动基本看不出来\n'
     '· 按住拖动时滑块不再随着速度沉回胶囊，「按住」那个凸起全程都在\n'
@@ -103,15 +109,15 @@ const String _changelogZh = 'v0.10.6\n'
     '· 顺手修掉小窗（200×400）下这个弹层的两处布局毛病：三个按钮挤不下时横向溢出、日期那两行的取值放不下\n'
     '\n'
 
-    'v0.9.17\n'
-    '· 桌面小组件那张月历（最大的那张）现在把上个月和下个月的日子连起来一起画了：月头月尾那几格不再是空的，相邻的日数字淡一档、班次照常显示，整张卡读起来是一段连续的日子\n'
-    '· 那张卡的标题行多了左右两个箭头：点一下翻上 / 下月，翻到没有数据的月份那侧会变灰；点中间的月份文字回到今天那个月\n'
-    '· 翻到你关注的月份之后，跨天、跨月都不会把你拽回来 —— 停在你翻到的那个月，直到你自己点回今天\n'
-    '\n'
-
 ;
 
-const String _changelogEn = 'v0.10.6\n'
+const String _changelogEn = 'v0.10.7\n'
+    '· The tab pill’s coloured edge is now a refractive halo — light spreading into the glass and a little beyond it, instead of a ribbon stuck along the rim\n'
+    '· The colour now wraps the whole rim: before, only the left and top had any (the lower right was essentially empty)\n'
+    '· Still nothing coloured at all while the pill is at rest\n'
+    '\n'
+
+    'v0.10.6\n'
     '· In light mode both ends of the tab capsule are equally visible now (a white rim used to erase the outline on the left, so only the right end looked like glass)\n'
     '· The prismatic rim is at full strength the moment the pill moves — before, you had to drag very fast to see it at all\n'
     '· While you hold and drag, the pill no longer sinks back inside the capsule, so the lifted bump stays for the whole drag\n'
@@ -172,12 +178,6 @@ const String _changelogEn = 'v0.10.6\n'
     '· Fixed the end of the todo and alarm lists: once there are enough entries, the last row sat under the floating button (or the button bar on the alarm page) and its delete button could not be tapped. Scrolling to the end now lifts it clear\n'
     '· The "Add a period" dialog now matches the row that opens it: its three labels were a size and a weight lighter (13/w400) and are now 14/w500, like the rest of the page\n'
     '· Also fixed two layout faults in that dialog in a small window (200×400): its buttons overflowed sideways, and the date rows could not fit their value\n'
-    '\n'
-
-    'v0.9.17\n'
-    '· The month widget (the largest one) now draws the previous and next month as well: the empty slots at the start and end of the month are gone, the neighbouring days show a lighter date and their shifts as usual, and the whole card reads as one continuous run of days\n'
-    '· Its title row now has a left and a right arrow: tap to step a month back or forward, and the side with no data left greys out; tap the month name in the middle to jump back to today\n'
-    '· Once you have stepped away, a new day or a new month will not drag you back — you stay on the month you picked until you tap back to today\n'
     '\n'
 
 ;

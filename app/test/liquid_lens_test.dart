@@ -537,19 +537,27 @@ void main() {
     return n;
   }
 
-  testWidgets('彩边比上一版更宽（3px → 4.5px）', (tester) async {
-    // 用户：「现在彩虹边缘的宽度太细了，不太容易察觉，需要再稍微加宽一点点」。
-    // 量**面积**而不是「有没有」—— 3px 那版也过得了上面那条。
+  testWidgets('彩边是「光晕」不是「等宽的带」：带色相的厚度远大于那条细线', (tester) async {
+    // 用户 2026-10-06：「现在给我的感觉就像在这个滑块的边缘加了一层彩带一样。
+    // 我们想要的是加一层折射的光晕。」
+    //
+    // 「彩带」最硬的那条判据就是**等宽** —— 原来那条 4.5px 的彩色描边量出来厚度
+    // 就是 2px（贴边那一条）。光晕是从边缘往里化开的一层，所以带色相的厚度必须
+    // **明显大于那条线本身**（现在线是 2.4px）。
+    //
+    // 标定：上一版（纯描边）**面积 277 / 厚度 2**；这一版 **2092 / 7**。
     const accent = Color(0xFF12B5A5);
     final List<int> px = await shotLens(tester,
         lift: 1, accent: accent, velocity: AppTokens.lensVelocityRef);
     final int area = ringArea(px, accent);
+    final int thickness = ringThickness(px, 60, accent);
     // ignore: avoid_print
-    print('[probe] 彩边面积 = $area 像素（厚度 ${ringThickness(px, 60, accent)}px）');
-    // 标定过：3px 那版量到 **132**，4.5px 这版 **229**（厚度 2 → 3）。阈值取两者之间，
-    // 所以退回 3px 会让这条变红。
-    expect(area, greaterThanOrEqualTo(180),
-        reason: '彩边的面积不够 —— 加宽没生效（3px 那版是 132）');
+    print('[probe] 彩边面积 = $area 像素（厚度 ${thickness}px）');
+    expect(thickness, greaterThan(AppTokens.lensRingWidth * 1.8),
+        reason: '带色相的厚度只有 ${thickness}px，与那条线'
+            '（${AppTokens.lensRingWidth}px）同量级 —— 又回到「一条等宽的彩带」了');
+    expect(area, greaterThanOrEqualTo(1200),
+        reason: '彩边的面积不够 —— 光晕那两层没生效（纯描边那版是 277）');
   });
 
   testWidgets('彩边「一动就满」：形状一模一样时，60px/s 已和满速一样亮', (tester) async {
@@ -583,6 +591,106 @@ void main() {
         greaterThanOrEqualTo((ringArea(fast, accent) * 0.95).round()),
         reason: '60px/s 还没到满效果（${ringArea(slow, accent)} vs '
             '${ringArea(fast, accent)}）—— 门又在跟速度大小走了');
+  });
+
+  /// 两帧在 [center] 附近（半径 [r] 的方框内）有多少个像素**肉眼可见地**不一样。
+  ///
+  /// [minDelta] 是单通道的可见门槛，与 `scripts/diff_visual.py` 同一个值（8）。
+  /// **不设门槛的话这条判据没有鉴别力** —— 环的底面即使压到 0.06，也还是会让像素
+  /// 动 1~2 级，`a[i] != b[i]` 照样为真（第一版就是这么写的，反向验证时才发现）。
+  ///
+  /// **也别用「色相偏离主色」来判**：色相沿轮廓走 300°，在**正右那一点正好绕回
+  /// 主色**，色相偏离恒为 0。判「看不看得见」的正确量法是**与「不画环」那一帧
+  /// 做差**，且带一个可见门槛。
+  int diffNear(List<int> a, List<int> b, Offset center,
+      {int r = 6, int minDelta = 8}) {
+    int n = 0;
+    for (int y = (center.dy - r).round(); y <= (center.dy + r).round(); y++) {
+      for (int x = (center.dx - r).round(); x <= (center.dx + r).round(); x++) {
+        if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) continue;
+        final int i = (y * canvas.width.toInt() + x) * 4;
+        int d = 0;
+        for (int c = 0; c < 3; c++) {
+          final int v = (a[i + c] - b[i + c]).abs();
+          if (v > d) d = v;
+        }
+        if (d >= minDelta) n++;
+      }
+    }
+    return n;
+  }
+
+  /// 透镜在 `shotLens` 那张画布里的几何（都是算出来的，不是估的）：
+  /// itemW = 胶囊宽 120、pad 0、centerPage 0 → 中心在画布 (60, 28 + 32)；
+  /// lift=1 / 满形变时半宽 `120×1.2+10 ÷ 2 = 77`、半高 `(64×0.92+20) ÷ 2 = 39.4`。
+  const Offset lensCenter = Offset(60, 60);
+  const double lensHalfW = 77, lensHalfH = 39.4;
+
+  testWidgets('彩边四面八方都有颜色：右边与下边不许是空的', (tester) async {
+    // 用户 2026-10-06：「不管我往左滑还是往右滑，感觉只有左边和上边有彩边，
+    // 右边和下边缘都没有。」
+    //
+    // 根因在算式里：`α = (0.06 + 0.86·toward²) · motion`，而 `toward` 的峰值
+    // 锚在 225°（左上）、并且**又平方了一次**。代进八个方位：
+    //   左上 **0.92** / 左 0.69 / 上 0.69 / 右上 0.28 / 左下 0.28 /
+    //   右 **0.08** / 下 **0.08** / 右下 **0.06** —— 后三档等于没有颜色。
+    // 它画在**固定的屏幕方位**上，所以与往哪边滑无关（用户观察到的正是这一点，
+    // 也是这条判据的鉴别力所在：跟着运动方向走的写法过不了这一组）。
+    //
+    // 量法：与**同一枚透镜但不画环**的那一帧做差 —— 有差 = 那里看得见。
+    //
+    // ⚠️ **对照帧必须把 `stretch` 显式钉住、速度只留一个正值**（第一版写的是
+    // `velocity: 0`，那会**连带把形状也改掉**，于是两帧到处都不一样、这条判据
+    // 变成永远为真 —— 反向验证时才发现）。`movingRight` 也要一致，所以速度取 1
+    // 而不是 0：`motion` 只有 0.017，落在 0.05 那道门之下 = 不画。
+    const accent = Color(0xFF12B5A5);
+    final List<int> on = await shotLens(tester,
+        lift: 1, accent: accent, velocity: AppTokens.lensVelocityRef,
+        stretch: 1);
+    final List<int> off = await shotLens(tester,
+        lift: 1, accent: accent, velocity: 1, stretch: 1);
+    for (final MapEntry<String, Offset> e in <String, Offset>{
+      '右': Offset(lensCenter.dx + lensHalfW, lensCenter.dy),
+      '下': Offset(lensCenter.dx, lensCenter.dy + lensHalfH),
+      '右下': Offset(lensCenter.dx + lensHalfW * 0.7,
+          lensCenter.dy + lensHalfH * 0.7),
+      '右上': Offset(lensCenter.dx + lensHalfW * 0.7,
+          lensCenter.dy - lensHalfH * 0.7),
+      '上': Offset(lensCenter.dx, lensCenter.dy - lensHalfH), // 对照组：本来就有
+    }.entries) {
+      expect(diffNear(on, off, e.value), greaterThan(0),
+          reason: '${e.key}边一个像素都没被彩边影响 —— 彩边又被锚在左上那一侧了');
+    }
+  });
+
+  testWidgets('光晕往**外**也散一点：轮廓之外也受影响', (tester) async {
+    // 用户 2026-10-06：「往外也散一点」。这一档必须画在裁剪**之外**才有 ——
+    // 本体那层挂在 `ClipPath` 底下，外半边会被裁掉（那就是「只往内散」的实现方式）。
+    const accent = Color(0xFF12B5A5);
+    final List<int> on = await shotLens(tester,
+        lift: 1, accent: accent, velocity: AppTokens.lensVelocityRef,
+        stretch: 1);
+    final List<int> off = await shotLens(tester,
+        lift: 1, accent: accent, velocity: 1, stretch: 1);
+    // 轮廓右侧外 6px 一小块：本体够不到那里，只有外溢光晕能到。
+    expect(diffNear(on, off, Offset(lensCenter.dx + lensHalfW + 6, lensCenter.dy),
+            r: 4),
+        greaterThan(0),
+        reason: '轮廓外一点都没变 —— 外溢那层没画（或被裁掉了）');
+  });
+
+  testWidgets('静止时轮廓外的像素与主色无关（光晕没在静止时画）', (tester) async {
+    // 两帧只有主色不同、几何完全一样。**静止时不画环也不画光晕**，所以轮廓外
+    // 那些像素不该随主色变 —— 变了就说明有东西在静止时漏出来了。
+    final List<int> teal =
+        await shotLens(tester, lift: 1, accent: const Color(0xFF12B5A5));
+    final List<int> orange =
+        await shotLens(tester, lift: 1, accent: const Color(0xFFF08800));
+    expect(
+        diffNear(teal, orange, Offset(lensCenter.dx + lensHalfW + 6, lensCenter.dy),
+            r: 4),
+        0,
+        reason: '静止时轮廓外还随主色变 —— 那圈光晕没跟着 motion 一起灭');
   });
 
   test('几何在任何尺寸 × 任何速度下都画得出东西（参数化扫一遍）', () {

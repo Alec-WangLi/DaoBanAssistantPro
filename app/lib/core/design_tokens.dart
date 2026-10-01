@@ -119,8 +119,38 @@ class AppTokens {
   static const double lensIconRingSigma = 0.45;
 
   /// 光谱环的线宽（与压在它上面的白芯）。
-  static const double lensRingWidth = 4.5;
-  static const double lensRingCoreWidth = 1.2;
+  ///
+  /// **4.5 → 2.4**（2026-10-06）：它原来是一条**等宽**的彩色描边，而用户的原话是
+  /// 「现在给我的感觉就像在这个滑块的边缘加了一层彩带一样。我们想要的是加一层
+  /// 折射的光晕」。等宽 + 硬边正是「彩带」读感的来源，所以这条收细、让位给
+  /// 底下那两层光晕（见 [lensHaloWidth]）。
+  static const double lensRingWidth = 2.4;
+  static const double lensRingCoreWidth = 1.0;
+
+  /// **折射光晕**：同一条扫掠渐变，画得又宽又糊。
+  ///
+  /// 这一层是消掉「彩带」读感的关键 —— 一条等宽、带硬边的彩色描边读作「贴在表面
+  /// 的彩带」；**从边缘往里化开、没有硬边**的一层才读作「光在玻璃里」。
+  ///
+  /// 它挂在本体那层 `ClipPath` 底下（`LiquidLens` 的 `body`），所以外半边被裁掉，
+  /// **只往轮廓里面散**；往外那一份由 [lensGlowWidth] 那层单独负责。
+  ///
+  /// 两层、色相各偏一点（−30° 与 +22°）：真色散会把光谱**摊开**，同一处边缘能
+  /// 看到相邻的两个色调。一层的话仍然只是「一个颜色一个位置」。
+  static const double lensHaloWidth = 22;
+  static const double lensHaloBlur = 6;
+  static const double lensHaloInnerWidth = 12;
+  static const double lensHaloInnerBlur = 3;
+
+  /// **外溢光晕**：画在裁剪**之外**那一层，往外也散一点。
+  ///
+  /// 本体画不到轮廓外面（那正是「只往内散」的实现方式），所以要单开一层 ——
+  /// 与浮起阴影同一层位。用户 2026-10-06：「往外也散一点」。
+  ///
+  /// 代价是那枚水滴的轮廓会被一圈很淡的颜色裹住 —— 那是**有意**的，真的折射也会
+  /// 在玻璃边外侧留下一条亮边。
+  static const double lensGlowWidth = 24;
+  static const double lensGlowBlur = 7;
 
   /// 光谱环「一动就满」的速度阈值（px/s）。
   ///
