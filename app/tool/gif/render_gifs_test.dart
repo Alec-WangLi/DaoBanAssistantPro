@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
@@ -203,6 +204,76 @@ void main() {
       );
     });
   }
+  // ③ 分段器 · 液态 · 拖到下一格。
+  //
+  //    与底栏那条同源：按住提起 → 拖动时滴沿运动方向拉伸、边缘彩边渐入 →
+  //    松手落回。**出帧必须 16ms**（弹簧每帧积分封顶在 `lensMaxStep`），
+  //    合成时用 `--fps 60` 还原实时。
+  testWidgets('分段器 · 液态 · 拖动 · light', (WidgetTester tester) async {
+    useLiquidGlassTier();
+    late TestGesture gesture;
+    bool released = false;
+    await renderFrames(
+      tester,
+      prefix: 'seg_liquid_',
+      home: const _SegmentGifHost(),
+      overrides: const <Override>[],
+      count: 100,
+      step: const Duration(milliseconds: 16),
+      onFrame: (WidgetTester t, int i) async {
+        if (i == 0) {
+          final Rect box = t.getRect(find.byType(GlassSegment));
+          gesture = await t.startGesture(
+              Offset(box.left + box.width * 0.18, box.center.dy));
+          addTearDown(() {
+            if (!released) return gesture.up();
+            return Future<void>.value();
+          });
+          await t.pump(const Duration(milliseconds: 16));
+        } else if (i <= 24) {
+          // 按住 380ms：过按住闸门，滴提起来
+        } else if (i <= 78) {
+          await gesture.moveBy(const Offset(2.5, 0)); // 拖过去
+        } else if (i == 79) {
+          await gesture.up();
+          released = true;
+        }
+      },
+    );
+  });
+
+  // ④ 开关 · 液态 · **按住拉长**。
+  //
+  //    用户 2026-10-01：「按住的时候不是要放大吗？那就要做成往纵向放大，
+  //    参考 iOS 26 他们的开关液态玻璃那种形状变化」。
+  testWidgets('开关 · 液态 · 按住 · light', (WidgetTester tester) async {
+    useLiquidGlassTier();
+    late TestGesture gesture;
+    bool released = false;
+    await renderFrames(
+      tester,
+      prefix: 'switch_liquid_',
+      home: const _SwitchGifHost(),
+      overrides: const <Override>[],
+      count: 80,
+      step: const Duration(milliseconds: 16),
+      onFrame: (WidgetTester t, int i) async {
+        if (i == 0) {
+          final Rect box = t.getRect(find.byType(GlassSwitch).last);
+          gesture = await t.startGesture(box.center);
+          addTearDown(() {
+            if (!released) return gesture.up();
+            return Future<void>.value();
+          });
+          await t.pump(const Duration(milliseconds: 16));
+        } else if (i == 70) {
+          await gesture.up();
+          released = true;
+        }
+      },
+    );
+  });
+
 }
 
 /// 开关特写用的板子：一行「开」一行「关」，落在中性的页面底色上 ——
@@ -230,5 +301,56 @@ class _SwitchBoard extends StatelessWidget {
         ),
       ),
     );
-  }
+}
+}
+
+/// 一屏只放三段分段器（液态档下拍拖动）。
+class _SegmentGifHost extends StatelessWidget {
+  const _SegmentGifHost();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTokens.space2xl),
+            child: GlassSegment(
+              count: 3,
+              selectedIndex: 0,
+              height: 40,
+              onSelected: (int _) {},
+              itemBuilder: (int i, bool sel) => Text(
+                <String>['跟随系统', '浅色', '深色'][i],
+                style: AppTokens.rowPrimary.copyWith(
+                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+/// 三枚开关（液态档下拍「按住拉长」）。
+class _SwitchGifHost extends StatelessWidget {
+  const _SwitchGifHost();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              GlassSwitch(value: true, onChanged: _ignore),
+              SizedBox(height: AppTokens.space2xl),
+              GlassSwitch(value: false, onChanged: _ignore),
+              SizedBox(height: AppTokens.space2xl),
+              GlassSwitch(value: true, onChanged: _ignore),
+            ],
+          ),
+        ),
+      );
+
+  static void _ignore(bool _) {}
 }

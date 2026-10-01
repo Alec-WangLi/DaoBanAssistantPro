@@ -40,7 +40,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.8\n'
+const String _changelogZh = 'v0.10.9\n'
+    '· 液态玻璃推广到另外两个面：分段器（主题模式 / 主色调 / 语言那几排）与开关\n'
+    '· 分段器选中那一块现在是一枚玻璃滴：按住会提起来、拖动跟手、边缘带一圈彩色折射光\n'
+    '· 开关改成玻璃轨道：开着的时候玻璃里透着一层主色；按住时那枚钮会纵向拉长（宽度不变，参考 iOS 26）\n'
+    '· 关掉液态玻璃时，这两处与之前一模一样\n'
+    '\n'
+
+    'v0.10.8\n'
     '· 底栏滑块那圈彩色的范围收紧了：外面那层从伸出约 33px 收到约 12px，里面也收了一半 —— 之前散得太开，像一片光雾\n'
     '· 彩边改成渐入渐出：手一动约 0.2 秒亮起来，手停下约 0.4 秒淡下去，不再是一动就「啪」地出现、一停就突然没了\n'
     '· 静止时依旧一点彩色都没有\n'
@@ -102,14 +109,16 @@ const String _changelogZh = 'v0.10.8\n'
     '· 清空重置现在真的回到刚安装的样子：排班、日程、闹钟、模板、你保存的铃声与外观设置一起清掉\n'
     '\n'
 
-    'v0.9.19\n'
-    '· 修好弹窗里的按钮跑到左边：上一版为了让小窗（200×400）下「删除 / 取消 / 保存」这种多按钮弹窗不横向溢出，动了弹窗共用的按钮行 —— 结果全 App 的弹窗（版本更新、删除确认、排班时段……）的按钮都变成了靠左。现在恢复靠右，小窗该折行的照样折行\n'
-    '· 编辑排班页底部那颗「保存并重排闹钟」不再垫着一条挡板：它是浮在正文上的，界面滑到它下面时能看见内容从底下穿过去（此前正文到那条按钮带的上沿就被硬切，下面露出一整片平色）。滑到底时最后一张卡会整个抬到按钮上面，不会被压住\n'
-    '\n'
-
 ;
 
-const String _changelogEn = 'v0.10.8\n'
+const String _changelogEn = 'v0.10.9\n'
+    '· Liquid glass now covers two more surfaces: the segmented controls (theme mode, accent colour, language) and the switches\n'
+    '· A segment’s selected block is now a glass droplet: it lifts when held, follows your drag, and carries a rim of chromatic light\n'
+    '· Switches are now a glass track, tinted with the accent when on; press and the knob stretches vertically (same width, after iOS 26)\n'
+    '· With liquid glass off, both look exactly as they did before\n'
+    '\n'
+
+    'v0.10.8\n'
     '· The coloured rim on the tab pill is much tighter: the outer spread went from about 33px to about 12px, and the inner one came in by half — it used to read as a haze of light rather than glass\n'
     '· The rim now fades in and out: about 0.2s to light up when you start moving, about 0.4s to fade when you stop, instead of snapping on and off\n'
     '· Still nothing coloured at all while the pill is at rest\n'
@@ -169,11 +178,6 @@ const String _changelogEn = 'v0.10.8\n'
     '· Fixed a batch of issues from testing: overlapping text in the widget, calendar text cut off with a large system font, the last row of the todo and alarm lists sitting under the floating button, dialog buttons jumping to the left, dialog text sliced off by the button row, and a midnight shift\'s alarm landing on the shift day instead of the evening before\n'
     '· The Me page descriptions were rewritten, with a new "Home-screen widgets" entry (how to add the cards, and why an update needs one app launch)\n'
     '· Clear & reset really does return the app to a fresh install: schedules, events, alarms, templates, the ringtone you saved and the appearance settings all go\n'
-    '\n'
-
-    'v0.9.19\n'
-    '· Fixed dialog buttons moving to the left: the last version changed the shared button row so that dialogs with several buttons (Delete / Cancel / Save) would not overflow in a small window (200×400) — which pushed the actions of every dialog in the app (update notes, delete confirmations, schedule periods…) to the left. They are right-aligned again, and still wrap on narrow windows\n'
-    '· The "Save & reschedule alarms" button at the bottom of the schedule editor no longer sits on a plate: it floats over the page, so content scrolls underneath it (until now the list was cut off at the top edge of that bar with a flat band below it). Scrolling to the end now lifts the last card clear of the button\n'
     '\n'
 
 ;
