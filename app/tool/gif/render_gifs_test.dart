@@ -19,11 +19,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:shiftassistantpro/core/widgets/glass_check.dart';
 import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
 
 import '../visual/visual_harness.dart';
 
@@ -355,6 +358,78 @@ void main() {
             await t.tap(find.byType(GlassCheck).first); // 勾上
           } else if (i == 44) {
             await t.tap(find.byType(GlassCheck).first); // 再点一下取消
+          }
+        },
+      );
+    });
+  }
+
+  // ⑥ 弹窗的**凝聚**入场 / 消散退场。
+  //
+  //    起点小一圈、糊一层，过程中一起收敛到清晰 —— 玻璃该有的样子是「从模糊里
+  //    凝出来」，而不是一张不透明卡片被点亮。驱动用的是路由自己的动画，所以退场
+  //    不用另写一份。
+  //
+  //    取「开始使用」那个弹窗：内容够长（九条带圆点的短句），凝聚过程在白底上
+  //    也看得出来；而且它是纯文案、不用库。
+  for (final v in _modes) {
+    testWidgets('弹窗 · 凝聚入场 · ${v.suffix}', (WidgetTester tester) async {
+      final GlobalKey host = GlobalKey();
+      await renderFrames(
+        tester,
+        prefix: 'dialog_condense_${v.suffix}_',
+        home: Scaffold(key: host, body: const SizedBox.expand()),
+        overrides: const <Override>[],
+        brightness: v.brightness,
+        count: 22,
+        step: const Duration(milliseconds: 16),
+        onFrame: (WidgetTester t, int i) async {
+          if (i == 0) showGettingStartedDialog(host.currentContext!);
+        },
+      );
+    });
+  }
+
+  // ⑦ 响铃页那枚「上滑关闭」的滴（v0.10.13 把它从手搓的白圆钮换成真的玻璃滴）。
+  //
+  //    拍「按住提起 → 跟着手指拉长 → 没到阈值弹回去」一整段。**故意不拖到 0.7**
+  //    （阈值）：到了就 `_finish()` 把整页 pop 掉，GIF 结尾会是一片黑。
+  for (final v in _modes) {
+    testWidgets('响铃 · 上滑关闭的玻璃滴 · ${v.suffix}', (WidgetTester tester) async {
+      // 这枚药丸挂在了液态玻璃开关后面（两条档位两棵树），所以必须拨到液态档 ——
+      // 顺带这条也钉住「液态档真的画了东西」：标准档那棵树上没有 `LiquidLens`，
+      // 下面 `find.byType(LiquidLens)` 会当场抛。
+      useLiquidGlassTier();
+      addTearDown(useStandardGlassTier);
+      late TestGesture g;
+      bool released = false;
+      await renderFrames(
+        tester,
+        prefix: 'ring_dismiss_${v.suffix}_',
+        home: const AlarmRingingScreen(label: '早班'),
+        overrides: const <Override>[],
+        brightness: v.brightness,
+        count: 100,
+        step: const Duration(milliseconds: 16),
+        onFrame: (WidgetTester t, int i) async {
+          if (i == 0) {
+            // 位置从树上量，别按算式猜 —— 轨道底边离屏幕底多少是布局说了算的。
+            final Offset c = t.getRect(find.byType(LiquidLens)).center;
+            g = await t.startGesture(c);
+            addTearDown(() {
+              if (released) return Future<void>.value();
+              return g.up();
+            });
+          } else if (i <= 10) {
+            // 按住 ~160ms。**别指望这期间会「提起」** —— 竖向拖动识别器要等手指
+            // 走掉 `kTouchSlop`（18px）才算开始，`onVerticalDragStart` 根本还没跑。
+          } else if (i <= 48) {
+            // 一路往上；⚠️ 前 18px 是空走的，要算进去，否则拖不到六成就松手、
+            // 看不出「跟着手指拉长」。
+            await g.moveBy(const Offset(0, -3.6));
+          } else if (i == 49) {
+            await g.up(); // 没到 0.7 的阈值 → 弹回去
+            released = true;
           }
         },
       );

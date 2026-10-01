@@ -30,6 +30,9 @@ const List<String> _allowed = <String>[
   'lib/core/widgets/glass_check.dart', // 待办那个勾
   'lib/core/widgets/glass_segment.dart', // 分段器
   'lib/core/widgets/glass_switch.dart', // 开关
+  // 响铃页那枚「上滑关闭」的药丸（2026-10-01 用户拍板：「同时挂在液态玻璃开关
+  // 后面……要像底栏那样分一棵树出来」）。
+  'lib/features/alarm/alarm_ringing_screen.dart',
 ];
 
 const String _needle = 'liquidGlassActive';
@@ -82,6 +85,7 @@ void main() {
         'lib/core/widgets/glass_check.dart',
         'lib/core/widgets/glass_segment.dart',
         'lib/core/widgets/glass_switch.dart',
+        'lib/features/alarm/alarm_ringing_screen.dart',
         'lib/features/home/glass_nav_bar.dart',
       ],
       reason: '去掉豁免后应**恰好**命中这两处（定义处 + 底栏）：\n'

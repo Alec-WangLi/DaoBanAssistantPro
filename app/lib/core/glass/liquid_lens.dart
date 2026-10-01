@@ -239,6 +239,23 @@ class LiquidLensShape {
   double get leftRadius => movingRight ? _trailing : _leading;
   double get rightRadius => movingRight ? _leading : _trailing;
 
+  /// 端头圆在**横轴**（`capsuleH` 那一轴）上的实际半径 —— **折边要的是这一对**。
+  ///
+  /// ⚠️ **别拿 [leftRadius] / [rightRadius] 去折边。** 那两个是**沿运动方向那一轴**
+  /// 的半径；而在**竖直档**（`宽 <= 高`，即「比宽还高」的那些滴）里它们被
+  /// `_cap = min(高, 宽) / 2` 钳住 —— 那道钳位是「两个端头圆不许互相吞掉」的兜底，
+  /// 代价是它**永远够不到胶囊的边**，于是一枚竖直档的滴**折边一次都不会亮**。
+  /// 实际轮廓的横向半高是 `height / 2`（`_verticalStretched` 正是按
+  /// `h / (2 · capV)` 把局部那两个圆拉开的）。
+  ///
+  /// 横向档下 `_cap` 恰好就等于 `height / 2`（那一档只在 `宽 > 高` 时走到，
+  /// 于是 `min` 取到的总是高），所以换成这一对**对底栏与分段器的渲染一个像素都不变**。
+  double get leftCrossRadius => movingRight ? _trailingCross : _leadingCross;
+  double get rightCrossRadius => movingRight ? _leadingCross : _trailingCross;
+
+  double get _leadingCross => height / 2;
+  double get _trailingCross => height / 2 * (1 - 0.35 * stretch);
+
   /// 轮廓：两端是**圆心同在水平中轴、半径可以不同**的圆，中间用两段**外公切线**
   /// 连起来。半径相等时退化成标准胶囊。
   ///
@@ -339,6 +356,7 @@ class LiquidLens extends StatelessWidget {
     this.fill,
     this.showRingCore = true,
     this.showRefractedEdge = true,
+    this.restEdge = 0,
   });
 
   /// 它依附的那块胶囊的完整尺寸（局部坐标的边界，原点在胶囊左上角）。
@@ -372,6 +390,17 @@ class LiquidLens extends StatelessWidget {
   /// 小控件上要关掉：它画的是**容器**的上下沿在透镜里的弯折，而开关的钮只有 22px
   /// 宽，那几道弧读起来是乱线。
   final bool showRefractedEdge;
+
+  /// **静止时也画的那一圈边缘高光**（0 = 不画，默认）。
+  ///
+  /// 光谱那几层全被 `motion` 关着 ——「静止时一个彩色像素都没有」是 v0.10.7 为底栏
+  /// 定的规矩，而底栏那枚旁边有图标与胶囊衬着、不缺这一圈。**落在深色页面上的独苗**
+  /// 不一样：静止时它只是一块平色，读起来像漆不像玻璃 ——「响铃页那枚上滑关闭的
+  /// 药丸」就是（用户 2026-10-01：「给它一档边缘高光，它会立刻读成玻璃」）。
+  ///
+  /// ⚠️ **默认 0，既有四处（底栏 / 分段器 / 开关 / 勾）一位都不动** —— 它们有
+  /// 「逐像素不变」的验收在。0 时那一层**连加都不加**（不是画一层透明的）。
+  final double restEdge;
 
   @override
   Widget build(BuildContext context) {
@@ -430,8 +459,68 @@ class LiquidLens extends StatelessWidget {
         height: box.height,
         child: IgnorePointer(child: body),
       ),
+      // ③ 静止时也画的那圈边缘高光（见 [restEdge]）。**压在轮廓上**（内一半、
+      // 外一半）—— 挂进本体那层 `ClipPath` 的话只剩内半边，读起来是一条内衬线。
+      if (restEdge > 0)
+        Positioned(
+          left: -m,
+          top: -m,
+          width: box.width,
+          height: box.height,
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _LensEdgePainter(
+                  shape: shape, origin: origin, amount: restEdge),
+            ),
+          ),
+        ),
     ]);
   }
+}
+
+/// **静止时也画的那一圈边缘高光**（见 [LiquidLens.restEdge]）。
+///
+/// 用**竖直渐变**（上亮下淡）而不是等宽纯白：与 `CapsuleRimPainter` 同一套读法，
+/// 等宽白线会读成「贴了一圈贴纸」。
+class _LensEdgePainter extends CustomPainter {
+  const _LensEdgePainter({
+    required this.shape,
+    required this.origin,
+    required this.amount,
+  });
+
+  final LiquidLensShape shape;
+  final Offset origin;
+
+  /// 0..1 的浓度。
+  final double amount;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Path p = _lensPath(shape, origin);
+    canvas.drawPath(
+      p,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Colors.white.withValues(alpha: 0.40 * amount),
+            Colors.white.withValues(alpha: 0.06 * amount),
+          ],
+        ).createShader(p.getBounds()),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LensEdgePainter old) =>
+      old.amount != amount ||
+      old.origin != origin ||
+      old.shape.centerX != shape.centerX ||
+      old.shape.width != shape.width ||
+      old.shape.height != shape.height;
 }
 
 /// 把绘制坐标系从「这块画布」搬回「胶囊左上角」。
@@ -629,8 +718,11 @@ class _LensGlowPainter extends CustomPainter {
 ({double xL, double xR, double bow, double fade})? refractedCapsuleEdge(
     LiquidLensShape shape) {
   final double cy = shape.centerY;
-  final double rl = shape.leftRadius;
-  final double rr = shape.rightRadius;
+  // **横轴的半径**，不是 `leftRadius` / `rightRadius`（那两个是沿运动轴的）——
+  // 胶囊的两条边就躺在横轴上，而在竖直档里那一对被钳住、够不到边。
+  // 详见 `LiquidLensShape.leftCrossRadius` 的说明。
+  final double rl = shape.leftCrossRadius;
+  final double rr = shape.rightCrossRadius;
 
   // 凸出量取**较大的那一端**：前缘总是先够到，后缘因为被压扁会晚一步。
   final double reach = math.max(rl, rr) - cy;
@@ -638,10 +730,27 @@ class _LensGlowPainter extends CustomPainter {
 
   // 钳到相切：`r = cy` 时 `sqrt(r² − cy²) = 0`，端点落在端头圆的竖直切线上。
   // 于是 r 从 cy 上方往下掉时，那一端是**连续地往回收**，不是整条消失。
-  final double sL = math.sqrt(math.max(0, rl * rl - cy * cy));
-  final double sR = math.sqrt(math.max(0, rr * rr - cy * cy));
-  final double xL = shape.centerX - shape.width / 2 + rl - sL;
-  final double xR = shape.centerX + shape.width / 2 - rr + sR;
+  final double xL;
+  final double xR;
+  if (shape.width <= shape.height) {
+    // **竖直档**：局部那枚滴其实是个**椭圆** —— `_verticalStretched` 把半径为
+    // `宽 / 2` 的正圆纵向拉开了 `h / w` 倍。它在边线（`y = 0` / `capsuleH`）上的
+    // 弦长 = `宽 · √(1 − (2·cy / h)²)`，两端对称于中轴。
+    //
+    // ⚠️ **横向档那套算式在这里不成立，而且失败方式很隐蔽**：那里的圆心是
+    // `centerX ± (宽/2 − r)`，而竖直档里 `r`（= `h / 2`）比 `宽 / 2` 还大 ——
+    // 两个圆心会**跑到对方的另一侧**，算出来的 xL / xR 挤在中间变成一小段弓，
+    // 画出来是滴正中间一道莫名其妙的短弧，而不是「边被折了」。
+    final double k = (2 * cy / shape.height).clamp(0.0, 1.0);
+    final double half = shape.width / 2 * math.sqrt(math.max(0, 1 - k * k));
+    xL = shape.centerX - half;
+    xR = shape.centerX + half;
+  } else {
+    final double sL = math.sqrt(math.max(0, rl * rl - cy * cy));
+    final double sR = math.sqrt(math.max(0, rr * rr - cy * cy));
+    xL = shape.centerX - shape.width / 2 + rl - sL;
+    xR = shape.centerX + shape.width / 2 - rr + sR;
+  }
   // 纯防御：可达区间（lift ≥ 0.6）里这个跨度约 35~74，够不着。
   if (xR - xL < 2) return null;
 

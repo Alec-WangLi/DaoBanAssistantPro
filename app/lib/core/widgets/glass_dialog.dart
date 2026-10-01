@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
@@ -71,7 +73,8 @@ class _GlassDialogState extends State<GlassDialog> {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-      child: Container(
+      child: _Materialize(
+        child: Container(
         // 给测试一个抓手：断言「操作按钮在面板里」（见 todo_dialog_test.dart
         // 的键盘用例 —— 按钮被挤出面板时，点它只会点到遮罩）。
         key: const Key('glass-dialog-panel'),
@@ -133,6 +136,7 @@ class _GlassDialogState extends State<GlassDialog> {
           ],
         ),
         ),
+      ),
       ),
     );
   }
@@ -259,6 +263,55 @@ class _GlassCloseButton extends StatelessWidget {
               size: AppTokens.iconMd, color: onSurface),
         ),
       ),
+    );
+  }
+}
+
+/// 弹窗的**凝聚**入场 / **消散**退场。
+///
+/// 现成的 `showDialog` 只把面板淡进来，读起来像一张不透明卡片被点亮 —— 而玻璃该有的
+/// 样子是「从模糊里凝出来」：起点小一圈、糊一层，过程中一起收敛到清晰锐利。
+///
+/// 驱动用的是**路由自己的**动画（`ModalRoute.of(context).animation`）：入场是它
+/// 0→1、退场是它 1→0，所以退场不用另写一份 —— 正是「消散」。两条曲线分开：入场
+/// 用 `easeOutCubic`（一开始就冲、尾巴缓缓落定），退场用 `easeInCubic`（先慢慢化开、
+/// 最后迅速散掉）；只喂一条曲线的话，退场会一直保持满尺寸、到最后几帧才「啪」地不见。
+///
+/// **安定之后直接返回原样的子树**（`t >= 1`）：否则每一帧都要为一块 420 宽的面板
+/// 付一层 `saveLayer`，而弹窗是常驻的。
+class _Materialize extends StatelessWidget {
+  const _Materialize({required this.child});
+
+  final Widget child;
+
+  /// 起点缩到多小、起点糊多厚。
+  static const double _minScale = 0.92;
+  static const double _blurSigma = 9;
+
+  @override
+  Widget build(BuildContext context) {
+    final Animation<double>? route = ModalRoute.of(context)?.animation;
+    if (route == null) return child;
+    return AnimatedBuilder(
+      animation: route,
+      builder: (BuildContext context, Widget? inner) {
+        final double raw = route.value.clamp(0.0, 1.0);
+        if (raw >= 1) return inner!;
+        final bool leaving = route.status == AnimationStatus.reverse;
+        final double t =
+            (leaving ? Curves.easeInCubic : Curves.easeOutCubic).transform(raw);
+        final double blur = _blurSigma * (1 - t);
+        Widget out = Transform.scale(scale: _minScale + (1 - _minScale) * t,
+            child: inner);
+        if (blur > 0.05) {
+          out = ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+            child: out,
+          );
+        }
+        return Opacity(opacity: t, child: out);
+      },
+      child: child,
     );
   }
 }

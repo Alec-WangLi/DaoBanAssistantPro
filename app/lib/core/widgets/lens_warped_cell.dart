@@ -74,3 +74,60 @@ class LensWarpedCell extends StatelessWidget {
     );
   }
 }
+
+/// 与 [LensWarpedCell] **同一份算式、换一根轴** —— 给**竖着走**的透镜用。
+///
+/// 响铃页那枚「上滑关闭」的药丸是竖着走的，[LensWarpedCell] 的参数全是 x，套不上去。
+/// 这里读的仍然是同一份纯函数 [lensIconWarp]，只把它的三个返回值换个轴用：位移落到
+/// **dy** 上，两个缩放**互换** —— 因为「被挤」永远是**垂直于透镜运动方向**的那一根。
+///
+/// ⚠️ **[lensCenterY] 是个回调、每帧问一次**，不是值：透镜位置在这里由
+/// `AnimationController` 驱动，只有重建时才算得出它（传值的话拿到的永远是上一帧）。
+class LensWarpedVertical extends StatelessWidget {
+  const LensWarpedVertical({
+    super.key,
+    required this.listenable,
+    required this.itemCenterY,
+    required this.lensCenterY,
+    required this.halfHeight,
+    required this.child,
+  });
+
+  /// 什么时候重算 —— 驱动透镜位置的**那一串** `Listenable` 的合并。
+  final Listenable listenable;
+
+  /// 这一块内容中心在**轨道局部坐标**里的 y（从轨道顶端量起、向下为正）。
+  final double itemCenterY;
+
+  /// 透镜中心，同一套坐标。**每帧问一次。**
+  final double Function() lensCenterY;
+
+  /// 透镜的半高，用**满升程**那个值 —— 与 [LensWarpedCell.halfWidth] 同一条理由：
+  /// 它随升程只变一点点，而权重本来就是一条软的钟形。
+  final double halfHeight;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: listenable,
+      child: child,
+      builder: (BuildContext context, Widget? child) {
+        final ({double scaleX, double scaleY, double dx}) w = lensIconWarp(
+          iconCenterX: itemCenterY,
+          lensCenterX: lensCenterY(),
+          lensHalfWidth: halfHeight,
+        );
+        if (w.scaleX == 1.0 && w.dx == 0.0) return child!;
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..translateByDouble(0, w.dx, 0, 1)
+            ..scaleByDouble(w.scaleY, w.scaleX, 1, 1),
+          child: child,
+        );
+      },
+    );
+  }
+}
