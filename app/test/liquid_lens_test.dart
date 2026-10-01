@@ -365,6 +365,9 @@ void main() {
     double velocity = 0,
     double? stretch,
     double? motion,
+    List<Color>? fill,
+    bool showRingCore = true,
+    bool showRefractedEdge = true,
   }) async {
     tester.view.physicalSize = canvas;
     tester.view.devicePixelRatio = 1.0;
@@ -409,6 +412,9 @@ void main() {
                   lift: lift,
                   isDark: false,
                   accent: accent,
+                  fill: fill,
+                  showRingCore: showRingCore,
+                  showRefractedEdge: showRefractedEdge,
                 ),
               ),
             ]),
@@ -475,6 +481,57 @@ void main() {
         lift: 1, accent: const Color(0xFF12B5A5));
     expect(brightestRow(px, 60, top, top + 10), greaterThan(top + 1),
         reason: '透镜中心那一列上，最亮的还是胶囊上沿本身 —— 那条边没被折进去');
+  });
+
+  testWidgets('本体填充可换：白玻璃与主色渐变必须是两幅像素', (tester) async {
+    // 开关那枚钮是**白玻璃球**（底栏 / 分段器是主色玻璃滴）—— 压在淡染轨道上，
+    // 主色玻璃滴会糊成一片。所以本体填充必须能换。
+    const accent = Color(0xFF12B5A5);
+    final List<int> tinted = await shotLens(tester, lift: 0, accent: accent);
+    final List<int> white = await shotLens(tester, lift: 0, accent: accent,
+        fill: <Color>[Colors.white, Colors.white]);
+    int at(List<int> px, int x, int y, int c) =>
+        px[(y * canvas.width.toInt() + x) * 4 + c];
+    // 本体正中（透镜中心 = (60, 60)，见 shotLens 的几何）
+    int worst = 0;
+    for (int c = 0; c < 3; c++) {
+      final int d = (at(tinted, 60, 60, c) - at(white, 60, 60, c)).abs();
+      if (d > worst) worst = d;
+    }
+    expect(worst, greaterThan(20),
+        reason: '换了 fill 本体却没变（最大差 $worst）—— 参数没接到 painter 上');
+  });
+
+  testWidgets('白芯可以关掉（白本体上它是一条看不见的线）', (tester) async {
+    const accent = Color(0xFF12B5A5);
+    final int top = ((canvas.height - capsule.height) / 2).round();
+    int brightest(List<int> px) {
+      int best = 0;
+      for (int y = top - 2; y <= top + 4; y++) {
+        final int v = px[(y * canvas.width.toInt() + 60) * 4];
+        if (v > best) best = v;
+      }
+      return best;
+    }
+
+    final List<int> on = await shotLens(tester, lift: 0, accent: accent);
+    final List<int> off = await shotLens(tester, lift: 0, accent: accent,
+        showRingCore: false);
+    expect(brightest(on), greaterThan(brightest(off) + 10),
+        reason: '关掉白芯之后轮廓一点没暗 —— 参数没接到 painter 上');
+  });
+
+  testWidgets('折边可以关掉（小控件上它是几道乱弧）', (tester) async {
+    const accent = Color(0xFF12B5A5);
+    final int top = ((canvas.height - capsule.height) / 2).round();
+    final List<int> on =
+        await shotLens(tester, lift: 1, accent: accent);
+    final List<int> off = await shotLens(tester, lift: 1, accent: accent,
+        showRefractedEdge: false);
+    expect(brightestRow(on, 60, top, top + 10), greaterThan(top + 1),
+        reason: '这一档本来就该有折边 —— 前提不成立，这条测不出东西');
+    expect(brightestRow(off, 60, top, top + 10), lessThanOrEqualTo(top + 1),
+        reason: '关掉折边之后那条亮带还在 —— 参数没接到 painter 上');
   });
 
   testWidgets('没凸出时没有这条折线（对照组）', (tester) async {

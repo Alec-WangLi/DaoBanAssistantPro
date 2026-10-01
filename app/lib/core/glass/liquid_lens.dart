@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
@@ -309,6 +310,9 @@ class LiquidLens extends StatelessWidget {
     required this.lift,
     required this.isDark,
     required this.accent,
+    this.fill,
+    this.showRingCore = true,
+    this.showRefractedEdge = true,
   });
 
   /// 它依附的那块胶囊的完整尺寸（局部坐标的边界，原点在胶囊左上角）。
@@ -326,6 +330,22 @@ class LiquidLens extends StatelessWidget {
   /// 主色：本体的渐变与（Task 7 的）光谱环都锚在它上面。
   final Color accent;
 
+  /// 本体填充。不给 = `AppTokens.accentGradient(accent)`（主色玻璃滴）。
+  ///
+  /// **开关那一档要给白色玻璃** —— 它那枚钮是**白的**（压在淡染轨道上，主色玻璃滴
+  /// 会糊成一片）。底栏与分段器用默认值。
+  final List<Color>? fill;
+
+  /// 压在轮廓上的那条白芯。**白本体的那一档要关掉它** —— 白上画白等于没画，
+  /// 反而把轮廓读没了。
+  final bool showRingCore;
+
+  /// 把容器的边「折进来」那条线（见 [_LensBodyPainter._paintRefractedCapsuleEdge]）。
+  ///
+  /// 小控件上要关掉：它画的是**容器**的上下沿在透镜里的弯折，而开关的钮只有 22px
+  /// 宽，那几道弧读起来是乱线。
+  final bool showRefractedEdge;
+
   @override
   Widget build(BuildContext context) {
     const double m = _lensCanvasPad;
@@ -337,7 +357,13 @@ class LiquidLens extends StatelessWidget {
       child: CustomPaint(
         size: box,
         painter: _LensBodyPainter(
-            shape: shape, origin: origin, isDark: isDark, accent: accent),
+            shape: shape,
+            origin: origin,
+            isDark: isDark,
+            accent: accent,
+            fill: fill,
+            showRingCore: showRingCore,
+            showRefractedEdge: showRefractedEdge),
       ),
     );
 
@@ -554,7 +580,14 @@ class _LensBodyPainter extends CustomPainter {
     required this.origin,
     required this.isDark,
     required this.accent,
+    required this.fill,
+    required this.showRingCore,
+    required this.showRefractedEdge,
   });
+
+  final List<Color>? fill;
+  final bool showRingCore;
+  final bool showRefractedEdge;
 
   final LiquidLensShape shape;
   final Offset origin;
@@ -567,8 +600,13 @@ class _LensBodyPainter extends CustomPainter {
     canvas.drawPath(
       p,
       Paint()
-        ..shader =
-            AppTokens.accentGradient(accent).createShader(p.getBounds()),
+        ..shader = (fill == null
+                ? AppTokens.accentGradient(accent)
+                : LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: fill!))
+            .createShader(p.getBounds()),
     );
     // 静止时**连画都不画**：不是「画一层透明的」，而是这一整趟省掉。
     // 门用 `motion`（「在动」）而不是 `stretch`（「多快」）—— 见 `motion` 的说明。
@@ -582,16 +620,18 @@ class _LensBodyPainter extends CustomPainter {
     // 「贴了一圈彩虹贴纸」，而「一圈被点亮的玻璃边」需要一条白芯把颜色挤到两侧去。
     // 浅色 0.85 → 0.70、宽 1.2 → 1.0（2026-10-01）：它自己也是一条硬边，收一档
     // 免得又把「彩带」的读感带回来。
-    canvas.drawPath(
-      p,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = AppTokens.lensRingCoreWidth
-        ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.70),
-    );
+    if (showRingCore) {
+      canvas.drawPath(
+        p,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = AppTokens.lensRingCoreWidth
+          ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.70),
+      );
+    }
     // 白芯**不跟速度走**：它不是折射，是这块玻璃自己的边（标准档那枚滑块也有一条
     // 同样明度的白边）。收掉它的话静止时透镜就没有轮廓了。
-    _paintRefractedCapsuleEdge(canvas);
+    if (showRefractedEdge) _paintRefractedCapsuleEdge(canvas);
   }
 
   /// 胶囊那条边被透镜**折进去**。
@@ -646,7 +686,10 @@ class _LensBodyPainter extends CustomPainter {
       old.shape.motion != shape.motion ||
       old.origin != origin ||
       old.isDark != isDark ||
-      old.accent != accent;
+      old.accent != accent ||
+      !listEquals(old.fill, fill) ||
+      old.showRingCore != showRingCore ||
+      old.showRefractedEdge != showRefractedEdge;
   /// **折射光晕**：同一条扫掠渐变，画得又宽又糊 —— 这是「光晕」而不是「彩带」的
   /// 全部来源。
   ///
