@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
@@ -135,8 +137,21 @@ class _GlassSegmentState extends State<GlassSegment>
   /// 光取消「按住」不够：`press()` 已经把滴挪到手指那一格了，而选中项并没有变，
   /// 于是滑块**定格在那一格**（用户 2026-10-01 报的「滑块定格」，他说
   /// 「需要再次点击一下滑块，才会恢复正常」）。所以真的取消时把它送回已提交那一格。
+  ///
+  /// ⚠️ **回退不能立刻做，要推到下一个微任务。** 点按被**拖动**挤出竞技场时，SDK 的
+  /// 顺序是 `GestureArenaManager._resolveInFavorOf` **先逐个 reject、再 accept 赢家**
+  /// —— 于是 `onTapCancel` 跑在 `onHorizontalDragStart` **之前**。立刻回退会把 `_page`
+  /// 改掉，紧接着 `dragStart` 就按错的 `_page` 算抓取偏移（`_grabOffset`），滴整枚跳到
+  /// 当前格去、松手提交的也是错的格子。**底栏那条尤其致命：它没有竖直方向的竞争者，
+  /// `onTapCancel` 只可能从拖动这条路走到。**
+  ///
+  /// 推一个微任务之后再判一次：那时若已经拖起来（`dragging`），就不该回退。
   void _onTapCancel() {
-    if (_lens.tapCancel()) _lens.snapTo(_committed + 0.5);
+    if (!_lens.tapCancel()) return;
+    scheduleMicrotask(() {
+      if (!mounted || _lens.dragging) return;
+      _lens.snapTo(_committed + 0.5);
+    });
   }
 
   void _cancel() {

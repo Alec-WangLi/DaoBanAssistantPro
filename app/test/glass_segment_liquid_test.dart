@@ -157,6 +157,72 @@ void main() {
             '（已提交的第 0 格中心是 52）');
   });
 
+  testWidgets('在**非当前那一格**上按住再横向拖：滴不跳回当前格（抓取偏移的护栏）',
+      (tester) async {
+    // 点按被**拖动**挤出竞技场时，SDK 的顺序是：先 reject 点按
+    // （`GestureArenaManager._resolveInFavorOf` 先逐个 reject 再 accept 赢家 →
+    // `TapGestureRecognizer.rejectGesture` → `onTapCancel`），**然后**才
+    // `onHorizontalDragStart`。
+    //
+    // 于是「取消就把滴送回已提交那一格」会在 `dragStart` 读 `_page` **之前**把它改掉，
+    // `_grabOffset = dx/itemW − _page` 就按错的 `_page` 算 —— 滴整枚跳到当前格去，
+    // 松手提交的也是错的格子。（底栏那条尤其致命：它没有竖直方向的竞争者，
+    // `onTapCancel` **只**能从拖动这条路走到。）
+    liquidGlassActive.value = true;
+    addTearDown(() => liquidGlassActive.value = false);
+
+    const int w = 300;
+    tester.view.physicalSize = Size(w.toDouble(), 120);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Material(
+        child: Center(
+          child: SizedBox(
+            width: w.toDouble(),
+            height: h,
+            child: GlassSegment(
+              count: 3,
+              selectedIndex: 0,
+              height: h,
+              onSelected: (int _) {},
+              itemBuilder: (int i, bool sel) => Text('$i'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    double centerX() =>
+        tester.widget<LiquidLens>(find.byType(LiquidLens)).shape.centerX;
+
+    // 每格 (300 − 2×3) / 3 = 98；第 2 格的中心 = 3 + 2.5×98 = 248，
+    // 当前格（第 0 格）的中心 = 52。
+    final TestGesture g = await tester.startGesture(const Offset(248, 60));
+    bool released = false;
+    addTearDown(() {
+      if (released) return Future<void>.value();
+      return g.up();
+    });
+    for (int i = 0; i < 25; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(centerX(), closeTo(248, 6),
+        reason: '按下去滴没有滑到手指那一格 —— 这条用例测不到东西');
+
+    await g.moveBy(const Offset(30, 0)); // 超过 kTouchSlop → 横向拖动赢
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(centerX(), greaterThan(200),
+        reason: '拖动一起手滴就跳到了 ${centerX()} —— 它在拖动赢下竞技场的那一刻'
+            '被「取消回退」送回了当前格，抓取偏移算错了');
+    await g.up();
+    released = true;
+  });
+
   testWidgets('两档是两棵树：光栅化像素必须不同', (tester) async {
     // 反过来说：这条要是绿着不动，说明「液态档」根本没生效 —— v0.10.1 出过这个岔子
     // （工装那两张「液态档」基线图与标准档逐字节相同）。

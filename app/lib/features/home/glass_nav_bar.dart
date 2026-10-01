@@ -9,6 +9,8 @@
 // 这次抽取是**纯搬移**，行为一字不变（验收是工装出图逐像素相同）。
 
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
@@ -184,8 +186,22 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// 了，而页面并没有切，于是滑块**定格在那一格**（用户 2026-10-01 报的正是它）。
   /// 所以真的取消时把滴送回**已提交的那一格**。
   /// （不能复用 [_cancel]：那个有个「没在拖就早退」的闸门。）
+  ///
+  /// ⚠️ **回退不能立刻做，要推到下一个微任务。** 点按被**拖动**挤出竞技场时，SDK 的
+  /// 顺序是 `GestureArenaManager._resolveInFavorOf` **先逐个 reject、再 accept 赢家**
+  /// —— 于是 `onTapCancel` 跑在 `onHorizontalDragStart` **之前**。立刻回退会把 `_page`
+  /// 改掉，紧接着 `dragStart` 就按错的 `_page` 算抓取偏移，滴整枚跳到当前格去、
+  /// 松手提交的也是错的格子。**底栏尤其致命：它没有竖直方向的竞争者，**
+  /// **`onTapCancel` 只可能从拖动这条路走到**（`glass_tier_test` 里那条「点按被取消」
+  /// 的用例注释记着这件事）。
+  ///
+  /// 推一个微任务之后再判一次：那时若已经拖起来（`dragging`），就不该回退。
   void _onTapCancel() {
-    if (_lens.tapCancel()) _lens.snapTo(_committedIndex + 0.5);
+    if (!_lens.tapCancel()) return;
+    scheduleMicrotask(() {
+      if (!mounted || _lens.dragging) return;
+      _lens.snapTo(_committedIndex + 0.5);
+    });
   }
 
   // 取消：仅当真正处于拖动中才回退（点按结束触发的 onCancel 不回退）
