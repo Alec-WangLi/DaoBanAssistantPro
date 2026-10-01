@@ -41,7 +41,8 @@ Map<String, Object> screenExtraPrefs(String slug) => switch (slug) {
       '36_home_shell_liquid' ||
       '37_profile_liquid' ||
       '38_alarm_liquid' ||
-      '39_todos_liquid' =>
+      '39_todos_liquid' ||
+      '47_ringing_liquid' =>
         const <String, Object>{'liquidGlass': true},
       _ => const <String, Object>{},
     };
@@ -125,6 +126,15 @@ final List<VisualScreen> visualScreens = [
     // 它的布局（尤其是底部「上滑关闭」滑块）此前没有任何可重复的看图手段。
     slug: '08_ringing',
     title: '响铃',
+    build: (db) async => const AlarmRingingScreen(label: '早班'),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 响铃页的**液态档**（v0.10.13）：那枚「上滑关闭」从手搓的白圆钮换成了真的玻璃药丸。
+    // 单开一屏的理由与 `36_home_shell_liquid` 同一套 —— 液态档**必须走 prefs** 才拍得到，
+    // 而这一屏的形状（凸出轨道、折边、竖着走的头大尾轻）正是这一轮改的东西。
+    slug: '47_ringing_liquid',
+    title: '响铃 · 液态玻璃',
     build: (db) async => const AlarmRingingScreen(label: '早班'),
     needsOnboardingPrefs: false,
   ),

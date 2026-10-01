@@ -59,6 +59,16 @@ void main() {
       visualTest('${screen.title} · ${variant.label}', (tester) async {
         failOnOverflow(tester);
         final db = await freshDb();
+        final extraPrefs = <String, Object>{
+          ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
+          ...screenExtraPrefs(screen.slug),
+        };
+        // ⚠️ **屏单里「液态档」不能只靠 prefs。** 读档位的那些屏是 `appSettingsProvider`
+        // 的 `_load()` 把 prefs 落实到模块级标志上的；而**不读那个 provider 的屏**
+        // （响铃页就是）prefs 根本落不到标志上 —— 拍出来与标准档**逐字节相同**。
+        // v0.10.1 踩过一次，这次是它的新变种：`47_ringing_liquid` 第一版两张图一模一样，
+        // 是**出图时当场看出来的**（不是任何断言抓到的）。
+        if (extraPrefs['liquidGlass'] == true) useLiquidGlassTier();
         await renderScreen(
           tester,
           name: '${screen.slug}_${variant.suffix}',
@@ -67,10 +77,7 @@ void main() {
           brightness: variant.brightness,
           language: variant.language,
           size: variant.size,
-          extraPrefs: <String, Object>{
-            ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
-            ...screenExtraPrefs(screen.slug),
-          },
+          extraPrefs: extraPrefs,
         );
       });
     }
