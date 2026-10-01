@@ -30,8 +30,9 @@ void main() {
     WidgetTester tester, {
     double dragTo = 0,
     Size size = const Size(420, 900),
+    bool liquid = true,
   }) async {
-    liquidGlassActive.value = true;
+    liquidGlassActive.value = liquid;
     addTearDown(() => liquidGlassActive.value = false);
     stubPluginChannels();
 
@@ -117,5 +118,20 @@ void main() {
         reason: '小窗下药丸没凸出轨道（${shapeOf(tester).height} vs $trackW）');
     expect(refractedCapsuleEdge(shapeOf(tester)), isNotNull,
         reason: '小窗下折边是 null');
+  });
+
+  testWidgets('两档是两棵树：标准档没有透镜，药丸尺寸却一模一样', (tester) async {
+    // 液态档先量一份：转 90°，所以屏幕上的**宽**是 `shape.height`、**高**是 `shape.width`。
+    await pumpRinging(tester);
+    final LiquidLensShape liq = shapeOf(tester);
+    final Size liquidSize = Size(liq.height, liq.width);
+
+    await pumpRinging(tester, liquid: false);
+    expect(find.byType(LiquidLens), findsNothing,
+        reason: '标准档树上还有透镜 —— 两棵树没真的分开');
+    final Rect std = tester.getRect(find.byKey(const Key('ring-dismiss-thumb')));
+    expect(std.size, liquidSize,
+        reason: '两档药丸尺寸不一致（标准 ${std.size} / 液态 $liquidSize）—— '
+            '切档位时控件会跳一下');
   });
 }

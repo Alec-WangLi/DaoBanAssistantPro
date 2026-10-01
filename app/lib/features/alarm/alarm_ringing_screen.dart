@@ -309,6 +309,8 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   Widget _standardThumb(
       Color primary, double thumbW, double thumbH, bool armed) {
     return Container(
+      // 抓手：护栏要比「两档的药丸尺寸一模一样」（切档位时不许跳）。
+      key: const Key('ring-dismiss-thumb'),
       width: thumbW,
       height: thumbH,
       decoration: BoxDecoration(
