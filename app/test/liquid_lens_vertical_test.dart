@@ -186,7 +186,7 @@ Future<List<int>> _shot(WidgetTester tester, LiquidLensShape shape) async {
             height: 30,
             child: LiquidLens(
               size: const Size(48, 30),
-              shape: shape,
+              outline: shape,
               lift: 1,
               isDark: true,
               accent: const Color(0xFF5B5BD6),

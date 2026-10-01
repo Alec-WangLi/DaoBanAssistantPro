@@ -377,15 +377,21 @@ git commit -m "feat(calendar): 拖选水带的几何（区间→每行一段；�
 // app/test/calendar_range_band_test.dart
 // 一律走几何与帧调度，不拿光栅亮度当判据（那枚块压在白卡上，亮度差被底色吃掉）。
 testWidgets('末端沿运动方向鼓出去，但**高度不变**', (tester) async {
+  // ⚠️ 鼓出**没法从路径包围盒里抠出来**：末端一边淌一边鼓，包围盒里两件事叠在一起。
+  // 所以判据读 `outlineStamp`（那一帧的几何指纹：段 + 连续末端 + 鼓出量）——
+  // 它就是这一帧画出来的东西的同源数据，不是另加一个测试钩子。
   await mount(tester, tipCell: 3);
   await tester.pumpAndSettle();
-  final Size still = bandBounds(tester).size;
-  // 把末端推着走（每帧喂一个新的 tipCell，走弹簧）
-  for (int i = 0; i < 8; i++) { await mount(tester, tipCell: 3 + i); await tester.pump(ms16); }
-  final Size moving = bandBounds(tester).size;
-  expect(moving.width, greaterThan(still.width + 2),
-      reason: '末端没有沿运动方向鼓出去');
-  expect(moving.height, closeTo(still.height, 0.01),
+  expect(bulge(tester), closeTo(0, 0.01), reason: '静止时不该有鼓出');
+  expect(bandBounds(tester).height, closeTo(cellH - 2 * inset, 0.01));
+
+  for (int i = 0; i < 4; i++) {       // 3 → 4 → 5 → 6，每帧喂一格
+    await mount(tester, tipCell: 3 + i);
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  expect(bulge(tester), greaterThan(1),
+      reason: '末端没有沿运动方向鼓出去（没接上 / 门太大）');
+  expect(bandBounds(tester).height, closeTo(cellH - 2 * inset, 0.01),
       reason: '带子高度动了 —— 它是渠道里的水，一变形就会露出格子的上下沿（spec §4.5）');
 });
 
@@ -440,6 +446,11 @@ git commit -m "feat(calendar): 拖选水带那枚 widget（漫上来 / 末端淌
 
 ```dart
 // app/test/calendar_screen_test.dart（新 group：'液态档那条水带'）
+/// 长按第 [from] 天、拖到第 [to] 天（可再拖 [extraCells] 格，把末端停在两格之间）。
+/// **不松手** —— 松手就弹选择层，带子也没了。
+Future<void> longPressDrag(WidgetTester tester,
+    {required int from, required int to, double extraCells = 0}) async { ... }
+
 testWidgets('液态档：多选态不画逐格淡染，改用一枚带子', (tester) async {
   await _pumpCalendar(tester, 'day_night_rest_rest', liquid: true);
   await longPressDrag(tester, from: 8, to: 15);          // 跨周那一段
@@ -457,8 +468,12 @@ testWidgets('标准档：还是逐格淡染（对照组，一个字没改）', (
 
 testWidgets('只挤**流动那一端**：带子内部那些格不套 Transform', (tester) async {
   await _pumpCalendar(tester, 'day_night_rest_rest', liquid: true);
-  await longPressDrag(tester, from: 8, to: 15);          // 拖着别松手
-  expect(warped(tester, day: 15), isTrue, reason: '末端那一格该被挤');
+  // ⚠️ 要拖到**两格之间**再取样：挤压场只够到一格的半径（t≈2.15 就出局），
+  // 末端停在格正中时连它自己那一格都不套 Transform（t≈0）。既有的
+  // 「挤字只变换绘制」那条也是这么拖的（半格）。
+  await longPressDrag(tester, from: 8, to: 15, extraCells: 0.5);
+  expect(warped(tester, day: 15) || warped(tester, day: 16), isTrue,
+      reason: '流动那一端旁边那一格没被挤 —— 挤压场没跟着末端走');
   expect(warped(tester, day: 10), isFalse,
       reason: '带子内部（已经圈住的日子）也被挤了 —— spec §4.5：那里面不该动');
 });

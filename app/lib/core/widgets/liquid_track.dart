@@ -182,7 +182,7 @@ class LiquidTrack extends StatelessWidget {
                       final double lift = controller.lift;
                       return LiquidLens(
                         size: size,
-                        shape: LiquidLensShape.of(
+                        outline: LiquidLensShape.of(
                           itemW: itemW,
                           capsuleH: capsuleH,
                           pad: pad,

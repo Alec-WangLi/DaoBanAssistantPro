@@ -197,6 +197,42 @@ void main() {
     );
   });
 
+  // 长按拖选**到一半**那条水带（v0.10.18）。静止帧拍不到它 —— 必须真长按、真拖，
+  // 而且**不许松手**（松手就弹选择层、带子也就没了）。
+  visualTest('日历 · 液态档拖选那条水带', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    useLiquidGlassTier();
+    await renderScreen(
+      tester,
+      name: '52_calendar_range_band',
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      extraPrefs: <String, Object>{'liquidGlass': true},
+      settleAfterCapture: false,
+      beforeCapture: (WidgetTester t) async {
+        // 2 日（周五）→ 18 日（周日）：**跨三行**，两个真端头都看得见，
+        // 中间那一整行是满的。
+        final TestGesture g = await t
+            .startGesture(t.getCenter(find.byKey(const ValueKey('day-card-2'))));
+        for (int i = 0; i < 40; i++) {
+          await t.pump(const Duration(milliseconds: 16)); // 过长按判定
+        }
+        final Offset from =
+            t.getCenter(find.byKey(const ValueKey('day-card-2')));
+        final Offset to = t.getCenter(find.byKey(const ValueKey('day-card-18')));
+        const int steps = 16;
+        for (int i = 0; i < steps; i++) {
+          await g.moveBy((to - from) / steps.toDouble());
+          await t.pump(const Duration(milliseconds: 16));
+        }
+        // 收尾再推两帧：末端还在淌 —— 那一帧才拍得到鼓出与彩边。
+        await t.pump(const Duration(milliseconds: 16));
+        addTearDown(g.up);
+      },
+    );
+  });
+
   visualTest('日历 · 点开某天', (tester) async {
     failOnOverflow(tester);
     final db = await freshDb();

@@ -84,6 +84,7 @@ class CalendarRangeBand extends StatefulWidget {
     required this.tipCell,
     required this.accent,
     required this.isDark,
+    this.onTipPos,
   });
 
   /// 网格盒（带子的坐标就长在这上面：`hPad` / `weekdayH` 是它内部的偏移）。
@@ -104,6 +105,13 @@ class CalendarRangeBand extends StatefulWidget {
 
   final Color accent;
   final bool isDark;
+
+  /// 末端这一帧淌到了哪儿（**格坐标**，含鼓出）。挤字的场要用它。
+  ///
+  /// 为什么不把末端弹簧挪到父层去算：那是这枚带子的**内部状态**（它跟吸附到格的
+  /// 状态是两件事），挪出去就得让父层替它跑一遍弹簧。而场必须跟着**淌着的那一点**
+  /// 走 —— 停在「那一格的中心」等于不挤（那一格的 `t` 恒为 0，见 spec §4.5 的订正）。
+  final ValueChanged<double>? onTipPos;
 
   /// 按住时**每侧**鼓出多少（px）。与那枚单格块同一个数 —— 同一族的手感。
   static const double protrude = 6;
@@ -145,6 +153,9 @@ class _CalendarRangeBandState extends State<CalendarRangeBand>
   /// 光谱环／光晕的亮峰锚在哪个方位（度）。见 `LiquidLensOutline.motionAngleDeg`。
   double _motionAngle = spectralSweepRestAnchor;
 
+  /// 这一帧的末端位置（格坐标，含鼓出）—— `build` 与回调共用同一个数。
+  double _tipPos = 0;
+
   Ticker? _ticker;
   Duration _lastStamp = Duration.zero;
 
@@ -173,6 +184,7 @@ class _CalendarRangeBandState extends State<CalendarRangeBand>
         omega: AppTokens.lensUnlitOmega,
         zeta: AppTokens.lensUnlitZeta);
     _tipRow = _targetTipRow;
+    _tipPos = _tip.value;
     _syncTicker();
   }
 
@@ -262,6 +274,10 @@ class _CalendarRangeBandState extends State<CalendarRangeBand>
 
     _retargetRing();
     _ring.step(dt);
+
+    // 末端这一帧淌到了哪儿：先算出来（父层的挤字场要用），再重建自己。
+    _tipPos = _tip.value + _bulge.value / widget.cellW;
+    widget.onTipPos?.call(_tipPos);
 
     if (mounted) setState(() {});
     _syncTicker();

@@ -205,7 +205,7 @@ class _GlassCheckState extends State<GlassCheck>
               children: <Widget>[
               LiquidLens(
                 size: Size(d, d),
-                shape: LiquidLensShape.of(
+                outline: LiquidLensShape.of(
                   itemW: d,
                   capsuleH: d,
                   pad: 0,

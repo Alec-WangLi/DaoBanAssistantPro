@@ -395,7 +395,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
         height: _trackWidth,
         child: LiquidLens(
           size: Size(2 * pad + thumbH, _trackWidth),
-          shape: LiquidLensShape.of(
+          outline: LiquidLensShape.of(
             itemW: thumbH,
             capsuleH: _trackWidth,
             pad: pad,

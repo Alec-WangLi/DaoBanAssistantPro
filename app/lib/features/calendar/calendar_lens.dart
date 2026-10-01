@@ -303,7 +303,7 @@ class _CalendarLensState extends State<CalendarLens>
           Positioned.fill(
             child: LiquidLens(
               size: widget.size,
-              shape: shape,
+              outline: shape,
               lift: _lift.value,
               isDark: widget.isDark,
               accent: widget.accent,

@@ -470,6 +470,45 @@ void main() {
       );
     });
   }
+
+  // ⑨ 长按拖选那条**水带**（v0.10.18）。时间轴：按住过一次长按判定（带子在这期间
+  //    「漫上来」）→ 停 10 帧 → 跨三行拖 20 帧（末端淌 + 鼓出 + 彩边）→ 停 11 帧
+  //    （彩边渐灭）。**最后不松手** —— 一松手就弹选择层、带子当场消失，GIF 会以
+  //    一个弹层收尾，而这一条要看的是带子本身。
+  for (final v in _modes) {
+    testWidgets('日历 · 拖选水带 · ${v.suffix}', (WidgetTester tester) async {
+      final db = await freshDb();
+      late TestGesture gesture;
+      Offset step = Offset.zero;
+      await renderFrames(
+        tester,
+        prefix: 'calendar_band_${v.suffix}_',
+        home: const CalendarScreen(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        extraPrefs: _liquidPrefs,
+        brightness: v.brightness,
+        count: 42,
+        step: const Duration(milliseconds: 16),
+        onFrame: (WidgetTester t, int i) async {
+          if (i == 0) {
+            gesture = await t.startGesture(
+                t.getCenter(find.byKey(const ValueKey('day-card-2'))));
+            addTearDown(gesture.up);
+            // 一次性推过 500ms 的长按判定 —— 那一下正好是「水漫上来」的起点。
+            await t.pump(const Duration(milliseconds: 600));
+            // 2 日（周五）→ 18 日（周日）：跨三行，中间那一整行是满的。
+            final Offset from =
+                t.getCenter(find.byKey(const ValueKey('day-card-2')));
+            final Offset to =
+                t.getCenter(find.byKey(const ValueKey('day-card-18')));
+            step = (to - from) / 20.0;
+          } else if (i > 10 && i <= 30) {
+            await gesture.moveBy(step);
+          }
+        },
+      );
+    });
+  }
 }
 /// 开关特写用的板子：一行「开」一行「关」，落在中性的页面底色上 ——
 /// 单看开关本身，不被整页其它玻璃面干扰。
