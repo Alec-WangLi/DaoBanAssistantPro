@@ -434,6 +434,13 @@ class AppTokens {
   /// 实测扫出来的（见 `test/liquid_lens_test.dart` 的折边参数扫描）。
   static const double navLensProtrude = 10;
 
+  /// 透镜外扩 / 凸出相对胶囊高度的比例（10 ÷ 64）。
+  ///
+  /// **只有 `LiquidLensMetrics.forCapsule` 用它。** 底栏那两个数（`navLensProtrude` /
+  /// `lensLiftWidth`）是**冻住的** —— 矮屏那一档胶囊只有 52 高，跟着比例取会变成 8.1，
+  /// 横屏与小窗两档的画面就变了，而「底栏逐像素不变」是抽共享件这一路的验收。
+  static const double lensLiftRatio = 0.15625;
+
   /// 「胶囊那条边被折进去」淡入所需的凸出量（逻辑 px）。
   ///
   /// 这条折线的早退条件原来写的是「**两个端头半径都**大于胶囊半高」，而速度一上来

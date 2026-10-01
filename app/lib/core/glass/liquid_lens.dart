@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import 'liquid_lens_metrics.dart';
 
 /// 液态档的透镜：弹簧解算器（本文件）→ 水滴几何 → 渲染。
 ///
@@ -136,7 +137,15 @@ class LiquidLensShape {
     required double velocity,
     double? stretch,
     double? motion,
+    LiquidLensMetrics? metrics,
   }) {
+    // 两个外扩量是**每个面各自的观感**（见 `LiquidLensMetrics` 的说明）。不给时用
+    // 底栏那档的常量 —— 那正是抽共享件之前的行为，所以既有调用点的渲染一个像素都不变。
+    final LiquidLensMetrics m = metrics ??
+        const LiquidLensMetrics(
+          protrude: AppTokens.navLensProtrude,
+          liftWidth: AppTokens.lensLiftWidth,
+        );
     // 形变强度 0..1：拉伸与压缩都用它一个量。
     final double s = (stretch ?? (velocity.abs() / AppTokens.lensVelocityRef))
         .clamp(0.0, 1.0);
@@ -148,9 +157,9 @@ class LiquidLensShape {
     return LiquidLensShape._(
       centerX: pad + (centerPage + 0.5) * itemW,
       // 外扩与形变都**加在/乘在基准尺寸上，不互相乘** —— 见下面 height 的说明。
-      // 外扩仍取横向与纵向同量级（见 lensLiftWidth 的说明）：纵横一起长才读得出体积。
-      width: itemW * (1 + AppTokens.lensStretch * s) +
-          AppTokens.lensLiftWidth * lift,
+      // 两个外扩量来自 [m]：底栏取「横向与纵向同量级」（纵横一起长才读得出体积），
+      // 而开关取 `liftWidth: 0` —— 只长个儿不变宽（iOS 26 那种形状变化）。
+      width: itemW * (1 + AppTokens.lensStretch * s) + m.liftWidth * lift,
       // ⚠️ **凸出必须加在「压扁之后」的基准上，不许乘进形变里。**
       //
       // 原式 `(基准 + 2·凸出·lift) × (1 − 0.12·s)` 把压扁乘在了凸出上：lift=1 /
@@ -158,7 +167,7 @@ class LiquidLensShape {
       // 「一枚浮起来的玻璃滴」直接掉回「一枚躺着药丸」。**「按住」这个动作的全部
       // 读感就在那零点几个像素上。** 实测见 `test/liquid_lens_test.dart` 的扫描。
       height: (capsuleH - 2 * pad) * (1 - AppTokens.lensSquash * s) +
-          2 * AppTokens.navLensProtrude * lift,
+          2 * m.protrude * lift,
       capsuleH: capsuleH,
       stretch: s,
       motion: glow,

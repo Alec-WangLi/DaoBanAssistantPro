@@ -232,7 +232,7 @@ class LiquidTrack extends StatefulWidget {
     required this.capsuleH,
     required this.pad,
     required this.controller,
-    required this.contentBuilder,   // Widget Function(BuildContext, int indexInSlot, int? previewIndex)
+    required this.contentBuilder,   // Widget Function(BuildContext)
     this.metrics,
     this.fill,                      // 不给 = 主色渐变
     this.showRingCore = true,

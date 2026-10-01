@@ -13,6 +13,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
+import 'package:shiftassistantpro/core/glass/liquid_lens_metrics.dart';
 
 void main() {
   test('收敛：从中点出发最终停到目标上', () {
@@ -157,6 +158,38 @@ void main() {
             centerPage: page,
             lift: lift,
             velocity: velocity);
+
+    test('几何默认值 = 底栏那档（10 / 10）—— 既有调用点的渲染一个字都不许变', () {
+      // 这一条是「底栏逐像素不变」那条验收的地基：不给 `metrics` 时，行为必须与抽
+      // 共享件之前**完全一样**。
+      //
+      // ⚠️ 矮屏那一档胶囊是 **52 高**，而它现在用的**也是 10 / 10** —— 几何参数化时
+      // 若图省事写成「按胶囊高度取」，52 会变成 8.1，横屏与小窗两档的画面就变了。
+      final s = LiquidLensShape.of(
+          itemW: 90, capsuleH: 52, pad: 6, centerPage: 0, lift: 1, velocity: 0);
+      expect(s.height, closeTo(52 - 12 + 2 * AppTokens.navLensProtrude, 0.001));
+      expect(s.width, closeTo(90 + AppTokens.lensLiftWidth, 0.001));
+    });
+
+    test('metrics 真的进几何：protrude 只管纵向、liftWidth 只管横向', () {
+      final s = LiquidLensShape.of(
+          itemW: 20,
+          capsuleH: 28,
+          pad: 3,
+          centerPage: 0,
+          lift: 1,
+          velocity: 0,
+          metrics: const LiquidLensMetrics(protrude: 8, liftWidth: 0));
+      expect(s.height, closeTo(22 + 16, 0.001)); // 基准 28−6，上下各探出 8
+      expect(s.width, closeTo(20, 0.001)); // itemW，横向一点都不外扩
+    });
+
+    test('forCapsule 按高度取；底栏那一档与常量一致', () {
+      expect(LiquidLensMetrics.forCapsule(64).protrude, closeTo(10, 0.001));
+      expect(LiquidLensMetrics.forCapsule(64).liftWidth, closeTo(10, 0.001));
+      expect(LiquidLensMetrics.forCapsule(40).protrude, closeTo(6.25, 0.001));
+      expect(LiquidLensMetrics.forCapsule(40).liftWidth, closeTo(6.25, 0.001));
+    });
 
     test('静止：是一枚胶囊（两端半径相等、且等于高的一半）', () {
       final s = at();
