@@ -116,6 +116,46 @@ void main() {
     }
   }
 
+  // 液态档那枚选中块的两档「活的」状态（v0.10.15）——
+  // **静止帧拍不到它们**，而这一轮的全部内容就在这两档上：按住时四面鼓出、
+  // 拖动时沿运动方向形变且边缘挤过格子里的字。手势必须真按下去（形状由弹簧与
+  // 速度驱动，喂参数是拍不出真东西的）。
+  for (final (String slug, String title, double dragBy)
+      in <(String, String, double)>[
+    ('49_calendar_lens_press', '日历 · 液态档选中块 · 按住', 0),
+    ('50_calendar_lens_drag', '日历 · 液态档选中块 · 拖动中', 46),
+  ]) {
+    visualTest(title, (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      useLiquidGlassTier();
+      await renderScreen(
+        tester,
+        name: slug,
+        home: const CalendarScreen(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        extraPrefs: <String, Object>{'liquidGlass': true},
+        beforeCapture: (WidgetTester t) async {
+          // 起点取今天那一格（选中块默认落在今天）；不能找 `calendar-selection-block`
+          // 的**位置**去按 —— 那枚块在拖动中会跟着走，而起点得是格子。
+          final TestGesture g = await t.startGesture(t.getCenter(
+              find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+          for (int i = 0; i < 20; i++) {
+            await t.pump(const Duration(milliseconds: 16)); // 过按住闸门
+          }
+          if (dragBy == 0) return;
+          // 46px = 半格 28 + 被竞技场 slop 吃掉的 18 —— 落点正好在两格之间，
+          // 右边那格的内容才会被透镜边缘挤到。
+          const int steps = 8;
+          for (int i = 0; i < steps; i++) {
+            await g.moveBy(Offset(dragBy / steps, 0));
+            await t.pump(const Duration(milliseconds: 16));
+          }
+        },
+      );
+    });
+  }
+
   visualTest('日历 · 点开某天', (tester) async {
     failOnOverflow(tester);
     final db = await freshDb();

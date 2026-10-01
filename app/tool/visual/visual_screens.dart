@@ -42,7 +42,8 @@ Map<String, Object> screenExtraPrefs(String slug) => switch (slug) {
       '37_profile_liquid' ||
       '38_alarm_liquid' ||
       '39_todos_liquid' ||
-      '47_ringing_liquid' =>
+      '47_ringing_liquid' ||
+      '48_calendar_lens' =>
         const <String, Object>{'liquidGlass': true},
       _ => const <String, Object>{},
     };
@@ -392,6 +393,18 @@ final List<VisualScreen> visualScreens = [
     slug: '39_todos_liquid',
     title: '待办 · 液态玻璃',
     build: (db) async => const ScheduleScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 日历那枚**选中块**在液态档下的样子（v0.10.15）。加了它之后，「液态档里有透镜」
+    // 这件事就不再只属于底栏了 —— `glass_tier_test` 里那条原来拿全页数的用例因此
+    // 改成了限定在 `glass-nav-bar` 里（红过一次，改的就是那里）。
+    //
+    // 静止这一屏只是**基线**：这一轮真正要看的是按住与拖动中那两档，
+    // 它们在 `render_screens_test.dart` 里（要真手势，进不了这份屏单）。
+    slug: '48_calendar_lens',
+    title: '日历 · 液态档选中块',
+    build: (db) async => const CalendarScreen(),
     needsOnboardingPrefs: false,
   ),
 ];

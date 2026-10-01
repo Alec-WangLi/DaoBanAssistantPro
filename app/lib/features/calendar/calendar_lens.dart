@@ -160,13 +160,16 @@ class _CalendarLensState extends State<CalendarLens>
     final bool busy =
         !_lift.isAtRest || !_ring.isAtRest || _vx.abs() > 1 || _vy.abs() > 1;
     if (busy) {
-      if (_ticker == null) {
-        _lastStamp = Duration.zero;
-        _ticker = createTicker(_onTick)..start();
+      // ⚠️ **ticker 只建一次，之后只 start / stop。** `SingleTickerProviderStateMixin`
+      // 的 `createTicker` 一个 State 只能调一次 —— 停机时 dispose、下次再建会直接抛
+      // 「multiple tickers were created」（出图工装当场抓到的：按住 → 松手 → 再按住）。
+      _ticker ??= createTicker(_onTick);
+      if (!_ticker!.isActive) {
+        _lastStamp = Duration.zero; // 重新起跑，`elapsed` 也是从 0 算的
+        _ticker!.start();
       }
     } else {
-      _ticker?.dispose();
-      _ticker = null;
+      _ticker?.stop();
     }
   }
 

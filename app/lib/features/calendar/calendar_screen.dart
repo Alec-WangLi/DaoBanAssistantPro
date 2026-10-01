@@ -1269,9 +1269,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 这一格的**内容**被透镜边缘挤成什么样 —— 液态档才有。
   ///
-  /// 用二维版 `lensIconWarp2d`（一维版只认 x，给底栏 / 分段器那种「一排」的控件）；
-  /// 半宽半高取**满升程 + 满形变**那一档 —— 它随升程只变一点点，而权重本来就是
-  /// 一条软的钟形（一维版也是这么取的）。
+  /// 用二维版 `lensIconWarp2d`（一维版只认 x，给底栏 / 分段器那种「一排」的控件）。
+  ///
+  /// ⚠️ 半宽半高取**静止那一档**（内盒的一半），**不是**「满升程 + 满形变」那一档。
+  /// 一维版那边两者只差约 5%（照最大值取无所谓），而这里从静止到满形变，透镜的宽会从
+  /// 52 涨到 74（**+43%**）—— 照最大值取的话，`t` 会把**静止时**的相邻格子也算成
+  /// 「在透镜里」，于是日历的常态画面上就带着一层变形（**逐张比基线时当场抓到的**：
+  /// 差异掩码里相邻两格的字整片亮起）。照静止那一档取，静止时相邻格子 `t ≈ 2.2`、
+  /// 权重见底、一层都不套；拖动到两格之间时 `t ≈ 1.08`、权重 ≈ 0.97 —— 正好。
   ///
   /// 恒等时返回 `null`：**一层恒等的 `Transform` 都不套**（它也是要付代价的）。
   Matrix4? _cellWarp({
@@ -1280,14 +1285,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     required double cellW,
     required double cellH,
   }) {
-    final double hw =
-        ((cellW - 2 * _cellInset) * (1 + AppTokens.lensStretch) +
-                2 * CalendarLens.protrude) /
-            2;
-    final double hh =
-        ((cellH - 2 * _cellInset) * (1 + AppTokens.lensStretch) +
-                2 * CalendarLens.protrude) /
-            2;
+    final double hw = (cellW - 2 * _cellInset) / 2;
+    final double hh = (cellH - 2 * _cellInset) / 2;
     final ({double scaleRadial, double scaleTangent, double dx, double dy,
         double angle}) w = lensIconWarp2d(
       itemCenterX: cellCenter.dx,
