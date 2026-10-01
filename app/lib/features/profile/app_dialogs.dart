@@ -39,7 +39,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.13\n'
+const String _changelogZh = 'v0.10.14\n'
+    '· 修好上一版带进来的一处问题：弹窗会顶到状态栏 / 手势条里（21 个弹窗都受影响）\n'
+    '· 底部弹层往下拖着要关掉时，不再被压暗、发糊\n'
+    '· 响铃页那枚「上滑关闭」的形变在高刷新率屏幕上不再只有一半（同一个拖动速度应当有同一个形状）\n'
+    '· 四个弹窗的遮罩浓度统一成与其余弹窗一样（模板管理 / 改名 / 删除、存为模板）\n\n'
+
+    'v0.10.13\n'
     '· 开关拖动时，背景色跟着滑块一起变（之前要松手那一刻才跳变）：颜色从一边漫过去、边界就压在滴下面\n'
     '· 弹窗与底部弹层出现时从模糊里凝出来、关掉时化开散掉（之前是生硬地淡入）\n'
     '· 响铃页的「上滑关闭」：圆钮换成一枚玻璃药丸，按住会变大、凸出轨道，轨道那两条边被折进它里面\n'
@@ -96,15 +102,19 @@ const String _changelogZh = 'v0.10.13\n'
     '· 头大尾小那个形变更容易出现了 —— 不用滑那么快\n'
     '· 底栏每一帧只重画透镜那一层，不再整条重建\n\n'
 
-    'v0.10.4\n'
-    '· 修好窄窗口下的一处严重问题：拖动底栏滑块时它会整个消失、还一闪一没（窗口宽度不够时那个形状算不出来）\n'
     '· 点待办提醒的通知切到待办页时，底栏滑块也跟着走过去（之前页面翻过去了、滑块还留在原处）\n\n'
 
 
 
 ;
 
-const String _changelogEn = 'v0.10.13\n'
+const String _changelogEn = 'v0.10.14\n'
+    '· Fixed a regression from the previous version: dialogs could sit under the status bar or gesture bar (21 of them were affected)\n'
+    '· A bottom sheet no longer dims and blurs while you drag it down to dismiss it\n'
+    '· The ringing screen pill deforms correctly on high-refresh-rate screens (the same drag speed now gives the same shape)\n'
+    '· Four dialogs\' backdrop dim now matches the rest (template manage / rename / delete, save as template)\n\n'
+
+    'v0.10.13\n'
     '· The switch track now tints as you drag (it used to jump the moment you let go): the colour sweeps in from one side, its edge tucked under the knob\n'
     '· Dialogs and bottom sheets condense out of blur and dissolve away, instead of just fading in\n'
     '· The ringing screen\'s "swipe up to dismiss" knob is now a glass pill: hold it and it grows past the track, and the track\'s edges fold into it\n'
@@ -161,8 +171,6 @@ const String _changelogEn = 'v0.10.13\n'
     '· The head-big tail-small stretch shows up sooner — no need to drag as fast\n'
     '· The tab bar now repaints only the lens layer each frame, not the whole bar\n\n'
 
-    'v0.10.4\n'
-    '· Fixed a serious bug in narrow windows: the tab pill could vanish entirely — and flicker — while you dragged it\n'
     '· Tapping a todo reminder now carries the tab pill along when the app jumps to the todo page (previously the page moved but the pill stayed put)\n\n'
 
 
