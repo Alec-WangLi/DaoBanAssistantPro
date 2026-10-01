@@ -6,6 +6,7 @@
 //   · **过冲**：松手落回格子那一下要越过一点再回来，那才是「Q 弹」。
 //
 // 纯 Dart、没有 widget 依赖，所以可以直接跑 200 步去断言它的行为。
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -1009,5 +1010,68 @@ void main() {
       expect(w.scaleX, 1.0);
       expect(w.dx, 0.0);
     });
+  });
+
+  // ── 竖直档的折边（v0.10.13）───────────────────────────────────────────────
+  //
+  // 响铃页那枚「上滑关闭」的药丸是**竖着走**的滴 —— 它落进 `toPath()` 的竖直档
+  // （`宽 ≤ 高`）。那一档此前有两个缺陷让折边**一次都不会亮**（spec §4）：
+  //
+  //   1. `refractedCapsuleEdge` 用的是**沿运动轴**的半径，而竖直档里那个半径被
+  //      兜底钳位 `_cap = min(高, 宽) / 2` 卡住，`reach = max(rl, rr) − cy` 恒为负；
+  //   2. 竖直档那枚滴其实是**椭圆**（不是「两个圆 + 外公切线」），横向那套弦长算式
+  //      会把两个圆心算到对方的另一侧、得出一小段挤在正中间的弧。
+  //
+  // 前两条钉住修好之后的行为，第三条钉住**横向档没被带坏** —— 底栏与分段器走的是
+  // 横向档，它们有「逐像素不变」的验收，这条就是那件事的可断言形式。
+
+  /// 响铃页那枚药丸的几何：局部 `itemW 38 / capsuleH 72 / pad 10`。
+  LiquidLensShape pillShape({double lift = 1, double stretch = 0}) =>
+      LiquidLensShape.of(
+        itemW: 38,
+        capsuleH: 72,
+        pad: 10,
+        centerPage: 0,
+        lift: lift,
+        velocity: 0,
+        stretch: stretch,
+        metrics: const LiquidLensMetrics(
+            protrude: 16, liftWidth: 6, rimScale: 0.7, velocityRef: 300),
+      );
+
+  test('竖直档：折边会亮（这条以前永远为 null）', () {
+    final shape = pillShape();
+    expect(shape.width <= shape.height, isTrue, reason: '前提错了：这一档应当是竖直档');
+    final e = refractedCapsuleEdge(shape);
+    expect(e, isNotNull, reason: '竖直档的折边算出来是 null —— 边永远折不了');
+    expect(e!.fade, greaterThan(0));
+  });
+
+  test('竖直档：折边的弦长是椭圆那条，不是横向那套', () {
+    final shape = pillShape();
+    final e = refractedCapsuleEdge(shape)!;
+    // 椭圆在边线（局部 y = 0 / capsuleH）上的弦长 = 宽 · √(1 − (2·cy/高)²)。
+    final double k = 2 * shape.centerY / shape.height;
+    final double expected = shape.width * math.sqrt(1 - k * k);
+    expect(e.xR - e.xL, closeTo(expected, 0.5));
+    expect(e.xL + e.xR, closeTo(2 * shape.centerX, 0.5), reason: '两端不对称');
+  });
+
+  test('横向档：横轴半径与原来那个逐值相等（底栏不受影响的可断言形式）', () {
+    // 底栏那一档：itemW 88 / capsuleH 64 / pad 4。三个 stretch 各取一个。
+    for (final double s in <double>[0, 0.5, 1]) {
+      final shape = LiquidLensShape.of(
+          itemW: 88,
+          capsuleH: 64,
+          pad: 4,
+          centerPage: 0,
+          lift: 1,
+          velocity: 0,
+          stretch: s);
+      expect(shape.width > shape.height, isTrue,
+          reason: '前提错了：这一档应当是横向档（stretch $s）');
+      expect(shape.leftCrossRadius, closeTo(shape.leftRadius, 1e-9));
+      expect(shape.rightCrossRadius, closeTo(shape.rightRadius, 1e-9));
+    }
   });
 }
