@@ -257,6 +257,23 @@ class LiquidLensController extends ChangeNotifier {
 
   double get _liftTarget => (_dragging || _heldLongEnough) ? 1.0 : 0.0;
 
+  /// 按**当前意图**刷新升程弹簧的目标。
+  ///
+  /// ⚠️ **`_lift.target` 不许只在 `_onTick` 里写。** [_syncTicker] 要用
+  /// `_lift.isAtRest` 判「还要不要推帧」，而那个判据比的是 `value` 与 `target` ——
+  /// 意图在两次 tick 之间翻掉时（[tapCancel] / [release] / [cancel] 都会），
+  /// `target` 还是旧的「1」，于是 `value == target` 成立、被判成静止、
+  /// **ticker 被停掉**，[_onTick] 再也不跑、`target` 也就永远停在 1：
+  /// **升程冻死在满档**。用户 2026-10-01 报的正是它 ——「长按这些滑块，手指快速
+  /// 上下滑动页面时，滑块会定格在放大的那个瞬间，需要再次点击一下滑块，才会恢复
+  /// 正常」（再点一下会好，是因为 `press()` 把 `_pressed` 翻回 true、ticker 被重新
+  /// 拉起来，`target` 于是一帧后就被重算成 0）。
+  ///
+  /// 抽成一处是为了让 `_onTick` 与 [_syncTicker] **共用** —— 两处各写一遍迟早走偏。
+  void _retarget() {
+    _lift.target = _liftTarget;
+  }
+
   void _armHoldTimer() {
     _holdTimer?.cancel();
     _holdTimer = Timer(AppTokens.lensHoldDelay, () {
@@ -279,6 +296,10 @@ class LiquidLensController extends ChangeNotifier {
   /// 四个弹簧**每一个都要带上** —— 漏掉亮度那条的症状是「手停下来时淡出到一半，
   /// ticker 就停了、彩边被冻在屏幕上」。
   void _syncTicker() {
+    // **先按当前意图刷新目标，再判静止。** 顺序反了的话，意图刚翻掉的那一帧会被
+    // 判成「已经静止」（`value == 旧的 target`），ticker 当场停掉、`target` 再也
+    // 没机会被重算 —— 升程冻死在满档。详见 [_retarget]。
+    _retarget();
     final bool needed = _pressed ||
         !_pos.isAtRest ||
         !_lift.isAtRest ||
@@ -305,7 +326,7 @@ class LiquidLensController extends ChangeNotifier {
     final bool lifting = _liftTarget > 0.5;
     _lift.omega = lifting ? AppTokens.lensLiftOmega : AppTokens.lensDropOmega;
     _lift.zeta = lifting ? AppTokens.lensLiftZeta : AppTokens.lensDropZeta;
-    _lift.target = _liftTarget;
+    _retarget();
     _lift.step(dt);
 
     if (!_dragging) {

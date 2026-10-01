@@ -155,6 +155,29 @@ void main() {
     await settleToRest(tester);
   });
 
+  testWidgets('按住够久再竖直滑走：升程**必须落回来**（它原来冻在满档）', (tester) async {
+    // 用户 2026-10-01：「长按这些滑块，手指快速上下滑动页面时，滑块会定格在放大的
+    // 那个瞬间，需要再次点击一下滑块，才会恢复正常」。
+    //
+    // 根因：`_syncTicker()` 拿 `_lift.isAtRest` 判「还要不要推帧」，而它比的是
+    // `value` 与 `target` —— **`target` 只在 `_onTick` 里刷新**。`tapCancel()` 翻完
+    // 状态立刻判，此时 `value == target == 1`，判成「已静止」→ 停 ticker →
+    // `_onTick` 再也不跑 → `target` 永远停在 1。
+    //
+    // **按得够久是复现的关键**：400ms 时升程弹簧速度还没落到 1 以下、不算静止，
+    // ticker 照跑，于是自愈 —— 它在真机上只在「弹簧停稳之后再滑」时出现。
+    final c = make();
+    c.press(itemW + itemW / 2);
+    await advance(tester, 1200); // 升程彻底停稳
+    expect(c.lift, closeTo(1, 0.001), reason: '这一档本该已经提满了');
+
+    c.tapCancel();
+    await advance(tester, 800);
+    expect(c.lift, lessThan(0.01), reason: '升程冻在 ${c.lift} —— ticker 被提前停了');
+
+    await settleToRest(tester);
+  });
+
   testWidgets('速度门调低之后，慢速拖动也积得起形变；松手会收回去', (tester) async {
     // 规格 §3.3：一格 25px 的轨道上，全局 900px/s 的峰值形变只有 0.22~0.28 ——
     // 钮一两个帧就到头了，速度积不起来（**越快反而越短**）。
