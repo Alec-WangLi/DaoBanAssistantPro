@@ -191,6 +191,28 @@ void main() {
       expect(LiquidLensMetrics.forCapsule(40).liftWidth, closeTo(6.25, 0.001));
     });
 
+    test('forCapsule 顺带导出彩边缩放；不给 metrics 时是 1.0（底栏那一档）', () {
+      // 用户 2026-10-01：「既然这个开关是小的，那彩边范围自然也要自适应变小」。
+      // 那四个宽度（10 / 6 / 8 / 2.4px）是照 **64 高**的胶囊量的常量，分母就在这里。
+      expect(LiquidLensMetrics.forCapsule(64).rimScale, closeTo(1.0, 0.001));
+      expect(LiquidLensMetrics.forCapsule(40).rimScale, closeTo(0.625, 0.001));
+      expect(LiquidLensMetrics.forCapsule(30).rimScale, closeTo(0.46875, 0.001));
+      // 底栏显式写死两个外扩量（不走 forCapsule）时，也必须是 1.0 ——
+      // 矮屏那一档胶囊只有 52 高，跟着缩会改到横屏与小窗的画面。
+      expect(
+          const LiquidLensMetrics(protrude: 10, liftWidth: 10).rimScale, 1.0);
+      expect(
+          LiquidLensShape.of(
+                  itemW: 90,
+                  capsuleH: 52,
+                  pad: 6,
+                  centerPage: 0,
+                  lift: 1,
+                  velocity: 0)
+              .rimScale,
+          1.0);
+    });
+
     test('静止：是一枚胶囊（两端半径相等、且等于高的一半）', () {
       final s = at();
       expect(s.width, closeTo(itemW, 0.01));
@@ -368,6 +390,7 @@ void main() {
     List<Color>? fill,
     bool showRingCore = true,
     bool showRefractedEdge = true,
+    LiquidLensMetrics? metrics,
   }) async {
     tester.view.physicalSize = canvas;
     tester.view.devicePixelRatio = 1.0;
@@ -383,7 +406,8 @@ void main() {
         lift: lift,
         velocity: velocity,
         stretch: stretch,
-        motion: motion);
+        motion: motion,
+        metrics: metrics);
     final double top = (canvas.height - capsule.height) / 2;
     await tester.pumpWidget(RepaintBoundary(
       key: key,
@@ -603,6 +627,61 @@ void main() {
     }
     return n;
   }
+
+  testWidgets('彩边随尺寸缩：rimScale 小一档，带色相的像素面积必须明显更小', (tester) async {
+    // 用户 2026-10-01：「既然这个开关是小的，那彩边范围自然也要自适应变小」。
+    // 那四个宽度是照 64 高胶囊量的常量；原样搬到 30 高的开关上，内晕（10px）比钮
+    // 本身还粗 —— 用户看到的是「像两个半圆一样」（轮廓的上半个圆 + 下半个圆各被
+    // 一道过宽的光晕糊成一团）。
+    //
+    // **反向验证**：把五处乘法去掉，两档面积相等，这条立刻红。
+    const Color accent = Color(0xFF5B5BD6);
+    Future<int> areaAt(double rimScale) async {
+      final List<int> px = await shotLens(tester,
+          lift: 1,
+          accent: accent,
+          velocity: AppTokens.lensVelocityRef,
+          stretch: 1,
+          metrics:
+              LiquidLensMetrics(protrude: 10, liftWidth: 10, rimScale: rimScale),
+          showRingCore: false,
+          showRefractedEdge: false);
+      return ringArea(px, accent);
+    }
+
+    final int big = await areaAt(1.0);
+    final int small = await areaAt(0.469);
+    expect(big, greaterThan(0), reason: '满速下一像素彩色都没有 —— 几何假设变了');
+    expect(small / big, lessThan(0.75),
+        reason: '彩边没跟着尺寸缩（1.0 档 $big 像素、0.469 档 $small 像素）—— '
+            '那道 10px 的内晕在小控件上比控件本身还粗');
+  });
+
+  testWidgets('外圈那几层一起缩：rimScale 小的不透明像素更少', (tester) async {
+    // 浮起阴影的偏移与模糊同样是常量，是「占满整个轨道」的另一半来源 —— 它跟着
+    // `rimScale` 一起缩。
+    //
+    // ⚠️ **能挡住的只是「整组都忘了缩」**，挡不住「少缩了其中一层」（只缩四层光谱、
+    // 漏掉阴影，这条仍然绿）。要分辨后者只能出图看 —— 样图里那圈灰晕最明显。
+    const Color accent = Color(0xFF5B5BD6);
+    Future<int> inked(double rimScale) async {
+      final List<int> px = await shotLens(tester,
+          lift: 1,
+          accent: accent,
+          metrics:
+              LiquidLensMetrics(protrude: 10, liftWidth: 10, rimScale: rimScale));
+      int n = 0;
+      for (int i = 3; i < px.length; i += 4) {
+        if (px[i] > 8) n++;
+      }
+      return n;
+    }
+
+    final int big = await inked(1.0);
+    final int small = await inked(0.469);
+    expect(small, lessThan(big),
+        reason: '外圈那几层没缩（1.0 档 $big 个不透明像素、0.469 档 $small 个）');
+  });
 
   testWidgets('彩边是「光晕」不是「等宽的带」：颜色往轮廓里会衰减', (tester) async {
     // 用户 2026-10-01：「现在给我的感觉就像在这个滑块的边缘加了一层彩带一样。

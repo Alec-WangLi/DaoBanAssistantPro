@@ -114,6 +114,7 @@ class LiquidLensShape {
     required this.stretch,
     required this.motion,
     required this.movingRight,
+    required this.rimScale,
   });
 
   /// 从手势状态算出这一帧的形状。
@@ -173,6 +174,7 @@ class LiquidLensShape {
       stretch: s,
       motion: glow,
       movingRight: velocity > 0,
+      rimScale: m.rimScale,
     );
   }
 
@@ -199,6 +201,10 @@ class LiquidLensShape {
   /// 这一帧是否在向右移动（决定哪一端是「前缘」）。静止时为 false，
   /// 但那时两端半径相等，所以取哪一边都一样。
   final bool movingRight;
+
+  /// 四层光谱与浮起阴影的**整体缩放**（见 `LiquidLensMetrics.rimScale`）。
+  /// 1.0 = 底栏那一档，也就是那四个宽度被量出来的尺子。
+  final double rimScale;
 
   /// 竖直中轴。透镜与胶囊**共用**这一条。
   double get centerY => capsuleH / 2;
@@ -449,11 +455,14 @@ class _LensShadowPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (lift <= 0.01) return;
     // 影子往下偏一点、越浮越深越散 —— 「浮起来」这件事几乎全靠它。
+    // 偏移与模糊都跟着透镜尺寸缩：小控件上照 64 高那档的量投，会得到一圈比钮还大的
+    // 灰晕（与彩边同一个毛病）。
+    final double k = shape.rimScale;
     canvas.drawPath(
-      _lensPath(shape, origin).shift(Offset(0, 2 + 3 * lift)),
+      _lensPath(shape, origin).shift(Offset(0, (2 + 3 * lift) * k)),
       Paint()
         ..color = Colors.black.withValues(alpha: 0.08 + 0.14 * lift)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 5 * lift),
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, (5 + 5 * lift) * k),
     );
   }
 
@@ -494,12 +503,14 @@ class _LensGlowPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (shape.motion <= 0.05) return;
     final Path p = _lensPath(shape, origin);
+    final double k = shape.rimScale;
     canvas.drawPath(
       p,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = AppTokens.lensGlowWidth
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, AppTokens.lensGlowBlur)
+        ..strokeWidth = AppTokens.lensGlowWidth * k
+        ..maskFilter =
+            MaskFilter.blur(BlurStyle.normal, AppTokens.lensGlowBlur * k)
         ..shader = spectralSweep(
           accent: accent,
           alpha: 0.28 * shape.motion,
@@ -625,7 +636,7 @@ class _LensBodyPainter extends CustomPainter {
         p,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = AppTokens.lensRingCoreWidth
+          ..strokeWidth = AppTokens.lensRingCoreWidth * shape.rimScale
           ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.70),
       );
     }
@@ -705,13 +716,14 @@ class _LensBodyPainter extends CustomPainter {
   /// 同时看到相邻的两个色调。一层的话仍然只是「一个颜色一个位置」。
   void _paintHalo(Canvas canvas, Path p) {
     final Rect b = p.getBounds();
+    final double k = shape.rimScale;
     canvas.drawPath(
       p,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = AppTokens.lensHaloWidth
+        ..strokeWidth = AppTokens.lensHaloWidth * k
         ..maskFilter =
-            const MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloBlur)
+            MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloBlur * k)
         ..shader = spectralSweep(
           accent: accent,
           alpha: 0.42 * shape.motion,
@@ -725,9 +737,9 @@ class _LensBodyPainter extends CustomPainter {
       p,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = AppTokens.lensHaloInnerWidth
+        ..strokeWidth = AppTokens.lensHaloInnerWidth * k
         ..maskFilter =
-            const MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloInnerBlur)
+            MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloInnerBlur * k)
         ..shader = spectralSweep(
           accent: accent,
           alpha: 0.52 * shape.motion,
@@ -755,7 +767,9 @@ class _LensBodyPainter extends CustomPainter {
       lensPath,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = AppTokens.lensRingWidth
+        // 跟着透镜尺寸缩（见 `rimScale`）：不缩的话这条 2.4px 的线在小钮上会与那两层
+        // 光晕一起把钮整个盖住。
+        ..strokeWidth = AppTokens.lensRingWidth * shape.rimScale
         ..shader = spectralSweep(
           accent: accent,
           // **整体乘的是「动不动」而不是「多快」**（用户 2026-10-01：「彩色边缘
