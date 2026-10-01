@@ -37,7 +37,8 @@ class CalendarScreen extends ConsumerStatefulWidget {
   ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+class _CalendarScreenState extends ConsumerState<CalendarScreen>
+    with SingleTickerProviderStateMixin {
   static const _hPad = 12.0; // 网格左右留白
   static const _weekdayH = 26.0; // 周标题行高
   static const _cellInset = AppTokens.gapHair; // 格子/玻璃块统一内缩
@@ -81,6 +82,39 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Duration? _lastFrameStamp;
   double _lastVelCol = 0;
   double _lastVelRow = 0;
+
+  // ── 滑行：点日期 / 点「今天」那一下，那枚块**自己飞过去**（只有液态档）──────
+  //
+  // 为什么位置要由我们自己算：`AnimatedPositioned` 走的时候我们**看不到中间位置**，
+  // 于是 ① 速度恒为 0（形变与彩边都不发生）② 挤压场一直盯着**终点那一格**（块飞过的
+  // 格子一点反应都没有）。位置一旦由我们算，速度、挤压场、以及画出来的那一帧就是
+  // 同一个数推出来的 —— 用户 2026-10-01 说的「返回的动画还是以前那种效果」就是它。
+  //
+  // 标准档**一个字节都不走这条路**：那里 `lensCenter` 是 null、速度也没人消费，跑起来
+  // 只是白付每帧重建 —— 那棵树仍旧由 `AnimatedPositioned` 自己走（逐像素不变）。
+  Ticker? _ticker;
+  bool _flying = false;
+
+  /// 这一帧那枚块在哪儿（格子层坐标，与 `blockLeft/blockTop` 同一套）。
+  /// 拖动中它就是手指的位置，滑行中它是算出来的中间位置。
+  Offset _flightPos = Offset.zero;
+  Offset? _flightFrom; // 这一趟的起点（null = 没有在跑的滑行）
+  Offset? _flightTarget; // 上一次摆过的目标（null = 块不在树上）
+
+  /// 滑行速度的换算要用格子尺寸，而那两个数只在 build 里算得出来 —— 起跑那一帧
+  /// 存下来（中途换窗口大小会差一档，那也是下一帧就自愈的事）。
+  double _flightCellW = 1;
+  double _flightCellH = 1;
+
+  /// 这一趟滑行已经走了多久。**自己累加，不拿 ticker 的 `elapsed`** —— 那个基准是
+  /// ticker 自己的（停掉再开会不会归零不在我们手上），而这里只要帧间隔。
+  Duration _flightElapsed = Duration.zero;
+  Duration? _lastFlightStamp;
+
+  /// 滑行的曲线与时长 —— **与标准档那棵树完全同一套**（`AnimatedPositioned` 用的
+  /// 就是这两个数），这样两档飞得一样快、一样刹车。
+  static const Curve _blockSlideCurve = Curves.easeOutCubic;
+  static const Duration _blockSlideDuration = AppTokens.durMed;
 
   /// 长按拖选：起点与当前终点（null = 不在范围选择态）。
   DateTime? _rangeAnchor;
@@ -205,6 +239,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   void dispose() {
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetLaunchRequested);
+    _ticker?.dispose();
     super.dispose();
   }
 
@@ -391,6 +426,95 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final day = index - _leading + 1;
     if (day < 1 || day > _daysInMonth) return null;
     return DateTime(_month.year, _month.month, day);
+  }
+
+  /// 目标变了就起一次滑行。**在 `build` 里调** —— 目标本来就只在 build 里算得出来，
+  /// 而目标没变时它一行都不做（同一帧里 build 跑几次是常态）。
+  ///
+  /// 用 `Ticker` 而不是 `AnimationController`：后者的 `forward()` 一调就会通知监听者，
+  /// 在 build 里会撞「setState() called during build」。而这里只需要「每帧来一下」。
+  void _syncBlockFlight(
+      bool showBlock, Offset target, double cellW, double cellH) {
+    if (!showBlock || !liquidGlassActive.value) {
+      // 块不在树上 / 不是液态档：**清掉「上一次摆过哪儿」** —— 下次它再出现时
+      // 直接落到位，不从上一处（很可能是另一个月的坐标）窜过来。
+      _flightTarget = null;
+      _stopFlight();
+      return;
+    }
+    _flightCellW = cellW;
+    _flightCellH = cellH;
+    if (_dragActive) {
+      // 拖动中位置由手指给（1:1 跟手），滑行让位。**这一条要在「目标没变」之前**：
+      // 用户可能在那枚块还在飞的时候一把按住它（`onPanStart` 的目标恰好就是
+      // `_selected` 那一格、与飞行的终点相同），那种帧不能当成「没变化」放过去。
+      _stopFlight();
+      _flightTarget = target;
+      _flightPos = target;
+      return;
+    }
+    if (_flightTarget == target) return; // 没变化（滑行途中每一帧都走到这里）
+    final Offset? prev = _flightTarget;
+    _flightTarget = target;
+    if (prev == null) {
+      // 头一次出现：直接落到位。**不飞** —— 「上一次的位置」是另一个月的坐标时
+      // （换月之后块被藏起来又露出来）飞过去会从莫名其妙的地方窜出来。
+      _stopFlight();
+      _flightPos = target;
+      return;
+    }
+    _flightFrom = _flightPos; // 中途被打断就从中途接着飞
+    _flightElapsed = Duration.zero;
+    _lastFlightStamp = null;
+    _flying = true;
+    // ⚠️ **ticker 只建一次，之后只 start / stop**（`SingleTickerProviderStateMixin`
+    // 一个 State 只许 `createTicker` 一次）—— `CalendarLens` 那边踩过同一个坑。
+    _ticker ??= createTicker(_onFlightTick);
+    if (!_ticker!.isActive) _ticker!.start();
+  }
+
+  void _onFlightTick(Duration elapsed) {
+    final Offset? from = _flightFrom;
+    if (from == null) return; // 已经被停掉的余帧
+    final Duration? prevStamp = _lastFlightStamp;
+    final Duration raw = prevStamp == null ? Duration.zero : elapsed - prevStamp;
+    // 掉帧时按**积分步长的上限**算（与弹簧同一条规矩）：不封顶的话卡顿那一帧会
+    // 让位置瞬移，速度也跟着跳一下。
+    final Duration dt = raw > Duration.zero && raw < LiquidLensSpring.maxStep
+        ? raw
+        : LiquidLensSpring.maxStep;
+    _lastFlightStamp = elapsed;
+    _flightElapsed += dt;
+
+    final double t = (_flightElapsed.inMicroseconds /
+            _blockSlideDuration.inMicroseconds)
+        .clamp(0.0, 1.0);
+    final Offset pos =
+        Offset.lerp(from, _flightTarget!, _blockSlideCurve.transform(t))!;
+
+    // 速度：**位置的帧间差分 ÷ 真实帧间隔** —— 与拖动那条同一个纯函数、同一道低通
+    // （那里差分的是「格」，这里把像素差换算成格）。
+    _vx = lensVelocityStep(
+        deltaPage: (pos.dx - _flightPos.dx) / _flightCellW,
+        itemW: _flightCellW,
+        dt: dt,
+        previous: _vx);
+    _vy = lensVelocityStep(
+        deltaPage: (pos.dy - _flightPos.dy) / _flightCellH,
+        itemW: _flightCellH,
+        dt: dt,
+        previous: _vy);
+
+    setState(() => _flightPos = pos);
+    if (t >= 1) _stopFlight();
+  }
+
+  /// 停下滑行。**速度不归零** —— 松手 / 落定之后那枚块还要靠最后一次速度把形变与
+  /// 彩边**收回去**（它自己按帧衰减），归零就是「啪」地一下没了。
+  void _stopFlight() {
+    _flying = false;
+    _flightFrom = null;
+    _ticker?.stop();
   }
 
   @override
@@ -975,6 +1099,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         final blockTop = _dragActive
             ? _weekdayH + _visualRow * cellH
             : (selectedRect?.top ?? 0);
+        // 目标变了就起一次滑行。**必须在算 `lensCenter` 之前**：挤压场用的是
+        // 「这一帧块在哪儿」，而那正是它更新出来的。
+        _syncBlockFlight(showBlock, Offset(blockLeft, blockTop), cellW, cellH);
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -1140,32 +1267,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       ..._dayRows(context, cellW, cellH, chain,
                           // 液态档才有：那枚块**当前的中心**（格子层坐标）。
                           // 「内容被它挤」用得到，标准档传 null（一层都不算）。
+                          //
+                          // ⚠️ 取 `_flightPos`（这一帧真的在哪儿）而不是目标格 ——
+                          // 滑行时块正从别的格子上面扫过去，被挤的该是它底下的那几格。
                           lensCenter: showBlock && liquidGlassActive.value
-                              ? Offset(blockLeft + cellW / 2, blockTop + cellH / 2)
+                              ? Offset(_flightPos.dx + cellW / 2,
+                                  _flightPos.dy + cellH / 2)
                               : null),
                     ],
                   ),
                 ),
-                if (showBlock)
-                  AnimatedPositioned(
-                    duration: _dragActive
-                        ? Duration.zero
-                        : AppTokens.durMed,
-                    curve: Curves.easeOutCubic,
-                    left: blockLeft,
-                    top: blockTop,
-                    width: cellW,
-                    height: cellH,
-                    child: AnimatedScale(
-                      // ⚠️ 液态档**钉在 1.0**：按住那个动作改由「四面鼓出 + 浮起阴影」
-                      // 承担（`CalendarLens` 的升程），两个叠在一起就重了。
-                      // 标准档一个字不改 —— 它靠的正是这 1.22。
-                      scale: _pressed && !liquidGlassActive.value ? 1.22 : 1.0,
-                      duration: AppTokens.durMed,
-                      curve: Curves.easeOutBack,
-                      child: _glassBlock(context, cellW, cellH),
-                    ),
-                  ),
+                if (showBlock) _blockPlacement(context, cellW, cellH, blockLeft, blockTop),
               ],
             ),
           ),
@@ -1745,6 +1857,45 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
+  /// 那枚块**摆在哪儿**。两档各一棵树：
+  ///
+  /// · **标准档**：`AnimatedPositioned` 自己走 —— 那棵树**一个字节都没动**。
+  /// · **液态档**：位置由我们算（`_flightPos`），因为滑行时的速度与挤压场都要那个
+  ///   中间位置，而 `AnimatedPositioned` 不把它交出来（见 `_syncBlockFlight`）。
+  ///
+  /// 两棵树用**同一套曲线与时长**（`_blockSlideCurve` / `_blockSlideDuration`），
+  /// 所以两档飞起来一样快、一样刹车。
+  Widget _blockPlacement(BuildContext context, double cellW, double cellH,
+      double left, double top) {
+    final Widget sized = AnimatedScale(
+      // ⚠️ 液态档**钉在 1.0**：按住那个动作改由「四面鼓出 + 浮起阴影」承担
+      // （`CalendarLens` 的升程），两个叠在一起就重了。
+      // 标准档一个字不改 —— 它靠的正是这 1.22。
+      scale: _pressed && !liquidGlassActive.value ? 1.22 : 1.0,
+      duration: AppTokens.durMed,
+      curve: Curves.easeOutBack,
+      child: _glassBlock(context, cellW, cellH),
+    );
+    if (liquidGlassActive.value) {
+      return Positioned(
+        left: _flightPos.dx,
+        top: _flightPos.dy,
+        width: cellW,
+        height: cellH,
+        child: sized,
+      );
+    }
+    return AnimatedPositioned(
+      duration: _dragActive ? Duration.zero : _blockSlideDuration,
+      curve: _blockSlideCurve,
+      left: left,
+      top: top,
+      width: cellW,
+      height: cellH,
+      child: sized,
+    );
+  }
+
   /// 可拖拽的玻璃选择块（与格子同 inset、同圆角，精确覆盖）。
   Widget _glassBlock(BuildContext context, double cellW, double cellH) {
     final accent = Theme.of(context).colorScheme.primary;
@@ -1757,7 +1908,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         key: const Key('calendar-selection-block'),
         size: Size(cellW, cellH),
         liftTarget: (_pressed || _dragActive) ? 1 : 0,
-        velocityLive: _dragActive,
+        // 速度的**两条来路**都从这一个入口进去：手指在拖（`onPanUpdate` 的帧间
+        // 差分），以及那枚块自己在滑行（`_onFlightTick` 算的）。两处都是每帧一个新
+        // 采样，所以 `CalendarLens` 那边那条「别把陈旧的值反复灌回来」照样成立。
+        velocityLive: _dragActive || _flying,
         velocity: Offset(_vx, _vy),
         isDark: Theme.of(context).brightness == Brightness.dark,
         accent: accent,

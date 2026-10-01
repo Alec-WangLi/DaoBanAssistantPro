@@ -1826,5 +1826,138 @@ void main() {
       await tester.pumpAndSettle();
       await _disposeCalendar(tester);
     });
+
+    // ── 滑行：点日期 / 点「今天」那一下，那枚块是**飞过去的** ──────────────
+    //
+    // 用户 2026-10-01：「点击当月的其他日期之后，再点『今天』，返回的动画也应该像
+    // 底部导航栏点击时那样，加上该有的光晕，以及『头大尾轻』之类的特效。现在看起来
+    // 还是以前那种效果。」
+    //
+    // 根因是三处同源：位置由 `AnimatedPositioned` 隐式走 → 拿不到中间位置 →
+    // ① 速度恒为 0（形变与彩边都不发生）② 挤压场一直盯着**终点那一格**（块飞过的
+    // 格子一点反应都没有）。现在位置由我们自己算，三件事从同一个数推出来。
+    testWidgets('点「今天」：那枚块真的**滑行**过去，不是瞬移', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      final int today = DateTime.now().day;
+      final int other = today >= 15 ? today - 10 : today + 10; // 一定在 1..25 里
+      final Finder block = find.byKey(const Key('calendar-selection-block'));
+      final Finder todayBtn = find.byIcon(Icons.today_outlined);
+
+      // 先飞一次到「今天」，把**终点**量出来（那枚块的左上角）。
+      await tester.tap(todayBtn);
+      await tester.pumpAndSettle();
+      final Offset end = tester.getTopLeft(block);
+
+      // 再点到远处那一格，然后点「今天」飞回来。
+      await tester.tap(find.byKey(ValueKey('day-card-$other')));
+      await tester.pumpAndSettle();
+      final Offset start = tester.getTopLeft(block);
+      expect(start, isNot(end));
+
+      await tester.tap(todayBtn);
+      await tester.pump(); // 起跑
+      // 逐帧推（一帧 16ms）：滑行按帧走，一次 `pump(80ms)` 只会让 ticker 跑一帧。
+      for (int i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 16)); // 中途
+      }
+      final Offset mid = tester.getTopLeft(block);
+      final Offset d = end - start;
+      final Offset m = mid - start;
+      final double along = (m.dx * d.dx + m.dy * d.dy) / d.distanceSquared;
+      expect(along, greaterThan(0.05),
+          reason: '那一帧还停在起点 —— 位置是瞬移过去、中间没有帧（$mid）');
+      expect(along, lessThan(0.95),
+          reason: '那一帧已经到终点了 —— 同上（$mid）');
+
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(block), end);
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('滑行中：挤压场跟着那枚块走，不是一直盯着终点', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      final int today = DateTime.now().day;
+      final int other = today >= 15 ? today - 10 : today + 10;
+      final Finder todayBtn = find.byIcon(Icons.today_outlined);
+
+      /// 全月有多少格的内容被透镜挤了（`Transform` 只在液态档、且只在非恒等时套）。
+      int warpedCells() {
+        var n = 0;
+        final int days = DateTime(DateTime.now().year, DateTime.now().month + 1, 0)
+            .day;
+        for (var d = 1; d <= days; d++) {
+          if (tester.any(find.descendant(
+              of: find.byKey(ValueKey('day-card-$d')),
+              matching: find.byType(Transform)))) {
+            n++;
+          }
+        }
+        return n;
+      }
+
+      await tester.tap(todayBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('day-card-$other')));
+      await tester.pumpAndSettle();
+      expect(warpedCells(), 0, reason: '静止时不该有被挤的格子（v0.10.15 那条）');
+
+      await tester.tap(todayBtn);
+      await tester.pump();
+      for (int i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      // 块正卡在格子之间，它扫过的那几格的内容该被挤。
+      expect(warpedCells(), greaterThan(0),
+          reason: '滑行中一格都没被挤 —— 挤压场还盯着终点那一格，没跟着那枚块走');
+
+      await tester.pumpAndSettle();
+      expect(warpedCells(), 0, reason: '落定之后该收干净');
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('滑行中：彩边亮起来（块在动），落定之后熄灭', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      final int today = DateTime.now().day;
+      final int other = today >= 15 ? today - 10 : today + 10;
+      final Finder todayBtn = find.byIcon(Icons.today_outlined);
+      double motion() =>
+          tester.widget<LiquidLens>(find.byType(LiquidLens)).shape.motion;
+
+      await tester.tap(find.byKey(ValueKey('day-card-$other')));
+      await tester.pumpAndSettle();
+      await tester.tap(todayBtn);
+      await tester.pump();
+      // ⚠️ **逐帧推**（一帧 16ms）：滑行是按帧走的，一次性 `pump(100ms)` 只会让
+      // ticker 跑一帧（`maxStep` 那条封顶），量到的是「刚起步」。
+      for (int i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(motion(), greaterThan(0.5),
+          reason: '滑行中彩边没亮 —— 速度还是恒为 0（那正是「以前那种效果」）');
+
+      await tester.pumpAndSettle();
+      expect(motion(), closeTo(0, 0.02));
+      // 滑行结束之后**不许再推帧**（常驻动画会让整套 widget 测试在 pumpAndSettle
+      // 上集体超时 —— 日历页 v0.9.8 吃过这个亏）。
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('两棵树：标准档仍是 AnimatedPositioned，液态档的位置由我们算',
+        (tester) async {
+      final Finder block = find.byKey(const Key('calendar-selection-block'));
+      await _pumpCalendar(tester, 'four_crew_three_shift');
+      expect(find.ancestor(of: block, matching: find.byType(AnimatedPositioned)),
+          findsOneWidget,
+          reason: '标准档那棵树一个字都不许动');
+      await _disposeCalendar(tester);
+
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      expect(find.ancestor(of: block, matching: find.byType(AnimatedPositioned)),
+          findsNothing);
+      expect(find.ancestor(of: block, matching: find.byType(Positioned)),
+          findsWidgets);
+      await _disposeCalendar(tester);
+    });
   });
 }
