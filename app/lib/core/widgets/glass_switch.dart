@@ -18,21 +18,22 @@ import 'liquid_track.dart';
 /// ## 液态档这一棵长什么样
 ///
 /// 轨道**玻璃化**（`GlassBlur` + `navFill` / `navBorder`），**开的时候**在玻璃里叠一层
-/// 主色淡染表示「已打开」。钮是一枚**白色**玻璃球（不是主色玻璃滴 —— 白球压在淡染
-/// 轨道上才读得出），**按住时纵向拉长**：`20 × 22 → 20 × 38`，宽度不变。
+/// 主色淡染表示「已打开」。钮是一枚**主色玻璃滴** —— 与底栏、分段器**同一件东西**
+/// （用户 2026-10-01：「颜色变浅了，尤其是跟主题模式等，有明显的颜色差别。理论上
+/// 它们应该都是一样的」；原来它是白球，材质与另两处根本不同）。
 ///
-/// 为什么钮要纵向拉长而不是等比例放大：用户 2026-10-01 的原话是「按住的时候不是要
-/// 放大吗？那就要做成往纵向放大，参考 iOS 26 他们的开关液态玻璃那种形状变化」。
-/// 那正是 `LiquidLensMetrics` 存在的理由 —— 底栏那套凸出量是照 64 高胶囊量的，
-/// 搬到 28 高的轨道上会「整个胀到外面」。
+/// 升程也**与另两处统一**（`LiquidLensMetrics.forCapsule`，纵横一起长）。
+/// v0.10.9 那版传的是 `protrude: 8, liftWidth: 0`「只长个儿」—— 那一版是照用户
+/// 当时「参考 iOS 26 往纵向放大」做的，2026-10-01 他自己推翻了：
+/// 「你参考底部导航栏那个滑块……还是优先把它统一起来」。
 class GlassSwitch extends StatefulWidget {
   const GlassSwitch({
     super.key,
     required this.value,
     required this.onChanged,
     this.activeColor,
-    this.width = 46,
-    this.height = 28,
+    this.width = 56,
+    this.height = 30,
     this.enabled = true,
   });
 
@@ -72,8 +73,8 @@ class _GlassSwitchState extends State<GlassSwitch>
       // 内缩 = `padChipV`（3）—— 标准档那棵树用的也是它，且钮径 `height - 6` 的
       // 内缩正好是 (28 − 22) / 2 = 3，两棵树的钮一样大。
       pad: AppTokens.padChipV,
-      // 「只长个儿、不变宽」—— 这是这一处的形状契约。
-      liftWidth: 0,
+      // 与底栏、分段器**同一套**（纵横一起长）。
+      liftWidth: LiquidLensMetrics.forCapsule(widget.height).liftWidth,
       vsync: this,
       initialSlot: widget.value ? 1 : 0,
       // 开关不可拖：提起之后钮**不朝手指走**（见 `followFinger` 的说明）。
@@ -194,10 +195,10 @@ class _GlassSwitchState extends State<GlassSwitch>
         capsuleH: widget.height,
         pad: AppTokens.padChipV,
         controller: _lens,
-        metrics: const LiquidLensMetrics(protrude: 8, liftWidth: 0),
-        // 钮是**白的** —— 压在淡染轨道上，主色玻璃滴会糊成一片。
-        fill: const <Color>[Colors.white, Colors.white],
-        // 白上画白等于没画：那条白芯在这里只会把轮廓读没。
+        metrics: LiquidLensMetrics.forCapsule(widget.height),
+        // 白芯在小钮上是坏的：它会渲成一道**横穿钮身的白线**（放大看很清楚）。
+        // v0.10.9 关掉它的理由是「白上画白等于没画」—— 那按的是**钮的颜色**，
+        // 于是钮一改成主色它就带着缺陷回来了。这里按**控件尺寸**判，与颜色无关。
         showRingCore: false,
         // 这两层是**底栏特有**的读法，46px 宽的轨道上它们是几道乱线（样图实测）。
         showGlowBand: false,

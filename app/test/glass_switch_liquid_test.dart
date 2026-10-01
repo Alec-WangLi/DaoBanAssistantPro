@@ -1,7 +1,15 @@
 // `GlassSwitch` 接上液态档之后的护栏。
 //
 // 「关掉液态档时与改之前逐像素相同」不在这里验 —— 开关长在七个界面里，那条由
-// `tool/visual` 的整屏逐像素比兜着。这里钉三件单屏照不出来的事。
+// `tool/visual` 的整屏逐像素比兜着。这里钉几件单屏照不出来的事。
+//
+// v0.10.10 把「按住时只往纵向拉长」换成了「与底栏 / 分段器同一套升程」，所以
+// 第二条**从「宽度不变」翻成了「宽度也要长」** —— 那不是放松，是设计改了
+// （用户 2026-10-01：「你参考底部导航栏那个滑块……还是优先把它统一起来」）。
+//
+// 几条都走**几何与配置**断言（`LiquidLens.shape` / `showRingCore` / `fill`），
+// 不光栅化：那几件事在这里是「接线对不对」，形状与配色本身由 `liquid_lens_test`
+// 那 60 多条守着。
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,20 +47,21 @@ void main() {
 
   testWidgets('静止：钮是一枚圆球（宽 ≈ 高），坐在轨道里', (tester) async {
     await pumpSwitch(tester, liquid: true);
-    // 轨道 46×28、内缩 3 → 每格 (46−6)/2 = 20；钮高 = 28−6 = 22
-    expect(lensOf(tester).shape.width, closeTo(20, 0.5));
-    expect(lensOf(tester).shape.height, closeTo(22, 0.5));
+    // 轨道 56×30、内缩 3 → 每格 (56−6)/2 = 25；钮高 = 30−6 = 24
+    expect(lensOf(tester).shape.width, closeTo(25, 0.5));
+    expect(lensOf(tester).shape.height, closeTo(24, 0.5));
     expect((lensOf(tester).shape.width - lensOf(tester).shape.height).abs(),
         lessThan(2.5),
         reason: '静止时钮不是圆的 —— 共享件把它变成了胶囊');
   });
 
-  testWidgets('按住：钮**纵向**拉长，宽度不变', (tester) async {
-    // 用户 2026-10-01：「按住的时候不是要放大吗？那就要做成往纵向放大，
-    // 参考 iOS 26 他们的开关液态玻璃那种形状变化」。
+  testWidgets('按住：钮**纵横一起长**（与底栏 / 分段器同一套升程）', (tester) async {
+    // v0.10.9 那一版是「只长个儿、不变宽」（用户当时要的「参考 iOS 26 往纵向放大」）。
+    // 2026-10-01 他自己推翻了：「你参考底部导航栏那个滑块……还是优先把它统一起来」。
+    // 所以这一条现在要求**两个方向都长**，反向的那条（宽度不变）已作废删掉。
     await pumpSwitch(tester, liquid: true);
-    final Size before = Size(lensOf(tester).shape.width,
-        lensOf(tester).shape.height);
+    final Size before =
+        Size(lensOf(tester).shape.width, lensOf(tester).shape.height);
 
     final Rect box = tester.getRect(find.byType(GlassSwitch));
     final TestGesture g = await tester.startGesture(box.center);
@@ -60,15 +69,36 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16)); // 320ms，过按住闸门
     }
 
-    final Size after = Size(lensOf(tester).shape.width,
-        lensOf(tester).shape.height);
-    expect(after.height, greaterThan(28),
+    final Size after =
+        Size(lensOf(tester).shape.width, lensOf(tester).shape.height);
+    expect(after.height, greaterThan(30),
         reason: '按住之后钮没有高过轨道（${after.height}）—— 没有「被抽出来」');
-    expect(after.height, greaterThan(before.height + 10));
-    expect(after.width, closeTo(before.width, 0.5),
-        reason: '宽度也变了（${before.width} → ${after.width}）—— 要的是只长个儿');
+    expect(after.height, greaterThan(before.height + 4));
+    expect(after.width, greaterThan(before.width + 2),
+        reason: '宽度没长（${before.width} → ${after.width}）—— 那还是「只长个儿」');
     await g.up();
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('钮是**主色玻璃滴**，不是白球（与分段器那枚要同一件东西）', (tester) async {
+    // 用户 2026-10-01：「颜色变浅了，尤其是跟主题模式等，有明显的颜色差别。
+    // 理论上它们应该都是一样的」—— 原来钮是 `fill: [white, white]`，
+    // 材质与分段器那枚主色滴根本不同，整条轨道读起来就淡一档。
+    //
+    // `fill == null` 就是「没覆盖，用默认的 `accentGradient`」—— 这一条断言的是
+    // 接线，不是像素；白色渐变在这里会当场红。
+    await pumpSwitch(tester, liquid: true);
+    expect(lensOf(tester).fill, isNull,
+        reason: '钮的填充被写死了 —— 它应当是默认的主色渐变');
+  });
+
+  testWidgets('白芯是关掉的（它在小钮上会渲成一道横穿钮身的白线）', (tester) async {
+    // v0.10.9 关掉白芯的理由是「白上画白等于没画」，那只覆盖了**白钮那一档**；
+    // 钮一改成主色，白芯就回来了 —— 而且在小钮上它渲成一道横穿钮身的白线。
+    // 判据按**控件尺寸**，与钮是什么颜色无关。
+    await pumpSwitch(tester, liquid: true);
+    expect(lensOf(tester).showRingCore, isFalse,
+        reason: '白芯开着 —— 在小钮上它是一道横穿钮身的白线');
   });
 
   testWidgets('置灰：即使液态档开着也走标准档那棵（树上没有透镜）', (tester) async {

@@ -90,11 +90,19 @@ class _RecurringList extends ConsumerWidget {
       if (next != null) L10n.nextTime(L10n.monthDay(next)),
     ];
     final muted = AppTokens.inkMuted(context);
+    // **小窗（200×400）里这一行本来就只有百来像素**：开关 + 间距 + 删除键已经占满，
+    // 标题只剩个位数。v0.10.10 把开关从 46 加宽到 56 之后它直接溢出了 6px（出图当场
+    // 红）。窄到放不下时把**内缩与间距**收掉 —— 不摘任何控件，删除键与开关都还在。
+    //
+    // 标题因此只从 4px 变成约 14px，仍然很挤 —— 但那是这一行在 200dp 下**原来就有**
+    // 的处境（不是这一版弄坏的）；真正要让它可读得重排这一行，是另一件事。
+    final bool tight = MediaQuery.sizeOf(context).width < 260;
     return GlassTile(
       enableBlur: false,
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceXs),
+      padding: EdgeInsets.symmetric(
+          horizontal: tight ? 0 : AppTokens.spaceSm,
+          vertical: AppTokens.spaceXs),
       onTap: () => _edit(context, ref, s),
       child: Row(
         children: [
@@ -102,7 +110,7 @@ class _RecurringList extends ConsumerWidget {
             value: s.enabled,
             onChanged: (v) => _setEnabled(ref, s, v),
           ),
-          const SizedBox(width: AppTokens.gapIconText),
+          SizedBox(width: tight ? AppTokens.gapHair : AppTokens.gapIconText),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
