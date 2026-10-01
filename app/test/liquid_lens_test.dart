@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens_metrics.dart';
+import 'package:shiftassistantpro/core/widgets/lens_warped_cell.dart';
 
 void main() {
   test('收敛：从中点出发最终停到目标上', () {
@@ -1168,5 +1169,58 @@ void main() {
     // 差得大 = 实现写成了「填一层淡白」而不是沿轮廓描一圈边。
     expect((lumAt(on, 100, 100) - lumAt(off, 100, 100)).abs(), lessThan(8));
     expect((lumAt(on, 100, 120) - lumAt(off, 100, 120)).abs(), lessThan(8));
+  });
+
+  // ── 竖着走的透镜也要挤内容（v0.10.13）────────────────────────────────────
+  //
+  // 响铃页那行「上滑关闭」正好躺在药丸经过的路上（用户原话：「如果这个滑轨上面有字，
+  // 记得这个字是不是也得扭曲效果」）。`LensWarpedCell` 的参数全是 x，套不上去 ——
+  // 所以有了 [LensWarpedVertical]：**同一份纯函数 `lensIconWarp`**，只把位移落到 dy、
+  // 两个缩放互换（因为「被挤」永远是**垂直于运动方向**的那一根）。
+
+  group('竖着走的透镜：LensWarpedVertical', () {
+    Future<void> pump(
+      WidgetTester tester, {
+      required double itemCenterY,
+      required double lensCenterY,
+    }) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Center(
+          child: LensWarpedVertical(
+            listenable: ValueNotifier<int>(0),
+            itemCenterY: itemCenterY,
+            lensCenterY: () => lensCenterY,
+            halfHeight: 50,
+            child: const Text('上滑关闭'),
+          ),
+        ),
+      ));
+    }
+
+    testWidgets('内容压在透镜边缘时被挤：位移沿 y、两个缩放互换', (tester) async {
+      // 半高 50 —— itemCenterY 放在透镜中心上方整整一个半高，t 正好 = 1（= 边缘）。
+      await pump(tester, itemCenterY: 150, lensCenterY: 100);
+      final Matrix4 m = tester
+          .widget<Transform>(find.descendant(
+              of: find.byType(LensWarpedVertical),
+              matching: find.byType(Transform)))
+          .transform;
+
+      expect(m.entry(0, 3), 0.0, reason: '位移跑到 x 上去了 —— 那是横向那一份');
+      expect(m.entry(1, 3).abs(), greaterThan(0.5), reason: '沿 y 没有位移');
+      // 「被挤」垂直于运动方向：竖着走 → **纵向压扁、横向拉长**。
+      expect(m.entry(1, 1), lessThan(1.0), reason: '纵向没压扁');
+      expect(m.entry(0, 0), greaterThan(1.0), reason: '横向没拉长');
+    });
+
+    testWidgets('内容落在透镜正中心时一层都不套（恒等就不套，那是要付代价的）',
+        (tester) async {
+      await pump(tester, itemCenterY: 100, lensCenterY: 100);
+      expect(
+          find.descendant(
+              of: find.byType(LensWarpedVertical),
+              matching: find.byType(Transform)),
+          findsNothing);
+    });
   });
 }
