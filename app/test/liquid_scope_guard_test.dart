@@ -27,6 +27,7 @@ import 'support/source_scan.dart';
 const List<String> _allowed = <String>[
   'lib/core/glass/glass.dart', // 定义处
   'lib/features/home/', // 底栏
+  'lib/core/widgets/glass_check.dart', // 待办那个勾
   'lib/core/widgets/glass_segment.dart', // 分段器
   'lib/core/widgets/glass_switch.dart', // 开关
 ];
@@ -78,6 +79,7 @@ void main() {
       // **按字典序**（`_readers` 排过序）—— 顺序写反了也会红。
       <String>[
         'lib/core/glass/glass.dart',
+        'lib/core/widgets/glass_check.dart',
         'lib/core/widgets/glass_segment.dart',
         'lib/core/widgets/glass_switch.dart',
         'lib/features/home/glass_nav_bar.dart',

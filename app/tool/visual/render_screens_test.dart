@@ -17,6 +17,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/widgets/glass_check.dart';
 import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
@@ -382,6 +383,36 @@ void main() {
           for (int i = 0; i < 20; i++) {
             await t.pump(const Duration(milliseconds: 30));
           }
+        },
+      );
+    });
+  }
+
+  // 待办 · **勾选态**（v0.10.10）。
+  //
+  // 待办原来用的是一枚开关，这一版换成了勾。屏单里已有的 `05_todos` 全是**没勾**的，
+  // 所以「勾上之后长什么样」在图上结构性地看不见 —— 而它恰恰是这一版改的东西。
+  // 点一下第一行那个勾，同一张图上就同时有「勾上」与「没勾」两态。
+  //
+  // 两档各出一张：一个 `GlassCheck` 只能读到一个档位（它读的是模块级标志），
+  // 要同时拍到两档只能出两张。
+  for (final bool liquid in <bool>[false, true]) {
+    visualTest('待办 · 勾选态 · ${liquid ? '液态档' : '标准档'}', (tester) async {
+      failOnOverflow(tester);
+      useLiquidGlassTier();
+      if (!liquid) useStandardGlassTier();
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: liquid ? '45_todo_check_liquid' : '44_todo_check',
+        home: const ScheduleScreen(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        extraPrefs: liquid
+            ? <String, Object>{...onboardingPrefs, 'liquidGlass': true}
+            : onboardingPrefs,
+        beforeCapture: (t) async {
+          await t.tap(find.byType(GlassCheck).first);
+          await settleVisual(t);
         },
       );
     });

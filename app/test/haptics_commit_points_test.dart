@@ -13,7 +13,7 @@
 //      一条**裁决**，不是一条实现（见下）
 //
 // **第 3 条的由来**：spec §4.2 那张提交点表原来把「待办勾选完成 → `commit()`」
-// 点在了 `schedule_screen.dart` 的 `onChanged` 上，而那个控件是 `GlassSwitch`，
+// 点在了 `schedule_screen.dart` 的 `onChanged` 上，而那个控件自己就会震一次，
 // §4.1 已经让它自震一次 `select()` —— 照办就是每拨一下震两下。裁决是**不加**：
 // 一个开关翻转只携带一条信息，两下比一下信息量更少。所以这一条断言的不是
 // 「能震就行」，而是**「`commit()` 没有回来」**：哪天有人照旧表把那一行加回去，
@@ -35,7 +35,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/haptics.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_action_button.dart';
-import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
+import 'package:shiftassistantpro/core/widgets/glass_check.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
@@ -176,7 +176,7 @@ void main() {
         reason: '决策①：primary 的确认按钮也是普通点击，不该震');
   });
 
-  testWidgets('待办勾选完成只震 select 一次：素材是 GlassSwitch，commit 不许再叠一次',
+  testWidgets('待办勾选完成只震 select 一次：素材是 GlassCheck，commit 不许再叠一次',
       (tester) async {
     final db = await _pumpTodos(tester);
     final repo = AppRepository(db);
@@ -187,7 +187,7 @@ void main() {
     );
     await _settle(tester);
 
-    await tester.tap(find.byType(GlassSwitch));
+    await tester.tap(find.byType(GlassCheck));
     await _settle(tester);
 
     // 库里真的写进去了 —— 没有这一条，下面那断言就只是「点了 → 震了」，
@@ -195,7 +195,7 @@ void main() {
     expect((await repo.listEvents()).single.isCompleted, isTrue,
         reason: '勾选没落库，这次点击就没真的发生');
 
-    // **整串都要对**：`GlassSwitch` 自己那一次 `select`（Task 4 的「选中变了」），
+    // **整串都要对**：`GlassCheck` 自己那一次 `select`（与开关同一处「选中变了」），
     // 且**到此为止**。`commit()` 半个都不许有 —— 一个开关翻转只携带一条信息，
     // 叠一档「动作落实」就是每拨一下震两下，正是这套设计要消灭的噪音。
     // 谁把 `Haptics.commit()` 加回 `onChanged`，这条立刻红。

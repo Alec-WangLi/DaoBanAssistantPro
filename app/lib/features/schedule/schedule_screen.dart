@@ -13,6 +13,7 @@ import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_segment.dart';
+import '../../core/widgets/glass_check.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
 import '../../data/app_repository.dart';
@@ -214,14 +215,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
       onTap: () => showEditEventDialog(context, ref, e),
       child: Row(
         children: [
-          GlassSwitch(
+          // v0.10.10：待办原来用的是一枚**开关** —— 那不符合待办事项的逻辑
+          // （用户 2026-10-01：「弄完之后打勾，给一个删除线表达」）。全 app 九处
+          // `GlassSwitch` 里只有这一处是勾选语义，其余八处都是真开关，不动。
+          GlassCheck(
             value: e.isCompleted,
             onChanged: (v) async {
-              // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassSwitch`，
-              // Task 4 已经让它在自己的 `onTap` 里发一次 `select()`（「选中变了」
-              // 正是它的语义）。再加一次就是每拨一下震两下 —— 两下比一下信息量
-              // **更少**，正是这套设计要消灭的噪音。spec §4.2 那张表原来点了这
-              // 一行，已作废：**§4.1 覆盖过的控件不再进 §4.2 的表**。
+              // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassCheck`，
+              // 它在自己的 `onTap` 里发一次 `select()`（「选中变了」正是它的语义，
+              // 与开关同一处）。再加一次就是每点一下震两下 —— 两下比一下信息量
+              // **更少**，正是这套设计要消灭的噪音。
               await ref.read(appRepositoryProvider).setEventCompleted(e, v);
               await _rescheduleReminders(ref);
             },
