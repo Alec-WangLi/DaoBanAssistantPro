@@ -57,6 +57,11 @@ List<({int row, int firstCol, int lastCol})> rangeRowRuns({
 /// 外缘，`k + 0.5` = 那一端又淌出去半格（widget 那层把「鼓出」也换算进来加在这儿）。
 /// `null` = 两端都按整格（静止帧）。哪一端会动由 [movingEnd] 说：
 /// `true` = 终点（右）、`false` = 起点（左）。
+///
+/// [inflate] 是**按住时长出来的那一圈**（每侧 = `protrude × lift`）。它只能在这儿加，
+/// 不能像那枚块那样交给形状算 —— 因为**轮廓本身就是最终几何**（形状那套是
+/// `LiquidLensShape` 内部按 `metrics` 拼出来的，协议这一维收不到）。
+/// **端头半径不跟着放大**（与那枚块同一个规矩：长出来的是体积，不是圆角）。
 Path rangeBandPath({
   required List<({int row, int firstCol, int lastCol})> runs,
   required double cellW,
@@ -67,6 +72,7 @@ Path rangeBandPath({
   required double endRadius,
   required bool movingEnd,
   double? tipCol,
+  double inflate = 0,
 }) {
   final Path path = Path();
   for (int i = 0; i < runs.length; i++) {
@@ -86,8 +92,11 @@ Path rangeBandPath({
     }
 
     path.addRRect(RRect.fromRectAndCorners(
-      Rect.fromLTRB(left, weekdayH + run.row * cellH + inset, right,
-          weekdayH + (run.row + 1) * cellH - inset),
+      Rect.fromLTRB(
+          left - inflate,
+          weekdayH + run.row * cellH + inset - inflate,
+          right + inflate,
+          weekdayH + (run.row + 1) * cellH - inset + inflate),
       topLeft: Radius.circular(isFirst ? endRadius : 0),
       bottomLeft: Radius.circular(isFirst ? endRadius : 0),
       topRight: Radius.circular(isLast ? endRadius : 0),

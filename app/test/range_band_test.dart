@@ -154,6 +154,35 @@ void main() {
     expect(p.getBounds().right, closeTo(rect(0, 4, 6).right, 0.01));
   });
 
+  test('按住那一圈：inflate 把每一段四面各推出去，**端头半径不跟着放大**', () {
+    final r = runs(DateTime(2026, 10, 2), DateTime(2026, 10, 4));
+    final Path flat = rangeBandPath(
+        runs: r,
+        cellW: cellW,
+        cellH: cellH,
+        hPad: hPad,
+        weekdayH: weekdayH,
+        inset: inset,
+        endRadius: endR,
+        movingEnd: true);
+    final Path lifted = rangeBandPath(
+        runs: r,
+        cellW: cellW,
+        cellH: cellH,
+        hPad: hPad,
+        weekdayH: weekdayH,
+        inset: inset,
+        endRadius: endR,
+        movingEnd: true,
+        inflate: 6);
+    expect(lifted.getBounds().width, closeTo(flat.getBounds().width + 12, 0.01));
+    expect(lifted.getBounds().height, closeTo(flat.getBounds().height + 12, 0.01));
+    // 端头半径仍是 endR：角上那点仍在轮廓外（放大半径的话它会被吞进去）。
+    final Rect b = flat.getBounds();
+    expect(lifted.contains(Offset(b.left - 5, b.top - 5)), isFalse,
+        reason: '端头半径跟着放大了 —— 长出来的该是体积，不是圆角');
+  });
+
   test('两段之间不会漏出天窗（跨行处上下两段严丝合缝）', () {
     // 第 0 行的下缘与第 1 行的上缘之间只隔一条 4px 的缝 —— 那一条本来就该是空的
     // （两段是各自成段的），但不许比 4px 更宽：验两段的边界值。
