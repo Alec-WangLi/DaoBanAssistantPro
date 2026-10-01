@@ -100,13 +100,52 @@ double lensVelocityStep({
   return previous * 0.6 + raw * 0.4;
 }
 
+/// 一块玻璃的**轮廓**：四层光谱（环 / 两层光晕 / 外溢）与浮起阴影只认它，
+/// **不认这个轮廓是怎么来的**。
+///
+/// 今天有两个实现：
+/// · [LiquidLensShape] —— 单凸的那一族（胶囊 / 水滴 / 圆角方）：底栏、分段器、开关、
+///   响铃页那枚药丸、日历那枚选中块都用它；
+/// · `RangeBandOutline`（`features/calendar/calendar_range_band.dart`）—— 拖选那条
+///   **水带**：多段圆角矩形的并集，不是凸形状，套不进上面那个模型。
+///
+/// 抽它出来是为了「材质只有一处实现」：四层光谱与阴影那些宽度 / 模糊 / 色相偏移，
+/// 是七八轮迭代才定下来的数，抄第二份一定会走样。
+abstract class LiquidLensOutline {
+  /// 画布坐标里的轮廓（已含 `LiquidLens` 那 24px 画布余量对应的 `origin` 偏移）。
+  Path paintPath(Offset origin);
+
+  /// 「容器那条边被折进来」那一圈线（画布坐标）+ 它这一帧该有多实的 `fade`。
+  /// `null` = 这一族没有这回事。
+  ///
+  /// 只有 [LiquidLensShape] 有：它依附的那个胶囊有一条 1px 的描边可以折。水带没有
+  /// 容器，所以返回 null —— 那一层直接跳过。`fade` 与路径一起给，是因为它们是同一个
+  /// 纯函数（`refractedCapsuleEdge`）的两个输出，分开算就等于算两遍。
+  ({Path path, double fade})? refractedEdge(Offset origin);
+
+  /// `shouldRepaint` 用的**值可比**指纹。
+  ///
+  /// 不能拿 `Path` 比（它没有值相等），也不能拿轮廓对象本身比（每帧都是新建的）——
+  /// 那样「静止时也每帧重画一遍」。实现里用 Dart 记录（结构相等）当指纹。
+  Object get outlineStamp;
+
+  /// 光谱环／光晕／外溢那几层的门（**「动不动」，不是「多快」**）。
+  double get motion;
+
+  /// 亮峰锚在哪个方位（度；0 = 正右，顺时针）。
+  double get motionAngleDeg;
+
+  /// 四层光谱与浮起阴影的整体缩放（跟着控件尺寸走，见 [LiquidLensMetrics.rimScale]）。
+  double get rimScale;
+}
+
 /// 透镜在**胶囊局部坐标**里的一帧几何。纯数据 + 纯函数，不依赖任何 widget。
 ///
 /// 坐标原点 = 胶囊的左上角；`y = capsuleH / 2` 是竖直中轴。
 ///
 /// **必须记住 [capsuleH]**：按住时透镜比胶囊高，`toPath()` 要竖直居中在那条中轴上
 /// —— 按自己的 `height / 2` 居中的话，凸出会全部跑到下面去（上面一点不露）。
-class LiquidLensShape {
+class LiquidLensShape implements LiquidLensOutline {
   LiquidLensShape._({
     required this.centerX,
     required this.width,
@@ -222,6 +261,7 @@ class LiquidLensShape {
   ///
   /// 和 [stretch] 分家是刻意的：形变要跟速度走（头大尾小），环却要「一动就满」。
   /// 喂同一个量就只能二选一 —— 而用户 2026-10-01 两次说的正是这两件事。
+  @override
   final double motion;
 
   /// 光谱环／光晕的**亮峰在哪个方位**（度；0 = 正右，顺时针）。
@@ -232,6 +272,7 @@ class LiquidLensShape {
   /// 挑的那条路 —— 轮廓一个像素都不动，方向由光来承担）。
   ///
   /// 转的**只是亮峰在哪儿**：色相序列与 floor/span 都不动，所以最暗那一侧仍然有色。
+  @override
   final double motionAngleDeg;
 
   /// 这一帧是否在向右移动（决定哪一端是「前缘」）。静止时为 false，
@@ -240,6 +281,7 @@ class LiquidLensShape {
 
   /// 四层光谱与浮起阴影的**整体缩放**（见 `LiquidLensMetrics.rimScale`）。
   /// 1.0 = 底栏那一档，也就是那四个宽度被量出来的尺子。
+  @override
   final double rimScale;
 
   /// **四角的圆角半径上限**。默认 `double.infinity` = 今天的行为（半径取到
@@ -305,6 +347,44 @@ class LiquidLensShape {
 
   double get _leadingCross => height / 2;
   double get _trailingCross => height / 2 * (1 - 0.35 * stretch);
+
+  /// [LiquidLensOutline] 那一维（四层材质与形状解耦，见那个接口的说明）。
+  ///
+  /// 指纹取**恰好是今天三个 `shouldRepaint` 比的那五个字段** —— 一个不多一个不少，
+  /// 所以「什么时候重画」这件事在这一抽里逐字没变。
+  @override
+  Object get outlineStamp => (centerX, width, height, leftRadius, rightRadius);
+
+  @override
+  Path paintPath(Offset origin) => toPath().shift(origin);
+
+  /// 折边那两条线（胶囊上下沿各一条），合在一个 `Path` 里。
+  ///
+  /// 画法原先住在 `_LensBodyPainter` 里，搬过来时**逻辑一字未动**：判据仍由
+  /// [refractedCapsuleEdge] 那个纯函数给（它的失败方式只有出图才看得见，所以
+  /// 它单独可测），`fade` 也一并带出去给 painter 取 alpha。
+  @override
+  ({Path path, double fade})? refractedEdge(Offset origin) {
+    final ({double xL, double xR, double bow, double fade})? e =
+        refractedCapsuleEdge(this);
+    if (e == null) return null;
+    // ⚠️ `Path.shift` **不是变更操作**（它返回一条新的）—— 写成级联 `..shift(origin)`
+    // 会把结果丢掉，折线整条画到胶囊外头去。
+    final Path p = Path()
+      ..addPath(
+        Path()
+          ..moveTo(e.xL, 0)
+          ..quadraticBezierTo(centerX, e.bow, e.xR, 0),
+        Offset.zero,
+      )
+      ..addPath(
+        Path()
+          ..moveTo(e.xL, capsuleH)
+          ..quadraticBezierTo(centerX, capsuleH - e.bow, e.xR, capsuleH),
+        Offset.zero,
+      );
+    return (path: p.shift(origin), fade: e.fade);
+  }
 
   /// 轮廓：两端是**圆心同在水平中轴、半径可以不同**的圆，中间用两段**外公切线**
   /// 连起来。半径相等时退化成标准胶囊。
@@ -410,7 +490,7 @@ class LiquidLens extends StatelessWidget {
   const LiquidLens({
     super.key,
     required this.size,
-    required this.shape,
+    required this.outline,
     required this.lift,
     required this.isDark,
     required this.accent,
@@ -423,8 +503,16 @@ class LiquidLens extends StatelessWidget {
   /// 它依附的那块胶囊的完整尺寸（局部坐标的边界，原点在胶囊左上角）。
   final Size size;
 
-  /// 这一帧的几何。
-  final LiquidLensShape shape;
+  /// 这一帧的几何（轮廓那一维是**协议**，见 [LiquidLensOutline]）。
+  final LiquidLensOutline outline;
+
+  /// ⚠️ **只对单凸那一族有效**（底栏 / 分段器 / 开关 / 响铃页那枚药丸 / 日历那枚选中块
+  /// —— 也就是**全部既有调用点**）。它们的轮廓就是 [LiquidLensShape]，而二十来个既有
+  /// 断言读的正是这一族才有的几何（宽高、圆心、两端半径）。
+  ///
+  /// 留着这个窄口子，是为了不把那些断言在一次重构里全搅进去；而拖选那条水带的轮廓
+  /// **不是** `LiquidLensShape`，在它身上读这个会当场抛 —— 那种地方一律走 [outline]。
+  LiquidLensShape get shape => outline as LiquidLensShape;
 
   /// 升程 0..1。**0 时一个像素都不画**（连阴影都不画）—— 这是「静止时不凸出」
   /// 与「与标准档逐像素相同」的保证。
@@ -470,11 +558,11 @@ class LiquidLens extends StatelessWidget {
     const Offset origin = Offset(m, m);
 
     final Widget body = ClipPath(
-      clipper: _LensClipper(shape: shape, origin: origin),
+      clipper: _LensClipper(outline: outline, origin: origin),
       child: CustomPaint(
         size: box,
         painter: _LensBodyPainter(
-            shape: shape,
+            outline: outline,
             origin: origin,
             isDark: isDark,
             accent: accent,
@@ -494,7 +582,7 @@ class LiquidLens extends StatelessWidget {
         child: IgnorePointer(
           child: CustomPaint(
             painter:
-                _LensShadowPainter(shape: shape, origin: origin, lift: lift),
+                _LensShadowPainter(outline: outline, origin: origin, lift: lift),
           ),
         ),
       ),
@@ -508,7 +596,7 @@ class LiquidLens extends StatelessWidget {
         child: IgnorePointer(
           child: CustomPaint(
             painter: _LensGlowPainter(
-                shape: shape, origin: origin, lift: lift, accent: accent),
+                outline: outline, origin: origin, lift: lift, accent: accent),
           ),
         ),
       ),
@@ -531,7 +619,7 @@ class LiquidLens extends StatelessWidget {
           child: IgnorePointer(
             child: CustomPaint(
               painter: _LensEdgePainter(
-                  shape: shape, origin: origin, amount: restEdge),
+                  outline: outline, origin: origin, amount: restEdge),
             ),
           ),
         ),
@@ -545,12 +633,12 @@ class LiquidLens extends StatelessWidget {
 /// 等宽白线会读成「贴了一圈贴纸」。
 class _LensEdgePainter extends CustomPainter {
   const _LensEdgePainter({
-    required this.shape,
+    required this.outline,
     required this.origin,
     required this.amount,
   });
 
-  final LiquidLensShape shape;
+  final LiquidLensOutline outline;
   final Offset origin;
 
   /// 0..1 的浓度。
@@ -558,7 +646,7 @@ class _LensEdgePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Path p = _lensPath(shape, origin);
+    final Path p = outline.paintPath(origin);
     canvas.drawPath(
       p,
       Paint()
@@ -579,17 +667,11 @@ class _LensEdgePainter extends CustomPainter {
   bool shouldRepaint(_LensEdgePainter old) =>
       old.amount != amount ||
       old.origin != origin ||
-      old.shape.centerX != shape.centerX ||
-      old.shape.width != shape.width ||
-      old.shape.height != shape.height;
+      // ⚠️ 这里原来只比三个字段（centerX / width / height），统一成 `outlineStamp`
+      // 之后**变宽**了（多比了半径与圆角）。宽只会「偶尔多画一帧」，收窄才会留下
+      // 「该画没画」的坑 —— 所以别为了「与今天逐字一样」把它拆回去。
+      old.outline.outlineStamp != outline.outlineStamp;
 }
-
-/// 把绘制坐标系从「这块画布」搬回「胶囊左上角」。
-///
-/// 两处都要用，且**必须是同一份** —— 裁剪用的路径与画本体用的路径差一个像素，
-/// 观感就是「一圈描边糊在轮廓外」。
-Path _lensPath(LiquidLensShape shape, Offset origin) =>
-    shape.toPath().shift(origin);
 
 /// **圆角方**（四角是真正的圆）—— 给 `cornerR` 比半高小的那些面用。
 ///
@@ -680,33 +762,29 @@ Path _verticalStretched({
 }
 
 class _LensClipper extends CustomClipper<Path> {
-  const _LensClipper({required this.shape, required this.origin});
+  const _LensClipper({required this.outline, required this.origin});
 
-  final LiquidLensShape shape;
+  final LiquidLensOutline outline;
   final Offset origin;
 
   @override
-  Path getClip(Size size) => _lensPath(shape, origin);
+  Path getClip(Size size) => outline.paintPath(origin);
 
   @override
   bool shouldReclip(_LensClipper old) =>
-      old.shape.centerX != shape.centerX ||
-      old.shape.width != shape.width ||
-      old.shape.height != shape.height ||
-      old.shape.leftRadius != shape.leftRadius ||
-      old.shape.rightRadius != shape.rightRadius ||
+      old.outline.outlineStamp != outline.outlineStamp ||
       old.origin != origin;
 }
 
 /// 透镜浮起时投在胶囊上的影子。**升程为 0 时一个像素都不画**。
 class _LensShadowPainter extends CustomPainter {
   const _LensShadowPainter({
-    required this.shape,
+    required this.outline,
     required this.origin,
     required this.lift,
   });
 
-  final LiquidLensShape shape;
+  final LiquidLensOutline outline;
   final Offset origin;
   final double lift;
 
@@ -716,9 +794,9 @@ class _LensShadowPainter extends CustomPainter {
     // 影子往下偏一点、越浮越深越散 —— 「浮起来」这件事几乎全靠它。
     // 偏移与模糊都跟着透镜尺寸缩：小控件上照 64 高那档的量投，会得到一圈比钮还大的
     // 灰晕（与彩边同一个毛病）。
-    final double k = shape.rimScale;
+    final double k = outline.rimScale;
     canvas.drawPath(
-      _lensPath(shape, origin).shift(Offset(0, (2 + 3 * lift) * k)),
+      outline.paintPath(origin).shift(Offset(0, (2 + 3 * lift) * k)),
       Paint()
         ..color = Colors.black.withValues(alpha: 0.08 + 0.14 * lift)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, (5 + 5 * lift) * k),
@@ -729,11 +807,7 @@ class _LensShadowPainter extends CustomPainter {
   bool shouldRepaint(_LensShadowPainter old) =>
       old.lift != lift ||
       old.origin != origin ||
-      old.shape.centerX != shape.centerX ||
-      old.shape.width != shape.width ||
-      old.shape.height != shape.height ||
-      old.shape.leftRadius != shape.leftRadius ||
-      old.shape.rightRadius != shape.rightRadius;
+      old.outline.outlineStamp != outline.outlineStamp;
 }
 
 /// **外溢光晕**：透镜轮廓**之外**那一圈彩色。
@@ -747,22 +821,22 @@ class _LensShadowPainter extends CustomPainter {
 /// 门与光谱环**共用**（`motion`）：不按就不散，静止时轮廓外一个彩色像素都没有。
 class _LensGlowPainter extends CustomPainter {
   const _LensGlowPainter({
-    required this.shape,
+    required this.outline,
     required this.origin,
     required this.lift,
     required this.accent,
   });
 
-  final LiquidLensShape shape;
+  final LiquidLensOutline outline;
   final Offset origin;
   final double lift;
   final Color accent;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (shape.motion <= 0.05) return;
-    final Path p = _lensPath(shape, origin);
-    final double k = shape.rimScale;
+    if (outline.motion <= 0.05) return;
+    final Path p = outline.paintPath(origin);
+    final double k = outline.rimScale;
     canvas.drawPath(
       p,
       Paint()
@@ -772,11 +846,11 @@ class _LensGlowPainter extends CustomPainter {
             MaskFilter.blur(BlurStyle.normal, AppTokens.lensGlowBlur * k)
         ..shader = spectralSweep(
           accent: accent,
-          alpha: 0.28 * shape.motion,
+          alpha: 0.28 * outline.motion,
           floor: 0.36,
           span: 0.64,
           pow2: false,
-          anchorDeg: shape.motionAngleDeg,
+          anchorDeg: outline.motionAngleDeg,
           // 与里面那两层再错一个色相：三层叠起来才是「摊开的光谱」。
           hueLag: -12,
         ).createShader(p.getBounds()),
@@ -788,14 +862,10 @@ class _LensGlowPainter extends CustomPainter {
       old.lift != lift ||
       old.accent != accent ||
       old.origin != origin ||
-      old.shape.centerX != shape.centerX ||
-      old.shape.width != shape.width ||
-      old.shape.height != shape.height ||
-      old.shape.leftRadius != shape.leftRadius ||
-      old.shape.rightRadius != shape.rightRadius ||
-      old.shape.motion != shape.motion ||
+      old.outline.outlineStamp != outline.outlineStamp ||
+      old.outline.motion != outline.motion ||
       // 亮峰换了一侧也要重画：几何一模一样、光的方向在转（日历那枚块滑行时）。
-      old.shape.motionAngleDeg != shape.motionAngleDeg;
+      old.outline.motionAngleDeg != outline.motionAngleDeg;
 }
 
 /// 胶囊那条边被透镜**折进去**的那一帧几何。纯函数 —— `null` = 这一帧不画。
@@ -869,7 +939,7 @@ class _LensGlowPainter extends CustomPainter {
 /// 2.35~4.43 —— 五种主色在深色下**全部跌破 AA**（v0.10.1 的独立审查算出来的）。
 class _LensBodyPainter extends CustomPainter {
   const _LensBodyPainter({
-    required this.shape,
+    required this.outline,
     required this.origin,
     required this.isDark,
     required this.accent,
@@ -882,14 +952,14 @@ class _LensBodyPainter extends CustomPainter {
   final bool showRingCore;
   final bool showRefractedEdge;
 
-  final LiquidLensShape shape;
+  final LiquidLensOutline outline;
   final Offset origin;
   final bool isDark;
   final Color accent;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Path p = _lensPath(shape, origin);
+    final Path p = outline.paintPath(origin);
     canvas.drawPath(
       p,
       Paint()
@@ -903,7 +973,7 @@ class _LensBodyPainter extends CustomPainter {
     );
     // 静止时**连画都不画**：不是「画一层透明的」，而是这一整趟省掉。
     // 门用 `motion`（「在动」）而不是 `stretch`（「多快」）—— 见 `motion` 的说明。
-    if (shape.motion > 0.05) {
+    if (outline.motion > 0.05) {
       // 顺序要紧：**光晕在下、彩线在上**。反过来的话那条细线会浮在光晕外面，
       // 又读回「贴了一层彩带」。
       _paintHalo(canvas, p);
@@ -918,7 +988,7 @@ class _LensBodyPainter extends CustomPainter {
         p,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = AppTokens.lensRingCoreWidth * shape.rimScale
+          ..strokeWidth = AppTokens.lensRingCoreWidth * outline.rimScale
           ..color = Colors.white.withValues(alpha: isDark ? 0.28 : 0.70),
       );
     }
@@ -940,8 +1010,7 @@ class _LensBodyPainter extends CustomPainter {
   /// 这一帧**画不画、画多鼓、多淡**全由 [refractedCapsuleEdge] 那个纯函数定
   /// （它是可单测的，说明也在那边）。
   void _paintRefractedCapsuleEdge(Canvas canvas) {
-    final ({double xL, double xR, double bow, double fade})? e =
-        refractedCapsuleEdge(shape);
+    final ({Path path, double fade})? e = outline.refractedEdge(origin);
     if (e == null) return;
 
     final Paint stroke = Paint()
@@ -951,34 +1020,19 @@ class _LensBodyPainter extends CustomPainter {
       // 全部依据** —— 门一开就给满亮度的话，观感还是断的。
       ..color = Colors.white
           .withValues(alpha: (isDark ? 0.45 : 0.62) * e.fade);
-    for (final bool top in <bool>[true, false]) {
-      final double edgeY = top ? 0 : shape.capsuleH;
-      // 路径按**胶囊局部坐标**建，画之前搬回画布坐标 —— 与 `_lensPath` 同一套
-      // （漏掉这一步，折线会整条画到胶囊上头 24px 去，而且**只看图不太看得出来**：
-      // 那条线会落在透镜凸出的顶部，读起来像一圈高光，不像「边被折了」）。
-      canvas.drawPath(
-        (Path()
-              ..moveTo(e.xL, edgeY)
-              ..quadraticBezierTo(
-                  shape.centerX, edgeY + (top ? e.bow : -e.bow), e.xR, edgeY))
-            .shift(origin),
-        stroke,
-      );
-    }
+    // 几何在 `outline.refractedEdge` 那边（连画布坐标都搬好了）—— 这一层只管
+    // 「用哪个颜色画」，因为 alpha 要看深/浅色。
+    canvas.drawPath(e.path, stroke);
   }
 
   @override
   bool shouldRepaint(_LensBodyPainter old) =>
-      old.shape.centerX != shape.centerX ||
-      old.shape.width != shape.width ||
-      old.shape.height != shape.height ||
-      old.shape.leftRadius != shape.leftRadius ||
-      old.shape.rightRadius != shape.rightRadius ||
+      old.outline.outlineStamp != outline.outlineStamp ||
       // **`motion` 必须比**：形状可以一模一样而环的明暗在变（同样的几何、
       // 速度从 0 到 60）。漏掉它，环就会卡在上一帧的亮度上不动。
-      old.shape.motion != shape.motion ||
+      old.outline.motion != outline.motion ||
       // 同上：亮峰换侧而几何不变时也必须重画。
-      old.shape.motionAngleDeg != shape.motionAngleDeg ||
+      old.outline.motionAngleDeg != outline.motionAngleDeg ||
       old.origin != origin ||
       old.isDark != isDark ||
       old.accent != accent ||
@@ -1000,7 +1054,7 @@ class _LensBodyPainter extends CustomPainter {
   /// 同时看到相邻的两个色调。一层的话仍然只是「一个颜色一个位置」。
   void _paintHalo(Canvas canvas, Path p) {
     final Rect b = p.getBounds();
-    final double k = shape.rimScale;
+    final double k = outline.rimScale;
     canvas.drawPath(
       p,
       Paint()
@@ -1010,11 +1064,11 @@ class _LensBodyPainter extends CustomPainter {
             MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloBlur * k)
         ..shader = spectralSweep(
           accent: accent,
-          alpha: 0.42 * shape.motion,
+          alpha: 0.42 * outline.motion,
           floor: 0.36,
           span: 0.64,
           pow2: false,
-          anchorDeg: shape.motionAngleDeg,
+          anchorDeg: outline.motionAngleDeg,
           hueLag: -30,
         ).createShader(b),
     );
@@ -1027,11 +1081,11 @@ class _LensBodyPainter extends CustomPainter {
             MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloInnerBlur * k)
         ..shader = spectralSweep(
           accent: accent,
-          alpha: 0.52 * shape.motion,
+          alpha: 0.52 * outline.motion,
           floor: 0.40,
           span: 0.60,
           pow2: false,
-          anchorDeg: shape.motionAngleDeg,
+          anchorDeg: outline.motionAngleDeg,
           hueLag: 22,
         ).createShader(b),
     );
@@ -1055,13 +1109,13 @@ class _LensBodyPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         // 跟着透镜尺寸缩（见 `rimScale`）：不缩的话这条 2.4px 的线在小钮上会与那两层
         // 光晕一起把钮整个盖住。
-        ..strokeWidth = AppTokens.lensRingWidth * shape.rimScale
+        ..strokeWidth = AppTokens.lensRingWidth * outline.rimScale
         ..shader = spectralSweep(
           accent: accent,
           // **整体乘的是「动不动」而不是「多快」**（用户 2026-10-01：「彩色边缘
           // 不明显，还是恢复成一动就直接达到满效果吧」）。乘的是 `motion` 而不是
           // `stretch` —— 形变要跟速度走，彩边只问「在不在动」。
-          alpha: shape.motion,
+          alpha: outline.motion,
           // 底面 0.58：原来是 `0.06 + 0.86·toward²`，右下那两个方向实际只有
           // 0.06~0.08 —— 等于没有颜色（用户 2026-10-01：「只有左边和上边有彩边，
           // 右边和下边缘都没有」）。抬上来之后**四面八方都有色**，左上只是略亮。
@@ -1069,7 +1123,7 @@ class _LensBodyPainter extends CustomPainter {
           span: 0.42,
           pow2: true,
           // 亮峰跟着这一帧的方向走（不给就是 225°，与既有四个调用点一致）。
-          anchorDeg: shape.motionAngleDeg,
+          anchorDeg: outline.motionAngleDeg,
         ).createShader(lensPath.getBounds()),
     );
   }

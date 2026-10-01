@@ -392,73 +392,40 @@ void main() {
   const Size canvas = Size(200, 120);
   const Size capsule = Size(120, 64);
 
-  /// 把「一枚透镜盖在一块胶囊底上」光栅化成原始 RGBA。
-  Future<List<int>> shotLens(
-    WidgetTester tester, {
-    required double lift,
-    required Color accent,
-    double velocity = 0,
-    double? stretch,
-    double? motion,
-    double? motionAngleDeg,
-    List<Color>? fill,
-    bool showRingCore = true,
-    bool showRefractedEdge = true,
-    LiquidLensMetrics? metrics,
-  }) async {
+
+  /// 「一块胶囊底 + 一枚透镜」那棵树 —— 两处共用，所以盒位与底色一定同源。
+  Widget capsuleStage(Widget lens) {
+    final double top = (canvas.height - capsule.height) / 2;
+    return SizedBox.fromSize(
+      size: canvas,
+      child: Stack(clipBehavior: Clip.none, children: <Widget>[
+        Positioned(
+          left: 0,
+          top: top,
+          width: capsule.width,
+          height: capsule.height,
+          child: const ColoredBox(color: Color(0xFFF5F6FA)),
+        ),
+        Positioned(
+          left: 0, top: top, width: capsule.width, height: capsule.height,
+          child: lens,
+        ),
+      ]),
+    );
+  }
+
+  Future<List<int>> shotAt(WidgetTester tester, Widget stage) async {
     tester.view.physicalSize = canvas;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final GlobalKey key = GlobalKey();
-    final shape = LiquidLensShape.of(
-        itemW: capsule.width,
-        capsuleH: capsule.height,
-        pad: 0,
-        centerPage: 0,
-        lift: lift,
-        velocity: velocity,
-        stretch: stretch,
-        motion: motion,
-        motionAngleDeg: motionAngleDeg ?? spectralSweepRestAnchor,
-        metrics: metrics);
-    final double top = (canvas.height - capsule.height) / 2;
     await tester.pumpWidget(RepaintBoundary(
       key: key,
       child: Directionality(
         textDirection: TextDirection.ltr,
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox.fromSize(
-            size: canvas,
-            child: Stack(clipBehavior: Clip.none, children: <Widget>[
-              Positioned(
-                left: 0,
-                top: top,
-                width: capsule.width,
-                height: capsule.height,
-                child: const ColoredBox(color: Color(0xFFF5F6FA)),
-              ),
-              Positioned(
-                left: 0,
-                top: top,
-                width: capsule.width,
-                height: capsule.height,
-                child: LiquidLens(
-                  size: capsule,
-                  shape: shape,
-                  lift: lift,
-                  isDark: false,
-                  accent: accent,
-                  fill: fill,
-                  showRingCore: showRingCore,
-                  showRefractedEdge: showRefractedEdge,
-                ),
-              ),
-            ]),
-          ),
-        ),
+        child: Align(alignment: Alignment.topLeft, child: stage),
       ),
     ));
     await tester.pumpAndSettle();
@@ -476,6 +443,66 @@ void main() {
     return bytes;
   }
 
+  /// 把「一枚透镜盖在一块胶囊底上」光栅化成原始 RGBA。
+  Future<List<int>> shotLens(
+    WidgetTester tester, {
+    required double lift,
+    required Color accent,
+    double velocity = 0,
+    double? stretch,
+    double? motion,
+    double? motionAngleDeg,
+    List<Color>? fill,
+    bool showRingCore = true,
+    bool showRefractedEdge = true,
+    LiquidLensMetrics? metrics,
+  }) {
+    final shape = LiquidLensShape.of(
+        itemW: capsule.width,
+        capsuleH: capsule.height,
+        pad: 0,
+        centerPage: 0,
+        lift: lift,
+        velocity: velocity,
+        stretch: stretch,
+        motion: motion,
+        motionAngleDeg: motionAngleDeg ?? spectralSweepRestAnchor,
+        metrics: metrics);
+    return shotAt(
+      tester,
+      capsuleStage(LiquidLens(
+        size: capsule,
+        outline: shape,
+        lift: lift,
+        isDark: false,
+        accent: accent,
+        fill: fill,
+        showRingCore: showRingCore,
+        showRefractedEdge: showRefractedEdge,
+      )),
+    );
+  }
+
+  /// 与 [shotLens] **同一张画布、同一套取像** —— 只是轮廓是外面给的那个。
+  ///
+  /// 拖选那条水带（第六轮）就是靠它接进来的：它的轮廓是多段圆角矩形的并集，
+  /// 不是单凸的水滴。这个 helper 的存在本身就是「四层材质与形状解耦」的体现。
+  Future<List<int>> shotOutlineLens(
+    WidgetTester tester, {
+    required LiquidLensOutline outline,
+    required Color accent,
+    double lift = 0,
+  }) =>
+      shotAt(
+        tester,
+        capsuleStage(LiquidLens(
+          size: capsule,
+          outline: outline,
+          lift: lift,
+          isDark: false,
+          accent: accent,
+        )),
+      );
   int alphaAt(List<int> px, int x, int y) => px[(y * canvas.width.toInt() + x) * 4 + 3];
 
   testWidgets('按住时透镜凸出胶囊：外框之外上下各有非透明像素', (tester) async {
@@ -1256,7 +1283,7 @@ void main() {
               height: 60,
               child: LiquidLens(
                 size: const Size(60, 60),
-                shape: shape,
+                outline: shape,
                 lift: 0,
                 isDark: true,
                 accent: const Color(0xFF4C4CE0),
@@ -1560,4 +1587,82 @@ void main() {
       expect(r.dy, greaterThan(0));
     });
   });
+
+  // ── 轮廓这一维：四层材质与「形状是怎么来的」解耦 ────────────────────────
+  //
+  // 拖选那条水带（第六轮）是第二个实现：它的轮廓是**多段圆角矩形的并集**，
+  // 不是单凸的水滴。这一组钉的是「外来的轮廓也能穿这套材质」——
+  // 抽取之前 `LiquidLens` 只认 `LiquidLensShape`，这个用例根本编译不过。
+  group('轮廓这一维（LiquidLensOutline）', () {
+    // 这块轮廓**整个落在默认胶囊之外**（胶囊占 x 0..120、y 28..92 那一带；
+    // 这份在 x 140..180 —— 连光晕（往外约 12px）都够不到），于是
+    // 「画出来的是给它的轮廓、不是别的形状」这件事可以被逐像素断言。
+    const Rect box = Rect.fromLTWH(140, 20, 40, 40);
+
+    List<int> rgbAt(List<int> px, int x, int y) {
+      final int i = (y * canvas.width.toInt() + x) * 4;
+      return <int>[px[i], px[i + 1], px[i + 2]];
+    }
+
+    /// 那一小块里有多少像素是**明显地有颜色**的（与中性底比彩度）。
+    /// 单看亮度会被「白压白」蒙过去 —— v0.10.10 那条教训。
+    int tintedNear(List<int> px, Offset c, {int r = 4}) {
+      int n = 0;
+      for (int y = (c.dy - r).round(); y <= (c.dy + r).round(); y++) {
+        for (int x = (c.dx - r).round(); x <= (c.dx + r).round(); x++) {
+          final int i = (y * canvas.width.toInt() + x) * 4;
+          final int mx = math.max(px[i], math.max(px[i + 1], px[i + 2]));
+          final int mn = math.min(px[i], math.min(px[i + 1], px[i + 2]));
+          if (px[i + 3] > 0 && mx - mn >= 12) n++;
+        }
+      }
+      return n;
+    }
+
+    testWidgets('外来的轮廓也能穿这套材质：填充跟着它、彩边贴着它', (tester) async {
+      const Color accent = Color(0xFF12B5A5);
+      final List<int> px = await shotOutlineLens(tester,
+          outline: const _RectOutline(box), accent: accent, lift: 1);
+
+      expect(alphaAt(px, 160, 68), greaterThan(100),
+          reason: '外来轮廓没被填充');
+      expect(rgbAt(px, 60, 60), <int>[245, 246, 250],
+          reason: '默认那枚胶囊也被画出来了 —— 轮廓没真的换掉（那里该只剩底色）');
+      expect(tintedNear(px, const Offset(138, 68)), greaterThan(0),
+          reason: '彩边没贴在外来轮廓上（motion 给的是 1，环该亮）');
+    });
+
+    test('外来轮廓的指纹是值可比的（几何一样就判「不用重画」）', () {
+      // `Path` 没有值相等、轮廓对象又每帧新建 —— 拿对象比会让静止时也每帧重画。
+      expect(const _RectOutline(box).outlineStamp, const _RectOutline(box).outlineStamp);
+      expect(const _RectOutline(box).outlineStamp,
+          isNot(_RectOutline(box.shift(const Offset(1, 0))).outlineStamp));
+    });
+  });
+}
+
+/// 一个**外来的轮廓**：一块光秃秃的矩形。这一组只关心「材质认不认它」，
+/// 所以表现参数都写死 —— 拖选那条水带的真轮廓在 `features/calendar/range_band.dart`。
+class _RectOutline implements LiquidLensOutline {
+  const _RectOutline(this.rect);
+  final Rect rect;
+
+  @override
+  Path paintPath(Offset origin) => Path()..addRect(rect.shift(origin));
+
+  @override
+  ({Path path, double fade})? refractedEdge(Offset origin) =>
+      null; // 这一族没有「容器的边」可折
+
+  @override
+  Object get outlineStamp => (rect.left, rect.top, rect.right, rect.bottom);
+
+  @override
+  double get motion => 1;
+
+  @override
+  double get motionAngleDeg => spectralSweepRestAnchor;
+
+  @override
+  double get rimScale => 1;
 }
