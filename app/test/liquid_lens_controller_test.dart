@@ -208,16 +208,31 @@ void main() {
     await settleToRest(tester);
   });
 
-  testWidgets('取消：只有真正在拖才回退，点按被取消不回退', (tester) async {
-    final c = make();
-    // 点按之后竖直滑走 → 只该取消「按住」，位置仍然去它本来要去的格
+  testWidgets('点按被取消：报告「取消掉了」、preview 清掉（**位置由调用点回退**）',
+      (tester) async {
+    // 规格 §4.5 第 2 条（**行为改动**）：取消的语义是「当作没点过」。
+    // 原来只取消「按住」，`_previewIndex` 也不清 —— 于是滴留在手指按下那一格、
+    // 分段器的高亮也停在那儿，而页面并没有切。用户看到的正是「滑块定格」
+    // （他说「需要再次点击一下滑块，才会恢复正常」）。
+    //
+    // 控制器**只管报告**「真的取消了」；回退到哪一格是调用点的事（只有它知道
+    // 「已提交的那一格」是哪一格），那一段在 `glass_segment_liquid_test.dart` 里端到端验。
+    final c = make(initialSlot: 2);
     c.press(itemW * 3 + itemW / 2);
     await advance(tester, 48);
-    c.tapCancel();
-    await advance(tester, 480);
-    expect(c.pressed, isFalse, reason: '_pressed 卡在 true —— 滴会一直提着');
-    expect(c.position, closeTo(3.5, 0.02), reason: '点按被取消却把位置也回退了');
- 
+    expect(c.previewIndex, 3, reason: '按下去之后该有 preview，不然这条白测');
+
+    expect(c.tapCancel(), isTrue, reason: '按过之后取消，应当报告「真的取消了」');
+    expect(c.pressed, isFalse);
+    expect(c.previewIndex, isNull, reason: 'preview 没清 —— 分段器的高亮会停在那儿');
+
+    await settleToRest(tester);
+  });
+
+  testWidgets('没按过就取消：报告「什么都没取消」（调用点不该白回退一次）',
+      (tester) async {
+    final c = make(initialSlot: 2);
+    expect(c.tapCancel(), isFalse);
     await settleToRest(tester);
   });
 }

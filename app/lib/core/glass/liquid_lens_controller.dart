@@ -237,20 +237,31 @@ class LiquidLensController extends ChangeNotifier {
     return true;
   }
 
-  /// 点按被取消（在容器上按下之后竖直滑走之类）。
+  /// 点按被取消（在容器上按下之后竖直滑走之类）→ **当作没点过**。
   ///
-  /// 不能复用 [cancel]：那个有个「没在拖就早退」的闸门，而点按结束触发的 cancel
-  /// 不该回退位置。**这是一个既有缺陷的修复**（原来是个空回调，`_pressed` 会永远
-  /// 卡在 true —— 标准档下只是容器一直大 6%，液态档下就是透镜永远提着）。
-  void tapCancel() {
+  /// **返回「是否真的取消掉了什么」** —— 调用点据此把位置交还给「已提交的那一格」
+  /// （只有调用点知道那是哪一格）。这条不能省：`press(moveToSlot: true)` 已经把滴
+  /// 滑到手指那一格了，不回退的话它会留在那儿，而页面并没有切 —— 那正是用户
+  /// 2026-10-01 说的「滑块定格」（「需要再次点击一下滑块，才会恢复正常」）。
+  ///
+  /// 不能复用 [cancel]：那个有个「没在拖就早退」的闸门（它是给「拖动取消」用的）。
+  ///
+  /// **这是一个既有缺陷的修复**：`onTapCancel` 原来是个空回调，`_pressed` 会永远卡在
+  /// true —— 标准档下只是容器一直大 6%，液态档下就是透镜永远提着。
+  bool tapCancel() {
+    final bool wasActive = _pressed || _dragging;
     _endHold();
     if (!_dragging) {
       _pressed = false;
+      // ⚠️ **preview 也要清。** 不清的话分段器的内容高亮会停在手指按下那一格
+      // （`selectedIdx = previewIndex ?? committed`），而选中项根本没有变。
+      _previewIndex = null;
       notifyListeners();
     } else {
       cancel();
     }
     _syncTicker();
+    return wasActive;
   }
 
   // ── 内部 ────────────────────────────────────────────────────────────────

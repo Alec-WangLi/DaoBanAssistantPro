@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
+import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/lens_warped_cell.dart';
 
@@ -84,6 +85,77 @@ void main() {
   }
 
   int red(List<int> px, int w, int x, int y) => px[(y * w + x) * 4];
+
+  testWidgets('点按之后竖直滑走：滴**回到已提交那一格**（不是停在手指那一格）',
+      (tester) async {
+    // 控制器那一条只证明它报告了「该回退」；这一条证明**调用点真的回退了**。
+    // 用户 2026-10-01 报的「滑块定格」就是这里：`press()` 已经把滴挪到手指那一格，
+    // 而页面并没有切，取消之后它留在那儿。
+    //
+    // 触发 `onTapCancel` 的办法：**上面挂一个竖直拖动识别器**。`TapGestureRecognizer`
+    // 自己不会因为移动而取消（读了 SDK 的 `tap.dart`：它只在竞技场里输给别人时才
+    // `_checkCancel`），所以必须有个竞争者把它挤出去。
+    liquidGlassActive.value = true;
+    addTearDown(() => liquidGlassActive.value = false);
+
+    const int w = 300;
+    tester.view.physicalSize = Size(w.toDouble(), 120);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Material(
+        child: Center(
+          child: GestureDetector(
+            onVerticalDragStart: (_) {},
+            child: SizedBox(
+              width: w.toDouble(),
+              height: h,
+              child: GlassSegment(
+                count: 3,
+                selectedIndex: 0,
+                height: h,
+                onSelected: (int _) {},
+                itemBuilder: (int i, bool sel) => Text('$i'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 3 格 300 宽 → 每格 (300 − 2×3) / 3 = 98；滴中心 = 3 + position × 98。
+    final TestGesture g =
+        await tester.startGesture(tester.getCenter(find.byType(GlassSegment)));
+    bool released = false;
+    addTearDown(() {
+      if (released) return Future<void>.value();
+      return g.up();
+    });
+    for (int i = 0; i < 25; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(tester.widget<LiquidLens>(find.byType(LiquidLens)).shape.centerX,
+        closeTo(150, 6),
+        reason: '按下去滴没有滑到手指那一格 —— 这条用例测不到东西');
+
+    for (int i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(0, -25)); // 竖直滑走 → 点按被挤出竞技场
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    for (int i = 0; i < 80; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    released = true;
+
+    expect(tester.widget<LiquidLens>(find.byType(LiquidLens)).shape.centerX,
+        closeTo(52, 1.0),
+        reason: '取消之后滴停在手指那一格 —— 那就是用户说的「滑块定格」'
+            '（已提交的第 0 格中心是 52）');
+  });
 
   testWidgets('两档是两棵树：光栅化像素必须不同', (tester) async {
     // 反过来说：这条要是绿着不动，说明「液态档」根本没生效 —— v0.10.1 出过这个岔子

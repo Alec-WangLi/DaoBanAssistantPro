@@ -130,6 +130,15 @@ class _GlassSegmentState extends State<GlassSegment>
     }
   }
 
+  /// 点按被取消（按下之后竖直滑走之类）→ **当作没点过**。
+  ///
+  /// 光取消「按住」不够：`press()` 已经把滴挪到手指那一格了，而选中项并没有变，
+  /// 于是滑块**定格在那一格**（用户 2026-10-01 报的「滑块定格」，他说
+  /// 「需要再次点击一下滑块，才会恢复正常」）。所以真的取消时把它送回已提交那一格。
+  void _onTapCancel() {
+    if (_lens.tapCancel()) _lens.snapTo(_committed + 0.5);
+  }
+
   void _cancel() {
     if (_lens.cancel()) _lens.snapTo(_committed + 0.5);
   }
@@ -162,7 +171,7 @@ class _GlassSegmentState extends State<GlassSegment>
             behavior: HitTestBehavior.opaque,
             onTapDown: (d) => _press(d.localPosition.dx, itemW),
             onTapUp: (_) => _release(),
-            onTapCancel: () => _lens.tapCancel(),
+            onTapCancel: _onTapCancel,
             onHorizontalDragStart: (d) =>
                 _dragStart(d.localPosition.dx, itemW),
             onHorizontalDragUpdate: (d) =>
@@ -246,7 +255,7 @@ class _GlassSegmentState extends State<GlassSegment>
         behavior: HitTestBehavior.opaque,
         onTapDown: (d) => _press(d.localPosition.dx, itemW),
         onTapUp: (_) => _release(),
-        onTapCancel: () => _lens.tapCancel(),
+        onTapCancel: _onTapCancel,
         onHorizontalDragStart: (d) => _dragStart(d.localPosition.dx, itemW),
         onHorizontalDragUpdate: (d) => _dragUpdate(d.localPosition.dx, itemW),
         onHorizontalDragEnd: (_) => _release(),
