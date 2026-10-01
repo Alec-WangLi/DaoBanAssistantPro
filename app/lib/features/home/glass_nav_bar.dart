@@ -13,11 +13,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
-import '../../core/glass/liquid_lens.dart';
 import '../../core/glass/liquid_lens_controller.dart';
 import '../../core/glass/liquid_lens_metrics.dart';
 import '../../core/layout.dart';
 import '../../core/motion.dart';
+import '../../core/widgets/lens_warped_cell.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/liquid_track.dart';
 
@@ -428,6 +428,8 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// [lensItemW] 给值时 = 液态档：每一格按**透镜边缘**的位置做一次仿射变换
   /// （用户 2026-10-01：「滑块的彩虹边缘碰到图标时，图标和文字也应该适当扭曲」）。
   /// 标准档传 null，**一个变换都不套**（也就不会多出一层 widget）。
+  ///
+  /// 那层变换的实现在 [LensWarpedCell]（v0.10.10 抽出去给分段器共用）。
   Widget _iconsRow(
     bool isShort,
     Color fg,
@@ -467,36 +469,19 @@ class _GlassNavBarState extends State<GlassNavBar>
         final double? itemW = lensItemW;
         if (itemW == null) return Expanded(child: cell);
 
-        // 这一格的中心在**胶囊局部坐标**里的位置 —— 与 `LiquidLensShape` 用的是
-        // 同一套坐标（都从胶囊左缘量起），所以两个数可以直接相减。
-        final double iconCenterX = lensPad + (i + 0.5) * itemW;
-        // 透镜的半宽用**满升程**那个值：它随升程只变 ~5%，不值得每帧再算一次；
-        // 而且 `lensIconWarp` 的权重本来就是一条软的钟形。
-        final double halfWidth = (itemW + AppTokens.lensLiftWidth) / 2;
-
         return Expanded(
-          child: ListenableBuilder(
-            listenable: _lens,
-            // `child` 传进来：每帧只重建外面那层 `Transform`，
-            // 图标与文字这两个 widget 本身不重建。
+          child: LensWarpedCell(
+            controller: _lens,
+            // 底栏的格子是**内缩之后**排的，所以中心要加上 `lensPad` ——
+            // 与 `LiquidLensShape` 用的是同一套坐标（都从胶囊左缘量起）。
+            // （分段器那一边的格子铺满全宽，它报的是 `(i+0.5)×内容宽÷格数`。）
+            iconCenterX: lensPad + (i + 0.5) * itemW,
+            lensPad: lensPad,
+            itemW: itemW,
+            // 半宽用**底栏冻结的** `lensLiftWidth`（10），不是 `forCapsule` 的值 ——
+            // 矮屏那一档胶囊 52 高，跟着取会改到横屏与小窗的画面。
+            halfWidth: (itemW + AppTokens.lensLiftWidth) / 2,
             child: cell,
-            builder: (context, Widget? child) {
-              final ({double scaleX, double scaleY, double dx}) warp =
-                  lensIconWarp(
-                iconCenterX: iconCenterX,
-                lensCenterX: lensPad + _lens.position * itemW,
-                lensHalfWidth: halfWidth,
-              );
-              // 恒等就别套 —— 少一层 `Transform`，也少一次重绘。
-              if (warp.scaleX == 1.0 && warp.dx == 0.0) return child!;
-              return Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..translateByDouble(warp.dx, 0, 0, 1)
-                  ..scaleByDouble(warp.scaleX, warp.scaleY, 1, 1),
-                child: child,
-              );
-            },
           ),
         );
       }),
