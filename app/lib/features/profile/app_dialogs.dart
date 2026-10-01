@@ -39,7 +39,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.12\n'
+const String _changelogZh = 'v0.10.13\n'
+    '· 开关拖动时，背景色跟着滑块一起变（之前要松手那一刻才跳变）：颜色从一边漫过去、边界就压在滴下面\n'
+    '· 弹窗与底部弹层出现时从模糊里凝出来、关掉时化开散掉（之前是生硬地淡入）\n'
+    '· 响铃页的「上滑关闭」：圆钮换成一枚玻璃药丸，按住会变大、凸出轨道，轨道那两条边被折进它里面\n'
+    '· 修好一处「折边」在竖直面上一直没生效的问题（响铃页那枚药丸、以及小窗里的底栏滑块）\n\n'
+
+    'v0.10.12\n'
     '· 开关按住时的形状不那么尖了：横向放开一点（满升程 27 × 42）\n'
     '· 修好开关的一处小毛病：拖动被系统打断之后，下一次拖动钮会跳一下\n\n'
     'v0.10.11\n'
@@ -94,17 +100,17 @@ const String _changelogZh = 'v0.10.12\n'
     '· 修好窄窗口下的一处严重问题：拖动底栏滑块时它会整个消失、还一闪一没（窗口宽度不够时那个形状算不出来）\n'
     '· 点待办提醒的通知切到待办页时，底栏滑块也跟着走过去（之前页面翻过去了、滑块还留在原处）\n\n'
 
-    'v0.10.3\n'
-    '· 底栏滑块重做：按住它时会吸附到手指上、放大成一枚真的玻璃滴，拖得越快形状拉得越长，松手带一点回弹地落回那一格\n'
-    '· 它的边缘现在有一圈跟着主色调走的彩色折射光；凸出胶囊时，胶囊那条边会在它里面被折进去\n'
-    '· 点一下照旧：滑块滑过去、切页，不提起 —— 凸起是「按住」专属的\n'
-    '· 关掉液态玻璃时，玻璃的观感与上一版一致\n\n'
-
 
 
 ;
 
-const String _changelogEn = 'v0.10.12\n'
+const String _changelogEn = 'v0.10.13\n'
+    '· The switch track now tints as you drag (it used to jump the moment you let go): the colour sweeps in from one side, its edge tucked under the knob\n'
+    '· Dialogs and bottom sheets condense out of blur and dissolve away, instead of just fading in\n'
+    '· The ringing screen\'s "swipe up to dismiss" knob is now a glass pill: hold it and it grows past the track, and the track\'s edges fold into it\n'
+    '· Fixed the folded-edge effect never lighting up on vertical drops (the ringing pill, and the tab bar slider in a small window)\n\n'
+
+    'v0.10.12\n'
     '· The switch looks less pointy while held — it is a little wider when it grows (27 × 42 at full lift)\n'
     '· Fixed a small switch bug: after a drag was interrupted by the system, the next drag made the knob jump\n\n'
     'v0.10.11\n'
@@ -158,12 +164,6 @@ const String _changelogEn = 'v0.10.12\n'
     'v0.10.4\n'
     '· Fixed a serious bug in narrow windows: the tab pill could vanish entirely — and flicker — while you dragged it\n'
     '· Tapping a todo reminder now carries the tab pill along when the app jumps to the todo page (previously the page moved but the pill stayed put)\n\n'
-
-    'v0.10.3\n'
-    '· The tab pill has been rebuilt: hold it and it sticks to your finger, swelling into a real droplet of glass that stretches the faster you drag and springs back into place when you let go\n'
-    '· Its rim now carries a prismatic edge that follows your accent colour, and the bar edge bends through it while lifted\n'
-    '· A tap still just slides the pill across and switches pages; lifting belongs to holding\n'
-    '· With liquid glass off, the frosted look is pixel-identical to the previous version\n\n'
 
 
 
