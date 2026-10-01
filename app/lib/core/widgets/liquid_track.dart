@@ -37,7 +37,8 @@ class LiquidTrack extends StatelessWidget {
     this.showGlowBand = true,
     this.showRefractedEdge = true,
     this.clipContent = true,
-  });
+    double? contentPad,
+  }) : _contentPad = contentPad;
 
   final int slots;
   final double capsuleH;
@@ -62,6 +63,13 @@ class LiquidTrack extends StatelessWidget {
   /// 里面，胶囊圆角外那一小块不会穿透到页面内容）。
   final bool clipContent;
 
+  /// 内容层的内缩。不给 = 与几何用同一个 [pad]。
+  ///
+  /// **分段器要分开给**：它的格子铺满全宽、只有滑块自己内缩 `padChipV`（底栏的格子
+  /// 是内缩之后排的）。所以那一边传 `pad: 3, contentPad: 0` —— 滴的大小与标准档那枚
+  /// 对齐，而文字位置一动不动。
+  final double? _contentPad;
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -74,7 +82,7 @@ class LiquidTrack extends StatelessWidget {
           final Size size = Size(c.maxWidth, capsuleH);
           final double itemW = (c.maxWidth - 2 * pad) / slots;
           final Widget content = Padding(
-            padding: EdgeInsets.all(pad),
+            padding: EdgeInsets.all(_contentPad ?? pad),
             child: ListenableBuilder(
               listenable: controller,
               builder: (BuildContext context, Widget? _) =>

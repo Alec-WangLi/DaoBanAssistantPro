@@ -333,8 +333,14 @@ void main() {
     return Offset(nav.left + nav.width * 0.85, nav.center.dy);
   }
 
-  LiquidLens lensOf(WidgetTester tester) =>
-      tester.widget<LiquidLens>(find.byType(LiquidLens));
+  /// 取**底栏那一枚**透镜。
+  ///
+  /// ⚠️ **必须限定在底栏里**：`GlassSegment` 接上液态档之后，「我的」页那个分段器
+  /// 也有一枚 `LiquidLens`，`find.byType(LiquidLens)` 会撞上「Too many elements」。
+  LiquidLens lensOf(WidgetTester tester) => tester.widget<LiquidLens>(
+      find.descendant(
+          of: find.byKey(const Key('glass-nav-bar')),
+          matching: find.byType(LiquidLens)));
 
   testWidgets('交互契约两档一致：按住期间页面不动、松手才提交', (tester) async {
     // 这一条钉的是用户 2026-10-01 那句话的可断言形式：「点一下滑块自动过来、然后

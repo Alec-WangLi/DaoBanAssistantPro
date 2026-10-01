@@ -1,7 +1,10 @@
 // app/test/liquid_scope_guard_test.dart
 //
-// 守门：**液态档的判据只许出现在 `core/glass/glass.dart`（定义处）与
-// `features/home/` 下。**
+// 守门：**液态档的判据只许出现在下面 [_allowed] 列的那几处。**
+//
+// 2026-10-01 把液态玻璃推广到分段器与开关时，这条名单从 2 处扩到 4 处 ——
+// 注意**新抽出来的两个件（`liquid_lens_controller` / `liquid_track`）不在名单里**：
+// 它们不读档位，判据只出现在调用点。多写了不该有的位置也是一种错误，同一条用例照得出。
 //
 // 2026-10-01 用户拍板：「咱们先把这个液态玻璃应用到底部导航栏，之前修改的其他
 // 地方先暂时不动。」这条守门把那个决定变成会失败的用例 —— 将来有人往别的玻璃面
@@ -23,7 +26,8 @@ import 'support/source_scan.dart';
 /// 允许出现这个判据的位置（前缀匹配）。
 const List<String> _allowed = <String>[
   'lib/core/glass/glass.dart', // 定义处
-  'lib/features/home/', // 唯一的使用处（底栏）
+  'lib/features/home/', // 底栏
+  'lib/core/widgets/glass_segment.dart', // 分段器
 ];
 
 const String _needle = 'liquidGlassActive';
@@ -70,8 +74,10 @@ void main() {
     // 任何一条坏掉，这条立刻红 —— 而不是让上一条静静地永远为真。
     expect(
       _readers(exempt: false),
+      // **按字典序**（`_readers` 排过序）—— 顺序写反了也会红。
       <String>[
         'lib/core/glass/glass.dart',
+        'lib/core/widgets/glass_segment.dart',
         'lib/features/home/glass_nav_bar.dart',
       ],
       reason: '去掉豁免后应**恰好**命中这两处（定义处 + 底栏）：\n'

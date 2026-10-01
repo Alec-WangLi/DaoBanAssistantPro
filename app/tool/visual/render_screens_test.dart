@@ -16,6 +16,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
@@ -311,4 +313,66 @@ void main() {
       );
     });
   }
+
+  // 分段器 · 液态 · **按住**那一刻。
+  //
+  // 「静止」那两态在 `37_profile_liquid_*` 里已经有了；**按住时那枚滴凸出容器**
+  // 只在按住时发生，静止帧拍不到 —— 这一屏专门拍它。
+  //
+  // 时序不能省：这个 `GestureDetector` 同时挂着 tap 与横向拖动两个识别器，
+  // `onTapDown` 要等 `kPressTimeout`（100ms）才触发，升程的闸门（`lensHoldDelay`
+  // = 110ms）再晚一点。所以按住之后要推够这两段。
+  for (final variant in visualVariants) {
+    visualTest('分段器 · 液态 · 按住 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '42_segment_liquid_${variant.suffix}',
+        home: const _SegmentHost(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        // 液态档必须走 prefs —— 只拨模块标志会被 `_load()` 覆盖回去（v0.10.1 踩过）。
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        beforeCapture: (WidgetTester t) async {
+          final Rect box = t.getRect(find.byType(GlassSegment));
+          final TestGesture g = await t.startGesture(
+              Offset(box.left + box.width * 0.18, box.center.dy));
+          addTearDown(g.up);
+          for (int i = 0; i < 20; i++) {
+            await t.pump(const Duration(milliseconds: 30));
+          }
+        },
+      );
+    });
+  }
+}
+
+/// 一屏只放三段分段器，用来单独看清液态档按住时那枚滴。
+class _SegmentHost extends StatelessWidget {
+  const _SegmentHost();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTokens.space2xl),
+            child: GlassSegment(
+              count: 3,
+              selectedIndex: 0,
+              height: 40,
+              onSelected: (int _) {},
+              itemBuilder: (int i, bool sel) => Text(
+                <String>['跟随系统', '浅色', '深色'][i],
+                style: AppTokens.rowPrimary.copyWith(
+                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }
