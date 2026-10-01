@@ -815,7 +815,7 @@ powershell -File scripts/release.ps1 -SkipConfirm   # 它**不构建**，只复�
 
 ## 自检记录
 
-- **规格覆盖**：§2 七条 → Task 2/3（扭曲）、Task 4/5（开关）、Task 6（勾）；§3.1–3.4 四条地基 → Task 1（3.1/3.2 的 `rimScale`）、Task 4 Step 1 第三条（3.3 白芯）、Task 6 Step 1 第四条与实现（3.4 半透）；§4.1 → Task 3；§4.2 → Task 4/5；§4.3 → Task 6；§5 结构 → 文件结构表；§6 → 各 Task 的验收步 + Task 6 Step 5/6；§7 动图管线 → Global Constraints + Task 7 Step 1；§8 风险 → Review Focus；§9 不做 → 各 Task 未触及那些文件。
+- **规格覆盖**：§2 七条 → Task 2/3（扭曲）、Task 4/5（开关）、Task 6（勾）；§3.1–3.2 两条 → Task 1 的 `rimScale`；§3.3 白芯 → Task 4 Step 1 的**第二条**；§3.4 半透 → Task 6 Step 3 的实现（`fill` 用接近不透明的 `[accent@0.95, accent@0.82]` 而不是 `accentGradient`），**这一条没有独立用例** —— 它是一次取色，样图里看得见，用例断言「勾上时主色够浓」只会重复实现里的那个数；§4.1 → Task 3；§4.2 → Task 4/5；§4.3 → Task 6；§5 结构 → 文件结构表；§6 → 各 Task 的验收步 + Task 6 Step 5/6；§7 动图管线 → Global Constraints + Task 7 Step 1；§8 风险 → Review Focus；§9 不做 → 各 Task 未触及那些文件。
 - **Review Focus 五条各自落在哪**：① 窄窗 → Task 4 Step 5（`failOnOverflow`）；② 边格文字顶出 → Task 3 Step 1 第二条；③ 白勾对比度 → Task 7 Step 5 的手工项；④ 底栏被抽坏 → Task 2 Step 5 的停线；⑤ 真列表里的行高 → Task 6 Step 6。
 - **三处写计划时才定下来的事**（规格没说死，这里钉住）：
   1. **分段器的扭曲只接液态那棵树** —— 与底栏同一条规矩（底栏标准档传 `lensItemW: null`，一个变换都不套）。判定理由是两棵树的**滑块坐标系不同构**：标准档的滑块中心恰好是 `(page+0.5)×格宽`，液态档的滴中心是 `pad + position×滴格宽`。硬凑一个式子会让峰值错开两三像素。**代价**：标准档那一格不动，两档切换时不会有「扭曲突然出现」的跳变（标准档本来就没有扭曲）。
