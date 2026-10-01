@@ -36,6 +36,7 @@ class LiquidLensController extends ChangeNotifier {
     required this.liftWidth,
     required TickerProvider vsync,
     int initialSlot = 0,
+    this.followFinger = true,
   }) {
     _page = initialSlot.toDouble();
     _slotCentre = initialSlot + 0.5;
@@ -53,6 +54,13 @@ class LiquidLensController extends ChangeNotifier {
   /// `LiquidLensMetrics.liftWidth`（夹紧用）：满升程时横向总共外扩多少，
   /// **可以为负**。
   final double liftWidth;
+
+  /// 提起之后**要不要朝手指走**。
+  ///
+  /// 底栏与分段器是「按住吸附到手上」，要（默认 true）。**开关不要** —— 它不可拖，
+  /// 交互只是「点哪儿都拨一下」；跟着手走的症状是在开着的那枚开关左半边按住，
+  /// 钮会自己飞到左边去（与「开关的钮不该跑到手指下」是同一件事的两半）。
+  final bool followFinger;
 
   // ── 弹簧 ────────────────────────────────────────────────────────────────
   /// 「该停在哪一格的中间」。点按 / 松手 / 外部切页都会改写它，`_onTick` 用它作为
@@ -157,15 +165,22 @@ class LiquidLensController extends ChangeNotifier {
   // ── 手势 ────────────────────────────────────────────────────────────────
 
   /// 点按落下：吸附到手指所在的那一整格，**不提起**。
-  void press(double localDx) {
+  ///
+  /// [moveToSlot] 为 `false` 时**不挪**，只进入按住态。开关用它 —— **开关的钮不该
+  /// 跑到手指按下的那一格去**（那是分段器 / 底栏的语义：点哪一格就去哪一格）；
+  /// 开关的交互是「点哪儿都只是拨一下」，钮只该在**值变了**之后才滑过去。
+  /// 少了这个参数，在开着的那枚开关左半边按住，钮会先跳到左边再跳回来。
+  void press(double localDx, {bool moveToSlot = true}) {
     final int i = _indexFor(localDx);
     _fingerInnerX = localDx;
     _armHoldTimer();
     _pressed = true;
     _previewIndex = i;
-    _page = i.toDouble();
-    _slotCentre = i + 0.5;
-    _pos.target = _slotCentre;
+    if (moveToSlot) {
+      _page = i.toDouble();
+      _slotCentre = i + 0.5;
+      _pos.target = _slotCentre;
+    }
     _syncTicker();
     notifyListeners();
   }
@@ -295,7 +310,7 @@ class LiquidLensController extends ChangeNotifier {
       // 位置的目标 = **该去的那一格**，只有升程起来之后才掺进手指的位置。于是点按
       // 换页时透镜照样「滑过去」，只是不提起。
       final double fingerCentre = _fingerInnerX / _itemW;
-      final double t = _lift.value.clamp(0.0, 1.0);
+      final double t = followFinger ? _lift.value.clamp(0.0, 1.0) : 0.0;
       _pos.target =
           _clampCentre(_slotCentre + (fingerCentre - _slotCentre) * t);
       _pos.step(dt);

@@ -37,6 +37,7 @@ class LiquidTrack extends StatelessWidget {
     this.showGlowBand = true,
     this.showRefractedEdge = true,
     this.clipContent = true,
+    this.trackTint,
     double? contentPad,
   }) : _contentPad = contentPad;
 
@@ -62,6 +63,10 @@ class LiquidTrack extends StatelessWidget {
   /// 内容层裁在胶囊里。开着的效果与底栏标准档一致（`GestureDetector` 在 `ClipRRect`
   /// 里面，胶囊圆角外那一小块不会穿透到页面内容）。
   final bool clipContent;
+
+  /// 叠在胶囊里的**一层纯色**。开关用它表示「已打开」（主色淡染）；
+  /// 底栏与分段器不给。
+  final Color? trackTint;
 
   /// 内容层的内缩。不给 = 与几何用同一个 [pad]。
   ///
@@ -118,6 +123,19 @@ class LiquidTrack extends StatelessWidget {
                   ),
                 ),
               ),
+              // ①c 轨道着色（开关的「已打开」）。压在边光**之下**、透镜**之上**
+              // 都不是——它要盖住胶囊的底色、又不该盖住边光与透镜，所以放这里。
+              if (trackTint != null)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(capsuleH / 2),
+                        color: trackTint,
+                      ),
+                    ),
+                  ),
+                ),
               // ①b 边光 + 「光跟随滑块」。
               if (showGlowBand)
                 Positioned.fill(

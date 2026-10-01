@@ -28,6 +28,7 @@ const List<String> _allowed = <String>[
   'lib/core/glass/glass.dart', // 定义处
   'lib/features/home/', // 底栏
   'lib/core/widgets/glass_segment.dart', // 分段器
+  'lib/core/widgets/glass_switch.dart', // 开关
 ];
 
 const String _needle = 'liquidGlassActive';
@@ -78,6 +79,7 @@ void main() {
       <String>[
         'lib/core/glass/glass.dart',
         'lib/core/widgets/glass_segment.dart',
+        'lib/core/widgets/glass_switch.dart',
         'lib/features/home/glass_nav_bar.dart',
       ],
       reason: '去掉豁免后应**恰好**命中这两处（定义处 + 底栏）：\n'

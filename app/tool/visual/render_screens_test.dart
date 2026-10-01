@@ -18,6 +18,7 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
+import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
@@ -325,6 +326,10 @@ void main() {
   for (final variant in visualVariants) {
     visualTest('分段器 · 液态 · 按住 · ${variant.label}', (tester) async {
       failOnOverflow(tester);
+      // 这两个宿主是**独立控件**，不读 `appSettingsProvider` —— 档位标志
+      // 不会因为 prefs 被点亮（前几屏能亮是因为它们读 provider）。
+      // 所以这里必须显式拨一下。
+      useLiquidGlassTier();
       final db = await freshDb();
       await renderScreen(
         tester,
@@ -348,6 +353,40 @@ void main() {
       );
     });
   }
+  // 开关 · 液态 · **按住那一刻**（钮纵向拉长）。
+  //
+  // 「开」「关」两态在 `37_profile_liquid_*` 等屏里已经有了；**按住时钮被抽出来**
+  // 只在按住时发生，静止帧拍不到 —— 这一屏专门拍它。
+  for (final variant in visualVariants) {
+    visualTest('开关 · 液态 · 按住 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      // 这两个宿主是**独立控件**，不读 `appSettingsProvider` —— 档位标志
+      // 不会因为 prefs 被点亮（前几屏能亮是因为它们读 provider）。
+      // 所以这里必须显式拨一下。
+      useLiquidGlassTier();
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '43_switch_liquid_${variant.suffix}',
+        home: const _SwitchHost(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        beforeCapture: (WidgetTester t) async {
+          // 按**最下面那一枚**（开着的那枚），上两枚作对照。
+          final Rect box = t.getRect(find.byType(GlassSwitch).last);
+          final TestGesture g = await t.startGesture(box.center);
+          addTearDown(g.up);
+          for (int i = 0; i < 20; i++) {
+            await t.pump(const Duration(milliseconds: 30));
+          }
+        },
+      );
+    });
+  }
+
 }
 
 /// 一屏只放三段分段器，用来单独看清液态档按住时那枚滴。
@@ -375,4 +414,29 @@ class _SegmentHost extends StatelessWidget {
           ),
         ),
       );
+}
+
+
+/// 三枚开关：开 / 关 / **按住那一枚会被拍下来**。
+class _SwitchHost extends StatelessWidget {
+  const _SwitchHost();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              GlassSwitch(value: true, onChanged: _ignore),
+              SizedBox(height: AppTokens.space2xl),
+              GlassSwitch(value: false, onChanged: _ignore),
+              SizedBox(height: AppTokens.space2xl),
+              GlassSwitch(value: true, onChanged: _ignore),
+            ],
+          ),
+        ),
+      );
+
+  static void _ignore(bool _) {}
 }
