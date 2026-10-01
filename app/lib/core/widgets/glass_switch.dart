@@ -218,8 +218,7 @@ class _GlassSwitchState extends State<GlassSwitch>
         // v0.10.9 关掉它的理由是「白上画白等于没画」—— 那按的是**钮的颜色**，
         // 于是钮一改成主色它就带着缺陷回来了。这里按**控件尺寸**判，与颜色无关。
         showRingCore: false,
-        // 这两层是**底栏特有**的读法，46px 宽的轨道上它们是几道乱线（样图实测）。
-        showGlowBand: false,
+        // 这一层是**底栏特有**的读法，46px 宽的轨道上它是几道乱线（样图实测）。
         showRefractedEdge: false,
         // 「已打开」= 玻璃里叠一层主色淡染。
         trackTint: widget.value ? accent.withValues(alpha: 0.35) : null,

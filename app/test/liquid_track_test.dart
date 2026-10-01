@@ -9,7 +9,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens_controller.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens_metrics.dart';
 import 'package:shiftassistantpro/core/widgets/liquid_track.dart';
@@ -22,9 +21,11 @@ void main() {
     WidgetTester tester, {
     double width = 300,
     double capsuleH = 40,
-    bool showGlowBand = true,
     bool showRefractedEdge = true,
     bool fillWhite = false,
+    // 「跟随滑块」那条亮带在**浅色下是白压白、结构性地看不见**（实测整个上沿
+    // 235~237 一条平的）—— 要量它必须切到深色。
+    bool dark = false,
   }) async {
     const int n = 3;
     tester.view.physicalSize = Size(width, 120);
@@ -45,6 +46,7 @@ void main() {
     await tester.pumpWidget(RepaintBoundary(
       key: key,
       child: MaterialApp(
+        theme: dark ? ThemeData.dark() : null,
         home: Material(
           child: Center(
             child: SizedBox(
@@ -56,7 +58,6 @@ void main() {
                 pad: pad,
                 controller: c,
                 metrics: LiquidLensMetrics.forCapsule(capsuleH),
-                showGlowBand: showGlowBand,
                 showRefractedEdge: showRefractedEdge,
                 fill: fillWhite
                     ? const <Color>[Colors.white, Colors.white]
@@ -109,22 +110,29 @@ void main() {
     );
   });
 
-  testWidgets('showGlowBand：关掉的是**那条光带**，不是整圈边光', (tester) async {
-    // 独立审查抓的：第一版拿这个开关包住了整个 `CapsuleRimPainter`，于是开关的轨道
-    // 连**方向性边光**也一起没了、变成一块平的着色板。规格 §4.3 要关的只是
-    // 「追着滑块的光带」。painter 自己在 `sliderIndex == null` 时就不画亮带。
-    CapsuleRimPainter rimOf(WidgetTester t) => t
-        .widgetList<CustomPaint>(find.byType(CustomPaint))
-        .map((CustomPaint p) => p.painter)
-        .whereType<CapsuleRimPainter>()
-        .single;
-
-    await shot(tester, showGlowBand: true);
-    expect(rimOf(tester).sliderIndex, isNotNull,
-        reason: '开着却没有那条光带 —— 这条测不出东西');
-    await shot(tester, showGlowBand: false);
-    expect(rimOf(tester).sliderIndex, isNull,
-        reason: '光带还在 —— 开关没接上');
+  testWidgets('胶囊的边光是**水平均匀**的：那条「跟随滑块」的亮带已经拆掉', (tester) async {
+    // 用户 2026-10-01：「我发现你这个底部导航栏的液态玻璃滑块，还有主题模式等那些
+    // 较长的滑块，中间边缘怎么都会发光啊？尤其是在深色模式下很明显」。
+    // 那团光就是 `CapsuleRimPainter` 的 sliderIndex 亮带（深色下白 @0.95、模糊 3、
+    // 再加宽 1.4 倍），落在滑块所在的那一段胶囊边上。滴在这几处几乎填满胶囊高，
+    // 亮带只剩**溢出到胶囊外**的那半截能看见 —— 读起来像「边缘漏了个光斑」而不是
+    // 「边上有光」。三处一起关掉（开关自 v0.10.9 起就关着）。
+    //
+    // 判据是**同一条边上的横向均匀性**：方向性边光的渐变轴是**竖直**的（v0.10.6
+    // 那条修的就是这个），所以左右两端必然等值；亮带一挂上去，滑块那一带就偏亮。
+    const int w = 300;
+    // **必须在深色下量。** 那条亮带在浅色下是白压白：实测整条上沿 235~237 一条平的，
+    // 拆没拆一个样（第一版就是这么写的，绿着不动）。深色下它才现形。
+    final List<int> px = await shot(tester, width: w.toDouble(), dark: true);
+    // 胶囊竖直居中在画布 120 高里 → 上沿在 y = 40，取 41（落在描边那一两个像素内）。
+    // 滑块停在第 0 格：3 格 300 宽、内缩 6 → 每格 96，中心 = 6 + 0.5×96 = 54。
+    // 实测（同一行）：
+    //   亮带在：x=20 → 40，x=54 → **74**（滑块那一带鼓出来 34 级）
+    //   拆掉后：x=20 → 40，x=54 → 39（一条平的缓坡，那是胶囊填充的对角渐变）
+    int lum(int x) => red(px, w, x, 41);
+    final int bump = lum(54) - lum(20);
+    expect(bump, lessThanOrEqualTo(6),
+        reason: '滑块那一带的边比左端亮 $bump 级 —— 亮带没拆干净');
   });
 
   testWidgets('窄窗（200 宽的胶囊）：不抛异常，且透镜仍占着第一格', (tester) async {

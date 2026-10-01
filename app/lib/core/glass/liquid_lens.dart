@@ -889,25 +889,25 @@ SweepGradient spectralSweep({
   return SweepGradient(colors: colors, stops: stops);
 }
 
-/// 胶囊那一圈**方向性边光** + 「光跟随滑块」的窄亮带。
+/// 胶囊那一圈**方向性边光**。
 ///
 /// 从 `glass.dart` 搬过来的（v0.10.3）：那一版里它和一个 painter 画透镜本体混在一起，
 /// 而透镜现在已经由 [LiquidLens] 负责 —— 留下的只有「静止的玻璃面上那圈光」。
 ///
-/// 两块内容：
-///   ① 一圈**方向性**描边（左上高光 → 右下收边）。浅色档的配方是「左上高光 + 右下
-///      轻收」而不是「一圈白」—— 白光照白底**结构性地**看不见，这是量出来的。
-///   ② 光源（滑块）经过时它附近那一段玻璃边亮起来。**这不是折射** —— 折射是逐像素
-///      扭曲背景，要 shader，而且在平背景上看不见。这是「光的响应」，而平背景上能被
-///      看见的只有这一类。
+/// 一圈**方向性**描边（左上高光 → 右下收边）。浅色档的配方是「左上高光 + 右下轻收」
+/// 而不是「一圈白」—— 白光照白底**结构性地**看不见，这是量出来的。
+///
+/// ⚠️ **它原来还画第二条东西：「光跟随滑块」的亮带**（滑块所在那一段胶囊边亮起来，
+/// 深色下白 @0.95 + 模糊 3 + 加宽 1.4 倍）。2026-10-01 拆掉了 —— 用户原话：
+/// 「中间边缘怎么都会发光啊？尤其是在深色模式下很明显」。它在这几个面上都不成立：
+/// 滴几乎填满胶囊高，亮带只剩**溢出到胶囊外**的那半截能看见，读起来像「边缘漏了个
+/// 光斑」；而它本来想提示的「药丸在哪儿」本来就不需要提示，药丸自己就是画面里最大
+/// 那块颜色。护栏见 `test/liquid_track_test.dart` 的「边光是水平均匀的」。
 class CapsuleRimPainter extends CustomPainter {
   const CapsuleRimPainter({
     required this.radius,
     required this.isDark,
     this.compact = false,
-    this.sliderIndex,
-    this.tabCount,
-    this.trackPad = 0,
   });
 
   final double radius;
@@ -915,15 +915,6 @@ class CapsuleRimPainter extends CustomPainter {
 
   /// 小控件（底栏胶囊）用更细的一圈：同一个宽度在小控件上相对更显眼。
   final bool compact;
-
-  /// 光源位置，**以「功能区」为单位**（第 2 格的中间 = 1.5）。null = 不做光的响应。
-  final double? sliderIndex;
-
-  /// 功能区个数。
-  final int? tabCount;
-
-  /// 信息区两侧的留白，用来把 [sliderIndex] 换算成真实像素。
-  final double trackPad;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -954,53 +945,13 @@ class CapsuleRimPainter extends CustomPainter {
           colors: AppTokens.glassRimProbe(isDark),
         ).createShader(rect),
     );
-
-    final double? index = sliderIndex;
-    final int? count = tabCount;
-    if (index == null || count == null || count <= 1 || size.width <= 0) return;
-
-    final double itemW = (size.width - 2 * trackPad) / count;
-    final double centerX = trackPad + index * itemW;
-    final Color glow = AppTokens.glassRimProbeGlow(isDark);
-
-    // 「光跟随滑块」：横向一条**窄**亮带。第一版做成 ±0.16 的宽带，结果和底色融了、
-    // 看不出「跟着走」—— 收窄才有指向性。
-    final double h = (centerX / size.width).clamp(0.0, 1.0);
-    const double band = 0.085;
-    double lo = h - band;
-    if (lo < 0) lo = 0;
-    double hi = h + band;
-    if (hi > 1) hi = 1;
-    if (hi - lo <= 0.02) return;
-    double mid = h;
-    if (mid < lo + 0.01) mid = lo + 0.01;
-    if (mid > hi - 0.01) mid = hi - 0.01;
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = width * 1.4
-        // 边缘光也要有晕 —— 一条硬线读作「描边」，一圈晕才读作「光」。
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3)
-        ..shader = LinearGradient(
-          colors: <Color>[
-            glow.withValues(alpha: 0),
-            glow,
-            glow.withValues(alpha: 0),
-          ],
-          stops: <double>[lo, mid, hi],
-        ).createShader(rect),
-    );
   }
 
   @override
   bool shouldRepaint(CapsuleRimPainter old) =>
       old.radius != radius ||
       old.isDark != isDark ||
-      old.compact != compact ||
-      old.sliderIndex != sliderIndex ||
-      old.tabCount != tabCount ||
-      old.trackPad != trackPad;
+      old.compact != compact;
 }
 
 /// 一枚图标（连同它下面那行文字）被**透镜边缘**影响的那一帧。
