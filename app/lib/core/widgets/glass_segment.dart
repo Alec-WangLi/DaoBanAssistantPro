@@ -6,6 +6,7 @@ import '../glass/liquid_lens_controller.dart';
 import '../glass/liquid_lens_metrics.dart';
 import '../haptics.dart';
 import '../motion.dart';
+import 'lens_warped_cell.dart';
 import 'liquid_track.dart';
 
 /// 胶囊分段选择器：与底部导航滑块同款手感。
@@ -250,18 +251,44 @@ class _GlassSegmentState extends State<GlassSegment>
         onHorizontalDragUpdate: (d) => _dragUpdate(d.localPosition.dx, itemW),
         onHorizontalDragEnd: (_) => _release(),
         onHorizontalDragCancel: _cancel,
-        child: _content(_lens.previewIndex ?? _committed),
+        child: _content(_lens.previewIndex ?? _committed, lensItemW: itemW),
       ),
     );
   }
 
-  Widget _content(int selectedIdx) => Row(
-        children: List<Widget>.generate(widget.count, (int i) {
-          return Expanded(
-            child: Center(
-              child: widget.itemBuilder(i, i == selectedIdx),
-            ),
-          );
-        }),
-      );
+  /// 分段内容。**[lensItemW] 只有液态那棵树传** —— 给了就把每一格套上
+  /// [LensWarpedCell]（滑块扫过时文字被边缘挤），与底栏同一条规矩：标准档
+  /// 一个变换都不套。
+  ///
+  /// ⚠️ **两套格宽不一样**，别合成一个数：
+  /// - 分段器的**格子**铺满全宽 → `cellW = (透镜格宽×格数 + 2×padChipV) ÷ 格数`；
+  /// - **滴**那一套是内缩的 → `padChipV + position × lensItemW`。
+  ///
+  /// 拿底栏那个式子（`pad + (i+0.5)×itemW`）算中心，300 宽下会得到 52 而不是 50
+  /// —— 差 2px 就够让峰值与滴的真实边缘错开。
+  Widget _content(int selectedIdx, {double? lensItemW}) {
+    final double cellW = lensItemW == null
+        ? 0
+        : lensItemW + 2 * AppTokens.padChipV / widget.count;
+    final double halfWidth = lensItemW == null
+        ? 0
+        : (lensItemW + LiquidLensMetrics.forCapsule(widget.height).liftWidth) / 2;
+    return Row(
+      children: List<Widget>.generate(widget.count, (int i) {
+        final Widget cell =
+            Center(child: widget.itemBuilder(i, i == selectedIdx));
+        if (lensItemW == null) return Expanded(child: cell);
+        return Expanded(
+          child: LensWarpedCell(
+            controller: _lens,
+            iconCenterX: (i + 0.5) * cellW,
+            lensPad: AppTokens.padChipV,
+            itemW: lensItemW,
+            halfWidth: halfWidth,
+            child: cell,
+          ),
+        );
+      }),
+    );
+  }
 }
