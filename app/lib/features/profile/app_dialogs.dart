@@ -39,7 +39,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.15\n'
+const String _changelogZh = 'v0.10.16\n'
+    '· 修好上一版带进来的一处问题：拖完日历上那枚选中的块、再点一下日期，它会自己抽一下（陈旧的速度被反复灌回来）\n'
+    '· 按住那枚块不动时，它的形变现在会自己收回去（之前会一直挂着）\n\n'
+
+    'v0.10.15\n'
     '· 日历上那枚选中的方块，在「液态玻璃」档下变成一枚真的玻璃透镜：按住时四面鼓出来、底下浮起一层影子\n'
     '· 拖动时它跟着手指的方向拉长、变扁，边上带一圈彩色折射光（停下就没了）\n'
     '· 它扫过哪一天，那一天的字（日期 / 班次 / 农历）就被它的边缘轻轻挤一下\n'
@@ -93,17 +97,13 @@ const String _changelogZh = 'v0.10.15\n'
     '· 静止时依然一个彩色像素都没有\n'
     '\n'
 
-    'v0.10.6\n'
-    '· 浅色下底栏胶囊的左右两边现在一样清楚（之前左边那圈白光把轮廓盖掉了，看着像只有右边有镜片）\n'
-    '· 底栏那圈彩色折射光改成一动就满 —— 之前要滑得很快才明显，正常拖动基本看不出来\n'
-    '· 按住拖动时滑块不再随着速度沉回胶囊，「按住」那个凸起全程都在\n'
-    '· 滑块的形变改了走弹簧，起步与停下更顺，不再跟着速度硬切\n'
-    '· 120Hz 屏幕上「速度被算成一半」的毛病修好了（拖动时形状大小不稳就是它）\n'
-    '\n'
-
 ;
 
-const String _changelogEn = 'v0.10.15\n'
+const String _changelogEn = 'v0.10.16\n'
+    '· Fixed a regression from the previous version: after dragging the calendar selection block, tapping a day made it stretch and flash once (a stale drag velocity was re-applied)\n'
+    '· Holding the block still now lets its stretch relax (it used to stay stretched)\n\n'
+
+    'v0.10.15\n'
     '· The selected day block on the calendar becomes a real glass lens in the Liquid Glass tier: it bulges out on all four sides while held, with a lifted shadow\n'
     '· While you drag it stretches along the direction of travel and flattens, with a prismatic rim that only shows while it is moving\n'
     '· As it sweeps over a day, that day text (date / shift / lunar) gets a slight squeeze at its edge\n'
@@ -155,14 +155,6 @@ const String _changelogEn = 'v0.10.15\n'
     '· The tab pill’s coloured edge is now a refractive halo — light spreading into the glass and a little beyond it, instead of a ribbon stuck along the rim\n'
     '· The colour now wraps the whole rim: before, only the left and top had any (the lower right was essentially empty)\n'
     '· Still nothing coloured at all while the pill is at rest\n'
-    '\n'
-
-    'v0.10.6\n'
-    '· In light mode both ends of the tab capsule are equally visible now (a white rim used to erase the outline on the left, so only the right end looked like glass)\n'
-    '· The prismatic rim is at full strength the moment the pill moves — before, you had to drag very fast to see it at all\n'
-    '· While you hold and drag, the pill no longer sinks back inside the capsule, so the lifted bump stays for the whole drag\n'
-    '· The pill’s shape now eases along a spring instead of snapping straight to the raw speed\n'
-    '· Fixed the speed being computed as half its real value on 120Hz displays (that was the shape wobbling as you dragged)\n'
     '\n'
 
 ;
