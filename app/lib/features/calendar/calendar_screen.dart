@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
 import '../../core/haptics.dart';
 import '../../core/glass/glass.dart';
+import '../../core/glass/liquid_lens.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/theme/animated_background.dart';
@@ -22,6 +24,7 @@ import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import '../widget/widget_service.dart';
 import 'info_card_metrics.dart';
+import 'calendar_lens.dart';
 import 'schedule_management_screen.dart';
 import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
@@ -68,6 +71,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   double _visualRow = 0; // 选中块视觉行（连续小数，拖动时用）
   double _grabCol = 0; // 手指相对选中块左缘的抓取偏移（列）
   double _grabRow = 0; // 手指相对选中块上缘的抓取偏移（行）
+
+  /// 选中块的拖动速度（px/s，逻辑像素）—— 帧间差分 ÷ 真实帧间隔（`lensVelocityStep`，
+  /// 一处实现、带低通）。**只有液态档那枚块读它**：标准档那枚是等比放大，不吃速度。
+  double _vx = 0;
+  double _vy = 0;
+
+  /// 上一帧的帧戳与「那一帧块在哪一格」。`null` = 这一段拖动还没量过速度。
+  Duration? _lastFrameStamp;
+  double _lastVelCol = 0;
+  double _lastVelRow = 0;
 
   /// 长按拖选：起点与当前终点（null = 不在范围选择态）。
   DateTime? _rangeAnchor;
@@ -994,12 +1007,46 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               _visualRow = startRow;
               _grabCol = (d.localPosition.dx - _hPad) / cellW - startCol;
               _grabRow = (d.localPosition.dy - _weekdayH) / cellH - startRow;
+              // 速度从这一格起算：上一段拖动的尾巴不许再算进来。
+              _vx = 0;
+              _vy = 0;
+              _lastFrameStamp = null;
+              _lastVelCol = startCol;
+              _lastVelRow = startRow;
             });
           },
           onPanUpdate: (d) {
+            final double col = (d.localPosition.dx - _hPad) / cellW - _grabCol;
+            final double row = (d.localPosition.dy - _weekdayH) / cellH - _grabRow;
+            // 速度：**位置的帧间差分 ÷ 真实的帧间隔**（`lensVelocityStep`，带低通）。
+            // 与底栏 / 分段器 / 开关 / 响铃那枚药丸同一套 —— **别退回 `delta × 60`**：
+            // 120Hz 上每帧位移只有一半、形变也就只有一半（v0.10.6 与 v0.10.14 各踩过一次）。
+            //
+            // ⚠️ **只在帧戳真的变了时才算**：同一帧 rebuild 多次是常态（指针事件不按帧到达），
+            // 第二遍进来位移已经被吃掉、算出来是 0，而低通会把那个 0 当真。
+            final Duration stamp =
+                SchedulerBinding.instance.currentSystemFrameTimeStamp;
+            if (stamp != _lastFrameStamp) {
+              final Duration? prev = _lastFrameStamp;
+              _lastFrameStamp = stamp;
+              if (prev != null) {
+                _vx = lensVelocityStep(
+                    deltaPage: col - _lastVelCol,
+                    itemW: cellW,
+                    dt: stamp - prev,
+                    previous: _vx);
+                _vy = lensVelocityStep(
+                    deltaPage: row - _lastVelRow,
+                    itemW: cellH,
+                    dt: stamp - prev,
+                    previous: _vy);
+              }
+              _lastVelCol = col;
+              _lastVelRow = row;
+            }
             setState(() {
-              _visualCol = (d.localPosition.dx - _hPad) / cellW - _grabCol;
-              _visualRow = (d.localPosition.dy - _weekdayH) / cellH - _grabRow;
+              _visualCol = col;
+              _visualRow = row;
             });
           },
           onPanEnd: (_) {
@@ -1014,6 +1061,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               _pressed = false;
               _dragActive = false;
               if (date != null) _selected = date;
+              // ⚠️ **不要把 `_vx` / `_vy` 归零**：松手之后那枚块还要靠最后一次速度
+              // 把形变**收回去**（`CalendarLens` 自己按帧衰减）。归零的话形变会
+              // 「啪」地消失，而不是收回去。下一次 `onPanStart` 才清它。
             });
             if (changed) Haptics.select();
           },
@@ -1087,7 +1137,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   child: Column(
                     children: [
                       _weekdayRow(context, cellW),
-                      ..._dayRows(context, cellW, cellH, chain),
+                      ..._dayRows(context, cellW, cellH, chain,
+                          // 液态档才有：那枚块**当前的中心**（格子层坐标）。
+                          // 「内容被它挤」用得到，标准档传 null（一层都不算）。
+                          lensCenter: showBlock && liquidGlassActive.value
+                              ? Offset(blockLeft + cellW / 2, blockTop + cellH / 2)
+                              : null),
                     ],
                   ),
                 ),
@@ -1102,10 +1157,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     width: cellW,
                     height: cellH,
                     child: AnimatedScale(
-                      scale: _pressed ? 1.22 : 1.0,
+                      // ⚠️ 液态档**钉在 1.0**：按住那个动作改由「四面鼓出 + 浮起阴影」
+                      // 承担（`CalendarLens` 的升程），两个叠在一起就重了。
+                      // 标准档一个字不改 —— 它靠的正是这 1.22。
+                      scale: _pressed && !liquidGlassActive.value ? 1.22 : 1.0,
                       duration: AppTokens.durMed,
                       curve: Curves.easeOutBack,
-                      child: _glassBlock(context),
+                      child: _glassBlock(context, cellW, cellH),
                     ),
                   ),
               ],
@@ -1154,7 +1212,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   List<Widget> _dayRows(
-      BuildContext context, double cellW, double cellH, ScheduleChain? chain) {
+      BuildContext context, double cellW, double cellH, ScheduleChain? chain,
+      {Offset? lensCenter}) {
     // 比「同一天」用 `isSameDay` 而不是 `==`：`dateOnly` 是 UTC 日期、这里的
     // `date` 是本地日期，`DateTime.==` 连 `isUtc` 一起比，`==` 恒为假
     // （「今天」的日期因此一直没加粗过）。
@@ -1170,6 +1229,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
     for (var d = 1; d <= _daysInMonth; d++) {
       final date = DateTime(_month.year, _month.month, d);
+      // 这一格的内容被透镜边缘挤成什么样（液态档才有；`null` = 一层都不套）。
+      final int slot = _leading + d - 1;
+      final Matrix4? warp = lensCenter == null
+          ? null
+          : _cellWarp(
+              cellCenter: Offset(_hPad + (slot % 7 + 0.5) * cellW,
+                  _weekdayH + (slot ~/ 7 + 0.5) * cellH),
+              lensCenter: lensCenter,
+              cellW: cellW,
+              cellH: cellH,
+            );
       cells.add(_dayCell(
           context,
           date,
@@ -1186,7 +1256,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               false,
           _rangeAnchor != null &&
               _rangeFocus != null &&
-              _inSelectedRange(date)));
+              _inSelectedRange(date),
+          warp: warp));
     }
     final rows = <Widget>[];
     for (var i = 0; i < cells.length; i += 7) {
@@ -1194,6 +1265,45 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       rows.add(Row(children: chunk));
     }
     return rows;
+  }
+
+  /// 这一格的**内容**被透镜边缘挤成什么样 —— 液态档才有。
+  ///
+  /// 用二维版 `lensIconWarp2d`（一维版只认 x，给底栏 / 分段器那种「一排」的控件）；
+  /// 半宽半高取**满升程 + 满形变**那一档 —— 它随升程只变一点点，而权重本来就是
+  /// 一条软的钟形（一维版也是这么取的）。
+  ///
+  /// 恒等时返回 `null`：**一层恒等的 `Transform` 都不套**（它也是要付代价的）。
+  Matrix4? _cellWarp({
+    required Offset cellCenter,
+    required Offset lensCenter,
+    required double cellW,
+    required double cellH,
+  }) {
+    final double hw =
+        ((cellW - 2 * _cellInset) * (1 + AppTokens.lensStretch) +
+                2 * CalendarLens.protrude) /
+            2;
+    final double hh =
+        ((cellH - 2 * _cellInset) * (1 + AppTokens.lensStretch) +
+                2 * CalendarLens.protrude) /
+            2;
+    final ({double scaleRadial, double scaleTangent, double dx, double dy,
+        double angle}) w = lensIconWarp2d(
+      itemCenterX: cellCenter.dx,
+      itemCenterY: cellCenter.dy,
+      lensCenterX: lensCenter.dx,
+      lensCenterY: lensCenter.dy,
+      lensHalfWidth: hw,
+      lensHalfHeight: hh,
+    );
+    if (w.scaleRadial == 1.0 && w.dx == 0.0 && w.dy == 0.0) return null;
+    // 沿径向压扁、垂直方向拉长，再朝远离透镜中心的方向推一点。
+    return Matrix4.identity()
+      ..translateByDouble(w.dx, w.dy, 0, 1)
+      ..rotateZ(w.angle)
+      ..scaleByDouble(w.scaleRadial, w.scaleTangent, 1, 1)
+      ..rotateZ(-w.angle);
   }
 
   /// 磨砂卡片日期格。
@@ -1218,9 +1328,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   ///
   /// [adjusted] 表示这天被「按天改班」覆盖过，胶囊右上角点一个小圆点。
   /// [inRange] 表示这天落在长按拖选的范围里，整格铺一层主色淡染。
+  ///
+  /// [warp] 是液态档那枚透镜把它**内容**挤了一下的仿射变换（`null` = 不套）。
+  /// 只套内容、**不套卡片**：卡片动了就成了「格子自己在扭」，而用户要的是
+  /// 「一枚玻璃压过去」。`Transform` 只改绘制、不改布局，所以字的排版不会跟着变。
   Widget _dayCell(BuildContext context, DateTime date, ShiftClass? shift,
       LunarInfo lunar, double cellW, double cellH, bool isToday, bool solid,
-      bool adjusted, bool inRange) {
+      bool adjusted, bool inRange, {Matrix4? warp}) {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
         : AppTokens.inkMuted(context);
@@ -1351,6 +1465,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       ..add(const SizedBox(height: AppTokens.gapHair))
       ..add(lunarLine);
 
+    // 内容那一层（日期 + 班次胶囊 + 农历）。抽出来是为了让「挤那一下」能套在它外面。
+    final Widget fittedContent = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: SizedBox(
+        width: contentW,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: children,
+        ),
+      ),
+    );
+
     return SizedBox(
       width: cellW,
       height: cellH,
@@ -1386,17 +1513,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               // 高过视口」，管不到「字高过格子」。
               //
               // 宽度给死值，所以 scaleDown 只在**高度**不够时才动手。
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: SizedBox(
-                  width: contentW,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: children,
-                  ),
-                ),
-              ),
+              //
+              // 外面那层 `Transform` 是液态档「内容被透镜边缘挤」——
+              // **`warp == null` 时一层都不套**（恒等的 Transform 也是要付代价的），
+              // 而套上时它只改绘制：`Transform` 不动布局，字的排版与换行都不变。
+              child: warp == null
+                  ? fittedContent
+                  : Transform(
+                      alignment: Alignment.center,
+                      transform: warp,
+                      child: fittedContent,
+                    ),
             ),
           ],
         ),
@@ -1620,8 +1747,23 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   /// 可拖拽的玻璃选择块（与格子同 inset、同圆角，精确覆盖）。
-  Widget _glassBlock(BuildContext context) {
+  Widget _glassBlock(BuildContext context, double cellW, double cellH) {
     final accent = Theme.of(context).colorScheme.primary;
+    // 液态档：一枚真的玻璃透镜（按住四面鼓出、拖动跟速度形变、边缘挤过格子里的字）。
+    // 它替下的是那个 1.22 的等比放大 —— 标准档那棵树上那条路径一个字没动。
+    if (liquidGlassActive.value) {
+      return CalendarLens(
+        // 与标准档那一枚**同一个 key**：它就是「选中块」这一个东西，
+        // 两个档位各是一棵树，但对外（单测、工装）是同一个身份。
+        key: const Key('calendar-selection-block'),
+        size: Size(cellW, cellH),
+        liftTarget: (_pressed || _dragActive) ? 1 : 0,
+        dragging: _dragActive,
+        velocity: Offset(_vx, _vy),
+        isDark: Theme.of(context).brightness == Brightness.dark,
+        accent: accent,
+      );
+    }
     return Container(
       key: const Key('calendar-selection-block'),
       margin: const EdgeInsets.all(_cellInset),

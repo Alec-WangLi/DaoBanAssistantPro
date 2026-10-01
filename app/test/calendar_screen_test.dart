@@ -18,6 +18,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
+import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/animated_background.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
@@ -26,6 +27,7 @@ import 'package:shiftassistantpro/domain/lunar_info.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
+import 'package:shiftassistantpro/features/calendar/calendar_lens.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/info_card_metrics.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
@@ -102,8 +104,26 @@ String _shiftLine(WidgetTester tester) => tester
 /// [blank] 造「跟随法定节假日（无班次）」那种空白表：形状照抄编辑器的
 /// `_followHolidayCard`（周期为空 → `isBlank`，班组收敛成「我」一个人）。
 Future<AppDatabase> _pumpCalendar(WidgetTester tester, String templateId,
-    {double width = 420, double height = 1600, bool blank = false}) async {
+    {double width = 420,
+    double height = 1600,
+    bool blank = false,
+    bool liquid = false}) async {
   final template = _template(templateId);
+
+  // ⚠️ **液态档不能只靠模块级标志**：`appSettingsProvider._load()` 会拿 prefs 里的
+  // `liquidGlass` 去 `recomputeGlassTiers()`（默认 false），先设标志的话会被它覆盖
+  // 回去 —— 表现是「液态档那几条跑出来与标准档一模一样」。v0.10.1 与 v0.10.13 各踩过
+  // 一次（都在出图上现形）。日历页读了那个 provider，所以 prefs 一定盖得住。
+  //
+  // ⚠️ **只在 liquid 时动 prefs**：非液态那几条里有依赖「调用方先设好 prefs」的
+  // （英文界面那条就是），无条件重置会把它们冲掉。
+  if (liquid) {
+    SharedPreferences.setMockInitialValues(
+        <String, Object>{'liquidGlass': true});
+  }
+  // 收尾拨回去：标志是模块级的，会漏到下一个用例。
+  liquidGlassActive.value = liquid;
+  addTearDown(() => liquidGlassActive.value = false);
 
   tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1.0;
@@ -1714,5 +1734,97 @@ void main() {
         reason: '多条闹钟只改那一行的文字，不该把卡片顶高');
 
     await _disposeCalendar(tester);
+  });
+
+  // ── 液态档那枚块（v0.10.15）─────────────────────────────────────────────
+  //
+  // 判据只出现在 `calendar_screen.dart` 那两处岔口（`_glassBlock` 与 `AnimatedScale`）。
+  // **标准档必须一点没变** —— 那是这一轮唯一的硬验收（出图逐张比在 Task 8 兜着），
+  // 这里先用几何钉住两条最容易破的：树上有没有那两枚东西、按住那个倍率还是不是 1.22。
+  group('液态档那枚块', () {
+    testWidgets('标准档与液态档是两棵树', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift');
+      expect(find.byType(CalendarLens), findsNothing);
+      expect(find.byType(LiquidLens), findsNothing);
+      await _disposeCalendar(tester);
+
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      expect(find.byType(CalendarLens), findsOneWidget);
+      expect(find.byType(LiquidLens), findsOneWidget);
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('液态档按住的倍率恒为 1.0（按住那个动作由四面鼓出承担）',
+        (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      final TestGesture g = await tester.startGesture(tester.getCenter(
+          find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+      for (int i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(_blockScale(tester), 1.0,
+          reason: '液态档还留着 1.22 —— 那会与「四面鼓出」叠成两层');
+      await g.up();
+      await tester.pumpAndSettle();
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('挤字只变换绘制、不改布局', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      final Finder card2 = find.byKey(const ValueKey('day-card-2'));
+      final Size before = tester.getSize(card2);
+
+      // 按住今天那格，往右拖**半格**（48px = 半格 28 + 被吃掉的 18px slop）——
+      // 透镜正好卡在两格之间，右边那格的内容才会被它的边缘挤到。
+      final TestGesture g = await tester.startGesture(tester.getCenter(
+          find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+      for (int i = 0; i < 8; i++) {
+        await g.moveBy(const Offset(6, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(find.descendant(of: card2, matching: find.byType(Transform)),
+          findsWidgets,
+          reason: '那格的内容没被挤 —— 要么透镜没走到两格之间，要么挤字没接上');
+      expect(tester.getSize(card2), before,
+          reason: '挤字只该变换绘制，不该改布局（改了就会把字挤出格子）');
+      await g.up();
+      await tester.pumpAndSettle();
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('窄屏（260×900）：格子只有 33 宽，形状退回胶囊那支、不崩',
+        (tester) async {
+      // ⚠️ 高度给 900 而不是 400：`AppLayout.isShort`（高 < 480）那一档**不画网格**、
+      // 只有今日信息卡 —— 那样根本测不到这枚块。
+      // ⚠️ 宽度取 260 而不是 200：**200 宽在标准档下自己就溢出 8px**（顶栏那行胶囊），
+      // 是既有问题、与本轮无关（实测过：同一个尺寸、非液态档，同样三条溢出）。
+      await _pumpCalendar(tester, 'four_crew_three_shift',
+          width: 260, height: 900, liquid: true);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(CalendarLens), findsOneWidget);
+      // 格宽 33.7 → 内盒 29.7 → cornerR(16) 比半宽 14.85 还大：形状退回胶囊那支
+      // （端头半径 = 半宽，而不是那个 cornerR）。
+      final LiquidLensShape sh =
+          tester.widget<LiquidLens>(find.byType(LiquidLens)).shape;
+      expect(sh.leftRadius, lessThan(AppTokens.radiusM));
+      expect(sh.leftRadius,
+          closeTo(sh.toPath().getBounds().width / 2, 0.5));
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('拖到本月之外的空白格：不崩、块照旧跟着走', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      final TestGesture g = await tester.startGesture(tester.getCenter(
+          find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+      for (int i = 0; i < 20; i++) {
+        await g.moveBy(const Offset(20, 0)); // 一路拖出行尾
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(tester.takeException(), isNull);
+      expect(find.byType(CalendarLens), findsOneWidget);
+      await g.up();
+      await tester.pumpAndSettle();
+      await _disposeCalendar(tester);
+    });
   });
 }
