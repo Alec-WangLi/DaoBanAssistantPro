@@ -3,9 +3,10 @@
 // 「关掉液态档时与改之前逐像素相同」不在这里验 —— 开关长在七个界面里，那条由
 // `tool/visual` 的整屏逐像素比兜着。这里钉几件单屏照不出来的事。
 //
-// v0.10.10 把「按住时只往纵向拉长」换成了「与底栏 / 分段器同一套升程」，所以
-// 第二条**从「宽度不变」翻成了「宽度也要长」** —— 那不是放松，是设计改了
-// （用户 2026-10-01：「你参考底部导航栏那个滑块……还是优先把它统一起来」）。
+// v0.10.10 把「按住时只往纵向拉长」换成了「与底栏 / 分段器同一套升程」。**2026-10-01
+// 用户又推翻了那一版**（「滑块放大得也不好看……现在感觉就变成一个大圆，不是很好看，
+// 还得往上下拉长一点」），答的是「右」：纵向拉长、横向反而收窄 2px。所以第二条这一轮
+// **又翻了一次**（「宽度也要长」→「纵向拉长」）—— 每次翻都是设计改了，不是放松。
 //
 // 几条都走**几何与配置**断言（`LiquidLens.shape` / `showRingCore` / `fill`），
 // 不光栅化：那几件事在这里是「接线对不对」，形状与配色本身由 `liquid_lens_test`
@@ -15,7 +16,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
+import 'package:shiftassistantpro/core/glass/liquid_lens_metrics.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
+import 'package:shiftassistantpro/core/widgets/liquid_track.dart';
 
 void main() {
   /// 返回**这次会话里 `onChanged` 收到的值**（拨了几次、拨成什么）。
@@ -51,6 +54,21 @@ void main() {
   LiquidLens lensOf(WidgetTester tester) =>
       tester.widget<LiquidLens>(find.byType(LiquidLens));
 
+  testWidgets('开关这一枚的四个数：纵向拉长 / 收窄的彩边 / 更低的速度门', (tester) async {
+    // 用户 2026-10-01 拍的板：形状那条答的是「右」（纵向拉长），
+    // 彩边那条答的是「该缩小就缩小」，速度门是这一轮量出来的（见 §3.3）。
+    await pumpSwitch(tester, liquid: true);
+    final LiquidTrack track =
+        tester.widget<LiquidTrack>(find.byType(LiquidTrack).first);
+    final LiquidLensMetrics m = track.metrics!;
+    expect(m.protrude, closeTo(9, 0.001));
+    expect(m.liftWidth, closeTo(-2, 0.001));
+    expect(m.rimScale, closeTo(0.25, 0.001),
+        reason: '彩边没收到与底栏同一个占比（内晕往里的厚度）');
+    expect(m.velocityRef, closeTo(180, 0.001),
+        reason: '速度门还是全局那一档 —— 25px 的轨道上尾巴积不起来');
+  });
+
   testWidgets('静止：钮是一枚圆球（宽 ≈ 高），坐在轨道里', (tester) async {
     await pumpSwitch(tester, liquid: true);
     // 轨道 56×30、内缩 3 → 每格 (56−6)/2 = 25；钮高 = 30−6 = 24
@@ -61,10 +79,10 @@ void main() {
         reason: '静止时钮不是圆的 —— 共享件把它变成了胶囊');
   });
 
-  testWidgets('按住：钮**纵横一起长**（与底栏 / 分段器同一套升程）', (tester) async {
-    // v0.10.9 那一版是「只长个儿、不变宽」（用户当时要的「参考 iOS 26 往纵向放大」）。
-    // 2026-10-01 他自己推翻了：「你参考底部导航栏那个滑块……还是优先把它统一起来」。
-    // 所以这一条现在要求**两个方向都长**，反向的那条（宽度不变）已作废删掉。
+  testWidgets('按住：钮**纵向拉长**（横向不外扩，反而收 2px）', (tester) async {
+    // 三段历史：v0.10.9「只长个儿、不变宽」→ v0.10.10「纵横一起长」→ 本轮
+    // 「纵向拉长 + 横向收 2px」（用户 2026-10-01 答的「右」）。
+    // 于是开关的升程量**与另两处分了家** —— 这是有意的设计改动，不是回归。
     await pumpSwitch(tester, liquid: true);
     final Size before =
         Size(lensOf(tester).shape.width, lensOf(tester).shape.height);
@@ -79,9 +97,10 @@ void main() {
         Size(lensOf(tester).shape.width, lensOf(tester).shape.height);
     expect(after.height, greaterThan(30),
         reason: '按住之后钮没有高过轨道（${after.height}）—— 没有「被抽出来」');
-    expect(after.height, greaterThan(before.height + 4));
-    expect(after.width, greaterThan(before.width + 2),
-        reason: '宽度没长（${before.width} → ${after.width}）—— 那还是「只长个儿」');
+    expect(after.height, greaterThan(before.height + 12),
+        reason: '纵向没拉长多少（${before.height} → ${after.height}）');
+    expect(after.width, lessThan(before.width),
+        reason: '横向还在长（${before.width} → ${after.width}）—— 那就又变回大圆了');
     await g.up();
     await tester.pumpAndSettle();
   });

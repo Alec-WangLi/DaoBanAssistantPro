@@ -155,6 +155,36 @@ void main() {
     await settleToRest(tester);
   });
 
+  testWidgets('速度门调低之后，慢速拖动也积得起形变；松手会收回去', (tester) async {
+    // 规格 §3.3：一格 25px 的轨道上，全局 900px/s 的峰值形变只有 0.22~0.28 ——
+    // 钮一两个帧就到头了，速度积不起来（**越快反而越短**）。
+    // 这一条同时钉两头：够得着，以及**松手之后不留在那儿**。
+    // 反向验证过：把这里的 180 换成 900，形变掉到 0.19。
+    final c = LiquidLensController(
+      slots: 2,
+      pad: 3,
+      liftWidth: 25 * 0.15625,
+      vsync: const TestVSync(),
+      initialSlot: 1,
+      velocityRef: 180,
+    )..setItemW(25);
+    addTearDown(c.dispose);
+
+    c.dragStart(25 * 1.5);
+    for (int i = 0; i < 8; i++) {
+      c.dragUpdate(25 * 1.5 - 3 * (i + 1)); // 187px/s，一次不紧不慢的正常拖动
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(c.stretch, greaterThan(0.7),
+        reason: '慢速拖动只积到 ${c.stretch} —— 速度门没接上');
+
+    c.release();
+    await advance(tester, 800);
+    expect(c.stretch, lessThan(0.05), reason: '松手之后尾巴还挂着（${c.stretch}）');
+
+    await settleToRest(tester);
+  });
+
   testWidgets('取消：只有真正在拖才回退，点按被取消不回退', (tester) async {
     final c = make();
     // 点按之后竖直滑走 → 只该取消「按住」，位置仍然去它本来要去的格

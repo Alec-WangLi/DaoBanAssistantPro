@@ -213,6 +213,17 @@ void main() {
           1.0);
     });
 
+    test('velocityRef 默认就是全局那一档（底栏与分段器必须不变）', () {
+      // 它下放成**每面的数**是这一轮才做的：形变强度走「位置的真实帧间差分 ÷
+      // velocityRef」，而一格多宽决定了同一个手势能走几帧 —— 底栏一格 88px，
+      // 800px/s 走 7 帧、峰值形变 0.77；开关一格 25px，同样 800px/s 只走 2 帧、
+      // 峰值 0.22（**越快反而越短**）。全局那一档在 25px 的轨道上够不着。
+      expect(const LiquidLensMetrics(protrude: 10, liftWidth: 10).velocityRef,
+          AppTokens.lensVelocityRef);
+      expect(LiquidLensMetrics.forCapsule(30).velocityRef,
+          AppTokens.lensVelocityRef);
+    });
+
     test('静止：是一枚胶囊（两端半径相等、且等于高的一半）', () {
       final s = at();
       expect(s.width, closeTo(itemW, 0.01));

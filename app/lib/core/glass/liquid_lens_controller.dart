@@ -37,6 +37,7 @@ class LiquidLensController extends ChangeNotifier {
     required TickerProvider vsync,
     int initialSlot = 0,
     this.followFinger = true,
+    this.velocityRef = AppTokens.lensVelocityRef,
   }) {
     _page = initialSlot.toDouble();
     _slotCentre = initialSlot + 0.5;
@@ -61,6 +62,10 @@ class LiquidLensController extends ChangeNotifier {
   /// 交互只是「点哪儿都拨一下」；跟着手走的症状是在开着的那枚开关左半边按住，
   /// 钮会自己飞到左边去（与「开关的钮不该跑到手指下」是同一件事的两半）。
   final bool followFinger;
+
+  /// 形变饱和的速度门（px/s）。默认取全局那一档，**底栏与分段器一个字都不改**；
+  /// 开关一格只有 25px，传一个更低的值才积得起形变（见 `LiquidLensMetrics.velocityRef`）。
+  final double velocityRef;
 
   // ── 弹簧 ────────────────────────────────────────────────────────────────
   /// 「该停在哪一格的中间」。点按 / 松手 / 外部切页都会改写它，`_onTick` 用它作为
@@ -329,7 +334,7 @@ class LiquidLensController extends ChangeNotifier {
     _lastCentre = _pos.value;
 
     _stretch.target =
-        (_velocityPx.abs() / AppTokens.lensVelocityRef).clamp(0.0, 1.0);
+        (_velocityPx.abs() / velocityRef).clamp(0.0, 1.0);
     _stretch.step(dt);
 
     // 亮度也走它自己的弹簧，**亮起与熄灭用两条**。目标仍是「动不动」。

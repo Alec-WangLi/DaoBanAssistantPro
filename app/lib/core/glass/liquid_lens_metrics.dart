@@ -14,6 +14,7 @@ class LiquidLensMetrics {
     required this.protrude,
     required this.liftWidth,
     this.rimScale = 1.0,
+    this.velocityRef = AppTokens.lensVelocityRef,
   });
 
   /// 按胶囊高度取默认值。
@@ -45,4 +46,20 @@ class LiquidLensMetrics {
   /// ⚠️ **底栏显式传 1.0、不走 [forCapsule]** —— 矮屏那一档只有 52 高，跟着缩会改到
   /// 横屏与小窗的画面。
   final double rimScale;
+
+  /// 形变饱和的速度门（px/s）。**每面各自的数** —— 形变强度走「位置的真实帧间差分
+  /// ÷ 它」，而**一格多宽**决定了同一个手势能走几帧：
+  ///
+  /// | 一格多宽 | 手指速度 | 走几帧 | 峰值形变 |
+  /// |---|---|---|---|
+  /// | 88px（底栏） | 800 px/s | 7 | 0.77 |
+  /// | 88px | 1500 px/s | 4 | 0.81 |
+  /// | 25px（开关） | 400 px/s | 4 | 0.27 |
+  /// | 25px | 800 px/s | 2 | 0.22 |
+  /// | 25px | 1500 px/s | 2 | 0.28 |
+  ///
+  /// **越快反而越短**（到得更早、走得更少帧）。全局那一档（900）在 25px 的轨道上
+  /// 够不着：尾巴该收 35%、实际只收 10%（前缘 15.3 / 后缘 14.3，只差 1px）——
+  /// 用户 2026-10-01 报的「形状完全没变」就是它。
+  final double velocityRef;
 }

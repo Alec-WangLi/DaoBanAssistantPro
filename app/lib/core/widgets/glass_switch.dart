@@ -58,6 +58,24 @@ class GlassSwitch extends StatefulWidget {
 
 class _GlassSwitchState extends State<GlassSwitch>
     with SingleTickerProviderStateMixin {
+  /// 开关这一枚的四个数（用户 2026-10-01 拍的板）。
+  ///
+  /// ⚠️ **写死的，不再跟 `widget.height` 走。** 全仓九个调用点都用默认的 56 × 30
+  /// （没人传过 `height`），而 `velocityRef` 是绝对速度（px/s）、`liftWidth: -2`
+  /// 也是绝对值 —— 它们本来就没法按高度等比推出来，留着 `forCapsule` 只会给出
+  /// 一个「看起来会自适应、其实一半是硬的」的假象。要改尺寸的话这四个数一起重算。
+  static const LiquidLensMetrics _metrics = LiquidLensMetrics(
+    // 纵向拉长（满升程约 23 × 42）—— 用户原话：「右」。
+    // v0.10.10 那版是 `forCapsule(30)`（纵横一起长），读起来是个大圆。
+    protrude: 9,
+    liftWidth: -2,
+    // 彩边：内晕往轮廓里伸进去的**占比**与底栏对齐。底栏 8%，而 `30/64 = 0.469`
+    // 时开关是 16%（钮只有 23 宽，同一份绝对宽度占掉两倍）。
+    rimScale: 0.25,
+    // 一格只有 25px，全局 900 会把尾巴掐掉三分之二（峰值形变 0.22~0.28）。
+    velocityRef: 180,
+  );
+
   late final LiquidLensController _lens;
 
   double _lastPage = 0;
@@ -73,12 +91,12 @@ class _GlassSwitchState extends State<GlassSwitch>
       // 内缩 = `padChipV`（3）—— 标准档那棵树用的也是它，且钮径 `height - 6` 的
       // 内缩正好是 (28 − 22) / 2 = 3，两棵树的钮一样大。
       pad: AppTokens.padChipV,
-      // 与底栏、分段器**同一套**（纵横一起长）。
-      liftWidth: LiquidLensMetrics.forCapsule(widget.height).liftWidth,
+      liftWidth: _metrics.liftWidth,
       vsync: this,
       initialSlot: widget.value ? 1 : 0,
       // 开关不可拖：提起之后钮**不朝手指走**（见 `followFinger` 的说明）。
       followFinger: false,
+      velocityRef: _metrics.velocityRef,
     );
     _lens.addListener(_onLensChanged);
   }
@@ -195,7 +213,7 @@ class _GlassSwitchState extends State<GlassSwitch>
         capsuleH: widget.height,
         pad: AppTokens.padChipV,
         controller: _lens,
-        metrics: LiquidLensMetrics.forCapsule(widget.height),
+        metrics: _metrics,
         // 白芯在小钮上是坏的：它会渲成一道**横穿钮身的白线**（放大看很清楚）。
         // v0.10.9 关掉它的理由是「白上画白等于没画」—— 那按的是**钮的颜色**，
         // 于是钮一改成主色它就带着缺陷回来了。这里按**控件尺寸**判，与颜色无关。
