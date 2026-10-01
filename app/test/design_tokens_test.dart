@@ -81,7 +81,7 @@ final Map<String, RegExp> _rules = {
   // 时长：**只认 `milliseconds:`** —— `seconds:` / `microseconds:` 一律逃
   //（树里 `lib/core/widgets/glass_snackbar.dart` 就有 `Duration(seconds: 2)`，
   // 本轮有意不收进令牌、也不扩规则）。已知边界，见「时长规则边界」用例。
-  '时长字面量（改用 durFast/Med/Slow/RingEnter）':
+  '时长字面量（改用 durFast/Med/Slow/RingEnter/GlassIn/GlassOut）':
       RegExp(r'Duration\(milliseconds:\s*[0-9]'),
   '颜色字面量（改用令牌）': RegExp(r'Color\(0x'),
   '旧的按尺寸命名的字号令牌（改用角色令牌）': RegExp(r'AppTokens\.font[A-Z]'),
@@ -504,6 +504,10 @@ void main() {
         reason: 'durMed —— 常规过渡（展开 / 切换）');
     expect(AppTokens.durSlow, const Duration(milliseconds: 340),
         reason: 'durSlow —— 较慢的位移 / 形变过渡');
+    expect(AppTokens.durGlassIn, const Duration(milliseconds: 300),
+        reason: 'durGlassIn —— 玻璃浮层的入场（要够从容才看得清「凝聚」）');
+    expect(AppTokens.durGlassOut, const Duration(milliseconds: 200),
+        reason: 'durGlassOut —— 玻璃浮层的退场（比进场快，免得挡路）');
 
     expect(AppTokens.inkMutedAlpha, 0.62,
         reason: '浅色最坏底 #F5F6FA 上 0.62 才到 4.70:1 过 AA（0.60 只有 4.33:1）');

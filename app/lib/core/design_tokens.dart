@@ -68,6 +68,14 @@ class AppTokens {
   /// 本轮未纳入令牌（范围外）。
   static const Duration durRingEnter = Duration(milliseconds: 650);
 
+  /// 玻璃浮层的**入场 / 退场**时长（`showGlassDialog` / `showGlassSheet` 用）。
+  ///
+  /// **两条分开是有意的。** `showDialog` 自带的 `DialogRoute` 只有一个 150ms：
+  /// 进场读不出「从模糊里凝出来」，退场又嫌它拖。进场要够从容才看得清那一下，
+  /// 退场快一点免得挡路。
+  static const Duration durGlassIn = Duration(milliseconds: 300);
+  static const Duration durGlassOut = Duration(milliseconds: 200);
+
   // ── Q 弹弹簧 + 缩放 ──
   static const SpringDescription qSpring =
       SpringDescription(mass: 1, stiffness: 400, damping: 16);
