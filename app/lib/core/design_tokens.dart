@@ -137,10 +137,10 @@ class AppTokens {
   ///
   /// 两层、色相各偏一点（−30° 与 +22°）：真色散会把光谱**摊开**，同一处边缘能
   /// 看到相邻的两个色调。一层的话仍然只是「一个颜色一个位置」。
-  static const double lensHaloWidth = 22;
-  static const double lensHaloBlur = 6;
-  static const double lensHaloInnerWidth = 12;
-  static const double lensHaloInnerBlur = 3;
+  static const double lensHaloWidth = 10;
+  static const double lensHaloBlur = 3;
+  static const double lensHaloInnerWidth = 6;
+  static const double lensHaloInnerBlur = 2;
 
   /// **外溢光晕**：画在裁剪**之外**那一层，往外也散一点。
   ///
@@ -149,8 +149,25 @@ class AppTokens {
   ///
   /// 代价是那枚水滴的轮廓会被一圈很淡的颜色裹住 —— 那是**有意**的，真的折射也会
   /// 在玻璃边外侧留下一条亮边。
-  static const double lensGlowWidth = 24;
-  static const double lensGlowBlur = 7;
+  static const double lensGlowWidth = 8;
+  static const double lensGlowBlur = 3;
+
+  /// 彩边与光晕「**亮起来**」那条弹簧。
+  ///
+  /// 用户 2026-10-07：「彩边出现得太突然了。我的手不动它时没有，一动它就突然
+  /// 出来了。能不能给它加个过渡动画，或者让它渐变出来？以及咱们手停下来的时候，
+  /// 也得有点过渡，不要突然就没了。」
+  ///
+  /// 所以亮度也**不能直接跟瞬时速度走** —— 那是个「在不在动」的开关，一两帧就
+  /// 跨过去了。过一条弹簧才有渐入渐出。
+  ///
+  /// **亮起与熄灭是两条**（和「提起 / 落下」同一条老规矩，Apple 也是这么分的）：
+  ///   亮起 ω=26 / ζ=0.72 —— 上升约 90ms（跟手，不拖沓）；
+  ///   熄灭 ω=12 / ζ=0.85 —— 包络 τ ≈ 100ms，约 320ms 淡尽（从容，不「啪」地断）。
+  static const double lensLitOmega = 26.0;
+  static const double lensLitZeta = 0.72;
+  static const double lensUnlitOmega = 12.0;
+  static const double lensUnlitZeta = 0.85;
 
   /// 光谱环「一动就满」的速度阈值（px/s）。
   ///

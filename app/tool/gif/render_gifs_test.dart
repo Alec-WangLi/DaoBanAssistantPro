@@ -98,6 +98,52 @@ void main() {
     });
   }
 
+  // ①b 彩边的**渐入渐出**：按住拖起来 → 手指停住不动 → 松手。
+  //
+  //    用户 2026-10-07：「彩边出现得太突然了。我的手不动它时没有，一动它就突然
+  //    出来了……以及咱们手停下来的时候，也得有点过渡，不要突然就没了。」
+  //
+  //    这一条的时间轴就是照那句话铺的：前 20 帧按住不动（**没有彩边**）→ 中间 23 帧
+  //    拖动（**渐入**）→ 后 28 帧手指停住、但**不松手**（**渐出**）→ 最后松手落回。
+  //    没有「停住但不松手」这一段，就拍不出「手停下来它不会突然没」。
+  testWidgets('彩边渐入渐出 · light', (tester) async {
+    final db = await freshDb();
+    late TestGesture gesture;
+    bool released = false;
+    await renderFrames(
+      tester,
+      prefix: 'bloom_',
+      home: const HomeShell(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      extraPrefs: _liquidPrefs,
+      // **必须 16ms 一帧**：`LiquidLensSpring.step` 把每帧积分封顶在
+      // `lensMaxStep`（16ms），喂 55ms 一帧的话整段动画会慢 3.4 倍 ——
+      // 拍出来的「渐入」比真机拖沓得多（第一版就是这么拍的，量出来要 440ms
+      // 才爬到一半）。出图按 16ms，合成时用 `--fps 60` 还原成实时。
+      count: 80,
+      step: const Duration(milliseconds: 16),
+      onFrame: (tester, i) async {
+        if (i == 0) {
+          gesture = await tester.startGesture(_navAt(tester, 0.18));
+          addTearDown(() {
+            if (!released) return gesture.up();
+            return Future<void>.value();
+          });
+          await tester.pump(const Duration(milliseconds: 16));
+        } else if (i <= 19) {
+          // 按住不动 320ms：透镜已经提起，但**一点彩边都没有**
+        } else if (i <= 42) {
+          await gesture.moveBy(const Offset(3, 0)); // 187px/s → 渐入
+        } else if (i <= 70) {
+          // 手指停住、**不松手** 450ms：速度归零 → 渐出
+        } else if (i == 71) {
+          await gesture.up();
+          released = true;
+        }
+      },
+    );
+  });
+
   // ② 点按换页：透镜**滑过去**、**不提起**。
   //
   //    与 ① 是一对反例：同样是从一格到另一格，① 是「按住吸附 + 放大 + 形变」，

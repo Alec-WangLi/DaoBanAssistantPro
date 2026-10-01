@@ -79,6 +79,16 @@ class _GlassNavBarState extends State<GlassNavBar>
   /// `AppTokens.lensStretchOmega`。
   late final LiquidLensSpring _stretchSpring;
 
+  /// 彩边与光晕的**亮度** 0..1。同样走一条自己的弹簧。
+  ///
+  /// 用户 2026-10-07：「彩边出现得太突然了。我的手不动它时没有，一动它就突然出来
+  /// 了……以及咱们手停下来的时候，也得有点过渡，不要突然就没了。」直接拿瞬时速度
+  /// 当亮度，就是一个一两帧内被跨过去的开关；过一条弹簧才有渐入渐出。
+  ///
+  /// **亮起与熄灭是两条**（和 [LiquidLensSpring] 那对「提起 / 落下」同一套写法，
+  /// 也同一条理由）。参数见 `AppTokens.lensLitOmega`。
+  late final LiquidLensSpring _litSpring;
+
   /// 升程的**目标**：按住够久、或者已经在拖，才提起。
   ///
   /// 这一条是**交互契约**的一部分（用户 2026-10-01）：点一下只是「滑块自动过来
@@ -133,6 +143,11 @@ class _GlassNavBarState extends State<GlassNavBar>
       omega: AppTokens.lensStretchOmega,
       zeta: AppTokens.lensStretchZeta,
     );
+    _litSpring = LiquidLensSpring(
+      target: 0,
+      omega: AppTokens.lensLitOmega,
+      zeta: AppTokens.lensLitZeta,
+    );
     _ticker = createTicker(_onTick);
     // 外部程序化切页（点了待办提醒的通知 → 跳到待办页）不经过这里的手势处理，
     // 所以还要听控制器：不听的话页面已经翻过去了、底部高亮还停在原来那一格。
@@ -160,7 +175,10 @@ class _GlassNavBarState extends State<GlassNavBar>
     final bool needed = _pressed ||
         !_posSpring.isAtRest ||
         !_liftSpring.isAtRest ||
-        !_stretchSpring.isAtRest;
+        !_stretchSpring.isAtRest ||
+        // **必须带上它**：不然「手停下来」时淡出到一半，ticker 就停了、
+        // 彩边被冻在屏幕上。
+        !_litSpring.isAtRest;
     final Ticker? t = _ticker;
     if (t == null) return;
     if (needed) {
@@ -235,10 +253,21 @@ class _GlassNavBarState extends State<GlassNavBar>
         (_lensVelocityPx.abs() / AppTokens.lensVelocityRef).clamp(0.0, 1.0);
     _stretchSpring.step(dt);
 
+    // 彩边的亮度也走一条弹簧，**亮起与熄灭用两条**（同上）。目标仍是「动不动」。
+    final bool lighting = _lensVelocityPx.abs() > AppTokens.lensRingFullSpeed / 2;
+    _litSpring.omega =
+        lighting ? AppTokens.lensLitOmega : AppTokens.lensUnlitOmega;
+    _litSpring.zeta =
+        lighting ? AppTokens.lensLitZeta : AppTokens.lensUnlitZeta;
+    _litSpring.target =
+        (_lensVelocityPx.abs() / AppTokens.lensRingFullSpeed).clamp(0.0, 1.0);
+    _litSpring.step(dt);
+
     if (!_pressed &&
         _posSpring.isAtRest &&
         _liftSpring.isAtRest &&
-        _stretchSpring.isAtRest) {
+        _stretchSpring.isAtRest &&
+        _litSpring.isAtRest) {
       _ticker?.stop();
       _lensVelocityPx = 0;
     }
@@ -692,6 +721,8 @@ class _GlassNavBarState extends State<GlassNavBar>
                                 // 形变**走弹簧**，不是瞬时速度：起步冲一点、
                                 // 停下拖一条尾巴。越界由形状那边 clamp。
                                 stretch: _stretchSpring.value,
+                                // 亮度走它自己那条弹簧（亮起 90ms / 熄灭 320ms）
+                                motion: _litSpring.value,
                               ),
                               lift: lift,
                               isDark: isDark,

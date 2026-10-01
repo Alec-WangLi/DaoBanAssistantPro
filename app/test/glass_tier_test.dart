@@ -615,4 +615,61 @@ void main() {
     expect(pressed(), isFalse, reason: '_pressed 卡在 true —— 胶囊会一直大 6%');
     await disposeShell(tester);
   });
+
+  testWidgets('彩边是渐入渐出的：不会一帧亮起、也不会一帧熄灭', (tester) async {
+    // 用户 2026-10-07：「彩边出现得太突然了。我的手不动它时没有，一动它就突然出来
+    // 了。能不能给它加个过渡动画，或者让它渐变出来？以及咱们手停下来的时候，也得
+    // 有点过渡，不要突然就没了。」
+    //
+    // 「突然」有**两个**来源，第二个才是主要的：
+    //   ① 亮度直接挂在瞬时速度上，60px/s 的阈一两帧就跨过去了；
+    //   ② 光晕那两层与外溢那层**根本没乘 `motion`** —— 它们只在 `motion > 0.05`
+    //      那道门上被一刀切开，一过门就是满亮度。
+    // 现在四层都跟着同一条亮度走，而那条亮度本身走一条弹簧（亮起 / 熄灭两条）。
+    //
+    // ⚠️ **pump 的步长必须是 16ms**：`LiquidLensSpring.step` 把每帧积分封顶在
+    // `lensMaxStep`（16ms），喂 55ms 一帧整段动画会慢 3.4 倍 —— 第一版用的就是
+    // 55ms，量出来「渐入要 440ms」，与真机完全不是一回事（那版动图也因此拍错了）。
+    await pumpShell(tester, liquid: true);
+    final Rect nav = tester.getRect(find.byKey(const Key('glass-nav-bar')));
+    final TestGesture g = await tester.startGesture(
+        Offset(nav.left + nav.width * 0.18, nav.center.dy));
+    double m() => lensOf(tester).shape.motion;
+
+    for (int i = 0; i < 25; i++) {
+      await tester.pump(const Duration(milliseconds: 16)); // 按住 400ms
+    }
+    expect(m(), lessThan(0.1), reason: '还没动就亮着');
+
+    for (int i = 0; i < 7; i++) {
+      await g.moveBy(const Offset(3, 0)); // 187px/s
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(m(), lessThan(0.4),
+        reason: '动起来才 110ms 就快满了 —— 那是「啪」地出现，不是渐入');
+
+    for (int i = 0; i < 15; i++) {
+      await g.moveBy(const Offset(3, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(m(), greaterThan(0.95),
+        reason: '一直拖着、350ms 了还没亮到满 —— 太拖沓');
+
+    // 手指停住、**不松手**：速度归零 → 应该渐出
+    for (int i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 16)); // 160ms
+    }
+    expect(m(), greaterThan(0.4),
+        reason: '停手 160ms 就基本没了 —— 那是「突然就没了」');
+
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16)); // 共 480ms
+    }
+    expect(m(), lessThan(0.1), reason: '停手 480ms 了还亮着 —— 淡不干净');
+
+    await g.up();
+    await disposeShell(tester);
+  });
 }
+
+// ── 临时诊断（跑完即删）：把彩边亮度随时间的变化打出来 ──

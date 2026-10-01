@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.7\n'
+const String _changelogZh = 'v0.10.8\n'
+    '· 底栏滑块那圈彩色的范围收紧了：外面那层从伸出约 33px 收到约 12px，里面也收了一半 —— 之前散得太开，像一片光雾\n'
+    '· 彩边改成渐入渐出：手一动约 0.2 秒亮起来，手停下约 0.4 秒淡下去，不再是一动就「啪」地出现、一停就突然没了\n'
+    '· 静止时依旧一点彩色都没有\n'
+    '\n'
+
+    'v0.10.7\n'
     '· 底栏滑块那圈彩色边缘重做成一层折射光晕：不再是贴在边上的那条彩带，而是从边缘往玻璃里化开、也往外面散一点的一层光\n'
     '· 彩色不再是只有左边和上边有 —— 之前另外三个方向几乎是空的，现在四面八方都有颜色，左上略亮\n'
     '· 静止时依然一个彩色像素都没有\n'
@@ -101,17 +107,15 @@ const String _changelogZh = 'v0.10.7\n'
     '· 编辑排班页底部那颗「保存并重排闹钟」不再垫着一条挡板：它是浮在正文上的，界面滑到它下面时能看见内容从底下穿过去（此前正文到那条按钮带的上沿就被硬切，下面露出一整片平色）。滑到底时最后一张卡会整个抬到按钮上面，不会被压住\n'
     '\n'
 
-    'v0.9.18\n'
-    '· 桌面小组件那张月历能翻的范围，从「前后各一个月」放宽到「前后各三个月」—— 标题行两边的箭头点一下翻一月。顺带一个好处：你更久不开 App，卡片上的数据也还够用\n'
-    '· 装完新版请先打开一次 App：小组件上的班次是 App 上次运行时算好的，不打开的话卡片还是旧样子（重启桌面也能让它重画，但没必要）。这条从这一版起写进更新说明，免得你以为升级把桌面弄乱了\n'
-    '· 修好待办与闹钟列表的一个毛病：条目多的时候，最后一行会被右下角那颗悬浮按钮（以及闹钟页底部那条按钮条）压住，删除键点不到。现在滑到底能把它绕到按钮上面\n'
-    '· 「排班时段 → 添加时段」那个弹层的字体与同一页对齐了：里面三个标签原来又小又轻一档（13/w400），现在与打开它的那一行一样（14/w500）\n'
-    '· 顺手修掉小窗（200×400）下这个弹层的两处布局毛病：三个按钮挤不下时横向溢出、日期那两行的取值放不下\n'
-    '\n'
-
 ;
 
-const String _changelogEn = 'v0.10.7\n'
+const String _changelogEn = 'v0.10.8\n'
+    '· The coloured rim on the tab pill is much tighter: the outer spread went from about 33px to about 12px, and the inner one came in by half — it used to read as a haze of light rather than glass\n'
+    '· The rim now fades in and out: about 0.2s to light up when you start moving, about 0.4s to fade when you stop, instead of snapping on and off\n'
+    '· Still nothing coloured at all while the pill is at rest\n'
+    '\n'
+
+    'v0.10.7\n'
     '· The tab pill’s coloured edge is now a refractive halo — light spreading into the glass and a little beyond it, instead of a ribbon stuck along the rim\n'
     '· The colour now wraps the whole rim: before, only the left and top had any (the lower right was essentially empty)\n'
     '· Still nothing coloured at all while the pill is at rest\n'
@@ -170,14 +174,6 @@ const String _changelogEn = 'v0.10.7\n'
     'v0.9.19\n'
     '· Fixed dialog buttons moving to the left: the last version changed the shared button row so that dialogs with several buttons (Delete / Cancel / Save) would not overflow in a small window (200×400) — which pushed the actions of every dialog in the app (update notes, delete confirmations, schedule periods…) to the left. They are right-aligned again, and still wrap on narrow windows\n'
     '· The "Save & reschedule alarms" button at the bottom of the schedule editor no longer sits on a plate: it floats over the page, so content scrolls underneath it (until now the list was cut off at the top edge of that bar with a flat band below it). Scrolling to the end now lifts the last card clear of the button\n'
-    '\n'
-
-    'v0.9.18\n'
-    '· The month widget now steps three months back or forward instead of one: tap the arrows either side of its title. As a bonus, the card keeps working for longer while the app stays closed\n'
-    '· Open the app once after an update: the shifts on the card are worked out the last time the app ran, so until you do, the card still shows the old picture. (Restarting the launcher redraws it too, but that is not needed.) That note now lives in the update notes, so an update never looks like it broke your home screen\n'
-    '· Fixed the end of the todo and alarm lists: once there are enough entries, the last row sat under the floating button (or the button bar on the alarm page) and its delete button could not be tapped. Scrolling to the end now lifts it clear\n'
-    '· The "Add a period" dialog now matches the row that opens it: its three labels were a size and a weight lighter (13/w400) and are now 14/w500, like the rest of the page\n'
-    '· Also fixed two layout faults in that dialog in a small window (200×400): its buttons overflowed sideways, and the date rows could not fit their value\n'
     '\n'
 
 ;

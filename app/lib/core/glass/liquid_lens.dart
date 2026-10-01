@@ -121,8 +121,12 @@ class LiquidLensShape {
   /// [stretch] 是形变强度 0..1；不给就按瞬时速度现推（单测与「没有弹簧」的调用点
   /// 走这条），给了就用它 —— 底栏那条**弹簧驱动**的形变走这条。
   ///
-  /// **两者必须分开**（2026-10-05）：形变要跟速度走（那是头大尾小），但环要的是
-  /// 「一动就满」—— 拿同一个量喂两处，就只能二选一。
+  /// [motion] 是光谱环／光晕的门 0..1。同样：不给就按瞬时速度现推，给了就用它 ——
+  /// 底栏那条**弹簧驱动**的渐入渐出走这条（用户 2026-10-07：「彩边出现得太突然了」）。
+  ///
+  /// **这几个量必须分开**：形变要跟速度走（那是头大尾小），环的门要「一动就满」，
+  /// 而亮度要有渐入渐出。拿同一个量喂三处就只能三选一 —— 而用户三轮说的正是
+  /// 这三件事。
   factory LiquidLensShape.of({
     required double itemW,
     required double capsuleH,
@@ -131,14 +135,16 @@ class LiquidLensShape {
     required double lift,
     required double velocity,
     double? stretch,
+    double? motion,
   }) {
     // 形变强度 0..1：拉伸与压缩都用它一个量。
     final double s = (stretch ?? (velocity.abs() / AppTokens.lensVelocityRef))
         .clamp(0.0, 1.0);
     // 光谱环的门：**「动不动」，不是「多快」**（用户 2026-10-05：「一动就直接达到
     // 满效果」）。60px/s 就封顶，那以下按比例淡入只是为了慢速收尾时不眨一下。
-    final double motion =
-        (velocity.abs() / AppTokens.lensRingFullSpeed).clamp(0.0, 1.0);
+    final double glow =
+        (motion ?? (velocity.abs() / AppTokens.lensRingFullSpeed))
+            .clamp(0.0, 1.0);
     return LiquidLensShape._(
       centerX: pad + (centerPage + 0.5) * itemW,
       // 外扩与形变都**加在/乘在基准尺寸上，不互相乘** —— 见下面 height 的说明。
@@ -155,7 +161,7 @@ class LiquidLensShape {
           2 * AppTokens.navLensProtrude * lift,
       capsuleH: capsuleH,
       stretch: s,
-      motion: motion,
+      motion: glow,
       movingRight: velocity > 0,
     );
   }
@@ -461,7 +467,7 @@ class _LensGlowPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, AppTokens.lensGlowBlur)
         ..shader = spectralSweep(
           accent: accent,
-          alpha: 0.40,
+          alpha: 0.28 * shape.motion,
           floor: 0.36,
           span: 0.64,
           pow2: false,
@@ -656,7 +662,7 @@ class _LensBodyPainter extends CustomPainter {
             const MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloBlur)
         ..shader = spectralSweep(
           accent: accent,
-          alpha: 0.46,
+          alpha: 0.42 * shape.motion,
           floor: 0.36,
           span: 0.64,
           pow2: false,
@@ -672,7 +678,7 @@ class _LensBodyPainter extends CustomPainter {
             const MaskFilter.blur(BlurStyle.normal, AppTokens.lensHaloInnerBlur)
         ..shader = spectralSweep(
           accent: accent,
-          alpha: 0.56,
+          alpha: 0.52 * shape.motion,
           floor: 0.40,
           span: 0.60,
           pow2: false,

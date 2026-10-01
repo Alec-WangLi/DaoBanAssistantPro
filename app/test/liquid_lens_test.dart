@@ -331,6 +331,7 @@ void main() {
     required Color accent,
     double velocity = 0,
     double? stretch,
+    double? motion,
   }) async {
     tester.view.physicalSize = canvas;
     tester.view.devicePixelRatio = 1.0;
@@ -345,7 +346,8 @@ void main() {
         centerPage: 0,
         lift: lift,
         velocity: velocity,
-        stretch: stretch);
+        stretch: stretch,
+        motion: motion);
     final double top = (canvas.height - capsule.height) / 2;
     await tester.pumpWidget(RepaintBoundary(
       key: key,
@@ -470,34 +472,9 @@ void main() {
     return worst;
   }
 
-  /// 在某一列上数「带色相」的连续行数 —— 就是那一圈彩边的**厚度**。
-  ///
-  /// 沿透镜竖直中轴那一列往下扫：那里正好横穿透镜**上沿**那一段环。
-  int ringThickness(List<int> px, int x, Color accent) {
-    final double base = HSLColor.fromColor(accent).hue;
-    int count = 0;
-    bool started = false;
-    for (int y = 0; y < canvas.height.toInt(); y++) {
-      final int i = (y * canvas.width.toInt() + x) * 4;
-      bool hit = false;
-      if (px[i + 3] >= 128) {
-        final HSLColor c =
-            HSLColor.fromColor(Color.fromARGB(px[i + 3], px[i], px[i + 1], px[i + 2]));
-        if (c.saturation >= 0.25) {
-          double d = (c.hue - base).abs() % 360;
-          if (d > 180) d = 360 - d;
-          hit = d > 25;
-        }
-      }
-      if (hit) {
-        count++;
-        started = true;
-      } else if (started) {
-        break; // 连续的一段结束
-      }
-    }
-    return count;
-  }
+  // `ringThickness`（数「带色相的连续行数」）在 v0.10.8 删掉了：光晕收小之后
+  // 它量出来只有 3px，与那条 2.4px 的细线同量级 —— **没有鉴别力了**。
+  // 现在改判「往轮廓里有没有衰减」，见下面那条的剖面表。
 
   testWidgets('彩边只在**动**的时候亮：静止时一个彩色像素都没有', (tester) async {
     // 用户 2026-10-04：「彩虹边缘在滑块静态时不应该出现。只有运动起来的时候，
@@ -537,27 +514,68 @@ void main() {
     return n;
   }
 
-  testWidgets('彩边是「光晕」不是「等宽的带」：带色相的厚度远大于那条细线', (tester) async {
+  testWidgets('彩边是「光晕」不是「等宽的带」：颜色往轮廓里会衰减', (tester) async {
     // 用户 2026-10-06：「现在给我的感觉就像在这个滑块的边缘加了一层彩带一样。
     // 我们想要的是加一层折射的光晕。」
     //
-    // 「彩带」最硬的那条判据就是**等宽** —— 原来那条 4.5px 的彩色描边量出来厚度
-    // 就是 2px（贴边那一条）。光晕是从边缘往里化开的一层，所以带色相的厚度必须
-    // **明显大于那条线本身**（现在线是 2.4px）。
+    // 「彩带」的判据是**等宽**，但量「厚度」这件事在光晕收小之后就不再有鉴别力了
+    // （10px 的晕量出来只有 3px，与那条 2.4px 的细线同量级）。真正区分两者的是
+    // **往轮廓里有没有衰减**：一条等宽的带要么到某处突然没了、要么处处一样亮；
+    // 光晕则是「贴边最亮、往里化开」。
     //
-    // 标定：上一版（纯描边）**面积 277 / 厚度 2**；这一版 **2092 / 7**。
+    // **反向验证**：把光晕换成一条等亮度的描边，`d(edge+8)` 会掉到 0 或与边缘相等，
+    // 这条立刻红。
     const accent = Color(0xFF12B5A5);
-    final List<int> px = await shotLens(tester,
-        lift: 1, accent: accent, velocity: AppTokens.lensVelocityRef);
-    final int area = ringArea(px, accent);
-    final int thickness = ringThickness(px, 60, accent);
+    final List<int> on = await shotLens(tester,
+        lift: 1, accent: accent, velocity: AppTokens.lensVelocityRef, stretch: 1);
+    final List<int> off = await shotLens(tester,
+        lift: 1, accent: accent, velocity: 1, stretch: 1);
+
+    // 轮廓上沿在 x = 60 那一列上的位置：直接用形状问，不靠估。
+    final LiquidLensShape shape = LiquidLensShape.of(
+        itemW: 120, capsuleH: 64, pad: 0, centerPage: 0, lift: 1,
+        velocity: AppTokens.lensVelocityRef, stretch: 1);
+    final Path path = shape.toPath();
+    int edgeY = 0;
+    for (int y = 0; y < 120; y++) {
+      if (path.contains(Offset(60, y - 28))) {
+        edgeY = y;
+        break;
+      }
+    }
+    expect(edgeY, greaterThan(0), reason: '没找到轮廓上沿 —— 几何假设变了，这条要重写');
+
+    int delta(int y) {
+      final int i = (y * canvas.width.toInt() + 60) * 4;
+      int d = 0;
+      for (int c = 0; c < 3; c++) {
+        final int v = (on[i + c] - off[i + c]).abs();
+        if (v > d) d = v;
+      }
+      return d;
+    }
+
+    final int atEdge = delta(edgeY + 1);
+    final int at5 = delta(edgeY + 5);
+    final int at8 = delta(edgeY + 8);
+    final String profile = <int>[1, 3, 5, 6, 8, 10, 12]
+        .map((int k) => '$k:${delta(edgeY + k)}')
+        .join('  ');
     // ignore: avoid_print
-    print('[probe] 彩边面积 = $area 像素（厚度 ${thickness}px）');
-    expect(thickness, greaterThan(AppTokens.lensRingWidth * 1.8),
-        reason: '带色相的厚度只有 ${thickness}px，与那条线'
-            '（${AppTokens.lensRingWidth}px）同量级 —— 又回到「一条等宽的彩带」了');
-    expect(area, greaterThanOrEqualTo(1200),
-        reason: '彩边的面积不够 —— 光晕那两层没生效（纯描边那版是 277）');
+    print('[probe] 剖面 $profile');
+    // **往里 5px 那一点才有鉴别力**（两版实测的剖面）：
+    //   真实现（糊开） 1:139  3:64  5:**23**  6:17  8:9  10:2
+    //   拍扁成硬带     1:163  3:61  5:** 2**  6: 2  8:1  10:1
+    // 差 11 倍，而且两者的**边缘值几乎一样** —— 所以判据必须取在「往里一点」：
+    // 只看边缘、或只看「往里 8px > 0」（硬带在那里也是 1）都蒙混得过去。
+    expect(atEdge, greaterThan(30), reason: '边缘没有颜色');
+    expect(at5, greaterThan(10),
+        reason: '往里 5px 只剩 $at5 —— 那是「一条等宽的硬带」（实测硬带在这里是 2），'
+            '不是从边缘往里化开的光晕');
+    expect(at8, lessThan((atEdge * 0.5).round()),
+        reason: '往里 8px 还和边缘一样亮 —— 等宽 = 彩带');
+    expect(ringArea(on, accent), greaterThanOrEqualTo(700),
+        reason: '带色相的总量太少 —— 光晕那两层没生效（纯描边那版是 277）');
   });
 
   testWidgets('彩边「一动就满」：形状一模一样时，60px/s 已和满速一样亮', (tester) async {
@@ -691,6 +709,43 @@ void main() {
             r: 4),
         0,
         reason: '静止时轮廓外还随主色变 —— 那圈光晕没跟着 motion 一起灭');
+  });
+
+  testWidgets('四层都跟着亮度走：motion=0.3 留下的痕迹约为满档的三成', (tester) async {
+    // 用户 2026-10-07：「彩边出现得太突然了……一动它就突然出来了。」
+    // **「突然」的主要来源不是那条细彩线，而是光晕那两层与外溢那层** —— 它们原先
+    // 只在 `motion > 0.05` 那道门上被一刀切开，一过门就是满亮度。这条单独钉它们。
+    //
+    // **反向验证过**：把 `_paintHalo` 那两层的 `* shape.motion` 去掉，比值会变成
+    // 1.0（一过门就满），这条立刻红。
+    const accent = Color(0xFF12B5A5);
+    final List<int> off = await shotLens(tester,
+        lift: 1, accent: accent, velocity: 1, stretch: 1, motion: 0);
+    final List<int> dim = await shotLens(tester,
+        lift: 1, accent: accent, velocity: 1, stretch: 1, motion: 0.3);
+    final List<int> full = await shotLens(tester,
+        lift: 1, accent: accent, velocity: 1, stretch: 1, motion: 1);
+    int worst(List<int> a, List<int> b) {
+      int d = 0;
+      for (int i = 0; i < a.length; i += 4) {
+        for (int c = 0; c < 3; c++) {
+          final int v = (a[i + c] - b[i + c]).abs();
+          if (v > d) d = v;
+        }
+      }
+      return d;
+    }
+
+    final int dFull = worst(full, off);
+    final int dDim = worst(dim, off);
+    // ignore: avoid_print
+    print('[probe] 满档最大差 = $dFull，三成档 = $dDim');
+    expect(dFull, greaterThan(60), reason: '满档都没留下痕迹 —— 这条测不出东西');
+    // 实测 0.43（不是 0.30）：四层是**叠**出来的，合成后的差不是严格线性。
+    // 要钉住的只是「它确实跟着亮度走」—— 漏乘一层会把它推到 1.0 附近。
+    expect(dDim / dFull, inInclusiveRange(0.2, 0.65),
+        reason: '亮度没跟着 motion 走（$dDim/$dFull'
+            ' = ${(dDim / dFull).toStringAsFixed(2)}）—— 有一层漏乘了');
   });
 
   test('几何在任何尺寸 × 任何速度下都画得出东西（参数化扫一遍）', () {
