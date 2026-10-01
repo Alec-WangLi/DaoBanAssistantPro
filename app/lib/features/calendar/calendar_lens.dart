@@ -79,6 +79,12 @@ class _CalendarLensState extends State<CalendarLens>
   double _vx = 0;
   double _vy = 0;
 
+  /// 上一次 tick 之后有没有收到过**新的**速度采样。
+  ///
+  /// 它决定「要不要自己衰减」：拖动中每一帧都有采样进来（手指在动），按住不动或松手
+  /// 之后就没有了 —— 那时速度必须自己收回去，否则那枚块会一直挂着形变。
+  bool _freshSample = false;
+
   Ticker? _ticker;
   Duration _lastStamp = Duration.zero;
 
@@ -104,6 +110,7 @@ class _CalendarLensState extends State<CalendarLens>
     if (widget.dragging) {
       _vx = widget.velocity.dx;
       _vy = widget.velocity.dy;
+      _freshSample = true;
     }
     _retargetRing();
     // ⚠️ **首次挂载也要推帧。** 只在 `didUpdateWidget` 里起 ticker 是不够的：
@@ -142,12 +149,16 @@ class _CalendarLensState extends State<CalendarLens>
       // 拖动中：把外面这一帧的采样低通进来（外面已经做过帧间差分）。
       _vx = _vx * 0.6 + widget.velocity.dx * 0.4;
       _vy = _vy * 0.6 + widget.velocity.dy * 0.4;
-    } else {
-      // 松手：只记下最后一次速度，衰减交给 ticker ——
-      // 外面每帧都会重建，这里不能把它当成「新的采样」一直续命。
+      _freshSample = true;
+    } else if (old.dragging) {
+      // **松手那一帧**：把最后的速度交回来，之后由本部件自己衰减。
       _vx = widget.velocity.dx;
       _vy = widget.velocity.dy;
     }
+    // ⚠️ **其余情况什么都别做。** 父层那份 `_vx/_vy` 松手之后**就不再更新了**
+    // （Task 6 的裁定：不归零，留给这里衰减），但它会**在每一次重建时**原样传进来
+    // —— 「拖完再点一下日期」那一帧会把陈旧的速度重新灌回来，那枚块自己拉长一下、
+    // 彩边再亮一下（点按是日历上最常见的动作）。独立审查抓的。
     _retargetRing();
     _syncTicker();
   }
@@ -186,7 +197,13 @@ class _CalendarLensState extends State<CalendarLens>
 
     _lift.step(dt);
     _ring.step(dt);
-    if (!widget.dragging) {
+    if (_freshSample) {
+      // 这一帧收到过新的采样（手指在动）—— 留着它。
+      _freshSample = false;
+    } else {
+      // 没有新采样（手指按住不动 / 已经松手）→ 自己收回去。
+      // **别无条件衰减**：拖动中每帧都有采样进来，无条件乘 0.72 会把稳态速度
+      // 压到真值的一半（实测 250px/s 会收敛到约 127）—— 那是「形变总是差一档」。
       _vx *= 0.72;
       _vy *= 0.72;
       // 速度衰减到门以下时环开始熄灭（熄灭那条比亮起慢得多，见 [_retargetRing]）。
