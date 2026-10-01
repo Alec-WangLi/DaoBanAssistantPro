@@ -1481,10 +1481,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _pickColor(int index) async {
-    final picked = await showModalBottomSheet<int>(
+    final picked = await showGlassSheet<int>(
       context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black26,
       builder: (context) => GlassPanel(
         solid: true,
         margin: const EdgeInsets.all(AppTokens.spaceMd),

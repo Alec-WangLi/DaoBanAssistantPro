@@ -28,15 +28,14 @@ const List<String> _allowed = <String>[
   'lib/core/widgets/glass_dialog.dart',
 ];
 
-/// 这一轮先只收弹窗那一族。**底部弹层（`showModalBottomSheet`）在 Task 9 迁完之后
-/// 加进来** —— 现在加会让这条一直红到那一步。
+/// 弹窗与弹层两族都要收。
 ///
 /// ⚠️ **匹配串不能带左括号。** 第一版写的是 `showDialog(` —— 而真实的调用形态是
 /// `showDialog<void>(`（泛型夹在中间），于是它**一个都匹配不到**、守门恒绿。
 /// 那个错是**反向验证**抓出来的（把一处调用改回裸 `showDialog<void>(`，守门居然还是绿的）。
-/// 去括号之后既能匹配带泛型的、也能匹配不带泛型的，而 `showGlassDialog` 里没有
-/// `showDialog` 这一串，不会误伤。
-const List<String> _needles = <String>['showDialog'];
+/// 去括号之后既能匹配带泛型的、也能匹配不带泛型的，而 `showGlassDialog` /
+/// `showGlassSheet` 里都没有这两串，不会误伤。
+const List<String> _needles = <String>['showDialog', 'showModalBottomSheet'];
 
 /// 走一遍 `lib/`，返回**剥壳之后**仍出现 [needles] 里任何一个的文件路径（已排序）。
 ///
@@ -89,13 +88,16 @@ void main() {
       'showDialog<void>(',
       'showDialog<bool>(',
       'await showDialog<_DeleteChoice>(',
+      'showModalBottomSheet(',
+      'showModalBottomSheet<int>(',
+      'await showModalBottomSheet<DateTime>(',
     ]) {
       expect(_needles.any(sample.contains), isTrue,
           reason: '样本 `$sample` 匹配不到 —— 这种写法会从守门下面溜过去');
     }
-    // 反过来：不许误伤统一入口（`showGlassDialog` 里没有 `showDialog` 这一串）。
+    // 反过来：不许误伤统一入口（那两串在 `showGlassXxx` 里都不存在）。
     expect(_needles.any('showGlassDialog<void>('.contains), isFalse,
-        reason: '匹配串误伤了统一入口 —— 全仓都会红');
+        reason: '匹配串误伤了弹窗入口 —— 全仓都会红');
     expect(_needles.any('showGlassSheet<void>('.contains), isFalse,
         reason: '匹配串误伤了弹层入口');
   });

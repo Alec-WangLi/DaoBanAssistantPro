@@ -391,3 +391,30 @@ Future<T?> showGlassDialog<T>({
     ),
   );
 }
+
+/// **底部弹层的统一入口。** 9 处 `showModalBottomSheet` 全部走它。
+///
+/// 与弹窗那一支的差别：**弹层保留 Material 自带的「从底下升上来」**（那是弹层该有的
+/// 动作），凝聚叠在面板上 —— 所以这里不自己写路由，而是把内容包一层 `GlassMaterialize`
+/// 并**用弹层自己的路由动画驱动**（`ModalRoute.of(...).animation`）。
+///
+/// 遮罩色与「底色透明」写在一处（原来是 9 处各写一遍 `backgroundColor: Colors.transparent`
+/// 与 `barrierColor: Colors.black26`）。
+Future<T?> showGlassSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool isScrollControlled = false,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black26,
+    isScrollControlled: isScrollControlled,
+    builder: (BuildContext sheetContext) {
+      final Widget panel = builder(sheetContext);
+      final Animation<double>? route = ModalRoute.of(sheetContext)?.animation;
+      if (route == null) return panel; // 理论上不会，防御一下
+      return GlassMaterialize(animation: route, child: panel);
+    },
+  );
+}

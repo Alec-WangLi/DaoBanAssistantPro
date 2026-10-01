@@ -11,6 +11,7 @@ import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/layout.dart';
 import '../../core/widgets/app_icon.dart';
+import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../domain/shift_rotation.dart';
 
@@ -67,16 +68,14 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
   // 提在循环外：它不随班次变，而下面每行都要用（见那里的说明）。
   final narrow = AppLayout.of(context).isNarrow;
 
-  return showModalBottomSheet<ShiftOverrideChoice>(
+  return showGlassSheet<ShiftOverrideChoice>(
     context: context,
-    backgroundColor: Colors.transparent,
     // 与 `glass_pickers.dart` 里的时间 / 日期 / 年月三个底部弹层同理 —— 就是设了
     // `isScrollControlled: true` 的那三个；同文件的 `showGlassOptionPicker` 没设，
     // 因为它只有一行文字的选项、撑不破 9/16。不开这个开关，弹层高度会被压到屏幕的
     // 9/16（600 高的屏只有 337px），而班次一多（四班两倒就有 4 行、前两行还带时间
     // 副标题）必然放不下 —— 最后几行被裁进滚动区，看得见却点不着。
     isScrollControlled: true,
-    barrierColor: Colors.black26,
     builder: (sheetContext) => GlassPanel(
       solid: true,
       margin: const EdgeInsets.all(12),

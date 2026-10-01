@@ -12,6 +12,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 
 void main() {
@@ -160,5 +161,36 @@ void main() {
         reason: '中途量的宽度（$mid）与落定后（$settled）差不多 —— '
             '要么没缩，要么那条「t ≥ 1 直接返回原样子树」的早退坏了');
     expect(blur, findsNothing, reason: '落定之后还留着常驻的模糊层');
+  });
+
+  testWidgets('弹层：入场时带着凝聚，落定之后收干净', (tester) async {
+    // 弹层与弹窗那一支的差别：**保留 Material 自带的「从底下升上来」**，凝聚叠在面板上
+    // —— 所以这里不自己写路由，而是用**弹层自己的路由动画**驱动 `GlassMaterialize`。
+    late BuildContext host;
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Builder(builder: (BuildContext c) {
+        host = c;
+        return const SizedBox.expand();
+      }),
+    ));
+    showGlassSheet<void>(
+      context: host,
+      builder: (BuildContext _) =>
+          const GlassPanel(solid: true, child: SizedBox(height: 120)),
+    );
+    final Finder blur = find.descendant(
+        of: find.byType(GlassMaterialize), matching: find.byType(ImageFiltered));
+
+    for (int i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 16)); // 入场刚起头
+    }
+    expect(blur, findsWidgets, reason: '弹层入场没有凝聚 —— 那层 GlassMaterialize 没接上');
+
+    await tester.pumpAndSettle();
+    expect(blur, findsNothing, reason: '弹层落定之后还留着常驻的模糊层');
+
+    Navigator.of(tester.element(find.byType(GlassPanel))).pop();
+    await tester.pumpAndSettle();
   });
 }

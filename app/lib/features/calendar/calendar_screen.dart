@@ -9,6 +9,7 @@ import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/theme/animated_background.dart';
 import '../../core/widgets/app_icon.dart';
+import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -744,10 +745,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final byId = {for (final s in schedules) s.id: s};
     final hasPeriods = spans.isNotEmpty;
 
-    await showModalBottomSheet<void>(
+    await showGlassSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black26,
       builder: (sheetContext) => GlassPanel(
         solid: true,
         margin: const EdgeInsets.all(12),

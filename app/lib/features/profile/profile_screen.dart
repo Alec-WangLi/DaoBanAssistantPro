@@ -397,10 +397,8 @@ class ProfileScreen extends ConsumerWidget {
     final ringtones = await AlarmService.listRingtones();
     if (!context.mounted) return;
 
-    final selection = await showModalBottomSheet<String>(
+    final selection = await showGlassSheet<String>(
       context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black26,
       builder: (sheetContext) => GlassPanel(
         solid: true,
         margin: const EdgeInsets.all(12),
