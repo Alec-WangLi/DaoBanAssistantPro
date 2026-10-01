@@ -2038,6 +2038,23 @@ void main() {
       await _disposeCalendar(tester);
     });
 
+    testWidgets('拖选当中换月（另一根手指点 ‹）：不许崩', (tester) async {
+      // 独立审查抓的那条：`showBand` 只看「在不在多选态」，而带子的落点
+      // (`bandTipRect` = `_cellRect(bandFocus)`) 在**换月之后就是 null** ——
+      // 下一帧那个 `!` 会当场抛。
+      await _pumpCalendar(tester, 'day_night_rest_rest', liquid: true);
+      final TestGesture g = await tester.startGesture(
+          tester.getCenter(find.byKey(const ValueKey('day-card-$_rangeFirstDay'))));
+      await tester.pump(const Duration(milliseconds: 600)); // 进多选态
+      await tester.tap(find.byIcon(Icons.chevron_left_outlined)); // 换月
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tester.takeException(), isNull,
+          reason: '拖选当中换月把带子画崩了（落点算不出来时还硬要画）');
+      await g.up();
+      await tester.pumpAndSettle();
+      await _disposeCalendar(tester);
+    });
+
     testWidgets('松手之后静止：带子收干净、没有待处理的帧', (tester) async {
       await _pumpCalendar(tester, 'day_night_rest_rest', liquid: true);
       await longPressDragCell(tester, _rangeFirstDay, 1);

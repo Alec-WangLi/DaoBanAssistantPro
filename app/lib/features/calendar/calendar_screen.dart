@@ -1121,21 +1121,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         final DateTime? bandAnchor = _rangeAnchor;
         final DateTime? bandFocus = _rangeFocus;
         final bool bandVisible = bandAnchor != null && bandFocus != null;
-        final bool showBand = bandVisible && liquidGlassActive.value;
-        final Rect? bandTipRect =
-            bandVisible ? _cellRect(bandFocus, cellW, cellH) : null;
+        final Rect? bandTip = bandVisible ? _cellRect(bandFocus, cellW, cellH) : null;
+        // ⚠️ **落点算不出来就不画**：拖选当中另一根手指点了 ‹ / ›（或点「今天」、
+        // 或桌面小组件跳过来）会让 `_month` 一换 —— 那时的 `bandFocus` 就不在新月
+        // 的格子里了，`_cellRect` 返回 null。少了这一条，下面那句 `bandTip!`
+        // 会当场抛（独立审查抓的，用例跟着它一起写）。
+        final bool showBand = bandTip != null && liquidGlassActive.value;
         // 挤字的场中心 = **淌着的末端**（还没收到第一帧回调时退回它吸附到的那一格）。
         //
         // ⚠️ `tipPos` 量的是那一端的**格边**（`k` = 第 k 格的右/左缘），所以场心要
         // **再加半格**才是那一格的中心 —— 少这半格，场会偏在格的边上，连末端自己
         // 那一格都被挤（出图上当场看得见）。
         final double bandTipCol =
-            bandTipRect == null ? 0 : (bandTipRect.left - _hPad) / cellW;
-        final Offset? bandWarpCenter = !showBand || bandTipRect == null
+            bandTip == null ? 0 : (bandTip.left - _hPad) / cellW;
+        final Offset? bandWarpCenter = !showBand
             ? null
             : Offset(
                 _hPad + ((_rangeTipPos ?? bandTipCol) + 0.5) * cellW,
-                bandTipRect.center.dy);
+                bandTip.center.dy);
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -1332,10 +1335,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                       hPad: _hPad,
                       weekdayH: _weekdayH,
                       runs: rangeRowRuns(
-                          from: bandAnchor, to: bandFocus, month: _month),
+                          from: bandAnchor!, to: bandFocus!, month: _month),
                       movingEnd: daysBetween(bandAnchor, bandFocus) >= 0,
-                      tipCell:
-                          ((bandTipRect!.left - _hPad) / cellW).round(),
+                      tipCell: ((bandTip.left - _hPad) / cellW).round(),
                       accent: Theme.of(context).colorScheme.primary,
                       isDark: Theme.of(context).brightness == Brightness.dark,
                       // 末端淌到哪儿了：只记下来 + 重建（挤字的场要用）。

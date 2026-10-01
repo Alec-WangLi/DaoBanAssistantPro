@@ -39,7 +39,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.18\n'
+const String _changelogZh = 'v0.10.19\n'
+    '· 修好一处崩溃：长按拖选当中用另一根手指点 ‹ / › 换月，日历会当场报错（那一段的日子不在新月里，落点算不出来却还在硬画那条带子）\n'
+    '· 上一版那枚水带「按住四面鼓起来」的判据补严了一格：它本来就画得出来，但一直靠同层里阴影顺带重画 —— 现在把它算进「该不该重画」\n\n'
+
+    'v0.10.18\n'
     '· 长按拖选一段日子时，那层逐格的淡色小方块换成了一条连着的水带：同一周内是一整条，格子之间的缝也盖住了\n'
     '· 按住那一下它会四面鼓起来、像水一样漫上来；拖动时末端淌到新的一格，它探进哪一格、那一格的字就被轻轻挤一下\n'
     '· 水带的两端是圆的；跨周时那两头切平（月历里跨周不是相邻的格子，是从最右列跳到下一行的最左列）\n'
@@ -89,16 +93,13 @@ const String _changelogZh = 'v0.10.18\n'
     '· 开关现在可以用手指拖着拨动 —— 按住拖到另一端松手就切换\n'
     '· 彩色折射光的宽度改成跟着控件尺寸走：之前那套数只适合底栏那种大盘，摆到小控件上比控件本身还粗\n'
     '\n'
-
-    'v0.10.9\n'
-    '· 液态玻璃推广到另外两个面：分段器（主题模式 / 主色调 / 语言那几排）与开关\n'
-    '· 分段器选中那一块现在是一枚玻璃滴：按住会提起来、拖动跟手、边缘带一圈彩色折射光\n'
-    '· 开关改成玻璃轨道：开着的时候玻璃里透着一层主色；按住时那枚钮会纵向拉长（宽度不变，参考 iOS 26）\n'
-    '· 关掉液态玻璃时，这两处与之前一模一样\n'
-    '\n'
 ;
 
-const String _changelogEn = 'v0.10.18\n'
+const String _changelogEn = 'v0.10.19\n'
+    '· Fixed a crash: with a range drag in progress, using a second finger to tap the month arrows left the calendar throwing errors (those days are not in the new month, so the band had nothing to anchor to yet was still drawn)\n'
+    '· Tightened one repaint criterion for the previous version water band: the press swell did render, but only because the shadow in the same layer happened to repaint alongside it — it is now part of the check\n\n'
+
+    'v0.10.18\n'
     '· Long-pressing to select a run of days now draws one continuous water band instead of a pale block per cell — within a week it is a single strip that covers the gaps between cells\n'
     '· Pressing swells it on all four sides, like water rising; dragging lets the tip flow into the next cell, and the day it reaches gets a slight squeeze\n'
     '· The band ends are round; where it wraps to the next week the two ends are cut flat (in a month grid a week wrap is not an adjacent cell)\n'
@@ -147,13 +148,6 @@ const String _changelogEn = 'v0.10.18\n'
     '· The switch was redone: a little longer (56 × 30), its knob is now the same accent glass droplet as everywhere else, and holding grows it in both directions\n'
     '· Switches can now be dragged with a finger — hold and drag to the other end, then let go to flip it\n'
     '· The chromatic rim now scales with the size of the control: those widths were measured for the big tab bar, and on a small control they came out wider than the control itself\n'
-    '\n'
-
-    'v0.10.9\n'
-    '· Liquid glass now covers two more surfaces: the segmented controls (theme mode, accent colour, language) and the switches\n'
-    '· A segment’s selected block is now a glass droplet: it lifts when held, follows your drag, and carries a rim of chromatic light\n'
-    '· Switches are now a glass track, tinted with the accent when on; press and the knob stretches vertically (same width, after iOS 26)\n'
-    '· With liquid glass off, both look exactly as they did before\n'
     '\n'
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

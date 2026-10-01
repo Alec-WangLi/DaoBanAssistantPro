@@ -316,6 +316,12 @@ class _CalendarRangeBandState extends State<CalendarRangeBand>
         widget.runs.last.lastCol,
         tipPos,
         _bulge.value,
+        // ⚠️ **升程也必须进指纹**：它只改 `inflate`（四面鼓出去），而那是轮廓的
+        // 一部分 —— 漏了它，`shouldRepaint` 在「按住不动、只有升程在涨」的那几帧
+        // 会判成「没变」。实测当时**还是画出来了**（同一层里浮起阴影的 `lift` 是它
+        // 自己的字段、判定为真，顺手把本体一起拖着重画），但那是**搭便车**：
+        // 谁哪天给本体单加一层 `RepaintBoundary`，这一条就会静默失效。
+        _lift.value,
       ),
       tipPos: tipPos,
       bulge: _bulge.value,
