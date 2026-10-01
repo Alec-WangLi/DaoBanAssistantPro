@@ -140,14 +140,6 @@ class LiquidLensController extends ChangeNotifier {
   /// 逻辑页（左缘，单位「格」）。标准档那棵树用它定位高亮块。
   double get page => _page;
 
-  /// 离当前中心最近的那一格。
-  int get nearestSlot {
-    var i = (position - 0.5).round();
-    if (i < 0) i = 0;
-    if (i > slots - 1) i = slots - 1;
-    return i;
-  }
-
   /// 调用点在布局时告诉它每格多宽。
   void setItemW(double itemW) {
     if (itemW > 0) _itemW = itemW;
@@ -210,6 +202,11 @@ class LiquidLensController extends ChangeNotifier {
     _endHold();
     // 目标格取**逻辑页**，不是弹簧的当前位置 —— 见 `_page` 的说明。
     final int target = _nearestIndex(_page);
+    // **逻辑页也要吸附过来。** 少了这一行，「拖了一点点、又松在同一格上」时
+    // `onSelected` 不触发、也没别的东西去纠正它 —— **标准档那块高亮会永远停在
+    // 差一点的位置上**（独立审查抓出来的 Critical；抽共享件之前两处都是自己吸附的：
+    // 底栏 `_visualPage = target`、分段器 `_visual = target`）。
+    _page = target.toDouble();
     _slotCentre = target + 0.5;
     _pos.target = _slotCentre;
     _syncTicker();

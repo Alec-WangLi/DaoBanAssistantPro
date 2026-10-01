@@ -53,8 +53,12 @@ class LiquidTrack extends StatelessWidget {
   final List<Color>? fill;
   final bool showRingCore;
 
-  /// 追着滑块那条光带。**小控件（开关）上要关掉** —— 它在 46px 宽的轨道上横穿
-  /// 整个控件，读起来是一条杂线（样图实测）。
+  /// 追着滑块那条光带（「药丸在哪儿」的指向性提示）。**小控件（开关）上要关掉**
+  /// —— 它在 46px 宽的轨道上横穿整个控件，读起来是一条杂线（样图实测）。
+  ///
+  /// ⚠️ **它只管那条光带，不管整圈边光。** 第一版是拿它包住整个 `CapsuleRimPainter`
+  /// 的，于是开关的轨道连**方向性边光**也一起没了、变成一块平的着色板
+  /// （独立审查抓出来的）。边光是「这是一块玻璃」的读法，任何一档都该有。
   final bool showGlowBand;
 
   /// 把容器上下沿「折进来」那条线。小控件上也要关掉，理由同上。
@@ -137,24 +141,25 @@ class LiquidTrack extends StatelessWidget {
                   ),
                 ),
               // ①b 边光 + 「光跟随滑块」。
-              if (showGlowBand)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: ListenableBuilder(
-                      listenable: controller,
-                      builder: (BuildContext context, Widget? _) => CustomPaint(
-                        painter: CapsuleRimPainter(
-                          radius: capsuleH / 2,
-                          isDark: isDark,
-                          compact: true,
-                          sliderIndex: controller.position,
-                          tabCount: slots,
-                          trackPad: pad,
-                        ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ListenableBuilder(
+                    listenable: controller,
+                    builder: (BuildContext context, Widget? _) => CustomPaint(
+                      painter: CapsuleRimPainter(
+                        radius: capsuleH / 2,
+                        isDark: isDark,
+                        compact: true,
+                        // `sliderIndex: null` = **只画边光、不画那条追着滑块的光带**
+                        // （painter 自己在 index 为 null 时就不画亮带）。
+                        sliderIndex: showGlowBand ? controller.position : null,
+                        tabCount: slots,
+                        trackPad: pad,
                       ),
                     ),
                   ),
                 ),
+              ),
               // ② 透镜。
               Positioned.fill(
                 child: IgnorePointer(

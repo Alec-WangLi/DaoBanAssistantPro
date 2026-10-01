@@ -109,15 +109,22 @@ void main() {
     );
   });
 
-  testWidgets('showGlowBand：关掉之后树上就没有 CapsuleRimPainter 了', (tester) async {
-    bool hasRim() => tester
+  testWidgets('showGlowBand：关掉的是**那条光带**，不是整圈边光', (tester) async {
+    // 独立审查抓的：第一版拿这个开关包住了整个 `CapsuleRimPainter`，于是开关的轨道
+    // 连**方向性边光**也一起没了、变成一块平的着色板。规格 §4.3 要关的只是
+    // 「追着滑块的光带」。painter 自己在 `sliderIndex == null` 时就不画亮带。
+    CapsuleRimPainter rimOf(WidgetTester t) => t
         .widgetList<CustomPaint>(find.byType(CustomPaint))
-        .any((CustomPaint p) => p.painter is CapsuleRimPainter);
+        .map((CustomPaint p) => p.painter)
+        .whereType<CapsuleRimPainter>()
+        .single;
 
     await shot(tester, showGlowBand: true);
-    expect(hasRim(), isTrue, reason: '开着却没有那条光带 —— 这条测不出东西');
+    expect(rimOf(tester).sliderIndex, isNotNull,
+        reason: '开着却没有那条光带 —— 这条测不出东西');
     await shot(tester, showGlowBand: false);
-    expect(hasRim(), isFalse, reason: '关了却还在画 —— 开关没接上');
+    expect(rimOf(tester).sliderIndex, isNull,
+        reason: '光带还在 —— 开关没接上');
   });
 
   testWidgets('窄窗（200 宽的胶囊）：不抛异常，且透镜仍占着第一格', (tester) async {

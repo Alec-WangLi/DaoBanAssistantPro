@@ -136,6 +136,25 @@ void main() {
     await settleToRest(tester);
   });
 
+  testWidgets('松手：**逻辑页也吸附**到落下的那一格（标准档的高亮块靠它）', (tester) async {
+    // 独立审查抓的 Critical：`release()` 原先只挪了弹簧的目标，忘了 `_page`。
+    // 于是「拖了一点点、又松在同一格上」时 —— `onSelected` 不触发、里面没有别的东西
+    // 去纠正它 —— **标准档那块高亮会永远停在差一点的位置上**。
+    //
+    // 抽共享件之前两处都是自己吸附的（底栏 `_visualPage = target`、分段器 `_visual = target`），
+    // 那两行在抽取时丢了。
+    final c = make();
+    c.press(itemW / 2); // 第 1 格中间
+    await advance(tester, 48);
+    c.dragStart(itemW / 2);
+    c.dragUpdate(itemW / 2 + 9); // 只往右挪 9px，仍在第 1 格里
+    expect(c.page, closeTo(0.1, 0.001), reason: '拖动中逻辑页该是连续的');
+    c.release();
+    expect(c.page, closeTo(0, 0.001),
+        reason: '松手之后逻辑页没吸附回那一格（停在 ${c.page}）—— 标准档的高亮块会偏着');
+    await settleToRest(tester);
+  });
+
   testWidgets('取消：只有真正在拖才回退，点按被取消不回退', (tester) async {
     final c = make();
     // 点按之后竖直滑走 → 只该取消「按住」，位置仍然去它本来要去的格
