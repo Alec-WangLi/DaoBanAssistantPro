@@ -1074,4 +1074,99 @@ void main() {
       expect(shape.rightCrossRadius, closeTo(shape.rightRadius, 1e-9));
     }
   });
+
+  // ── 静止时的那圈边缘高光（v0.10.13）──────────────────────────────────────
+  //
+  // 光谱那几层全被 `motion` 关着 ——「静止时一个彩色像素都没有」是 v0.10.7 为底栏定的
+  // 规矩，而底栏那枚旁边有图标与胶囊衬着、不缺这一圈。响铃页那枚药丸孤零零挂在深色
+  // 页面上，关了它就只剩一块平色、读起来像漆 —— `restEdge` 就是给那种场合开的一档，
+  // **默认 0**，既有四处一位都不动。
+  //
+  // 两条都在**纯黑画布**上量：白边在浅色底上等于没画（那正是它只给深色页面用的原因）。
+
+  /// 把一枚 60 直径的正圆光栅化到 200×200 的纯黑画布上。
+  ///
+  /// `lift: 0` → 连阴影都不画；`velocity: 0` → `motion = 0` → 连光谱都不画。
+  /// 于是这张图上**只剩本体填充与新加的那圈边**，别的都干扰不到。
+  Future<List<int>> rasterRoundLens(
+    WidgetTester tester, {
+    required double restEdge,
+  }) async {
+    const int edge = 200;
+    tester.view.physicalSize = const Size(edge * 1.0, edge * 1.0);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final LiquidLensShape shape = LiquidLensShape.of(
+        itemW: 60, capsuleH: 60, pad: 0, centerPage: 0, lift: 0, velocity: 0);
+    final GlobalKey key = GlobalKey();
+    await tester.pumpWidget(RepaintBoundary(
+      key: key,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: ColoredBox(
+          color: const Color(0xFF000000),
+          child: Center(
+            child: SizedBox(
+              width: 60,
+              height: 60,
+              child: LiquidLens(
+                size: const Size(60, 60),
+                shape: shape,
+                lift: 0,
+                isDark: true,
+                accent: const Color(0xFF4C4CE0),
+                restEdge: restEdge,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    late List<int> px;
+    await tester.runAsync(() async {
+      final RenderRepaintBoundary b =
+          key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final ui.Image img = await b.toImage(pixelRatio: 1.0);
+      final data = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+      img.dispose();
+      px = data!.buffer.asUint8List().toList();
+    });
+    return px;
+  }
+
+  /// 圆心在 (100, 100)、半径 30 —— 轮廓那一点就在 y = 70。
+  int lumAt(List<int> px, int x, int y) {
+    final int i = (y * 200 + x) * 4;
+    return (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) ~/ 1000;
+  }
+
+  testWidgets('restEdge = 1：轮廓上真的亮出一圈', (tester) async {
+    final List<int> off = await rasterRoundLens(tester, restEdge: 0);
+    final List<int> on = await rasterRoundLens(tester, restEdge: 1);
+    int brightest(List<int> px) {
+      var v = 0;
+      for (int y = 64; y <= 76; y++) {
+        final int l = lumAt(px, 100, y);
+        if (l > v) v = l;
+      }
+      return v;
+    }
+
+    expect(brightest(on) - brightest(off), greaterThan(20),
+        reason: '开了 restEdge 轮廓上却没亮（关 ${brightest(off)} / 开 ${brightest(on)}）');
+  });
+
+  testWidgets('restEdge = 1：只画边，不往里面填', (tester) async {
+    final List<int> off = await rasterRoundLens(tester, restEdge: 0);
+    final List<int> on = await rasterRoundLens(tester, restEdge: 1);
+
+    // 圆心与圆心下方 20px（都在轮廓里侧 10px 以上）：两版应当几乎一样。
+    // 差得大 = 实现写成了「填一层淡白」而不是沿轮廓描一圈边。
+    expect((lumAt(on, 100, 100) - lumAt(off, 100, 100)).abs(), lessThan(8));
+    expect((lumAt(on, 100, 120) - lumAt(off, 100, 120)).abs(), lessThan(8));
+  });
 }
