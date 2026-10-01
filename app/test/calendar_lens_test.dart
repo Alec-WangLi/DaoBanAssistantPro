@@ -21,7 +21,7 @@ void main() {
   Future<void> mount(
     WidgetTester tester, {
     required double liftTarget,
-    bool dragging = false,
+    bool velocityLive = false,
     Offset velocity = Offset.zero,
   }) async {
     await tester.pumpWidget(MaterialApp(
@@ -33,7 +33,7 @@ void main() {
           child: CalendarLens(
             size: box,
             liftTarget: liftTarget,
-            dragging: dragging,
+            velocityLive: velocityLive,
             velocity: velocity,
             isDark: false,
             accent: const Color(0xFF4C8DFF),
@@ -50,12 +50,13 @@ void main() {
 
   /// 推 [frames] 帧，并且**每帧都把速度再喂一次**。
   ///
-  /// 真机上父层每来一个指针事件就重建一次（拖动中几乎每帧一次），所以「手指在动」
-  /// 在这枚块看来就是「每帧都有新采样」。用例里不喂的话，它按「手指停住了」处理 ——
-  /// 那是**对的**行为（速度该自己收回去），只是不是这两条用例要测的东西。
+  /// 真机上父层每来一个指针事件就重建一次（拖动中几乎每帧一次），**滑行时则是
+  /// 父层自己的 ticker 每帧喂一次** —— 两种情况下这枚块看到的都是「每帧都有新采样」。
+  /// 用例里不喂的话，它按「手指停住了」处理 —— 那是**对的**行为（速度该自己收回去），
+  /// 只是不是这两条用例要测的东西。
   Future<void> dragFrames(WidgetTester tester, int frames, Offset velocity) async {
     for (int i = 0; i < frames; i++) {
-      await mount(tester, liftTarget: 1, dragging: true, velocity: velocity);
+      await mount(tester, liftTarget: 1, velocityLive: true, velocity: velocity);
       await tester.pump(const Duration(milliseconds: 16));
     }
   }
@@ -76,7 +77,7 @@ void main() {
     // ⚠️ **判据得比在「压扁之后的那条基准」上**，不能比在内盒高上：速度一上来基准
     // 本来就该变矮（那是形变，不是 bug）。内盒高只对零速度成立。
     for (final Offset v in <Offset>[Offset.zero, const Offset(900, 0)]) {
-      await mount(tester, liftTarget: 1, dragging: true, velocity: v);
+      await mount(tester, liftTarget: 1, velocityLive: true, velocity: v);
       for (int i = 0; i < 40; i++) {
         await tester.pump(const Duration(milliseconds: 16));
       }
@@ -153,7 +154,7 @@ void main() {
 
   testWidgets('环是渐入渐出的，不是一动就满', (tester) async {
     await mount(tester,
-        liftTarget: 1, dragging: true, velocity: const Offset(600, 0));
+        liftTarget: 1, velocityLive: true, velocity: const Offset(600, 0));
     await tester.pump(const Duration(milliseconds: 110));
     final double early = shapeOf(tester).motion;
     await dragFrames(tester, 20, const Offset(600, 0));
@@ -164,7 +165,7 @@ void main() {
   testWidgets('松手之后速度衰减到 0、环熄灭（静止时一点彩色都没有）',
       (tester) async {
     await mount(tester,
-        liftTarget: 1, dragging: true, velocity: const Offset(600, 0));
+        liftTarget: 1, velocityLive: true, velocity: const Offset(600, 0));
     for (int i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
@@ -186,7 +187,7 @@ void main() {
   // 那枚块自己拉长一下、彩边再亮一下（点按是日历上最常见的动作）。
   testWidgets('松手之后再重建（下一次点按）不会把陈旧的速度灌回来', (tester) async {
     await mount(tester,
-        liftTarget: 1, dragging: true, velocity: const Offset(600, 0));
+        liftTarget: 1, velocityLive: true, velocity: const Offset(600, 0));
     for (int i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
@@ -208,16 +209,77 @@ void main() {
   testWidgets('按住不动（没有新的速度采样）时，形变自己收回去', (tester) async {
     // 量的是 `stretch`（形变强度）而不是宽度：宽度里还叠着按住那 12px 的鼓出，
     // 那点余量会把这条的鉴别力吃掉。
-    await mount(tester,
-        liftTarget: 1, dragging: true, velocity: const Offset(600, 0));
-    await tester.pump(const Duration(milliseconds: 16));
+    //
+    // ⚠️ 先喂**好几帧**再取 `early`：形变现在过一条弹簧（底栏同一套），一帧只开得出
+    // 一点点 —— 一帧就取的话，取到的是「弹簧还没开始走」，不是这条要测的东西。
+    await dragFrames(tester, 8, const Offset(600, 0));
     final double early = shapeOf(tester).stretch;
-    expect(early, greaterThan(0.4), reason: '前提：刚喂过速度，形变该起来了');
+    expect(early, greaterThan(0.5), reason: '前提：喂了八帧，形变该起来了');
     // 之后一帧采样都不来：手指按在原地，指针事件不再产生。
-    for (int i = 0; i < 60; i++) {
+    for (int i = 0; i < 80; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
     expect(shapeOf(tester).stretch, lessThan(early - 0.2),
         reason: '手指停住了，形变却一直挂着 —— 速度没有随时间衰减');
+  });
+
+  testWidgets('形变走弹簧：不会几帧内就拉满，之后才开出来', (tester) async {
+    // 滑行的起步速度是平均速度的近三倍（`easeOutCubic` 在 t=0 的斜率 ≈ 2.8）——
+    // 不过弹簧的话**第一帧就拉满**（喂进来的已经是满档速度，算出来的目标就是 1.0），
+    // 正是底栏 v0.10.6 那个「机械感」的来源。底栏那枚的形变走的就是
+    // `lensStretchOmega / Zeta`，日历这枚原来没走。
+    await mount(tester,
+        liftTarget: 0, velocityLive: true, velocity: const Offset(1200, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(shapeOf(tester).stretch, lessThan(0.8),
+        reason: '两帧就开到八成以上了 —— 形变没过弹簧（不过弹簧的写法这里给的是 1.0）');
+
+    await dragFrames(tester, 10, const Offset(1200, 0));
+    expect(shapeOf(tester).stretch, greaterThan(0.8),
+        reason: '弹簧得真的开到接近满 —— 只在开头小、后面也不长，那是坏的');
+  });
+
+  testWidgets('光的方向跟着运动走：往右锚在正右、往左锚在正左、往下锚在正下',
+      (tester) async {
+    // 轮廓一个像素都不动 —— 方向由**光**承担（用户 2026-10-01 在方格子做不了
+    // 「头大尾轻」之后挑的那条路）。`spectralSweep` 的方位约定：0° = 正右，
+    // 顺时针（90° = 正下）。
+    double gap(double a, double b) {
+      final double d = (a - b).abs() % 360;
+      return d > 180 ? 360 - d : d;
+    }
+
+    await dragFrames(tester, 12, const Offset(1200, 0));
+    expect(gap(shapeOf(tester).motionAngleDeg, 0), lessThan(10),
+        reason: '往右走，亮峰却没挪到正右');
+    await dragFrames(tester, 12, const Offset(-1200, 0));
+    expect(gap(shapeOf(tester).motionAngleDeg, 180), lessThan(10),
+        reason: '往左走，亮峰却没挪到正左');
+    await dragFrames(tester, 12, const Offset(0, 1200));
+    expect(gap(shapeOf(tester).motionAngleDeg, 90), lessThan(10),
+        reason: '往下走，亮峰却没挪到正下');
+  });
+
+  testWidgets('没动过的时候：光还锚在静止那一档（左上）', (tester) async {
+    await mount(tester, liftTarget: 1);
+    for (int i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(shapeOf(tester).motionAngleDeg, spectralSweepRestAnchor,
+        reason: '没动过就歪了 —— 那枚块静止时的样子会跟着变');
+  });
+
+  testWidgets('停手之后亮峰**留在上一次的方向**上（不在熄灭过程中转回去）',
+      (tester) async {
+    // 熄灭要 400ms 左右。这一段时间里要是把锚点转回 225°，看过去就是「一圈光在
+    // 缓缓转圈」—— 比留在原地怪得多。所以门（`lensRingFullSpeed`）以下不动锚点。
+    await dragFrames(tester, 12, const Offset(1200, 0));
+    for (int i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final LiquidLensShape sh = shapeOf(tester);
+    final double d = (sh.motionAngleDeg - 0).abs() % 360;
+    expect(d > 180 ? 360 - d : d, lessThan(10),
+        reason: '亮峰在熄灭那一段转回去了（锚点不该跟速度一起掉到门下就复位）');
   });
 }

@@ -1757,7 +1757,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         key: const Key('calendar-selection-block'),
         size: Size(cellW, cellH),
         liftTarget: (_pressed || _dragActive) ? 1 : 0,
-        dragging: _dragActive,
+        velocityLive: _dragActive,
         velocity: Offset(_vx, _vy),
         isDark: Theme.of(context).brightness == Brightness.dark,
         accent: accent,

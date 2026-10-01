@@ -9,9 +9,15 @@ import '../../core/glass/liquid_lens_metrics.dart';
 
 /// 日历那枚选中块在**液态档**下的样子：一枚会鼓起来、会跟着拖动形变的玻璃透镜。
 ///
-/// 它只认三个输入 —— **在哪儿**（由外面的 `AnimatedPositioned` 摆）、**按住没有**
-/// （[liftTarget]）、**拖动速度**（[velocity]）—— 其余全关在里面：升降两条弹簧、
-/// 环的门那条弹簧、速度的低通与松手后的衰减、以及那个只在动的时候才跑的 `Ticker`。
+/// 它只认三个输入 —— **在哪儿**（由外面的 `Positioned` 摆）、**按住没有**
+/// （[liftTarget]）、**速度**（[velocity] / [velocityLive]）—— 其余全关在里面：
+/// 升降两条弹簧、形变两条弹簧、环的门那条弹簧、速度的低通与松手后的衰减、
+/// 光的方向、以及那个只在动的时候才跑的 `Ticker`。
+///
+/// **速度有两条来路**，都从同一个入口进来：手指拖动（`onPanUpdate` 的帧间差分），
+/// 以及**那枚块自己滑行**（点日期 / 点「今天」那一跳，父层自己每帧算一次）。
+/// 后者是这一版新加的：滑行原来由 `AnimatedPositioned` 隐式走，外面拿不到中间位置，
+/// 于是速度恒为 0 —— 形变与彩边全都不发生，「返回的动画还是以前那种效果」。
 ///
 /// **它不读档位**（`liquidGlassActive`）—— 判据只许出现在调用点，与本仓既有纪律
 /// 一致（`liquid_scope_guard_test` 扫源码守着）。
@@ -23,7 +29,7 @@ class CalendarLens extends StatefulWidget {
     super.key,
     required this.size,
     required this.liftTarget,
-    required this.dragging,
+    required this.velocityLive,
     required this.velocity,
     required this.isDark,
     required this.accent,
@@ -39,8 +45,13 @@ class CalendarLens extends StatefulWidget {
   /// 「按住」这个动作改由「四面鼓出 + 浮起阴影」承担。
   final double liftTarget;
 
-  /// 手指还在不在。松手之后速度由本部件自己衰减。
-  final bool dragging;
+  /// **父层这一刻的速度是不是「活的」** —— 手指在拖，或者那枚块正在滑行。
+  ///
+  /// 只有这两种情况下父层才会**每帧喂一个新采样**：拖动是跟着指针事件，滑行是跟着
+  /// 父层自己的 ticker（点日期 / 点「今天」那一跳）。松手之后父层那份速度**不归零**
+  /// （要留给这里自己衰减），所以这个标志还得管住「别把陈旧的值反复灌回来」——
+  /// v0.10.16 那条：拖完再点一下日期，那枚块会自己抽一下。
+  final bool velocityLive;
 
   /// 这一帧的拖动速度（px/s，逻辑像素）。二维都认：横向拉宽、纵向拉高。
   final Offset velocity;
@@ -75,6 +86,17 @@ class _CalendarLensState extends State<CalendarLens>
   /// 而熄灭要比亮起慢，不然停手那一下颜色会「啪」地没。
   late final LiquidLensSpring _ring;
 
+  /// 横 / 纵那两份形变。**它们也走弹簧**（与底栏同一套 `lensStretchOmega / Zeta`）——
+  /// 直接拿速度现推的话，滑行起步那一帧就拉满：`easeOutCubic` 在 t=0 的斜率约 2.8，
+  /// 也就是**起步速度是平均速度的近三倍**（v0.10.6 在底栏上记过这条「机械感」）。
+  late final LiquidLensSpring _stretchX;
+  late final LiquidLensSpring _stretchY;
+
+  /// 光谱亮峰锚在哪个方位（度）。见 [LiquidLensShape.motionAngleDeg]。
+  ///
+  /// 初值就是静止那一档（225° = 左上）—— **没动过的块与今天的画面一个像素不差**。
+  double _motionAngle = spectralSweepRestAnchor;
+
   /// 拖动速度的低通值（松手之后逐帧衰减到 0）。
   double _vx = 0;
   double _vy = 0;
@@ -104,10 +126,20 @@ class _CalendarLensState extends State<CalendarLens>
       omega: AppTokens.lensUnlitOmega,
       zeta: AppTokens.lensUnlitZeta,
     );
+    _stretchX = LiquidLensSpring(
+      target: 0,
+      omega: AppTokens.lensStretchOmega,
+      zeta: AppTokens.lensStretchZeta,
+    );
+    _stretchY = LiquidLensSpring(
+      target: 0,
+      omega: AppTokens.lensStretchOmega,
+      zeta: AppTokens.lensStretchZeta,
+    );
     // 挂载时就把这一帧的速度吃进来 —— 与 `didUpdateWidget` 那条同一个道理：
     // **不能只更新读**。只读更新那一侧的话，带着速度挂上来的这一枚（切档位、
     // 重建）会停在「没在动」上，彩边永远不亮。
-    if (widget.dragging) {
+    if (widget.velocityLive) {
       _vx = widget.velocity.dx;
       _vy = widget.velocity.dy;
       _freshSample = true;
@@ -130,6 +162,12 @@ class _CalendarLensState extends State<CalendarLens>
   void _retargetRing() {
     final bool moving =
         math.max(_vx.abs(), _vy.abs()) > AppTokens.lensRingFullSpeed;
+    if (moving) {
+      // 亮峰锚到**运动方向**上：前缘亮一档、尾缘暗一档（轮廓一个像素都不动）。
+      // 门以下**不动它** —— 熄灭那 400ms 里要是把锚点转回 225°，看过去就是
+      // 「一圈光在缓缓转圈」，比留在上一次的方向上怪得多。
+      _motionAngle = math.atan2(_vy, _vx) * 180 / math.pi;
+    }
     _ring
       ..target = moving ? 1 : 0
       ..omega = moving ? AppTokens.lensLitOmega : AppTokens.lensUnlitOmega
@@ -145,12 +183,12 @@ class _CalendarLensState extends State<CalendarLens>
         ..omega = _liftOmegaFor(widget.liftTarget > 0)
         ..zeta = _liftZetaFor(widget.liftTarget > 0);
     }
-    if (widget.dragging) {
-      // 拖动中：把外面这一帧的采样低通进来（外面已经做过帧间差分）。
+    if (widget.velocityLive) {
+      // 拖动 / 滑行中：把外面这一帧的采样低通进来（外面已经做过帧间差分）。
       _vx = _vx * 0.6 + widget.velocity.dx * 0.4;
       _vy = _vy * 0.6 + widget.velocity.dy * 0.4;
       _freshSample = true;
-    } else if (old.dragging) {
+    } else if (old.velocityLive) {
       // **松手那一帧**：把最后的速度交回来，之后由本部件自己衰减。
       _vx = widget.velocity.dx;
       _vy = widget.velocity.dy;
@@ -168,8 +206,12 @@ class _CalendarLensState extends State<CalendarLens>
   /// ⚠️ 日历页吃过大亏（v0.9.8）：常驻动画让帧队列永远非空，整套 widget 测试在
   /// `pumpAndSettle` 上集体超时。停的条件要把**参与动画的每一个量**都列上。
   void _syncTicker() {
-    final bool busy =
-        !_lift.isAtRest || !_ring.isAtRest || _vx.abs() > 1 || _vy.abs() > 1;
+    final bool busy = !_lift.isAtRest ||
+        !_ring.isAtRest ||
+        !_stretchX.isAtRest ||
+        !_stretchY.isAtRest ||
+        _vx.abs() > 1 ||
+        _vy.abs() > 1;
     if (busy) {
       // ⚠️ **ticker 只建一次，之后只 start / stop。** `SingleTickerProviderStateMixin`
       // 的 `createTicker` 一个 State 只能调一次 —— 停机时 dispose、下次再建会直接抛
@@ -197,6 +239,12 @@ class _CalendarLensState extends State<CalendarLens>
 
     _lift.step(dt);
     _ring.step(dt);
+    // 形变：目标仍是「速度 ÷ 这一面的速度门」，但**过一条弹簧**再交给形状 ——
+    // 与底栏同一套参数。见 `_stretchX` 的说明（滑行起步那一下会拉满）。
+    _stretchX.target = (_vx.abs() / CalendarLens.velocityRef).clamp(0.0, 1.0);
+    _stretchX.step(dt);
+    _stretchY.target = (_vy.abs() / CalendarLens.velocityRef).clamp(0.0, 1.0);
+    _stretchY.step(dt);
     if (_freshSample) {
       // 这一帧收到过新的采样（手指在动）—— 留着它。
       _freshSample = false;
@@ -230,10 +278,12 @@ class _CalendarLensState extends State<CalendarLens>
       // 只有 `movingRight` 读它（胶囊那两条分支用的），圆角方那支不看方向 ——
       // 传进去是为了「这一帧确实在往哪边走」这件事在形状里留个记录。
       velocity: _vx,
-      // 二维：按速度分量各拉各的（横着拖拉宽压矮、竖着拖拉高收窄）。
-      stretch: (_vx.abs() / CalendarLens.velocityRef).clamp(0.0, 1.0),
-      stretchY: (_vy.abs() / CalendarLens.velocityRef).clamp(0.0, 1.0),
+      // 二维：按速度分量各拉各的（横着拖拉宽压矮、竖着拖拉高收窄），过弹簧。
+      stretch: _stretchX.value,
+      stretchY: _stretchY.value,
       motion: _ring.value.clamp(0.0, 1.0),
+      // 亮峰跟着运动方向走（没动过就是 225° = 左上，与今天逐像素相同）。
+      motionAngleDeg: _motionAngle,
       metrics: LiquidLensMetrics(
         protrude: CalendarLens.protrude,
         liftWidth: CalendarLens.liftWidth,
