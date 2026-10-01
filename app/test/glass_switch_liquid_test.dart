@@ -5,7 +5,7 @@
 //
 // v0.10.10 把「按住时只往纵向拉长」换成了「与底栏 / 分段器同一套升程」。**2026-10-01
 // 用户又推翻了那一版**（「滑块放大得也不好看……现在感觉就变成一个大圆，不是很好看，
-// 还得往上下拉长一点」），答的是「右」：纵向拉长、横向反而收窄 2px。所以第二条这一轮
+// 还得往上下拉长一点」），答的是「右」：纵向拉长、横向只放 2px（放多了端头就快成圆）。所以第二条这一轮
 // **又翻了一次**（「宽度也要长」→「纵向拉长」）—— 每次翻都是设计改了，不是放松。
 //
 // 几条都走**几何与配置**断言（`LiquidLens.shape` / `showRingCore` / `fill`），
@@ -62,7 +62,7 @@ void main() {
         tester.widget<LiquidTrack>(find.byType(LiquidTrack).first);
     final LiquidLensMetrics m = track.metrics!;
     expect(m.protrude, closeTo(9, 0.001));
-    expect(m.liftWidth, closeTo(-2, 0.001));
+    expect(m.liftWidth, closeTo(2, 0.001));
     expect(m.rimScale, closeTo(0.25, 0.001),
         reason: '彩边没收到与底栏同一个占比（内晕往里的厚度）');
     expect(m.velocityRef, closeTo(180, 0.001),
@@ -79,9 +79,10 @@ void main() {
         reason: '静止时钮不是圆的 —— 共享件把它变成了胶囊');
   });
 
-  testWidgets('按住：钮**纵向拉长**（横向不外扩，反而收 2px）', (tester) async {
-    // 三段历史：v0.10.9「只长个儿、不变宽」→ v0.10.10「纵横一起长」→ 本轮
-    // 「纵向拉长 + 横向收 2px」（用户 2026-10-01 答的「右」）。
+  testWidgets('按住：钮**纵向拉长**（横向只放 2px，不是不放）', (tester) async {
+    // 三段历史：v0.10.9「只长个儿、不变宽」→ v0.10.10「纵横一起长」（读起来是个
+    // 大圆）→ 本轮「纵向拉长为主 + 横向只放 2px」（用户 2026-10-01 答的「右」，
+    // 随后真机反馈「上下有点尖尖的」—— 端头是椭圆，宽高比越小越圆）。
     // 于是开关的升程量**与另两处分了家** —— 这是有意的设计改动，不是回归。
     await pumpSwitch(tester, liquid: true);
     final Size before =
@@ -99,8 +100,9 @@ void main() {
         reason: '按住之后钮没有高过轨道（${after.height}）—— 没有「被抽出来」');
     expect(after.height, greaterThan(before.height + 12),
         reason: '纵向没拉长多少（${before.height} → ${after.height}）');
-    expect(after.width, lessThan(before.width),
-        reason: '横向还在长（${before.width} → ${after.width}）—— 那就又变回大圆了');
+    expect(after.width, closeTo(before.width + 2, 1.0),
+        reason: '横向该只放 2px（${before.width} → ${after.width}）—— '
+            '放多了端头就快成圆，缩回去又会让上下更尖');
     await g.up();
     await tester.pumpAndSettle();
   });

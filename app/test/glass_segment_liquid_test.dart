@@ -223,6 +223,73 @@ void main() {
     released = true;
   });
 
+  testWidgets('标准档：点按被取消也回退（那棵树的高亮块跟着回来）', (tester) async {
+    // 取消的回退在**两棵树**上都要成立。液态那棵有一条端到端用例；标准档这棵的
+    // 位置由 `_lens.page` 驱动 `AnimatedPositioned` —— 不回退就是「高亮停在手指
+    // 按下的那一格」。v0.10.11 实施时 `replace_all` 只命中一棵树（两棵缩进不同），
+    // 正是这一类静默漂移，所以两棵都要钉。
+    liquidGlassActive.value = false;
+    addTearDown(() => liquidGlassActive.value = false);
+
+    const int w = 300;
+    tester.view.physicalSize = Size(w.toDouble(), 120);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Material(
+        child: Center(
+          child: GestureDetector(
+            onVerticalDragStart: (_) {},
+            child: SizedBox(
+              width: w.toDouble(),
+              height: h,
+              child: GlassSegment(
+                count: 3,
+                selectedIndex: 0,
+                height: h,
+                onSelected: (int _) {},
+                itemBuilder: (int i, bool sel) => Text('$i'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 标准档那棵的格子**铺满全宽**：每格 300/3 = 100，内缩 3。
+    double blockLeft() => tester
+        .widget<AnimatedPositioned>(find.byType(AnimatedPositioned))
+        .left!;
+
+    final TestGesture g = await tester.startGesture(const Offset(250, 60));
+    bool released = false;
+    addTearDown(() {
+      if (released) return Future<void>.value();
+      return g.up();
+    });
+    for (int i = 0; i < 25; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(blockLeft(), closeTo(203, 1.0),
+        reason: '按下去高亮块没有挪到手指那一格 —— 这条用例测不到东西');
+
+    for (int i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(0, -25)); // 竖直滑走 → 点按被挤出竞技场
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    for (int i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    released = true;
+
+    expect(blockLeft(), closeTo(3, 1.0),
+        reason: '取消之后高亮块停在手指那一格（${blockLeft()}）—— 没回到第 0 格');
+  });
+
   testWidgets('两档是两棵树：光栅化像素必须不同', (tester) async {
     // 反过来说：这条要是绿着不动，说明「液态档」根本没生效 —— v0.10.1 出过这个岔子
     // （工装那两张「液态档」基线图与标准档逐字节相同）。

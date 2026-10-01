@@ -13,7 +13,7 @@ import '../glass/liquid_lens_metrics.dart';
 ///
 /// ```
 /// ①  胶囊          ClipRRect + GlassBlur + navFill / navBorder
-/// ①b 边光           CapsuleRimPainter（可关）
+/// ①b 边光           CapsuleRimPainter（静止的，不跟 controller 重建）
 /// ②  玻璃滴         LiquidLens（内部还有浮起阴影与外溢光晕两层）
 /// ③  内容 + 手势    裁在胶囊里、按 pad 内缩
 /// ```
@@ -21,7 +21,7 @@ import '../glass/liquid_lens_metrics.dart';
 /// **它不读档位**（`liquidGlassActive`）—— 那是调用点的事，与本仓既有纪律一致
 /// （判据只许出现在 `core/glass/glass.dart` 与各调用点）。
 ///
-/// 每帧重建的只有 ①b / ② / ③ 三层（听 [controller]）：胶囊连它的 `BackdropFilter`
+/// 每帧重建的只有 ② / ③ 两层（听 [controller]）：胶囊连它的 `BackdropFilter`
 /// 不跟着动 —— 这是底栏量出来的一条，别改回「整棵树每帧重建」。
 class LiquidTrack extends StatelessWidget {
   const LiquidTrack({
@@ -131,17 +131,16 @@ class LiquidTrack extends StatelessWidget {
                     ),
                   ),
                 ),
-              // ①b 边光 + 「光跟随滑块」。
+              // ①b 边光。**不挂在 `ListenableBuilder` 底下** —— 它不读 [controller]
+              // （「光跟随滑块」那条亮带 v0.10.11 拆掉了），挂上去只是每帧白重建一个
+              // `CustomPaint`。
               Positioned.fill(
                 child: IgnorePointer(
-                  child: ListenableBuilder(
-                    listenable: controller,
-                    builder: (BuildContext context, Widget? _) => CustomPaint(
-                      painter: CapsuleRimPainter(
-                        radius: capsuleH / 2,
-                        isDark: isDark,
-                        compact: true,
-                      ),
+                  child: CustomPaint(
+                    painter: CapsuleRimPainter(
+                      radius: capsuleH / 2,
+                      isDark: isDark,
+                      compact: true,
                     ),
                   ),
                 ),

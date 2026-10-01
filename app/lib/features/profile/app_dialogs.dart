@@ -40,7 +40,10 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.11\n'
+const String _changelogZh = 'v0.10.12\n'
+    '· 开关按住时的形状不那么尖了：横向放开一点（满升程 27 × 42）\n'
+    '· 修好开关的一处小毛病：拖动被系统打断之后，下一次拖动钮会跳一下\n\n'
+    'v0.10.11\n'
     '· 长按滑块之后手指上下滑动页面，滑块不再定格在放大那一刻（之前要再点一下才恢复）\n'
     '· 修好滑块边缘的彩色折射：它之前会画进滑块里面（几道横线和弧线），现在只贴着轮廓\n'
     '· 开关按住时改成上下拉长（之前是个大圆），拖动时一端粗一端细、跟着拖动方向\n'
@@ -98,16 +101,14 @@ const String _changelogZh = 'v0.10.11\n'
     '· 点一下照旧：滑块滑过去、切页，不提起 —— 凸起是「按住」专属的\n'
     '· 关掉液态玻璃时，玻璃的观感与上一版一致\n\n'
 
-    'v0.10.2\n'
-    '· 底栏选中滑块不再比胶囊大 —— 按住时才凸出来成一枚透镜，松手缩回\n'
-    '· 滑块的吸附恢复了磨砂玻璃那种平滑（之前是瞬移）；开关现在能按住拖动；主题模式 / 主色调这些分段选择器也带上了同一层效果\n'
-    '· 修好几处光加错了地方：待办、闹钟列表的每一行都被描了一圈边（那些行本来就没有模糊）\n'
-    '· 使用帮助弹窗底下不再多出一截空白（按钮真正浮在正文上）\n'
-    '· 深色下底栏选中那一格的白字对比度回到达标\n\n'
+
 
 ;
 
-const String _changelogEn = 'v0.10.11\n'
+const String _changelogEn = 'v0.10.12\n'
+    '· The switch looks less pointy while held — it is a little wider when it grows (27 × 42 at full lift)\n'
+    '· Fixed a small switch bug: after a drag was interrupted by the system, the next drag made the knob jump\n\n'
+    'v0.10.11\n'
     '· Long-pressing a slider and then scrolling the page no longer freezes it mid-enlargement (it used to need another tap to recover)\n'
     '· Fixed the coloured refraction on the switch: it used to be drawn inside the knob (stray lines and arcs) and now hugs the outline\n'
     '· Holding the switch now stretches it vertically instead of turning it into a big circle, and dragging tapers it along the direction of travel\n'
@@ -165,12 +166,7 @@ const String _changelogEn = 'v0.10.11\n'
     '· A tap still just slides the pill across and switches pages; lifting belongs to holding\n'
     '· With liquid glass off, the frosted look is pixel-identical to the previous version\n\n'
 
-    'v0.10.2\n'
-    '· The tab bar\'s selection slider is no longer larger than the bar at rest — it bulges out into a lens only while you hold it\n'
-    '· The slider snaps smoothly again (it used to jump); the switch can now be dragged; the segmented pickers (theme, accent colour) got the same treatment\n'
-    '· Fixed several places where the rim landed on rows that are not glass at all (the todo and alarm lists were outlined row by row)\n'
-    '· The help dialog no longer leaves a gap below its text — the button now really floats over it\n'
-    '· White text on the selected tab meets contrast requirements again in dark mode\n\n'
+
 
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

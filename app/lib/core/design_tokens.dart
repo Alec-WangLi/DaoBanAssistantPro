@@ -464,14 +464,6 @@ class AppTokens {
   /// 于是它既不会在高速下开天窗，也不会「啪」地出现或消失。
   static const double lensEdgeFade = 3;
 
-  /// 探针：**滑块附近那一段边缘光**的配色（滑块滑过时玻璃边被点亮）。
-  ///
-  /// 这不是折射 —— 折射是逐像素扭曲背景，需要 shader，且在平背景上看不见。
-  /// 这是「光的响应」：光源（滑块）靠近玻璃边时，那边的边亮起来。平背景上能被
-  /// 看见的只有这一类。
-  static Color glassRimProbeGlow(bool isDark) =>
-      Colors.white.withValues(alpha: isDark ? 0.95 : 0.85);
-
   static List<Color> glassHighlight(bool isDark) => [
         Colors.white.withValues(alpha: isDark ? 0.18 : 0.55),
         Colors.white.withValues(alpha: 0.0),

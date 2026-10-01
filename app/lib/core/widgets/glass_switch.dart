@@ -68,7 +68,10 @@ class _GlassSwitchState extends State<GlassSwitch>
     // 纵向拉长（满升程约 23 × 42）—— 用户原话：「右」。
     // v0.10.10 那版是 `forCapsule(30)`（纵横一起长），读起来是个大圆。
     protrude: 9,
-    liftWidth: -2,
+    // 满升程 27 × 42。**这个数还管着「上下有多尖」**：端头是椭圆，顶点曲率半径
+    // = 宽² ÷ (2 × 高) —— `-2` 时只有 6.3（用户 2026-10-01 真机：「上下有点尖尖的」），
+    // `+2` 回到 8.7，`+6` 是 11.4（但到最快那一档就快成圆了）。取 +2。
+    liftWidth: 2,
     // 彩边：内晕往轮廓里伸进去的**占比**与底栏对齐。底栏 8%，而 `30/64 = 0.469`
     // 时开关是 16%（钮只有 23 宽，同一份绝对宽度占掉两倍）。
     rimScale: 0.25,
@@ -203,7 +206,7 @@ class _GlassSwitchState extends State<GlassSwitch>
     );
   }
 
-  /// **液态档**：玻璃轨道 + 一枚按住会纵向拉长的白玻璃钮。
+  /// **液态档**：玻璃轨道 + 一枚按住会纵向拉长的**主色玻璃滴**（与底栏、分段器同款）。
   Widget _buildLiquid(BuildContext context, bool isDark, Color accent) {
     return SizedBox(
       width: widget.width,
@@ -253,7 +256,13 @@ class _GlassSwitchState extends State<GlassSwitch>
           onHorizontalDragEnd: (DragEndDetails _) {
             if (_lens.release() != (widget.value ? 1 : 0)) _toggle();
           },
-          onHorizontalDragCancel: _lens.cancel,
+          onHorizontalDragCancel: () {
+            // 拖动被系统打断：**位置也要回退**。`cancel()` 自己不动 `_page`，底栏与
+            // 分段器都是在调用点补一发 `snapTo` —— 开关原先漏了这一发，于是那一次
+            // 之后 `_page` 停在拖到的位置，**下一次**拖动会按陈旧的值算抓取偏移、
+            // 钮跳一下。
+            if (_lens.cancel()) _lens.snapTo(widget.value ? 1.5 : 0.5);
+          },
           child: const SizedBox.expand(),
         ),
       ),
