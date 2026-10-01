@@ -189,28 +189,35 @@ class LiquidLensController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 松手：吸附到最近一格。
-  void release() {
+  /// 松手：吸附到最近一格。**返回落到了哪一格** —— 调用点要用它去翻页
+  /// （页面归调用点管，这里只管那枚滴）。
+  int release() {
     _endHold();
     // 目标格取**逻辑页**，不是弹簧的当前位置 —— 见 `_page` 的说明。
-    _slotCentre = _nearestIndex(_page) + 0.5;
+    final int target = _nearestIndex(_page);
+    _slotCentre = target + 0.5;
     _pos.target = _slotCentre;
     _syncTicker();
     _pressed = false;
     _dragging = false;
     _previewIndex = null;
     notifyListeners();
+    return target;
   }
 
   /// 取消：只有**真正在拖**才回退（点按结束触发的 cancel 不回退）。
-  void cancel() {
-    if (!_dragging) return;
+  ///
+  /// **返回「是否真的取消了」** —— 回退到哪一格是调用点的事（它才知道「已经提交的
+  /// 那一格」是哪一格），所以真正取消时调用点要自己再 `snapTo(committed + 0.5)`。
+  bool cancel() {
+    if (!_dragging) return false;
     _endHold();
     _pressed = false;
     _dragging = false;
     _previewIndex = null;
     _syncTicker();
     notifyListeners();
+    return true;
   }
 
   /// 点按被取消（在容器上按下之后竖直滑走之类）。

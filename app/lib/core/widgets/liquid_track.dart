@@ -96,9 +96,13 @@ class LiquidTrack extends StatelessWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(capsuleH / 2),
                         border: Border.all(color: AppTokens.navBorder(isDark)),
+                        // **对角轴**（不是竖直）—— 与底栏标准档、以及抽这一层
+                        // 之前的液态档逐字一致。写反了的症状是深色下胶囊的
+                        // 着色差一档（深色那两档 navFill 的 alpha 差得更大），
+                        // 出图逐像素比会当场照出来。
                         gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                           colors: AppTokens.navFill(isDark),
                         ),
                       ),
