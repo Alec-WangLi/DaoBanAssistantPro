@@ -90,48 +90,60 @@ class _RecurringList extends ConsumerWidget {
       if (next != null) L10n.nextTime(L10n.monthDay(next)),
     ];
     final muted = AppTokens.inkMuted(context);
-    // **小窗（200×400）里这一行本来就只有百来像素**：开关 + 间距 + 删除键已经占满，
-    // 标题只剩个位数。v0.10.10 把开关从 46 加宽到 56 之后它直接溢出了 6px（出图当场
-    // 红）。窄到放不下时把**内缩与间距**收掉 —— 不摘任何控件，删除键与开关都还在。
+    // **窄窗（窗口宽 < 260）这一行排两行。**
     //
-    // 标题因此只从 4px 变成约 14px，仍然很挤 —— 但那是这一行在 200dp 下**原来就有**
-    // 的处境（不是这一版弄坏的）；真正要让它可读得重排这一行，是另一件事。
+    // v0.10.10 把开关从 46 加宽到 56 之后，这一行在 200×400 下先溢出了 6px；收掉
+    // 内缩与间距能止住溢出，但独立审查**量**出来：标题只剩 **14px**，而一个汉字
+    // 加省略号要 ≈28px —— Flutter 索性什么都不画，行读起来是 `[开关] [垃圾桶]`，
+    // 看不出自己在开关哪一条规则（**那不是这一版弄坏的**，v0.10.9 只剩 4px）。
+    //
+    // 所以窄窗改成两行排：开关与删除键一行、标题与副标题**拿回整行宽度**在下一行。
+    // **一个控件都没有摘**（对比：摘掉那个删除键也能腾出 36px，但那是交互改动）。
     final bool tight = MediaQuery.sizeOf(context).width < 260;
+
+    final Widget switchTile = GlassSwitch(
+      value: s.enabled,
+      onChanged: (v) => _setEnabled(ref, s, v),
+    );
+    final Widget deleteTile = GlassDeleteButton(
+      compact: true,
+      onPressed: () => _delete(context, ref, s),
+    );
+    final Widget texts = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(s.title,
+            maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTokens.rowPrimary),
+        Text(parts.join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTokens.microText.copyWith(color: muted)),
+      ],
+    );
+
     return GlassTile(
       enableBlur: false,
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
-      padding: EdgeInsets.symmetric(
-          horizontal: tight ? 0 : AppTokens.spaceSm,
-          vertical: AppTokens.spaceXs),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceXs),
       onTap: () => _edit(context, ref, s),
-      child: Row(
-        children: [
-          GlassSwitch(
-            value: s.enabled,
-            onChanged: (v) => _setEnabled(ref, s, v),
-          ),
-          SizedBox(width: tight ? AppTokens.gapHair : AppTokens.gapIconText),
-          Expanded(
-            child: Column(
+      child: tight
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.rowPrimary),
-                Text(parts.join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.microText.copyWith(color: muted)),
+                Row(children: [switchTile, const Spacer(), deleteTile]),
+                const SizedBox(height: AppTokens.spaceXs),
+                texts,
+              ],
+            )
+          : Row(
+              children: [
+                switchTile,
+                const SizedBox(width: AppTokens.gapIconText),
+                Expanded(child: texts),
+                deleteTile,
               ],
             ),
-          ),
-          GlassDeleteButton(
-            compact: true,
-            onPressed: () => _delete(context, ref, s),
-          ),
-        ],
-      ),
     );
   }
 

@@ -179,6 +179,37 @@ void main() {
     expect(calls, isEmpty, reason: '拖出去又拖回来，值不该变');
   });
 
+  testWidgets('拖到一半被系统打断（PointerCancel）：按「松手」处理，逻辑页不留残值', (tester) async {
+    // 这一条的来历值得记：独立审查报「开关的 `onHorizontalDragCancel` 只调了
+    // `cancel()`、没有像分段器与底栏那样 `snapTo(committed + 0.5)`，于是逻辑页
+    // 会留残值，下一次拖动刚过 slop 钮就跳」。**前提是错的** —— 探针实测：
+    // Flutter 的 `DragGestureRecognizer` 对**已被接受**的拖动收到 PointerCancel 时
+    // 走的是 `_checkEnd()`（`_checkCancel()` 只在 `possible` 那一档，
+    // 而那一档 `_dragging` 还是 false，`cancel()` 直接早退）。
+    // 所以那一刻跑的是 `onHorizontalDragEnd` → `release()`，逻辑页照样被吸附。
+    //
+    // 于是这里钉的是**真实行为**：被打断 = 按松手处理（交出落点、提交一次），
+    // 而且钮停在它该在的那一端，不是停在手指离开的位置。
+    final List<bool> calls = await pumpSwitch(tester, liquid: true);
+    final Rect box = tester.getRect(find.byType(GlassSwitch));
+    final TestGesture g =
+        await tester.startGesture(box.centerLeft + const Offset(18, 0));
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    for (int i = 0; i < 20; i++) {
+      await g.moveBy(const Offset(2.5, 0)); // 拖到右端
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.cancel(); // 系统手势 / 通知栏下拉
+    await tester.pumpAndSettle();
+
+    expect(calls, <bool>[true], reason: '被打断的这一次拖动没有被当成松手处理');
+    // 右端那一格的格心：3 + 1.5×25 = 40.5。
+    expect(lensOf(tester).shape.centerX, closeTo(40.5, 0.5),
+        reason: '钮停在了手指离开的位置，而不是吸附到最近那一端');
+  });
+
   testWidgets('点按仍然只拨一下，钮不跟着手指跑（v0.10.9 那条契约）', (tester) async {
     // 接拖动最容易把这一条弄坏：`followFinger` / `moveToSlot` 一旦放开，
     // 在**开着**的那枚开关左半边按住，钮会先跳到左边再跳回来。
