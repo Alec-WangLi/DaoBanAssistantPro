@@ -171,4 +171,52 @@ void main() {
     expect(calls, contains('cancelAllNativeAlarms'),
         reason: '不撤的话重置完到点还会响');
   });
+
+  testWidgets('界面层：点「取消」什么都不清（返回值被当成确认是迁移最容易丢的一条）',
+      (tester) async {
+    // Review Focus 第 1 条。把 21 处 `showDialog` 换成 `showGlassDialog` 时，每一处的
+    // 泛型与 `await` 之后的用法必须原样保留 —— 丢了就是「点了取消却当成确认」，
+    // **不报错**（`false` 与「没返回」在 `if (ok == true)` 之外长得一样）。
+    // 上面那条只走了「确认」那一侧，这条补上「取消」那一侧。
+    SharedPreferences.setMockInitialValues({
+      'themeMode': 'dark',
+      'onboarded': true,
+      'lastSeenVersion': '0.9.19',
+    });
+    await repo.addCustomAlarm(hour: 6, minute: 30, repeatType: 1);
+    await repo.saveTemplate(_template());
+
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [databaseProvider.overrideWithValue(db)],
+      child: const MaterialApp(
+        home: Scaffold(body: ProfileScreen()),
+      ),
+    ));
+    await _pumpFrames(tester);
+
+    await tester.scrollUntilVisible(find.text(L10n.clearReset), 200,
+        scrollable: find.byType(Scrollable).first);
+    await _pumpFrames(tester);
+    await tester.tap(find.text(L10n.clearReset));
+    await _pumpFrames(tester);
+    await tester.tap(find.text(L10n.cancel));
+    await _pumpFrames(tester, frames: 40);
+
+    expect(await repo.listCustomAlarms(), isNotEmpty,
+        reason: '点了「取消」，自定义闹钟却没了 —— 返回值被当成了确认');
+    expect(await repo.listTemplates(), isNotEmpty,
+        reason: '点了「取消」，「我的模板」却没了');
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(ProfileScreen)));
+    expect(container.read(appSettingsProvider).themeMode, AppThemeMode.dark,
+        reason: '点了「取消」，外观却回默认了');
+    final sp = await SharedPreferences.getInstance();
+    expect(sp.getKeys(), isNotEmpty,
+        reason: '点了「取消」，SharedPreferences 却被清空了');
+  });
 }

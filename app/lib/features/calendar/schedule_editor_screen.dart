@@ -1424,9 +1424,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   Future<void> _setFollowHoliday(bool v) async {
     if (v && _classes.isNotEmpty && _overridesByClassId.isNotEmpty) {
       final lost = _overridesByClassId.values.fold<int>(0, (a, b) => a + b);
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showGlassDialog<bool>(
         context: context,
-        barrierColor: Colors.black26,
         builder: (dialogContext) => GlassDialog(
           title: L10n.followHolidayConfirmTitle,
           content: Text(L10n.followHolidayDropsOverrides(lost)),
@@ -1553,7 +1552,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     // 同一套写法 —— 提前 dispose 会在弹窗退场动画里被 TextField 再读一次，
     // 直接抛「A TextEditingController was used after being disposed」。
     final ctrl = TextEditingController(text: _name.trim());
-    final name = await showDialog<String>(
+    final name = await showGlassDialog<String>(
       context: context,
       builder: (dialogContext) => GlassDialog(
         title: L10n.saveAsTemplate,
@@ -1626,9 +1625,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     // 路 —— 所以天数必须写进确认框，不能只提时间 / 颜色 / 闹钟。
     final name = _classes[index].name;
     final lostOverrides = _overridesByClassId[_classes[index].id] ?? 0;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog<bool>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (dialogContext) => GlassDialog(
         title: L10n.deleteShiftClassTitle,
         content: Column(

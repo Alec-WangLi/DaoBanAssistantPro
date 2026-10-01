@@ -326,9 +326,16 @@ class GlassMaterialize extends StatelessWidget {
 /// 进场与退场只能同速 —— 而分开的那条是 `TransitionRoute.reverseTransitionDuration`，
 /// 要分开就得自己写一条路由。进场 300ms 才读得出「凝聚」，退场 200ms 免得挡路。
 class _GlassOverlayRoute<T> extends PopupRoute<T> {
-  _GlassOverlayRoute({required this.builder, required this.barrierLabel});
+  _GlassOverlayRoute({
+    required this.builder,
+    required this.barrierLabel,
+    this.dismissible = true,
+  });
 
   final WidgetBuilder builder;
+
+  /// 点遮罩算不算「关掉」。**默认可以**；下载进度那种「做到一半不许点掉」的传 false。
+  final bool dismissible;
 
   @override
   final String barrierLabel;
@@ -340,7 +347,7 @@ class _GlassOverlayRoute<T> extends PopupRoute<T> {
   Duration get reverseTransitionDuration => AppTokens.durGlassOut;
 
   @override
-  bool get barrierDismissible => true;
+  bool get barrierDismissible => dismissible;
 
   @override
   Color get barrierColor => Colors.black26;
@@ -363,19 +370,21 @@ class _GlassOverlayRoute<T> extends PopupRoute<T> {
       GlassMaterialize(animation: animation, child: child);
 }
 
-/// **弹窗的统一入口。** 19 处 `showDialog` 全部走它（由
+/// **弹窗的统一入口。** 21 处 `showDialog` 全部走它（由
 /// `test/glass_overlay_guard_test.dart` 扫源码守着）。
 ///
 /// 与裸 `showDialog` 的三点差别：进场 300ms / 退场 200ms（不是固定的 150ms）、
-/// 面板「从模糊里凝出来」、遮罩色与可点关闭**写在一处**（原来是 19 处各写一遍
+/// 面板「从模糊里凝出来」、遮罩色与可点关闭**写在一处**（原来是 21 处各写一遍
 /// `barrierColor: Colors.black26`）。
 Future<T?> showGlassDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
+  bool barrierDismissible = true,
 }) {
   return Navigator.of(context, rootNavigator: true).push<T>(
     _GlassOverlayRoute<T>(
       builder: builder,
+      dismissible: barrierDismissible,
       // 遮罩要一个语义标签（`barrierDismissible` 为真时必须有）—— 走本地化那一份，
       // 与 SDK 的 `DialogRoute` 同一个来源。
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,

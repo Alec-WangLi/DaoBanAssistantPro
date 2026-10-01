@@ -15,9 +15,8 @@ void showAppInfoDialog(
   required String title,
   required String content,
 }) {
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (dialogContext) => GlassDialog(
       title: title,
       showClose: true,
@@ -178,9 +177,8 @@ void showChangelogDialog(BuildContext context) {
 /// 检查更新结果弹窗：展示正式版与测试版两个通道，各自可下载（仅当比当前新）。
 void showUpdateDialog(BuildContext context, UpdateCheckResult result) {
   const current = appVersion;
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (dialogContext) => GlassDialog(
       title: L10n.checkUpdate,
       showClose: true,
@@ -269,9 +267,8 @@ void _showHelpDialog(
   required String title,
   required Widget content,
 }) {
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (dialogContext) => GlassDialog(
       title: title,
       showClose: true,
@@ -476,10 +473,10 @@ class _GuideEntry extends StatelessWidget {
 
 /// 关闭更新弹窗后，弹出下载进度弹窗（内部完成下载并自动拉起系统安装器）。
 void _downloadAndInstall(BuildContext context, UpdateInfo info) {
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
+    // 下载做到一半不许被点掉。
     barrierDismissible: false,
-    barrierColor: Colors.black26,
     builder: (_) => _DownloadProgressDialog(info: info),
   );
 }

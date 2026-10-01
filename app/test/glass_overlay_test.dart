@@ -18,7 +18,10 @@ void main() {
   /// 装配一个能拿到 `BuildContext` 的宿主，弹出最小的一个 `GlassDialog`。
   ///
   /// 返回那个 `Future` —— 点遮罩 / 按返回键两条用例要拿它的返回值。
-  Future<Future<bool?>> openMinimal(WidgetTester tester) async {
+  Future<Future<bool?>> openMinimal(
+    WidgetTester tester, {
+    bool dismissible = true,
+  }) async {
     late BuildContext host;
     await tester.pumpWidget(MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -29,6 +32,7 @@ void main() {
     ));
     return showGlassDialog<bool>(
       context: host,
+      barrierDismissible: dismissible,
       builder: (BuildContext _) => const GlassDialog(
         title: '标题',
         content: SizedBox(height: 40),
@@ -110,6 +114,24 @@ void main() {
 
     expect(panel(), findsNothing, reason: '按返回键没关窗');
     expect(await result, isNull);
+  });
+
+  testWidgets('barrierDismissible: false 时点遮罩不关窗', (tester) async {
+    // 「下载进度」那个弹窗就是这样 —— 做到一半不许被点掉。这条是**迁移时差点丢掉**
+    // 的行为：原来那一处自己写了 `barrierDismissible: false`，而我给入口写的默认是
+    // `true`（写入口的第一版根本没有这个参数，是编译器把它拦下来的）。
+    await openMinimal(tester, dismissible: false);
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+
+    expect(panel(), findsOneWidget,
+        reason: '点了遮罩却关掉了 —— `barrierDismissible: false` 没传下去');
+
+    // 收尾：把它关掉，免得留一条永远不完成的 future。
+    Navigator.of(tester.element(panel())).pop();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('入场中途面板是缩着的、还糊着（几何断言必须在落定之后量）', (tester) async {

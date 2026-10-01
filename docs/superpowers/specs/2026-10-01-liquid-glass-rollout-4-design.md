@@ -68,8 +68,8 @@ v0.10.12 装上真机之后，用户提了两件事：
 
 ### 3.2 弹窗：统一入口 + 凝聚 / 消散
 
-**现状**：`lib/` 里 **19 处 `showDialog<...>`**（8 个文件）+ **9 处 `showModalBottomSheet`**
-（5 个文件），共 **28 个实心面板**，全部自己写 `barrierColor: Colors.black26`。入场只有
+**现状**：`lib/` 里 **21 处 `showDialog`**（8 个文件）+ **9 处 `showModalBottomSheet`**
+（5 个文件），共 **30 个实心面板**，全部自己写 `barrierColor: Colors.black26`。入场只有
 `DialogRoute` 自带的 150ms 淡入 —— 读起来像一张不透明卡片被点亮，而不是一块玻璃凝出来。
 
 **新入口**（放在 `lib/core/widgets/glass_dialog.dart`）：
@@ -100,7 +100,10 @@ Future<T?> showGlassSheet<T>({
 
 **`GlassDialog` 里那份 `_Materialize` 必须拿掉**：它读的是 `ModalRoute.of(context).animation`，
 留着会与新的路由转场**叠成两层**。拿掉之后，还直接用 `GlassDialog` 的地方就没有转场了 ——
-所以 19 处必须**全部**迁到新入口（这一条由源码扫描护栏钉住，见 §6）。
+所以 21 处必须**全部**迁到新入口（这一条由源码扫描护栏钉住，见 §6）。
+
+> 订正（实施时发现）：最初数的是 `showDialog<`，**21 处里有两处不带泛型**（`showDialog(`），
+> 所以真实数是 **21** 不是 19；弹层面板总数因此是 **30** 不是 28。
 
 **底部弹层**：`showGlassSheet` 用同一份 `GlassMaterialize`，但**保留 Material 自带的
 「从底下升上来」** —— 那是弹层该有的动作，凝聚叠在面板上即可。
@@ -234,7 +237,7 @@ Future<T?> showGlassSheet<T>({
   压上限见 §8。
 - **`restEdge` 是栈上的第 4 层**：只在那一个调用点开，且不做每帧重建；但深色全屏页面上
   多一层绘制的代价要**量一次**（不靠估），确认帧时间没有肉眼可见的跳动。
-- **统一入口动 28 处调用点**：机械但面积大。泛型与返回值必须逐个对上（不少调用点用了
+- **统一入口动 30 处调用点**：机械但面积大。泛型与返回值必须逐个对上（不少调用点用了
   `showDialog<bool>` 之类的返回），全靠现有弹窗用例兜。
 - **`showDialog` → `showGeneralDialog` 的行为差**：路由类型从 `DialogRoute` 换成
   `PopupRoute`，要确认 `Route.isCurrent` 那套（`dialogCloser` 依赖它）、返回键、点击外部

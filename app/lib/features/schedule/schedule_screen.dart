@@ -326,9 +326,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     final titleCtrl = TextEditingController();
     final fields = _EventFields(date: dateOnly(DateTime.now()));
 
-    showDialog(
+    showGlassDialog(
       context: context,
-      barrierColor: Colors.black26,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -675,9 +674,8 @@ Future<void> showEditEventDialog(
   );
 
   if (!context.mounted) return;
-  showDialog(
+  showGlassDialog(
     context: context,
-    barrierColor: Colors.black26,
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
@@ -740,9 +738,8 @@ enum _DeleteChoice { once, series }
 /// 两个回调都是**同步** `pop`（不 await 任何东西），所以不需要 `dialogCloser`
 /// —— 那个是给「await 之后才关窗」的保存类动作准备的。
 Future<_DeleteChoice?> _askDeleteRecurring(BuildContext context, String name) {
-  return showDialog<_DeleteChoice>(
+  return showGlassDialog<_DeleteChoice>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (context) => GlassDialog(
       title: L10n.deleteRecurringTitle,
       content: Text(L10n.deleteRecurringContent(name)),

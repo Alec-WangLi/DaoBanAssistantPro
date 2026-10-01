@@ -115,9 +115,8 @@ class ScheduleManagementScreen extends ConsumerWidget {
 
   Future<void> _deleteSchedule(
       BuildContext context, WidgetRef ref, ShiftScheduleRow s) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog<bool>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (context) => GlassDialog(
         title: L10n.deleteScheduleTitle,
         content: Text(L10n.deleteScheduleContent(s.name)),
@@ -256,9 +255,8 @@ Future<void> showRemainingPicker(
   final currentId =
       ref.read(activeScheduleProvider).valueOrNull?.currentScheduleId;
 
-  await showDialog<void>(
+  await showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (dialogContext) => GlassDialog(
       title: label ?? L10n.remainingTime,
       content: Column(
@@ -358,9 +356,8 @@ Future<void> showSpanEditor(
         to: t,
       );
 
-  await showDialog<void>(
+  await showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setLocal) => GlassDialog(
         title: existing == null ? L10n.addSpan : spanRangeLabel(from, to),

@@ -30,9 +30,8 @@ import 'schedule_screen.dart';
 /// 的、没有可渲染的 widget），而那个薄壳只给 context。里面用 `Consumer` 取
 /// provider，所以不需要外传 `ref`。
 Future<void> showRecurringTodosDialog(BuildContext context) {
-  return showDialog<void>(
+  return showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (context) => GlassDialog(
       title: L10n.recurring,
       showClose: true,
@@ -184,9 +183,8 @@ class _RecurringList extends ConsumerWidget {
         .where((e) => e.seriesId == s.id)
         .length;
     if (!context.mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (context) => GlassDialog(
         title: L10n.deleteRecurringTitle,
         content: Text(L10n.deleteSeriesContent(s.title, n)),

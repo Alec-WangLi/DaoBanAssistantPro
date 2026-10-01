@@ -407,9 +407,8 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
       weekdays = 1 << (DateTime.now().weekday - 1);
     }
 
-    showDialog<void>(
+    showGlassDialog<void>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => GlassDialog(
           title: isEdit ? L10n.editAlarm : L10n.newAlarm,

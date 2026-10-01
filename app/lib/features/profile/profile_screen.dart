@@ -300,9 +300,8 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmReset(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog<bool>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (dialogContext) => GlassDialog(
         title: L10n.confirmResetTitle,
         content: Text(L10n.confirmResetContent),
@@ -346,9 +345,8 @@ class ProfileScreen extends ConsumerWidget {
   Future<void> _showLog(BuildContext context) async {
     final log = await AlarmService.readLog();
     if (!context.mounted) return;
-    await showDialog<void>(
+    await showGlassDialog<void>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (dialogContext) => GlassDialog(
         title: L10n.log,
         showClose: true,
