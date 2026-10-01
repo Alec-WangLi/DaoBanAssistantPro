@@ -383,7 +383,12 @@ void main() {
 
   testWidgets('液态档的底栏树里有透镜', (tester) async {
     await pumpShell(tester, liquid: true);
-    expect(find.byType(LiquidLens), findsOneWidget);
+    // ⚠️ **必须限定在底栏里**：v0.10.15 起日历那一页也有一枚透镜，全页数会数到两枚。
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('glass-nav-bar')),
+            matching: find.byType(LiquidLens)),
+        findsOneWidget);
     await disposeShell(tester);
   });
 

@@ -5,6 +5,8 @@
 // 2026-10-01 把液态玻璃推广到分段器与开关时，这条名单从 2 处扩到 4 处 ——
 // 注意**新抽出来的两个件（`liquid_lens_controller` / `liquid_track`）不在名单里**：
 // 它们不读档位，判据只出现在调用点。多写了不该有的位置也是一种错误，同一条用例照得出。
+// v0.10.13 加响铃页那枚药丸（5 → 6），v0.10.15 加日历那枚选中块（6 → 7）——
+// 后者同样带出一个不读档位的新件 `calendar_lens.dart`，它**不进名单**。
 //
 // 2026-10-01 用户拍板：「咱们先把这个液态玻璃应用到底部导航栏，之前修改的其他
 // 地方先暂时不动。」这条守门把那个决定变成会失败的用例 —— 将来有人往别的玻璃面
@@ -33,6 +35,10 @@ const List<String> _allowed = <String>[
   // 响铃页那枚「上滑关闭」的药丸（2026-10-01 用户拍板：「同时挂在液态玻璃开关
   // 后面……要像底栏那样分一棵树出来」）。
   'lib/features/alarm/alarm_ringing_screen.dart',
+  // 日历那枚选中块（v0.10.15）。判据只在这一个文件里读 —— 它分两处岔口
+  // （`_glassBlock` 与 `AnimatedScale`），但都在同一棵子树里。
+  // ⚠️ **`calendar_lens.dart` 不进名单**：它不读档位（与 `liquid_track.dart` 同一条纪律）。
+  'lib/features/calendar/calendar_screen.dart',
 ];
 
 const String _needle = 'liquidGlassActive';
@@ -86,9 +92,10 @@ void main() {
         'lib/core/widgets/glass_segment.dart',
         'lib/core/widgets/glass_switch.dart',
         'lib/features/alarm/alarm_ringing_screen.dart',
+        'lib/features/calendar/calendar_screen.dart',
         'lib/features/home/glass_nav_bar.dart',
       ],
-      reason: '去掉豁免后应**恰好**命中这两处（定义处 + 底栏）：\n'
+      reason: '去掉豁免后应**恰好**命中这几处（定义处 + 六个调用点）：\n'
           '  少命中 = 扫描 / 匹配 / 剥壳坏了，上一条守门会变成永远为真的空话；\n'
           '  多命中 = 真有文件在允许的位置之外读了它（上一条也该同时红）。\n'
           '  底栏在 Task 2 从 `home_shell.dart` 搬进了 `glass_nav_bar.dart` —— '
