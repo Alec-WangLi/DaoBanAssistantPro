@@ -388,6 +388,49 @@ void main() {
     });
   }
 
+  // 开关 · 液态 · **拖动中**（「头大尾轻」那一态）。
+  //
+  // 与上面「按住」那条是**故意的配对**：按住不动时形变恒为 0，钮只是一枚竖着的椭圆；
+  // 形状只有在**动**的时候才变。少了这一屏，「拖动时到底有没有头大尾轻」结构性地
+  // 拍不到 —— 而这一轮争的正是它。
+  //
+  // ⚠️ **拖动距离必须先走掉 `kTouchSlop`（18px）**：识别器赢下竞技场之前那 18px 是
+  // 空走的，而这条轨道一共只有 56 宽、钮只能走 25px。本轮第一版每帧只走 3px、六帧
+  // 才 18px，识别器压根没收下这次拖动，两张图逐字节相同。
+  for (final variant in visualVariants) {
+    visualTest('开关 · 液态 · 拖动中 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      useLiquidGlassTier();
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '46_switch_drag_${variant.suffix}',
+        home: const _SwitchHost(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        settleAfterCapture: false,
+        beforeCapture: (WidgetTester t) async {
+          final Rect box = t.getRect(find.byType(GlassSwitch).last);
+          final TestGesture g =
+              await t.startGesture(Offset(box.right - 8, box.center.dy));
+          addTearDown(g.up);
+          for (int i = 0; i < 20; i++) {
+            await t.pump(const Duration(milliseconds: 30)); // 过长按闸门
+          }
+          await g.moveBy(const Offset(-18, 0)); // 走掉 kTouchSlop
+          await t.pump(const Duration(milliseconds: 16));
+          for (int i = 0; i < 6; i++) {
+            await g.moveBy(const Offset(-3, 0)); // 187px/s，一次正常的拖动
+            await t.pump(const Duration(milliseconds: 16));
+          }
+        },
+      );
+    });
+  }
+
   // 待办 · **勾选态**（v0.10.10）。
   //
   // 待办原来用的是一枚开关，这一版换成了勾。屏单里已有的 `05_todos` 全是**没勾**的，

@@ -259,12 +259,12 @@ class LiquidLensShape {
     // 哪些尺寸会掉进来：`itemW + 10·lift <= 52 + 20·lift`，也就是 `itemW` 小于约 62
     // 的窗口。**200×400 那个工装档（itemW 39）在 lift=1 时一半的速度都在死区里。**
     //
-    // 改成**竖直的胶囊**：把上面那套闭式解整体转 90°（见 `_verticalTwoRadius`）。
-    // 宽度与高度都保住了 —— 于是「按住时凸出胶囊」这个信号在窄窗里照样成立，
-    // 比退成一枚圆团更好（圆团会把高度一起丢掉）。
+    // 改成**竖直的胶囊**：把上面那套闭式解按目标宽搭好、再**纵向拉伸**到目标高
+    // （见 `_verticalStretched`）。宽度与高度都保住了 —— 于是「按住时凸出胶囊」这个
+    // 信号在窄窗里照样成立，比退成一枚圆团更好（圆团会把高度一起丢掉）。
     //
-    // 这条构造**天然带两个半径**，所以竖直档也读前后缘（头大尾轻在竖着的时候照样
-    // 画得出来）—— 上一版是「上圆 + 下圆 + 中矩形」并起来的，那两个半径在那儿
+    // 这条构造**天然带两个半径**，而且前后缘还在**左右**，所以竖直档也读得到
+    // 头大尾轻 —— 上一版是「上圆 + 下圆 + 中矩形」并起来的，那两个半径在那儿
     // 是算了但没用。
     //
     // ⚠️ **上一版并三个子路径还有个更贵的代价**：填色对，**描边会把三段边界全画
@@ -272,13 +272,20 @@ class LiquidLensShape {
     // 与内侧弧 —— 用户 2026-10-01：「彩边穿到滑块里边了，而且还不规则，也不贴边」。
     // 转出来的是一条**闭合子路径**，没有这个问题。
     if (width <= height) {
-      return _verticalTwoRadius(
+      // ⚠️ **别直接把 `_cap`（= 宽/2）交给它。** 拉伸**不能**把两端的圆变回来：
+      // 局部那两个圆要是各占满半宽（`rl + rr ≥ 宽`），尾部整个落进头部圆里，
+      // 轮廓退化成**一个圆**、尾巴消失 —— 而且 `mx` 会正好等于 1，踩 `arcTo`
+      // 扫 2π 那个坑。留出尾部收缩的余量，`stretch = 0` 时余量归零（局部是个
+      // 正圆，靠 `_verticalStretched` 里那道 `d` 钳位兜住）。
+      final double capV = width / 2 * (1 - 0.175 * stretch);
+      final double thin = capV * (1 - 0.35 * stretch);
+      return _verticalStretched(
         centerX: centerX,
         cy: cy,
         w: width,
         h: height,
-        rTop: leftRadius,
-        rBot: rightRadius,
+        rl: movingRight ? thin : capV,
+        rr: movingRight ? capV : thin,
       );
     }
 
@@ -428,53 +435,56 @@ class LiquidLens extends StatelessWidget {
 Path _lensPath(LiquidLensShape shape, Offset origin) =>
     shape.toPath().shift(origin);
 
-/// **竖直**的两半径胶囊 —— 用的是同一套闭式解，只是把那个横着的形状整体转 90°。
+/// **竖直**的两半径胶囊 —— 用的是同一套闭式解，但收尾是**纵向拉伸**，不是旋转。
 ///
-/// 重推一遍外公切线（把 x/y 换过来）容易在符号上出错，转置则天然精确。而且转出来的
-/// 是**一条闭合子路径** —— 原先那版 `addOval × 2 + addRect` 是三条，填色没问题，
-/// **描边会把内部接缝也画出来**（四层光谱全是描边）。
+/// ⚠️ **别改成「整体转 90°」。** 转过之后局部坐标的「左右两端」会落到屏幕的上下
+/// 两头去 —— 于是「头大尾轻」变成「上大下小」。用户 2026-10-01 把这一条说得很死：
+/// 「头重脚轻肯定不能是上下的，肯定要左右」。**拉伸**则两样都保住：先在横着的坐标系
+/// 里按**目标宽**搭一枚两半径胶囊（前后缘还在左右），再把它纵向拉长到目标高。
 ///
-/// [rTop] 收 `leftRadius`、[rBot] 收 `rightRadius`：转过去之后，局部坐标的「左端」
-/// 落在屏幕的**上端**。于是向右拖时（前缘在右、后缘在左）读作「下大上小」。
-Path _verticalTwoRadius({
+/// 落在屏幕上就是「两枚高低不同的椭圆 + 外公切线」：静止（两半径相等）时是一枚
+/// **竖着的椭圆**，拖动时一端粗一端细 —— 上下拉长与左右头重脚轻同时成立。
+///
+/// 另一条好处：线性拉伸出来的路径 `getBounds()` 是紧的（旋转那版会松一截 —— 同一份
+/// 构造在**横向**档上也是松的，见 `test/liquid_lens_vertical_test.dart` 的说明）。
+Path _verticalStretched({
   required double centerX,
   required double cy,
   required double w,
   required double h,
-  required double rTop,
-  required double rBot,
+  required double rl,
+  required double rr,
 }) {
-  // 局部坐标系里「宽 = 转过去之后的高、高 = 转过去之后的宽」。
-  final double len = h;
-  final double thick = w;
-  final double cx0 = len / 2;
-  final double cy0 = thick / 2;
-  final Offset c1 = Offset(cx0 - len / 2 + rTop, cy0);
-  final Offset c2 = Offset(cx0 + len / 2 - rBot, cy0);
+  // 局部坐标系：**竖直中轴在 y = 0**（这样拉伸之后才不用再挪一次），横向铺满 [0, w]。
+  final Offset c1 = Offset(rl, 0);
+  final Offset c2 = Offset(w - rr, 0);
   // ⚠️ **圆心距要钳一个正的下限。** 两个**等半径**的圆、圆心距又恰好等于 `2r` 时
-  // （形状是个正圆）`d = 0`，而 `(rTop − rBot) / d` 就是 `0 / 0`。钳住之后
+  // （局部是个正圆）`d = 0`，而 `(rl − rr) / d` 就是 `0 / 0`。钳住之后
   // `mx = 0`、`my = 1`、`theta = π/2`：外公切线是一条竖直线、两端圆弧各扫 π ——
   // 精确，也不碰 `arcTo` 扫过 2π 那个坑（见 `toPath()` 顶上那段）。
   final double d = math.max(0.01, c2.dx - c1.dx);
-  final double mx = ((rTop - rBot) / d).clamp(-1.0, 1.0);
+  final double mx = ((rl - rr) / d).clamp(-1.0, 1.0);
   final double my = math.sqrt(math.max(0.0, 1 - mx * mx));
   final double theta = math.atan2(my, mx);
 
   final Path p = Path()
-    ..moveTo(c1.dx + rTop * mx, cy0 - rTop * my)
-    ..lineTo(c2.dx + rBot * mx, cy0 - rBot * my)
-    ..arcTo(Rect.fromCircle(center: c2, radius: rBot), -theta, 2 * theta, false)
-    ..lineTo(c1.dx + rTop * mx, cy0 + rTop * my)
-    ..arcTo(Rect.fromCircle(center: c1, radius: rTop), theta,
+    ..moveTo(c1.dx + rl * mx, -rl * my)
+    ..lineTo(c2.dx + rr * mx, -rr * my)
+    ..arcTo(Rect.fromCircle(center: c2, radius: rr), -theta, 2 * theta, false)
+    ..lineTo(c1.dx + rl * mx, rl * my)
+    ..arcTo(Rect.fromCircle(center: c1, radius: rl), theta,
         2 * (math.pi - theta), false)
     ..close();
 
-  // 局部 (x, y) → 屏幕 (centerX − (y − cy0), cy + (x − cx0))
+  // 纵向拉长到目标高，再搬到透镜中心。局部 (x, y) → 屏幕
+  // (centerX − w/2 + x, cy + sy·y)。
+  final double capV = math.max(rl, rr);
+  final double sy = h / (2 * capV);
   return p.transform(Float64List.fromList(<double>[
-    0, 1, 0, 0, //
-    -1, 0, 0, 0, //
+    1, 0, 0, 0, //
+    0, sy, 0, 0, //
     0, 0, 1, 0, //
-    centerX + cy0, cy - cx0, 0, 1,
+    centerX - w / 2, cy, 0, 1,
   ]));
 }
 

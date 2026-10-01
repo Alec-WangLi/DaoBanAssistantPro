@@ -71,27 +71,48 @@ void main() {
 
   test('竖直档的**轮廓本身**读前缘/后缘：细的那一头真的更窄', () {
     // 只断言 `leftRadius != rightRadius` 是不够的 —— 那两个 getter 在改之前就是对的，
-    // **是 `toPath()` 没用它们**。所以这里探路径本身。
-    // （否则有人把子路径数「修」成一条**对称**的闭合轮廓，头大尾轻会静悄悄地没了。）
+    // **是 `toPath()` 没用它们**。所以这里探路径本身：
+    // 两半径不等时轮廓**不可能**是左右镜像的。
+    //
+    // ⚠️ 收尾必须是**纵向拉伸**而不是旋转 —— 旋转会把前后缘搬到上下两头，
+    // 于是「头大尾轻」变成「上大下小」，而用户要的是左右（见 `_verticalStretched`）。
     final s = vertical(stretch: 1, velocity: AppTokens.lensVelocityRef);
     expect(s.width, lessThan(s.height), reason: '这一档本该是竖直的');
     expect(s.leftRadius, lessThan(s.rightRadius),
-        reason: '向右拖 → 后缘在上、前缘在下');
+        reason: '向右拖 → 后缘在左、前缘在右');
 
-    // 离两端各 8px、离中轴 10px 的两个镜像点。上端半径 9.1（细）、下端 14（粗），
-    // 于是上面那个在轮廓外、下面那个在轮廓里。改之前两端的半径都是 14，两个都在里面。
-    final p = s.toPath();
-    final double dx = s.centerX + 10;
-    expect(p.contains(Offset(dx, s.centerY - s.height / 2 + 8)), isFalse,
-        reason: '细的那一头在 (±10, 离端 8) 处仍是实心 —— 轮廓没读前后缘');
-    expect(p.contains(Offset(dx, s.centerY + s.height / 2 - 8)), isTrue,
-        reason: '粗的那一头该在同样的位置仍是实心');
+    final Path p = s.toPath();
+    // 中轴两侧**等高**的两个点：粗的那一头（前缘在右）在这个高度还是实的，
+    // 细的那一头已经收进去了。改之前两端半径相等、轮廓左右镜像，两个都在里面。
+    final double dx = s.width * 0.43;
+    final double dy = s.height * 0.26;
+    expect(p.contains(Offset(s.centerX + dx, s.centerY + dy)), isTrue,
+        reason: '粗的那一头在这个高度该还是实的');
+    expect(p.contains(Offset(s.centerX - dx, s.centerY + dy)), isFalse,
+        reason: '轮廓左右镜像 —— 它没读前后缘（还是等半径那两个圆）');
+
+    // 向左拖镜像过来。
+    final LiquidLensShape mirror =
+        vertical(stretch: 1, velocity: -AppTokens.lensVelocityRef);
+    final Path mp = mirror.toPath();
+    expect(mp.contains(Offset(mirror.centerX - dx, mirror.centerY + dy)), isTrue);
+    expect(mp.contains(Offset(mirror.centerX + dx, mirror.centerY + dy)),
+        isFalse);
   });
 
-  test('竖直档：两半径相等时精确退化成胶囊（与横向档同一条性质）', () {
+  test('竖直档：两半径相等时是一枚**左右对称的竖椭圆**', () {
     final s = vertical();
     expect(s.leftRadius, closeTo(s.rightRadius, 0.001));
-    expect(s.leftRadius, closeTo(s.width / 2, 0.001));
+    final Path p = s.toPath();
+    final Rect b = p.getBounds();
+    expect(b.width, closeTo(s.width, 0.5), reason: '包围盒宽不等于 width');
+    expect(b.height, closeTo(s.height, 0.5), reason: '包围盒高不等于 height');
+    for (final double dy in <double>[-12, -6, 0, 6, 12]) {
+      final double y = s.centerY + dy;
+      expect(p.contains(Offset(s.centerX - 8, y)),
+          p.contains(Offset(s.centerX + 8, y)),
+          reason: 'dy=$dy 处左右不对称 —— 两半径相等却不是镜像的');
+    }
   });
 
   test('宽 == 高（正圆那一档）不塌：路径非空、面积 > 0、中心在里面', () {

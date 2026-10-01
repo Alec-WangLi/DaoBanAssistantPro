@@ -275,6 +275,54 @@ void main() {
     );
   });
 
+  // ④b 开关 · 液态 · **按住 → 拖动 → 松手**（「头大尾轻」的完整过程）。
+  //
+  //    与 ④ 是故意的配对：按住不动时形变恒为 0，光看 ④ 根本不知道形状会不会变 ——
+  //    而 2026-10-01 这一轮争的正是「拖动时到底有没有头大尾轻」。
+  //
+  //    ⚠️ **拖动距离必须先走掉 `kTouchSlop`（18px）**：识别器赢下竞技场之前那 18px
+  //    是空走的，而这条轨道一共只有 56 宽、钮只能走 25px。本轮第一版每帧只走 3px、
+  //    六帧才 18px，识别器压根没收下这次拖动，两帧逐字节相同。
+  //    出帧必须 16ms（弹簧每帧积分封顶在 `lensMaxStep`），合成用 `--fps 62`。
+  for (final ({String suffix, Brightness brightness}) v in _modes) {
+    testWidgets('开关 · 液态 · 按住拖到另一端 · ${v.suffix}',
+        (WidgetTester tester) async {
+      useLiquidGlassTier();
+      late TestGesture gesture;
+      bool released = false;
+      await renderFrames(
+        tester,
+        prefix: 'switch_drag_${v.suffix}_',
+        home: const _SwitchGifHost(),
+        overrides: const <Override>[],
+        brightness: v.brightness,
+        count: 100,
+        step: const Duration(milliseconds: 16),
+        onFrame: (WidgetTester t, int i) async {
+          if (i == 0) {
+            final Rect box = t.getRect(find.byType(GlassSwitch).last);
+            gesture =
+                await t.startGesture(Offset(box.right - 8, box.center.dy));
+            addTearDown(() {
+              if (!released) return gesture.up();
+              return Future<void>.value();
+            });
+            await t.pump(const Duration(milliseconds: 16));
+          } else if (i <= 24) {
+            // 按住 ~380ms：过按住闸门，钮纵向提起来
+          } else if (i == 25) {
+            await gesture.moveBy(const Offset(-18, 0)); // 走掉 kTouchSlop
+          } else if (i <= 37) {
+            await gesture.moveBy(const Offset(-2, 0)); // 125px/s，拖满那一格
+          } else if (i == 62) {
+            await gesture.up();
+            released = true;
+          }
+        },
+      );
+    });
+  }
+
   // ⑤ 待办打勾 · 标准档 / 液态档。
   //
   //    用户 2026-10-01：「我看别的设计语言都是用打勾的样式……弄完之后打勾，给一个
