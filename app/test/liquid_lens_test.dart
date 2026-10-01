@@ -1281,6 +1281,33 @@ void main() {
       expect(sh.leftRadius, closeTo(21 / 2, 0.01));
       expect(sh.toPath().getBounds().height, closeTo(36, 0.01));
     });
+
+    test('四个角恒为 cornerR —— 满形变下也不收后缘（不然会露月牙）', () {
+      // 胶囊那族的「后缘半径 ×(1−0.35·stretch)」是给端头用的；圆角方上收半径只是
+      // 把一个角磨尖，而它必须与卡片的 radiusM 逐像素对齐 —— 差一档就是那两个角
+      // 各露出一条月牙（v0.7.3 真机反馈的那一类）。
+      final LiquidLensShape sh = LiquidLensShape.of(
+          itemW: 52,
+          capsuleH: 85,
+          pad: 2,
+          centerPage: 0,
+          lift: 1,
+          velocity: 600,
+          stretch: 1, // 满形变：胶囊那支这一档会把后缘半径打到 65%
+          cornerR: 16);
+      final Rect b = sh.toPath().getBounds();
+      // 半径 16 的 45° 点离角 4.69；半径 10.4（= 16×0.65）的离角 3.05 —— 取中间的 3.9。
+      const double d = 3.9;
+      for (final Offset p in <Offset>[
+        Offset(b.left + d, b.top + d),
+        Offset(b.right - d, b.top + d),
+        Offset(b.right - d, b.bottom - d),
+        Offset(b.left + d, b.bottom - d),
+      ]) {
+        expect(sh.toPath().contains(p), isFalse,
+            reason: '有一个角比 cornerR 小 —— 它会与卡片的圆角对不上');
+      }
+    });
   });
 
   // ── 形变分横纵两份 ──────────────────────────────────────────────────────

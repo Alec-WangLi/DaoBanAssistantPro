@@ -314,7 +314,7 @@ class LiquidLensShape {
     // `cornerR = ∞`（今天那四个调用点）时 `2·_cap == min(高,宽)`，这条**永不进**。
     if (2 * _cap < math.min(width, height) - 0.01) {
       return _roundedRect(
-          centerX: centerX, cy: cy, w: width, h: height, rl: rl, rr: rr);
+          centerX: centerX, cy: cy, w: width, h: height, rad: _cap);
     }
 
     // **退化档：`宽 <= 高`**（独立审查抓出来的 Critical）。
@@ -585,31 +585,31 @@ Path _lensPath(LiquidLensShape shape, Offset origin) =>
 /// 与 [toPath] 另两条的差别是它**不受 `宽 <= 高` 的限制** —— 圆角方本来就允许
 /// 高比宽大（日历的格子正是 52 × 81）。
 ///
-/// 两端半径 [rl] / [rr] 可以不等：那就是「后缘收细」在圆角方上的样子。
-/// （⚠️ 只在半径**远小于**半高时才看得出来；胶囊那族之所以明显，是因为它的半径
-/// 就是半高。日历那块头部收细最终**没做**，理由见规格 §9。）
+/// ⚠️ **四个角共用一个半径，不收后缘。** 胶囊那族的「后缘半径 ×(1−0.35·stretch)」
+/// 是给**端头**用的（那里的半径就是半高，收一点就看得出来）；圆角方上收半径只是
+/// 把一个角磨尖，而它**必须与卡片的 `radiusM` 逐像素对齐** —— 差一档就是那两个角
+/// 各露出一条月牙（v0.7.3 真机反馈的那一类）。
 Path _roundedRect({
   required double centerX,
   required double cy,
   required double w,
   required double h,
-  required double rl,
-  required double rr,
+  required double rad,
 }) {
   final double l = centerX - w / 2;
   final double r = centerX + w / 2;
   final double t = cy - h / 2;
   final double b = cy + h / 2;
   return Path()
-    ..moveTo(l + rl, t)
-    ..lineTo(r - rr, t)
-    ..arcToPoint(Offset(r, t + rr), radius: Radius.circular(rr))
-    ..lineTo(r, b - rr)
-    ..arcToPoint(Offset(r - rr, b), radius: Radius.circular(rr))
-    ..lineTo(l + rl, b)
-    ..arcToPoint(Offset(l, b - rl), radius: Radius.circular(rl))
-    ..lineTo(l, t + rl)
-    ..arcToPoint(Offset(l + rl, t), radius: Radius.circular(rl))
+    ..moveTo(l + rad, t)
+    ..lineTo(r - rad, t)
+    ..arcToPoint(Offset(r, t + rad), radius: Radius.circular(rad))
+    ..lineTo(r, b - rad)
+    ..arcToPoint(Offset(r - rad, b), radius: Radius.circular(rad))
+    ..lineTo(l + rad, b)
+    ..arcToPoint(Offset(l, b - rad), radius: Radius.circular(rad))
+    ..lineTo(l, t + rad)
+    ..arcToPoint(Offset(l + rad, t), radius: Radius.circular(rad))
     ..close();
 }
 
