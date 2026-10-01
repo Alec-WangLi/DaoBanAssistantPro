@@ -116,6 +116,7 @@ class LiquidLensShape {
     required this.motion,
     required this.movingRight,
     required this.rimScale,
+    required this.cornerR,
   });
 
   /// 从手势状态算出这一帧的形状。
@@ -141,6 +142,7 @@ class LiquidLensShape {
     double? stretch,
     double? motion,
     LiquidLensMetrics? metrics,
+    double cornerR = double.infinity,
   }) {
     // 两个外扩量是**每个面各自的观感**（见 `LiquidLensMetrics` 的说明）。不给时用
     // 底栏那档的常量 —— 那正是抽共享件之前的行为，所以既有调用点的渲染一个像素都不变。
@@ -178,6 +180,7 @@ class LiquidLensShape {
       motion: glow,
       movingRight: velocity > 0,
       rimScale: m.rimScale,
+      cornerR: cornerR,
     );
   }
 
@@ -209,6 +212,19 @@ class LiquidLensShape {
   /// 1.0 = 底栏那一档，也就是那四个宽度被量出来的尺子。
   final double rimScale;
 
+  /// **四角的圆角半径上限**。默认 `double.infinity` = 今天的行为（半径取到
+  /// `min(高, 宽) / 2`，也就是一枚胶囊）。
+  ///
+  /// 给它一个比 `min(高, 宽) / 2` **小**的值，形状就从「胶囊」变成一枚**圆角方**
+  /// （四角是真正的圆，不是被纵向拉长的椭圆）—— 日历那枚选中块要的正是这个：
+  /// 它是格子（`radiusM` = 16），而不是一枚躺着的药丸。
+  ///
+  /// 给了也不一定走得到：`cornerR` 比半宽还大时（小窗 200×400 的格宽只有 21）
+  /// 四角会互相吞掉，那时 `_cap` 把它钳回来、退回胶囊那两支 —— 形状仍然合法。
+  ///
+  /// 四个既有调用点都不传它，于是走的还是那两条老分支，**逐像素不变**。
+  final double cornerR;
+
   /// 竖直中轴。透镜与胶囊**共用**这一条。
   double get centerY => capsuleH / 2;
 
@@ -225,7 +241,11 @@ class LiquidLensShape {
   ///
   /// 顺带一个好处：`leftRadius + rightRadius <= min(高, 宽) <= 宽` **恒成立**，
   /// 因此不需要另外再做一次钳制，也不存在「圆重叠」这个失败态。
-  double get _cap => math.min(height, width) / 2;
+  ///
+  /// [cornerR] 比 `min(高, 宽) / 2` 小时取它 —— 那时四角不再相接，形状可以走
+  /// [toPath] 的**圆角方**那一支（真圆角，不是被拉长的椭圆）。
+  double get _cap =>
+      math.min(cornerR, math.min(height, width) / 2);
 
   /// 前缘半径（运动方向上那一端）与后缘半径。
   ///
@@ -268,6 +288,17 @@ class LiquidLensShape {
     final Offset c1 = Offset(centerX - width / 2 + rl, cy);
     final Offset c2 = Offset(centerX + width / 2 - rr, cy);
     final double d = c2.dx - c1.dx;
+
+    // **圆角方档**（`cornerR` 给了个比半高小的值）：四角不相接，形状本来就
+    // 不是胶囊 —— 直接按两个圆角半径搭一枚圆角方，四角是**真正的圆**。
+    //
+    // 走下面那两条老分支都不对：竖直那支会把半径**纵向拉长**成椭圆，贴在一张
+    // `radiusM` 的卡片上，四角差那两三像素就够读成「没对齐」。
+    // `cornerR = ∞`（今天那四个调用点）时 `2·_cap == min(高,宽)`，这条**永不进**。
+    if (2 * _cap < math.min(width, height) - 0.01) {
+      return _roundedRect(
+          centerX: centerX, cy: cy, w: width, h: height, rl: rl, rr: rr);
+    }
 
     // **退化档：`宽 <= 高`**（独立审查抓出来的 Critical）。
     //
@@ -529,6 +560,41 @@ class _LensEdgePainter extends CustomPainter {
 /// 观感就是「一圈描边糊在轮廓外」。
 Path _lensPath(LiquidLensShape shape, Offset origin) =>
     shape.toPath().shift(origin);
+
+/// **圆角方**（四角是真正的圆）—— 给 `cornerR` 比半高小的那些面用。
+///
+/// 与横向那支的闭式解**等价**（两个半径 r 的圆 + 平行于中轴的外公切线 = 圆角方），
+/// 但这里直接按四段弧 + 四条直边搭：看得清，也不必再处理「切线塌成竖线」那类退化。
+/// 与 [toPath] 另两条的差别是它**不受 `宽 <= 高` 的限制** —— 圆角方本来就允许
+/// 高比宽大（日历的格子正是 52 × 81）。
+///
+/// 两端半径 [rl] / [rr] 可以不等：那就是「后缘收细」在圆角方上的样子。
+/// （⚠️ 只在半径**远小于**半高时才看得出来；胶囊那族之所以明显，是因为它的半径
+/// 就是半高。日历那块头部收细最终**没做**，理由见规格 §9。）
+Path _roundedRect({
+  required double centerX,
+  required double cy,
+  required double w,
+  required double h,
+  required double rl,
+  required double rr,
+}) {
+  final double l = centerX - w / 2;
+  final double r = centerX + w / 2;
+  final double t = cy - h / 2;
+  final double b = cy + h / 2;
+  return Path()
+    ..moveTo(l + rl, t)
+    ..lineTo(r - rr, t)
+    ..arcToPoint(Offset(r, t + rr), radius: Radius.circular(rr))
+    ..lineTo(r, b - rr)
+    ..arcToPoint(Offset(r - rr, b), radius: Radius.circular(rr))
+    ..lineTo(l + rl, b)
+    ..arcToPoint(Offset(l, b - rl), radius: Radius.circular(rl))
+    ..lineTo(l, t + rl)
+    ..arcToPoint(Offset(l + rl, t), radius: Radius.circular(rl))
+    ..close();
+}
 
 /// **竖直**的两半径胶囊 —— 用的是同一套闭式解，但收尾是**纵向拉伸**，不是旋转。
 ///

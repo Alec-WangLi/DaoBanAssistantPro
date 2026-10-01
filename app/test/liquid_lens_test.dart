@@ -1223,4 +1223,63 @@ void main() {
           findsNothing);
     });
   });
+
+  // ── 日历那枚选中块要的形状：圆角方，而不是胶囊 ────────────────────────────
+  //
+  // 这一族到今天只会画「半径 = min(高, 宽)/2」的胶囊。日历的格子是 52 × 81 的
+  // **圆角方**（半径 16）—— 半径远小于半高，所以必须另开一支；直接套胶囊那一支
+  // 会画成一枚竖着的椭圆，贴在 `radiusM` 的卡片上四角对不上。
+  //
+  // 三条自证缺一不可：默认值不许变（既有四处逐像素不变靠它）、给了就走新支、
+  // 给的太大时要自动退回老支（小窗的格宽只有 21 —— 那里连圆角方都画不出来）。
+  group('圆角方那一支（cornerR）', () {
+    LiquidLensShape s({double cornerR = double.infinity}) => LiquidLensShape.of(
+        itemW: 52,
+        capsuleH: 85,
+        pad: 2,
+        centerPage: 0,
+        lift: 0,
+        velocity: 0,
+        stretch: 0,
+        cornerR: cornerR);
+
+    test('不给 cornerR：还是今天那枚胶囊（半径 = min(高,宽)/2）', () {
+      expect(s().leftRadius, closeTo(26, 0.01)); // min(81, 52) / 2
+    });
+
+    test('给了 cornerR：端头半径就是它，轮廓是那个矩形', () {
+      final LiquidLensShape sh = s(cornerR: 16);
+      expect(sh.leftRadius, closeTo(16, 0.01));
+      final Rect b = sh.toPath().getBounds();
+      expect(b.width, closeTo(52, 0.01));
+      expect(b.height, closeTo(81, 0.01));
+    });
+
+    test('圆角方那一支的四角是**真圆**（不是被纵向拉长的椭圆）', () {
+      final LiquidLensShape sh = s(cornerR: 16);
+      final Rect b = sh.toPath().getBounds();
+      // 45° 那一点：真圆的角上落在 (r(1−1/√2), r(1−1/√2))；
+      // 而竖直档那一支会把半径 26 纵向拉成 40.5，同一个角落在 (4.7, 11.9)
+      // —— 差 2.9px，用 0.6 的容差分得开。
+      final double k = 16 * (1 - math.sqrt(2) / 2);
+      final Offset p = Offset(b.left + k, b.top + k);
+      expect(sh.toPath().contains(p + const Offset(0.6, 0.6)), isTrue,
+          reason: '圆角内侧那一点应当在轮廓里 —— 不在说明角被拉成了椭圆');
+      expect(sh.toPath().contains(p - const Offset(0.6, 0.6)), isFalse,
+          reason: '圆角外侧那一点应当在轮廓外');
+    });
+
+    test('cornerR 比半宽还大时自动退回胶囊那支（小窗的格宽只有 21）', () {
+      final LiquidLensShape sh = LiquidLensShape.of(
+          itemW: 21,
+          capsuleH: 40,
+          pad: 2,
+          centerPage: 0,
+          lift: 0,
+          velocity: 0,
+          cornerR: 16);
+      expect(sh.leftRadius, closeTo(21 / 2, 0.01));
+      expect(sh.toPath().getBounds().height, closeTo(36, 0.01));
+    });
+  });
 }
