@@ -1282,4 +1282,40 @@ void main() {
       expect(sh.toPath().getBounds().height, closeTo(36, 0.01));
     });
   });
+
+  // ── 形变分横纵两份 ──────────────────────────────────────────────────────
+  //
+  // 日历那枚块是**二维**走的（上下左右都是相邻的格子），所以「沿运动方向拉长、
+  // 垂直于运动方向收细」要按分量各算各的。今天只有横向那一份：纵向那一份**只会
+  // 被压扁、从不被拉长**。`stretchY` 不给时取 0，两条算式逐字退回今天 ——
+  // 这是既有四处逐像素不变的可断言形式。
+  group('纵向形变（stretchY）', () {
+    LiquidLensShape s({required double sx, double? sy}) => LiquidLensShape.of(
+        itemW: 88,
+        capsuleH: 64,
+        pad: 10,
+        centerPage: 0,
+        lift: 1,
+        velocity: 0,
+        stretch: sx,
+        stretchY: sy,
+        metrics: const LiquidLensMetrics(
+            protrude: 10, liftWidth: 10, rimScale: 1));
+
+    test('不给 stretchY：宽高与今天逐字相同', () {
+      final LiquidLensShape sh = s(sx: 1);
+      expect(sh.width, closeTo(88 * (1 + AppTokens.lensStretch) + 10, 0.001));
+      expect(sh.height, closeTo(44 * (1 - AppTokens.lensSquash) + 20, 0.001));
+    });
+
+    test('纵向那一份独立：给 vy 时高变高、宽变窄，且不影响横向那一条', () {
+      final LiquidLensShape x = s(sx: 1, sy: 0);
+      final LiquidLensShape y = s(sx: 0, sy: 1);
+      expect(x.width, greaterThan(y.width), reason: '横着拖那份没有拉宽');
+      expect(y.height, greaterThan(x.height), reason: '竖着拖那份没有拉高');
+      // 交叉项：横向那一份也会把高压矮、纵向那份也会把宽收窄（面积近似守恒）。
+      expect(y.width, lessThan(88 + 10));
+      expect(x.height, lessThan(44 + 20));
+    });
+  });
 }

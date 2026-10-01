@@ -129,6 +129,10 @@ class LiquidLensShape {
   /// [motion] 是光谱环／光晕的门 0..1。同样：不给就按瞬时速度现推，给了就用它 ——
   /// 底栏那条**弹簧驱动**的渐入渐出走这条（用户 2026-10-01：「彩边出现得太突然了」）。
   ///
+  /// [stretchY] 是**纵向**那一份形变 0..1，与 [stretch]（横向）配对。不给 = 0，
+  /// 于是宽高两条算式逐字退回今天的样子（今天只有横向拉伸 + 纵向压扁）。
+  /// 日历那枚块是**二维**走的（上下左右都是相邻的格子），所以按速度分量各拉各的。
+  ///
   /// **这几个量必须分开**：形变要跟速度走（那是头大尾小），环的门要「一动就满」，
   /// 而亮度要有渐入渐出。拿同一个量喂三处就只能三选一 —— 而用户三轮说的正是
   /// 这三件事。
@@ -140,6 +144,7 @@ class LiquidLensShape {
     required double lift,
     required double velocity,
     double? stretch,
+    double? stretchY,
     double? motion,
     LiquidLensMetrics? metrics,
     double cornerR = double.infinity,
@@ -156,25 +161,37 @@ class LiquidLensShape {
     // 在这条路上就自相矛盾了）。
     final double s = (stretch ?? (velocity.abs() / m.velocityRef))
         .clamp(0.0, 1.0);
+    // 纵向那一份形变。**不给 = 0** —— 于是下面那两条算式逐字退回今天的样子
+    // （今天只有横向拉伸 + 纵向压扁，没有任何纵向拉长）。日历那枚块是二维走的，
+    // 按速度分量各拉各的。
+    final double sy = (stretchY ?? 0).clamp(0.0, 1.0);
     // 光谱环的门：**「动不动」，不是「多快」**（用户 2026-10-01：「一动就直接达到
     // 满效果」）。60px/s 就封顶，那以下按比例淡入只是为了慢速收尾时不眨一下。
     final double glow =
         (motion ?? (velocity.abs() / AppTokens.lensRingFullSpeed))
             .clamp(0.0, 1.0);
+    // 外扩与形变都**加在/乘在基准尺寸上，不互相乘** —— 见下面 height 的说明。
+    // 两个外扩量来自 [m]：底栏取「横向与纵向同量级」（纵横一起长才读得出体积），
+    // 而开关取 `liftWidth: 0` —— 只长个儿不变宽（iOS 26 那种形状变化）。
+    //
+    // 横纵各一份形变：**沿运动方向拉长、垂直于运动方向收细**（面积近似守恒）。
+    // `sy` 不给时两条算式逐字退回今天的样子。
+    final double w = itemW *
+            (1 + AppTokens.lensStretch * s - AppTokens.lensSquash * sy) +
+        m.liftWidth * lift;
+    // ⚠️ **凸出必须加在「压扁之后」的基准上，不许乘进形变里。**
+    //
+    // 原式 `(基准 + 2·凸出·lift) × (1 − 0.12·s)` 把压扁乘在了凸出上：lift=1 /
+    // 700px/s 时高 63.4，而胶囊高 64 —— 透镜整个沉回胶囊里面，按住拖动时
+    // 「一枚浮起来的玻璃滴」直接掉回「一枚躺着药丸」。**「按住」这个动作的全部
+    // 读感就在那零点几个像素上。** 实测见 `test/liquid_lens_test.dart` 的扫描。
+    final double h = (capsuleH - 2 * pad) *
+            (1 + AppTokens.lensStretch * sy - AppTokens.lensSquash * s) +
+        2 * m.protrude * lift;
     return LiquidLensShape._(
       centerX: pad + (centerPage + 0.5) * itemW,
-      // 外扩与形变都**加在/乘在基准尺寸上，不互相乘** —— 见下面 height 的说明。
-      // 两个外扩量来自 [m]：底栏取「横向与纵向同量级」（纵横一起长才读得出体积），
-      // 而开关取 `liftWidth: 0` —— 只长个儿不变宽（iOS 26 那种形状变化）。
-      width: itemW * (1 + AppTokens.lensStretch * s) + m.liftWidth * lift,
-      // ⚠️ **凸出必须加在「压扁之后」的基准上，不许乘进形变里。**
-      //
-      // 原式 `(基准 + 2·凸出·lift) × (1 − 0.12·s)` 把压扁乘在了凸出上：lift=1 /
-      // 700px/s 时高 63.4，而胶囊高 64 —— 透镜整个沉回胶囊里面，按住拖动时
-      // 「一枚浮起来的玻璃滴」直接掉回「一枚躺着药丸」。**「按住」这个动作的全部
-      // 读感就在那零点几个像素上。** 实测见 `test/liquid_lens_test.dart` 的扫描。
-      height: (capsuleH - 2 * pad) * (1 - AppTokens.lensSquash * s) +
-          2 * m.protrude * lift,
+      width: w,
+      height: h,
       capsuleH: capsuleH,
       stretch: s,
       motion: glow,
