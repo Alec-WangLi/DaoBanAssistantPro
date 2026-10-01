@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.10\n'
+const String _changelogZh = 'v0.10.11\n'
+    '· 长按滑块之后手指上下滑动页面，滑块不再定格在放大那一刻（之前要再点一下才恢复）\n'
+    '· 修好滑块边缘的彩色折射：它之前会画进滑块里面（几道横线和弧线），现在只贴着轮廓\n'
+    '· 开关按住时改成上下拉长（之前是个大圆），拖动时一端粗一端细、跟着拖动方向\n'
+    '· 修好滑块附近那一小段「边缘发光」——底栏与分段器的玻璃边不再有一段莫名更亮\n'
+    '· 在滑块上按下之后滑走（取消这次点按），滑块会回到原来的位置，不再停在手指按下的那一格\n\n'
+    'v0.10.10\n'
     '· 待办事项改用打勾（之前是一枚开关）：勾上之后标题划掉、变浅，再点一下取消\n'
     '· 滑块扫过分段器（主题模式 / 主色调 / 语言）时，文字会像透过玻璃边看一样被挤一下\n'
     '· 开关重做：长了一点（56 × 30），钮改成与别处同一枚主色玻璃滴，按住时上下左右一起长\n'
@@ -98,14 +104,16 @@ const String _changelogZh = 'v0.10.10\n'
     '· 修好几处光加错了地方：待办、闹钟列表的每一行都被描了一圈边（那些行本来就没有模糊）\n'
     '· 使用帮助弹窗底下不再多出一截空白（按钮真正浮在正文上）\n'
     '· 深色下底栏选中那一格的白字对比度回到达标\n\n'
-    'v0.10.1\n'
-    '· 「我的 → 外观」里那颗「高级材质」换成了「液态玻璃」，默认关。打开之后玻璃边缘带上一层光；底栏的选中滑块与开关在你按住时鼓起成一枚透镜 —— 玻璃件凸出容器之外，光才有边可落\n'
-    '· 关掉就是现在这个样子（磨砂玻璃），只是名字与说明跟着改了\n'
-    '· 内存小于 4GB 的机器一律保持关闭\n\n'
 
 ;
 
-const String _changelogEn = 'v0.10.10\n'
+const String _changelogEn = 'v0.10.11\n'
+    '· Long-pressing a slider and then scrolling the page no longer freezes it mid-enlargement (it used to need another tap to recover)\n'
+    '· Fixed the coloured refraction on the switch: it used to be drawn inside the knob (stray lines and arcs) and now hugs the outline\n'
+    '· Holding the switch now stretches it vertically instead of turning it into a big circle, and dragging tapers it along the direction of travel\n'
+    '· Fixed the odd bright patch on the glass edge near the slider (tab bar and segmented controls)\n'
+    '· Cancelling a press on a slider (press, then slide away) returns it to where it was instead of stranding it under your finger\n\n'
+    'v0.10.10\n'
     '· To-dos now use a checkmark instead of a switch: tick it and the title is struck through and dimmed; tap again to undo\n'
     '· When the pill sweeps across a segmented control (theme mode, accent colour, language) the label is squeezed, as if seen through the glass edge\n'
     '· The switch was redone: a little longer (56 × 30), its knob is now the same accent glass droplet as everywhere else, and holding grows it in both directions\n'
@@ -163,10 +171,6 @@ const String _changelogEn = 'v0.10.10\n'
     '· Fixed several places where the rim landed on rows that are not glass at all (the todo and alarm lists were outlined row by row)\n'
     '· The help dialog no longer leaves a gap below its text — the button now really floats over it\n'
     '· White text on the selected tab meets contrast requirements again in dark mode\n\n'
-    'v0.10.1\n'
-    '· "Advanced material" in Me → Appearance is now "Liquid glass", off by default. Turn it on and the glass gains a lit rim; the tab bar\'s selection slider and the switch swell into a lens while you press them — they bulge out of the container, which is where the light finally has an edge to catch\n'
-    '· Off is exactly what you see today (frosted glass); only the name and the wording changed\n'
-    '· Devices with under 4GB of RAM always keep it off\n\n'
 
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
