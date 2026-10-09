@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'glass_nav_bar.dart';
 
 import '../../core/app_info.dart';
+import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
 import '../../data/app_repository.dart';
@@ -46,6 +49,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
     ProfileScreen(),
   ];
 
+  /// 快照推送的去抖句柄（见 [_scheduleWidgetPush]）。
+  Timer? _pushDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -63,18 +69,18 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _maybeAutoCheckUpdate();
       // 冷启动由桌面小组件拉起：读一次「要跳到哪天」。
       WidgetService.consumeLaunchDay();
-      // 首帧推一次快照，桌面上的卡片立刻与 App 对齐。
-      _pushWidgetSnapshot();
+      // 首帧推一次快照，桌面上的卡片立刻与 App 对齐（去抖之后 340ms 发出去）。
+      _scheduleWidgetPush();
     });
     AlarmService.ringingAlarm.addListener(_onRingingChanged);
     AlarmService.openTodoRequested.addListener(_onTodoRequested);
     // 排班数据与外观设置任一变化就重推快照 —— 这是「改完排班桌面立刻变」的那条路。
-    ref.listenManual(activeScheduleProvider, (_, __) => _pushWidgetSnapshot());
-    ref.listenManual(appSettingsProvider, (_, __) => _pushWidgetSnapshot());
+    ref.listenManual(activeScheduleProvider, (_, __) => _scheduleWidgetPush());
+    ref.listenManual(appSettingsProvider, (_, __) => _scheduleWidgetPush());
     // 待办变化也要重推：徽章上的「N 项待办」是快照里的一个数，而这条流
     // （eventsProvider）此前**没有任何推送触发** —— 勾掉一条待办之后桌面上的
     // 数字会一整天不动，直到改排班/改外观/下次冷启动。（冷启动那次重复推送无害。）
-    ref.listenManual(eventsProvider, (_, __) => _pushWidgetSnapshot());
+    ref.listenManual(eventsProvider, (_, __) => _scheduleWidgetPush());
     WidgetService.widgetLaunchRequested.addListener(_onWidgetDayRequested);
   }
 
@@ -120,6 +126,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     AlarmService.ringingAlarm.removeListener(_onRingingChanged);
     AlarmService.openTodoRequested.removeListener(_onTodoRequested);
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetDayRequested);
+    _pushDebounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -136,7 +143,24 @@ class _HomeShellState extends ConsumerState<HomeShell>
   /// 更新简介；而这里保证「打开了就该生效」，不让用户卡在一个没有出口的状态里。
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _pushWidgetSnapshot();
+    if (state == AppLifecycleState.resumed) _scheduleWidgetPush();
+  }
+
+  /// 快照推送的**尾去抖**。
+  ///
+  /// 触发点有五处（首帧、三个 provider、回前台），而一次「保存排班」会让好几个
+  /// provider 连着发 —— 逐个推就是连着构建 224 天、编码 48KB、跨好几次端。
+  /// 合并成一次即可；去抖窗口用 `durSlow`（340ms，界面层不许写时长字面量 ——
+  /// 借它只是因为这一档最接近，它在这里是**采样窗口**、不是过渡时长，
+  /// 与 `FlowingBackground._tick` 同一个理由）。
+  ///
+  /// ⚠️ **`dispose()` 里必须 cancel**：留着的话 widget 测试会报
+  /// 「A Timer is still pending after the widget tree was disposed」。
+  void _scheduleWidgetPush() {
+    _pushDebounce?.cancel();
+    _pushDebounce = Timer(AppTokens.durSlow, () {
+      if (mounted) _pushWidgetSnapshot();
+    });
   }
 
   void _onRingingChanged() {

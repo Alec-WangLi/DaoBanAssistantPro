@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/schedule_chain.dart';
+import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import 'widget_snapshot.dart';
 
@@ -32,24 +33,53 @@ class WidgetService {
   static final ValueNotifier<DateTime?> widgetLaunchRequested =
       ValueNotifier<DateTime?>(null);
 
+  /// 上一次**推成功**的那份内容指纹（`null` = 还没推过）。见 [push] 的说明。
+  static String? _lastPushedKey;
+
+  /// 清掉去重记忆。用例之间要隔离（它是模块级的）。
+  @visibleForTesting
+  static void resetPushCache() => _lastPushedKey = null;
+
   /// 把当前状态算成快照推给原生。
   ///
   /// 原生收到后会：落盘 → `updateAppWidget` 全部实例 → 重排下一次刷新闹钟。
   /// 所以「改完排班桌面立刻变」这件事，靠的就是这里被调到。
+  ///
+  /// **同一份内容不推第二次**：这个函数在首帧、每次回前台、排班变、外观变（含换
+  /// 主色）、勾一条待办时都会跑，而它同步构建 224 天、编码约 48KB JSON 再跨一次端。
+  /// 最常见的那次白付就是「回前台」—— 什么都没改，却整套重算 + 全量重渲染。
   static Future<void> push({
     required ScheduleChain? chain,
     required AppSettings settings,
     required int todayTodoCount,
   }) async {
+    final DateTime now = DateTime.now();
+    // 指纹取**输入**而不是 JSON：快照是
+    // (链, 窗口, 今天, 主题, 主色, 今日待办数) 的纯函数（见 `buildWidgetSnapshot`），
+    // 这六样一样不差地覆盖了它。直接比 JSON 是不行的 —— 里面带 `genAtMs`
+    // （生成时刻，毫秒），两次调用之间必然不同，等于永不命中。
+    final String key = <String>[
+      chain?.cacheKey ?? '-',
+      widgetWindow(now).from.millisecondsSinceEpoch.toString(),
+      dateOnly(now).millisecondsSinceEpoch.toString(),
+      settings.themeMode.name,
+      settings.accentColor.toARGB32().toString(),
+      todayTodoCount.toString(),
+    ].join('|');
+    if (key == _lastPushedKey) return;
     try {
       final json = jsonEncode(buildWidgetSnapshot(
         chain: chain,
-        now: DateTime.now(),
+        now: now,
         themeMode: settings.themeMode.name,
         accent: settings.accentColor.toARGB32(),
         todayTodoCount: todayTodoCount,
       ));
       await _channel.invokeMethod<bool>('widgetPushSnapshot', {'json': json});
+      // ⚠️ **只在推成功之后才记。** 失败也记的话，那条「装完新版先打开一次 App」的
+      // 兜底重试（回前台再推一次）就永远不会再试 —— 桌面会一直挂着升级前那一次的
+      // 渲染字节，而用户在界面上看不出任何异常。
+      _lastPushedKey = key;
     } catch (e) {
       // 小组件是锦上添花：没有它 App 一切照常，推失败不打扰用户、也不中断调用方
       // （它多半跑在 build 之后的后帧回调里）。

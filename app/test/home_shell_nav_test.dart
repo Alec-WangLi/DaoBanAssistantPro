@@ -19,6 +19,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 /// 有界推进若干帧。
@@ -68,6 +69,9 @@ void main() {
 
   setUp(() {
     L10n.locale = 'zh';
+    // 快照去重的「上一份」是模块级状态 —— 不清会漏给下一个用例（表现是这一条
+    // 的推送被上一条留下的键挡掉，而单跑这一条却是绿的）。
+    WidgetService.resetPushCache();
     // 引导与「版本更新」弹窗都不弹：它们会盖住整个界面。
     SharedPreferences.setMockInitialValues({
       'onboarded': true,
@@ -107,8 +111,13 @@ void main() {
   // 恢复正常」。根因是**数据只能由 App 算**（原生不查库），所以装完新版确实得先
   // 打开一次 App —— 这句会写进更新简介。但「我打开了、卡片却没变」不该是个死局：
   // 推快照是 fire-and-forget，失败只留一条日志（`WidgetService.push` 的 catch），
-  // 下一次触发可能要等到改排班或重启桌面。所以切回前台时再推一次，等于给一次重试。
-  testWidgets('从后台切回前台时再推一次小组件快照', (tester) async {
+  // 下一次触发可能要等到改排班或重启桌面。所以切回前台时**再算一次**，等于给一次重试。
+  //
+  // 2026-10-10 起「再算一次」与「再推一次」分了家：`push` 自己按**内容**去重
+  // （同一份内容不推第二遍 —— 回前台时什么都没改是常态，不该白付一次 224 天构建、
+  // 48KB 编码、跨端，以及原生侧全部实例的重渲染）。于是这一对用例钉**意图**的两头：
+  // 没变就不推、推失败才重试。
+  testWidgets('回前台会重算快照，但内容没变就不重复推', (tester) async {
     const channel = MethodChannel('com.daoban.shiftassistantpro/settings');
     final calls = <String>[];
     final messenger =
@@ -121,7 +130,8 @@ void main() {
 
     await _pumpShell(tester);
 
-    // 先退后台，再把计数器清了 —— 冷启动那次推送（首帧后）也已经发生，别把它算进来。
+    // 先退后台，再把计数器清了 —— 冷启动那几次推送也已经发生（首帧后 + 三个
+    // provider 到齐，后者被 340ms 尾去抖合并过），别把它们算进来。
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await _pumpFrames(tester, frames: 4);
     calls.clear();
@@ -129,8 +139,43 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await _pumpFrames(tester);
 
+    expect(calls.where((m) => m == 'widgetPushSnapshot'), isEmpty,
+        reason: '内容一个字节都没变，就不该再推 —— 去重省掉的正是这一份白付');
+
+    await _disposeShell(tester);
+  });
+
+  testWidgets('上一次推失败：回前台必须重试一次', (tester) async {
+    const channel = MethodChannel('com.daoban.shiftassistantpro/settings');
+    final calls = <String>[];
+    var failPush = true;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'widgetPushSnapshot' && failPush) {
+        throw PlatformException(code: 'boom');
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    // 首帧 + 三个 provider 那几次全失败（去重不许把失败的记成已推）
+    await _pumpShell(tester);
     expect(calls.where((m) => m == 'widgetPushSnapshot'), isNotEmpty,
-        reason: '切回前台要重推一次快照 —— 这是「打开过 App 卡片却没变」的兜底');
+        reason: '前提：冷启动那几次确实试过推');
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await _pumpFrames(tester, frames: 4);
+    calls.clear();
+    failPush = false;
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await _pumpFrames(tester);
+
+    expect(calls.where((m) => m == 'widgetPushSnapshot'), isNotEmpty,
+        reason: '上一次没推成功，回前台必须再试 —— 「我明明打开过 App，桌面却没变」'
+            '那条反馈的出口就在这里');
 
     await _disposeShell(tester);
   });
