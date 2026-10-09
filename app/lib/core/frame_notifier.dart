@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 /// 一个**可以静默写**的值通知源。
 ///
@@ -35,4 +36,62 @@ class FrameNotifier<T> extends ChangeNotifier implements ValueListenable<T> {
     if (next == _value) return;
     _value = next;
   }
+}
+
+/// 像 `ValueListenableBuilder`，但**每一次 build 都现读** [listenable] 的值。
+///
+/// 差别只有一个，而它是这一轮的地基：`ValueListenableBuilder` 把值**缓存在 State
+/// 里**、只靠 listener 刷新（Flutter 3.47 的 `value_listenable_builder.dart`：
+/// `late T value;` 只在 `_valueChanged` 里更新），于是 [FrameNotifier.publishSilently]
+/// 写进去的值它**看不到** —— 而日历那两层每帧值里，跑在 `LayoutBuilder` 布局阶段的
+/// 那一处只能静默写（在那里通知会当场抛「setState() called during build」）。
+///
+/// 用法与 `ValueListenableBuilder` 一样：`child` 传进来的子树不会跟着重建。
+class FrameBuilder<T> extends StatefulWidget {
+  const FrameBuilder({
+    super.key,
+    required this.listenable,
+    required this.builder,
+    this.child,
+  });
+
+  final ValueListenable<T> listenable;
+
+  final Widget Function(BuildContext context, T value, Widget? child) builder;
+
+  final Widget? child;
+
+  @override
+  State<FrameBuilder<T>> createState() => _FrameBuilderState<T>();
+}
+
+class _FrameBuilderState<T> extends State<FrameBuilder<T>> {
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.addListener(_onChanged);
+  }
+
+  @override
+  void didUpdateWidget(FrameBuilder<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.listenable != widget.listenable) {
+      oldWidget.listenable.removeListener(_onChanged);
+      widget.listenable.addListener(_onChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context, widget.listenable.value, widget.child);
 }

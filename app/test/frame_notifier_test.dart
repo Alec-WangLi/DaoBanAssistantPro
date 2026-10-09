@@ -12,6 +12,7 @@
 // `ValueNotifier` 的 `value` setter 只有「记值 + 通知」一条路（`_value` 是私有的，
 // 子类碰不到），所以才要有这个件。
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/frame_notifier.dart';
 
@@ -55,5 +56,71 @@ void main() {
     final FrameNotifier<int> n = FrameNotifier<int>(5);
     final ValueListenable<int> asListenable = n;
     expect(asListenable.value, 5);
+  });
+
+  // ── FrameBuilder：每帧**现读**的那一层 ──────────────────────────────────
+  //
+  // **别退回 `ValueListenableBuilder`**：它把值缓存在 State 里、只靠 listener 刷新
+  // （Flutter 3.47 的 `value_listenable_builder.dart`：`late T value;` 只在
+  // `_valueChanged` 里更新），于是**静默写进去的值它看不到** —— 而帧内（布局阶段）
+  // 那一处只能静默写。这两条就是那个差别的现场。
+  testWidgets('FrameBuilder：publish 之后重建（帧间那一类）', (tester) async {
+    final FrameNotifier<int> n = FrameNotifier<int>(0);
+    addTearDown(n.dispose);
+    await tester.pumpWidget(MaterialApp(
+        home: FrameBuilder<int>(
+            listenable: n, builder: (_, int v, __) => Text('$v'))));
+    expect(find.text('0'), findsOneWidget);
+
+    n.publish(3);
+    await tester.pump();
+    expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('FrameBuilder：publishSilently 之后再 build，读到的是新值',
+      (tester) async {
+    final FrameNotifier<int> n = FrameNotifier<int>(0);
+    addTearDown(n.dispose);
+    late StateSetter rebuild;
+    await tester.pumpWidget(MaterialApp(
+        home: StatefulBuilder(
+            builder: (_, StateSetter setSt) {
+      rebuild = setSt;
+      return FrameBuilder<int>(
+          listenable: n, builder: (_, int v, __) => Text('$v'));
+    })));
+    expect(find.text('0'), findsOneWidget);
+
+    n.publishSilently(9);
+    expect(find.text('0'), findsOneWidget,
+        reason: '静默写不触发重建 —— 此刻树上还是老样子');
+
+    rebuild(() {});
+    await tester.pump();
+    expect(find.text('9'), findsOneWidget,
+        reason: '重建时必须读到静默写进去的值（`ValueListenableBuilder` 在这里会'
+            '读到缓存的旧值 —— 那正是不能退回它的理由）');
+  });
+
+  testWidgets('FrameBuilder：`child` 是同一个实例时不重建', (tester) async {
+    final FrameNotifier<int> n = FrameNotifier<int>(0);
+    addTearDown(n.dispose);
+    var childBuilds = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: FrameBuilder<int>(
+            listenable: n,
+            child: Builder(builder: (_) {
+              childBuilds++;
+              return const SizedBox();
+            }),
+            builder: (_, int v, Widget? child) => Column(
+                children: <Widget>[Text('$v'), child!]))));
+
+    n.publish(1);
+    await tester.pump();
+    n.publish(2);
+    await tester.pump();
+
+    expect(childBuilds, 1, reason: 'child 是同一个实例，不该跟着每帧重建');
   });
 }

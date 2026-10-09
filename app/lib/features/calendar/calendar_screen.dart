@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
+import '../../core/frame_notifier.dart';
 import '../../core/haptics.dart';
 import '../../core/glass/glass.dart';
 import '../../core/glass/liquid_lens.dart';
@@ -25,6 +26,7 @@ import '../alarm/alarm_service.dart';
 import '../widget/widget_service.dart';
 import 'info_card_metrics.dart';
 import 'calendar_lens.dart';
+import 'lens_warp_scope.dart';
 import 'calendar_range_band.dart';
 import 'range_band.dart';
 import 'schedule_management_screen.dart';
@@ -163,6 +165,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   bool _monthHasOverrideHint(ScheduleChain? chain) =>
       chain?.monthHasOverrideHint(_month) ?? false;
 
+  /// 这一帧「挤压场的中心」—— 42 格那层读它（`LensWarpScope`）。
+  ///
+  /// ⚠️ **只许从 [_publishFrame] 写**：帧间（`Ticker` / 指针 / 带子回调）用
+  /// `publish`，帧内（`_gridBody` 里那个 `LayoutBuilder` 跑在**布局阶段**）必须
+  /// `silent: true` —— 在那里通知会当场抛「setState() called during build」，
+  /// 而静默写照样能在同一帧被读到（读的人每帧现读，见 `FrameBuilder`）。
+  final FrameNotifier<Offset?> _lensCenter = FrameNotifier<Offset?>(null);
+
+  void _publishFrame({required Offset? center, bool silent = false}) {
+    if (silent) {
+      _lensCenter.publishSilently(center);
+    } else {
+      _lensCenter.publish(center);
+    }
+  }
+
   /// 底栏信息卡该多高、以及本月每一天各自的内容高度（见 `info_card_metrics.dart`）。
   InfoCardMetrics _cardMetricsFor(
       BuildContext context, ScheduleChain? chain, double cardOuterWidth) {
@@ -247,6 +265,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   @override
   void dispose() {
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetLaunchRequested);
+    _lensCenter.dispose();
     _ticker?.dispose();
     super.dispose();
   }
@@ -1140,6 +1159,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 _hPad + ((_rangeTipPos ?? bandTipCol) + 0.5) * cellW,
                 bandTip.center.dy);
 
+        // 挤压场的中心：多选态跟着**会动的那一头**（水带末端），否则跟着那枚块。
+        // ⚠️ 这一段跑在 `LayoutBuilder` 的**布局阶段** —— 只能静默写。
+        _publishFrame(
+            center: !liquidGlassActive.value
+                ? null
+                : showBand
+                    ? bandWarpCenter
+                    : (showBlock
+                        ? Offset(_flightPos.dx + cellW / 2,
+                            _flightPos.dy + cellH / 2)
+                        : null),
+            silent: true);
+
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapDown: (d) {
@@ -1303,23 +1335,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                   child: Column(
                     children: [
                       _weekdayRow(context, cellW),
-                      ..._dayRows(context, cellW, cellH, chain,
-                          // 液态档才有：透镜**当前的中心**（格子层坐标）。
-                          // 「内容被它挤」用得到，标准档传 null（一层都不算）。
-                          //
-                          // 两种情形各有一个中心：
-                          // · 多选态 → **会动的那一头**那一格（带子内部是已经圈住的
-                          //   日子，把它们也挤了就不像「水正在漫过来」）；
-                          // · 滑行/按住 → `_flightPos`（这一帧那枚块真的在哪儿，
-                          //   而不是它的目标格 —— 滑行时被挤的该是它底下的那几格）。
-                          lensCenter: !liquidGlassActive.value
-                              ? null
-                              : showBand
-                                  ? bandWarpCenter
-                                  : (showBlock
-                                      ? Offset(_flightPos.dx + cellW / 2,
-                                          _flightPos.dy + cellH / 2)
-                                      : null)),
+                      ..._dayRows(context, cellW, cellH, chain),
                     ],
                   ),
                 ),
@@ -1395,8 +1411,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   }
 
   List<Widget> _dayRows(
-      BuildContext context, double cellW, double cellH, ScheduleChain? chain,
-      {Offset? lensCenter}) {
+      BuildContext context, double cellW, double cellH, ScheduleChain? chain) {
     // 比「同一天」用 `isSameDay` 而不是 `==`：`dateOnly` 是 UTC 日期、这里的
     // `date` 是本地日期，`DateTime.==` 连 `isUtc` 一起比，`==` 恒为假
     // （「今天」的日期因此一直没加粗过）。
@@ -1412,17 +1427,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     }
     for (var d = 1; d <= _daysInMonth; d++) {
       final date = DateTime(_month.year, _month.month, d);
-      // 这一格的内容被透镜边缘挤成什么样（液态档才有；`null` = 一层都不套）。
+      // 这一格的中心（格层坐标）—— 液态档拿它去算「内容被透镜挤成什么样」。
       final int slot = _leading + d - 1;
-      final Matrix4? warp = lensCenter == null
-          ? null
-          : _cellWarp(
-              cellCenter: Offset(_hPad + (slot % 7 + 0.5) * cellW,
-                  _weekdayH + (slot ~/ 7 + 0.5) * cellH),
-              lensCenter: lensCenter,
-              cellW: cellW,
-              cellH: cellH,
-            );
+      final Offset cellCenter = Offset(_hPad + (slot % 7 + 0.5) * cellW,
+          _weekdayH + (slot ~/ 7 + 0.5) * cellH);
       cells.add(_dayCell(
           context,
           date,
@@ -1442,7 +1450,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               _rangeAnchor != null &&
               _rangeFocus != null &&
               _inSelectedRange(date),
-          warp: warp));
+          // 液态档才有：这一格的内容听那个「挤压场中心」自己变。
+          // 标准档传 null ⇒ **一个 LensWarpScope 都不挂**，那棵树与今天逐字节相同。
+          warpCenter: liquidGlassActive.value ? cellCenter : null));
     }
     final rows = <Widget>[];
     for (var i = 0; i < cells.length; i += 7) {
@@ -1450,44 +1460,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       rows.add(Row(children: chunk));
     }
     return rows;
-  }
-
-  /// 这一格的**内容**被透镜边缘挤成什么样 —— 液态档才有。
-  ///
-  /// 用二维版 `lensIconWarp2d`（一维版只认 x，给底栏 / 分段器那种「一排」的控件）。
-  ///
-  /// ⚠️ 半宽半高取**静止那一档**（内盒的一半），**不是**「满升程 + 满形变」那一档。
-  /// 一维版那边两者只差约 5%（照最大值取无所谓），而这里从静止到满形变，透镜的宽会从
-  /// 52 涨到 74（**+43%**）—— 照最大值取的话，`t` 会把**静止时**的相邻格子也算成
-  /// 「在透镜里」，于是日历的常态画面上就带着一层变形（**逐张比基线时当场抓到的**：
-  /// 差异掩码里相邻两格的字整片亮起）。照静止那一档取，静止时相邻格子 `t ≈ 2.2`、
-  /// 权重见底、一层都不套；拖动到两格之间时 `t ≈ 1.08`、权重 ≈ 0.97 —— 正好。
-  ///
-  /// 恒等时返回 `null`：**一层恒等的 `Transform` 都不套**（它也是要付代价的）。
-  Matrix4? _cellWarp({
-    required Offset cellCenter,
-    required Offset lensCenter,
-    required double cellW,
-    required double cellH,
-  }) {
-    final double hw = (cellW - 2 * _cellInset) / 2;
-    final double hh = (cellH - 2 * _cellInset) / 2;
-    final ({double scaleRadial, double scaleTangent, double dx, double dy,
-        double angle}) w = lensIconWarp2d(
-      itemCenterX: cellCenter.dx,
-      itemCenterY: cellCenter.dy,
-      lensCenterX: lensCenter.dx,
-      lensCenterY: lensCenter.dy,
-      lensHalfWidth: hw,
-      lensHalfHeight: hh,
-    );
-    if (w.scaleRadial == 1.0 && w.dx == 0.0 && w.dy == 0.0) return null;
-    // 沿径向压扁、垂直方向拉长，再朝远离透镜中心的方向推一点。
-    return Matrix4.identity()
-      ..translateByDouble(w.dx, w.dy, 0, 1)
-      ..rotateZ(w.angle)
-      ..scaleByDouble(w.scaleRadial, w.scaleTangent, 1, 1)
-      ..rotateZ(-w.angle);
   }
 
   /// 磨砂卡片日期格。
@@ -1518,7 +1490,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 「一枚玻璃压过去」。`Transform` 只改绘制、不改布局，所以字的排版不会跟着变。
   Widget _dayCell(BuildContext context, DateTime date, ShiftClass? shift,
       LunarInfo lunar, double cellW, double cellH, bool isToday, bool solid,
-      bool adjusted, bool inRange, {Matrix4? warp}) {
+      bool adjusted, bool inRange, {Offset? warpCenter}) {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
         : AppTokens.inkMuted(context);
@@ -1698,14 +1670,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               //
               // 宽度给死值，所以 scaleDown 只在**高度**不够时才动手。
               //
-              // 外面那层 `Transform` 是液态档「内容被透镜边缘挤」——
-              // **`warp == null` 时一层都不套**（恒等的 Transform 也是要付代价的），
-              // 而套上时它只改绘制：`Transform` 不动布局，字的排版与换行都不变。
-              child: warp == null
+              // 外面那层是液态档「内容被透镜边缘挤」——
+              // **`warpCenter == null` 时一层 `LensWarpScope` 都不挂**
+              // （恒等的 `Transform` 也是要付代价的），而挂上时它只改绘制：
+              // `Transform` 不动布局，字的排版与换行都不变。
+              child: warpCenter == null
                   ? fittedContent
-                  : Transform(
-                      alignment: Alignment.center,
-                      transform: warp,
+                  : LensWarpScope(
+                      center: _lensCenter,
+                      cellCenter: warpCenter,
+                      cellW: cellW,
+                      cellH: cellH,
+                      inset: _cellInset,
                       child: fittedContent,
                     ),
             ),
