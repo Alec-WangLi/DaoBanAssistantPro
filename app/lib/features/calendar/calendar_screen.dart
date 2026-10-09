@@ -34,6 +34,43 @@ import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
+/// 那枚块**这一帧**的状态：在哪、多快、速度是不是「活的」。
+///
+/// 存在的理由：这三个值原来住在整页的 `State` 里，每帧 `setState` ⇒ **整页重建**
+/// （实测 436 个 widget/帧，而标准档同场景 6 个）。搬进 `FrameNotifier` 之后，
+/// 重建范围只剩「那枚块那一层」与「被挤的那几格」。
+@immutable
+class BlockFrame {
+  const BlockFrame({
+    required this.pos,
+    required this.velocity,
+    required this.live,
+  });
+
+  /// 块左上角（格层坐标）。
+  final Offset pos;
+
+  /// 速度（px/s，逻辑像素）。二维都认。
+  final Offset velocity;
+
+  /// 这一帧的速度有没有来源：手指在拖，或者块自己在滑行。
+  ///
+  /// 与从前 `velocityLive: _dragActive || _flying` 同一个判据 —— 松手之后父层
+  /// **不归零**（留给透镜自己衰减），所以这个标志还得管住「别把陈旧的反复灌回来」。
+  final bool live;
+
+  /// `publish` 靠 `==` 挡掉重复写：拖动中同一帧被重建两次是常态。
+  @override
+  bool operator ==(Object other) =>
+      other is BlockFrame &&
+      other.pos == pos &&
+      other.velocity == velocity &&
+      other.live == live;
+
+  @override
+  int get hashCode => Object.hash(pos, velocity, live);
+}
+
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
@@ -173,11 +210,30 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 而静默写照样能在同一帧被读到（读的人每帧现读，见 `FrameBuilder`）。
   final FrameNotifier<Offset?> _lensCenter = FrameNotifier<Offset?>(null);
 
+  /// 那枚块这一帧的状态（位置 / 速度 / 速度是不是活的）—— 只由 [_publishFrame] 写。
+  final FrameNotifier<BlockFrame> _blockFrame =
+      FrameNotifier<BlockFrame>(const BlockFrame(
+          pos: Offset.zero, velocity: Offset.zero, live: false));
+
+  /// 把这一帧的两个每帧值一起发出去。
+  ///
+  /// ⚠️ **两个通知源只从这一个方法出去**（各自写迟早会各说各话）。
+  /// ⚠️ 调用点分两类：**帧间**（`Ticker` / 指针回调）默认通知；**帧内**
+  /// （`_gridBody` 里那个 `LayoutBuilder` 跑在**布局阶段**）必须 `silent: true`
+  /// —— 在那里通知会当场抛「setState() called during build」，而静默写照样能在
+  /// 同一帧被读到（读的人每帧现读，见 `FrameBuilder`）。
   void _publishFrame({required Offset? center, bool silent = false}) {
+    final BlockFrame f = BlockFrame(
+      pos: _flightPos,
+      velocity: Offset(_vx, _vy),
+      live: _dragActive || _flying,
+    );
     if (silent) {
       _lensCenter.publishSilently(center);
+      _blockFrame.publishSilently(f);
     } else {
       _lensCenter.publish(center);
+      _blockFrame.publish(f);
     }
   }
 
@@ -266,6 +322,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   void dispose() {
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetLaunchRequested);
     _lensCenter.dispose();
+    _blockFrame.dispose();
     _ticker?.dispose();
     super.dispose();
   }
@@ -537,8 +594,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         dt: dt,
         previous: _vy);
 
-    setState(() => _flightPos = pos);
+    _flightPos = pos;
     if (t >= 1) _stopFlight();
+    // ⚠️ **顺序要紧**：先落位、再 `_stopFlight()`（`live` 因此变 false）、**最后**才发
+    // —— 这样最后一帧交出去的是「松手那一帧」，透镜那边「把最后的速度接过来、自己
+    // 衰减」照样成立（v0.10.15 的裁定，别改）。
+    _publishFrame(
+        center: Offset(_flightPos.dx + _flightCellW / 2,
+            _flightPos.dy + _flightCellH / 2));
   }
 
   /// 停下滑行。**速度不归零** —— 松手 / 落定之后那枚块还要靠最后一次速度把形变与
@@ -1240,10 +1303,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               _lastVelCol = col;
               _lastVelRow = row;
             }
-            setState(() {
-              _visualCol = col;
-              _visualRow = row;
-            });
+            final DateTime? before = _nearestDateFromVisual();
+            _visualCol = col;
+            _visualRow = row;
+            if (liquidGlassActive.value) {
+              // 位置与速度每帧都在变 —— 走通知源，**整页不跟着重建**。
+              _flightPos = Offset(_hPad + col * cellW, _weekdayH + row * cellH);
+              _publishFrame(
+                  center: Offset(_flightPos.dx + cellW / 2,
+                      _flightPos.dy + cellH / 2));
+              // **吸附到的那一格真的变了才重建整页**：那一格的班次胶囊要画成实心，
+              // 而那是「标题级」的状态。与 `onLongPressMoveUpdate` 同一条纪律
+              // —— 每帧重建整页正是这一轮要消掉的东西。
+              if (_nearestDateFromVisual() != before) setState(() {});
+            } else {
+              // 标准档那棵树一个字不改：它的位置由 `AnimatedPositioned` 自己走，
+              // 而那个位置是从布局里的 `_visualCol/_visualRow` 算出来的。
+              setState(() {});
+            }
           },
           onPanEnd: (_) {
             final date = _nearestDateFromVisual();
@@ -1916,24 +1993,44 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 所以两档飞起来一样快、一样刹车。
   Widget _blockPlacement(BuildContext context, double cellW, double cellH,
       double left, double top) {
-    final Widget sized = AnimatedScale(
-      // ⚠️ 液态档**钉在 1.0**：按住那个动作改由「四面鼓出 + 浮起阴影」承担
-      // （`CalendarLens` 的升程），两个叠在一起就重了。
-      // 标准档一个字不改 —— 它靠的正是这 1.22。
-      scale: _pressed && !liquidGlassActive.value ? 1.22 : 1.0,
-      duration: AppTokens.durMed,
-      curve: Curves.easeOutBack,
-      child: _glassBlock(context, cellW, cellH),
-    );
     if (liquidGlassActive.value) {
-      return Positioned(
-        left: _flightPos.dx,
-        top: _flightPos.dy,
-        width: cellW,
-        height: cellH,
-        child: sized,
+      // 位置每帧都在变 —— 走通知源，**整页不跟着重建**。
+      //
+      // ⚠️ **`Stack` 的孩子必须是 `Positioned`**：`FrameBuilder` 直接塞进去会让那
+      // 一块变成「非定位孩子」，布局当场错。所以外面套 `Positioned.fill`，由 builder
+      // 返回的**内层 `Stack`**（`clipBehavior: Clip.none`，让透镜照旧能鼓到格子外）
+      // 去摆那个真的 `Positioned`。外层那个 Stack 的裁剪行为因此与今天一字不差。
+      return Positioned.fill(
+        child: FrameBuilder<BlockFrame>(
+          listenable: _blockFrame,
+          builder: (BuildContext context, BlockFrame f, Widget? _) => Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Positioned(
+                left: f.pos.dx,
+                top: f.pos.dy,
+                width: cellW,
+                height: cellH,
+                // ⚠️ **透镜本体必须在这里现建**（不能在 builder 外面建好再传进来）：
+                // 它每帧要一个新速度（`_blockFrame.value` 刚写进去的那一份），而同一个
+                // widget **实例**是不会被重建的 —— 建在外面等于把它冻在第一帧的速度上
+                // （v0.10.17 那条「滑行中彩边亮起来」的用例当场抓到过）。
+                child: AnimatedScale(
+                  // ⚠️ 液态档**钉在 1.0**：按住那个动作改由「四面鼓出 + 浮起阴影」
+                  // 承担（`CalendarLens` 的升程），两个叠在一起就重了。
+                  scale: 1.0,
+                  duration: AppTokens.durMed,
+                  curve: Curves.easeOutBack,
+                  child: _glassBlock(context, cellW, cellH),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
+    // 标准档：位置由 `AnimatedPositioned` 自己走，**那棵树一个字不改**
+    // （`scale` 仍是 `_pressed` 那 1.22）。
     return AnimatedPositioned(
       duration: _dragActive ? Duration.zero : _blockSlideDuration,
       curve: _blockSlideCurve,
@@ -1941,7 +2038,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       top: top,
       width: cellW,
       height: cellH,
-      child: sized,
+      child: AnimatedScale(
+        scale: _pressed ? 1.22 : 1.0,
+        duration: AppTokens.durMed,
+        curve: Curves.easeOutBack,
+        child: _glassBlock(context, cellW, cellH),
+      ),
     );
   }
 
@@ -1960,8 +2062,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         // 速度的**两条来路**都从这一个入口进去：手指在拖（`onPanUpdate` 的帧间
         // 差分），以及那枚块自己在滑行（`_onFlightTick` 算的）。两处都是每帧一个新
         // 采样，所以 `CalendarLens` 那边那条「别把陈旧的值反复灌回来」照样成立。
-        velocityLive: _dragActive || _flying,
-        velocity: Offset(_vx, _vy),
+        // 这两个值每帧都在变，从通知源现读（`_publishFrame` 刚写进去的那一份）。
+        velocityLive: _blockFrame.value.live,
+        velocity: _blockFrame.value.velocity,
         isDark: Theme.of(context).brightness == Brightness.dark,
         accent: accent,
       );
