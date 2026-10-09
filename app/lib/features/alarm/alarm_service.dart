@@ -524,8 +524,10 @@ class AlarmService {
           for (final t in repeatTimes) t.millisecondsSinceEpoch,
         ],
       });
-      await logInfo(
-          'scheduleNativeAlarm 成功: id=$id, label=$label, repeatType=$repeatType');
+      // ⚠️ **这里不许再跟一条 `logInfo`**：那等于每排一条闹钟就多跨一次端
+      // （实测一次 `rescheduleAll` 46 条班次闹钟 + 2 条汇总，跨端 99 次里有 46 次
+      // 是它）。要留痕就在 `reschedule` 收尾打一条汇总 —— 由
+      // `alarm_reschedule_budget_test.dart` 钉住。
     } catch (e) {
       await appendLog('scheduleNativeAlarm 失败: $e');
     }
@@ -910,6 +912,7 @@ class AlarmService {
         'days（$days）不得超过天数窗口 $_shiftDaysHorizon —— 原生 id 会撞号');
     await logInfo(
         'reschedule: 开始，排班=${source.label}，自定义闹钟=${customAlarms.length} 个');
+    final Stopwatch sw = Stopwatch()..start();
     // 先清掉可能已损坏的排定缓存，再 cancelAll（否则会抛 Missing type parameter）
     try {
       await _plugin.cancelAll();
@@ -931,8 +934,9 @@ class AlarmService {
     //
     // 「哪些天要排、各排几点」由 [planShiftAlarms] 这个纯函数决定（可单测）；
     // 这里只负责把决策落成原生闹钟。id 仍是 `_shiftBaseId + 天数偏移`。
-    for (final plan in planShiftAlarms(source,
-        from: DateTime.now(), days: days, overrides: overrides)) {
+    final List<ShiftAlarmPlan> shiftPlans = planShiftAlarms(source,
+        from: DateTime.now(), days: days, overrides: overrides);
+    for (final plan in shiftPlans) {
       try {
         await scheduleNativeAlarm(
             _shiftBaseId + plan.alarmIndex * _shiftDaysHorizon + plan.offset,
@@ -992,7 +996,11 @@ class AlarmService {
     // 3) 待办提醒：普通通知，不进闹钟那套（全屏 + 循环响铃对一条待办太重）。
     //    每条待办只有一个日期、没有重复，所以一次排完就是全部。
     await rescheduleEventReminders(events);
-    await logInfo('reschedule: 完成');
+    // 一条汇总顶掉从前「每排一条闹钟跟一条日志」那一批（跨端调用因此从 99 降到 53，
+    // 见 `alarm_reschedule_budget_test.dart` 与规格 §2）。
+    await logInfo('reschedule: 完成 —— 班次闹钟 ${shiftPlans.length} 条、'
+        '自定义 ${customAlarms.where((a) => a.enabled).length} 个（启用）、'
+        '待办事件 ${events.length} 条，耗时 ${sw.elapsedMilliseconds}ms');
   }
 
   /// 只重排待办提醒（待办增删改之后调用）。
