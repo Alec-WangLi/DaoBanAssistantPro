@@ -90,9 +90,29 @@ class _FlowingBackgroundState extends State<FlowingBackground> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _WavePainter(_t, widget.intensity),
-      child: widget.child,
+    // **光晕自己一层**（`Stack` 里的兄弟层），不是「给页面内容加一层
+    // `RepaintBoundary`」。两个理由：
+    //
+    // ① 层序与从前一字不差：原来 `CustomPaint(painter:, child:)` 就是「先画光晕、
+    //    再画 child」，这里光晕仍是先画的兄弟 ⇒ 画面不变（`glow_layer_test` 与
+    //    `tool/visual` 的逐张比都盯着）。
+    // ② 给 child 加边界会把这条链变成「边界里的模糊看不看得见边界外的变化」——
+    //    引擎在这件事上有历史问题，一旦跟不上，表现就是**玻璃里的模糊被冻住**
+    //    （页面在动、玻璃里的底色不动），那是实打实的观感下降。兄弟层不依赖那条
+    //    行为：光晕一变整棵树就重合成，压在它上面的模糊读到的一定是新的光晕。
+    //
+    // 效果：那一帧只重新录制光晕自己这一层（实测「被画过的绘制节点」139 → 个位数）。
+    // 注意它省的是 **UI 线程**那份重绘录制；压在光晕上面的 `BackdropFilter` 仍然会
+    // 被合成器重算（那是 GPU 的事）—— 要连那份一起省，只能让光晕别动。
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: CustomPaint(painter: _WavePainter(_t, widget.intensity)),
+          ),
+        ),
+        widget.child,
+      ],
     );
   }
 }

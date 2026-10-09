@@ -36,13 +36,15 @@ Future<int> _rebuildsInOneFrame(
   debugOnRebuildDirtyWidget = (Element e, bool wasDirty) {
     if (on) n++;
   };
-  addTearDown(() => debugOnRebuildDirtyWidget = null);
 
   await act();
   await tester.pump(); // 处理这一下交互本身
   on = true;
   await tester.pump(const Duration(milliseconds: 16)); // 动画里的一帧
-  on = false;
+
+  // ⚠️ **必须在测试体里还原**（`addTearDown` 跑在框架的自检之后 —— 与
+  // `glow_layer_test.dart` 同一条）。
+  debugOnRebuildDirtyWidget = null;
   return n;
 }
 
