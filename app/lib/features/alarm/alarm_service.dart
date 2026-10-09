@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
 
 import '../../core/l10n.dart';
 import '../../data/app_repository.dart';
@@ -297,12 +296,15 @@ class AlarmService {
   static const _recurringBaseId = 40000;
 
   static Future<void> init() async {
-    // 时区库：当前**没有**用它的地方 —— 排定全部走原生（epoch 毫秒）或
-    // `scheduleNativeAlarm`。留着是因为 `flutter_local_notifications` 的
-    // 时区型 API 一旦被用到（比如以后真要上 `zonedSchedule`）就得先有它，
-    // 而那时还必须补 `tz.setLocalLocation`，否则 `tz.local` 是 UTC、会整体
-    // 差一个时区偏移（见 `scheduleTodoReminder` 的说明）。
-    tz.initializeTimeZones();
+    // ⚠️ **不要再把 `tz.initializeTimeZones()` 加回来**（2026-10-10 删）。
+    //
+    // 它从前是为了「以后可能要用 `flutter_local_notifications` 的时区型 API」而留着
+    // 的，但全仓从来没有一处 `zonedSchedule` / `TZDateTime` —— 排定全部走原生
+    // （epoch 毫秒）或 `scheduleNativeAlarm`。代价却是实打实的：`latest_all` 是全量
+    // IANA 库，实测 **21ms**（宿主；真机更慢），而且它跑在 `main()` 里、**首帧之前**。
+    //
+    // 将来真要上时区型 API，除了把这一句加回来，还必须补 `tz.setLocalLocation`
+    // —— 否则 `tz.local` 是 UTC，会整体差一个时区偏移（见 `scheduleTodoReminder` 的说明）。
     // 原生闹钟触发时（App 已在后台），MainActivity 通过此回调通知我们弹出响铃界面；
     // 待办提醒被点开时同样由它通知我们切到「待办」页。
     _settingsChannel.setMethodCallHandler((call) async {
