@@ -1772,21 +1772,34 @@ void main() {
 
     testWidgets('挤字只变换绘制、不改布局', (tester) async {
       await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
-      final Finder card2 = find.byKey(const ValueKey('day-card-2'));
-      final Size before = tester.getSize(card2);
 
-      // 按住今天那格，往右拖**半格**（48px = 半格 28 + 被吃掉的 18px slop）——
+      // ⚠️ **锚点不取「今天」**（与上面拖选那几条同一个理由，见 `_rangeFirstDay`）：
+      // 这一条要的是「透镜卡在两格之间、**右邻那格**被挤」，而「今天」在月历里的列
+      // 位置逐日不同 —— 锚在它身上只有每月头两天才成立。2026-10-10 实测：它红了，
+      // 而且与任何改动无关（干净树上一样红）。8 日永远落在第 1 行，右邻是 9 日；
+      // 只有月初偏移为 6（1 号是周日）那种月份 8 / 9 不同行，那种月份改取 9 / 10。
+      final DateTime now = DateTime.now();
+      final int leading = DateTime(now.year, now.month, 1).weekday - 1;
+      final int anchor = leading == 6 ? 9 : 8;
+      final Finder anchorCard = find.byKey(ValueKey('day-card-$anchor'));
+      final Finder neighbour = find.byKey(ValueKey('day-card-${anchor + 1}'));
+
+      // 拖动是从**选中那格**起算的（`onPanStart` 读 `_selectedRect`），所以先选中锚点。
+      await tester.tap(anchorCard);
+      await tester.pumpAndSettle();
+
+      final Size before = tester.getSize(neighbour);
+      // 按住锚点那格，往右拖**半格**（48px = 半格 28 + 被吃掉的 18px slop）——
       // 透镜正好卡在两格之间，右边那格的内容才会被它的边缘挤到。
-      final TestGesture g = await tester.startGesture(tester.getCenter(
-          find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+      final TestGesture g = await tester.startGesture(tester.getCenter(anchorCard));
       for (int i = 0; i < 8; i++) {
         await g.moveBy(const Offset(6, 0));
         await tester.pump(const Duration(milliseconds: 16));
       }
-      expect(find.descendant(of: card2, matching: find.byType(Transform)),
+      expect(find.descendant(of: neighbour, matching: find.byType(Transform)),
           findsWidgets,
           reason: '那格的内容没被挤 —— 要么透镜没走到两格之间，要么挤字没接上');
-      expect(tester.getSize(card2), before,
+      expect(tester.getSize(neighbour), before,
           reason: '挤字只该变换绘制，不该改布局（改了就会把字挤出格子）');
       await g.up();
       await tester.pumpAndSettle();
