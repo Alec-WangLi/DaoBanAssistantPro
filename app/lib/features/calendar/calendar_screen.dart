@@ -210,6 +210,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 而静默写照样能在同一帧被读到（读的人每帧现读，见 `FrameBuilder`）。
   final FrameNotifier<Offset?> _lensCenter = FrameNotifier<Offset?>(null);
 
+  /// 「此刻有东西在动」：拖动 / 滑行 / 多选拖选。
+  ///
+  /// 光晕拿它暂停（见 `FlowingBackground.pauseWhen`）—— 那些交互本来每帧都在画，
+  /// 而光晕每 340ms 插进来一帧就是一次固定掉帧。与 [_publishFrame] 同一处更新，
+  /// 所以它不会与「谁在动」走散。
+  final ValueNotifier<bool> _interacting = ValueNotifier<bool>(false);
+
   /// 那枚块这一帧的状态（位置 / 速度 / 速度是不是活的）—— 只由 [_publishFrame] 写。
   final FrameNotifier<BlockFrame> _blockFrame =
       FrameNotifier<BlockFrame>(const BlockFrame(
@@ -223,6 +230,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// —— 在那里通知会当场抛「setState() called during build」，而静默写照样能在
   /// 同一帧被读到（读的人每帧现读，见 `FrameBuilder`）。
   void _publishFrame({required Offset? center, bool silent = false}) {
+    // 有东西在动就把光晕停住。写的是 `ValueNotifier`（监听者只起停 `Timer`、不
+    // `setState`），所以帧内（布局阶段）那一处也写得。
+    _interacting.value = _dragActive || _flying || _rangeAnchor != null;
     final BlockFrame f = BlockFrame(
       pos: _flightPos,
       velocity: Offset(_vx, _vy),
@@ -323,6 +333,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetLaunchRequested);
     _lensCenter.dispose();
     _blockFrame.dispose();
+    _interacting.dispose();
     _ticker?.dispose();
     super.dispose();
   }
@@ -629,6 +640,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       // 好让下面这一大段内容保持原缩进、不制造一片只有空白的 diff。
       body: FlowingBackground(
         intensity: _bgIntensity,
+        // 拖动 / 滑行 / 拖选的时候把它停住（每 340ms 一次的固定掉帧就出在这儿）。
+        pauseWhen: _interacting,
         // 这一页天天停留，「高级材质」一关就别再推动背景了（见那个参数的说明）。
         freezeWhenBlurDisabled: true,
         child: SafeArea(child: Builder(builder: (context) {

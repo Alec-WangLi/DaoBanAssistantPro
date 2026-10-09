@@ -174,6 +174,20 @@ Future<void> _disposeCalendar(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 20));
 }
 
+/// 光晕走到哪一相位（0..1）。读的是 `_WavePainter.debugPhase`（`@visibleForTesting`）。
+double _glowPhase(WidgetTester tester) =>
+    (tester
+            .widget<CustomPaint>(find.byKey(const Key('flowing-background')))
+            .painter! as dynamic)
+        .debugPhase as double;
+
+/// 推若干帧（一帧 16ms）。**不用 `pumpAndSettle`**：光晕那个定时器会一直调度下一帧。
+Future<void> _pumpFrames(WidgetTester tester, int frames) async {
+  for (int i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
+
 void main() {
   setUpAll(() async {
     // L10n.yearMonth 用 intl DateFormat('zh')，测试里要自己初始化。
@@ -2075,6 +2089,43 @@ void main() {
           reason: '松手之后带子还挂着（那时该已经弹选择层了）');
       // 常驻动画会让整套 widget 测试在 `pumpAndSettle` 上集体超时（v0.9.8 的老账）。
       expect(tester.binding.hasScheduledFrame, isFalse);
+      await _disposeCalendar(tester);
+    });
+  });
+
+  // ── 光晕在交互时暂停（v0.10.20）─────────────────────────────────────────
+  //
+  // 光晕每 340ms 走一步。它走的那一步在 Task 8 里已经不牵动整页了，但拖动时它仍然
+  // 每 340ms 触发一次「光晕那一帧」，与拖动帧撞在一起 —— 那是**每 340ms 一次固定
+  // 掉帧**。所以有东西在动的时候把它停掉（`_t` 不推进 ⇒ 恢复时从原处续上、不跳回）。
+  group('光晕在交互时暂停', () {
+    testWidgets('静止时它在走；按住拖起来它停；松手之后接着走（不跳回）',
+        (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+
+      final double t0 = _glowPhase(tester);
+      await _pumpFrames(tester, 22); // 约 350ms，够走一步
+      expect(_glowPhase(tester), isNot(t0), reason: '静止时它该在走');
+
+      // 按住今天那格往右拖（走掉 18px 的 slop 之后 Pan 才赢下竞技场）
+      final TestGesture g = await tester.startGesture(tester
+          .getCenter(find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+      for (int i = 0; i < 6; i++) {
+        await g.moveBy(const Offset(5, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final double during = _glowPhase(tester);
+      await _pumpFrames(tester, 44); // 约 700ms，够走两步
+      expect(_glowPhase(tester), during,
+          reason: '拖动中它不该再动 —— 那正是每 340ms 一次固定掉帧的来源');
+
+      await g.up();
+      await _pumpFrames(tester, 2);
+      final double afterUp = _glowPhase(tester);
+      await _pumpFrames(tester, 22);
+      expect(_glowPhase(tester), isNot(afterUp),
+          reason: '松手之后要接着走');
+
       await _disposeCalendar(tester);
     });
   });

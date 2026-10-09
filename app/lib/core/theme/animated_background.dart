@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
@@ -36,11 +37,22 @@ class FlowingBackground extends StatefulWidget {
     required this.child,
     this.intensity = 1.0,
     this.freezeWhenBlurDisabled = false,
+    this.pauseWhen,
   });
 
   final Widget child;
   final double intensity;
   final bool freezeWhenBlurDisabled;
+
+  /// 这个为真时**把光晕停住**（`_t` 不推进 ⇒ 恢复时从原处续上、不跳回）。
+  ///
+  /// 日历页拿它传「有东西在动」（拖动 / 滑行 / 多选拖选）：那些交互本来每帧都在画，
+  /// 而光晕每 340ms 插进来一帧就是**一次固定掉帧**。默认 `null` ⇒ 行为不变
+  /// （响铃界面那一处不传）。
+  ///
+  /// ⚠️ 它与 [freezeWhenBlurDisabled] 是**两件事**（一个问「机器做不做贵的合成」、
+  /// 一个问「此刻有没有别的东西在动」），`_syncRun` 里各判各的。
+  final ValueListenable<bool>? pauseWhen;
 
   @override
   State<FlowingBackground> createState() => _FlowingBackgroundState();
@@ -62,11 +74,23 @@ class _FlowingBackgroundState extends State<FlowingBackground> {
   void initState() {
     super.initState();
     glassBlurDisabled.addListener(_syncRun);
+    widget.pauseWhen?.addListener(_syncRun);
     _syncRun();
   }
 
+  @override
+  void didUpdateWidget(FlowingBackground old) {
+    super.didUpdateWidget(old);
+    if (old.pauseWhen != widget.pauseWhen) {
+      old.pauseWhen?.removeListener(_syncRun);
+      widget.pauseWhen?.addListener(_syncRun);
+      _syncRun();
+    }
+  }
+
   void _syncRun() {
-    final frozen = widget.freezeWhenBlurDisabled && glassBlurDisabled.value;
+    final frozen = (widget.freezeWhenBlurDisabled && glassBlurDisabled.value) ||
+        (widget.pauseWhen?.value ?? false);
     if (frozen) {
       _timer?.cancel();
       _timer = null;
@@ -84,6 +108,7 @@ class _FlowingBackgroundState extends State<FlowingBackground> {
   @override
   void dispose() {
     glassBlurDisabled.removeListener(_syncRun);
+    widget.pauseWhen?.removeListener(_syncRun);
     _timer?.cancel();
     super.dispose();
   }
@@ -108,7 +133,10 @@ class _FlowingBackgroundState extends State<FlowingBackground> {
       children: <Widget>[
         Positioned.fill(
           child: RepaintBoundary(
-            child: CustomPaint(painter: _WavePainter(_t, widget.intensity)),
+            child: CustomPaint(
+              key: const Key('flowing-background'),
+              painter: _WavePainter(_t, widget.intensity),
+            ),
           ),
         ),
         widget.child,
@@ -121,6 +149,11 @@ class _WavePainter extends CustomPainter {
   _WavePainter(this.t, this.intensity);
 
   final double t;
+
+  /// 光晕走到哪一相位（0..1）。给用例读的 —— 「拖动中它停、松手后接着走」
+  /// 只有这一个可断言的口子。
+  @visibleForTesting
+  double get debugPhase => t;
 
   /// 光斑透明度的倍率，1.0 = 响铃界面那一档。
   final double intensity;
