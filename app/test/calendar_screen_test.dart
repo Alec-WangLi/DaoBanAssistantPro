@@ -2094,38 +2094,77 @@ void main() {
     });
   });
 
-  // ── 光晕在交互时暂停（v0.10.20）─────────────────────────────────────────
+  // ── 光晕在交互时暂停（v0.10.20；判据在 v0.10.22 收紧）────────────────────
   //
-  // 光晕每 340ms 走一步。它走的那一步在 Task 8 里已经不牵动整页了，但拖动时它仍然
-  // 每 340ms 触发一次「光晕那一帧」，与拖动帧撞在一起 —— 那是**每 340ms 一次固定
-  // 掉帧**。所以有东西在动的时候把它停掉（`_t` 不推进 ⇒ 恢复时从原处续上、不跳回）。
+  // 光晕每 340ms 走一步。它走的那一步在 v0.10.20 里已经不牵动整页了，但拖动时它
+  // 仍然每 340ms 触发一次「光晕那一帧」、与拖动帧撞在一起 —— 那是**每 340ms 一次
+  // 固定掉帧**。所以有东西在动的时候把它停掉（`_t` 不推进 ⇒ 恢复时从原处续上、不跳回）。
+  //
+  // ⚠️ **判据是「这一帧有没有东西在产出」，不是「手指按着」**（v0.10.21 之前是后者，
+  // 那是错的）：手指按住不动时屏幕上没有任何东西在变，把光晕也冻住没有理由。
   group('光晕在交互时暂停', () {
-    testWidgets('静止时它在走；按住拖起来它停；松手之后接着走（不跳回）',
-        (tester) async {
-      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
-
-      final double t0 = _glowPhase(tester);
-      await _pumpFrames(tester, 22); // 约 350ms，够走一步
-      expect(_glowPhase(tester), isNot(t0), reason: '静止时它该在走');
-
-      // 按住今天那格往右拖（走掉 18px 的 slop 之后 Pan 才赢下竞技场）
-      final TestGesture g = await tester.startGesture(tester
-          .getCenter(find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+    Future<TestGesture> pressToday(WidgetTester tester) async {
+      final TestGesture g = await tester.startGesture(tester.getCenter(
+          find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+      // 走掉 18px 的 slop 之后 Pan 才赢下竞技场
       for (int i = 0; i < 6; i++) {
         await g.moveBy(const Offset(5, 0));
         await tester.pump(const Duration(milliseconds: 16));
       }
-      final double during = _glowPhase(tester);
+      return g;
+    }
+
+    testWidgets('按住**不动**时光晕接着走 —— 「按着」不等于「在动」', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      final TestGesture g = await pressToday(tester);
+
+      final double t0 = _glowPhase(tester);
       await _pumpFrames(tester, 44); // 约 700ms，够走两步
-      expect(_glowPhase(tester), during,
-          reason: '拖动中它不该再动 —— 那正是每 340ms 一次固定掉帧的来源');
+      expect(_glowPhase(tester), isNot(t0),
+          reason: '手指按住不动 ⇒ 屏幕上没有任何东西在变 ⇒ 光晕没有理由冻住。'
+              'v0.10.21 之前这里判的是 `_dragActive`，按住就停');
 
       await g.up();
-      await _pumpFrames(tester, 2);
-      final double afterUp = _glowPhase(tester);
-      await _pumpFrames(tester, 22);
-      expect(_glowPhase(tester), isNot(afterUp),
-          reason: '松手之后要接着走');
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('拖动中（每帧都有位移）光晕停；停手之后接着走', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      final TestGesture g = await pressToday(tester);
+
+      // 每帧都推一点位移 —— 这才是「在动」
+      final double t0 = _glowPhase(tester);
+      for (int i = 0; i < 44; i++) {
+        await g.moveBy(const Offset(3, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(_glowPhase(tester), t0,
+          reason: '拖动中它不该动 —— 那正是每 340ms 一次固定掉帧的来源');
+
+      // 停手不动 → 恢复
+      final double afterStop = _glowPhase(tester);
+      await _pumpFrames(tester, 44);
+      expect(_glowPhase(tester), isNot(afterStop), reason: '停手之后要接着走');
+
+      await g.up();
+      await _disposeCalendar(tester);
+    });
+
+    testWidgets('换月时光晕停（换月动画每帧都在重画）', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      await tester.tap(find.byIcon(Icons.chevron_left_outlined));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final double t0 = _glowPhase(tester);
+      // 换月动画跑着的那几帧里，光晕一步都不该走
+      await _pumpFrames(tester, 10);
+      expect(_glowPhase(tester), t0, reason: '换月动画在跑的这几帧里光晕要停');
+
+      // 动画跑完之后恢复
+      await _pumpFrames(tester, 60);
+      final double after = _glowPhase(tester);
+      await _pumpFrames(tester, 44);
+      expect(_glowPhase(tester), isNot(after), reason: '换月落定之后接着走');
 
       await _disposeCalendar(tester);
     });

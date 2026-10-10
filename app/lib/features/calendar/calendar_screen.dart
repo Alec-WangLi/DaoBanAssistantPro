@@ -276,9 +276,34 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 「此刻有东西在动」：拖动 / 滑行 / 多选拖选。
   ///
   /// 光晕拿它暂停（见 `FlowingBackground.pauseWhen`）—— 那些交互本来每帧都在画，
-  /// 而光晕每 340ms 插进来一帧就是一次固定掉帧。与 [_publishFrame] 同一处更新，
-  /// 所以它不会与「谁在动」走散。
+  /// 而光晕每 340ms 插进来一帧就是一次固定掉帧。
+  ///
+  /// ⚠️ **判据是「这一帧有没有东西在产出」，不是「手指按着」。** [_publishFrame]
+  /// 只在真有运动源推帧时才被调用：滑行的 tick、拖动中**有位移**的指针事件、
+  /// 带子末端在淌、以及换月时那个每帧重建整页的 `AnimatedSwitcher`。
+  /// **手指按住不动时谁都不调它**，而那时屏幕上没有任何东西在变 —— 把光晕也冻住
+  /// 是没有理由的（v0.10.21 之前判的是 `_dragActive`，按住就停，那是错的）。
   final ValueNotifier<bool> _interacting = ValueNotifier<bool>(false);
+
+  /// 「动」的判定天然是**一帧一帧续**的：每一帧末无条件放掉，下一帧谁在动谁再置位。
+  ///
+  /// 于是运动源一停，光晕 340ms 后就接着走（`_t` 从没被推进过 ⇒ 恢复时不跳回）。
+  /// 用 `addPostFrameCallback` 而不是 `Timer`：帧末必然跑到，而定时器会在
+  /// 「已经没人动了」之后还挂着一条待处理项（widget 测试会因此报
+  /// 「A Timer is still pending」）。
+  bool _interactingClearScheduled = false;
+
+  void _markInteracting() {
+    // 写的是 `ValueNotifier`（监听者只起停 `Timer`、不 `setState`），
+    // 所以帧内（布局阶段）那一处也写得。
+    _interacting.value = true;
+    if (_interactingClearScheduled) return;
+    _interactingClearScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _interactingClearScheduled = false;
+      if (mounted) _interacting.value = false;
+    });
+  }
 
   /// 那枚块这一帧的状态（位置 / 速度 / 速度是不是活的）—— 只由 [_publishFrame] 写。
   final FrameNotifier<BlockFrame> _blockFrame =
@@ -293,9 +318,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// —— 在那里通知会当场抛「setState() called during build」，而静默写照样能在
   /// 同一帧被读到（读的人每帧现读，见 `FrameBuilder`）。
   void _publishFrame({required Offset? center, bool silent = false}) {
-    // 有东西在动就把光晕停住。写的是 `ValueNotifier`（监听者只起停 `Timer`、不
-    // `setState`），所以帧内（布局阶段）那一处也写得。
-    _interacting.value = _dragActive || _flying || _rangeAnchor != null;
+    // 这一帧有东西在产出 ⇒ 把光晕停住（见 [_markInteracting] 那段说明）。
+    _markInteracting();
     final BlockFrame f = BlockFrame(
       pos: _flightPos,
       velocity: Offset(_vx, _vy),
