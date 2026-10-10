@@ -39,7 +39,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.2\n'
+const String _changelogZh = 'v0.11.3\n'
+    '· 待办勾完不再一直堆在列表里了：主列表只列没做完的，做完的收进列表底部一条「已完成 N 条」里（点一下展开，看得出之前干完了什么）。勾完那一刻它仍留在原地、划掉，下次进这一页才收走\n'
+    '· 归档最多留 100 条，更早的自己消失 —— 所以这个列表会一直干干净净\n'
+    '· 顺带修好一处：删掉一条「重复待办」之后它又被自己补回来（从归档里删更旧的历史会踩到）\n'
+    '\n'
+
+    'v0.11.2\n'
     '· 修好上一版带进来的一处：次日档的闹钟（0:15「准备下班」那类、夜班的上午时段）在它响的那一天重排时会被取消掉、再也排不回去，等于不响 —— 打开 App、回到前台、开机自动重排都会走到这条路\n'
     '\n'
 
@@ -100,17 +106,16 @@ const String _changelogZh = 'v0.11.2\n'
     '· 落定之后这些自己收回去，静止时与之前一样\n'
     '· 拖动那枚块时，形状是「开」出来的，不再一下拉满（与底栏滑块同一套手感）\n\n'
 
-    'v0.10.16\n'
-    '· 修好上一版带进来的一处问题：拖完日历上那枚选中的块、再点一下日期，它会自己抽一下（陈旧的速度被反复灌回来）\n'
-    '· 按住那枚块不动时，它的形变现在会自己收回去（之前会一直挂着）\n\n'
-
-    '· 它扫过哪一天，那一天的字（日期 / 班次 / 农历）就被它的边缘轻轻挤一下\n'
-    '· 液态玻璃关着的时候，日历与之前一模一样（一个像素都没动）\n\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.2\n'
+const String _changelogEn = 'v0.11.3\n'
+    '· Completed todos no longer pile up in the list: the main list shows only what is still open, and finished ones move into an "N completed" row at the bottom (tap it to expand and see what you got done). The moment you tick one it stays where it was, struck through, and only moves down there the next time you open this page\n'
+    '· The archive keeps the latest 100; older ones drop off on their own, so this list stays tidy\n'
+    '· Also fixed: deleting a recurring todo used to bring it straight back (it could happen when deleting an older occurrence from the archive)\n'
+    '\n'
+
+    'v0.11.2\n'
     '· Fixed a regression from the previous version: next-day alarms (the 00:15 "get ready to clock off" kind, or a night shift\'s morning alarms) were cancelled and never scheduled again when the app rescheduled on the very day they were due — which happens on every launch, on every return to the foreground, and after a reboot\n'
     '\n'
 
@@ -170,12 +175,6 @@ const String _changelogEn = 'v0.11.2\n'
     '· The days it sweeps over get a slight squeeze (before, the squeeze sat on the destination while the block was still in mid-air)\n'
     '· All of it settles back once it lands — at rest it looks exactly as before\n'
     '· While dragging, the shape blooms instead of snapping to full (the same feel as the tab bar pill)\n\n'
-
-    'v0.10.16\n'
-    '· Fixed a regression from the previous version: after dragging the calendar selection block, tapping a day made it stretch and flash once (a stale drag velocity was re-applied)\n'
-    '· Holding the block still now lets its stretch relax (it used to stay stretched)\n\n'
-
-    '· With Liquid Glass off the calendar is pixel-for-pixel what it was\n\n'
 
         '\n'
 ;
