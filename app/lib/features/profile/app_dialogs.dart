@@ -39,7 +39,17 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.21\n'
+const String _changelogZh = 'v0.10.22\n'
+    '· 滑动更跟手了：真正的开销一直在「画面合成」那一侧，这一版把其中最贵的一道工序省掉了 —— 编辑排班、日历、闹钟、待办这几页每帧的合成开销降到原来的三分之一上下（编辑排班 13.1ms → 6.0ms、日历 10.4ms → 2.3ms）\n'
+    '· 手指按住不动时，背景那层光晕不再冻住（之前是按着就停）\n'
+    '· 顺手把「换月」也算进光晕该停的那一刻\n'
+    '· 拨一下触觉开关不再把整个界面重建一遍\n'
+    '· 待办 / 闹钟 / 排班上的日期文案不再每次重算\n'
+    '· 响铃 15 分钟没人管会自己停（之前会一直响、一直震）\n'
+    '· 排闹钟不再一条一条写盘（一次重排从 62 次降到 4 次）\n'
+    '· 桌面小组件的刷新改用非精确闹钟，少占一份系统唤醒额度\n'
+
+    'v0.10.21\n'
     '· 修好上一版带进来的三处「改完之后界面没跟上」：调整某一天的班次、或者换语言之后，桌面小组件现在会跟着变（之前会一直停着旧的）\n'
     '· 调整班次、改周期之后，信息卡那行「本月统计」现在会跟着变（之前还是旧数字）\n'
     '· 长按拖选一段日子时，日历不再每一帧重算整页 —— 上一版的更新说明里写了这一条，当时其实还没做到\n\n'
@@ -88,13 +98,20 @@ const String _changelogZh = 'v0.10.21\n'
     '· 响铃页的「上滑关闭」：圆钮换成一枚玻璃药丸，按住会变大、凸出轨道，轨道那两条边被折进它里面\n'
     '· 修好一处「折边」在竖直面上一直没生效的问题（响铃页那枚药丸、以及小窗里的底栏滑块）\n\n'
 
-    'v0.10.12\n'
-    '· 开关按住时的形状不那么尖了：横向放开一点（满升程 27 × 42）\n'
-    '· 修好开关的一处小毛病：拖动被系统打断之后，下一次拖动钮会跳一下\n\n'
         '\n'
 ;
 
-const String _changelogEn = 'v0.10.21\n'
+const String _changelogEn = 'v0.10.22\n'
+    '· Smoother scrolling: the real cost was on the compositing side, and this version drops the most expensive step of it — per-frame compositing on the editor, calendar, alarm and todo screens is now about a third of what it was (editor 13.1ms → 6.0ms, calendar 10.4ms → 2.3ms)\n'
+    '· The background glow no longer freezes while you simply hold your finger down\n'
+    '· Month switching is now part of when the glow pauses, too\n'
+    '· Toggling the haptics switch no longer rebuilds the whole interface\n'
+    '· Date strings on the todo, alarm and schedule screens are no longer rebuilt every time\n'
+    '· A ringing alarm stops itself after 15 minutes if nobody attends to it (it used to ring and buzz forever)\n'
+    '· Scheduling alarms no longer writes to disk once per alarm (62 writes per reschedule → 4)\n'
+    '· The home-screen widget refresh now uses an inexact alarm, spending less of the system wake-up budget\n'
+
+    'v0.10.21\n'
     '· Fixed three "the screen did not keep up" cases from the previous version: after adjusting a single day or switching language the home-screen widget now updates (it used to stay on the old shifts)\n'
     '· After adjusting a day or editing the cycle, the info card\'s monthly tally now updates (it used to keep the old numbers)\n'
     '· Long-press selecting a run of days no longer rebuilds the whole calendar every frame — the previous release notes claimed this, but it was not actually done yet\n\n'
@@ -143,9 +160,6 @@ const String _changelogEn = 'v0.10.21\n'
     '· The ringing screen\'s "swipe up to dismiss" knob is now a glass pill: hold it and it grows past the track, and the track\'s edges fold into it\n'
     '· Fixed the folded-edge effect never lighting up on vertical drops (the ringing pill, and the tab bar slider in a small window)\n\n'
 
-    'v0.10.12\n'
-    '· The switch looks less pointy while held — it is a little wider when it grows (27 × 42 at full lift)\n'
-    '· Fixed a small switch bug: after a drag was interrupted by the system, the next drag made the knob jump\n\n'
         '\n'
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
