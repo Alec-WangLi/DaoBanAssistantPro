@@ -4,7 +4,6 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 
 /**
  * 把「下一次该刷新了」排进 AlarmManager。
@@ -36,16 +35,15 @@ object WidgetRefreshScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         try {
-            // API 31 起精确闹钟要用户授权（SCHEDULE_EXACT_ALARM / USE_EXACT_ALARM）。
-            // 被收回时退化成非精确 —— 跨天翻页本来就不要求秒级准时，可接受的偏差是
-            // 「凌晨多等一会儿才翻页」，而不是「卡片永久停住」。
-            if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) {
-                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
-                AlarmLog.info(context, "WidgetRefreshScheduler: 无精确权限，退化非精确 at=$atMs")
-            } else {
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
-                AlarmLog.info(context, "WidgetRefreshScheduler: 已排精确 at=$atMs")
-            }
+            // **默认就走非精确**（`setAndAllowWhileIdle`，不是 `setExactAndAllowWhileIdle`）。
+            //
+            // 跨天翻页本来就不要求秒级：早几分钟、晚几分钟都只是「桌面上那张卡晚一点
+            // 翻到新的一天」，而精确闹钟要占一份系统级的精确唤醒额度（API 31 起还要
+            // 用户单独授权 SCHEDULE_EXACT_ALARM，被收回时反而要走降级分支）。
+            // 这一档的代价写清楚：**偏差是分钟级**，可接受的降级是「凌晨多等一会儿才翻页」，
+            // 不可接受的是「卡片永久停住」—— 所以下面那条 `set()` 退路仍然留着。
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
+            AlarmLog.info(context, "WidgetRefreshScheduler: 已排非精确 at=$atMs")
         } catch (e: Exception) {
             // SecurityException（权限中途被收回）等：绝不让它冒出去弄崩 onReceive。
             // 再退一档，用不保证唤醒的 set()。
