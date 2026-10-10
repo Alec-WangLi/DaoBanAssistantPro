@@ -8,11 +8,19 @@
 //
 // ⚠️ **推失败不许记「已推」**：那条「装完新版先打开一次 App」的兜底重试，靠的正是
 // 回前台那一次；记错了它就永远不再试，桌面小组件会一直挂着升级前那一次的渲染。
+import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
+import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/schedule_chain.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 const MethodChannel _channel =
     MethodChannel('com.daoban.shiftassistantpro/settings');
@@ -41,10 +49,37 @@ Future<void> _push({int todoCount = 3}) => WidgetService.push(
       todayTodoCount: todoCount,
     );
 
+/// 落一套真排班，返回（仓库、链、方案 id）。
+///
+/// 用真库而不是手搓 `ShiftSchedule`：这一组要钉的正是「**改了某一天的班**之后
+/// 快照指纹跟不跟得上」，而「哪一天归哪套、那天被改成什么」是链才知道的事。
+Future<(AppRepository, ScheduleChain, int)> _seedChain() async {
+  final raw = sqlite3.sqlite3.openInMemory();
+  final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+  addTearDown(db.close);
+  final AppRepository repo = AppRepository(db);
+  final ShiftTemplate t =
+      shiftTemplates.firstWhere((ShiftTemplate x) => x.id == 'four_crew_three_shift');
+  final int id = await repo.saveSchedule(
+    name: t.subtitle,
+    anchorDate: dateOnly(DateTime.now()),
+    classes: t.classes,
+    cycle: t.cycle,
+    makeCurrent: true,
+    teamCount: t.teamCount,
+    teamNames: L10n.defaultTeamNames(t.teamCount),
+    ourTeamIndex: 0,
+    teamOffsets: t.teamOffsets,
+  );
+  final ScheduleChain chain = (await repo.getActiveSchedules())!.chain;
+  return (repo, chain, id);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
+    drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     // 快照里有月份标题（`L10n.monthTitle` 走 intl）—— 不初始化 locale，
     // `buildWidgetSnapshot` 会抛 `LocaleDataException`，而它被 `push` 的 catch
     // 吞掉，表现是「一次都没发出去」（排查时先看 `logInfo` 那条痕）。
@@ -68,6 +103,50 @@ void main() {
       await _push(todoCount: 4);
     });
     expect(n, 2, reason: '待办数变了，桌面那张卡上的徽章要跟着变 —— 这不算重复');
+  });
+
+  test('改了某一天的班：必须重推（指纹要跟着**排班**走，不只是「卡片高度」）', () async {
+    // ⚠️ 这一条是独立审查抓的：指纹原来复用了 `chain.cacheKey`，而那个是**信息卡
+    // 高度**的指纹 —— 它**不含按天改班的覆盖、周期、班组起始日、班组错位**。
+    // 于是「调一次班」之后指纹不变 ⇒ 不重推 ⇒ **桌面小组件一直画着旧的班**，
+    // 而 App 里日历已经变了（静默、且是相对上一版的回归）。
+    final (AppRepository repo, ScheduleChain chain, int id) = await _seedChain();
+    final int n = await _pushesOf(() async {
+      await WidgetService.push(
+          chain: chain, settings: const AppSettings(), todayTodoCount: 3);
+      await WidgetService.push(
+          chain: chain, settings: const AppSettings(), todayTodoCount: 3);
+
+      // 调班：把今天改成这套方案里的另一个班次
+      final domain = await repo.getScheduleDomain(id);
+      await repo.setDayOverrides(<DateTime>[dateOnly(DateTime.now())],
+          classId: domain!.classes[1].id!);
+      final ScheduleChain after = (await repo.getActiveSchedules())!.chain;
+      await WidgetService.push(
+          chain: after, settings: const AppSettings(), todayTodoCount: 3);
+    });
+    expect(n, 2, reason: '调过班之后没重推 —— 桌面小组件还停在旧班次上');
+  });
+
+  test('换语言：必须重推', () async {
+    // 快照里的星期、月份标题、空表提示都取自 `L10n`（它跟着设置走 —— `app.dart`
+    // 在 build 里把 `L10n.locale` 设成设置里那个值），所以换语言之后**内容**就变了，
+    // 指纹（比内容）跟着变、必须重推。
+    //
+    // ⚠️ 这里要**照真实时序**来：光传 `AppSettings(language: 'en')` 而 `L10n.locale`
+    // 还是 zh，快照内容其实一个字没变（那也是对的 —— 指纹比的是内容，不是「设置里
+    // 写了什么」）。
+    addTearDown(() => L10n.locale = 'zh');
+    final int n = await _pushesOf(() async {
+      await WidgetService.push(
+          chain: null, settings: const AppSettings(), todayTodoCount: 3);
+      L10n.locale = 'en';
+      await WidgetService.push(
+          chain: null,
+          settings: const AppSettings(language: 'en'),
+          todayTodoCount: 3);
+    });
+    expect(n, 2, reason: '换了语言没重推 —— 桌面小组件还停在旧语言');
   });
 
   test('推失败时不记「已推」，下一次照样重试', () async {

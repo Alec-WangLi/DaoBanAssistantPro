@@ -39,7 +39,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.20\n'
+const String _changelogZh = 'v0.10.21\n'
+    '· 修好上一版带进来的三处「改完之后界面没跟上」：调整某一天的班次、或者换语言之后，桌面小组件现在会跟着变（之前会一直停着旧的）\n'
+    '· 调整班次、改周期之后，信息卡那行「本月统计」现在会跟着变（之前还是旧数字）\n'
+    '· 长按拖选一段日子时，日历不再每一帧重算整页 —— 上一版的更新说明里写了这一条，当时其实还没做到\n\n'
+
+    'v0.10.20\n'
     '· 更顺了：点日期、「今天」飞回去、按住拖动那枚选中的块、长按拖选一段日子时，日历不再每帧重算整页\n'
     '· 更省电了：那层缓缓流动的光晕不再牵着整页一起重画（你按住拖动的时候它会停一下、松手接着走 —— 观感上几乎看不出来）\n'
     '· 打开 App 快了一点；翻月、勾待办、改排班之后的卡顿也少了\n'
@@ -86,16 +91,15 @@ const String _changelogZh = 'v0.10.20\n'
     'v0.10.12\n'
     '· 开关按住时的形状不那么尖了：横向放开一点（满升程 27 × 42）\n'
     '· 修好开关的一处小毛病：拖动被系统打断之后，下一次拖动钮会跳一下\n\n'
-    'v0.10.11\n'
-    '· 长按滑块之后手指上下滑动页面，滑块不再定格在放大那一刻（之前要再点一下才恢复）\n'
-    '· 修好滑块边缘的彩色折射：它之前会画进滑块里面（几道横线和弧线），现在只贴着轮廓\n'
-    '· 开关按住时改成上下拉长（之前是个大圆），拖动时一端粗一端细、跟着拖动方向\n'
-    '· 修好滑块附近那一小段「边缘发光」——底栏与分段器的玻璃边不再有一段莫名更亮\n'
-    '· 在滑块上按下之后滑走（取消这次点按），滑块会回到原来的位置，不再停在手指按下的那一格\n\n'
         '\n'
 ;
 
-const String _changelogEn = 'v0.10.20\n'
+const String _changelogEn = 'v0.10.21\n'
+    '· Fixed three "the screen did not keep up" cases from the previous version: after adjusting a single day or switching language the home-screen widget now updates (it used to stay on the old shifts)\n'
+    '· After adjusting a day or editing the cycle, the info card\'s monthly tally now updates (it used to keep the old numbers)\n'
+    '· Long-press selecting a run of days no longer rebuilds the whole calendar every frame — the previous release notes claimed this, but it was not actually done yet\n\n'
+
+    'v0.10.20\n'
     '· Smoother: tapping a date, flying back to Today, dragging the selection block and long-press selecting a run of days no longer rebuild the whole calendar every frame\n'
     '· Lighter on the battery: the slowly drifting glow no longer repaints the page along with it (it pauses while you drag and carries on after — you will not notice)\n'
     '· Faster start-up, and less stutter after switching months, ticking a to-do or saving a schedule\n'
@@ -142,12 +146,6 @@ const String _changelogEn = 'v0.10.20\n'
     'v0.10.12\n'
     '· The switch looks less pointy while held — it is a little wider when it grows (27 × 42 at full lift)\n'
     '· Fixed a small switch bug: after a drag was interrupted by the system, the next drag made the knob jump\n\n'
-    'v0.10.11\n'
-    '· Long-pressing a slider and then scrolling the page no longer freezes it mid-enlargement (it used to need another tap to recover)\n'
-    '· Fixed the coloured refraction on the switch: it used to be drawn inside the knob (stray lines and arcs) and now hugs the outline\n'
-    '· Holding the switch now stretches it vertically instead of turning it into a big circle, and dragging tapers it along the direction of travel\n'
-    '· Fixed the odd bright patch on the glass edge near the slider (tab bar and segmented controls)\n'
-    '· Cancelling a press on a slider (press, then slide away) returns it to where it was instead of stranding it under your finger\n\n'
         '\n'
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

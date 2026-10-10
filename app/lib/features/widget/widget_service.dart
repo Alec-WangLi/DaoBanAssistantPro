@@ -10,7 +10,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/schedule_chain.dart';
-import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import 'widget_snapshot.dart';
 
@@ -54,27 +53,27 @@ class WidgetService {
     required int todayTodoCount,
   }) async {
     final DateTime now = DateTime.now();
-    // 指纹取**输入**而不是 JSON：快照是
-    // (链, 窗口, 今天, 主题, 主色, 今日待办数) 的纯函数（见 `buildWidgetSnapshot`），
-    // 这六样一样不差地覆盖了它。直接比 JSON 是不行的 —— 里面带 `genAtMs`
-    // （生成时刻，毫秒），两次调用之间必然不同，等于永不命中。
-    final String key = <String>[
-      chain?.cacheKey ?? '-',
-      widgetWindow(now).from.millisecondsSinceEpoch.toString(),
-      dateOnly(now).millisecondsSinceEpoch.toString(),
-      settings.themeMode.name,
-      settings.accentColor.toARGB32().toString(),
-      todayTodoCount.toString(),
-    ].join('|');
+    final Map<String, Object?> snap = buildWidgetSnapshot(
+      chain: chain,
+      now: now,
+      themeMode: settings.themeMode.name,
+      accent: settings.accentColor.toARGB32(),
+      todayTodoCount: todayTodoCount,
+    );
+    final String json = jsonEncode(snap);
+    // 去重键 = **内容本身**，只把「生成时刻」那一项换成常量（它每次都不同，但它不是
+    // 内容；`genAtMs` 只有诊断用途，原生侧一个字都没读它）。
+    //
+    // ⚠️ **别退回「手写一串输入当指纹」** —— 那串东西漏一项就是「该推的没推」，
+    // 而它已经漏过一次（拿 `chain.cacheKey` 当指纹：那是**信息卡高度**的指纹，
+    // 不含按天改班、周期、班组起始日、班组错位，也不含语言 ⇒ 「调一次班」或
+    // 「换一次语言」之后桌面小组件**一直画着旧的**，而 App 里已经变了）。
+    // 比内容自己会覆盖将来新增的每一个字段 —— 代价只是多一次 `jsonEncode`
+    // （热态那次构建 8~11ms，编码占其中一小截）。
+    snap['genAtMs'] = 0;
+    final String key = jsonEncode(snap);
     if (key == _lastPushedKey) return;
     try {
-      final json = jsonEncode(buildWidgetSnapshot(
-        chain: chain,
-        now: now,
-        themeMode: settings.themeMode.name,
-        accent: settings.accentColor.toARGB32(),
-        todayTodoCount: todayTodoCount,
-      ));
       await _channel.invokeMethod<bool>('widgetPushSnapshot', {'json': json});
       // ⚠️ **只在推成功之后才记。** 失败也记的话，那条「装完新版先打开一次 App」的
       // 兜底重试（回前台再推一次）就永远不会再试 —— 桌面会一直挂着升级前那一次的

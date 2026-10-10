@@ -2133,10 +2133,40 @@ void main() {
 
   // ── 当月那五样的缓存键（v0.10.20）───────────────────────────────────────
   //
-  // `_factsFor` 把「本月统计 / 有班表在管吗 / 有调过班吗 / 有未完成待办吗」这几样
-  // 按一把键缓存住（原来每次重建都要重算：约 93 次链查询 + 一个 TextPainter）。
-  // **键漏一项 = 界面上静默显示旧值** —— 这两条各钉一头。
+  // `_factsFor` 把「本月统计 / 整月有没有班表在管」按一把键缓存住（这两样是每次
+  // 重建都要整月 × 链查询的大头）。**键漏一项 = 界面上静默显示旧值** —— 下面几条
+  // 各钉一头：语言、以及**排班本身**（基准日 / 周期 / 班组错位 / 按天改班）。
+  //
+  // ⚠️ 键里用的是 `chain.rotationKey` 而**不是 `chain.cacheKey`** —— 后者是「信息卡
+  // 高度」的指纹，不含按天改班。当初用错它的后果是「调过班之后这一行还是旧数字」，
+  // 这正是下面第二条用例钉住的（独立审查抓的）。
   group('当月事实缓存', () {
+    testWidgets('调过班之后「本月统计」那一行跟着变（键里必须含排班本身）', (tester) async {
+      // ⚠️ 这一条是独立审查抓的：键原来用的是 `chain.cacheKey`，而那个是**信息卡
+      // 高度**的指纹 —— 它只看组名 / 简称 / 空白表 / 时段，**不含基准日、周期、
+      // 班组错位、按天改班的覆盖**。于是「调一次班」之后键不变 ⇒ 这一行一直显示
+      // 旧数字，而同一个界面上格子与班次行已经变了（自己打自己的脸）。
+      final AppDatabase db = await _pumpCalendar(tester, 'four_crew_three_shift');
+      final String before = tester
+          .widget<Text>(find.byKey(const Key('info-card-month-tally')))
+          .data!;
+
+      final DateTime today = dateOnly(DateTime.now());
+      final ActiveSchedules schedules =
+          (await AppRepository(db).getActiveSchedules())!;
+      final ShiftClass target = schedules.chain.scheduleOn(today)!.classes[1];
+      await AppRepository(db)
+          .setDayOverrides(<DateTime>[today], classId: target.id!);
+      await tester.pumpAndSettle();
+
+      final String after = tester
+          .widget<Text>(find.byKey(const Key('info-card-month-tally')))
+          .data!;
+      expect(after, isNot(before),
+          reason: '调过班之后这一行还是旧数字 —— 键里少了「排班本身」');
+      await _disposeCalendar(tester);
+    });
+
     testWidgets('换语言之后「本月统计」那一行跟着换（键里必须含语言）', (tester) async {
       await _pumpCalendar(tester, 'four_crew_three_shift');
       expect(find.textContaining(L10n.monthTally), findsOneWidget,

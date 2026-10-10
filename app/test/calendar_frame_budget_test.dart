@@ -120,6 +120,36 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  testWidgets('液态档：长按拖选一段日子时，一帧重建的 widget 数 ≤ 80', (tester) async {
+    // ⚠️ 这一条是独立审查抓出来的缺口：上面那条只测「点日期起滑行」，而**用户真正
+    // 觉得卡的是拖选** —— 带子每帧把「末端淌到哪儿」回调给父层，父层每帧 `setState`
+    // 就把整页重建了一遍（实测 509 个 widget/帧，比滑行那 42 个还多）。
+    await _pumpCalendar(tester, liquid: true);
+
+    final TestGesture g =
+        await tester.startGesture(tester.getCenter(find.byKey(const ValueKey<String>('day-card-8'))));
+    await tester.pump(const Duration(milliseconds: 600)); // 过长按判定，进入多选态
+    await g.moveBy(const Offset(0, 60)); // 往下拖一行，带子开始淌
+    await tester.pump();
+
+    var n = 0;
+    var on = false;
+    debugOnRebuildDirtyWidget = (Element e, bool wasDirty) {
+      if (on) n++;
+    };
+    on = true;
+    await tester.pump(const Duration(milliseconds: 16)); // 带子还在动的一帧
+    on = false;
+    debugOnRebuildDirtyWidget = null;
+
+    expect(n, lessThanOrEqualTo(80),
+        reason: '拖选时整页还在每帧重建 —— 带子的末端位置不该由 `setState` 驱动。'
+            '实测本次：$n');
+    await g.up();
+    await tester.pumpAndSettle();
+    await _disposeCalendar(tester);
+  });
+
   testWidgets('对照：标准档同一个动作仍然只有个位数', (tester) async {
     // 标准档那棵树一个字没动（`AnimatedPositioned` 自己走），所以它本来就该小。
     await _pumpCalendar(tester, liquid: false);

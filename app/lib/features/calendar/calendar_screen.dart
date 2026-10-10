@@ -199,7 +199,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   ///
   /// ⚠️ **`ref.watch` 就在这一句里，而它必须每次 build 都跑到** —— 别把它挪进
   /// 「缓存命中就提前返回」的那条路（那等于勾一条待办时这一页不再重建，徽章停住）。
-  /// 所以它由 `build()` 开头统一读一次、存进 [_pendingTodosNow]。
+  /// 这也是它**不进 [_factsFor]** 的原因之一（另一个原因是它依赖**数据**，
+  /// 而 [_factsFor] 的键只跟方案与月份有关）。
   bool get _monthHasPendingTodos {
     final events = ref.watch(eventsProvider).valueOrNull;
     if (events == null) return false;
@@ -238,7 +239,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       _month.year.toString(),
       _month.month.toString(),
       L10n.isEn.toString(),
-      chain?.cacheKey ?? '-',
+      // ⚠️ **`rotationKey` 而不是 `cacheKey`**：后者的注释自己写着它是「会影响
+      // 信息卡高度」的指纹，**不含基准日 / 周期 / 班组错位 / 按天改班** —— 用它当键
+      // 的话，「调一次班」之后这一行会一直显示旧数字（独立审查抓的）。
+      chain?.rotationKey ?? '-',
     ].join('|');
     if (key == _factsKey && _facts != null) return _facts!;
     final _MonthFacts f = _MonthFacts(
@@ -1506,11 +1510,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                       tipCell: ((bandTip.left - _hPad) / cellW).round(),
                       accent: Theme.of(context).colorScheme.primary,
                       isDark: Theme.of(context).brightness == Brightness.dark,
-                      // 末端淌到哪儿了：只记下来 + 重建（挤字的场要用）。
-                      // 带子只在动的时候回调，所以这不会变成常驻的每帧重建。
+                      // 末端淌到哪儿了。**走通知源，不是 `setState`** —— 带子在动的
+                      // 时候这个回调是**每帧**发的，`setState` 就等于每帧把整页重建
+                      // 一遍（独立审查实测 509 个 widget/帧，比滑行那条路还狠）。
+                      //
+                      // 场心仍然跟着「淌着的那一点」（规格 §4.5 那条订正：不能跟
+                      // 「末端吸附到的那一格」，格心的权重恒为 0，那样一格都不挤）。
                       onTipPos: (double v) {
                         if (!mounted) return;
-                        setState(() => _rangeTipPos = v);
+                        _rangeTipPos = v; // 真值照记（布局那一份也读它当兜底）
+                        _publishFrame(
+                            center: Offset(_hPad + (v + 0.5) * cellW,
+                                bandTip.center.dy));
                       },
                     ),
                   ),
