@@ -37,7 +37,28 @@ class WidgetService {
 
   /// 清掉去重记忆。用例之间要隔离（它是模块级的）。
   @visibleForTesting
-  static void resetPushCache() => _lastPushedKey = null;
+  /// 仅供测试：把模块级状态（去重的「上一份」与「在飞」）一起清掉。
+  ///
+  /// **两个要一起清**：只清去重的话，上一个用例里那发没跑完的推送会把 `_inFlight`
+  /// 留成 `true`，下一个用例的冷启动推送就被守卫**静默丢掉** —— 表现是
+  /// 「前提：冷启动那几次确实试过推」那种断言莫名其妙地空掉（第一次加守卫时
+  /// `home_shell_nav_test` 就是这么红的）。
+  @visibleForTesting
+  static void resetPushCache() {
+    _lastPushedKey = null;
+    _inFlight = false;
+  }
+
+  /// 上一次推送还在飞。`true` 时后来的触发**直接丢掉**。
+  ///
+  /// 为什么需要它：五个触发点（首帧 / 回前台 / 排班变 / 外观变 / 勾待办）**可能挨在
+  /// 一起** —— 保存一次排班会让好几个 provider 连着发。而 [push] 中间要同步构建
+  /// 224 天 + 编码两份 JSON + 跨一次端；上一次还在飞的时候第二次进来，去重键又是
+  /// 不同的（内容真的变了），于是两发一起压到原生侧、把全部实例重渲染两遍。
+  ///
+  /// ⚠️ **必须用 `finally` 放开**：一次失败就把闸门永久关死，比没有守卫更糟 ——
+  /// 那之后再也推不出去，而桌面上什么都看不出来。
+  static bool _inFlight = false;
 
   /// 把当前状态算成快照推给原生。
   ///
@@ -73,6 +94,10 @@ class WidgetService {
     snap['genAtMs'] = 0;
     final String key = jsonEncode(snap);
     if (key == _lastPushedKey) return;
+    // 上一次还在飞：这次直接丢掉（见 [_inFlight]）。放在去重之后，因为「同一份内容」
+    // 本来就不该发，那是更省的那条路。
+    if (_inFlight) return;
+    _inFlight = true;
     try {
       await _channel.invokeMethod<bool>('widgetPushSnapshot', {'json': json});
       // ⚠️ **只在推成功之后才记。** 失败也记的话，那条「装完新版先打开一次 App」的
@@ -92,6 +117,10 @@ class WidgetService {
       } catch (_) {
         // 连日志都发不出去（引擎已经没了）—— 到这一步没什么可做的了。
       }
+    } finally {
+      // ⚠️ **放在 `finally` 里**：成功、失败、连日志都发不出去，三条路都要放开闸门。
+      // 少放一次，这条链路就永久哑了（而界面上看不出来）。
+      _inFlight = false;
     }
   }
 

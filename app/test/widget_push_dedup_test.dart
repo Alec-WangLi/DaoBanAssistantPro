@@ -8,6 +8,8 @@
 //
 // ⚠️ **推失败不许记「已推」**：那条「装完新版先打开一次 App」的兜底重试，靠的正是
 // 回前台那一次；记错了它就永远不再试，桌面小组件会一直挂着升级前那一次的渲染。
+import 'dart:async';
+
 import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
@@ -86,7 +88,7 @@ void main() {
     await initializeDateFormatting('zh');
   });
 
-  // 去重的「上一份」是模块级状态，用例之间要清掉。
+  // 去重的「上一份」与「在飞」都是模块级状态，用例之间要清掉。
   setUp(WidgetService.resetPushCache);
 
   test('同一份内容连推两次，只发一次', () async {
@@ -158,5 +160,36 @@ void main() {
     expect(n, 2,
         reason: '第一次失败了就不能记「已推」—— 否则「装完新版先打开一次 App」'
             '那条兜底重试永远不再试，桌面停在升级前那一次渲染');
+  });
+
+  test('上一次还没回来时，第二次触发不发车；守卫放开之后照样能推', () async {
+    // 触发点有五处（首帧 / 回前台 / 排班变 / 外观变 / 勾待办），它们**可能挨在一起**：
+    // 保存一次排班会让好几个 provider 连着发。而 `push` 中间要同步构建 224 天 +
+    // 编码两份 JSON + 跨一次端 —— 上一次还在飞的时候第二次进来，去重键又不同
+    // （内容真的变了），于是两发一起压到原生侧、把所有实例重渲染两遍。
+    var pushes = 0;
+    final Completer<void> gate = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (MethodCall call) async {
+      if (call.method != 'widgetPushSnapshot') return null;
+      pushes++;
+      if (pushes == 1) await gate.future; // 第一发挂着不返回
+      return true;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, null));
+
+    final Future<void> a = _push(todoCount: 3);
+    await Future<void>.delayed(Duration.zero); // 让它跑到跨端那一步、挂住
+    await _push(todoCount: 4); // 内容不同 ⇒ 去重拦不住，只能靠 in-flight 守卫
+    expect(pushes, 1, reason: '上一次还没回来就发第二发 —— 原生侧会重渲染两遍');
+
+    gate.complete();
+    await a;
+
+    await _push(todoCount: 5);
+    expect(pushes, 2,
+        reason: '守卫把闸门**永久**关死了 —— 那比没有守卫更糟：以后再也推不出去');
   });
 }
