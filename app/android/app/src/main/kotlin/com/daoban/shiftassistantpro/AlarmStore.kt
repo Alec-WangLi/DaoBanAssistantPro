@@ -1,6 +1,8 @@
 package com.daoban.shiftassistantpro
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -69,42 +71,100 @@ object AlarmStore {
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    // ---------- 内存镜像 + 合并落盘 ----------
+    //
+    // `put` 原先是「读全表 → 解析 → 全量序列化 → 全量写回」，**一条一次**。而
+    // `AlarmScheduler.schedule` 每排一条闹钟就调它一次 —— 一次 `rescheduleAll`
+    // 是几十条（用户库实测 29 条班次闹钟 + 8 条待办），于是整份 JSON 被解析几十遍、
+    // 又序列化几十遍，是实打实的 O(n²)。
+    //
+    // 改法两层：① `all()` 之后把解析结果留在内存里，后续的 `put` 直接在它上面改；
+    // ② `put` 不立刻落盘，攒一段静默期合并写一次 —— 一次重排因此只落一次盘。
+    //
+    // ⚠️ **清空类必须取消待落盘**，否则「清空重置」之后那次延迟写会把旧清单原样写回去。
+    // ⚠️ 代价：最后一条的记录晚最多 `FLUSH_DELAY_MS` 才落盘，而那窗口里进程被杀就丢了。
+    // 这份清单只在**设备重启**后才有用（AlarmManager 的记录重启即清），所以这个窗口
+    // 可以忽略 —— 何况 `write` 本来就是 `apply()`（异步落盘），性质一样。
+
+    /** 内存镜像。`null` = 还没读过。 */
+    private var cachedEntries: MutableList<Entry>? = null
+    private var cachedQuiets: MutableList<Quiet>? = null
+
+    /** 合并落盘的静默期。一次 `rescheduleAll` 那几十条落在同一个窗口里。 */
+    private const val FLUSH_DELAY_MS = 1_000L
+    private val flushHandler = Handler(Looper.getMainLooper())
+    private var flushEntriesPending = false
+    private var flushQuietsPending = false
+
+    private fun scheduleFlush(context: Context, entries: Boolean, quiets: Boolean) {
+        val app = context.applicationContext
+        if (entries && !flushEntriesPending) {
+            flushEntriesPending = true
+            flushHandler.postDelayed({
+                flushEntriesPending = false
+                cachedEntries?.let { write(app, it) }
+            }, FLUSH_DELAY_MS)
+        }
+        if (quiets && !flushQuietsPending) {
+            flushQuietsPending = true
+            flushHandler.postDelayed({
+                flushQuietsPending = false
+                cachedQuiets?.let { writeQuiets(app, it) }
+            }, FLUSH_DELAY_MS)
+        }
+    }
+
+    private fun cancelPendingFlush() {
+        flushHandler.removeCallbacksAndMessages(null)
+        flushEntriesPending = false
+        flushQuietsPending = false
+    }
+
     /** 全量读。解析不出来的记录直接跳过 —— 一条坏数据不该让整份清单失效。 */
     @Synchronized
     fun all(context: Context): List<Entry> {
-        val raw = prefs(context).getString(KEY, null) ?: return emptyList()
-        return try {
-            val arr = JSONArray(raw)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val id = o.optInt("id", -1)
-                val millis = o.optLong("millis", 0L)
-                if (id < 0 || millis <= 0L) return@mapNotNull null
-                Entry(
-                    id = id,
-                    millis = millis,
-                    label = o.optString("label", "闹钟"),
-                    uri = o.optString("uri", "").ifEmpty { null },
-                    repeatType = o.optInt("repeatType", 0),
-                    hour = o.optInt("hour", 0),
-                    minute = o.optInt("minute", 0),
-                    weekdays = o.optInt("weekdays", 0),
-                    detail = o.optString("detail", "").ifEmpty { null },
-                    repeatTimes = _readRepeatTimes(o),
-                )
-            }
-        } catch (e: Exception) {
-            AlarmLog.error(context, "AlarmStore.all 解析失败，按空清单处理: ${e.message}")
+        cachedEntries?.let { return it }
+        val raw = prefs(context).getString(KEY, null)
+        val parsed: List<Entry> = if (raw == null) {
             emptyList()
+        } else {
+            try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).mapNotNull { i ->
+                    val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                    val id = o.optInt("id", -1)
+                    val millis = o.optLong("millis", 0L)
+                    if (id < 0 || millis <= 0L) return@mapNotNull null
+                    Entry(
+                        id = id,
+                        millis = millis,
+                        label = o.optString("label", "闹钟"),
+                        uri = o.optString("uri", "").ifEmpty { null },
+                        repeatType = o.optInt("repeatType", 0),
+                        hour = o.optInt("hour", 0),
+                        minute = o.optInt("minute", 0),
+                        weekdays = o.optInt("weekdays", 0),
+                        detail = o.optString("detail", "").ifEmpty { null },
+                        repeatTimes = _readRepeatTimes(o),
+                    )
+                }
+            } catch (e: Exception) {
+                AlarmLog.error(context, "AlarmStore.all 解析失败，按空清单处理: ${e.message}")
+                emptyList()
+            }
         }
+        val box = parsed.toMutableList()
+        cachedEntries = box
+        return box
     }
 
     /** 写入 / 覆盖一条（同一个 id 只有一条待触发记录，与 AlarmScheduler 的约定一致）。 */
     @Synchronized
     fun put(context: Context, e: Entry) {
         try {
-            val list = all(context).filterNot { it.id == e.id } + e
-            write(context, list)
+            cachedEntries =
+                (all(context).filterNot { it.id == e.id } + e).toMutableList()
+            scheduleFlush(context, entries = true, quiets = false)
         } catch (ex: Exception) {
             AlarmLog.error(context, "AlarmStore.put 失败: ${ex.message}")
         }
@@ -113,6 +173,7 @@ object AlarmStore {
     @Synchronized
     fun remove(context: Context, id: Int) {
         try {
+            // 删除是低频单发，不等静默期，立刻落盘（`write` 会同步更新镜像）。
             write(context, all(context).filterNot { it.id == id })
         } catch (ex: Exception) {
             AlarmLog.error(context, "AlarmStore.remove 失败: ${ex.message}")
@@ -122,6 +183,8 @@ object AlarmStore {
     @Synchronized
     fun clear(context: Context) {
         try {
+            cancelPendingFlush()
+            cachedEntries = null
             prefs(context).edit().remove(KEY).apply()
         } catch (ex: Exception) {
             AlarmLog.error(context, "AlarmStore.clear 失败: ${ex.message}")
@@ -156,32 +219,42 @@ object AlarmStore {
 
     @Synchronized
     fun allQuiets(context: Context): List<Quiet> {
-        val raw = prefs(context).getString(KEY_QUIET, null) ?: return emptyList()
-        return try {
-            val arr = JSONArray(raw)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val id = o.optInt("id", -1)
-                val millis = o.optLong("millis", 0L)
-                if (id < 0 || millis <= 0L) return@mapNotNull null
-                Quiet(
-                    id = id,
-                    millis = millis,
-                    title = o.optString("title", ""),
-                    body = o.optString("body", ""),
-                    repeatTimes = _readRepeatTimes(o),
-                )
-            }
-        } catch (e: Exception) {
-            AlarmLog.error(context, "AlarmStore.allQuiets 解析失败，按空清单处理: ${e.message}")
+        cachedQuiets?.let { return it }
+        val raw = prefs(context).getString(KEY_QUIET, null)
+        val parsed: List<Quiet> = if (raw == null) {
             emptyList()
+        } else {
+            try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).mapNotNull { i ->
+                    val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                    val id = o.optInt("id", -1)
+                    val millis = o.optLong("millis", 0L)
+                    if (id < 0 || millis <= 0L) return@mapNotNull null
+                    Quiet(
+                        id = id,
+                        millis = millis,
+                        title = o.optString("title", ""),
+                        body = o.optString("body", ""),
+                        repeatTimes = _readRepeatTimes(o),
+                    )
+                }
+            } catch (e: Exception) {
+                AlarmLog.error(context, "AlarmStore.allQuiets 解析失败，按空清单处理: ${e.message}")
+                emptyList()
+            }
         }
+        val box = parsed.toMutableList()
+        cachedQuiets = box
+        return box
     }
 
     @Synchronized
     fun putQuiet(context: Context, q: Quiet) {
         try {
-            writeQuiets(context, allQuiets(context).filterNot { it.id == q.id } + q)
+            cachedQuiets =
+                (allQuiets(context).filterNot { it.id == q.id } + q).toMutableList()
+            scheduleFlush(context, entries = false, quiets = true)
         } catch (ex: Exception) {
             AlarmLog.error(context, "AlarmStore.putQuiet 失败: ${ex.message}")
         }
@@ -207,6 +280,7 @@ object AlarmStore {
     }
 
     private fun write(context: Context, list: List<Entry>) {
+        cachedEntries = list.toMutableList()
         val arr = JSONArray()
         for (e in list) {
             arr.put(
@@ -230,6 +304,7 @@ object AlarmStore {
     }
 
     private fun writeQuiets(context: Context, list: List<Quiet>) {
+        cachedQuiets = list.toMutableList()
         val arr = JSONArray()
         for (q in list) {
             arr.put(
