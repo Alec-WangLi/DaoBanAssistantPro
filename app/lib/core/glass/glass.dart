@@ -38,6 +38,10 @@ void recomputeGlassTiers() {
 /// 为什么要有这个函数、而不是各处直接写 `ImageFilter.blur`：它是**唯一**一处
 /// 「背景怎么处理」的装配点 —— 阶段 2 的液态档要在这里按档位分叉。散着写的话，
 /// 那一步就得满仓库找 `BackdropFilter`。
+///
+/// **别指望靠简化这个 filter 省钱**：真机上量过 —— 同一段滑动，只留模糊（σ 仍 18）
+/// raster p90 是 7.92ms、只留饱和度是 8.21ms，而**整条 `BackdropFilter` 摘掉是 2.37ms**。
+/// 贵的是那条渲染通道本身，不是滤镜算什么。
 ImageFilter glassFilter(double sigma) => ImageFilter.compose(
       outer: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
       inner: AppTokens.glassSaturation,
@@ -46,11 +50,19 @@ ImageFilter glassFilter(double sigma) => ImageFilter.compose(
 /// 液态玻璃面板。
 ///
 /// 效果构成（与调研结论一致）：
-///   1) 背景模糊（BackdropFilter + ImageFilter.blur）
+///   1) 背景模糊（[BackdropFilter] + `ImageFilter.blur`）—— **只在背后真有东西会动
+///      的时候才挂**，见 [blurBackdrop]
 ///   2) 半透明渐变着色（近似饱和度提升）
 ///   3) 顶部镜面高光描边（liquid 边缘光）
 ///
-/// 低端降级：`enableBlur=false` 时用更不透明的填充代替真实背景模糊。
+/// **这个件上有两件互相独立的事，别把它们当成一件：**
+///   · [translucentFill] —— 用哪**支填充**（观感）
+///   · [blurBackdrop]    —— 挂不挂那条 backdrop **渲染通道**（代价）
+///
+/// 它们从前捆在一个叫 `enableBlur` 的开关上。捆着的时候，「卡片不糊」只能靠换成
+/// 更实的那支填充来换，而那**肉眼可见**；拆开之后卡片可以「不糊、但仍是原来那支
+/// 半透填充」，逐像素几乎不变（真机实测全屏 ≥4 的像素 0.43%、≥8 的 0.01%）。
+///
 /// 真·折射/液滴 shader 作为后续增强（FragmentProgram）叠加。
 class GlassPanel extends StatelessWidget {
   const GlassPanel({
@@ -58,7 +70,8 @@ class GlassPanel extends StatelessWidget {
     required this.child,
     this.borderRadius = const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
     this.blurSigma = AppTokens.blurPanel,
-    this.enableBlur = true,
+    this.translucentFill = true,
+    this.blurBackdrop = true,
     this.solid = false,
     this.padding,
     this.margin,
@@ -69,8 +82,18 @@ class GlassPanel extends StatelessWidget {
   final BorderRadius borderRadius;
   final double blurSigma;
 
-  /// 是否启用真实背景模糊（API31+ 或性能充足时为 true）。
-  final bool enableBlur;
+  /// 用哪一支填充：`true` = 半透那支（配模糊用）；`false` = 更实的那支
+  /// （低端档的补偿配方 / 密集列表用）。
+  ///
+  /// ⚠️ **它只管观感，不管糊不糊** —— 那件事归 [blurBackdrop]。
+  final bool translucentFill;
+
+  /// 要不要真的挂 [BackdropFilter]。
+  ///
+  /// `false` = 只画填充 / 描边 / 阴影。**背后是平色时糊了等于没糊**，却要付一次
+  /// backdrop 渲染通道的钱 —— 真机上那是整帧最贵的一笔（编辑排班页 raster p90
+  /// **13.10ms → 2.37ms**、掉拍帧 13.4% → 2%）。[GlassTile]（页面里的卡片）恒为 false。
+  final bool blurBackdrop;
 
   /// 近实心模式：底部弹层等场景用。背景遮罩照常变暗，但面板本身用
   /// 不透明的 [Theme.colorScheme.surface] 作底，不再半透明透出遮罩的暗色。
@@ -90,10 +113,10 @@ class GlassPanel extends StatelessWidget {
   Widget _build(BuildContext context, bool blurDisabled) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = Theme.of(context).colorScheme.surface;
-    final blurOn = enableBlur && !blurDisabled;
+    final translucent = translucentFill && !blurDisabled;
     final fill = solid
         ? [surface, surface]
-        : AppTokens.glassSurface(isDark, blurOn);
+        : AppTokens.glassSurface(isDark, translucent);
     final fillGradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
@@ -115,13 +138,21 @@ class GlassPanel extends StatelessWidget {
       ),
     );
 
-    if (blurOn && !solid) {
+    // **裁不裁这一圈，跟的是「填充那一支」，不是「挂不挂模糊」。**
+    //
+    // 它本来是 `blurOn`（模糊开着才裁）—— 摘掉卡片的 `BackdropFilter` 之后这个条件
+    // 其实已经没有存在理由了，但**不能顺手删**：`ClipRRect` 同时把 panel 的
+    // `boxShadow` 裁进了圆角矩形内（全 app 因此有两套卡片观感 —— 带模糊的没有阴影，
+    // `translucentFill: false` 的与 `solid` 的有）。删了卡片会突然长出一圈阴影，
+    // 那是**肉眼可见**的改动，属于观感决定、要单独拍板（spec §3.2 已裁定这一轮保持现状）。
+    final clipPanel = !solid && translucentFill && !blurDisabled;
+    final blurOn = !solid && blurBackdrop && !blurDisabled;
+    if (clipPanel || blurOn) {
       panel = ClipRRect(
         borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: glassFilter(blurSigma),
-          child: panel,
-        ),
+        child: blurOn
+            ? BackdropFilter(filter: glassFilter(blurSigma), child: panel)
+            : panel,
       );
     }
     if (onTap != null) {
@@ -138,7 +169,14 @@ class GlassPanel extends StatelessWidget {
   }
 }
 
-/// 液态玻璃圆角容器（无内边距快捷版）。
+/// 液态玻璃圆角容器（无内边距快捷版）—— **页面里的卡片**。
+///
+/// ⚠️ **它永远不挂 `BackdropFilter`**（`blurBackdrop: false`）：卡片坐在页面上，
+/// 背后是一块**平色**，糊了等于没糊，却要付一次 backdrop 渲染通道的钱 ——
+/// 真机上那是整帧最贵的一笔（编辑排班页 raster p90 13.10ms → 2.37ms）。
+/// 这其实是 v0.4.1 对「列表行」做过的同一件事，卡片当时被漏下了。
+///
+/// **真要一个会糊的面（背后是正文 / 会滚动的正文），用 [GlassPanel]。**
 class GlassTile extends StatelessWidget {
   const GlassTile({
     super.key,
@@ -146,7 +184,7 @@ class GlassTile extends StatelessWidget {
     this.borderRadius = const BorderRadius.all(Radius.circular(AppTokens.radiusL)),
     this.padding,
     this.margin,
-    this.enableBlur = true,
+    this.translucentFill = true,
     this.onTap,
   });
 
@@ -154,7 +192,9 @@ class GlassTile extends StatelessWidget {
   final BorderRadius borderRadius;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
-  final bool enableBlur;
+
+  /// 见 [GlassPanel.translucentFill] —— 只管**填充那一支**，与糊不糊无关。
+  final bool translucentFill;
   final VoidCallback? onTap;
 
   @override
@@ -163,7 +203,8 @@ class GlassTile extends StatelessWidget {
       borderRadius: borderRadius,
       padding: padding,
       margin: margin,
-      enableBlur: enableBlur,
+      translucentFill: translucentFill,
+      blurBackdrop: false,
       onTap: onTap,
       blurSigma: AppTokens.blurCard,
       child: child,

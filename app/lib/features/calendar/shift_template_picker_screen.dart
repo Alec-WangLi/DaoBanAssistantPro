@@ -222,7 +222,7 @@ class _ShiftTemplatePickerScreenState
     );
 
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: EdgeInsets.zero,
       child: GlassPressable(
@@ -316,7 +316,7 @@ class _ShiftTemplatePickerScreenState
             // + 紧凑删除钮 + 点行进编辑），只是装在弹窗里。
             for (final t in saved)
               GlassTile(
-                enableBlur: false,
+                translucentFill: false,
                 margin: const EdgeInsets.only(bottom: AppTokens.spaceSm),
                 padding: EdgeInsets.zero,
                 child: GlassPressable(
@@ -423,7 +423,7 @@ class _ShiftTemplatePickerScreenState
   Widget _customCard(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       padding: EdgeInsets.zero,
       child: GlassPressable(
         child: InkWell(

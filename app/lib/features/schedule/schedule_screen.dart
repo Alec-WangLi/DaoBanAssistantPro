@@ -208,7 +208,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     final onSurface = Theme.of(context).colorScheme.onSurface;
 
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       // 卡片之间：分隔两条待办（两个板块），归节奏档。
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

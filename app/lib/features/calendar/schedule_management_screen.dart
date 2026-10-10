@@ -53,7 +53,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
                 ...schedules.map((s) {
                   final isCurrent = s.id == current?.currentScheduleId;
                   return GlassTile(
-                    enableBlur: false,
+                    translucentFill: false,
                     margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
                     padding: EdgeInsets.zero,
                     child: GlassPressable(
@@ -181,7 +181,7 @@ class _TimelineSection extends ConsumerWidget {
     final hasPeriods = spans.isNotEmpty;
 
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(

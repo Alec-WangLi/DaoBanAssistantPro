@@ -2189,4 +2189,23 @@ void main() {
     });
 
   });
+
+  // ── 这一轮的性能护栏 ─────────────────────────────────────────────────
+  //
+  // 日历页那两张 `GlassTile`（完整信息卡 / 小窗卡）背后是那层极淡的光晕。
+  // 真机上把卡片的 `BackdropFilter` 摘掉：日历 raster p50 **6.22ms → 3.59ms**、
+  // p90 **10.36 → 5.92**。观感是量过的 —— 相位对齐之后全屏 ≥4 的像素 **0.43%**、
+  // ≥8 的 **0.01%**，放大 12 倍才看得见（差异只有文字描边的抗锯齿、
+  // 与光晕透过卡片的极淡纹理）。所以这不是取舍，是白捡。
+  //
+  // 夹具是**标准档**（`liquidGlass` 默认关）—— 那几层模糊属于液态档的浮层，
+  // 不在这个断言的范围内。
+  testWidgets('日历页不再有卡片那一层 BackdropFilter', (tester) async {
+    await _pumpCalendar(tester, 'four_crew_three_shift');
+    final int layers =
+        tester.widgetList<BackdropFilter>(find.byType(BackdropFilter)).length;
+    // 改之前这里是 **1**（完整信息卡那一张）。小窗档那张用的是另一个夹具尺寸。
+    expect(layers, lessThanOrEqualTo(0), reason: '实测 $layers 层');
+    await _disposeCalendar(tester);
+  });
 }

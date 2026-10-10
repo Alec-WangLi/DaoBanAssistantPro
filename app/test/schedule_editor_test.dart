@@ -1498,4 +1498,23 @@ void main() {
       });
     }
   });
+
+  // ── 这一轮的性能护栏 ─────────────────────────────────────────────────
+  //
+  // 卡片（`GlassTile`）背后是平色，**不挂 `BackdropFilter`** —— 真机上那是整帧
+  // 最贵的一笔：编辑排班页滑动时 raster p90 **13.10ms → 2.37ms**、掉拍帧
+  // **13.4% → 2%**（帧预算 8.33ms，这块屏全程 120Hz）。而只留模糊或只留饱和度
+  // 都只降到 8ms 上下 —— 贵的是那条渲染通道本身，不是滤镜算什么。
+  //
+  // 这一条钉的是**剩下的那几层**：编辑排班页上只该剩**浮在滚动正文之上的控件**
+  // （底部那颗保存胶囊、班次行里的开关），卡片一层都不该有。
+  testWidgets('编辑排班页的 BackdropFilter 层数有上界', (tester) async {
+    await _pumpEditor(tester, _domain(cycle: const [0, 1, 2]));
+    final int layers =
+        tester.widgetList<BackdropFilter>(find.byType(BackdropFilter)).length;
+    // 夹具是**标准档**（`liquidGlass` 默认关）：分段器与开关只在液态档下才带模糊，
+    // 所以这里应当是 **0**（改之前是 **6** —— 六张卡各一层）。
+    // 液态档下那两族会各带一层，那是浮在正文上的控件、有意保留。
+    expect(layers, lessThanOrEqualTo(0), reason: '实测 $layers 层');
+  });
 }

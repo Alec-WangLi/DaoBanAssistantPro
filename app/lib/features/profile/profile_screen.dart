@@ -41,7 +41,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionAppearance),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,7 +174,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionSchedule),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: EdgeInsets.zero,
               child: GlassPressable(
                 child: ListTile(
@@ -192,7 +192,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionDesktop),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: EdgeInsets.zero,
               child: GlassPressable(
                 child: ListTile(
@@ -210,7 +210,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionData),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: EdgeInsets.zero,
               child: GlassPressable(
                 child: ListTile(
@@ -228,7 +228,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionAbout),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
@@ -700,7 +700,7 @@ class _RingtoneTileState extends ConsumerState<_RingtoneTile> {
 
   @override
   Widget build(BuildContext context) => GlassTile(
-        enableBlur: false,
+        translucentFill: false,
         padding: EdgeInsets.zero,
         child: GlassPressable(
           child: ListTile(
@@ -816,7 +816,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
         _fsi == null ||
         _battery == null;
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       padding: const EdgeInsets.fromLTRB(
           4, AppTokens.gapIconText, 4, AppTokens.gapIconText),
       child: loading

@@ -234,7 +234,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
       // 测试用抓手：按天的行 + 行里每条闹钟的块（`alarm-block-<天>-<序号>`）。
       // 「前一天」标记要断言**跟着各自那条走**，只能靠这个块定位。
       key: Key('alarm-day-row-${dayNumber(e.date)}'),
-      enableBlur: false,
+      translucentFill: false,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
@@ -311,7 +311,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
 
   Widget _alarmTile(BuildContext context, CustomAlarm a) {
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       onTap: () => _showAlarmDialog(a: a),

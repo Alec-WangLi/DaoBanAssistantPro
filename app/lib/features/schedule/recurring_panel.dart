@@ -121,7 +121,7 @@ class _RecurringList extends ConsumerWidget {
     );
 
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceXs),
