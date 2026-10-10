@@ -39,7 +39,11 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.1\n'
+const String _changelogZh = 'v0.11.2\n'
+    '· 修好上一版带进来的一处：次日档的闹钟（0:15「准备下班」那类、夜班的上午时段）在它响的那一天重排时会被取消掉、再也排不回去，等于不响 —— 打开 App、回到前台、开机自动重排都会走到这条路\n'
+    '\n'
+
+    'v0.11.1\n'
     '· 班次的联动闹钟多了一档落点：除了「前一天」和「班次当天」，现在还有「次日」。中班 16:30–次日 0:30 的人终于能设一条 0:15 的闹钟提醒自己准备下班 —— 它落在次日 0:15，正好是下班前 15 分钟；同一个班次设 1:00 则落在次日 1:00（下班之后），从前它会落在上班前 15 个半小时的凌晨\n'
     '· 注意：有一类闹钟的日子跟着变准了，请对一下。① 跨午夜班次里落在午夜之后的那些（20:30 上班的夜班配凌晨 2 点、16:30 上班的中班配 0:15）原来排在班次当天凌晨、比上班早十几个小时，现在排在次日；② 夜班的上午时段（20:30–8:30 的班次配 9:00 到 14:29）原来落在上班之前，现在落在下班之后；③ 正好等于下班钟点的那一刻（20:00 上班配 8:00）原来在班次当天，现在在次日。钟点晚于上班钟点的那些（零点班配 23:00、白班配 22:00）一直是前一天，没有变；24 小时值班也照旧全天都算当天\n'
     '· 一个班次能挂的联动闹钟从 6 条提到 10 条\n'
@@ -100,16 +104,17 @@ const String _changelogZh = 'v0.11.1\n'
     '· 修好上一版带进来的一处问题：拖完日历上那枚选中的块、再点一下日期，它会自己抽一下（陈旧的速度被反复灌回来）\n'
     '· 按住那枚块不动时，它的形变现在会自己收回去（之前会一直挂着）\n\n'
 
-    'v0.10.15\n'
-    '· 日历上那枚选中的方块，在「液态玻璃」档下变成一枚真的玻璃透镜：按住时四面鼓出来、底下浮起一层影子\n'
-    '· 拖动时它跟着手指的方向拉长、变扁，边上带一圈彩色折射光（停下就没了）\n'
     '· 它扫过哪一天，那一天的字（日期 / 班次 / 农历）就被它的边缘轻轻挤一下\n'
     '· 液态玻璃关着的时候，日历与之前一模一样（一个像素都没动）\n\n'
 
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.1\n'
+const String _changelogEn = 'v0.11.2\n'
+    '· Fixed a regression from the previous version: next-day alarms (the 00:15 "get ready to clock off" kind, or a night shift\'s morning alarms) were cancelled and never scheduled again when the app rescheduled on the very day they were due — which happens on every launch, on every return to the foreground, and after a reboot\n'
+    '\n'
+
+    'v0.11.1\n'
     '· Shift-linked alarms gained a third landing day: besides "the day before" and "the shift day" there is now "the next day". Someone on a 16:30–00:30 shift can finally set a 00:15 alarm to get ready to clock off — it lands at 00:15 the next day, 15 minutes before the shift ends. A 01:00 alarm on the same shift lands at 01:00 the next day, i.e. after the shift; it used to land at 01:00 in the small hours, 15½ hours before the shift started\n'
     '· Note: a few alarms move to a different day, so please check yours. (1) Alarms past midnight on a shift that crosses midnight (a 02:00 alarm on a 20:30 night shift, a 00:15 alarm on a 16:30 shift) used to land in the small hours of the shift day — more than ten hours before the shift — and now land the next day. (2) Morning alarms on a night shift (09:00–14:29 on a 20:30–08:30 shift) used to land before the shift and now land after it. (3) An alarm exactly at the shift end (08:00 on a 20:00 shift) used to be on the shift day and is now the next day. Alarms later in the clock than the shift start (23:00 on a 00:00 shift, 22:00 on a day shift) have always been the day before and are unchanged; 24-hour duty still counts everything as the shift day\n'
     '· Up to 10 linked alarms per shift, up from 6\n'
@@ -170,10 +175,6 @@ const String _changelogEn = 'v0.11.1\n'
     '· Fixed a regression from the previous version: after dragging the calendar selection block, tapping a day made it stretch and flash once (a stale drag velocity was re-applied)\n'
     '· Holding the block still now lets its stretch relax (it used to stay stretched)\n\n'
 
-    'v0.10.15\n'
-    '· The selected day block on the calendar becomes a real glass lens in the Liquid Glass tier: it bulges out on all four sides while held, with a lifted shadow\n'
-    '· While you drag it stretches along the direction of travel and flattens, with a prismatic rim that only shows while it is moving\n'
-    '· As it sweeps over a day, that day text (date / shift / lunar) gets a slight squeeze at its edge\n'
     '· With Liquid Glass off the calendar is pixel-for-pixel what it was\n\n'
 
         '\n'
