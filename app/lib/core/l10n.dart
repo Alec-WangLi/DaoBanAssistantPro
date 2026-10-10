@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:intl/intl.dart';
 
 /// 一段双语文案的持有者。
@@ -24,6 +25,25 @@ class L10n {
   static bool get isEn => locale == 'en';
 
   static String t(String zh, String en) => isEn ? en : zh;
+
+  // ── 日期格式化器的记忆化 ────────────────────────────────────────────────
+  //
+  // `DateFormat(pattern, locale)` 每次构造都要把模式串**解析一遍**，而下面那几处
+  // 是「每次重建都要调」的：日历一屏就有月标题、完整日期、每一格；`monthShort`
+  // 还在「本月统计」那一行里按班次种类循环。
+  //
+  // 键 = `语言|模式`。**没有上界** —— 模式全是这个文件里的常量，一共就那几条，
+  // 而语言只有两种（与 `lunar_info.dart` 那个按天缓存不同，那个的键是无限的）。
+  static final Map<String, DateFormat> _dfCache = <String, DateFormat>{};
+
+  static DateFormat _df(String pattern, String loc) =>
+      _dfCache.putIfAbsent('$loc|$pattern', () => DateFormat(pattern, loc));
+
+  @visibleForTesting
+  static int debugDateFormatCacheSize() => _dfCache.length;
+
+  @visibleForTesting
+  static void debugDateFormatCacheClear() => _dfCache.clear();
 
   // 底部导航
   static String get navCalendar => t('日历', 'Calendar');
@@ -867,22 +887,22 @@ class L10n {
   // 用缩写月（Sep 2026）而不是全称，跟中文「2026年9月」的紧凑度对齐，
   // 顶部那颗胶囊才放得下。
   static String yearMonth(DateTime d) => isEn
-      ? DateFormat('MMM yyyy', 'en').format(d)
-      : DateFormat('yyyy年M月', 'zh').format(d);
+      ? _df('MMM yyyy', 'en').format(d)
+      : _df('yyyy年M月', 'zh').format(d);
   static String monthDay(DateTime d) => isEn
-      ? DateFormat('MMM d', 'en').format(d)
-      : DateFormat('M月d日', 'zh').format(d);
+      ? _df('MMM d', 'en').format(d)
+      : _df('M月d日', 'zh').format(d);
   static String monthShort(int month) {
     final d = DateTime(2000, month, 1);
-    return isEn ? DateFormat('MMM', 'en').format(d) : DateFormat('M月', 'zh').format(d);
+    return isEn ? _df('MMM', 'en').format(d) : _df('M月', 'zh').format(d);
   }
   static String monthDayWeekday(DateTime d) => isEn
-      ? DateFormat('EEE, MMM d', 'en').format(d)
-      : DateFormat('M月d日 EEEE', 'zh').format(d);
+      ? _df('EEE, MMM d', 'en').format(d)
+      : _df('M月d日 EEEE', 'zh').format(d);
   // 英文按 'Sep 9, 2026' 的顺序；`yyyy MMM d` 会串成「2026 Sep 9」，不像英文。
   static String yearMonthDay(DateTime d) => isEn
-      ? DateFormat('MMM d, yyyy', 'en').format(d)
-      : DateFormat('yyyy年 M月 d日', 'zh').format(d);
+      ? _df('MMM d, yyyy', 'en').format(d)
+      : _df('yyyy年 M月 d日', 'zh').format(d);
 
   // 桌面小组件。只有「今天/明天/后天」与空表提示是本轮新文案 ——
   // 时间串复用既有的 [timeRange]，日期串复用 [monthDay]，周几复用 [weekday]，
