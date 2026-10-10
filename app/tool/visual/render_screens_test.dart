@@ -311,6 +311,24 @@ void main() {
     );
   });
 
+  // 「折叠区展开后」：归档那几行的长相（**没有**勾选框、标题划掉、副标题也跟着淡）
+  // 只有展开才看得到，而展开是一次**点击** —— 静止帧拍不到。跟 `26_todo_dialog_weekly`
+  // 同一条路：首帧之后真点一下。
+  visualTest('待办 · 归档折叠区展开', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '54_todos_archive_open',
+      home: const ScheduleScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      beforeCapture: (t) async {
+        await t.tap(find.byIcon(Icons.keyboard_arrow_down));
+        await settleVisual(t);
+      },
+    );
+  });
+
   // 搜不到倒班方式那张空态。**只能单独一个用例**：搜索词 `_query` 是选择页的
   // 内部状态、构造参数进不去，必须首帧之后真敲一次字（`beforeCapture`）。
   // 也正因为它没法进 `visualScreens`（记录类型加可选字段要改全部 24 条），

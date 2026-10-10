@@ -348,6 +348,16 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
     timeMinute: 9 * 60,
     advanceRemindMinutes: 1440,
   );
+
+  // 两条**已完成**的：待办页底部那个「已完成 N 条」折叠区要有东西可画。
+  // 已完成的**不**计入日历的「N 项待办」与桌面小组件的待办数，所以加这两条
+  // 只影响待办那几屏。
+  for (final (title, daysAgo) in [('做完的：交体检报告', 3), ('做完的：还备用钥匙', 1)]) {
+    final id = await repo.addEvent(
+        title: title, date: today.subtract(Duration(days: daysAgo)));
+    final row = (await repo.listEvents()).firstWhere((e) => e.id == id);
+    await repo.setEventCompleted(row, true);
+  }
   await db.into(db.scheduleEvents).insert(ScheduleEventsCompanion.insert(
         title: '领劳保用品',
         date: today,
