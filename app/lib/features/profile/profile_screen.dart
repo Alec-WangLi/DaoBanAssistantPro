@@ -29,7 +29,17 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(appSettingsProvider);
+    // **「我的」页是那个例外**：主题档 / 主色 / 语言 / 液态玻璃 / 触觉五个开关都画在
+    // 它自己身上，所以这五项都得订阅。收成 `language` 会把那几个开关**冻住**。
+    // 写成显式的五元组而不是全量 `watch`：以后再往 `AppSettings` 加字段时，
+    // 这一页不会为它白重建（builder check 抓出来的那一条）。
+    final settings = ref.watch(appSettingsProvider.select((s) => (
+          themeMode: s.themeMode,
+          accentIndex: s.accentIndex,
+          language: s.language,
+          liquidGlass: s.liquidGlass,
+          hapticsEnabled: s.hapticsEnabled,
+        )));
 
     return Scaffold(
       body: SafeArea(
@@ -41,7 +51,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionAppearance),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,20 +129,28 @@ class ProfileScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(L10n.advancedMaterial,
+                            Text(L10n.liquidGlass,
                                 style: AppTokens.labelStrong),
                             const SizedBox(height: AppTokens.gapHair),
-                            Text(L10n.advancedMaterialHint,
+                            Text(
+                                // 低内存机器上这一档被 `!lowEndDevice` 挡掉：
+                                // 开关置灰 + 换一句说明。**不能让它看着能开、
+                                // 开了什么也不发生** —— 那比直接说不可用更糟
+                                // （spec §1 的成功标准：回落并说明原因、不静默无反应）。
+                                lowEndDevice
+                                    ? L10n.liquidGlassUnsupportedHint
+                                    : L10n.liquidGlassHint,
                                 style: AppTokens.microText
                                     .copyWith(color: AppTokens.inkMuted(context))),
                           ],
                         ),
                       ),
                       GlassSwitch(
-                        value: settings.advancedMaterial,
+                        value: settings.liquidGlass,
+                        enabled: !lowEndDevice,
                         onChanged: (v) => ref
                             .read(appSettingsProvider.notifier)
-                            .setAdvancedMaterial(v),
+                            .setLiquidGlass(v),
                       ),
                     ],
                   ),
@@ -166,7 +184,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionSchedule),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: EdgeInsets.zero,
               child: GlassPressable(
                 child: ListTile(
@@ -184,7 +202,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionDesktop),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: EdgeInsets.zero,
               child: GlassPressable(
                 child: ListTile(
@@ -202,7 +220,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionData),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: EdgeInsets.zero,
               child: GlassPressable(
                 child: ListTile(
@@ -220,7 +238,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionAbout),
             GlassTile(
-              enableBlur: false,
+              translucentFill: false,
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
@@ -292,9 +310,8 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmReset(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog<bool>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (dialogContext) => GlassDialog(
         title: L10n.confirmResetTitle,
         content: Text(L10n.confirmResetContent),
@@ -338,9 +355,8 @@ class ProfileScreen extends ConsumerWidget {
   Future<void> _showLog(BuildContext context) async {
     final log = await AlarmService.readLog();
     if (!context.mounted) return;
-    await showDialog<void>(
+    await showGlassDialog<void>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (dialogContext) => GlassDialog(
         title: L10n.log,
         showClose: true,
@@ -391,10 +407,8 @@ class ProfileScreen extends ConsumerWidget {
     final ringtones = await AlarmService.listRingtones();
     if (!context.mounted) return;
 
-    final selection = await showModalBottomSheet<String>(
+    final selection = await showGlassSheet<String>(
       context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black26,
       builder: (sheetContext) => GlassPanel(
         solid: true,
         margin: const EdgeInsets.all(12),
@@ -696,7 +710,7 @@ class _RingtoneTileState extends ConsumerState<_RingtoneTile> {
 
   @override
   Widget build(BuildContext context) => GlassTile(
-        enableBlur: false,
+        translucentFill: false,
         padding: EdgeInsets.zero,
         child: GlassPressable(
           child: ListTile(
@@ -805,14 +819,14 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(appSettingsProvider); // 语言切换时重建（权限卡文案也要实时刷新）
+    ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（权限卡文案也要实时刷新）
     final loading = _notif == null ||
         _exact == null ||
         _overlay == null ||
         _fsi == null ||
         _battery == null;
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       padding: const EdgeInsets.fromLTRB(
           4, AppTokens.gapIconText, 4, AppTokens.gapIconText),
       child: loading

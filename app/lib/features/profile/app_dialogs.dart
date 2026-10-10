@@ -15,9 +15,8 @@ void showAppInfoDialog(
   required String title,
   required String content,
 }) {
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (dialogContext) => GlassDialog(
       title: title,
       showClose: true,
@@ -40,154 +39,145 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.0\n'
-    '· 桌面小组件三张卡都在了：本周条、今日卡、整月。整月那张把上个月下个月连起来画，标题行两边的箭头能翻前后各三个月；在 App 里改了排班，桌面立刻跟着变\n'
-    '· 每个班次最多能挂 6 条闹钟，每条可以起名字 —— 「起床」「午休」分开响\n'
-    '· 排班时段重做：在「排班管理」页的一条时间线上排「哪几天用哪套班表」，两段不许重叠，其余时间可以设成「无」（领导真给休息几天时，不必专门再建一套休息班表）。一套班表还能出现在多段上 —— 9 月临时换、10 月换回来\n'
-    '· 多套班表按日期衔接：日历、闹钟、桌面小组件都按天取「那天归哪套」，翻回历史看到的也是那时的班、不是现在的\n'
-    '· 重复待办：每周三的会到点自己冒出来，勾掉的留成历史；提醒由系统自己续排，App 长期不开也照常响\n'
-    '· 「法定班次」（跟随法定节假日）现在就是一张日历：只画日期与农历，不再替它写「上班 / 休息」\n'
-    '· 日历上能单独改某几天的班（请假、跟同事换班）：点信息卡那行班次，或长按格子拖选一段；改过的那天有标记，也能一键恢复轮转\n'
-    '· 「我的模板」：调好的班表存下来，下次新建排班直接从最上面那组里选\n'
-    '· 闹钟铃声多了一档「仅震动」，也能从手机里自选音频\n'
-    '· 修好一批评测里报上来的毛病：桌面小组件的字重影、系统字号放大后日历文字被截、待办与闹钟列表最后一行被悬浮按钮压住、弹窗按钮跑到左边、弹层里正文被按钮拦腰切断、零点班（00:00 上班）的闹钟排在班次当天而不是上班前一晚……\n'
-    '· 「我的」页的说明重写了一遍，并多了一条「桌面小组件」（怎么加到桌面、装完新版为什么要先打开一次 App）\n'
-    '· 清空重置现在真的回到刚安装的样子：排班、日程、闹钟、模板、你保存的铃声与外观设置一起清掉\n'
+const String _changelogZh = 'v0.11.0\n'
+    '· 液态玻璃铺满全 app：底栏重做成一枚真的、会动的玻璃滴 —— 按住它吸附到手指上、放大并凸出胶囊，拖动时形状沿运动方向拉伸，松手带过冲地落回，边缘一圈彩色的折射光。随后分段器、开关、日历上那枚选中的块也换成同一套玻璃：按住时四面鼓出来、底下浮起一层影子，边上那圈彩色折射光一动就亮、停下就没了\n'
+    '· 日历上多了两处「水」的动作：点别的日期再点「今天」，那枚选中的块是飞回去的（途中彩边亮起、形状按飞行方向拉长压扁、飞过哪几格哪几格的字被轻轻挤一下）；长按拖选一段日子时，逐格的淡色方块换成一条连着的水带，同一周里是一整条、格子之间的缝也盖住\n'
+    '· 弹窗与底部弹层出现时从模糊里凝出来、关掉时化开散掉；响铃页的「上滑关闭」从圆钮换成一枚玻璃药丸\n'
+    '· 明显更顺、也更省电（两轮动画与流畅性优化）：先把「每一帧重建整页」收掉 —— 液态档一帧重建的界面元素从 436 个降到 42 个、光晕每走一步重绘的画面节点从 139 个降到 1 个；再量出真正的瓶颈在「画面合成」那一侧，把其中最贵的一道工序省掉 —— 编辑排班页每帧的合成开销 13.1ms → 6.0ms、日历 10.4ms → 2.3ms、闹钟 9.8ms → 2.3ms、待办 6.5ms → 2.5ms\n'
+    '· 那层缓缓流动的光晕不再牵着整页一起重画：你按住拖动、换月的时候它会先停一下，松手接着走（观感上几乎看不出来）\n'
+    '· 响铃 15 分钟没人管会自己停 —— 之前它会一直响、一直震，手机扔在包里也停不下来\n'
+    '· 桌面小组件的刷新改用非精确闹钟，少占一份系统唤醒额度；排闹钟时也不再反复解析整份清单\n'
+    '· 修好一串「改完之后界面没跟上」的毛病：调整某一天的班次、或者换语言之后，桌面小组件现在会跟着变；改周期之后，信息卡那行「本月统计」也会跟着变 —— 此前它们都停着旧的\n'
+    '· 顺手收掉两处白付的活：拨一下触觉开关不再把整个界面重建一遍；待办 / 闹钟 / 排班上的日期文案不再每次重算\n'
+    '· 修好一串只在特定操作下才现形的问题：弹窗顶进状态栏 / 手势条（21 个弹窗都受影响）、底部弹层往下拖着要关掉时被压暗发糊、拖着日历上的块跨月换页会当场报错、拖完那枚块再点一下日期它会自己抽一下\n'
+    '· 液态玻璃关着的时候，底栏、分段器与日历都和之前一模一样\n'
     '\n'
 
-    'v0.9.19\n'
-    '· 修好弹窗里的按钮跑到左边：上一版为了让小窗（200×400）下「删除 / 取消 / 保存」这种多按钮弹窗不横向溢出，动了弹窗共用的按钮行 —— 结果全 App 的弹窗（版本更新、删除确认、排班时段……）的按钮都变成了靠左。现在恢复靠右，小窗该折行的照样折行\n'
-    '· 编辑排班页底部那颗「保存并重排闹钟」不再垫着一条挡板：它是浮在正文上的，界面滑到它下面时能看见内容从底下穿过去（此前正文到那条按钮带的上沿就被硬切，下面露出一整片平色）。滑到底时最后一张卡会整个抬到按钮上面，不会被压住\n'
-    '\n'
+    'v0.10.22\n'
+    '· 滑动更跟手了：真正的开销一直在「画面合成」那一侧，这一版把其中最贵的一道工序省掉了 —— 编辑排班、日历、闹钟、待办这几页每帧的合成开销降到原来的三分之一上下（编辑排班 13.1ms → 6.0ms、日历 10.4ms → 2.3ms）\n'
+    '· 手指按住不动时，背景那层光晕不再冻住（之前是按着就停）\n'
+    '· 顺手把「换月」也算进光晕该停的那一刻\n'
+    '· 拨一下触觉开关不再把整个界面重建一遍\n'
+    '· 待办 / 闹钟 / 排班上的日期文案不再每次重算\n'
+    '· 响铃 15 分钟没人管会自己停（之前会一直响、一直震）\n'
+    '· 排闹钟时不再反复解析整份清单（那一步是白付的）\n'
+    '· 桌面小组件的刷新改用非精确闹钟，少占一份系统唤醒额度\n'
 
-    'v0.9.18\n'
-    '· 桌面小组件那张月历能翻的范围，从「前后各一个月」放宽到「前后各三个月」—— 标题行两边的箭头点一下翻一月。顺带一个好处：你更久不开 App，卡片上的数据也还够用\n'
-    '· 装完新版请先打开一次 App：小组件上的班次是 App 上次运行时算好的，不打开的话卡片还是旧样子（重启桌面也能让它重画，但没必要）。这条从这一版起写进更新说明，免得你以为升级把桌面弄乱了\n'
-    '· 修好待办与闹钟列表的一个毛病：条目多的时候，最后一行会被右下角那颗悬浮按钮（以及闹钟页底部那条按钮条）压住，删除键点不到。现在滑到底能把它绕到按钮上面\n'
-    '· 「排班时段 → 添加时段」那个弹层的字体与同一页对齐了：里面三个标签原来又小又轻一档（13/w400），现在与打开它的那一行一样（14/w500）\n'
-    '· 顺手修掉小窗（200×400）下这个弹层的两处布局毛病：三个按钮挤不下时横向溢出、日期那两行的取值放不下\n'
-    '\n'
+    'v0.10.21\n'
+    '· 修好上一版带进来的三处「改完之后界面没跟上」：调整某一天的班次、或者换语言之后，桌面小组件现在会跟着变（之前会一直停着旧的）\n'
+    '· 调整班次、改周期之后，信息卡那行「本月统计」现在会跟着变（之前还是旧数字）\n'
+    '· 长按拖选一段日子时，日历不再每一帧重算整页 —— 上一版的更新说明里写了这一条，当时其实还没做到\n\n'
 
-    'v0.9.17\n'
-    '· 桌面小组件那张月历（最大的那张）现在把上个月和下个月的日子连起来一起画了：月头月尾那几格不再是空的，相邻的日数字淡一档、班次照常显示，整张卡读起来是一段连续的日子\n'
-    '· 那张卡的标题行多了左右两个箭头：点一下翻上 / 下月，翻到没有数据的月份那侧会变灰；点中间的月份文字回到今天那个月\n'
-    '· 翻到你关注的月份之后，跨天、跨月都不会把你拽回来 —— 停在你翻到的那个月，直到你自己点回今天\n'
-    '\n'
+    'v0.10.20\n'
+    '· 更顺了：点日期、「今天」飞回去、按住拖动那枚选中的块、长按拖选一段日子时，日历不再每帧重算整页\n'
+    '· 更省电了：那层缓缓流动的光晕不再牵着整页一起重画（你按住拖动的时候它会停一下、松手接着走 —— 观感上几乎看不出来）\n'
+    '· 打开 App 快了一点；翻月、勾待办、改排班之后的卡顿也少了\n'
+    '· 桌面小组件：内容没变时不再重复推一遍（从后台切回来不再白算一次整月数据）\n\n'
 
-    'v0.9.16\n'
-    '· 「法定班次」（跟随法定节假日）不再写「上班 / 休息」了：这种班表在日历格子、小窗那张信息卡与桌面小组件上都只画日期与农历 —— 法定节假日照旧标红、调休照旧打「班」。它本质上就是一张日历，上一版替它标上「上班」是我想多了\n'
-    '· 顺带：这种班表下信息卡不再为那一行留高度，卡片矮约 16dp，上面六个格子相应高一点\n'
-    '· 上一版改对的那一半照旧：「这段时间没有排班」那句只在真的没有任何班表盖着这些天时才出现 —— 判定它的是「这天有没有班表在管」，与「这天画不画得出东西」从此分开看\n'
-    '\n'
+    'v0.10.19\n'
+    '· 修好一处崩溃：长按拖选当中用另一根手指点 ‹ / › 换月，日历会当场报错（那一段的日子不在新月里，落点算不出来却还在硬画那条带子）\n'
+    '· 上一版那枚水带「按住四面鼓起来」的判据补严了一格：它本来就画得出来，但一直靠同层里阴影顺带重画 —— 现在把它算进「该不该重画」\n\n'
 
-    'v0.9.15\n'
-    '· 「法定班次」（跟随法定节假日）不再被当成「没有排班」了：这种班表每一天都画得出来 —— 法定节假日写「休息」、其余日子写「上班」，日历格子、小窗那张信息卡与桌面小组件同一个口径。此前只有一套这种班表时，整张日历被「这段时间没有排班」盖住，可你明明是按法定节假日上班的\n'
-    '· 排班管理页分成两节：「排班时段」在上、「排班表」在下，各带一个标题，不再挤成一片\n'
-    '· 一个时段都没有时，那行改说「全部日子」，不再说「其余时间」：「其余」得有「这一段」才有意义，一段都没有时那句话会被读成「这是默认一直用它的意思吗」\n'
-    '· 修好「排班时段」弹层里的「取消」：点了没有任何反应。顺手把「删除 / 取消 / 保存」三颗钮之间补上间隔（原先紧挨着）\n'
-    '· 待办页那个「重复待办」入口挪到了右上角（原来紧贴在标题后面，看着像标题的一部分）\n'
-    '· 修好更新说明里的 markdown 标记：像「两段时间不许重叠」那种加粗写法会原样带上两个星号。更新日志走的是纯文本渲染，标记不会被解析；这回补了一条用例盯着，再混进去就直接失败\n'
-    '· 修好「把每周三改成每周五」这条路径在周三、周四不生效：编辑一个重复待办时会把系列的起始日改写成「当前这一次」的日期，于是「最近的那个周五」被算成早于起始日、静默不对齐\n\n'
+    'v0.10.18\n'
+    '· 长按拖选一段日子时，那层逐格的淡色小方块换成了一条连着的水带：同一周内是一整条，格子之间的缝也盖住了\n'
+    '· 按住那一下它会四面鼓起来、像水一样漫上来；拖动时末端淌到新的一格，它探进哪一格、那一格的字就被轻轻挤一下\n'
+    '· 水带的两端是圆的；跨周时那两头切平（月历里跨周不是相邻的格子，是从最右列跳到下一行的最左列）\n'
+    '· 液态玻璃关着的时候，拖选与之前一模一样（逐格淡色方块，一个像素都没动）\n\n'
 
-    'v0.9.14\n'
-    '· 「排班时段」不再设在排班编辑器里了：现在在「排班管理」页顶部，一条时间线由上到下 —— 头一行是「其余时间」（没被时段覆盖的日子归它管），下面是你排的每一段，点任意一行就能改\n'
-    '· 两段时间不许重叠：一天只能有一套排班。撞上了会告诉你跟哪一段撞的、撞的是哪几天。（从前允许重叠，结果设了两套都占 9 月、出来的是其中一套，说不清为什么）\n'
-    '· 「其余时间」可以设成「无」：两个班表之间领导真给休息几天时，直接留空就行，不必再专门建一套「休息」的班表。那些天在日历上会写一句「这段时间没有排班」，告诉你去哪加一段\n'
-    '· 日历顶栏那个「切换排班」按钮改成了「排班时段」：点开是一张只读的时间线，能看到这段时间在用哪套、今天落在哪一段，要改就点底下的「管理排班时段」。原来那个按钮在时段盖满日子之后就什么也改不动，看着像坏了\n'
-    '· 一套班表现在可以出现在多段上（9 月临时换成别的班表、10 月再换回来），从前那种「一套只占一段」的写法表达不了\n\n'
+    'v0.10.17\n'
+    '· 日历上那枚选中的块，点别的日期、再点「今天」时，现在是飞回去的：飞的时候一圈彩色折射光亮起来，形状按飞行的方向拉长、变扁\n'
+    '· 它飞过哪几格，那几格的字就被轻轻挤一下（之前被挤的是终点那一格 —— 块还在半路上，终点就已经先动了）\n'
+    '· 落定之后这些自己收回去，静止时与之前一样\n'
+    '· 拖动那枚块时，形状是「开」出来的，不再一下拉满（与底栏滑块同一套手感）\n\n'
 
-    'v0.9.13\n'
-    '· 待办页右上角那个「重复待办」入口重新做了：原来是几个小字，现在是实心主色胶囊（与日历右上角那颗「今天」同一个形态），一眼看得出是个按钮。窄屏上仍只留图标，位置不变\n\n'
+    'v0.10.16\n'
+    '· 修好上一版带进来的一处问题：拖完日历上那枚选中的块、再点一下日期，它会自己抽一下（陈旧的速度被反复灌回来）\n'
+    '· 按住那枚块不动时，它的形变现在会自己收回去（之前会一直挂着）\n\n'
 
-    'v0.9.12\n'
-    '· 排班表可以「衔接」了：每套方案能设一个生效时段（从几号到几号，两端都可以留空 —— 留空就是「不限起点」或「一直持续」）。日历、闹钟、桌面小组件从此都按天取「那天归哪一套」，翻回历史看到的也是当时的班\n'
-    '· 设在排班编辑器里新的一节「生效时段」（在「班组设置」下面）。没设过时段的方案不参与衔接，一切照旧 —— 升级后什么都不用做\n'
-    '· 顶栏「切换排班」现在写明每套方案管哪些日子：设了时段的写时段；没设时段又正在用的那套标「其余日子」（没被时段覆盖的日子就归它管）\n'
-    '· 日历上长按选一段日子改班时，如果这段跨了两套排班，会提示你分开调整 —— 从前那样只会改到一半，另一半悄没声地不动\n\n'
+    'v0.10.15\n'
+    '· 日历上那枚选中的方块，在「液态玻璃」档下变成一枚真的玻璃透镜：按住时四面鼓出来、底下浮起一层影子\n'
+    '· 拖动时它跟着手指的方向拉长、变扁，边上带一圈彩色折射光（停下就没了）\n'
+    '· 它扫过哪一天，那一天的字（日期 / 班次 / 农历）就被它的边缘轻轻挤一下\n'
+    '· 液态玻璃关着的时候，日历与之前一模一样（一个像素都没动）\n\n'
 
-    'v0.9.11\n'
-    '· 待办能重复了：新建待办时选「每天 / 每周几 / 每月某日」，它就会按时自己出现 —— 不用每周手动建一次。勾掉之后留成历史（带删除线），下一次到点自动来一条新的\n'
-    '· 一个重复待办同时只占一行：永远是「当前这一次」。过期没勾的，下一次到点时就地顺延，不会堆出一串「上周三的会」\n'
-    '· 删一条重复待办时会问一句：是「只这一次不要了」，还是「删除整个重复」—— 前者只是跳过这一次（下次照常出现），后者连它已完成的历史一起删掉\n'
-    '· 待办页右上角多了「重复待办」入口（小窗里只剩图标）：能看到有哪些重复项、各自的下一次是什么时候，能改周期、能停用、能删。停用之后当前那条会留着 —— 那是你还没做的一件事，不替你收走\n'
-    '· 重复待办的提醒由系统自己接着排，App 长期不开也照常响，不是「等你下次打开才补上」\n\n'
+    'v0.10.14\n'
+    '· 修好上一版带进来的一处问题：弹窗会顶到状态栏 / 手势条里（21 个弹窗都受影响）\n'
+    '· 底部弹层往下拖着要关掉时，不再被压暗、发糊\n'
+    '· 响铃页那枚「上滑关闭」的形变在高刷新率屏幕上不再只有一半（同一个拖动速度应当有同一个形状）\n'
+    '· 四个弹窗的遮罩浓度统一成与其余弹窗一样（模板管理 / 改名 / 删除、存为模板）\n\n'
 
+        '\n'
 ;
 
-const String _changelogEn = 'v0.10.0\n'
-    '· All three home-screen cards are in: the week strip, the today card and the month view. The month card draws the neighbouring months as well, its title arrows step three months either way, and any schedule change in the app shows up on the cards\n'
-    '· A shift can now carry up to 6 alarms, each with a name — "Wake up" and "Nap" ring separately\n'
-    '· Schedule periods rebuilt: arrange which schedule covers which dates on a single timeline on the Schedules page. Periods may not overlap, "Other dates" can be set to none (for the days your manager really does give you off, without building a rest schedule), and one schedule can appear in several periods — swap away for September and swap back in October\n'
-    '· Schedules chain by date: the calendar, the alarms and the home-screen cards all work out day by day which schedule a date belongs to, so history shows the schedule that was in force back then\n'
-    '· Repeating todos: a Wednesday meeting shows up on its own, ticking it keeps it as history, and the system re-arms the reminder, so it still rings after the app has been closed for a long while\n'
-    '· A "legal-holiday schedule" (follow the public holidays) is just a calendar now: dates and lunar lines, no invented "Workday / Rest"\n'
-    '· Change a few days on their own (a day off, or swapping with a colleague): tap the shift row on the info card, or long-press a cell and drag. An adjusted day is marked and one tap restores the rotation\n'
-    '· "My templates": save a schedule you like and pick it first next time you create one\n'
-    '· A "Vibrate only" ringtone, and you can pick your own audio file\n'
-    '· Fixed a batch of issues from testing: overlapping text in the widget, calendar text cut off with a large system font, the last row of the todo and alarm lists sitting under the floating button, dialog buttons jumping to the left, dialog text sliced off by the button row, and a midnight shift\'s alarm landing on the shift day instead of the evening before\n'
-    '· The Me page descriptions were rewritten, with a new "Home-screen widgets" entry (how to add the cards, and why an update needs one app launch)\n'
-    '· Clear & reset really does return the app to a fresh install: schedules, events, alarms, templates, the ringtone you saved and the appearance settings all go\n'
+const String _changelogEn = 'v0.11.0\n'
+    '· Liquid Glass across the whole app: the tab bar is now a real, moving glass drop — hold it and it sticks to your finger, growing and swelling out past the capsule; drag and it stretches along the direction of travel, then overshoots back on release, with a prismatic rim around it. The segmented control, the switch and the calendar selection block then got the same glass: it swells on all four sides while held, lifts a shadow, and the prismatic rim lights up only while it is moving\n'
+    '· Two new "water" motions on the calendar: tapping another date and then Today flies the selected block back (the rim lights up on the way, the shape stretches along its direction of travel, and every day it sweeps over gets a slight squeeze); long-press selecting a run of days draws one continuous water band that covers the gaps between cells\n'
+    '· Dialogs and bottom sheets condense out of blur and dissolve away; the ringing screen\'s "swipe up to dismiss" knob became a glass pill\n'
+    '· Noticeably smoother and lighter on the battery (two rounds of animation and smoothness work): first the "rebuild the whole page every frame" was removed — in the Liquid Glass tier one frame rebuilt 436 interface elements, now 42, and one step of the glow repainted 139 paint nodes, now 1; then the real bottleneck turned out to be compositing, and the most expensive step of it is gone — the editor went from 13.1ms of compositing per frame to 6.0ms, the calendar 10.4ms to 2.3ms, alarms 9.8ms to 2.3ms and to-dos 6.5ms to 2.5ms\n'
+    '· The slowly drifting glow no longer repaints the page along with it: while you drag or switch months it pauses, then carries on afterwards (you will not notice)\n'
+    '· A ringing alarm now stops itself after 15 minutes if nobody attends to it — it used to ring and buzz forever, even from inside a bag\n'
+    '· Home-screen widget refreshes now use an inexact alarm, spending less of the system wake-up budget, and scheduling alarms no longer re-parses the whole list every time\n'
+    '· Fixed a run of "the screen did not keep up" cases: after adjusting a single day, or switching language, the home-screen widget now updates, and after editing the cycle the info card\'s monthly tally does too — both used to stay on the old values\n'
+    '· Also removed two pieces of work that bought nothing: toggling the haptics switch rebuilt the whole interface, and date strings on the todo, alarm and schedule screens were recomputed every time\n'
+    '· Fixed a run of problems that only showed up in specific operations: dialogs sitting under the status bar or gesture bar (21 of them were affected), a bottom sheet dimming and blurring while dragged down to dismiss, a crash when switching months mid range-drag, and the selection block twitching when tapped right after a drag\n'
+    '· With Liquid Glass off, the tab bar, the segmented control and the calendar are pixel-for-pixel what they were\n'
     '\n'
 
-    'v0.9.19\n'
-    '· Fixed dialog buttons moving to the left: the last version changed the shared button row so that dialogs with several buttons (Delete / Cancel / Save) would not overflow in a small window (200×400) — which pushed the actions of every dialog in the app (update notes, delete confirmations, schedule periods…) to the left. They are right-aligned again, and still wrap on narrow windows\n'
-    '· The "Save & reschedule alarms" button at the bottom of the schedule editor no longer sits on a plate: it floats over the page, so content scrolls underneath it (until now the list was cut off at the top edge of that bar with a flat band below it). Scrolling to the end now lifts the last card clear of the button\n'
-    '\n'
+    'v0.10.22\n'
+    '· Smoother scrolling: the real cost was on the compositing side, and this version drops the most expensive step of it — per-frame compositing on the editor, calendar, alarm and todo screens is now about a third of what it was (editor 13.1ms → 6.0ms, calendar 10.4ms → 2.3ms)\n'
+    '· The background glow no longer freezes while you simply hold your finger down\n'
+    '· Month switching is now part of when the glow pauses, too\n'
+    '· Toggling the haptics switch no longer rebuilds the whole interface\n'
+    '· Date strings on the todo, alarm and schedule screens are no longer rebuilt every time\n'
+    '· A ringing alarm stops itself after 15 minutes if nobody attends to it (it used to ring and buzz forever)\n'
+    '· Scheduling alarms no longer re-parses the whole alarm list on every entry\n'
+    '· The home-screen widget refresh now uses an inexact alarm, spending less of the system wake-up budget\n'
 
-    'v0.9.18\n'
-    '· The month widget now steps three months back or forward instead of one: tap the arrows either side of its title. As a bonus, the card keeps working for longer while the app stays closed\n'
-    '· Open the app once after an update: the shifts on the card are worked out the last time the app ran, so until you do, the card still shows the old picture. (Restarting the launcher redraws it too, but that is not needed.) That note now lives in the update notes, so an update never looks like it broke your home screen\n'
-    '· Fixed the end of the todo and alarm lists: once there are enough entries, the last row sat under the floating button (or the button bar on the alarm page) and its delete button could not be tapped. Scrolling to the end now lifts it clear\n'
-    '· The "Add a period" dialog now matches the row that opens it: its three labels were a size and a weight lighter (13/w400) and are now 14/w500, like the rest of the page\n'
-    '· Also fixed two layout faults in that dialog in a small window (200×400): its buttons overflowed sideways, and the date rows could not fit their value\n'
-    '\n'
+    'v0.10.21\n'
+    '· Fixed three "the screen did not keep up" cases from the previous version: after adjusting a single day or switching language the home-screen widget now updates (it used to stay on the old shifts)\n'
+    '· After adjusting a day or editing the cycle, the info card\'s monthly tally now updates (it used to keep the old numbers)\n'
+    '· Long-press selecting a run of days no longer rebuilds the whole calendar every frame — the previous release notes claimed this, but it was not actually done yet\n\n'
 
-    'v0.9.17\n'
-    '· The month widget (the largest one) now draws the previous and next month as well: the empty slots at the start and end of the month are gone, the neighbouring days show a lighter date and their shifts as usual, and the whole card reads as one continuous run of days\n'
-    '· Its title row now has a left and a right arrow: tap to step a month back or forward, and the side with no data left greys out; tap the month name in the middle to jump back to today\n'
-    '· Once you have stepped away, a new day or a new month will not drag you back — you stay on the month you picked until you tap back to today\n'
-    '\n'
+    'v0.10.20\n'
+    '· Smoother: tapping a date, flying back to Today, dragging the selection block and long-press selecting a run of days no longer rebuild the whole calendar every frame\n'
+    '· Lighter on the battery: the slowly drifting glow no longer repaints the page along with it (it pauses while you drag and carries on after — you will not notice)\n'
+    '· Faster start-up, and less stutter after switching months, ticking a to-do or saving a schedule\n'
+    '· Home-screen widgets: an unchanged snapshot is no longer pushed again (returning to the app no longer recomputes the whole month for nothing)\n\n'
 
-    'v0.9.16\n'
-    '· A "legal-holiday schedule" (follow the public holidays) no longer writes "Workday / Rest": on the calendar grid, on the info card in a small window and on the home-screen widget it now draws only the date and the lunar line — public holidays are still marked red and makeup workdays still tagged. It really is just a calendar, and labelling those days "Workday" was overreach on my part\n'
-    '· As a result the info card no longer reserves a line for it: the card is about 16dp shorter and the grid above it gains that height\n'
-    '· The half of that change that was right stays: "No schedule for these dates" appears only when no schedule covers those days at all — the test for it is now "is a schedule in force on this day", separate from "does this day draw anything"\n'
-    '\n'
+    'v0.10.19\n'
+    '· Fixed a crash: with a range drag in progress, using a second finger to tap the month arrows left the calendar throwing errors (those days are not in the new month, so the band had nothing to anchor to yet was still drawn)\n'
+    '· Tightened one repaint criterion for the previous version water band: the press swell did render, but only because the shadow in the same layer happened to repaint alongside it — it is now part of the check\n\n'
 
-    'v0.9.15\n'
-    '· A "legal-holiday schedule" (follow the public holidays) is no longer treated as "no schedule": every day of one now draws something — "Rest" on a public holiday, "Workday" otherwise, the same on the calendar grid, the info card in a small window, and the home-screen widget. Until now, with only one such schedule, the whole calendar was covered by "No schedule for these dates" while you were in fact working to the public-holiday calendar\n'
-    '· The Schedules page is split into two sections: "Schedule timeline" on top, "Schedules" below, each with its own heading instead of running together\n'
-    '· With no periods at all, that line now reads "All dates" instead of "Other dates" — "other" needs a period to be other than, and on its own the line read like "so is this the default, always?"\n'
-    '· Fixed the Cancel button in the period dialog, which did nothing at all, and put a gap between the Delete / Cancel / Save buttons, which were touching\n'
-    '· The "Repeating" entry on the todo screen moved to the top right corner (it used to sit right after the title, looking like part of it)\n'
-    '· Fixed markdown markers leaking into the update notes: bold text showed up with its two asterisks. The in-app changelog is plain text and never parses markup; a test now fails if any gets in again\n'
-    '· Fixed "change a weekly Wednesday todo to Friday" doing nothing on Wednesdays and Thursdays: editing a repeating todo rewrote the series start date to the current occurrence, so the most recent Friday came out before the start and the alignment was silently skipped\n\n'
+    'v0.10.18\n'
+    '· Long-pressing to select a run of days now draws one continuous water band instead of a pale block per cell — within a week it is a single strip that covers the gaps between cells\n'
+    '· Pressing swells it on all four sides, like water rising; dragging lets the tip flow into the next cell, and the day it reaches gets a slight squeeze\n'
+    '· The band ends are round; where it wraps to the next week the two ends are cut flat (in a month grid a week wrap is not an adjacent cell)\n'
+    '· With Liquid Glass off, selection is exactly as before (a pale block per cell, pixel for pixel)\n\n'
 
-    'v0.9.14\n'
-    '· The schedule timeline no longer lives in the schedule editor: it is now the top section of the Schedules page, one line per period from top to bottom — the first line is "Other dates" (which covers whatever no period covers), then each period you placed. Tap any line to edit it\n'
-    '· Periods may not overlap: a day can only belong to one schedule. If they clash, the app names the period you clashed with and the dates involved. (Overlaps used to be allowed, and two schedules both covering September silently resolved to one of them)\n'
-    '· "Other dates" can be set to none: when your manager really does give you a few days off between two schedules, just leave it blank instead of building a "rest" schedule for it. Those days say "No schedule for these dates" on the calendar, pointing at where to add a period\n'
-    '· The calendar\'s "Switch schedule" button is now "Schedule timeline": a read-only overview showing which schedule is in force, which period contains today, and a "Manage the timeline" entry. The old button could not change anything once periods covered the dates, so it looked broken\n'
-    '· A schedule can now appear in several periods (switch away for September, switch back in October) — the old one-period-per-schedule shape could not express that\n\n'
+    'v0.10.17\n'
+    '· The calendar selection block now flies back when you tap another date and then Today: a prismatic rim lights up on the way, and the shape stretches along its direction of travel\n'
+    '· The days it sweeps over get a slight squeeze (before, the squeeze sat on the destination while the block was still in mid-air)\n'
+    '· All of it settles back once it lands — at rest it looks exactly as before\n'
+    '· While dragging, the shape blooms instead of snapping to full (the same feel as the tab bar pill)\n\n'
 
-    'v0.9.13\n'
-    '· The "Repeating" entry at the top of the todo screen has been redone: it was a few small characters, and is now a solid accent pill (the same shape as the "Today" button on the calendar), so it reads as a button at a glance. In a narrow window it still shows just the icon, in the same place\n\n'
+    'v0.10.16\n'
+    '· Fixed a regression from the previous version: after dragging the calendar selection block, tapping a day made it stretch and flash once (a stale drag velocity was re-applied)\n'
+    '· Holding the block still now lets its stretch relax (it used to stay stretched)\n\n'
 
-    'v0.9.12\n'
-    '· Schedules can now be chained: each one can carry an active period (from a date to a date, either end may be left empty — empty means "any time" or "ongoing"). The calendar, the alarms and the home-screen widget now resolve day by day which schedule a date belongs to, and history shows the schedule that was in force back then\n'
-    '· Where to set it: the new "Active period" section in the schedule editor (under "Crews"). Schedules without a period take no part in chaining, so nothing changes until you set one\n'
-    '· The "Switch schedule" sheet now spells out which days each schedule covers: the ones with a period show it, and the one currently in use without a period is marked "Other days" — those are the days it covers\n'
-    '· Adjusting a dragged range of days on the calendar now tells you to adjust separately when the range crosses two schedules, instead of quietly changing only half of it\n\n'
+    'v0.10.15\n'
+    '· The selected day block on the calendar becomes a real glass lens in the Liquid Glass tier: it bulges out on all four sides while held, with a lifted shadow\n'
+    '· While you drag it stretches along the direction of travel and flattens, with a prismatic rim that only shows while it is moving\n'
+    '· As it sweeps over a day, that day text (date / shift / lunar) gets a slight squeeze at its edge\n'
+    '· With Liquid Glass off the calendar is pixel-for-pixel what it was\n\n'
 
-    'v0.9.11\n'
-    '· Todos can repeat now: pick "every day / weekly (choose the days) / monthly (pick a day)" when adding one and it shows up on its own — no more creating it by hand every week. Ticking it keeps it as history (struck through), and the next occurrence arrives on time\n'
-    '· A repeating todo only ever takes one line: the current occurrence. Miss one and it rolls forward in place at the next occurrence, instead of piling up a stack of "last Wednesday\'s meeting"\n'
-    '· Deleting a repeating todo asks which you mean: "skip this one" (the next occurrence still comes) or "delete the whole repeat" (its completed history goes too)\n'
-    '· The todo screen now has a "Repeating" entry (an icon in a small window): see your repeating todos and when each next occurs, and edit / pause / delete them. Pausing keeps the current entry — that is something you have not done yet, and the app will not take it away for you\n'
-    '· Their reminders are re-armed by the system itself, so they still ring after the app has been closed for a long time — not "fixed up the next time you open it"\n\n'
+    'v0.10.14\n'
+    '· Fixed a regression from the previous version: dialogs could sit under the status bar or gesture bar (21 of them were affected)\n'
+    '· A bottom sheet no longer dims and blurs while you drag it down to dismiss it\n'
+    '· The ringing screen pill deforms correctly on high-refresh-rate screens (the same drag speed now gives the same shape)\n'
+    '· Four dialogs\' backdrop dim now matches the rest (template manage / rename / delete, save as template)\n\n'
 
+        '\n'
 ;
-
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
 void showChangelogDialog(BuildContext context) {
@@ -197,9 +187,8 @@ void showChangelogDialog(BuildContext context) {
 /// 检查更新结果弹窗：展示正式版与测试版两个通道，各自可下载（仅当比当前新）。
 void showUpdateDialog(BuildContext context, UpdateCheckResult result) {
   const current = appVersion;
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (dialogContext) => GlassDialog(
       title: L10n.checkUpdate,
       showClose: true,
@@ -288,16 +277,18 @@ void _showHelpDialog(
   required String title,
   required Widget content,
 }) {
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (dialogContext) => GlassDialog(
       title: title,
       showClose: true,
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420),
-        child: SingleChildScrollView(child: content),
-      ),
+      // **不要再套 `ConstrainedBox(maxHeight: …) + SingleChildScrollView`。**
+      // 它造出**第二个更小的视口**：正文在那个高度就结束，面板底下空一截，
+      // 用户读成「按钮没浮起来、底下压着一层蒙版」（2026-10-01 反馈）。
+      // `GlassDialog` 自己的内容区就铺满面板、并负责滚动，动作行由它用
+      // `Positioned` 浮在上面 —— 这里只要把 content 原样交给它。
+      // （v0.10.0 从 `showAppInfoDialog` 里拆掉的就是这两层，这个调用点当时漏了。）
+      content: content,
       actions: [
         GlassActionButton(
           variant: GlassActionVariant.primary,
@@ -492,10 +483,10 @@ class _GuideEntry extends StatelessWidget {
 
 /// 关闭更新弹窗后，弹出下载进度弹窗（内部完成下载并自动拉起系统安装器）。
 void _downloadAndInstall(BuildContext context, UpdateInfo info) {
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
+    // 下载做到一半不许被点掉。
     barrierDismissible: false,
-    barrierColor: Colors.black26,
     builder: (_) => _DownloadProgressDialog(info: info),
   );
 }

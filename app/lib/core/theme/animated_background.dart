@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
@@ -17,8 +18,8 @@ import 'app_colors.dart';
 /// [intensity] 是光斑透明度的倍率：响铃界面是主角、用满（1.0）；日历页是天天看着的
 /// 一页、且一大半被 92% 不透明的格子盖住，调弱一档更耐看。
 ///
-/// [freezeWhenBlurDisabled] 为真时，「高级材质」一关（[glassBlurDisabled]）就**停下**，
-/// 只留当前这一帧。那个开关的语义是「这台机器不做贵的合成」，而背景只要还在动，页面上
+/// [freezeWhenBlurDisabled] 为真时，省电档一开（[glassBlurDisabled]）就**停下**，
+/// 只留当前这一帧。那个档的语义是「这台机器不做贵的合成」，而背景只要还在动，页面上
 /// 每一层 `BackdropFilter` 就得每帧重算 —— 模糊都关了却继续推动背景，等于把省下来的
 /// 又花回去。默认 false：响铃界面只出现几秒、光晕本来就是它的主角，没必要改它。
 ///
@@ -36,11 +37,22 @@ class FlowingBackground extends StatefulWidget {
     required this.child,
     this.intensity = 1.0,
     this.freezeWhenBlurDisabled = false,
+    this.pauseWhen,
   });
 
   final Widget child;
   final double intensity;
   final bool freezeWhenBlurDisabled;
+
+  /// 这个为真时**把光晕停住**（`_t` 不推进 ⇒ 恢复时从原处续上、不跳回）。
+  ///
+  /// 日历页拿它传「有东西在动」（拖动 / 滑行 / 多选拖选）：那些交互本来每帧都在画，
+  /// 而光晕每 340ms 插进来一帧就是**一次固定掉帧**。默认 `null` ⇒ 行为不变
+  /// （响铃界面那一处不传）。
+  ///
+  /// ⚠️ 它与 [freezeWhenBlurDisabled] 是**两件事**（一个问「机器做不做贵的合成」、
+  /// 一个问「此刻有没有别的东西在动」），`_syncRun` 里各判各的。
+  final ValueListenable<bool>? pauseWhen;
 
   @override
   State<FlowingBackground> createState() => _FlowingBackgroundState();
@@ -62,11 +74,23 @@ class _FlowingBackgroundState extends State<FlowingBackground> {
   void initState() {
     super.initState();
     glassBlurDisabled.addListener(_syncRun);
+    widget.pauseWhen?.addListener(_syncRun);
     _syncRun();
   }
 
+  @override
+  void didUpdateWidget(FlowingBackground old) {
+    super.didUpdateWidget(old);
+    if (old.pauseWhen != widget.pauseWhen) {
+      old.pauseWhen?.removeListener(_syncRun);
+      widget.pauseWhen?.addListener(_syncRun);
+      _syncRun();
+    }
+  }
+
   void _syncRun() {
-    final frozen = widget.freezeWhenBlurDisabled && glassBlurDisabled.value;
+    final frozen = (widget.freezeWhenBlurDisabled && glassBlurDisabled.value) ||
+        (widget.pauseWhen?.value ?? false);
     if (frozen) {
       _timer?.cancel();
       _timer = null;
@@ -84,15 +108,39 @@ class _FlowingBackgroundState extends State<FlowingBackground> {
   @override
   void dispose() {
     glassBlurDisabled.removeListener(_syncRun);
+    widget.pauseWhen?.removeListener(_syncRun);
     _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _WavePainter(_t, widget.intensity),
-      child: widget.child,
+    // **光晕自己一层**（`Stack` 里的兄弟层），不是「给页面内容加一层
+    // `RepaintBoundary`」。两个理由：
+    //
+    // ① 层序与从前一字不差：原来 `CustomPaint(painter:, child:)` 就是「先画光晕、
+    //    再画 child」，这里光晕仍是先画的兄弟 ⇒ 画面不变（`glow_layer_test` 与
+    //    `tool/visual` 的逐张比都盯着）。
+    // ② 给 child 加边界会把这条链变成「边界里的模糊看不看得见边界外的变化」——
+    //    引擎在这件事上有历史问题，一旦跟不上，表现就是**玻璃里的模糊被冻住**
+    //    （页面在动、玻璃里的底色不动），那是实打实的观感下降。兄弟层不依赖那条
+    //    行为：光晕一变整棵树就重合成，压在它上面的模糊读到的一定是新的光晕。
+    //
+    // 效果：那一帧只重新录制光晕自己这一层（实测「被画过的绘制节点」139 → 个位数）。
+    // 注意它省的是 **UI 线程**那份重绘录制；压在光晕上面的 `BackdropFilter` 仍然会
+    // 被合成器重算（那是 GPU 的事）—— 要连那份一起省，只能让光晕别动。
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: CustomPaint(
+              key: const Key('flowing-background'),
+              painter: _WavePainter(_t, widget.intensity),
+            ),
+          ),
+        ),
+        widget.child,
+      ],
     );
   }
 }
@@ -101,6 +149,11 @@ class _WavePainter extends CustomPainter {
   _WavePainter(this.t, this.intensity);
 
   final double t;
+
+  /// 光晕走到哪一相位（0..1）。给用例读的 —— 「拖动中它停、松手后接着走」
+  /// 只有这一个可断言的口子。
+  @visibleForTesting
+  double get debugPhase => t;
 
   /// 光斑透明度的倍率，1.0 = 响铃界面那一档。
   final double intensity;

@@ -8,6 +8,7 @@ import '../layout.dart';
 import '../l10n.dart';
 import 'app_icon.dart';
 import 'glass_action_button.dart';
+import 'glass_dialog.dart';
 import 'glass_pressable.dart';
 
 /// 玻璃时间选择器：底部玻璃弹层 + 时/分滚轮 + Q弹按钮。
@@ -15,13 +16,11 @@ Future<TimeOfDay?> showGlassTimePicker(
   BuildContext context, {
   required TimeOfDay initialTime,
 }) {
-  return showModalBottomSheet<TimeOfDay>(
+  return showGlassSheet<TimeOfDay>(
     context: context,
-    backgroundColor: Colors.transparent,
     // 不开这个开关，`showModalBottomSheet` 会把弹层高度压到屏幕的 9/16 ——
     // 横屏 420 高的屏上只有 236px，而下面的内容要 340px，必然溢出。
     isScrollControlled: true,
-    barrierColor: Colors.black26,
     builder: (context) => _GlassTimePickerSheet(initialTime: initialTime),
   );
 }
@@ -146,11 +145,9 @@ Future<DateTime?> showGlassDatePicker(
   DateTime? firstDate,
   DateTime? lastDate,
 }) {
-  return showModalBottomSheet<DateTime>(
+  return showGlassSheet<DateTime>(
     context: context,
-    backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    barrierColor: Colors.black26,
     builder: (context) => _GlassDatePickerSheet(
       initialDate: initialDate,
       firstDate: firstDate ?? DateTime(2000),
@@ -312,12 +309,10 @@ Future<DateTime?> showGlassMonthPicker(
   BuildContext context, {
   required DateTime initialMonth,
 }) {
-  return showModalBottomSheet<DateTime>(
+  return showGlassSheet<DateTime>(
     context: context,
-    backgroundColor: Colors.transparent,
     // 与时间选择器同理：不开这个开关，弹层会被压到屏幕的 9/16。
     isScrollControlled: true,
-    barrierColor: Colors.black26,
     builder: (context) => _GlassMonthPickerSheet(initialMonth: initialMonth),
   );
 }
@@ -479,10 +474,8 @@ Future<T?> showGlassOptionPicker<T>(
   required String Function(T) labelOf,
   required T selected,
 }) {
-  return showModalBottomSheet<T>(
+  return showGlassSheet<T>(
     context: context,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black26,
     builder: (sheetContext) => GlassPanel(
       solid: true,
       margin: const EdgeInsets.all(12),

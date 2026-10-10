@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
@@ -261,4 +263,194 @@ class _GlassCloseButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 玻璃浮层的**凝聚**入场 / **消散**退场。
+///
+/// 玻璃该有的样子是「从模糊里凝出来」：起点小一圈、糊一层，过程中一起收敛到清晰锐利 ——
+/// 而不是一张不透明卡片被点亮（`showDialog` 自带的 150ms 淡入就是那样）。
+///
+/// **动画由外面传进来**，本件自己**不读路由** —— 驱动它的是 `showGlassDialog` 里那条
+/// `PopupRoute` 的转场。路由那条同时管入场与退场（`animation` 正向走 / 反向走），
+/// 所以退场不用另写一份，正是「消散」。
+///
+/// 两条曲线分开：入场 `easeOutCubic`（一开始就冲、尾巴缓缓落定），退场 `easeInCubic`
+/// （先慢慢化开、最后迅速散掉）。只喂一条的话，退场会一直保持满尺寸、到最后几帧才
+/// 「啪」地不见。
+///
+/// **安定之后直接返回原样的子树**（`t >= 1`）：否则弹窗常驻期间每一帧都要为一块
+/// 420 宽的面板付一层 `saveLayer`。`glass_overlay_test` 有一条钉着这件事。
+class GlassMaterialize extends StatelessWidget {
+  const GlassMaterialize({
+    super.key,
+    required this.animation,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+  final Widget child;
+
+  /// 起点缩到多小、起点糊多厚。
+  static const double minScale = 0.92;
+  static const double blurSigma = 9;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (BuildContext context, Widget? inner) {
+        final double raw = animation.value.clamp(0.0, 1.0);
+        if (raw >= 1) return inner!;
+        final bool leaving = animation.status == AnimationStatus.reverse;
+        final double t =
+            (leaving ? Curves.easeInCubic : Curves.easeOutCubic).transform(raw);
+        final double blur = blurSigma * (1 - t);
+        Widget out =
+            Transform.scale(scale: minScale + (1 - minScale) * t, child: inner);
+        if (blur > 0.05) {
+          out = ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+            child: out,
+          );
+        }
+        return Opacity(opacity: t, child: out);
+      },
+      child: child,
+    );
+  }
+}
+
+/// 玻璃浮层的路由。
+///
+/// **为什么不直接用 `showGeneralDialog`**：它只有一个 `transitionDuration`，
+/// 进场与退场只能同速 —— 而分开的那条是 `TransitionRoute.reverseTransitionDuration`，
+/// 要分开就得自己写一条路由。进场 300ms 才读得出「凝聚」，退场 200ms 免得挡路。
+class _GlassOverlayRoute<T> extends PopupRoute<T> {
+  _GlassOverlayRoute({
+    required this.builder,
+    required this.barrierLabel,
+    this.dismissible = true,
+  });
+
+  final WidgetBuilder builder;
+
+  /// 点遮罩算不算「关掉」。**默认可以**；下载进度那种「做到一半不许点掉」的传 false。
+  final bool dismissible;
+
+  @override
+  final String barrierLabel;
+
+  @override
+  Duration get transitionDuration => AppTokens.durGlassIn;
+
+  @override
+  Duration get reverseTransitionDuration => AppTokens.durGlassOut;
+
+  @override
+  bool get barrierDismissible => dismissible;
+
+  @override
+  Color get barrierColor => Colors.black26;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) =>
+      // ⚠️ **`SafeArea` 不能省。** SDK 的 `DialogRoute` 默认 `useSafeArea: true`，
+      // 在 `dialog.dart` 里把 page 包进 `SafeArea`；`Dialog` 自己**不**避让系统栏
+      // （它只处理键盘的 `viewInsets`）。漏了这一层，21 处迁移过去的弹窗就全都不再
+      // 避让状态栏 / 手势条 / 横屏挖孔 —— 这是**独立审查抓出来的真 regression**
+      // （这条路由第一版没有它）。`glass_overlay_test` 有一条钉住。
+      SafeArea(child: builder(context));
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) =>
+      GlassMaterialize(animation: animation, child: child);
+}
+
+/// **弹窗的统一入口。** 21 处 `showDialog` 全部走它（由
+/// `test/glass_overlay_guard_test.dart` 扫源码守着）。
+///
+/// 与裸 `showDialog` 的三点差别：进场 300ms / 退场 200ms（不是固定的 150ms）、
+/// 面板「从模糊里凝出来」、遮罩色与可点关闭**写在一处**（原来是 21 处各写一遍
+/// `barrierColor: Colors.black26`）。
+Future<T?> showGlassDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+}) {
+  return Navigator.of(context, rootNavigator: true).push<T>(
+    _GlassOverlayRoute<T>(
+      builder: builder,
+      dismissible: barrierDismissible,
+      // 遮罩要一个语义标签（`barrierDismissible` 为真时必须有）—— 走本地化那一份，
+      // 与 SDK 的 `DialogRoute` 同一个来源。
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    ),
+  );
+}
+
+/// **底部弹层的统一入口。** 9 处 `showModalBottomSheet` 全部走它。
+///
+/// 与弹窗那一支的差别：**弹层保留 Material 自带的「从底下升上来」**（那是弹层该有的
+/// 动作），凝聚叠在面板上 —— 所以这里不自己写路由，而是把内容包一层 `GlassMaterialize`
+/// 并**用弹层自己的路由动画驱动**（`ModalRoute.of(...).animation`）。
+///
+/// 遮罩色与「底色透明」写在一处（原来是 9 处各写一遍 `backgroundColor: Colors.transparent`
+/// 与 `barrierColor: Colors.black26`）。
+Future<T?> showGlassSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool isScrollControlled = false,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black26,
+    isScrollControlled: isScrollControlled,
+    builder: (BuildContext sheetContext) =>
+        _SheetEntrance(child: builder(sheetContext)),
+  );
+}
+
+/// 弹层的**入场**凝聚：自己跑一次就停。
+///
+/// ⚠️ **不能拿弹层路由自己的动画驱动它。** `ModalBottomSheetRoute` 把「下拉关闭」的
+/// 手势**直接写进同一个 controller**（SDK 的 `bottom_sheet.dart` 里
+/// `animationController.value -= primaryDelta / childHeight`）—— 跟着它走的话，
+/// 把弹层往下拖三成，面板就被缩到 0.95、糊 σ6、**只剩三成不透明**：一次正常的下拉
+/// 手势把面板弄得半透明。（**独立审查抓出来的**，规格里写的也正是「凝聚叠在面板上
+/// 即可」—— 它只要求入场。）
+class _SheetEntrance extends StatefulWidget {
+  const _SheetEntrance({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SheetEntrance> createState() => _SheetEntranceState();
+}
+
+class _SheetEntranceState extends State<_SheetEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: AppTokens.durGlassIn,
+  )..forward();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      GlassMaterialize(animation: _c, child: widget.child);
 }

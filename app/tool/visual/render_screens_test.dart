@@ -16,6 +16,11 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/widgets/glass_check.dart';
+import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
+import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
+import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
@@ -38,6 +43,9 @@ void main() {
   });
 
   setUp(setUpVisualPrefs);
+  // 档位是模块级标志，会在用例之间残留 —— 每个用例收尾都拨回标准档，
+  // 免得「液态档那几条」把后面所有屏都染上。
+  tearDown(useStandardGlassTier);
 
   /// 每个用例一套干净的库，避免前一个用例的改动漏到后一个的图里。
   Future<AppDatabase> freshDb() async {
@@ -51,6 +59,16 @@ void main() {
       visualTest('${screen.title} · ${variant.label}', (tester) async {
         failOnOverflow(tester);
         final db = await freshDb();
+        final extraPrefs = <String, Object>{
+          ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
+          ...screenExtraPrefs(screen.slug),
+        };
+        // ⚠️ **屏单里「液态档」不能只靠 prefs。** 读档位的那些屏是 `appSettingsProvider`
+        // 的 `_load()` 把 prefs 落实到模块级标志上的；而**不读那个 provider 的屏**
+        // （响铃页就是）prefs 根本落不到标志上 —— 拍出来与标准档**逐字节相同**。
+        // v0.10.1 踩过一次，这次是它的新变种：`47_ringing_liquid` 第一版两张图一模一样，
+        // 是**出图时当场看出来的**（不是任何断言抓到的）。
+        if (extraPrefs['liquidGlass'] == true) useLiquidGlassTier();
         await renderScreen(
           tester,
           name: '${screen.slug}_${variant.suffix}',
@@ -59,7 +77,7 @@ void main() {
           brightness: variant.brightness,
           language: variant.language,
           size: variant.size,
-          extraPrefs: screen.needsOnboardingPrefs ? onboardingPrefs : const {},
+          extraPrefs: extraPrefs,
         );
       });
     }
@@ -97,6 +115,123 @@ void main() {
       });
     }
   }
+
+  // 液态档那枚选中块的两档「活的」状态（v0.10.15）——
+  // **静止帧拍不到它们**，而这一轮的全部内容就在这两档上：按住时四面鼓出、
+  // 拖动时沿运动方向形变且边缘挤过格子里的字。手势必须真按下去（形状由弹簧与
+  // 速度驱动，喂参数是拍不出真东西的）。
+  for (final (String slug, String title, double dragBy)
+      in <(String, String, double)>[
+    ('49_calendar_lens_press', '日历 · 液态档选中块 · 按住', 0),
+    ('50_calendar_lens_drag', '日历 · 液态档选中块 · 拖动中', 46),
+  ]) {
+    visualTest(title, (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      useLiquidGlassTier();
+      await renderScreen(
+        tester,
+        name: slug,
+        home: const CalendarScreen(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        extraPrefs: <String, Object>{'liquidGlass': true},
+        // ⚠️ **「在动」的那一档不许 `settleVisual`**：它推 60 帧，而手指停住不动
+        // → 速度衰减到 0 → 拍出来的其实是「按住但静止」，**形变与彩边一个都看不到**。
+        // 这正是 v0.10.6 在底栏上踩过的那个坑（`40_nav_lens_dragging` 当年就是这么
+        // 拍的）；「拖动中」这一屏要是也稳稳地拍，等于什么都没拍。
+        //
+        // ⚠️ **「按住」那一档也不能 settle**：`settleVisual` 推 60 帧（每帧 16ms），
+        // 加上前面按住那 20 帧就过了 500ms —— **长按判定会在这里触发**，于是这一屏
+        // 拍到的其实是「长按之后」：块不再鼓起、反倒竖起了那枚水带（第六轮加上带子
+        // 之后它在图上当场现形；在那之前它一直是个「什么都看不出来」的错状态）。
+        // 代价：少推 60 帧，页面底下那层极慢的光晕背景会停在另一个相位上，
+        // 与基线逐张比时会多出一片弥散的小差异（已知、可解释）。
+        settleAfterCapture: false,
+        beforeCapture: (WidgetTester t) async {
+          // 起点取今天那一格（选中块默认落在今天）；不能找 `calendar-selection-block`
+          // 的**位置**去按 —— 那枚块在拖动中会跟着走，而起点得是格子。
+          final TestGesture g = await t.startGesture(t.getCenter(
+              find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+          for (int i = 0; i < 20; i++) {
+            await t.pump(const Duration(milliseconds: 16)); // 过按住闸门
+          }
+          if (dragBy == 0) return;
+          // 46px = 半格 28 + 被竞技场 slop 吃掉的 18 —— 落点正好在两格之间，
+          // 右边那格的内容才会被透镜边缘挤到。
+          const int steps = 8;
+          for (int i = 0; i < steps; i++) {
+            await g.moveBy(Offset(dragBy / steps, 0));
+            await t.pump(const Duration(milliseconds: 16));
+          }
+        },
+      );
+    });
+  }
+
+  // 点「今天」那一跳的**中途**（v0.10.17）。用户 2026-10-01 报的就是这一下：
+  // 「点完别的日期再点今天，返回的动画还是以前那种效果」—— 位置由
+  // `AnimatedPositioned` 隐式走时，速度恒为 0、挤压场盯着终点，于是既没有彩边、
+  // 也没有形变、块飞过的格子一点反应都没有。静止帧拍不到这一档，必须真点。
+  visualTest('日历 · 液态档选中块 · 点「今天」飞回去', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    useLiquidGlassTier();
+    final int today = DateTime.now().day;
+    final int other = today >= 15 ? today - 10 : today + 10; // 一定在 1..25 里
+    await renderScreen(
+      tester,
+      name: '51_calendar_lens_flight',
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      extraPrefs: <String, Object>{'liquidGlass': true},
+      settleAfterCapture: false,
+      beforeCapture: (WidgetTester t) async {
+        await t.tap(find.byKey(ValueKey('day-card-$other')));
+        await settleVisual(t); // 先落到远处那一格
+        await t.tap(find.byIcon(Icons.today_outlined));
+        // 5 帧（80ms）≈ 飞了大半：块卡在格子之间，彩边亮着、底下几格正被挤。
+        for (int i = 0; i < 5; i++) {
+          await t.pump(const Duration(milliseconds: 16));
+        }
+      },
+    );
+  });
+
+  // 长按拖选**到一半**那条水带（v0.10.18）。静止帧拍不到它 —— 必须真长按、真拖，
+  // 而且**不许松手**（松手就弹选择层、带子也就没了）。
+  visualTest('日历 · 液态档拖选那条水带', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    useLiquidGlassTier();
+    await renderScreen(
+      tester,
+      name: '52_calendar_range_band',
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      extraPrefs: <String, Object>{'liquidGlass': true},
+      settleAfterCapture: false,
+      beforeCapture: (WidgetTester t) async {
+        // 2 日（周五）→ 18 日（周日）：**跨三行**，两个真端头都看得见，
+        // 中间那一整行是满的。
+        final TestGesture g = await t
+            .startGesture(t.getCenter(find.byKey(const ValueKey('day-card-2'))));
+        for (int i = 0; i < 40; i++) {
+          await t.pump(const Duration(milliseconds: 16)); // 过长按判定
+        }
+        final Offset from =
+            t.getCenter(find.byKey(const ValueKey('day-card-2')));
+        final Offset to = t.getCenter(find.byKey(const ValueKey('day-card-18')));
+        const int steps = 16;
+        for (int i = 0; i < steps; i++) {
+          await g.moveBy((to - from) / steps.toDouble());
+          await t.pump(const Duration(milliseconds: 16));
+        }
+        // 收尾再推两帧：末端还在淌 —— 那一帧才拍得到鼓出与彩边。
+        await t.pump(const Duration(milliseconds: 16));
+        addTearDown(g.up);
+      },
+    );
+  });
 
   visualTest('日历 · 点开某天', (tester) async {
     failOnOverflow(tester);
@@ -214,4 +349,292 @@ void main() {
       },
     );
   });
+
+  // 底栏 · 液态 · 按住拖到一半。
+  //
+  // **静止帧拍不到这一档的全部** —— 凸出胶囊、沿运动方向拉伸、光谱环与那条被折射的
+  // 边，都只在**按住**的时候才发生（松手就没了）。所以要起手拖动、**拖到一半停住**
+  // 再取像。
+  //
+  // 时序不能省：这个 `GestureDetector` 同时挂着 tap 与横向拖动两个识别器，
+  // `onTapDown` 要等竞技场裁决（`kPressTimeout` = 100ms）才触发；升程的闸门
+  // （`lensHoldDelay` = 110ms）再晚一点。先按 30ms 一帧推够这两段，再拖。
+  // **五档变体全出**，不是只出手机那一张。
+  //
+  // 这条屏一开始只渲了 420×900 一张 —— 于是**小窗 200×400 那一档从头到尾没被
+  // 「看过」**，而窄窗恰好是「透镜整个画不出来」那个 Critical 的现场（工装出图的
+  // 意义就在这里；AGENTS.md 里「没有屏单 = 没有眼睛」已经记过两次，这是第三次）。
+  for (final variant in visualVariants) {
+    visualTest('底栏 · 液态 · 按住拖到一半 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '40_nav_lens_dragging_${variant.suffix}',
+        home: const HomeShell(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        // 液态档必须走 prefs —— 只拨模块标志会被 `_load()` 覆盖回去（v0.10.1 踩过）。
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        beforeCapture: (t) async {
+          final Rect nav = t.getRect(find.byKey(const Key('glass-nav-bar')));
+          final TestGesture g = await t.startGesture(
+              Offset(nav.left + nav.width * 0.25, nav.center.dy));
+          addTearDown(g.up); // 取像之后不松手会留下一个未完成的指针
+          for (int i = 0; i < 12; i++) {
+            await t.pump(const Duration(milliseconds: 30));
+          }
+          for (int i = 0; i < 8; i++) {
+            await g.moveBy(const Offset(12, 0));
+            await t.pump(const Duration(milliseconds: 16));
+          }
+        },
+      );
+    });
+  }
+
+  // 底栏 · 液态 · **正在动**（手指还在走的那一刻）。
+  //
+  // 与上面那条 `40_nav_lens_dragging` 是**故意的反例**，两条缺一不可：
+  // 那一条在 `beforeCapture` 之后会被 `settleVisual`（60 帧）稳住，而手指停在原地
+  // —— 于是透镜速度衰减到 0。**光谱环、折边、形变全都由速度驱动**，所以那一屏拍到的
+  // 其实是「按住但静止」，恰好是这个档位唯一一切都正常的那个状态。
+  // **用户 2026-10-01 说的「彩色边缘看不出来」因此从没在任何一张图上现形过。**
+  //
+  // 靠 `settleAfterCapture: false` 取「还在动」的那一帧。速度**故意取慢的**：
+  // 每帧 16ms 走 5px = **312px/s**，比一格 90px 走 290ms —— 一次不紧不慢的正常拖动。
+  //
+  // 为什么不取快的（750px/s 那种）：旧代码的环亮度是 `× clamp(v / 700)`，**在快的那
+  // 一端它本来就是满的** —— 拍快了这条屏单刚好盖住要看的那个变化。用户说的
+  // 「看不出来」发生在 200~400px/s 这一段：旧代码在那里只有三成亮度，新的是一来就满。
+  for (final variant in visualVariants) {
+    visualTest('底栏 · 液态 · 正在动 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '41_nav_lens_moving_${variant.suffix}',
+        home: const HomeShell(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        settleAfterCapture: false,
+        beforeCapture: (t) async {
+          final Rect nav = t.getRect(find.byKey(const Key('glass-nav-bar')));
+          final TestGesture g = await t.startGesture(
+              Offset(nav.left + nav.width * 0.2, nav.center.dy));
+          addTearDown(g.up);
+          for (int i = 0; i < 12; i++) {
+            await t.pump(const Duration(milliseconds: 30)); // 过长按闸门
+          }
+          for (int i = 0; i < 12; i++) {
+            await g.moveBy(const Offset(5, 0));
+            await t.pump(const Duration(milliseconds: 16));
+          }
+        },
+      );
+    });
+  }
+
+  // 分段器 · 液态 · **按住**那一刻。
+  //
+  // 「静止」那两态在 `37_profile_liquid_*` 里已经有了；**按住时那枚滴凸出容器**
+  // 只在按住时发生，静止帧拍不到 —— 这一屏专门拍它。
+  //
+  // 时序不能省：这个 `GestureDetector` 同时挂着 tap 与横向拖动两个识别器，
+  // `onTapDown` 要等 `kPressTimeout`（100ms）才触发，升程的闸门（`lensHoldDelay`
+  // = 110ms）再晚一点。所以按住之后要推够这两段。
+  for (final variant in visualVariants) {
+    visualTest('分段器 · 液态 · 按住 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      // 这两个宿主是**独立控件**，不读 `appSettingsProvider` —— 档位标志
+      // 不会因为 prefs 被点亮（前几屏能亮是因为它们读 provider）。
+      // 所以这里必须显式拨一下。
+      useLiquidGlassTier();
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '42_segment_liquid_${variant.suffix}',
+        home: const _SegmentHost(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        // 液态档必须走 prefs —— 只拨模块标志会被 `_load()` 覆盖回去（v0.10.1 踩过）。
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        beforeCapture: (WidgetTester t) async {
+          final Rect box = t.getRect(find.byType(GlassSegment));
+          final TestGesture g = await t.startGesture(
+              Offset(box.left + box.width * 0.18, box.center.dy));
+          addTearDown(g.up);
+          for (int i = 0; i < 20; i++) {
+            await t.pump(const Duration(milliseconds: 30));
+          }
+        },
+      );
+    });
+  }
+  // 开关 · 液态 · **按住那一刻**（钮纵向拉长）。
+  //
+  // 「开」「关」两态在 `37_profile_liquid_*` 等屏里已经有了；**按住时钮被抽出来**
+  // 只在按住时发生，静止帧拍不到 —— 这一屏专门拍它。
+  for (final variant in visualVariants) {
+    visualTest('开关 · 液态 · 按住 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      // 这两个宿主是**独立控件**，不读 `appSettingsProvider` —— 档位标志
+      // 不会因为 prefs 被点亮（前几屏能亮是因为它们读 provider）。
+      // 所以这里必须显式拨一下。
+      useLiquidGlassTier();
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '43_switch_liquid_${variant.suffix}',
+        home: const _SwitchHost(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        beforeCapture: (WidgetTester t) async {
+          // 按**最下面那一枚**（开着的那枚），上两枚作对照。
+          final Rect box = t.getRect(find.byType(GlassSwitch).last);
+          final TestGesture g = await t.startGesture(box.center);
+          addTearDown(g.up);
+          for (int i = 0; i < 20; i++) {
+            await t.pump(const Duration(milliseconds: 30));
+          }
+        },
+      );
+    });
+  }
+
+  // 开关 · 液态 · **拖动中**（「头大尾轻」那一态）。
+  //
+  // 与上面「按住」那条是**故意的配对**：按住不动时形变恒为 0，钮只是一枚竖着的椭圆；
+  // 形状只有在**动**的时候才变。少了这一屏，「拖动时到底有没有头大尾轻」结构性地
+  // 拍不到 —— 而这一轮争的正是它。
+  //
+  // ⚠️ **拖动距离必须先走掉 `kTouchSlop`（18px）**：识别器赢下竞技场之前那 18px 是
+  // 空走的，而这条轨道一共只有 56 宽、钮只能走 25px。本轮第一版每帧只走 3px、六帧
+  // 才 18px，识别器压根没收下这次拖动，两张图逐字节相同。
+  for (final variant in visualVariants) {
+    visualTest('开关 · 液态 · 拖动中 · ${variant.label}', (tester) async {
+      failOnOverflow(tester);
+      useLiquidGlassTier();
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '46_switch_drag_${variant.suffix}',
+        home: const _SwitchHost(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: variant.brightness,
+        language: variant.language,
+        size: variant.size,
+        extraPrefs: <String, Object>{...onboardingPrefs, 'liquidGlass': true},
+        settleAfterCapture: false,
+        beforeCapture: (WidgetTester t) async {
+          final Rect box = t.getRect(find.byType(GlassSwitch).last);
+          final TestGesture g =
+              await t.startGesture(Offset(box.right - 8, box.center.dy));
+          addTearDown(g.up);
+          for (int i = 0; i < 20; i++) {
+            await t.pump(const Duration(milliseconds: 30)); // 过长按闸门
+          }
+          await g.moveBy(const Offset(-18, 0)); // 走掉 kTouchSlop
+          await t.pump(const Duration(milliseconds: 16));
+          for (int i = 0; i < 6; i++) {
+            await g.moveBy(const Offset(-3, 0)); // 187px/s，一次正常的拖动
+            await t.pump(const Duration(milliseconds: 16));
+          }
+        },
+      );
+    });
+  }
+
+  // 待办 · **勾选态**（v0.10.10）。
+  //
+  // 待办原来用的是一枚开关，这一版换成了勾。屏单里已有的 `05_todos` 全是**没勾**的，
+  // 所以「勾上之后长什么样」在图上结构性地看不见 —— 而它恰恰是这一版改的东西。
+  // 点一下第一行那个勾，同一张图上就同时有「勾上」与「没勾」两态。
+  //
+  // 两档各出一张：一个 `GlassCheck` 只能读到一个档位（它读的是模块级标志），
+  // 要同时拍到两档只能出两张。
+  for (final bool liquid in <bool>[false, true]) {
+    visualTest('待办 · 勾选态 · ${liquid ? '液态档' : '标准档'}', (tester) async {
+      failOnOverflow(tester);
+      useLiquidGlassTier();
+      if (!liquid) useStandardGlassTier();
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: liquid ? '45_todo_check_liquid' : '44_todo_check',
+        home: const ScheduleScreen(),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        extraPrefs: liquid
+            ? <String, Object>{...onboardingPrefs, 'liquidGlass': true}
+            : onboardingPrefs,
+        beforeCapture: (t) async {
+          await t.tap(find.byType(GlassCheck).first);
+          await settleVisual(t);
+        },
+      );
+    });
+  }
+
+}
+
+/// 一屏只放三段分段器，用来单独看清液态档按住时那枚滴。
+class _SegmentHost extends StatelessWidget {
+  const _SegmentHost();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTokens.space2xl),
+            child: GlassSegment(
+              count: 3,
+              selectedIndex: 0,
+              height: 40,
+              onSelected: (int _) {},
+              itemBuilder: (int i, bool sel) => Text(
+                <String>['跟随系统', '浅色', '深色'][i],
+                style: AppTokens.rowPrimary.copyWith(
+                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+
+/// 三枚开关：开 / 关 / **按住那一枚会被拍下来**。
+class _SwitchHost extends StatelessWidget {
+  const _SwitchHost();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              GlassSwitch(value: true, onChanged: _ignore),
+              SizedBox(height: AppTokens.space2xl),
+              GlassSwitch(value: false, onChanged: _ignore),
+              SizedBox(height: AppTokens.space2xl),
+              GlassSwitch(value: true, onChanged: _ignore),
+            ],
+          ),
+        ),
+      );
+
+  static void _ignore(bool _) {}
 }

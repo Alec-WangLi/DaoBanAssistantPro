@@ -17,7 +17,7 @@ import 'package:flutter/services.dart';
 
 /// 用户是否关掉了触觉反馈（由「外观」设置反灌）。
 ///
-/// 走模块级标志，而不是让每个调用点自己去查设置 —— 与 `advancedMaterialDisabled`
+/// 走模块级标志，而不是让每个调用点自己去查设置 —— 与 `liquidGlassEnabled`
 /// （`core/glass/glass.dart`）同一条路：一处赋值全 app 生效，没人会漏查。
 bool hapticsDisabled = false;
 

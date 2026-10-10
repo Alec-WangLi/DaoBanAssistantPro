@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:intl/intl.dart';
 
 /// 一段双语文案的持有者。
@@ -24,6 +25,25 @@ class L10n {
   static bool get isEn => locale == 'en';
 
   static String t(String zh, String en) => isEn ? en : zh;
+
+  // ── 日期格式化器的记忆化 ────────────────────────────────────────────────
+  //
+  // `DateFormat(pattern, locale)` 每次构造都要把模式串**解析一遍**，而下面那几处
+  // 是「每次重建都要调」的：日历一屏就有月标题、完整日期、每一格；`monthShort`
+  // 还在「本月统计」那一行里按班次种类循环。
+  //
+  // 键 = `语言|模式`。**没有上界** —— 模式全是这个文件里的常量，一共就那几条，
+  // 而语言只有两种（与 `lunar_info.dart` 那个按天缓存不同，那个的键是无限的）。
+  static final Map<String, DateFormat> _dfCache = <String, DateFormat>{};
+
+  static DateFormat _df(String pattern, String loc) =>
+      _dfCache.putIfAbsent('$loc|$pattern', () => DateFormat(pattern, loc));
+
+  @visibleForTesting
+  static int debugDateFormatCacheSize() => _dfCache.length;
+
+  @visibleForTesting
+  static void debugDateFormatCacheClear() => _dfCache.clear();
 
   // 底部导航
   static String get navCalendar => t('日历', 'Calendar');
@@ -197,13 +217,13 @@ class L10n {
       '· 排班表、日程与待办\n'
       '· 自定义闹钟、你的模板\n'
       '· 你保存的铃声\n'
-      '外观设置（主题 / 主色调 / 语言 / 高级材质 / 触觉）也一并回到默认。\n'
+      '外观设置（主题 / 主色调 / 语言 / 液态玻璃 / 触觉）也一并回到默认。\n'
       '此操作不可撤销。',
       'The app goes back to a fresh install. This clears:\n'
       '· schedules, events and todos\n'
       '· custom alarms and your templates\n'
       '· any ringtone you saved\n'
-      'Appearance settings (theme, accent colour, language, advanced material, '
+      'Appearance settings (theme, accent colour, language, liquid glass, '
           'haptics) return to their defaults too.\n'
       'This cannot be undone.');
   static String get confirmResetAction => t('确认清空', 'Clear');
@@ -789,8 +809,8 @@ class L10n {
   static List<String> get guideAppearanceDesc => [
         t('「我的 → 外观」可切跟随系统 / 浅色 / 深色，选 5 种主色调，中英文切换',
             'Me → Appearance: follow the system / light / dark, pick one of 5 accent colours, switch between Chinese and English'),
-        t('「高级材质」关掉后全 App 取消背景模糊，省电、低端机更流畅',
-            'Turning "Advanced material" off removes background blur app-wide — lighter on battery and smoother on low-end devices'),
+        t('「液态玻璃」给玻璃边缘加光、滑块与开关按下时鼓起成透镜；关掉更省电',
+            '"Liquid glass" lights up the glass rim, and the slider and switch swell into a lens while you press them — turn it off to save battery'),
         t('「触觉反馈」控制开关、选中、拖选与改班时的轻微震动，默认开',
             'Haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change) is on by default and lives here too'),
       ];
@@ -840,11 +860,24 @@ class L10n {
   static String get swipeUpToDismiss => t('上滑关闭', 'Swipe up to dismiss');
 
   // 外观设置
-  static String get advancedMaterial => t('高级材质', 'Advanced material');
-  static String get advancedMaterialHint => t(
-      '磨砂玻璃的背景模糊；关掉更省电、低端机更流畅',
-      'Frosted-glass background blur — turn it off to save battery and go '
-          'smoother on low-end devices');
+  static String get liquidGlass => t('液态玻璃', 'Liquid glass');
+  /// 「我的 → 外观 → 液态玻璃」那一行的副标题。
+  ///
+  /// ⚠️ **它必须说的只有底栏**（v0.10.3 定的范围；v0.10.9 / v0.10.15 起其实已经
+  /// 铺到分段器、开关与日历上那枚选中的块）：这一句仍然只点**最先做、也最好认**的
+  /// 那处。上一版写的是「玻璃边缘带光、按下时鼓起成透镜」—— 那是全局描述，在
+  /// v0.10.3 那个范围下是**假的**（卡片、顶部胶囊上都没有那圈光），所以收成了这一句。
+  /// ⚠️ **长度是量的**：420dp 下这一行只放得下约 21 个汉字，多一个字就折行、
+  /// 把「我的」页整体推下去一行（改文案时工装那 27 张差异屏里有 7 张就是它）。
+  /// 要把那几处也写进去，先按这条量一遍宽度再动。
+  static String get liquidGlassHint => t(
+      '按住底栏滑块提起成透镜；关掉是磨砂玻璃',
+      'Hold the tab pill to lift it into a lens; off is frosted glass');
+
+  /// 低内存机器上那一行改说这句（开关同时置灰）。
+  static String get liquidGlassUnsupportedHint => t(
+      '这台设备内存较小，始终使用磨砂玻璃',
+      'Low-memory device — frosted glass is always used');
   static String get hapticFeedback => t('触觉反馈', 'Haptic feedback');
   static String get hapticFeedbackHint => t(
       '开关翻转、选中、拖选与改班时轻微震动（普通点击不震）',
@@ -856,22 +889,22 @@ class L10n {
   // 用缩写月（Sep 2026）而不是全称，跟中文「2026年9月」的紧凑度对齐，
   // 顶部那颗胶囊才放得下。
   static String yearMonth(DateTime d) => isEn
-      ? DateFormat('MMM yyyy', 'en').format(d)
-      : DateFormat('yyyy年M月', 'zh').format(d);
+      ? _df('MMM yyyy', 'en').format(d)
+      : _df('yyyy年M月', 'zh').format(d);
   static String monthDay(DateTime d) => isEn
-      ? DateFormat('MMM d', 'en').format(d)
-      : DateFormat('M月d日', 'zh').format(d);
+      ? _df('MMM d', 'en').format(d)
+      : _df('M月d日', 'zh').format(d);
   static String monthShort(int month) {
     final d = DateTime(2000, month, 1);
-    return isEn ? DateFormat('MMM', 'en').format(d) : DateFormat('M月', 'zh').format(d);
+    return isEn ? _df('MMM', 'en').format(d) : _df('M月', 'zh').format(d);
   }
   static String monthDayWeekday(DateTime d) => isEn
-      ? DateFormat('EEE, MMM d', 'en').format(d)
-      : DateFormat('M月d日 EEEE', 'zh').format(d);
+      ? _df('EEE, MMM d', 'en').format(d)
+      : _df('M月d日 EEEE', 'zh').format(d);
   // 英文按 'Sep 9, 2026' 的顺序；`yyyy MMM d` 会串成「2026 Sep 9」，不像英文。
   static String yearMonthDay(DateTime d) => isEn
-      ? DateFormat('MMM d, yyyy', 'en').format(d)
-      : DateFormat('yyyy年 M月 d日', 'zh').format(d);
+      ? _df('MMM d, yyyy', 'en').format(d)
+      : _df('yyyy年 M月 d日', 'zh').format(d);
 
   // 桌面小组件。只有「今天/明天/后天」与空表提示是本轮新文案 ——
   // 时间串复用既有的 [timeRange]，日期串复用 [monthDay]，周几复用 [weekday]，

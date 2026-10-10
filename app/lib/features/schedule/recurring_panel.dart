@@ -30,9 +30,8 @@ import 'schedule_screen.dart';
 /// 的、没有可渲染的 widget），而那个薄壳只给 context。里面用 `Consumer` 取
 /// provider，所以不需要外传 `ref`。
 Future<void> showRecurringTodosDialog(BuildContext context) {
-  return showDialog<void>(
+  return showGlassDialog<void>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (context) => GlassDialog(
       title: L10n.recurring,
       showClose: true,
@@ -90,40 +89,60 @@ class _RecurringList extends ConsumerWidget {
       if (next != null) L10n.nextTime(L10n.monthDay(next)),
     ];
     final muted = AppTokens.inkMuted(context);
+    // **窄窗（窗口宽 < 260）这一行排两行。**
+    //
+    // v0.10.10 把开关从 46 加宽到 56 之后，这一行在 200×400 下先溢出了 6px；收掉
+    // 内缩与间距能止住溢出，但独立审查**量**出来：标题只剩 **14px**，而一个汉字
+    // 加省略号要 ≈28px —— Flutter 索性什么都不画，行读起来是 `[开关] [垃圾桶]`，
+    // 看不出自己在开关哪一条规则（**那不是这一版弄坏的**，v0.10.9 只剩 4px）。
+    //
+    // 所以窄窗改成两行排：开关与删除键一行、标题与副标题**拿回整行宽度**在下一行。
+    // **一个控件都没有摘**（对比：摘掉那个删除键也能腾出 36px，但那是交互改动）。
+    final bool tight = MediaQuery.sizeOf(context).width < 260;
+
+    final Widget switchTile = GlassSwitch(
+      value: s.enabled,
+      onChanged: (v) => _setEnabled(ref, s, v),
+    );
+    final Widget deleteTile = GlassDeleteButton(
+      compact: true,
+      onPressed: () => _delete(context, ref, s),
+    );
+    final Widget texts = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(s.title,
+            maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTokens.rowPrimary),
+        Text(parts.join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTokens.microText.copyWith(color: muted)),
+      ],
+    );
+
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceXs),
       onTap: () => _edit(context, ref, s),
-      child: Row(
-        children: [
-          GlassSwitch(
-            value: s.enabled,
-            onChanged: (v) => _setEnabled(ref, s, v),
-          ),
-          const SizedBox(width: AppTokens.gapIconText),
-          Expanded(
-            child: Column(
+      child: tight
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.rowPrimary),
-                Text(parts.join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.microText.copyWith(color: muted)),
+                Row(children: [switchTile, const Spacer(), deleteTile]),
+                const SizedBox(height: AppTokens.spaceXs),
+                texts,
+              ],
+            )
+          : Row(
+              children: [
+                switchTile,
+                const SizedBox(width: AppTokens.gapIconText),
+                Expanded(child: texts),
+                deleteTile,
               ],
             ),
-          ),
-          GlassDeleteButton(
-            compact: true,
-            onPressed: () => _delete(context, ref, s),
-          ),
-        ],
-      ),
     );
   }
 
@@ -164,9 +183,8 @@ class _RecurringList extends ConsumerWidget {
         .where((e) => e.seriesId == s.id)
         .length;
     if (!context.mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
-      barrierColor: Colors.black26,
       builder: (context) => GlassDialog(
         title: L10n.deleteRecurringTitle,
         content: Text(L10n.deleteSeriesContent(s.title, n)),

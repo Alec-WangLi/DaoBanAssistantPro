@@ -32,24 +32,78 @@ class WidgetService {
   static final ValueNotifier<DateTime?> widgetLaunchRequested =
       ValueNotifier<DateTime?>(null);
 
+  /// 上一次**推成功**的那份内容指纹（`null` = 还没推过）。见 [push] 的说明。
+  static String? _lastPushedKey;
+
+  /// 清掉去重记忆。用例之间要隔离（它是模块级的）。
+  @visibleForTesting
+  /// 仅供测试：把模块级状态（去重的「上一份」与「在飞」）一起清掉。
+  ///
+  /// **两个要一起清**：只清去重的话，上一个用例里那发没跑完的推送会把 `_inFlight`
+  /// 留成 `true`，下一个用例的冷启动推送就被守卫**静默丢掉** —— 表现是
+  /// 「前提：冷启动那几次确实试过推」那种断言莫名其妙地空掉（第一次加守卫时
+  /// `home_shell_nav_test` 就是这么红的）。
+  @visibleForTesting
+  static void resetPushCache() {
+    _lastPushedKey = null;
+    _inFlight = false;
+  }
+
+  /// 上一次推送还在飞。`true` 时后来的触发**直接丢掉**。
+  ///
+  /// 为什么需要它：五个触发点（首帧 / 回前台 / 排班变 / 外观变 / 勾待办）**可能挨在
+  /// 一起** —— 保存一次排班会让好几个 provider 连着发。而 [push] 中间要同步构建
+  /// 224 天 + 编码两份 JSON + 跨一次端；上一次还在飞的时候第二次进来，去重键又是
+  /// 不同的（内容真的变了），于是两发一起压到原生侧、把全部实例重渲染两遍。
+  ///
+  /// ⚠️ **必须用 `finally` 放开**：一次失败就把闸门永久关死，比没有守卫更糟 ——
+  /// 那之后再也推不出去，而桌面上什么都看不出来。
+  static bool _inFlight = false;
+
   /// 把当前状态算成快照推给原生。
   ///
   /// 原生收到后会：落盘 → `updateAppWidget` 全部实例 → 重排下一次刷新闹钟。
   /// 所以「改完排班桌面立刻变」这件事，靠的就是这里被调到。
+  ///
+  /// **同一份内容不推第二次**：这个函数在首帧、每次回前台、排班变、外观变（含换
+  /// 主色）、勾一条待办时都会跑，而它同步构建 224 天、编码约 48KB JSON 再跨一次端。
+  /// 最常见的那次白付就是「回前台」—— 什么都没改，却整套重算 + 全量重渲染。
   static Future<void> push({
     required ScheduleChain? chain,
     required AppSettings settings,
     required int todayTodoCount,
   }) async {
+    final DateTime now = DateTime.now();
+    final Map<String, Object?> snap = buildWidgetSnapshot(
+      chain: chain,
+      now: now,
+      themeMode: settings.themeMode.name,
+      accent: settings.accentColor.toARGB32(),
+      todayTodoCount: todayTodoCount,
+    );
+    final String json = jsonEncode(snap);
+    // 去重键 = **内容本身**，只把「生成时刻」那一项换成常量（它每次都不同，但它不是
+    // 内容；`genAtMs` 只有诊断用途，原生侧一个字都没读它）。
+    //
+    // ⚠️ **别退回「手写一串输入当指纹」** —— 那串东西漏一项就是「该推的没推」，
+    // 而它已经漏过一次（拿 `chain.cacheKey` 当指纹：那是**信息卡高度**的指纹，
+    // 不含按天改班、周期、班组起始日、班组错位，也不含语言 ⇒ 「调一次班」或
+    // 「换一次语言」之后桌面小组件**一直画着旧的**，而 App 里已经变了）。
+    // 比内容自己会覆盖将来新增的每一个字段 —— 代价只是多一次 `jsonEncode`
+    // （热态那次构建 8~11ms，编码占其中一小截）。
+    snap['genAtMs'] = 0;
+    final String key = jsonEncode(snap);
+    if (key == _lastPushedKey) return;
+    // 上一次还在飞：这次直接丢掉（见 [_inFlight]）。放在去重之后，因为「同一份内容」
+    // 本来就不该发，那是更省的那条路。
+    if (_inFlight) return;
+    _inFlight = true;
     try {
-      final json = jsonEncode(buildWidgetSnapshot(
-        chain: chain,
-        now: DateTime.now(),
-        themeMode: settings.themeMode.name,
-        accent: settings.accentColor.toARGB32(),
-        todayTodoCount: todayTodoCount,
-      ));
       await _channel.invokeMethod<bool>('widgetPushSnapshot', {'json': json});
+      // ⚠️ **只在推成功之后才记。** 失败也记的话，那条「装完新版先打开一次 App」的
+      // 兜底重试（回前台再推一次）就永远不会再试 —— 桌面会一直挂着升级前那一次的
+      // 渲染字节，而用户在界面上看不出任何异常。
+      _lastPushedKey = key;
     } catch (e) {
       // 小组件是锦上添花：没有它 App 一切照常，推失败不打扰用户、也不中断调用方
       // （它多半跑在 build 之后的后帧回调里）。
@@ -63,6 +117,10 @@ class WidgetService {
       } catch (_) {
         // 连日志都发不出去（引擎已经没了）—— 到这一步没什么可做的了。
       }
+    } finally {
+      // ⚠️ **放在 `finally` 里**：成功、失败、连日志都发不出去，三条路都要放开闸门。
+      // 少放一次，这条链路就永久哑了（而界面上看不出来）。
+      _inFlight = false;
     }
   }
 

@@ -55,7 +55,10 @@ void main() {
           overrides: <Override>[databaseProvider.overrideWithValue(db)],
           brightness: variant.brightness,
           language: variant.language,
-          extraPrefs: screen.needsOnboardingPrefs ? onboardingPrefs : const {},
+          extraPrefs: <String, Object>{
+            ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
+            ...screenExtraPrefs(screen.slug),
+          },
         );
 
         // textContrastGuideline 用的是 WCAG AA 阈值（普通文字 4.5:1、大字 3:1）。

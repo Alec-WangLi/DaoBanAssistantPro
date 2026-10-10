@@ -30,6 +30,24 @@ typedef VisualScreen = ({
   bool needsOnboardingPrefs,
 });
 
+/// 某些屏需要额外的 prefs。用一张**按 slug 查的小表**，而不是往 [VisualScreen]
+/// 记录里加字段 —— 只有两屏要它，为它去改三十条记录不划算。
+///
+/// 液态档那两屏必须走 prefs（而不是只调 `useLiquidGlassTier()`）：屏幕一
+/// `ref.watch(appSettingsProvider)` 就会建 notifier → `_load()` 读 prefs →
+/// **把档位标志覆盖回去**。这条坑真踩过 —— v0.10.1 收口时那四张「液态档」图
+/// 与各自的标准档**逐字节相同**，等于这一档从没被渲染过。
+Map<String, Object> screenExtraPrefs(String slug) => switch (slug) {
+      '36_home_shell_liquid' ||
+      '37_profile_liquid' ||
+      '38_alarm_liquid' ||
+      '39_todos_liquid' ||
+      '47_ringing_liquid' ||
+      '48_calendar_lens' =>
+        const <String, Object>{'liquidGlass': true},
+      _ => const <String, Object>{},
+    };
+
 final List<VisualScreen> visualScreens = [
   (
     slug: '00_home_shell',
@@ -109,6 +127,15 @@ final List<VisualScreen> visualScreens = [
     // 它的布局（尤其是底部「上滑关闭」滑块）此前没有任何可重复的看图手段。
     slug: '08_ringing',
     title: '响铃',
+    build: (db) async => const AlarmRingingScreen(label: '早班'),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 响铃页的**液态档**（v0.10.13）：那枚「上滑关闭」从手搓的白圆钮换成了真的玻璃药丸。
+    // 单开一屏的理由与 `36_home_shell_liquid` 同一套 —— 液态档**必须走 prefs** 才拍得到，
+    // 而这一屏的形状（凸出轨道、折边、竖着走的头大尾轻）正是这一轮改的东西。
+    slug: '47_ringing_liquid',
+    title: '响铃 · 液态玻璃',
     build: (db) async => const AlarmRingingScreen(label: '早班'),
     needsOnboardingPrefs: false,
   ),
@@ -335,6 +362,49 @@ final List<VisualScreen> visualScreens = [
     slug: '33_span_editor',
     title: '排班管理 · 时段弹层',
     build: (db) async => const _SpanEditorHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 液态玻璃档（「我的 → 外观」里那颗开关，默认关）。要拍它是因为这一档的观感
+    // 从来没在**正式代码路径**下被看过（见 `screenExtraPrefs` 的说明）。
+    // 它同时也是对比度审计的覆盖对象 —— 那正是这条当初漏掉的地方。
+    slug: '36_home_shell_liquid',
+    title: '主壳 · 液态玻璃',
+    build: (db) async => const HomeShell(),
+    needsOnboardingPrefs: true,
+  ),
+  (
+    slug: '37_profile_liquid',
+    title: '我的 · 液态玻璃',
+    build: (db) async => const ProfileScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 列表行是 `enableBlur: false` 的**平填充**，不是玻璃 —— 液态档**不该**给它们
+    // 加边光。上一版加了，闹钟页 / 待办页于是变成「一排描了边的框」（用户
+    // 2026-10-01 反馈的「边缘不知道是什么情况，有点丑」）。这两屏是那条判据的
+    // 常驻护栏。
+    slug: '38_alarm_liquid',
+    title: '闹钟 · 液态玻璃',
+    build: (db) async => const AlarmScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    slug: '39_todos_liquid',
+    title: '待办 · 液态玻璃',
+    build: (db) async => const ScheduleScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 日历那枚**选中块**在液态档下的样子（v0.10.15）。加了它之后，「液态档里有透镜」
+    // 这件事就不再只属于底栏了 —— `glass_tier_test` 里那条原来拿全页数的用例因此
+    // 改成了限定在 `glass-nav-bar` 里（红过一次，改的就是那里）。
+    //
+    // 静止这一屏只是**基线**：这一轮真正要看的是按住与拖动中那两档，
+    // 它们在 `render_screens_test.dart` 里（要真手势，进不了这份屏单）。
+    slug: '48_calendar_lens',
+    title: '日历 · 液态档选中块',
+    build: (db) async => const CalendarScreen(),
     needsOnboardingPrefs: false,
   ),
 ];

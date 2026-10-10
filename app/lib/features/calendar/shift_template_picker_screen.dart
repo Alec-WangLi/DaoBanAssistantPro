@@ -222,7 +222,7 @@ class _ShiftTemplatePickerScreenState
     );
 
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: EdgeInsets.zero,
       child: GlassPressable(
@@ -304,7 +304,7 @@ class _ShiftTemplatePickerScreenState
   Future<void> _manageTemplates(
       BuildContext context, List<ScheduleTemplate> saved) async {
     if (saved.isEmpty) return;
-    await showDialog<void>(
+    await showGlassDialog<void>(
       context: context,
       builder: (dialogContext) => GlassDialog(
         title: L10n.myTemplates,
@@ -316,7 +316,7 @@ class _ShiftTemplatePickerScreenState
             // + 紧凑删除钮 + 点行进编辑），只是装在弹窗里。
             for (final t in saved)
               GlassTile(
-                enableBlur: false,
+                translucentFill: false,
                 margin: const EdgeInsets.only(bottom: AppTokens.spaceSm),
                 padding: EdgeInsets.zero,
                 child: GlassPressable(
@@ -361,7 +361,7 @@ class _ShiftTemplatePickerScreenState
     // 控制器不 dispose（与待办弹窗同一套写法）：提前 dispose 会在弹窗退场
     // 动画里被 TextField 再读一次，直接抛「used after being disposed」。
     final ctrl = TextEditingController(text: t.name);
-    final name = await showDialog<String>(
+    final name = await showGlassDialog<String>(
       context: context,
       builder: (dialogContext) => GlassDialog(
         title: L10n.renameTemplate,
@@ -396,7 +396,7 @@ class _ShiftTemplatePickerScreenState
       BuildContext context, ScheduleTemplate t) async {
     final id = t.id;
     if (id == null) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (dialogContext) => GlassDialog(
         title: L10n.deleteTemplateTitle,
@@ -423,7 +423,7 @@ class _ShiftTemplatePickerScreenState
   Widget _customCard(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       padding: EdgeInsets.zero,
       child: GlassPressable(
         child: InkWell(

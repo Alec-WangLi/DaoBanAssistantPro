@@ -714,7 +714,160 @@ def main_v0100():
               f'  {os.path.getsize(p) // 1024} KB')
 
 
+# ---------------------------------------------------------------------------
+# v0.11.0 那一组
+#
+# 液态玻璃那几屏的素材是**应用自己渲染**的界面（`app/build/visual/`，与回归工装
+# 同源）：它们拍的都是「按住 / 拖动中」那一瞬 —— 真机上要点住不放才看得到，
+# 截图抓不准（这也是 `40_nav_lens_dragging` / `49_calendar_lens_press` 这几屏
+# 当初被加进屏单的原因）。响铃页那张同理。
+# ---------------------------------------------------------------------------
+
+
+def cover_0110():
+    """更新说明首图：这一版最重要的四件事。"""
+    W, H = 1400, 1000
+    img = _gradient(W, H)
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 96), '倒班助手 Pro', font=_font('msyhbd.ttc', 60),
+           fill=INK_SUB, anchor='ma')
+    d.text((W / 2, 178), 'v0.11.0　正式稳定版', font=_font('msyhbd.ttc', 96),
+           fill=INK, anchor='ma')
+    d.text((W / 2, 312), '归纳 v0.10.1 ~ v0.10.22 的二十二个测试版',
+           font=_font('msyh.ttc', 34), fill=INK_SUB, anchor='ma')
+
+    items = [
+        ('液态玻璃铺满全 app',
+         '底栏、开关、分段器、日历上那枚选中的块 —— 按住会鼓起、会拉长，带一圈彩光'),
+        ('日历上多了两处「水」的动作',
+         '点「今天」那枚块飞回去；长按拖选画的是一条连着的水带'),
+        ('明显更顺、也更省电',
+         '编辑排班每帧的画面合成 13.1ms → 6.0ms，日历 10.4 → 2.3ms'),
+        ('响铃 15 分钟没人管会自己停',
+         '此前会一直响、一直震，手机扔在包里也停不下来'),
+    ]
+    y = 414
+    for i, (head, tail) in enumerate(items):
+        _panel(img, (180, y, W - 180, y + 116))
+        d.ellipse((216, y + 40, 252, y + 76), fill=ACCENT)
+        d.text((234, y + 58), str(i + 1), font=_font('msyhbd.ttc', 26),
+               fill=INK, anchor='mm')
+        d.text((286, y + 22), head, font=_font('msyhbd.ttc', 36), fill=INK)
+        d.text((286, y + 70), tail, font=_font('msyh.ttc', 27), fill=INK_SUB)
+        y += 140
+    return img.convert('RGB')
+
+
+def liquid_0110():
+    """液态玻璃：底栏滑块按住 + 日历上那枚块按住（两屏都拍「按住」那一刻）。
+
+    右边那张**不用 `43_switch_liquid_light`** —— 那一屏是开关特写用的测试板
+    （一页白底 + 三枚开关），摆在整屏界面旁边读起来像「这就是 App」，很不像。
+    开关按住拉长这件事交给动图（`work/gif/v0110-switch-drag.gif`）。
+    """
+    return _pair(
+        '液态玻璃：按住才发生的那点事',
+        '静止时一切照旧 —— 鼓起、拉长、那圈彩光，都只在按住或滑动的那一刻出现',
+        '40_nav_lens_dragging_light.png', '49_calendar_lens_press.png',
+        '底栏：凸出胶囊', '日历：按住鼓出',
+        notes=[
+            '底栏那枚滑块按住会吸到手指上、放大并凸出胶囊，拖动时沿运动方向拉长、松手带过冲地落回',
+            '关掉「液态玻璃」就是原来的磨砂玻璃 —— 逐像素一致；低内存机器自动只用那一档',
+        ],
+        base=VIS,
+    )
+
+
+def calendar_0110():
+    """日历上那两处「水」的动作：飞行 + 拖选水带。"""
+    return _pair(
+        '日历上那两处「水」的动作',
+        '点「今天」飞回去 / 长按拖选画一条连着的水带',
+        '51_calendar_lens_flight.png', '52_calendar_range_band.png',
+        '点「今天」：飞回去', '拖选：一条水带',
+        notes=[
+            '飞行途中彩边亮起、形状按飞行方向拉长压扁，飞过哪几格哪几格的字被轻轻挤一下',
+            '水带在同一周里是一整条、格子之间的缝也盖住；按住那一下它会四面鼓起来',
+        ],
+        base=VIS,
+    )
+
+
+def smooth_0110():
+    """更顺、也更省电：逐屏「每帧画面合成耗时」的前后对比（真机探针实测）。"""
+    W, H = 1400, 1000
+    img = _gradient(W, H)
+    _title(img, '更顺、也更省电',
+           '真机实测每帧「画面合成」的耗时 —— 越低越顺；这块屏全程 120Hz，帧预算只有 8.33ms')
+    d = ImageDraw.Draw(img)
+
+    rows = [('编辑排班', 13.10, 5.98), ('日历', 10.36, 2.26), ('闹钟', 9.77, 2.27),
+            ('待办', 6.48, 2.50), ('我的', 3.45, 2.66)]
+    x0, x1 = 430, 1150
+    top, rowh = 340, 96
+    vmax = 14.0
+    span = x1 - x0
+    # 8.33ms 那条「帧预算」线：越过去就是掉拍
+    budget = x0 + span * (8.33 / vmax)
+    d.line((budget, top - 34, budget, top + rowh * (len(rows) - 1) + 66),
+           fill=BAD, width=3)
+    d.text((budget, top - 52), '帧预算 8.33ms', font=_font('msyh.ttc', 24),
+           fill=BAD, anchor='ma')
+    for i, (name, before, after) in enumerate(rows):
+        y = top + i * rowh
+        d.text((x0 - 36, y + 40), name, font=_font('msyhbd.ttc', 32),
+               fill=INK, anchor='rm')
+        d.rounded_rectangle((x0, y, x0 + span * before / vmax, y + 34),
+                            radius=17, fill=(122, 132, 186))
+        d.rounded_rectangle((x0, y + 42, x0 + span * after / vmax, y + 76),
+                            radius=17, fill=OK)
+        d.text((x0 + span * before / vmax + 16, y + 18), f'{before:g}ms',
+               font=_font('msyh.ttc', 26), fill=INK_SUB, anchor='lm')
+        d.text((x0 + span * after / vmax + 16, y + 60), f'{after:g}ms',
+               font=_font('msyh.ttc', 26), fill=OK, anchor='lm')
+    d.text((W / 2, H - 112), '上：改前　下：改后（v0.10.22 真机探针实测）',
+           font=_font('msyh.ttc', 26), fill=INK_SUB, anchor='ma')
+    d.text((W / 2, H - 64), '背景那层缓缓流动的光晕也不再牵着整页一起重画',
+           font=_font('msyh.ttc', 26), fill=INK_SUB, anchor='ma')
+    return img.convert('RGB')
+
+
+def alarmstop_0110():
+    """响铃 15 分钟无人操作会自己停。"""
+    return _single(
+        '响铃 15 分钟没人管，它会自己停',
+        '响铃界面亮着超过 15 分钟仍无人操作 —— 铃声与震动自己停下',
+        '47_ringing_liquid_light.png',
+        [
+            '走的是与用户手动关闭完全相同的拆除路径：撤通知、放锁、收界面、停服务',
+            '此前：一直响、一直震、一直占着前台服务，手机扔在包里也停不下来',
+        ],
+        dev_w=400,
+        base=VIS,
+    )
+
+
+JOBS_0110 = [
+    ('v0110-cover.png', cover_0110),
+    ('v0110-liquid.png', liquid_0110),
+    ('v0110-calendar.png', calendar_0110),
+    ('v0110-smooth.png', smooth_0110),
+    ('v0110-alarm-stop.png', alarmstop_0110),
+]
+
+
+def main_v0110():
+    """只出 v0.11.0 那一组。"""
+    for name, fn in JOBS_0110:
+        p = os.path.join(OUT, name)
+        img = fn()
+        img.save(p, optimize=True)
+        print(f'docs/images/{name}  {img.size[0]}x{img.size[1]}'
+              f'  {os.path.getsize(p) // 1024} KB')
+
+
 if __name__ == '__main__':
     import sys
     _group = sys.argv[1] if len(sys.argv) > 1 else 'v080'
-    {'v080': main, 'v090': main_v090, 'v0100': main_v0100}[_group]()
+    {'v080': main, 'v090': main_v090, 'v0100': main_v0100,
+     'v0110': main_v0110}[_group]()

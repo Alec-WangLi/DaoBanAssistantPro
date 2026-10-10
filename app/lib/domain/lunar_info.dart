@@ -1,4 +1,5 @@
 import 'package:characters/characters.dart';
+import 'package:flutter/foundation.dart';
 import 'package:lunar_plus/lunar.dart';
 
 import 'shift_rotation.dart';
@@ -170,7 +171,36 @@ class LunarInfo {
   }
 }
 
+/// `lunarOf` 的缓存上界。到了就**整个清掉**，不做 LRU —— 请求天然按天聚集
+/// （一屏 42 天、一次快照 224 天），清一次最多多付一屏的代价；而 LRU 要多一套
+/// 要维护、要测的东西。
+const int _lunarCacheMax = 1024;
+
+/// `lunarOf` 的记忆化。**键 = [dayNumber]（自 epoch 的天数）**。
+///
+/// `LunarInfo` 与语言无关（节日名来自 `lunar_plus` 与内置的官方放假表，
+/// `shortLabel` / `cellLabel` / `fullDescription` 都不读 `L10n`），所以键里不需要语言。
+final Map<int, LunarInfo> _lunarCache = <int, LunarInfo>{};
+
+@visibleForTesting
+int lunarCacheEntryCount() => _lunarCache.length;
+
+@visibleForTesting
+void lunarCacheClear() => _lunarCache.clear();
+
+/// 某一天的农历信息。**带缓存**（见 [_lunarCache] 的说明）。
 LunarInfo lunarOf(DateTime date) {
+  final key = dayNumber(date);
+  final hit = _lunarCache[key];
+  if (hit != null) return hit;
+  if (_lunarCache.length >= _lunarCacheMax) _lunarCache.clear();
+  final info = _computeLunar(date);
+  _lunarCache[key] = info;
+  return info;
+}
+
+/// 真正算一次（原样搬过来，一个字没改）。
+LunarInfo _computeLunar(DateTime date) {
   final solar = Solar.fromYmd(date.year, date.month, date.day);
   final lunar = solar.getLunar();
   final festivals = <String>[

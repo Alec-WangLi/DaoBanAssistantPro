@@ -13,6 +13,7 @@ import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_segment.dart';
+import '../../core/widgets/glass_check.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
 import '../../data/app_repository.dart';
@@ -68,7 +69,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
     final events = eventsAsync.valueOrNull ?? const [];
-    ref.watch(appSettingsProvider); // 语言切换时重建
+    ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
     return Scaffold(
       body: SafeArea(
@@ -207,21 +208,23 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     final onSurface = Theme.of(context).colorScheme.onSurface;
 
     return GlassTile(
-      enableBlur: false,
+      translucentFill: false,
       // 卡片之间：分隔两条待办（两个板块），归节奏档。
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       onTap: () => showEditEventDialog(context, ref, e),
       child: Row(
         children: [
-          GlassSwitch(
+          // v0.10.10：待办原来用的是一枚**开关** —— 那不符合待办事项的逻辑
+          // （用户 2026-10-01：「弄完之后打勾，给一个删除线表达」）。全 app 九处
+          // `GlassSwitch` 里只有这一处是勾选语义，其余八处都是真开关，不动。
+          GlassCheck(
             value: e.isCompleted,
             onChanged: (v) async {
-              // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassSwitch`，
-              // Task 4 已经让它在自己的 `onTap` 里发一次 `select()`（「选中变了」
-              // 正是它的语义）。再加一次就是每拨一下震两下 —— 两下比一下信息量
-              // **更少**，正是这套设计要消灭的噪音。spec §4.2 那张表原来点了这
-              // 一行，已作废：**§4.1 覆盖过的控件不再进 §4.2 的表**。
+              // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassCheck`，
+              // 它在自己的 `onTap` 里发一次 `select()`（「选中变了」正是它的语义，
+              // 与开关同一处）。再加一次就是每点一下震两下 —— 两下比一下信息量
+              // **更少**，正是这套设计要消灭的噪音。
               await ref.read(appRepositoryProvider).setEventCompleted(e, v);
               await _rescheduleReminders(ref);
             },
@@ -323,9 +326,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     final titleCtrl = TextEditingController();
     final fields = _EventFields(date: dateOnly(DateTime.now()));
 
-    showDialog(
+    showGlassDialog(
       context: context,
-      barrierColor: Colors.black26,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -672,9 +674,8 @@ Future<void> showEditEventDialog(
   );
 
   if (!context.mounted) return;
-  showDialog(
+  showGlassDialog(
     context: context,
-    barrierColor: Colors.black26,
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
@@ -737,9 +738,8 @@ enum _DeleteChoice { once, series }
 /// 两个回调都是**同步** `pop`（不 await 任何东西），所以不需要 `dialogCloser`
 /// —— 那个是给「await 之后才关窗」的保存类动作准备的。
 Future<_DeleteChoice?> _askDeleteRecurring(BuildContext context, String name) {
-  return showDialog<_DeleteChoice>(
+  return showGlassDialog<_DeleteChoice>(
     context: context,
-    barrierColor: Colors.black26,
     builder: (context) => GlassDialog(
       title: L10n.deleteRecurringTitle,
       content: Text(L10n.deleteRecurringContent(name)),

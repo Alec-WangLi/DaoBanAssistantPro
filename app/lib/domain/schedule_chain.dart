@@ -176,6 +176,25 @@ class ScheduleChain implements ShiftSource {
         'f:${_sourceKey(fallback)}',
       ].join(';');
 
+  /// **所有会影响「某天上什么班」的东西**的指纹 —— 比 [cacheKey] 宽。
+  ///
+  /// [cacheKey] 是**信息卡高度**的指纹：它只管组名 / 简称 / 空白表 / 时段，也就是
+  /// 「会影响卡片高度」的那些。而 `shiftOn` 还会看**基准日、周期、班组错位、按天
+  /// 改班的覆盖** —— 那四样都不在里面。任何拿 [cacheKey] 当「排班指纹」用的地方，
+  /// 都会在「调一次班」或「改一次周期」之后**静默拿到旧值**。
+  ///
+  /// v0.10.20 就是这么栽过一次（两处一起）：信息卡那行「本月统计」的缓存键、
+  /// 以及桌面小组件「内容变没变、要不要重推」的判定 —— 都用了 [cacheKey]，于是
+  /// 调过班之后前者显示旧数字、后者干脆不推（桌面上还画着旧的班）。
+  ///
+  /// ⚠️ **要判「排班变没变」，用这个，不要用 [cacheKey]。** 覆盖表按**键排序**再拼，
+  /// 免得同一份内容因为读出顺序不同而算出两个指纹。
+  String get rotationKey => <String>[
+        cacheKey,
+        for (final ScheduleSpan s in spans) _rotationOf(s.schedule),
+        'f:${_rotationOf(fallback)}',
+      ].join(';');
+
   @override
   String get label {
     final names = [for (final s in spans) s.schedule.name];
@@ -189,6 +208,18 @@ String _sourceKey(ShiftSchedule? s) => s == null
     ? '-'
     : '${s.name}|${s.teamCount}|${s.ourTeamIndex}|${s.isBlank}|'
         '${s.teamNames.join("/")}|${s.classes.map((c) => c.shortLabel).join("/")}';
+
+/// 一套方案里**会影响「某天上什么班」**的那些（见 [ScheduleChain.rotationKey]）。
+String _rotationOf(ShiftSchedule? s) {
+  if (s == null) return '-';
+  final List<MapEntry<int, int>> overrides = s.dayOverrides.entries.toList()
+    ..sort((MapEntry<int, int> a, MapEntry<int, int> b) => a.key.compareTo(b.key));
+  return '${s.anchorDate.millisecondsSinceEpoch}|'
+      '${s.cycle.join(",")}|'
+      '${s.teamOffsets.join(",")}|'
+      '${s.teamCount}|${s.ourTeamIndex}|'
+      '${overrides.map((MapEntry<int, int> e) => '${e.key}:${e.value}').join(",")}';
+}
 
 /// [a] 的起点是否**晚于** [b] 的起点（并列时比 id，大的赢）。
 ///

@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
 
 import '../../core/l10n.dart';
 import '../../data/app_repository.dart';
@@ -297,31 +296,18 @@ class AlarmService {
   static const _recurringBaseId = 40000;
 
   static Future<void> init() async {
-    // 时区库：当前**没有**用它的地方 —— 排定全部走原生（epoch 毫秒）或
-    // `scheduleNativeAlarm`。留着是因为 `flutter_local_notifications` 的
-    // 时区型 API 一旦被用到（比如以后真要上 `zonedSchedule`）就得先有它，
-    // 而那时还必须补 `tz.setLocalLocation`，否则 `tz.local` 是 UTC、会整体
-    // 差一个时区偏移（见 `scheduleTodoReminder` 的说明）。
-    tz.initializeTimeZones();
+    // ⚠️ **不要再把 `tz.initializeTimeZones()` 加回来**（2026-10-10 删）。
+    //
+    // 它从前是为了「以后可能要用 `flutter_local_notifications` 的时区型 API」而留着
+    // 的，但全仓从来没有一处 `zonedSchedule` / `TZDateTime` —— 排定全部走原生
+    // （epoch 毫秒）或 `scheduleNativeAlarm`。代价却是实打实的：`latest_all` 是全量
+    // IANA 库，实测 **21ms**（宿主；真机更慢），而且它跑在 `main()` 里、**首帧之前**。
+    //
+    // 将来真要上时区型 API，除了把这一句加回来，还必须补 `tz.setLocalLocation`
+    // —— 否则 `tz.local` 是 UTC，会整体差一个时区偏移（见 `scheduleTodoReminder` 的说明）。
     // 原生闹钟触发时（App 已在后台），MainActivity 通过此回调通知我们弹出响铃界面；
     // 待办提醒被点开时同样由它通知我们切到「待办」页。
-    _settingsChannel.setMethodCallHandler((call) async {
-      if (call.method == 'onAlarmFired') {
-        // 原生侧回传的是 {label, detail} 两张牌（见 MainActivity.handleAlarmIntent）
-        final ring = AlarmRing.fromMap(call.arguments);
-        await logInfo('Dart 收到 onAlarmFired: ${ring?.title}');
-        if (ring != null) {
-          ringingAlarm.value = ring;
-        }
-      } else if (call.method == 'onTodoTapped') {
-        await logInfo('Dart 收到 onTodoTapped');
-        openTodoRequested.value = true;
-      }
-      // 小组件某一天被点击（热启动路径）。
-      if (call.method == 'onWidgetDayTapped') {
-        WidgetService.onNativeDayTapped(call.arguments as int);
-      }
-    });
+    _settingsChannel.setMethodCallHandler(handleNativeCall);
 
     // 通知通道的名字要在系统「通知」设置里显示，得跟着界面语言走；而通道只能
     // 在原生侧建。启动时把当前语言的名字递过去（同名重复创建 = 更新，不是报错）。
@@ -363,6 +349,39 @@ class AlarmService {
     if (todoId != null) {
       await logInfo('Dart init: 冷启动读取 pendingTodoId=$todoId');
       openTodoRequested.value = true;
+    }
+  }
+
+  /// 处理原生推过来的方法调用 —— 「原生说了什么、Dart 要做什么」的全套契约。
+  ///
+  /// **抽成静态方法是为了能单测**：`init()` 里那一堆插件初始化在 widget 测试里跑不起来，
+  /// 而这里面每一条都是会静默出错的东西（漏一条就是「原生做了、界面没跟上」）。
+  @visibleForTesting
+  static Future<void> handleNativeCall(MethodCall call) async {
+    if (call.method == 'onAlarmFired') {
+      // 原生侧回传的是 {label, detail} 两张牌（见 MainActivity.handleAlarmIntent）
+      final ring = AlarmRing.fromMap(call.arguments);
+      await logInfo('Dart 收到 onAlarmFired: ${ring?.title}');
+      if (ring != null) {
+        ringingAlarm.value = ring;
+      }
+    } else if (call.method == 'onTodoTapped') {
+      await logInfo('Dart 收到 onTodoTapped');
+      openTodoRequested.value = true;
+    } else if (call.method == 'onAlarmAutoStopped') {
+      // **响铃 15 分钟超时自停**。原生那条路与用户手动关闭**完全相同**
+      // （`MainActivity.onAlarmAutoStopped` → `exitLockScreenMode()` +
+      // `stopForeground(REMOVE)` + `stopSelf()`），走到最后发这一发。
+      //
+      // 这里只清这个值：`HomeShell` 看到它从「有」变成「没有」就把响铃那层路由收掉
+      // （用户手动关闭那条路由它自己 `popUntil`，两条路在这里合流）。
+      await logInfo('Dart 收到 onAlarmAutoStopped');
+      ringingAlarm.value = null;
+    }
+    // 小组件某一天被点击（热启动路径）。它不参与上面那条 if/else ——
+    // 单独一个 `if` 是有意的，别顺手并进去。
+    if (call.method == 'onWidgetDayTapped') {
+      WidgetService.onNativeDayTapped(call.arguments as int);
     }
   }
 
@@ -524,8 +543,10 @@ class AlarmService {
           for (final t in repeatTimes) t.millisecondsSinceEpoch,
         ],
       });
-      await logInfo(
-          'scheduleNativeAlarm 成功: id=$id, label=$label, repeatType=$repeatType');
+      // ⚠️ **这里不许再跟一条 `logInfo`**：那等于每排一条闹钟就多跨一次端
+      // （实测一次 `rescheduleAll` 46 条班次闹钟 + 2 条汇总，跨端 99 次里有 46 次
+      // 是它）。要留痕就在 `reschedule` 收尾打一条汇总 —— 由
+      // `alarm_reschedule_budget_test.dart` 钉住。
     } catch (e) {
       await appendLog('scheduleNativeAlarm 失败: $e');
     }
@@ -910,6 +931,7 @@ class AlarmService {
         'days（$days）不得超过天数窗口 $_shiftDaysHorizon —— 原生 id 会撞号');
     await logInfo(
         'reschedule: 开始，排班=${source.label}，自定义闹钟=${customAlarms.length} 个');
+    final Stopwatch sw = Stopwatch()..start();
     // 先清掉可能已损坏的排定缓存，再 cancelAll（否则会抛 Missing type parameter）
     try {
       await _plugin.cancelAll();
@@ -931,8 +953,9 @@ class AlarmService {
     //
     // 「哪些天要排、各排几点」由 [planShiftAlarms] 这个纯函数决定（可单测）；
     // 这里只负责把决策落成原生闹钟。id 仍是 `_shiftBaseId + 天数偏移`。
-    for (final plan in planShiftAlarms(source,
-        from: DateTime.now(), days: days, overrides: overrides)) {
+    final List<ShiftAlarmPlan> shiftPlans = planShiftAlarms(source,
+        from: DateTime.now(), days: days, overrides: overrides);
+    for (final plan in shiftPlans) {
       try {
         await scheduleNativeAlarm(
             _shiftBaseId + plan.alarmIndex * _shiftDaysHorizon + plan.offset,
@@ -992,7 +1015,11 @@ class AlarmService {
     // 3) 待办提醒：普通通知，不进闹钟那套（全屏 + 循环响铃对一条待办太重）。
     //    每条待办只有一个日期、没有重复，所以一次排完就是全部。
     await rescheduleEventReminders(events);
-    await logInfo('reschedule: 完成');
+    // 一条汇总顶掉从前「每排一条闹钟跟一条日志」那一批（跨端调用因此从 99 降到 53，
+    // 见 `alarm_reschedule_budget_test.dart` 与规格 §2）。
+    await logInfo('reschedule: 完成 —— 班次闹钟 ${shiftPlans.length} 条、'
+        '自定义 ${customAlarms.where((a) => a.enabled).length} 个（启用）、'
+        '待办事件 ${events.length} 条，耗时 ${sw.elapsedMilliseconds}ms');
   }
 
   /// 只重排待办提醒（待办增删改之后调用）。

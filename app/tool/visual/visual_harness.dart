@@ -40,6 +40,14 @@ import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+// 插件通道的桩搬到了 `test/support/plugin_channels.dart`（`test/` 下的用例也要
+// 用它 —— 凡是要 pump 主壳的都会撞上「首帧后请求权限」那个没人接的异步异常）。
+// **`import` 给本文件自己用（`pumpScreen` 里要调），`export` 给下游用** ——
+// 两者都要，`export` 不会把名字引进本文件。`export` 必须待在所有声明之前。
+import '../../test/support/plugin_channels.dart';
+
+export '../../test/support/plugin_channels.dart';
+
 /// 渲染画布：6.8" 级别手机的常见逻辑尺寸（K90 Pro Max 一类）。
 const Size kVisualSize = Size(420, 900);
 
@@ -155,10 +163,9 @@ Future<void> ensureVisualFonts() async {
       ? '[visual] 字体就绪：Roboto + MaterialIcons + ${loadedCjkFont!}'
       : '[visual] 字体缺 ${missing.join(" / ")}，缺的部分会渲染成方块');
 
-  // 「高级材质」若被关掉，玻璃退化成不透明填充，看不出真实观感。
-  advancedMaterialDisabled = false;
-  lowEndDevice = false;
-  recomputeGlassBlur();
+  // 玻璃拨到默认的「标准」档再出图 —— 否则看到的是省电档那个不透明填充，
+  // 不是真实观感。
+  useStandardGlassTier();
 
   // 每个用例各建一个内存库是有意为之（互不污染），drift 的「重复建库」告警
   // 在这个用法下纯属噪音。
@@ -181,29 +188,34 @@ ThemeData _applyVisualFonts(ThemeData theme) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 玻璃档位
+// ---------------------------------------------------------------------------
+
+/// 把玻璃拨到「标准」档（默认档）：省电关、液态关。
+///
+/// 出图与对比度审计的**默认状态**，由 `ensureVisualFonts()` 调一次。不拨的话，
+/// 低端机自动降级会让玻璃退化成不透明填充，拍出来的不是真实观感。
+void useStandardGlassTier() {
+  lowEndDevice = false;
+  liquidGlassEnabled.value = false;
+  recomputeGlassTiers();
+}
+
+/// 把玻璃拨到「液态」档。给液态档的屏单与对比度审计用。
+void useLiquidGlassTier() {
+  lowEndDevice = false;
+  liquidGlassEnabled.value = true;
+  recomputeGlassTiers();
+}
+
 
 // ---------------------------------------------------------------------------
 // 测试桩
 // ---------------------------------------------------------------------------
 
-/// 把插件通道挂上空实现。
-///
-/// 测试环境没有原生侧，没人接的 MethodChannel 会抛 MissingPluginException；
-/// 而权限请求这类调用多半是在 `initState` 里 fire-and-forget 出去的，异常
-/// 没有调用者去接，就成了未处理异步错误 —— flutter_test 直接判整个用例失败。
-///
-/// 统一返回 null 等价于「权限一个都没给」，界面落在一个确定的状态上。
-void stubPluginChannels() {
-  final messenger =
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  for (final name in const [
-    'dexterous.com/flutter/local_notifications',
-    'com.daoban.shiftassistantpro/settings',
-  ]) {
-    messenger.setMockMethodCallHandler(
-        MethodChannel(name), (call) async => null);
-  }
-}
+// `stubPluginChannels()` 现在来自 `test/support/plugin_channels.dart`，在本文件
+// 顶上 `export` 出去了（见那里的说明：`test/` 下的用例也要用它）。
 
 // ---------------------------------------------------------------------------
 // 外壳
@@ -759,6 +771,7 @@ Future<GlobalKey> pumpScreen(
   Size size = kVisualSize,
   double textScale = 1.0,
   Future<void> Function(WidgetTester tester)? beforeCapture,
+  bool settleAfterCapture = true,
 }) async {
   // 字体得在 setUpAll 里装好（见 ensureVisualFonts 的说明）。这里只做体检：
   // 忘了调用时给一句明确的话，而不是让图片出来全是方块再回头猜。
@@ -806,7 +819,14 @@ Future<GlobalKey> pumpScreen(
 
   if (beforeCapture != null) {
     await beforeCapture(tester);
-    await settleVisual(tester);
+    // ⚠️ **默认要稳住，但有些屏必须不稳住。**
+    //
+    // `settleVisual` 会推 60 帧；`beforeCapture` 里按住不放的那根手指**停在原地**，
+    // 于是透镜速度衰减到 0 —— 而**光谱环、折边、形变全都由速度驱动**。
+    // `40_nav_lens_dragging` 就是这么渲染的：它拍到的其实是「按住但静止」，
+    // 恰好是这个档位唯一一切都正常的那个状态。**那一屏至今没拍到过彩虹边。**
+    // 要拍「真的在动」必须传 `settleAfterCapture: false`。
+    if (settleAfterCapture) await settleVisual(tester);
   }
   return boundaryKey;
 }
@@ -839,6 +859,7 @@ Future<void> renderScreen(
   Size size = kVisualSize,
   double textScale = 1.0,
   Future<void> Function(WidgetTester tester)? beforeCapture,
+  bool settleAfterCapture = true,
 }) async {
   final boundaryKey = await pumpScreen(
     tester,
@@ -850,6 +871,7 @@ Future<void> renderScreen(
     size: size,
     textScale: textScale,
     beforeCapture: beforeCapture,
+    settleAfterCapture: settleAfterCapture,
   );
 
   final boundary =
@@ -910,4 +932,62 @@ Future<int> currentScheduleId(AppDatabase db) async {
         ..where((s) => s.isCurrent.equals(true)))
       .getSingle();
   return row.id;
+}
+
+// ---------------------------------------------------------------------------
+// 逐帧出图（供 scripts/make_gif.py 合成动图）
+// ---------------------------------------------------------------------------
+
+/// 逐帧出图，供 `scripts/make_gif.py` 合成 GIF（见长期记忆
+/// `prefer-gifs-for-feature-demos`：关键功能展示优先用动图）。
+///
+/// 与 [renderScreen] 的区别是它**故意不稳住** —— 动画必须还在走才拍得成动图。
+/// [onFrame] 在每帧取像**之前**调用，用来推进手势 / 切换状态；每帧之后按 [step]
+/// 推进时钟。产物落 `build/visual/frames/<prefix>NNN.png`。
+///
+/// 两个坑写进 `make_gif.py` 里了：**不要抖动**（会毁掉 GIF 的压缩率）、
+/// **`disposal=2`**（防残影）。
+Future<void> renderFrames(
+  WidgetTester tester, {
+  required String prefix,
+  required Widget home,
+  required List<Override> overrides,
+  required int count,
+  Duration step = const Duration(milliseconds: 80),
+  Brightness brightness = Brightness.light,
+  Size size = kVisualSize,
+  Map<String, Object> extraPrefs = const {},
+  Future<void> Function(WidgetTester tester, int frame)? onFrame,
+}) async {
+  final GlobalKey key = await pumpScreen(
+    tester,
+    home: home,
+    overrides: overrides,
+    brightness: brightness,
+    size: size,
+    extraPrefs: extraPrefs,
+  );
+  final boundary =
+      key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+
+  final Directory dir = Directory('$kVisualOutDir/frames');
+  dir.createSync(recursive: true);
+
+  for (int i = 0; i < count; i++) {
+    if (onFrame != null) await onFrame(tester, i);
+    final File file =
+        File('${dir.path}/$prefix${i.toString().padLeft(3, '0')}.png');
+    // 取像与写盘必须在真实异步区里（伪造时钟区里的 future 不会完成）——
+    // 同 [renderScreen]。
+    await tester.runAsync(() async {
+      final ui.Image image = await boundary.toImage(pixelRatio: kVisualDpr);
+      final ByteData? data =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      await file.writeAsBytes(data!.buffer.asUint8List(), flush: true);
+    });
+    await tester.pump(step);
+  }
+  stdout.writeln('[gif] $count 帧 → ${dir.path}/$prefix*.png');
+  await teardownVisual(tester);
 }

@@ -49,6 +49,35 @@ class MainActivity : FlutterActivity() {
          */
         var pendingWidgetDay: Int = -1
 
+        /**
+         * 当前活着的 Activity。只为**响铃超时自停**服务 —— 见 [onAlarmAutoStopped]。
+         *
+         * 用同进程的静态引用而不是「发个 Intent 把它拉起来」：拉 Activity 正是
+         * MIUI「后台弹出界面」不开时会**静默拒绝**的那件事，而自停要干的恰恰是在
+         * 那条路走不通时收尾。同进程直接调，不经过系统那一层。
+         */
+        @Volatile
+        private var instance: MainActivity? = null
+
+        /**
+         * 响铃超时自停：`AlarmRingService` 到点后回来收尾。
+         *
+         * 做的是与用户手动关闭**完全相同**的两件事 —— 撤锁屏标志
+         * （`setShowWhenLocked`/`setTurnScreenOn` 是只进不出的，不撤就等于把
+         * 「锁屏下能直接操作 App」那个洞重新打开，v0.8.0 修过一次），
+         * 并让 Dart 把那层响铃界面收掉。
+         *
+         * Activity 已经没了就什么都不做：没有界面要收、也没有锁屏标志要撤。
+         */
+        fun onAlarmAutoStopped() {
+            val a = instance ?: return
+            a.runOnUiThread {
+                a.exitLockScreenMode()
+                a.flutterChannel?.invokeMethod("onAlarmAutoStopped", null)
+                AlarmLog.info(a, "MainActivity: 响铃自停 —— 已撤锁屏标志并通知 Dart 收界面")
+            }
+        }
+
         /** 自选铃声请求码 —— 与插件占用的请求码区分开。 */
         private const val REQ_PICK_RINGTONE = 40071
 
@@ -71,10 +100,18 @@ class MainActivity : FlutterActivity() {
     /** 等文件选择器回来的那个 Flutter 回调（同一时刻只允许一个）。 */
     private var pendingRingtoneResult: MethodChannel.Result? = null
 
+    override fun onDestroy() {
+        // 响铃自停靠这个引用回来撤锁屏标志：Activity 没了就把它清掉，别让它挂着一个
+        // 已经销毁的 Activity（那会把整个 Activity 泄漏到进程结束）。
+        instance = null
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // 关键：必须在 setContentView（super.onCreate 内部）之前设置，锁屏冷启动才能点亮屏幕并显示
         applyShowWhenLocked(intent)
         super.onCreate(savedInstanceState)
+        instance = this
         handleAlarmIntent(intent)
         handleWidgetIntent(intent)
         // 捕获原生未处理异常（含闹钟 receiver 触发时的崩溃），写入日志文件

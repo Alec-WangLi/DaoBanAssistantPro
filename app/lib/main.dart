@@ -34,7 +34,7 @@ Future<void> main() async {
       lowEndDevice = true;
     }
   } catch (_) {}
-  recomputeGlassBlur();
+  recomputeGlassTiers();
 
   // 捕获 Flutter 框架错误 + 未处理异步错误，写入日志文件（「我的 → 查看日志」可看）
   FlutterError.onError = (details) {
