@@ -76,7 +76,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
         ref.watch(customAlarmsProvider).valueOrNull ?? const <CustomAlarm>[];
     final overrides = ref.watch(shiftAlarmOverridesProvider).valueOrNull ??
         const <int, bool>{};
-    ref.watch(appSettingsProvider); // 语言切换时重建
+    ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
     final now = DateTime.now();
     final today = dateOnly(now);

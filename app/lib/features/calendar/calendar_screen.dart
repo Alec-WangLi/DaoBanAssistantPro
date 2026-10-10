@@ -692,7 +692,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 整页按**天**解析：某天归哪套方案由链回答（spec §2 ②），所以下面
     // 「网格 / 信息卡 / 本月统计 / 已调班」全都只认它，不再认「当前方案」。
     final chain = scheduleAsync.valueOrNull?.chain;
-    ref.watch(appSettingsProvider); // 语言切换时重建
+    ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
     return Scaffold(
       // 玻璃要有东西可透（见 `FlowingBackground`）：底色仍是主题给的那块平坦中性色，

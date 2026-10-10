@@ -76,7 +76,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
     AlarmService.openTodoRequested.addListener(_onTodoRequested);
     // 排班数据与外观设置任一变化就重推快照 —— 这是「改完排班桌面立刻变」的那条路。
     ref.listenManual(activeScheduleProvider, (_, __) => _scheduleWidgetPush());
-    ref.listenManual(appSettingsProvider, (_, __) => _scheduleWidgetPush());
+    ref.listenManual(appSettingsProvider.select((s) => s.language),
+        (_, __) => _scheduleWidgetPush());
     // 待办变化也要重推：徽章上的「N 项待办」是快照里的一个数，而这条流
     // （eventsProvider）此前**没有任何推送触发** —— 勾掉一条待办之后桌面上的
     // 数字会一整天不动，直到改排班/改外观/下次冷启动。（冷启动那次重复推送无害。）
@@ -269,7 +270,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     // 待办的流也要听：三个流谁最后到齐都要能触发那次重排，漏掉这一个会出现
     // 「待办先到、另两个后到，于是重排跑了但没排待办」——不报错，只是提醒不发。
     ref.listen(eventsProvider, (_, __) => _tryStartupReschedule());
-    ref.watch(appSettingsProvider); // 语言切换时重建导航标签
+    ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建导航标签（只订阅语言）
     return Scaffold(
       extendBody: true,
       // 去掉底部安全区：让页面内容无遮挡地铺满到底、从悬浮胶囊下方穿过，

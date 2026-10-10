@@ -29,7 +29,17 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(appSettingsProvider);
+    // **「我的」页是那个例外**：主题档 / 主色 / 语言 / 液态玻璃 / 触觉五个开关都画在
+    // 它自己身上，所以这五项都得订阅。收成 `language` 会把那几个开关**冻住**。
+    // 写成显式的五元组而不是全量 `watch`：以后再往 `AppSettings` 加字段时，
+    // 这一页不会为它白重建（builder check 抓出来的那一条）。
+    final settings = ref.watch(appSettingsProvider.select((s) => (
+          themeMode: s.themeMode,
+          accentIndex: s.accentIndex,
+          language: s.language,
+          liquidGlass: s.liquidGlass,
+          hapticsEnabled: s.hapticsEnabled,
+        )));
 
     return Scaffold(
       body: SafeArea(
@@ -809,7 +819,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(appSettingsProvider); // 语言切换时重建（权限卡文案也要实时刷新）
+    ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（权限卡文案也要实时刷新）
     final loading = _notif == null ||
         _exact == null ||
         _overlay == null ||

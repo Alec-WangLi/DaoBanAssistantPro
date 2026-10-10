@@ -69,7 +69,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
     final events = eventsAsync.valueOrNull ?? const [];
-    ref.watch(appSettingsProvider); // 语言切换时重建
+    ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
     return Scaffold(
       body: SafeArea(
