@@ -39,7 +39,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.10.19\n'
+const String _changelogZh = 'v0.10.20\n'
+    '· 更顺了：点日期、「今天」飞回去、按住拖动那枚选中的块、长按拖选一段日子时，日历不再每帧重算整页\n'
+    '· 更省电了：那层缓缓流动的光晕不再牵着整页一起重画（你按住拖动的时候它会停一下、松手接着走 —— 观感上几乎看不出来）\n'
+    '· 打开 App 快了一点；翻月、勾待办、改排班之后的卡顿也少了\n'
+    '· 桌面小组件：内容没变时不再重复推一遍（从后台切回来不再白算一次整月数据）\n\n'
+
+    'v0.10.19\n'
     '· 修好一处崩溃：长按拖选当中用另一根手指点 ‹ / › 换月，日历会当场报错（那一段的日子不在新月里，落点算不出来却还在硬画那条带子）\n'
     '· 上一版那枚水带「按住四面鼓起来」的判据补严了一格：它本来就画得出来，但一直靠同层里阴影顺带重画 —— 现在把它算进「该不该重画」\n\n'
 
@@ -86,16 +92,16 @@ const String _changelogZh = 'v0.10.19\n'
     '· 开关按住时改成上下拉长（之前是个大圆），拖动时一端粗一端细、跟着拖动方向\n'
     '· 修好滑块附近那一小段「边缘发光」——底栏与分段器的玻璃边不再有一段莫名更亮\n'
     '· 在滑块上按下之后滑走（取消这次点按），滑块会回到原来的位置，不再停在手指按下的那一格\n\n'
-    'v0.10.10\n'
-    '· 待办事项改用打勾（之前是一枚开关）：勾上之后标题划掉、变浅，再点一下取消\n'
-    '· 滑块扫过分段器（主题模式 / 主色调 / 语言）时，文字会像透过玻璃边看一样被挤一下\n'
-    '· 开关重做：长了一点（56 × 30），钮改成与别处同一枚主色玻璃滴，按住时上下左右一起长\n'
-    '· 开关现在可以用手指拖着拨动 —— 按住拖到另一端松手就切换\n'
-    '· 彩色折射光的宽度改成跟着控件尺寸走：之前那套数只适合底栏那种大盘，摆到小控件上比控件本身还粗\n'
-    '\n'
+        '\n'
 ;
 
-const String _changelogEn = 'v0.10.19\n'
+const String _changelogEn = 'v0.10.20\n'
+    '· Smoother: tapping a date, flying back to Today, dragging the selection block and long-press selecting a run of days no longer rebuild the whole calendar every frame\n'
+    '· Lighter on the battery: the slowly drifting glow no longer repaints the page along with it (it pauses while you drag and carries on after — you will not notice)\n'
+    '· Faster start-up, and less stutter after switching months, ticking a to-do or saving a schedule\n'
+    '· Home-screen widgets: an unchanged snapshot is no longer pushed again (returning to the app no longer recomputes the whole month for nothing)\n\n'
+
+    'v0.10.19\n'
     '· Fixed a crash: with a range drag in progress, using a second finger to tap the month arrows left the calendar throwing errors (those days are not in the new month, so the band had nothing to anchor to yet was still drawn)\n'
     '· Tightened one repaint criterion for the previous version water band: the press swell did render, but only because the shadow in the same layer happened to repaint alongside it — it is now part of the check\n\n'
 
@@ -142,13 +148,7 @@ const String _changelogEn = 'v0.10.19\n'
     '· Holding the switch now stretches it vertically instead of turning it into a big circle, and dragging tapers it along the direction of travel\n'
     '· Fixed the odd bright patch on the glass edge near the slider (tab bar and segmented controls)\n'
     '· Cancelling a press on a slider (press, then slide away) returns it to where it was instead of stranding it under your finger\n\n'
-    'v0.10.10\n'
-    '· To-dos now use a checkmark instead of a switch: tick it and the title is struck through and dimmed; tap again to undo\n'
-    '· When the pill sweeps across a segmented control (theme mode, accent colour, language) the label is squeezed, as if seen through the glass edge\n'
-    '· The switch was redone: a little longer (56 × 30), its knob is now the same accent glass droplet as everywhere else, and holding grows it in both directions\n'
-    '· Switches can now be dragged with a finger — hold and drag to the other end, then let go to flip it\n'
-    '· The chromatic rim now scales with the size of the control: those widths were measured for the big tab bar, and on a small control they came out wider than the control itself\n'
-    '\n'
+        '\n'
 ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 

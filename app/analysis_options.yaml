@@ -18,9 +18,6 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
-    # 一次性性能探针（用完即删）。它们不在 `test/` 下，所以 `@visibleForTesting`
-    # 那几个成员在这里会被报成 warning；而它们本来就不是交付物。
-    - tool/probe/**
 
 linter:
   # The lint rules applied to this project can be customized in the
