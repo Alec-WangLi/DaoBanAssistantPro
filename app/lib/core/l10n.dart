@@ -538,10 +538,25 @@ class L10n {
   /// 响铃落在上班前一天时的标记（闹钟列表行的时间下面那行小字）。
   static String get prevDay => t('前一天', 'day before');
 
-  /// 班次编辑里响铃时间下面那行小字：为什么闹钟排在前一天、落在哪个钟点。
-  static String alarmPrevDayHint(String start, String alarm) => t(
-      '上班 $start，闹钟排在前一天 $alarm',
-      'Shift starts $start — the alarm rings the day before at $alarm');
+  /// 响铃时间落在班次**次日**时的钟点写法（16:30–次日 00:30 的班中 / 下班后闹钟）。
+  ///
+  /// 与 [clockPrevDay] 同一条语序理由：整串交给 [t]，不拼前缀。
+  static String clockNextDay(String time) => t('次日 $time', '$time (next day)');
+
+  /// 响铃落在班次次日时的标记（闹钟列表行的时间下面那行小字）。
+  ///
+  /// **与 [nextDay] 是两个键，别合并**：那个是「结束时间落在次日」的**前缀**
+  /// （英文带尾空格、直接接钟点，见 `timeRange` 与结束时间那块 chip）。
+  static String get nextDayMarker => t('次日', 'next day');
+
+  /// 班次编辑里响铃时间下面那行小字（三档通用）：有闹钟不落在班次当天时，
+  /// 拿**第一条非当天**的举例说清它落在哪天。
+  ///
+  /// [labeledTime] 已经是带日前缀的整串（`前一天 23:00` / `次日 00:15`），
+  /// 所以这里不再自己拼 —— 拼了中英语序会打架（同 [clockPrevDay] 那条）。
+  static String alarmDayHint(String start, String labeledTime) => t(
+      '上班 $start，有一条闹钟排在$labeledTime',
+      'Shift starts $start — one alarm rings $labeledTime');
 
   /// 没填上班时间时的那行小字：判断不了，闹钟按当天算。
   static String get alarmNoStartHint =>

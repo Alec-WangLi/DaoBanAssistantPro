@@ -293,10 +293,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                         overflow: TextOverflow.ellipsis,
                         style: AppTokens.titleStrong,
                       ),
-                      if (alarmFallsOnPreviousDay(
-                          e.shift, e.shift.alarms[k]))
+                      // 不落在班次当天时标一下：只写钟点会被读成班次当天
+                      // （16:30–次日 00:30 的 00:15 就是这一类）。
+                      if (_dayMarkerOf(e.shift, e.shift.alarms[k])
+                          case final marker?)
                         Text(
-                          L10n.prevDay,
+                          marker,
                           style: AppTokens.microText.copyWith(color: muted),
                         ),
                     ],
@@ -562,3 +564,14 @@ class _AboveCapsuleBarLocation extends FloatingActionButtonLocation {
     return Offset(16, base.dy - 76);
   }
 }
+
+/// 这条闹钟不落在班次当天时的标记（`前一天` / `次日`）；落在当天返回 null。
+///
+/// 只写钟点会被读成班次当天 —— 16:30–次日 00:30 的 00:15 一旦只写「00:15」，
+/// 看着就像上班前的那个凌晨（比上班早 16 小时）。
+String? _dayMarkerOf(ShiftClass shift, ShiftAlarm alarm) =>
+    switch (alarmDayAnchor(shift, alarm)) {
+      AlarmDayAnchor.prev => L10n.prevDay,
+      AlarmDayAnchor.next => L10n.nextDayMarker,
+      AlarmDayAnchor.same => null,
+    };

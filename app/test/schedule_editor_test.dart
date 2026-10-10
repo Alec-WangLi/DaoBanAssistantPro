@@ -1427,6 +1427,67 @@ void main() {
     expect(repo.saved!.classes.first.alarms, hasLength(maxAlarmsPerShift));
   });
 
+  // 三档落点在编辑页上的读法：只写钟点会被读成班次当天，所以不落在当天的那几条
+  // 必须各自带前缀。16:30–次日 00:30 的中班配 00:15 与 01:00 —— 两条都落**次日**
+  // （00:15 是班中、下班前 15 分钟；01:00 是下班之后）。
+  testWidgets('次日那两类闹钟在编辑页都带「次日」标记', (tester) async {
+    await _pumpEditor(
+      tester,
+      _oneShift(const ShiftClass(
+        name: '中班',
+        abbr: '中',
+        startMinute: 16 * 60 + 30,
+        endMinute: 30, // 回绕式：次日 00:30
+        color: 0xFFFF9F0A,
+        alarmEnabled: true,
+        alarms: [
+          ShiftAlarm(minute: 15), // 00:15 班中、下班前 15 分钟
+          ShiftAlarm(minute: 60), // 01:00 下班之后
+        ],
+      )),
+    );
+
+    expect(
+      find.descendant(
+          of: find.byKey(const Key('shift-alarm-row-0-0')),
+          matching: find.text(L10n.clockNextDay('00:15'))),
+      findsOneWidget,
+      reason: '不标「次日」会被读成班次当天凌晨 —— 那比上班早 16 小时',
+    );
+    expect(
+      find.descendant(
+          of: find.byKey(const Key('shift-alarm-row-0-1')),
+          matching: find.text(L10n.clockNextDay('01:00'))),
+      findsOneWidget,
+    );
+    expect(find.text(L10n.alarmDayHint('16:30', L10n.clockNextDay('00:15'))),
+        findsOneWidget,
+        reason: '整组那行小字要拿第一条非当天的举例');
+  });
+
+  testWidgets('晚于上班钟点的闹钟仍带「前一天」标记（既有约定不受三档影响）',
+      (tester) async {
+    await _pumpEditor(
+      tester,
+      _oneShift(const ShiftClass(
+        name: '夜班',
+        abbr: '夜',
+        startMinute: 0,
+        endMinute: 8 * 60,
+        color: 0xFF7A5CFF,
+        alarmEnabled: true,
+        alarms: [ShiftAlarm(minute: 23 * 60)],
+      )),
+    );
+
+    expect(
+      find.descendant(
+          of: find.byKey(const Key('shift-alarm-row-0-0')),
+          matching: find.text(L10n.clockPrevDay('23:00'))),
+      findsOneWidget,
+    );
+  });
+
   // ---------------------------------------------------------------------------
   // 底部那颗悬浮的「保存并重排闹钟」胶囊
   // ---------------------------------------------------------------------------

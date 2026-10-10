@@ -141,13 +141,6 @@ AlarmDayAnchor alarmDayAnchor(ShiftClass shift, ShiftAlarm alarm) {
   return after < before ? AlarmDayAnchor.next : AlarmDayAnchor.same;
 }
 
-/// 某条闹钟是不是落在上班的**前一天**。
-///
-/// **过渡期的兼容层**：界面那四处调用点还按布尔写的，等它们改成按
-/// [AlarmDayAnchor] 三路分支之后本函数就删（见实施计划 Task 4）。
-bool alarmFallsOnPreviousDay(ShiftClass shift, ShiftAlarm alarm) =>
-    alarmDayAnchor(shift, alarm) == AlarmDayAnchor.prev;
-
 const int _dayMinutes = 1440;
 
 /// 两个闹钟列表逐条相等（本文件不引 Flutter，拿不到 `listEquals`）。

@@ -588,7 +588,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final outline = Theme.of(context).colorScheme.outlineVariant;
     final muted = AppTokens.inkMuted(context);
     // 响铃落在哪天是「算」出来的、看不出来（00:00 上班 + 23:00 响铃 = **前一天**
-    // 晚上，见 `alarmFallsOnPreviousDay`），所以下面既改钟点的写法、又补一行
+    // 晚上；16:30–次日 00:30 的 00:15 = **次日**，见 `alarmDayAnchor`），
+    // 所以下面既改钟点的写法、又补一行
     // 小字：用户反馈里问的正是「这 23:00 到底是哪天」。
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
@@ -716,12 +717,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                           context,
                           label: L10n.alarmTime,
                           minutes: c.alarms[k].minute,
-                          // 落在上班前一天的写成「前一天 23:00」：只写钟点会让人
-                          // 读成班次当天，而那正是用户反馈里说的「看不到有这个选项」。
-                          valueText: alarmFallsOnPreviousDay(c, c.alarms[k])
-                              ? L10n.clockPrevDay(
-                                  formatClock(c.alarms[k].minute))
-                              : null,
+                          // 不落在班次当天的那两档都带日前缀（「前一天 23:00」/
+                          // 「次日 00:15」）—— 只写钟点会被读成班次当天。
+                          valueText: _alarmDayLabel(c, c.alarms[k]),
                           onPick: (m) {
                             // `_timeChip` 的 onPick 类型是可空 int（没选就调不到
                             // 这里），但闹钟必须有个钟点，所以空值直接忽略。
@@ -769,17 +767,18 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     ],
                   ),
                 ),
-              // 「前一天」的小字：整组给一句就够 —— 它讲的是**规则**（上班 HH:MM、
-              // 闹钟排在前一天 HH:MM），不是某一条的正文；多条各给一句会重复成一片。
-              if (c.alarms.any((a) => alarmFallsOnPreviousDay(c, a)))
+              // 不落在班次当天的小字：整组给一句就够 —— 它点的是**哪一条不在当天**，
+              // 不是某一条的正文；多条各给一句会重复成一片。
+              if (c.alarms.any((a) => _alarmDayLabel(c, a) != null))
                 Padding(
                   padding: const EdgeInsets.only(top: AppTokens.spaceXs),
                   child: Text(
-                    L10n.alarmPrevDayHint(
+                    L10n.alarmDayHint(
                         formatClock(c.startMinute!),
-                        formatClock(c.alarms
-                            .firstWhere((a) => alarmFallsOnPreviousDay(c, a))
-                            .minute)),
+                        _alarmDayLabel(
+                            c,
+                            c.alarms.firstWhere(
+                                (a) => _alarmDayLabel(c, a) != null))!),
                     style: AppTokens.microText.copyWith(color: muted),
                   ),
                 )
@@ -1839,3 +1838,18 @@ bool cycleRowFitsTime({
 
 /// 「第 N 天」标签的固定宽度。
 const double _dayLabelWidth = 56;
+
+/// 这条闹钟落在班次当天的哪一边 —— 只管**读法**：前一天 / 次日给一个带日前缀的
+/// 整串（`前一天 23:00` / `次日 00:15`），落在当天返回 null（不标）。
+///
+/// 为什么非标不可：只写钟点会被读成班次当天 —— 16:30–次日 00:30 的 00:15 只写
+/// 「00:15」，看着就像上班前的那个凌晨（比上班早 16 小时），而那正是用户报的
+/// 「看不到有这个选项」。
+String? _alarmDayLabel(ShiftClass c, ShiftAlarm a) {
+  final clock = formatClock(a.minute);
+  return switch (alarmDayAnchor(c, a)) {
+    AlarmDayAnchor.prev => L10n.clockPrevDay(clock),
+    AlarmDayAnchor.next => L10n.clockNextDay(clock),
+    AlarmDayAnchor.same => null,
+  };
+}

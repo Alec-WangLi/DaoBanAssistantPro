@@ -450,9 +450,9 @@ void main() {
     });
   });
 
-  // ⚠️ 这一组断言的是**算出来的日期与时刻**，不是 `alarmFallsOnPreviousDay` 那个
-  // 布尔值 —— 「次日」的布尔值也是 false，光断言布尔的话，把 24 小时值班的上班前
-  // 闹钟错判成次日这一类回归会**静默通过**（见 spec §7 末尾那条）。
+  // ⚠️ 这一组断言的是**算出来的日期与时刻**，不是「落不落在前一天」这一类布尔 ——
+  // 「次日」在那种布尔下也是 false，光断言布尔的话，把 24 小时值班的上班前闹钟
+  // 错判成次日这一类回归会**静默通过**（见 spec §7 末尾那条）。
   group('shiftAlarmFireAt：三档落点', () {
     ShiftClass cls(int? start, int? end) =>
         ShiftClass(name: '班', startMinute: start, endMinute: end);

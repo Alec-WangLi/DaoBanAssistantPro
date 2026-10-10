@@ -2758,10 +2758,14 @@ String _alarmText(ShiftClass t) {
   if (!t.alarmEnabled || t.alarms.isEmpty) return L10n.alarmOff;
   final alarm = t.alarms.first;
   final clock = formatClock(alarm.minute);
-  // 落在上班**前一天**的（00:00 上班的夜班）必须标出来：不标的话，这一行会跟
-  // 前面的「00:00 – 08:00」读成同一天的两件事。
-  final shown =
-      alarmFallsOnPreviousDay(t, alarm) ? L10n.clockPrevDay(clock) : clock;
+  // 不落在班次**当天**的必须标出来：不标的话，这一行会跟前面的「00:00 – 08:00」
+  // 读成同一天的两件事（00:00 上班的夜班配 23:00、16:30–次日 00:30 的中班配
+  // 00:15 都是这一类）。
+  final shown = switch (alarmDayAnchor(t, alarm)) {
+    AlarmDayAnchor.prev => L10n.clockPrevDay(clock),
+    AlarmDayAnchor.next => L10n.clockNextDay(clock),
+    AlarmDayAnchor.same => clock,
+  };
   // 多条的只写首条 + 「等 N 个」：这一行本来就是 `maxLines: 1` + 省略号，把每条
   // 时刻都铺开会把后面的内容挤掉 —— 而卡片是**定高**的，多一行就顶高卡片、
   // 连带把日历网格挤矮（`info_card_metrics.dart` 那边的前提）。
