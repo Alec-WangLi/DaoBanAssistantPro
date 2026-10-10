@@ -258,6 +258,12 @@ class L10n {
 
   // 待办（日程）
   static String get noEvents => t('还没有待办事项，点右下角添加', 'No todos yet, tap + to add');
+
+  /// 待办页底部那个折叠区的标题：「已完成 N 条」。
+  ///
+  /// 中英语序不同（中文把数字夹在中间、英文是「N completed」），整串交给 [t]，
+  /// 别拼前缀 —— 直接拼会在英文界面下露出中文语序。
+  static String archivedTodos(int n) => t('已完成 $n 条', '$n completed');
   static String get addEvent => t('添加待办事项', 'Add todo');
   static String get editEvent => t('编辑待办事项', 'Edit todo');
   static String get title => t('标题', 'Title');

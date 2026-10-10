@@ -19,6 +19,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -239,6 +240,28 @@ void main() {
     expect(
         (await repo.listEvents()).where((e) => e.isCompleted), hasLength(100),
         reason: '启动闸没裁 —— 归档会无限长下去');
+    await _disposeShell(tester);
+  });
+
+  // 「勾完先划掉、下次进来才收走」这条**唯一**靠的就是：切走之后待办页那个 State
+  // 被销毁（`_justCompleted` 跟着清空）。它不是任何一处代码显式写的，而是
+  // `PageView` 把离屏页 dispose 这个既有性质带来的 —— 所以这条用例钉的是那个性质。
+  testWidgets('切走之后待办页会被销毁（「下次进来才收走」靠的就是这个）', (tester) async {
+    await _pumpShell(tester);
+
+    // 切到待办页（走通知那条入口，与上面那条用例同一条路）。
+    AlarmService.openTodoRequested.value = true;
+    await _pumpFrames(tester);
+    expect(find.byType(ScheduleScreen), findsOneWidget, reason: '先确认它真的在树上');
+
+    // 切回日历页。
+    tester.widget<PageView>(find.byType(PageView)).controller!.jumpToPage(0);
+    await _pumpFrames(tester);
+    expect(find.byType(ScheduleScreen), findsNothing,
+        reason: 'PageView 会把离屏那一页销毁 —— 待办页的 State（含「本次刚勾」）'
+            '因此清空，刚勾的那条才会「下次进来」收进折叠区。'
+            '谁把 tab 保活加回来，这条会红。');
+
     await _disposeShell(tester);
   });
 }

@@ -12,16 +12,22 @@ import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
+import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_check.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
 import '../../data/app_repository.dart';
+import '../../data/todo_archive.dart';
 import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import 'recurring_panel.dart';
+
+/// 归档行左侧那个空位的边长 —— 必须与 `GlassCheck` 的默认尺寸（28）一致，否则
+/// 归档区的文字缩进会比主列表差一档。
+const double _archiveCheckSlot = 28;
 
 /// 日程：最简事件（标题 + 日期 + 可选时间 + 可选提前提醒 + 完成勾选）。
 ///
@@ -36,6 +42,16 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     with WidgetsBindingObserver {
+  /// **本次进来之后刚勾掉的行 id**：这一趟它们仍留在主列表里（划掉、停在原位），
+  /// 下次进这一页才收进折叠区。清空的时机就是这一页被销毁重建 —— `home_shell`
+  /// 的 `PageView` 会把离屏那一页 dispose（v0.10.22 明确决定不做 tab 保活），
+  /// 所以「切走再回来」天然成立，不需要额外机制。`home_shell_nav_test` 里那条
+  /// 「切走之后待办页会被销毁」的用例钉着这个前提。
+  final Set<int> _justCompleted = {};
+
+  /// 折叠区展开了没有。默认收起。
+  bool _archiveOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +85,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
     final events = eventsAsync.valueOrNull ?? const [];
+    final split = splitTodos(events, _justCompleted);
     ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
     return Scaffold(
@@ -145,17 +162,36 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                         ),
                       ),
                     )
-                  : ListView.builder(
+                  : ListView(
                       // 底部留白走 `kFloatingActionInset`：这一页的「新建」按钮是
                       // **悬浮**在列表之上的，96 那一档下最后一行会被它压住
-                      // （删除键点不到 —— 2026-10-01 用户反馈）。
+                      // （删除键点不到 —— 2026-10-01 用户反馈）。折叠区展开之后
+                      // 那一条同样受这条约束。
                       padding: const EdgeInsets.fromLTRB(
                           16, 8, 16, kFloatingActionInset),
-                      itemCount: events.length,
-                      itemBuilder: (context, i) {
-                        final e = events[i];
-                        return _eventTile(context, ref, e);
-                      },
+                      children: [
+                        for (final e in split.active)
+                          _eventTile(context, ref, e),
+                        // 主列表空了、归档还有：那句话仍要出现，而折叠区挂在它下面
+                        // —— 不能让归档被空态顶掉（那几条就再也点不开了）。
+                        if (split.active.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 24),
+                            child: Text(
+                              L10n.noEvents,
+                              textAlign: TextAlign.center,
+                              style: AppTokens.rowSecondary
+                                  .copyWith(color: AppTokens.inkMuted(context)),
+                            ),
+                          ),
+                        if (split.archived.isNotEmpty) ...[
+                          _archiveHeader(context, split.archived.length),
+                          if (_archiveOpen)
+                            for (final e in split.archived)
+                              _eventTile(context, ref, e, archived: true),
+                        ],
+                      ],
                     ),
             ),
           ],
@@ -197,7 +233,42 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     );
   }
 
-  Widget _eventTile(BuildContext context, WidgetRef ref, ScheduleEvent e) {
+  /// 折叠区那一行：`已完成 N 条` + 一个随展开状态转的箭头。整行可点。
+  Widget _archiveHeader(BuildContext context, int count) {
+    final muted = AppTokens.inkMuted(context);
+    return GlassPressable(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppTokens.radiusM),
+        onTap: () => setState(() => _archiveOpen = !_archiveOpen),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceSm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  L10n.archivedTodos(count),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTokens.rowSecondary.copyWith(color: muted),
+                ),
+              ),
+              AppIcon(
+                _archiveOpen
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                size: AppTokens.iconSm,
+                color: muted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _eventTile(BuildContext context, WidgetRef ref, ScheduleEvent e,
+      {bool archived = false}) {
     final subtitle = [
       L10n.monthDayWeekday(e.date),
       if (e.timeMinute != null) _fmt(e.timeMinute!),
@@ -215,20 +286,39 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
       onTap: () => showEditEventDialog(context, ref, e),
       child: Row(
         children: [
-          // v0.10.10：待办原来用的是一枚**开关** —— 那不符合待办事项的逻辑
-          // （用户 2026-10-01：「弄完之后打勾，给一个删除线表达」）。全 app 九处
-          // `GlassSwitch` 里只有这一处是勾选语义，其余八处都是真开关，不动。
-          GlassCheck(
-            value: e.isCompleted,
-            onChanged: (v) async {
-              // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassCheck`，
-              // 它在自己的 `onTap` 里发一次 `select()`（「选中变了」正是它的语义，
-              // 与开关同一处）。再加一次就是每点一下震两下 —— 两下比一下信息量
-              // **更少**，正是这套设计要消灭的噪音。
-              await ref.read(appRepositoryProvider).setEventCompleted(e, v);
-              await _rescheduleReminders(ref);
-            },
-          ),
+          if (archived)
+            // 归档区**不画勾选框** —— 这一区不给取消勾选（spec §5：归档里的行可能
+            // 是旧 occurrence，取消勾选会让一个系列出现两条未完成的行，管理面板的
+            // `live.single` 会当场抛异常）。留一个与勾选框等宽的空位，免得这一区的
+            // 文字缩进跟主列表差一档。
+            const SizedBox(
+                width: _archiveCheckSlot, height: _archiveCheckSlot)
+          else
+            // v0.10.10：待办原来用的是一枚**开关** —— 那不符合待办事项的逻辑
+            // （用户 2026-10-01：「弄完之后打勾，给一个删除线表达」）。全 app 九处
+            // `GlassSwitch` 里只有这一处是勾选语义，其余八处都是真开关，不动。
+            GlassCheck(
+              value: e.isCompleted,
+              onChanged: (v) async {
+                // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassCheck`，
+                // 它在自己的 `onTap` 里发一次 `select()`（「选中变了」正是它的语义，
+                // 与开关同一处）。再加一次就是每点一下震两下 —— 两下比一下信息量
+                // **更少**，正是这套设计要消灭的噪音。
+                //
+                // **先乐观地记进 `_justCompleted`、再去写库**：等 `await` 完再记的话，
+                // 流会先吐出一帧「这一行已经完成、又不在集合里」的状态 —— 那一帧里
+                // 它会离开主列表，正是「勾一条整页跳一下」。
+                setState(() {
+                  if (v) {
+                    _justCompleted.add(e.id);
+                  } else {
+                    _justCompleted.remove(e.id);
+                  }
+                });
+                await ref.read(appRepositoryProvider).setEventCompleted(e, v);
+                await _rescheduleReminders(ref);
+              },
+            ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
