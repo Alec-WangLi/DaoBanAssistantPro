@@ -35,6 +35,14 @@ class _HomeShellState extends ConsumerState<HomeShell>
   late final PageController _controller;
   bool _startupRescheduled = false;
 
+  /// 响铃那层全屏路由此刻是不是挂着。
+  ///
+  /// 它只为一件事服务：**原生那条响铃超时自停的路**要把那层路由收掉，而
+  /// `ringingAlarm` 变成 null 并不能反推「路由还在不在」（用户手动关闭时也是先
+  /// `popUntil` 再清值）。没有这个位就会在用户已经关掉之后再 `popUntil` 一次 ——
+  /// 那会把他自己打开的页面一起弹掉。
+  bool _ringingUp = false;
+
   static List<(IconData, String)> get _items => [
         (Icons.calendar_month_outlined, L10n.navCalendar),
         (Icons.alarm_outlined, L10n.navAlarm),
@@ -165,7 +173,17 @@ class _HomeShellState extends ConsumerState<HomeShell>
   }
 
   void _onRingingChanged() {
-    if (AlarmService.ringingAlarm.value != null) _showRinging();
+    final ring = AlarmService.ringingAlarm.value;
+    if (ring != null) {
+      _showRinging();
+      return;
+    }
+    // 从「有」变成「没有」= **原生那条响铃超时自停的路**（用户手动关闭时，
+    // `AlarmRingingScreen` 自己就 `popUntil` 了，走到这里时路由已经不在）。
+    // 不在这里收的话，声音停了、屏幕还被那层全屏路由占着 —— 看着像卡死。
+    if (!_ringingUp || !mounted) return;
+    _ringingUp = false;
+    Navigator.of(context).popUntil((Route<dynamic> r) => r.isFirst);
   }
 
   /// 用户点了待办提醒的通知：切到「待办」页，并把请求清掉。
@@ -226,15 +244,20 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   void _showRinging() {
     final ring = AlarmService.ringingAlarm.value;
-    if (ring == null || !mounted) return;
+    if (ring == null || !mounted || _ringingUp) return;
     AlarmService.logInfo('HomeShell: 弹出全屏响铃界面 label=${ring.title}');
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) =>
-            AlarmRingingScreen(label: ring.title, detail: ring.detail),
-      ),
-    );
+    _ringingUp = true;
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute<void>(
+            fullscreenDialog: true,
+            builder: (_) =>
+                AlarmRingingScreen(label: ring.title, detail: ring.detail),
+          ),
+        )
+        // 路由以任何方式离开（用户上滑关闭 / 再睡一会 / 原生自停）都要把这个位清掉，
+        // 否则下一次响铃会因为「以为已经开着」而弹不出来。
+        .whenComplete(() => _ringingUp = false);
   }
 
   Future<void> _tryStartupReschedule() async {

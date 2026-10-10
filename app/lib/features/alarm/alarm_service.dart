@@ -307,23 +307,7 @@ class AlarmService {
     // —— 否则 `tz.local` 是 UTC，会整体差一个时区偏移（见 `scheduleTodoReminder` 的说明）。
     // 原生闹钟触发时（App 已在后台），MainActivity 通过此回调通知我们弹出响铃界面；
     // 待办提醒被点开时同样由它通知我们切到「待办」页。
-    _settingsChannel.setMethodCallHandler((call) async {
-      if (call.method == 'onAlarmFired') {
-        // 原生侧回传的是 {label, detail} 两张牌（见 MainActivity.handleAlarmIntent）
-        final ring = AlarmRing.fromMap(call.arguments);
-        await logInfo('Dart 收到 onAlarmFired: ${ring?.title}');
-        if (ring != null) {
-          ringingAlarm.value = ring;
-        }
-      } else if (call.method == 'onTodoTapped') {
-        await logInfo('Dart 收到 onTodoTapped');
-        openTodoRequested.value = true;
-      }
-      // 小组件某一天被点击（热启动路径）。
-      if (call.method == 'onWidgetDayTapped') {
-        WidgetService.onNativeDayTapped(call.arguments as int);
-      }
-    });
+    _settingsChannel.setMethodCallHandler(handleNativeCall);
 
     // 通知通道的名字要在系统「通知」设置里显示，得跟着界面语言走；而通道只能
     // 在原生侧建。启动时把当前语言的名字递过去（同名重复创建 = 更新，不是报错）。
@@ -365,6 +349,39 @@ class AlarmService {
     if (todoId != null) {
       await logInfo('Dart init: 冷启动读取 pendingTodoId=$todoId');
       openTodoRequested.value = true;
+    }
+  }
+
+  /// 处理原生推过来的方法调用 —— 「原生说了什么、Dart 要做什么」的全套契约。
+  ///
+  /// **抽成静态方法是为了能单测**：`init()` 里那一堆插件初始化在 widget 测试里跑不起来，
+  /// 而这里面每一条都是会静默出错的东西（漏一条就是「原生做了、界面没跟上」）。
+  @visibleForTesting
+  static Future<void> handleNativeCall(MethodCall call) async {
+    if (call.method == 'onAlarmFired') {
+      // 原生侧回传的是 {label, detail} 两张牌（见 MainActivity.handleAlarmIntent）
+      final ring = AlarmRing.fromMap(call.arguments);
+      await logInfo('Dart 收到 onAlarmFired: ${ring?.title}');
+      if (ring != null) {
+        ringingAlarm.value = ring;
+      }
+    } else if (call.method == 'onTodoTapped') {
+      await logInfo('Dart 收到 onTodoTapped');
+      openTodoRequested.value = true;
+    } else if (call.method == 'onAlarmAutoStopped') {
+      // **响铃 15 分钟超时自停**。原生那条路与用户手动关闭**完全相同**
+      // （`MainActivity.onAlarmAutoStopped` → `exitLockScreenMode()` +
+      // `stopForeground(REMOVE)` + `stopSelf()`），走到最后发这一发。
+      //
+      // 这里只清这个值：`HomeShell` 看到它从「有」变成「没有」就把响铃那层路由收掉
+      // （用户手动关闭那条路由它自己 `popUntil`，两条路在这里合流）。
+      await logInfo('Dart 收到 onAlarmAutoStopped');
+      ringingAlarm.value = null;
+    }
+    // 小组件某一天被点击（热启动路径）。它不参与上面那条 if/else ——
+    // 单独一个 `if` 是有意的，别顺手并进去。
+    if (call.method == 'onWidgetDayTapped') {
+      WidgetService.onNativeDayTapped(call.arguments as int);
     }
   }
 
