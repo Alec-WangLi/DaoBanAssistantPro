@@ -597,11 +597,11 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     "cancelAllNativeAlarms" -> {
-                        // 后台线程执行，避免 ~1400 次 cancel 卡住主线程（重排时开关动画会卡顿）
+                        // 后台线程执行，避免 ~1600 次 cancel 卡住主线程（重排时开关动画会卡顿）
                         Thread {
                             try {
                                 val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                                for (id in 0..400) am.cancel(nativePendingIntent(id))
+                                for (id in 0..600) am.cancel(nativePendingIntent(id))
                                 for (id in 10000..11000) am.cancel(nativePendingIntent(id))
                                 for (id in 99990..100000) am.cancel(nativePendingIntent(id))
                                 // 清单一起清空：随后 Dart 会把要留的重新排一遍，
@@ -617,7 +617,7 @@ class MainActivity : FlutterActivity() {
                         Thread {
                             try {
                                 val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                                for (id in 0..400) cancelNotificationAlarm(am, id)
+                                for (id in 0..600) cancelNotificationAlarm(am, id)
                                 for (id in 10000..11000) cancelNotificationAlarm(am, id)
                                 for (id in 99990..100000) cancelNotificationAlarm(am, id)
                                 result.success(null)

@@ -514,7 +514,7 @@ class L10n {
   /// 权威定义）。本文件**有意不 import 它**：`l10n.dart` 只依赖 intl 这件性质
   /// （纯 Dart、能被 `dart test` 直接跑）比少写一个数字值钱。
   static String get alarmLimitReached =>
-      t('每个班次最多 6 个闹钟', 'Up to 6 alarms per shift');
+      t('每个班次最多 10 个闹钟', 'Up to 10 alarms per shift');
 
   /// 联动闹钟的响铃标题。[label] 是这条闹钟自己的名字（可空）。
   ///

@@ -274,12 +274,13 @@ class AlarmService {
   /// 班次闹钟排定的天数窗口（`reschedule` 的 [days] 缺省值）。
   ///
   /// **它就是原生 id 里的那个 60**：id = `序号 × 本值 + 天数偏移`。所以它与
-  /// `maxAlarmsPerShift`（6，见 `domain/shift_rotation.dart`）是一对：
-  /// 6 × 60 = 360 ≤ 400，而 Kotlin 侧 `cancelAllNativeAlarms` 扫的是 0..400
-  /// （`MainActivity.kt:550`）。**改这个值必须同时改那个上限与 Kotlin 的扫描范围。**
+  /// `maxAlarmsPerShift`（10，见 `domain/shift_rotation.dart`）是一对：
+  /// 10 × 60 = 600 ≤ 600，而 Kotlin 侧 `cancelAllNativeAlarms` / `cancelAllNotificationAlarms`
+  /// 扫的是 0..600（`MainActivity.kt:604` 与 `:620`）。
+  /// **改这个值必须同时改那个上限与 Kotlin 的扫描范围。**
   static const int _shiftDaysHorizon = 60;
 
-  /// 测试用只读出口：id 算式是「上限 6」的由来，得能在纯测试里断言。
+  /// 测试用只读出口：id 算式是「上限 10」的由来，得能在纯测试里断言。
   static int get shiftDaysHorizonForTesting => _shiftDaysHorizon;
 
   static const _customBaseId = 10000;
@@ -287,7 +288,7 @@ class AlarmService {
   /// 待办提醒的原生 id 基址。
   ///
   /// **四段互不重叠**，原生侧按区间扫着取消（见 `MainActivity` 的几个 cancel 分支）：
-  /// 班次 `0..400`、自定义闹钟 `10000..11000`、待办行 `20000..`（留到 39999）、
+  /// 班次 `0..600`、自定义闹钟 `10000..11000`、待办行 `20000..`（留到 39999）、
   /// 重复待办系列 `40000..41999`。
   ///
   /// 为什么把重复待办单列一段：它的号按**系列 id** 算，而待办行的号按**行 id** 算，

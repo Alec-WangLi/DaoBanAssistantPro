@@ -74,7 +74,7 @@ object WidgetRenderer {
      * 互相覆盖 extras。
      *
      * 既有区间（`AlarmScheduler` / `TodoReminderReceiver` 都用 `requestCode = 各自的 id`）：
-     * 班次闹钟 0..400、自定义闹钟 10000..11000、待办行提醒 20000..39999、重复待办
+     * 班次闹钟 0..600、自定义闹钟 10000..11000、待办行提醒 20000..39999、重复待办
      * 提醒 40000..41999，另有 `AlarmRingService` 的通知点击 0 / 1（同样带着
      * `alarm_label` 打向 `MainActivity`）与 `MainActivity.REQ_PICK_RINGTONE = 40071`。
      * 取 100000 起，全部避开。
@@ -122,7 +122,7 @@ object WidgetRenderer {
      * 翻月那两枚箭头的 requestCode 基数。**广播池**，与上面 `WIDGET_REQ_BASE`
      * （活动池，点格开 App 用 `getActivity`）**是两回事**。
      *
-     * 900_000 离既有占用都够远：班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒
+     * 900_000 离既有占用都够远：班次闹钟 0..600、自定义闹钟 10000..11000、待办提醒
      * 20000..39999、重复待办 40000..41999、选铃声 40071、刷新闹钟 40081。
      *
      * 编号 = `BASE + widgetId * 4 + dir`（dir：0 = 上月、1 = 下月、2 = 回今天，第 4 档

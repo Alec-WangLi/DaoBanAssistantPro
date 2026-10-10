@@ -77,9 +77,10 @@ class ShiftAlarm {
 ///
 /// **不是产品口味，是原生 id 空间的硬上限**：原生 id 是
 /// `序号 × 天数窗口 + 天数偏移`（见 `alarm_service.dart` 的 `_shiftDaysHorizon`），
-/// Kotlin 侧 `cancelAllNativeAlarms` 扫的是 `0..400`（`MainActivity.kt:550`）。
-/// 6 × 60 = 360 ≤ 400 刚好放得下。**改这个数或改天数窗口，必须同时改另一边。**
-const int maxAlarmsPerShift = 6;
+/// Kotlin 侧 `cancelAllNativeAlarms` / `cancelAllNotificationAlarms` 扫的是
+/// `0..600`（`MainActivity.kt:604` 与 `:620`）。
+/// 10 × 60 = 600 ≤ 600 刚好放得下。**改这个数或改天数窗口，必须同时改另一边。**
+const int maxAlarmsPerShift = 10;
 
 /// 一条闹钟的钟点落在**班次当天那一圈钟点**的哪一边。
 enum AlarmDayAnchor {

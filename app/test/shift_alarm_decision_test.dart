@@ -13,6 +13,8 @@
 //
 // 顺带钉住 `offset` 与「序号」：原生 id 是 `序号 × 天数窗口 + 天数偏移`，跳过某天
 // 时**不能**重新编号 —— 否则闹钟会集体换个号。
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
@@ -316,18 +318,18 @@ void main() {
           DateTime(2026, 9, 20, 4)), isFalse);
     });
 
-    test('原生 id 的算式：序号 × 天窗口 + 天数偏移，且落在 0..400 里', () {
-      // 这条把 `reschedule` 的 id 算式抄成纯断言 —— 它是「上限 6」的由来。
+    test('原生 id 的算式：序号 × 天窗口 + 天数偏移，且落在 0..600 里', () {
+      // 这条把 `reschedule` 的 id 算式抄成纯断言 —— 它是「上限 10」的由来。
       final horizon =
           maxAlarmsPerShift * AlarmService.shiftDaysHorizonForTesting;
-      expect(horizon, lessThanOrEqualTo(400),
-          reason: 'Kotlin 侧 cancelAllNativeAlarms 只扫 0..400（MainActivity.kt:550）');
+      expect(horizon, lessThanOrEqualTo(600),
+          reason: 'Kotlin 侧 cancelAllNativeAlarms 只扫 0..600（MainActivity.kt:604）');
       final plans = planShiftAlarms(twoAlarms(),
           from: DateTime(2026, 9, 20, 5), days: 3);
       for (final p in plans) {
         final id = p.alarmIndex * AlarmService.shiftDaysHorizonForTesting +
             p.offset;
-        expect(id, inInclusiveRange(0, 400));
+        expect(id, inInclusiveRange(0, 600));
       }
       // 同一天两个闹钟必须拿到不同的 id（序号把它们分开）
       final ids = plans
@@ -336,6 +338,26 @@ void main() {
               p.alarmIndex * AlarmService.shiftDaysHorizonForTesting + p.offset)
           .toSet();
       expect(ids, hasLength(2));
+    });
+
+    // 上面那条只把「Dart 侧算出来的 id」钉在上界里 —— 而那个上界是**写在 Kotlin
+    // 里的**（`cancelAllNativeAlarms` 盲扫一段固定区间）。两边一旦对不上，症状是
+    // 「闹钟排得下去、取消不掉」：改上限之后旧号的闹钟会留在系统里，重启后自己响。
+    // 这条把两边连起来。
+    test('原生扫描上界容得下 序号 × 天数窗口 的最大 id', () {
+      final src = File('android/app/src/main/kotlin/com/daoban/'
+              'shiftassistantpro/MainActivity.kt')
+          .readAsStringSync();
+      final scans =
+          RegExp(r'for \(id in 0\.\.(\d+)\)').allMatches(src).toList();
+      expect(scans.length, greaterThanOrEqualTo(2),
+          reason: 'cancelAllNativeAlarms 与 cancelAllNotificationAlarms 两处都要扫');
+      final maxId =
+          maxAlarmsPerShift * AlarmService.shiftDaysHorizonForTesting - 1;
+      for (final m in scans) {
+        expect(int.parse(m.group(1)!), greaterThanOrEqualTo(maxId),
+            reason: '扫描上界必须覆盖最大 id $maxId，否则旧号的闹钟取消不掉');
+      }
     });
 
     test('重排两次得到同一批 id（序号不能自己变）', () {
