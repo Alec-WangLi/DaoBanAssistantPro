@@ -99,7 +99,12 @@ class AlarmRingService : Service() {
                     or PowerManager.ON_AFTER_RELEASE,
                 "shiftassistant:alarm_ring"
             )
-            wl.acquire(10 * 60 * 1000L) // 最长 10 分钟；停止响铃时在 onDestroy 释放
+            // ⚠️ **超时必须长过 `autoStopMs`**：原来写死 10 分钟，而自停是 15 分钟 ——
+            // 「仅震动」那一档没有音频在放，锁一掉 CPU 就可能睡下去，那个
+            // `postDelayed(autoStopMs)` 要等到**下一次有人唤醒设备**才跑，于是闹钟
+            // 会一直震下去 —— 正好是自停要治的那件事。多给一分钟余量，
+            // 真正的释放仍然在 `onDestroy`（用户手动关闭那条路照样立刻放）。
+            wl.acquire(autoStopMs + 60_000L)
             wakeLock = wl
             AlarmLog.info(
                 this,

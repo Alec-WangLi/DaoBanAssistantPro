@@ -1,8 +1,6 @@
 package com.daoban.shiftassistantpro
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -71,54 +69,36 @@ object AlarmStore {
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    // ---------- 内存镜像 + 合并落盘 ----------
+    // ---------- 内存镜像（**只镜像「读」这一半，写仍是写穿**）----------
     //
     // `put` 原先是「读全表 → 解析 → 全量序列化 → 全量写回」，**一条一次**。而
     // `AlarmScheduler.schedule` 每排一条闹钟就调它一次 —— 一次 `rescheduleAll`
-    // 是几十条（用户库实测 29 条班次闹钟 + 8 条待办），于是整份 JSON 被解析几十遍、
-    // 又序列化几十遍，是实打实的 O(n²)。
+    // 是几十条（用户库实测 29 条班次闹钟 + 8 条待办），于是整份 JSON 被解析几十遍，
+    // 是实打实的 O(n²)。
     //
-    // 改法两层：① `all()` 之后把解析结果留在内存里，后续的 `put` 直接在它上面改；
-    // ② `put` 不立刻落盘，攒一段静默期合并写一次 —— 一次重排因此只落一次盘。
+    // 这里只治**解析**那一半：`all()` 之后把解析结果留在内存里，后续的读与改都在它
+    // 上面做，不再反复解析。**写仍然每条都落** —— 详见下面那条裁定。
     //
-    // ⚠️ **清空类必须取消待落盘**，否则「清空重置」之后那次延迟写会把旧清单原样写回去。
-    // ⚠️ 代价：最后一条的记录晚最多 `FLUSH_DELAY_MS` 才落盘，而那窗口里进程被杀就丢了。
-    // 这份清单只在**设备重启**后才有用（AlarmManager 的记录重启即清），所以这个窗口
-    // 可以忽略 —— 何况 `write` 本来就是 `apply()`（异步落盘），性质一样。
+    // ⚠️ **曾经试过「攒一段静默期合并写一次」，被最终审查否掉了**，两个理由，都是真的：
+    //   ① **竞态**：延迟那一发跑在主线程的 `Handler` 上、**不在任何锁里**，而
+    //      `clear` / `clearEntries` / `clearQuiets` 是从**后台线程**调的
+    //      （`MainActivity` 的 `cancelAllNativeAlarms` / `cancelTodoReminders` 都是
+    //      `Thread{…}.start()`）。两边一起动 `cachedEntries` 与同一个 prefs 键，
+    //      后果是丢更新、或者**把刚清掉的清单又写回去** —— 而症状是「重启之后冒出
+    //      一条幽灵闹钟」，正是这一层要防的事。
+    //   ② **丢失窗口比看上去大**：`reschedule` 开头就是 `cancelAllNativeAlarms` →
+    //      `clear()`（同步把键删掉），那一刻**盘上是空的**，而新的那一批要等静默期
+    //      才落 —— 这窗口里进程被杀，重启之后 `BootReceiver` 一条都排不回来。
+    //      写穿的话这个窗口不存在：每写一条盘上就有一条。
+    //
+    // 写穿的代价是 O(n) 的序列化（每次几 KB JSON），而不是 O(n²) 的解析 + 序列化 ——
+    // 真机实测（探针）：这一层从 **16ms** 降到 **~7ms**，仍然是一次重排里可以忽略的一笔。
 
-    /** 内存镜像。`null` = 还没读过。 */
+
+
+    /** 内存镜像。`null` = 还没读过。**所有访问都在 `@Synchronized` 里**。 */
     private var cachedEntries: MutableList<Entry>? = null
     private var cachedQuiets: MutableList<Quiet>? = null
-
-    /** 合并落盘的静默期。一次 `rescheduleAll` 那几十条落在同一个窗口里。 */
-    private const val FLUSH_DELAY_MS = 1_000L
-    private val flushHandler = Handler(Looper.getMainLooper())
-    private var flushEntriesPending = false
-    private var flushQuietsPending = false
-
-    private fun scheduleFlush(context: Context, entries: Boolean, quiets: Boolean) {
-        val app = context.applicationContext
-        if (entries && !flushEntriesPending) {
-            flushEntriesPending = true
-            flushHandler.postDelayed({
-                flushEntriesPending = false
-                cachedEntries?.let { write(app, it) }
-            }, FLUSH_DELAY_MS)
-        }
-        if (quiets && !flushQuietsPending) {
-            flushQuietsPending = true
-            flushHandler.postDelayed({
-                flushQuietsPending = false
-                cachedQuiets?.let { writeQuiets(app, it) }
-            }, FLUSH_DELAY_MS)
-        }
-    }
-
-    private fun cancelPendingFlush() {
-        flushHandler.removeCallbacksAndMessages(null)
-        flushEntriesPending = false
-        flushQuietsPending = false
-    }
 
     /** 全量读。解析不出来的记录直接跳过 —— 一条坏数据不该让整份清单失效。 */
     @Synchronized
@@ -162,9 +142,9 @@ object AlarmStore {
     @Synchronized
     fun put(context: Context, e: Entry) {
         try {
-            cachedEntries =
-                (all(context).filterNot { it.id == e.id } + e).toMutableList()
-            scheduleFlush(context, entries = true, quiets = false)
+            // 写穿：`write` 会同步更新镜像，所以下一次 `all()` 不必再解析
+            // （镜像那一半的收益全在这里，落盘仍然是每条都落）。
+            write(context, all(context).filterNot { it.id == e.id } + e)
         } catch (ex: Exception) {
             AlarmLog.error(context, "AlarmStore.put 失败: ${ex.message}")
         }
@@ -183,7 +163,6 @@ object AlarmStore {
     @Synchronized
     fun clear(context: Context) {
         try {
-            cancelPendingFlush()
             cachedEntries = null
             prefs(context).edit().remove(KEY).apply()
         } catch (ex: Exception) {
@@ -252,9 +231,7 @@ object AlarmStore {
     @Synchronized
     fun putQuiet(context: Context, q: Quiet) {
         try {
-            cachedQuiets =
-                (allQuiets(context).filterNot { it.id == q.id } + q).toMutableList()
-            scheduleFlush(context, entries = false, quiets = true)
+            writeQuiets(context, allQuiets(context).filterNot { it.id == q.id } + q)
         } catch (ex: Exception) {
             AlarmLog.error(context, "AlarmStore.putQuiet 失败: ${ex.message}")
         }

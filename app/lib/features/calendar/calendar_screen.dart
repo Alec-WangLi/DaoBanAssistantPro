@@ -293,16 +293,26 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 「A Timer is still pending」）。
   bool _interactingClearScheduled = false;
 
+  /// 这一帧有没有运动源推帧。
+  bool _motionThisFrame = false;
+
   void _markInteracting() {
-    // 写的是 `ValueNotifier`（监听者只起停 `Timer`、不 `setState`），
-    // 所以帧内（布局阶段）那一处也写得。
-    _interacting.value = true;
+    _motionThisFrame = true;
+    _syncInteracting();
     if (_interactingClearScheduled) return;
     _interactingClearScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _interactingClearScheduled = false;
-      if (mounted) _interacting.value = false;
+      _motionThisFrame = false;
+      _syncInteracting();
     });
+  }
+
+  /// 「此刻有没有东西在动」。写的是 `ValueNotifier`（监听者只起停 `Timer`、
+  /// 不 `setState`），所以帧内（布局阶段）那一处也写得。
+  void _syncInteracting() {
+    if (!mounted) return;
+    _interacting.value = _motionThisFrame;
   }
 
   /// 那枚块这一帧的状态（位置 / 速度 / 速度是不是活的）—— 只由 [_publishFrame] 写。
@@ -506,7 +516,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           // 每个孩子自己带上月份来分（[_MonthPane]）。
           final pane = child as _MonthPane;
           final dir = pane.month == month ? _monthRoll : -_monthRoll;
-          return FadeTransition(
+          // ⚠️ **换月也算「在动」**，而它得靠这一层带进来：整个转场里用的是**同一个
+          // `_MonthPane` 实例**，子树不会每帧重建，所以 `_buildGrid` 里那一处
+          // `_publishFrame` 只在 `setState` 那一帧跑一次、不是每帧。
+          // （第一版就是这么以为的 —— 注释还写成了「换月那个每帧重建整页的
+          // AnimatedSwitcher」，于是那条用例其实什么都没验：换月动画 220ms
+          // 比光晕一步的 340ms 还短，即使完全不暂停也看不出差别。最终审查抓出来的。）
+          return _MonthRollWatcher(
+            animation: animation,
+            onFrame: _markInteracting,
+            child: FadeTransition(
             opacity: animation,
             child: SlideTransition(
               position: Tween<Offset>(
@@ -516,6 +535,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 end: Offset.zero,
               ).animate(animation),
               child: child,
+            ),
             ),
           );
         },
@@ -2865,6 +2885,40 @@ double calendarCellHeight({
 /// 的新月份、出去的旧月份 —— 而两者的滑动方向相反（进来的从翻页那一侧滑入，出去的
 /// 往另一侧滑走）。`AnimatedSwitcher` 给两个孩子的 `animation` 是同一个（一个正向、
 /// 一个反向），`animation` 本身分不出谁是谁，让每个孩子自己带上月份就分得清了。
+/// 换月转场里**每帧**回调一次 —— 好让「换月」也能算进「有没有东西在动」。
+///
+/// 存在的理由：`AnimatedSwitcher` 的 `transitionBuilder` 只在 **build** 时跑一次，而
+/// 转场里用的是同一个 `_MonthPane` 实例（子树不重建），所以父层拿不到「动画还在跑」
+/// 这件事。而 `AnimatedBuilder` 会跟着 `animation` 每帧重建 —— 这就是那个信号。
+///
+/// ⚠️ 回调写在 **build 里**是安全的：它落到 [CalendarScreen] 的 `_markInteracting`，
+/// 而那一处只写一个 `ValueNotifier`（监听者只起停 `Timer`、不 `setState`）——
+/// 与 `_gridBody` 那个布局阶段的 `publishSilently` 同一条理由。
+/// ⚠️ `animation.isCompleted` 之后不再回调，光晕才恢复得起来。
+class _MonthRollWatcher extends StatelessWidget {
+  const _MonthRollWatcher({
+    required this.animation,
+    required this.onFrame,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+  final VoidCallback onFrame;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (BuildContext context, Widget? child) {
+        if (!animation.isCompleted) onFrame();
+        return child!;
+      },
+      child: child,
+    );
+  }
+}
+
 class _MonthPane extends StatelessWidget {
   const _MonthPane({super.key, required this.month, required this.child});
 

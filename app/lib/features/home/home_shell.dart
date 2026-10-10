@@ -84,7 +84,15 @@ class _HomeShellState extends ConsumerState<HomeShell>
     AlarmService.openTodoRequested.addListener(_onTodoRequested);
     // 排班数据与外观设置任一变化就重推快照 —— 这是「改完排班桌面立刻变」的那条路。
     ref.listenManual(activeScheduleProvider, (_, __) => _scheduleWidgetPush());
-    ref.listenManual(appSettingsProvider.select((s) => s.language),
+    // ⚠️ **这一处「收窄 select」不能只收语言。** 快照里**带着主题档与主色**
+    // （`widget_snapshot.dart` 的 `themeMode` / `accent`，原生渲染端拿它们决定
+    // 今日高亮、胶囊配色与深色判定），所以这三样任何一样变了都要重推。
+    // 只 select 语言的话，**换主色 / 换主题档之后桌面那张卡停在旧配色上** ——
+    // 与 v0.10.21 修过的「换语言不重推」是同一类静默失效（`home_shell_nav_test.dart`
+    // 的「换主色：必须重推快照」钉着这条；那是最终审查抓出来的回归）。
+    ref.listenManual(
+        appSettingsProvider.select((s) =>
+            (themeMode: s.themeMode, accent: s.accentColor, language: s.language)),
         (_, __) => _scheduleWidgetPush());
     // 待办变化也要重推：徽章上的「N 项待办」是快照里的一个数，而这条流
     // （eventsProvider）此前**没有任何推送触发** —— 勾掉一条待办之后桌面上的
@@ -178,8 +186,13 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _showRinging();
       return;
     }
-    // 从「有」变成「没有」= **原生那条响铃超时自停的路**（用户手动关闭时，
-    // `AlarmRingingScreen` 自己就 `popUntil` 了，走到这里时路由已经不在）。
+    // 从「有」变成「没有」= **原生那条响铃超时自停的路**。
+    //
+    // ⚠️ 用户手动关闭那条路**也会走到这里**（`AlarmRingingScreen._finish` 是先把
+    // `ringingAlarm` 清成 null、**再**自己 `popUntil`），所以这一处实际上是先弹的那个，
+    // 它那次 `popUntil` 是幂等的、无害。第一版注释写反了（写成了「手动关闭时路由已经
+    // 不在」），最终审查指出来的。
+    //
     // 不在这里收的话，声音停了、屏幕还被那层全屏路由占着 —— 看着像卡死。
     if (!_ringingUp || !mounted) return;
     _ringingUp = false;
@@ -244,6 +257,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   void _showRinging() {
     final ring = AlarmService.ringingAlarm.value;
+    // ⚠️ **`_ringingUp` 那一支是一处行为变化**（v0.10.22 加的，最终审提醒要写下来）：
+    // 前一个响铃界面还挂着时又来一个闹钟，**不再叠第二层** —— 屏幕上那层留着原来的
+    // 标签。从前会叠上去。叠上去的话，用户在两层之间「上滑关闭」只会关掉最上面那层、
+    // 露出下面那一层，看着像关不掉；现在最坏是标签是前一个的。
     if (ring == null || !mounted || _ringingUp) return;
     AlarmService.logInfo('HomeShell: 弹出全屏响铃界面 label=${ring.title}');
     _ringingUp = true;

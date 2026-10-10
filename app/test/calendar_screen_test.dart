@@ -2150,21 +2150,28 @@ void main() {
       await _disposeCalendar(tester);
     });
 
-    testWidgets('换月时光晕停（换月动画每帧都在重画）', (tester) async {
+    testWidgets('换月：动画跑着的那一段光晕不走（而且这条有鉴别力）', (tester) async {
+      // ⚠️ **第一版这条是句空话**（最终审查抓出来的）：它只推 10 帧（160ms）就断言
+      // 「光晕没动」，而换月动画只有 `durMed`(220ms)、光晕一步是 `durSlow`(340ms) ——
+      // **即使完全不暂停，160ms 内它本来也不会走**。判据要落在「本来该走一步、
+      // 却没走」那一刻上。
+      //
+      // 计时：不暂停的话，点 ‹ 那一帧会把光晕的 340ms 定时器重置 ⇒ 约 340ms 后走一步；
+      // 暂停的话，定时器要到动画结束（220ms）才重启 ⇒ 约 560ms 后才走。
+      // 所以**推 380ms** 正好落在两者之间。
       await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
+      await _pumpFrames(tester, 2);
+
       await tester.tap(find.byIcon(Icons.chevron_left_outlined));
       await tester.pump(const Duration(milliseconds: 16));
-
       final double t0 = _glowPhase(tester);
-      // 换月动画跑着的那几帧里，光晕一步都不该走
-      await _pumpFrames(tester, 10);
-      expect(_glowPhase(tester), t0, reason: '换月动画在跑的这几帧里光晕要停');
 
-      // 动画跑完之后恢复
-      await _pumpFrames(tester, 60);
-      final double after = _glowPhase(tester);
-      await _pumpFrames(tester, 44);
-      expect(_glowPhase(tester), isNot(after), reason: '换月落定之后接着走');
+      await _pumpFrames(tester, 24); // 384ms —— 不暂停的话这一步早该走了
+      expect(_glowPhase(tester), t0,
+          reason: '换月动画在跑的这几帧里光晕该停住 —— 不然它会与换月动画撞在一起');
+
+      await _pumpFrames(tester, 26); // 再 416ms，动画早结束、定时器也重启过了
+      expect(_glowPhase(tester), isNot(t0), reason: '换月落定之后要接着走');
 
       await _disposeCalendar(tester);
     });
@@ -2244,7 +2251,7 @@ void main() {
     final int layers =
         tester.widgetList<BackdropFilter>(find.byType(BackdropFilter)).length;
     // 改之前这里是 **1**（完整信息卡那一张）。小窗档那张用的是另一个夹具尺寸。
-    expect(layers, lessThanOrEqualTo(0), reason: '实测 $layers 层');
+    expect(layers, 0, reason: '实测 $layers 层');
     await _disposeCalendar(tester);
   });
 }

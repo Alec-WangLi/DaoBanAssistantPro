@@ -20,6 +20,7 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 /// 有界推进若干帧。
@@ -176,6 +177,39 @@ void main() {
     expect(calls.where((m) => m == 'widgetPushSnapshot'), isNotEmpty,
         reason: '上一次没推成功，回前台必须再试 —— 「我明明打开过 App，桌面却没变」'
             '那条反馈的出口就在这里');
+
+    await _disposeShell(tester);
+  });
+
+  // ── 快照的推送触发条件（v0.10.22 收窄 `select` 时砍漏了一条）───────────────
+  //
+  // `home_shell` 用 `ref.listenManual(appSettingsProvider…)` 推快照，而**快照里带着
+  // 主题档与主色**（`widget_snapshot.dart` 的 `themeMode` / `accent`，原生渲染端拿它们
+  // 决定今日高亮、胶囊配色与深色判定）。把它收窄成 `select((s) => s.language)` 之后，
+  // **换主色、换主题档都不再重推** —— 桌面那张卡停在旧配色上，而 App 里已经变了。
+  // 与 v0.10.21 修过的「换语言不重推」是同一类**静默**失效（界面上看不出来）。
+  testWidgets('换主色：必须重推快照', (tester) async {
+    const channel = MethodChannel('com.daoban.shiftassistantpro/settings');
+    final calls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    await _pumpShell(tester);
+    calls.clear();
+
+    ProviderScope.containerOf(tester.element(find.byType(HomeShell)),
+            listen: false)
+        .read(appSettingsProvider.notifier)
+        .setAccentIndex(3);
+    await _pumpFrames(tester); // 340ms 尾去抖
+
+    expect(calls.where((m) => m == 'widgetPushSnapshot'), isNotEmpty,
+        reason: '换了主色没重推 —— 桌面小组件还停在旧配色上，而 App 里已经变了');
 
     await _disposeShell(tester);
   });

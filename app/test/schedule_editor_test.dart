@@ -1515,6 +1515,6 @@ void main() {
     // 夹具是**标准档**（`liquidGlass` 默认关）：分段器与开关只在液态档下才带模糊，
     // 所以这里应当是 **0**（改之前是 **6** —— 六张卡各一层）。
     // 液态档下那两族会各带一层，那是浮在正文上的控件、有意保留。
-    expect(layers, lessThanOrEqualTo(0), reason: '实测 $layers 层');
+    expect(layers, 0, reason: '实测 $layers 层');
   });
 }
