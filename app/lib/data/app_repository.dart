@@ -919,9 +919,22 @@ class AppRepository {
   ///
   /// 不写这个标记的话，在列表里删掉当前那条之后，下一次打开 App 生成器又会把它
   /// 补出来 —— 用户看到的就是「删不掉」。
-  Future<void> skipRecurringOccurrence(int seriesId, DateTime occ) {
-    return (db.update(db.recurringSeriesRows)..where((t) => t.id.equals(seriesId)))
-        .write(RecurringSeriesRowsCompanion(skipThrough: Value(dayNumber(occ))));
+  ///
+  /// ⚠️ **它是单调的**（只进不退）。主列表里被删的那条永远是最新的 occurrence，
+  /// 所以这个标记从前只会往前走；而**归档区里有更旧的 occurrence** —— 删它会
+  /// 把这个标记**往回写**，生成器随后发现「下一次 occurrence 还在标记之后」，
+  /// 就把用户刚删掉的那一条又补出来（又一个「删了又回来」）。水位线本来就不该倒流。
+  Future<void> skipRecurringOccurrence(int seriesId, DateTime occ) async {
+    final row = await (db.select(db.recurringSeriesRows)
+          ..where((t) => t.id.equals(seriesId)))
+        .getSingleOrNull();
+    if (row == null) return;
+    final next = dayNumber(occ);
+    final current = row.skipThrough;
+    if (current != null && current >= next) return;
+    await (db.update(db.recurringSeriesRows)
+          ..where((t) => t.id.equals(seriesId)))
+        .write(RecurringSeriesRowsCompanion(skipThrough: Value(next)));
   }
 
   /// 删一个系列，**连带删它的行**（当前那条与已完成的历史都算它的）。
