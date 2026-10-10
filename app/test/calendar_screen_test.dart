@@ -23,6 +23,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/animated_background.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -2128,5 +2129,34 @@ void main() {
 
       await _disposeCalendar(tester);
     });
+  });
+
+  // ── 当月那五样的缓存键（v0.10.20）───────────────────────────────────────
+  //
+  // `_factsFor` 把「本月统计 / 有班表在管吗 / 有调过班吗 / 有未完成待办吗」这几样
+  // 按一把键缓存住（原来每次重建都要重算：约 93 次链查询 + 一个 TextPainter）。
+  // **键漏一项 = 界面上静默显示旧值** —— 这两条各钉一头。
+  group('当月事实缓存', () {
+    testWidgets('换语言之后「本月统计」那一行跟着换（键里必须含语言）', (tester) async {
+      await _pumpCalendar(tester, 'four_crew_three_shift');
+      expect(find.textContaining(L10n.monthTally), findsOneWidget,
+          reason: '前提：这一行本来就画出来了（不然下面比的是「都没有」）');
+
+      // ⚠️ `L10n.locale` 是模块级的，用完必须还原 —— 漏出去会把后面用例的班次名
+      // 换成英文（`_pumpCalendar` 的说明里写着这条）。还原只动 `L10n`，不碰已经
+      // 拆掉的 provider 容器（在那里读会抛「container already disposed」）。
+      addTearDown(() => L10n.locale = 'zh');
+
+      // 走 provider 换语言 —— 直接改 `L10n.locale` 不会让这一页重建。
+      final ProviderContainer container = ProviderScope.containerOf(
+          tester.element(find.byType(CalendarScreen)));
+      await container.read(appSettingsProvider.notifier).setLanguage('en');
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining(L10n.monthTally), findsOneWidget,
+          reason: '键里少了语言 —— 换到英文之后这一行还是从前的缓存值（中文）');
+      await _disposeCalendar(tester);
+    });
+
   });
 }

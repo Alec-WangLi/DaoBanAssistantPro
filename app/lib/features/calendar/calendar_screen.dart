@@ -34,6 +34,21 @@ import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
+/// 与**这个月**有关、且只跟**方案本身**有关的那两样（见 `_factsFor`）。
+///
+/// 它们原来每次重建都要重算（各是整月 × 一次链查询 + 拼字符串），而输入只跟
+/// 「哪个月 / 哪条链 / 什么语言」有关 —— 与「选中哪天」「这一帧那枚块在哪」都无关。
+@immutable
+class _MonthFacts {
+  const _MonthFacts({required this.tally, required this.hasNoSchedule});
+
+  /// 信息卡最后那行「本月 早12 · 午8 · 夜8 · 休6」（没有班次时为 null）。
+  final String? tally;
+
+  /// 整月**一天班表都没有**（指路那层用它判要不要盖）。
+  final bool hasNoSchedule;
+}
+
 /// 那枚块**这一帧**的状态：在哪、多快、速度是不是「活的」。
 ///
 /// 存在的理由：这三个值原来住在整页的 `State` 里，每帧 `setState` ⇒ **整页重建**
@@ -181,6 +196,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 信息卡日期行上的「N 项待办」徽章只在有待办的日子画，而卡片是定高的 ——
   /// 高度必须按**月**预留（有一天可能有就留），按天算的话点一天高度变一次，
   /// 上面的网格跟着抖。
+  ///
+  /// ⚠️ **`ref.watch` 就在这一句里，而它必须每次 build 都跑到** —— 别把它挪进
+  /// 「缓存命中就提前返回」的那条路（那等于勾一条待办时这一页不再重建，徽章停住）。
+  /// 所以它由 `build()` 开头统一读一次、存进 [_pendingTodosNow]。
   bool get _monthHasPendingTodos {
     final events = ref.watch(eventsProvider).valueOrNull;
     if (events == null) return false;
@@ -193,15 +212,55 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
 
   /// 本月里有没有被**按天调整过**的日子。
   ///
+  /// 与 `_monthHasPendingTodos` 一样**每次重建现算**（不进 [_factsFor] 那份缓存）：
+  /// 它依赖按天覆盖，而 `chain.cacheKey` **不含覆盖**（那个指纹只覆盖「会影响信息卡
+  /// 高度的方案特征」—— 见 `schedule_chain.dart` 的 `_sourceKey`）。把它关进缓存，
+  /// 「已调班」胶囊那点高度就再也不会留出来（缓存键不变 ⇒ 永远不重量）。
+  bool _monthHasOverrideHint(ScheduleChain? chain) =>
+      chain?.monthHasOverrideHint(_month) ?? false;
+
+  /// 与**这个月**有关、且**只跟方案本身**有关的那两样 —— 一次算好，键变了才重量。
+  ///
+  /// 为什么是这两样、而不是全部五样：它们才是每次重建都要重算的大头
+  /// （`_computeMonthTally` 是整月 × `shiftOn` + 拼字符串，`_computeMonthHasNoSchedule`
+  /// 是整月 × `hasScheduleOn`），而它们的输入**恰好就是** `chain.cacheKey` 覆盖的
+  /// 那些（组名 / 简称 / 空白表 / 时段）。
+  ///
+  /// 「有没有未完成的待办」与「有没有被按天调过」**不进这里**：它们依赖**数据**
+  /// （待办表、按天覆盖表），而 `chain.cacheKey` 不含后者 —— 关进缓存就会在
+  /// 「调整了一次班次」之后拿到旧值（`已调班` 胶囊的高度再也不留）。那两样本来
+  /// 也便宜（一次扫待办 / 整月 `scheduleOn`），现算即可。
+  ///
+  /// ⚠️ 键里**必须有语言**：`_computeMonthTally` 那一行是本地化的（`L10n.monthTally`
+  /// 与班次简称都可能随语言变）。
+  _MonthFacts _factsFor(ScheduleChain? chain) {
+    final String key = <String>[
+      _month.year.toString(),
+      _month.month.toString(),
+      L10n.isEn.toString(),
+      chain?.cacheKey ?? '-',
+    ].join('|');
+    if (key == _factsKey && _facts != null) return _facts!;
+    final _MonthFacts f = _MonthFacts(
+      tally: _computeMonthTally(chain),
+      hasNoSchedule: _computeMonthHasNoSchedule(chain),
+    );
+    _factsKey = key;
+    _facts = f;
+    return f;
+  }
+
+  _MonthFacts? _facts;
+  String? _factsKey;
+
+  /// 本月里有没有被**按天调整过**的日子。
+  ///
   /// 与 `_monthHasPendingTodos` 同一个道理：班次行尾巴上的「已调班」胶囊只在被
   /// 改过的那天画，而信息卡是定高的 —— 高度必须按**月**预留（这个月有被调过就
   /// 留），按天算的话点一天高度变一次，上面的网格跟着抖。
   ///
   /// 判定挪进 `ScheduleChain.monthHasOverrideHint`：跨时段的一个月里被改过的那天
   /// 可能归**另一套**方案，得逐天问「那天归哪套」—— 那正是链才知道的事。
-  bool _monthHasOverrideHint(ScheduleChain? chain) =>
-      chain?.monthHasOverrideHint(_month) ?? false;
-
   /// 这一帧「挤压场的中心」—— 42 格那层读它（`LensWarpScope`）。
   ///
   /// ⚠️ **只许从 [_publishFrame] 写**：帧间（`Ticker` / 指针 / 带子回调）用
@@ -250,8 +309,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 底栏信息卡该多高、以及本月每一天各自的内容高度（见 `info_card_metrics.dart`）。
   InfoCardMetrics _cardMetricsFor(
       BuildContext context, ScheduleChain? chain, double cardOuterWidth) {
-    final hasTodoHint = _monthHasPendingTodos;
-    final hasOverrideHint = _monthHasOverrideHint(chain);
+    final bool hasTodoHint = _monthHasPendingTodos;
+    final bool hasOverrideHint = _monthHasOverrideHint(chain);
     final key = [
       _month.year,
       _month.month,
@@ -294,7 +353,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 看不出来（spec §7.1）。跨方案时同名的「休」合并成一个数，本来就该合。
   ///
   /// 没有排班、或整月都没有班次（空白表跟随法定节假日）时返回 null。
-  String? _monthTally(ScheduleChain? chain) {
+  String? _computeMonthTally(ScheduleChain? chain) {
     if (chain == null) return null;
     final counts = <String, int>{};
     final days = DateTime(_month.year, _month.month + 1, 0).day;
@@ -1118,7 +1177,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   Widget _buildGrid(
       BuildContext context, ScheduleChain? chain, double availHeight) {
     final body = _gridBody(context, chain, availHeight);
-    if (!_monthHasNoSchedule(chain, _month)) return body;
+    if (!_factsFor(chain).hasNoSchedule) return body;
     final muted = AppTokens.inkMuted(context);
     return Stack(
       children: [
@@ -1169,7 +1228,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 这层指路盖住 —— v0.9.14 真机反馈的正是它；v0.9.15 一度改成「给空白表合成一个
   /// 上班 / 休息班次」来绕开，那是拿**显示**去迁就**判据**，用户当即指出「确实不应该
   /// 显示上班，它本质上就是一张日历」。判据归判据、显示归显示。
-  bool _monthHasNoSchedule(ScheduleChain? chain, DateTime month) {
+  bool _computeMonthHasNoSchedule(ScheduleChain? chain) {
+    final DateTime month = _month;
     if (chain == null) return true;
     final days = DateTime(month.year, month.month + 1, 0).day;
     for (var d = 1; d <= days; d++) {
@@ -2526,7 +2586,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           final metrics = inSidePane
               ? null
               : _cardMetricsFor(context, chain, constraints.maxWidth);
-          final tally = _monthTally(chain);
+          final String? tally = _factsFor(chain).tally;
           final showTally = tally != null &&
               infoCardTallyFits(
                 context: context,
