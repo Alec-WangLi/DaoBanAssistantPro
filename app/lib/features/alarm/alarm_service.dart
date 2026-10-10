@@ -91,7 +91,7 @@ DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
       .add(Duration(minutes: alarm.minute));
 }
 
-/// 决定「未来 [days] 天里哪些天要排班次联动闹钟、各排在几点」。
+/// 决定「从**昨天**起的 [days] 天里，哪些天要排班次联动闹钟、各排在几点」。
 ///
 /// 从 [AlarmService.reschedule] 的排定循环里抽出来的**纯**决策：不碰通知插件、
 /// 不读 `DateTime.now()`（当前时刻由 [from] 传入）。抽出来是因为那段逻辑原本
@@ -128,10 +128,18 @@ List<ShiftAlarmPlan> planShiftAlarms(
   required int days,
   Map<int, bool> overrides = const {},
 }) {
-  final today = dateOnly(from);
+  // ⚠️ 从**昨天**起算，不是今天。次日档的闹钟（16:30–次日 00:30 的 00:15、夜班的
+  // 上午时段）属于**昨天那个班次**、却在今天响 —— 而 `reschedule` 开头会把
+  // `0..600` 全部取消再照这份计划重排，窗口里没有「昨天」就等于**取消之后再也没
+  // 排回去**，静默不响（冷启动 / 回前台 / 开机重排都走这条路）。
+  //
+  // 往前挪一天的代价只是前向窗口少一天（今天 +58 而不是 +59）；`offset` 的含义随之
+  // 变成「距昨天几天」，但它只负责让 id 在同一次重排里唯一、且跳过的天照样占号，
+  // 绝对值不参与任何判据。**别把这一行改回 `dateOnly(from)`。**
+  final anchor = dateOnly(from).subtract(const Duration(days: 1));
   final plans = <ShiftAlarmPlan>[];
   for (var d = 0; d < days; d++) {
-    final date = today.add(Duration(days: d));
+    final date = anchor.add(Duration(days: d));
     final t = source.shiftOn(date);
     if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
       continue;

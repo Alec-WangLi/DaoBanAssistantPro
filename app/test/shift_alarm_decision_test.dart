@@ -91,27 +91,28 @@ void main() {
     expect(plans, hasLength(1));
     expect(plans.single.shift.name, '白班');
     expect(plans.single.fireAt, DateTime(2026, 9, 20, 7));
-    expect(plans.single.offset, 0);
+    expect(plans.single.offset, 1,
+        reason: 'offset 从**昨天**起算（窗口要往回多一天，见 planShiftAlarms）');
   });
 
   test('跳过的天照样占号：offset 不能重新编号（原生 id 靠它）', () {
-    // 第 1 天改成休班（跳过）、第 2 天改成白班（要排）。排出来的那条 offset
-    // 必须是 1 而不是 0 —— 重新编号会让它的原生 id 跟第 1 天撞上。
+    // 第 2 天改成休班（跳过）、第 3 天改成白班（要排）。排出来的那条 offset
+    // 必须是 2 而不是 1 —— 重新编号会让它的原生 id 跟跳过的第 2 天撞上。
     final plans = planShiftAlarms(
         _schedule(overrides: {
           dayNumber(_day): 2,
           dayNumber(_day.add(const Duration(days: 1))): 0,
         }),
         from: DateTime(2026, 9, 20, 6),
-        days: 2);
+        days: 3);
     expect(plans, hasLength(1));
-    expect(plans.single.offset, 1,
-        reason: 'offset 是距起点日的天数，不是「第几条排上的闹钟」');
+    expect(plans.single.offset, 2,
+        reason: 'offset 是这一天在窗口里的位置，不是「第几条排上的闹钟」');
   });
 
   test('覆盖成休班：那天不排闹钟', () {
     final plans = planShiftAlarms(_schedule(overrides: {dayNumber(_day): 2}),
-        from: DateTime(2026, 9, 20, 6), days: 1);
+        from: DateTime(2026, 9, 20, 6), days: 2);
     expect(plans, isEmpty, reason: '改成休班的那天不该响（spec §11）');
   });
 
@@ -119,7 +120,7 @@ void main() {
     // 那天轮转本来是「白班」（07:00）；覆盖成「夜班」（19:30）之后闹钟必须
     // 跟着挪到 19:30 —— 仍按旧班次的时间排就等于没跟上覆盖。
     final plans = planShiftAlarms(_schedule(overrides: {dayNumber(_day): 1}),
-        from: DateTime(2026, 9, 20, 6), days: 1);
+        from: DateTime(2026, 9, 20, 6), days: 2);
     expect(plans, hasLength(1));
     expect(plans.single.shift.name, '夜班');
     expect(plans.single.fireAt, DateTime(2026, 9, 20, 19, 30),
@@ -132,27 +133,27 @@ void main() {
 
     expect(
         planShiftAlarms(_schedule(overrides: changed),
-            from: DateTime(2026, 9, 20, 6), days: 1, overrides: muted),
+            from: DateTime(2026, 9, 20, 6), days: 2, overrides: muted),
         isEmpty,
         reason: '关过闹钟的那天，改完班之后仍然关着（spec §11）');
 
     // 对照组：不关的话同一天要排上 —— 否则上面那条断言可能是假通过。
     expect(
         planShiftAlarms(_schedule(overrides: changed),
-            from: DateTime(2026, 9, 20, 6), days: 1),
+            from: DateTime(2026, 9, 20, 6), days: 2),
         hasLength(1));
   });
 
   test('闹钟时刻已经过去：跳过', () {
     // 白班闹钟 07:00，起点时刻已经是 08:00。
     expect(
-        planShiftAlarms(_schedule(), from: DateTime(2026, 9, 20, 8), days: 1),
+        planShiftAlarms(_schedule(), from: DateTime(2026, 9, 20, 8), days: 2),
         isEmpty,
         reason: '已经过去的时刻不必再排（排了也不会响）');
 
     // 对照组：06:00 时 07:00 还没到，要排。
     expect(
-        planShiftAlarms(_schedule(), from: DateTime(2026, 9, 20, 6), days: 1),
+        planShiftAlarms(_schedule(), from: DateTime(2026, 9, 20, 6), days: 2),
         hasLength(1));
   });
 
@@ -175,11 +176,11 @@ void main() {
     test('00:00 上班 + 23:00 响铃 → 前一天 23:00', () {
       // 起点日 9/19 12:00：9/19 那天的闹钟（9/18 23:00）已经过去，只剩 9/20 的。
       final plans = planShiftAlarms(_nightOnlySchedule(),
-          from: DateTime(2026, 9, 19, 12), days: 2);
+          from: DateTime(2026, 9, 19, 12), days: 3);
       expect(plans, hasLength(1));
       expect(plans.single.fireAt, DateTime(2026, 9, 19, 23),
           reason: '班次在 9/20 凌晨上班，闹钟要排在 9/19 晚上 23:00');
-      expect(plans.single.offset, 1,
+      expect(plans.single.offset, 2,
           reason: '排定时刻前移一天，但 offset / 原生 id 仍按班次那一天算');
     });
 
@@ -190,20 +191,20 @@ void main() {
           _nightOnlySchedule(
               startMinute: 20 * 60 + 30, alarmMinute: 19 * 60 + 30),
           from: DateTime(2026, 9, 20, 6),
-          days: 1);
+          days: 2);
       expect(plans.single.fireAt, DateTime(2026, 9, 20, 19, 30));
     });
 
     test('钟点相同：算当天', () {
       final plans = planShiftAlarms(_nightOnlySchedule(alarmMinute: 0),
-          from: DateTime(2026, 9, 19, 12), days: 2);
+          from: DateTime(2026, 9, 19, 12), days: 3);
       expect(plans.single.fireAt, DateTime(2026, 9, 20),
           reason: '「不晚于上班时刻的最近一次该钟点」就是上班那一刻本身');
     });
 
     test('没填上班时间：无从判断，仍按当天（不瞎挪一天）', () {
       final plans = planShiftAlarms(_nightOnlySchedule(startMinute: null),
-          from: DateTime(2026, 9, 20, 6), days: 1);
+          from: DateTime(2026, 9, 20, 6), days: 2);
       expect(plans.single.fireAt, DateTime(2026, 9, 20, 23));
     });
   });
@@ -234,7 +235,7 @@ void main() {
 
     test('两个闹钟各一条 plan，序号 0/1，都落在班次当天', () {
       final plans = planShiftAlarms(twoAlarms(),
-          from: DateTime(2026, 9, 20, 5), days: 1);
+          from: DateTime(2026, 9, 20, 5), days: 2);
       expect(plans, hasLength(2));
       expect(plans[0].alarmIndex, 0);
       expect(plans[0].fireAt, DateTime(2026, 9, 20, 6, 30));
@@ -268,12 +269,12 @@ void main() {
         teamOffsets: const [0],
       );
       final plans =
-          planShiftAlarms(s, from: DateTime(2026, 9, 19, 12), days: 2);
-      // 9/19 那天的班：起床 9/18 23:00（已过去，跳过）、补觉 9/19 03:00（已过去）
+          planShiftAlarms(s, from: DateTime(2026, 9, 19, 12), days: 3);
+      // 9/18 / 9/19 那两天的班：起床与补觉都已经过去，跳过
       // 9/20 那天的班：起床 9/19 23:00、补觉 9/20 03:00
       expect(plans.map((p) => p.fireAt).toList(),
           [DateTime(2026, 9, 19, 23), DateTime(2026, 9, 20, 3)]);
-      expect(plans.map((p) => p.offset).toList(), [1, 1],
+      expect(plans.map((p) => p.offset).toList(), [2, 2],
           reason: 'offset 仍按班次那一天算');
       expect(plans.map((p) => p.alarmIndex).toList(), [0, 1]);
     });
@@ -282,7 +283,7 @@ void main() {
       expect(
           planShiftAlarms(twoAlarms(),
               from: DateTime(2026, 9, 20, 5),
-              days: 1,
+              days: 2,
               overrides: {dayNumber(DateTime(2026, 9, 20)): false}),
           isEmpty);
     });
@@ -331,9 +332,10 @@ void main() {
             p.offset;
         expect(id, inInclusiveRange(0, 600));
       }
-      // 同一天两个闹钟必须拿到不同的 id（序号把它们分开）
+      // 同一天两个闹钟必须拿到不同的 id（序号把它们分开）。取 offset 1 那一天
+      // （窗口从**昨天**起算，所以 1 才是 `from` 的当天）。
       final ids = plans
-          .where((p) => p.offset == 0)
+          .where((p) => p.offset == 1)
           .map((p) =>
               p.alarmIndex * AlarmService.shiftDaysHorizonForTesting + p.offset)
           .toSet();
@@ -433,12 +435,12 @@ void main() {
 
     test('边界前按 A 的班、边界后按 B 的班（闭区间：6/29 仍归 A）', () {
       // 锚点 2026-01-01 起的第 178 天是 6/28 → 178 % 2 = 0 → 白班
-      final plans = planShiftAlarms(chain(), from: DateTime(2026, 6, 28), days: 4);
+      final plans = planShiftAlarms(chain(), from: DateTime(2026, 6, 28), days: 5);
       final byOffset = <int, String>{for (final p in plans) p.offset: p.shift.name};
-      expect(byOffset[0], 'A-白'); // 6/28 → A
-      expect(byOffset.containsKey(1), isFalse); // 6/29 → A 的休班，不排
-      expect(byOffset[2], 'B-白'); // 6/30 → B（边界第一天）
-      expect(byOffset.containsKey(3), isFalse); // 7/1 → B 的休班
+      expect(byOffset[1], 'A-白'); // 6/28 → A
+      expect(byOffset.containsKey(2), isFalse); // 6/29 → A 的休班，不排
+      expect(byOffset[3], 'B-白'); // 6/30 → B（边界第一天）
+      expect(byOffset.containsKey(4), isFalse); // 7/1 → B 的休班
     });
 
     test('原生 id 不撞号：同一天只归一套方案', () {
@@ -478,6 +480,30 @@ void main() {
     test('24 小时值班：07:00 仍在班次当天（模板回归护栏）', () {
       expect(shiftAlarmFireAt(d, cls(480, 1920), const ShiftAlarm(minute: 420)),
           DateTime(2026, 10, 12, 7, 0));
+    });
+  });
+
+  // 三档落点带来的一个新问题：**次日档的闹钟属于「昨天」那个班次，却在今天响**。
+  // 而 `reschedule` 开头会把 0..600 全部取消、再按 `planShiftAlarms` 重排 —— 循环
+  // 若从「今天」起算，「昨天」就不在窗口里，那条闹钟被取消之后再也排不回去，
+  // **静默不响**。冷启动（打开 App / 回到前台 / 开机重排）必然走这条路。
+  group('planShiftAlarms：窗口往回算一天（次日档的回归护栏）', () {
+    test('在次日档闹钟响的那天重排，它仍要被排上', () {
+      // 夜班 20:30 – 次日 04:30 配一条 09:00 —— 属于「昨天」的班次，今天响。
+      final sched =
+          _nightOnlySchedule(startMinute: 20 * 60 + 30, alarmMinute: 9 * 60);
+      final plans =
+          planShiftAlarms(sched, from: DateTime(2026, 10, 13, 8, 0), days: 3);
+      expect(plans.map((p) => p.fireAt), contains(DateTime(2026, 10, 13, 9, 0)),
+          reason: '10/13 09:00 属于 10/12 的夜班（次日档）—— 10/13 08:00 重排时必须排回去');
+    });
+
+    test('窗口往回一天，不会把昨天那些已经响过的排回来', () {
+      // 9/20 是白班（07:00 闹钟，已经过去）、9/21 休班、9/22 白班。
+      final plans = planShiftAlarms(_schedule(),
+          from: DateTime(2026, 9, 21, 12, 0), days: 3);
+      expect(plans.map((p) => p.fireAt).toList(), [DateTime(2026, 9, 22, 7, 0)],
+          reason: '已经过去的一律被 fireAt.isAfter(from) 滤掉');
     });
   });
 }
