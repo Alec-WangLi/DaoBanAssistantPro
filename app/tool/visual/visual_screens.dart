@@ -250,7 +250,7 @@ final List<VisualScreen> visualScreens = [
   ),
   (
     slug: '22_editor_alarm_max',
-    title: '排班编辑器 · 闹钟到上限（6 个）',
+    title: '排班编辑器 · 闹钟到上限（$maxAlarmsPerShift 个）',
     build: (db) async {
       await makeAlarmShowcase(db, count: maxAlarmsPerShift);
       return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
@@ -263,6 +263,17 @@ final List<VisualScreen> visualScreens = [
     build: (db) async {
       await makeAlarmShowcase(db, count: 2, nightShift: true);
       return const AlarmScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 三档落点在编辑页的读法：**前一天 / 次日 / 不标**三种同屏。v0.11.1 新加的
+    // 界面状态，令牌守门看不出「那一行会不会被日前缀挤掉」——只有出图能看。
+    slug: '53_editor_alarm_tri_tier',
+    title: '排班编辑器 · 闹钟三档落点（前一天 / 当天 / 次日）',
+    build: (db) async {
+      await makeTriTierAlarmShowcase(db);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
     },
     needsOnboardingPrefs: false,
   ),
@@ -596,6 +607,9 @@ const Map<String, double> visualScrollDown = {
   '20_editor_alarm_one': 420,
   '21_editor_alarm_three': 520,
   '22_editor_alarm_max': 620,
+  // 三档那张的「前一天」那一档在**第二个班次卡**（夜班）上，首屏只露得出中班
+  // 那张卡 —— 不滚就看不到三档里的第一档。
+  '53_editor_alarm_tri_tier': 760,
   // 撞班提示挂在「周期设置」卡的末尾，10 行周期表的下面；给足量让它滚到底，
   // 靠到底后的钳位保证那张卡的下半段（提示 + 均分按钮）在画面里。
   '15_editor_crew_clash': 2400,

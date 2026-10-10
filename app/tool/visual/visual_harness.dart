@@ -496,6 +496,51 @@ Future<void> makeAlarmShowcase(
   );
 }
 
+/// 三档落点同屏：中班（16:30–次日 00:30）的 `00:15` 是**次日**、夜班（00:00–08:00）
+/// 的 `23:00` 是**前一天**，`19:00` 落在当天（不标）。
+///
+/// 三档标记是 v0.11.1 新加的读法，而它只在**不落在当天**时才画 —— 一张静止帧上
+/// 三种都要出现，才看得出它们长得一样不一样（尤其是中英两种长度不同的前缀
+/// 会不会把那一行挤掉）。编辑页会把方案里每个班次都画出来，所以一套方案装三个
+/// 班次就够。
+Future<void> makeTriTierAlarmShowcase(AppDatabase db) async {
+  final today = dateOnly(DateTime.now());
+  await AppRepository(db).saveSchedule(
+    name: '三档落点',
+    anchorDate: today,
+    classes: const [
+      ShiftClass(
+        name: '中班',
+        abbr: '中',
+        startMinute: 16 * 60 + 30,
+        endMinute: 30, // 回绕式：次日 00:30
+        color: 0xFFFF9F0A,
+        alarmEnabled: true,
+        alarms: [
+          ShiftAlarm(minute: 0 * 60 + 15, label: '准备下班'), // 次日 00:15
+          ShiftAlarm(minute: 19 * 60), // 当天 19:00（不标）
+        ],
+      ),
+      ShiftClass(
+        name: '夜班',
+        abbr: '夜',
+        startMinute: 0,
+        endMinute: 8 * 60,
+        color: 0xFF7A5CFF,
+        alarmEnabled: true,
+        alarms: [ShiftAlarm(minute: 23 * 60, label: '起床')], // 前一天 23:00
+      ),
+      ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+    ],
+    cycle: const [0, 0, 1],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: L10n.defaultTeamNames(1),
+    ourTeamIndex: 0,
+    teamOffsets: const [0],
+  );
+}
+
 /// 把一套「五班三倒 · 10 天一轮」设为当前方案，但**各班组仍按 1 天错开** ——
 /// 也就是「撞班」那个状态（白白中中休夜夜休休休，5 个班组天天撞）。
 ///
