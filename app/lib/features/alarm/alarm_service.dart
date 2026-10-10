@@ -74,19 +74,21 @@ class ShiftAlarmPlan {
 
 /// 某天某个班次的**某一条**闹钟的响铃时刻。
 ///
-/// 钟点取 [alarm] 的钟面值；[alarmFallsOnPreviousDay] 为真时整体前移一天 ——
-/// 规则是「**不晚于上班时刻的最近一次该钟点**」，所以 00:00 上班、23:00 响铃排的是
-/// 前一天 23:00（排在班次当天就已经是班后 15 小时了）。
+/// 钟点取 [alarm] 的钟面值；落在**哪一天**由 [alarmDayAnchor] 定（前一天 / 班次
+/// 当天 / 次日三档）：00:00 上班、23:00 响铃排的是**前一天** 23:00（排在班次当天
+/// 就已经是班后 15 小时了）；16:30–次日 00:30 的 00:15 与 01:00 排的是**次日**；
+/// 20:00 上班、08:00 响铃排的是**班次当天**（正好下班那一刻）。
 ///
-/// 日期用 `DateTime(y, m, d - 1)` 重建而不是 `subtract(Duration(days: 1))`：
-/// 后者减的是绝对 24 小时，碰上夏令时切换会把钟点也挪掉一小时。
+/// 日期用 `DateTime(y, m, d + delta)` 重建而不是 `add(Duration(days: delta))`：
+/// 后者加的是绝对 24 小时，碰上夏令时切换会把钟点也挪掉一小时。
 DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
-  final clock = alarm.minute;
-  return alarmFallsOnPreviousDay(shift, alarm)
-      ? DateTime(date.year, date.month, date.day - 1)
-          .add(Duration(minutes: clock))
-      : DateTime(date.year, date.month, date.day)
-          .add(Duration(minutes: clock));
+  final delta = switch (alarmDayAnchor(shift, alarm)) {
+    AlarmDayAnchor.prev => -1,
+    AlarmDayAnchor.same => 0,
+    AlarmDayAnchor.next => 1,
+  };
+  return DateTime(date.year, date.month, date.day + delta)
+      .add(Duration(minutes: alarm.minute));
 }
 
 /// 决定「未来 [days] 天里哪些天要排班次联动闹钟、各排在几点」。
@@ -104,7 +106,8 @@ DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
 ///
 /// **一个班次挂了几个闹钟就出几条 plan**，各自算各自的触发时刻与落点。
 ///
-/// 触发时刻由 [shiftAlarmFireAt] 算（可能是**前一天**晚上），但 `offset` 与原生
+/// 触发时刻由 [shiftAlarmFireAt] 算（可能是**前一天**晚上，也可能是**次日**），
+/// 但 `offset` 与原生
 /// id 始终按**班次那一天**算 —— id 是 `序号 × 天数窗口 + 天数偏移`，跟着触发时刻走
 /// 的话，每个午夜班的闹钟都会换号。**「序号」是闹钟在 `shift.alarms` 里的下标**：
 /// 用户在编辑页里调整顺序会让闹钟换号（可接受 —— 编辑之后必然重排、`cancelAll`

@@ -81,40 +81,71 @@ class ShiftAlarm {
 /// 6 × 60 = 360 ≤ 400 刚好放得下。**改这个数或改天数窗口，必须同时改另一边。**
 const int maxAlarmsPerShift = 6;
 
-/// 某条闹钟的钟点落在上班的**前一天**还是**班次当天**。
+/// 一条闹钟的钟点落在**班次当天那一圈钟点**的哪一边。
+enum AlarmDayAnchor {
+  /// 班次**前一天**的那个钟点。
+  prev,
+
+  /// **班次当天**。
+  same,
+
+  /// 班次**次日**的那个钟点。
+  next,
+}
+
+/// 某条闹钟落在**前一天 / 班次当天 / 次日**的哪一档。
 ///
-/// 规则（spec §4.2）：
-///   ① 钟点落在**值班窗口内**（`[start, end)`，按班次相对时刻算 —— 跨午夜与
-///      24 小时班都成立）→ **当天**。班中间的闹钟（白班的午休 12:30、零点班的
-///      班中 03:00）要的就是这一档。
+/// 规则（spec `2026-10-11-shift-alarm-anchor-and-cap-design.md` §3）：
+///   ① 钟点落在**值班窗口内** → 窗口里那一次**出现**所在的那一天。窗口跨过午夜
+///      时，落在午夜之后那一段的出现在**次日** —— 16:30–次日 00:30 的 00:15
+///      就是它（从前被静默排到班次当天凌晨，比上班早 16 小时）。
 ///   ② 否则钟点**晚于上班钟点** → **前一天**。00:00 上班、23:00 响铃排前一天的
-///      23:00 —— 排在班次当天就已经是班后 15 小时（v0.8.9 修好的那条）。
-///   ③ 否则 → **当天**。
+///      23:00 —— 排在班次当天就已经是班后 15 小时。**这是 v0.8.9 立起来的既有
+///      约定，这一版不动它。**
+///   ③ 否则 → **当天与次日里离窗口更近的那一个**。这就是「下班之后的闹钟」：
+///      16:30–次日 00:30 的 01:00 落在**次日** 01:00（从前落在上班前 15 个半小时）。
+///      两边一样近时取**当天**。
 ///
-/// 与旧规则（`alarm.minute > start` 一条判据）的差异**只有第 ① 档**：旧规则会把
-/// 班中间的闹钟搬到 20 多小时前。其余钟点逐条相同，包括两个边界 ——
-/// 正好等于下班时刻 / 下班之后的钟点走第 ② ③ 档，落哪天取决于它相对上班钟点的
-/// 大小（00:00 班的 08:00 → 前一天；20:00 班的 08:00 → 当天），两种形状都与旧规则
-/// 逐字相同。这两类钟点用户真想要的是「次日」，两档模型表达不了，见 spec §9。
+/// **窗口长到一整天时（24 小时值班，`span == 1440`）一律算当天**：那时候任何钟点
+/// 都落在窗口内，「上班之前」与「班次之中」在模型上已经合并（既有行为就是「全天
+/// 都算当天」，内置的 `duty_24_24/48/72` 三个模板靠它维持原样）。没有这一条，
+/// 那些模板配的 07:00 上班提醒会被第 ① 档判成次日 —— 从「上班前 1 小时」变成
+/// 「下班前 1 小时」。护栏是 `shift_rotation_test` 的「24 小时值班：全天都算当天」
+/// 与 `shift_templates_test` 的模板差集用例。
 ///
 /// 时间没填：上班没填 → 判不了，按当天（不瞎挪一天）；下班没填 → 窗口算不出，
-/// 退回旧规则（只按上班钟点判）。
-bool alarmFallsOnPreviousDay(ShiftClass shift, ShiftAlarm alarm) {
+/// 退回两档（只按上班钟点判），**永远不会是次日**。
+AlarmDayAnchor alarmDayAnchor(ShiftClass shift, ShiftAlarm alarm) {
   final s = shift.startMinute;
-  if (s == null) return false;
+  if (s == null) return AlarmDayAnchor.same;
+  final t = alarm.minute;
   final e = shift.endMinute;
-  if (e != null) {
-    // 值班时长。**班次有两种存法**：累计式（24 小时值班 480 → 1920）与回绕式
-    // （夜班 20:30 → 08:30 存成 510 < 1230 —— 内置 12 小时制模板与编辑器产出的
-    // 都是这一种）。所以要补一天再减：直接 `e - s` 在回绕式下**是负的**，窗口
-    // 判据会静默失效、班中闹钟又回到前一天（独立审查抓出来的；`shift_rotation_test`
-    // 里「回绕式存法的跨午夜班」与「两种存法同解」两条是它的护栏）。
-    final span = e > s ? e - s : e - s + _dayMinutes;
-    final rel = ((alarm.minute - s) % _dayMinutes + _dayMinutes) % _dayMinutes;
-    if (rel < span) return false;
+  if (e == null) return t > s ? AlarmDayAnchor.prev : AlarmDayAnchor.same;
+  // 值班时长。**班次有两种存法**：累计式（24 小时值班 480 → 1920）与回绕式
+  // （夜班 20:30 → 08:30 存成 510 < 1230 —— 内置 12 小时制模板与编辑器产出的
+  // 都是这一种）。所以要补一天再减：直接 `e - s` 在回绕式下**是负的**，窗口
+  // 判据会静默失效、班中闹钟又回到前一天（独立审查抓出来的；`shift_rotation_test`
+  // 里「回绕式存法的跨午夜班」与「两种存法同解」两条是它的护栏）。
+  final span = e > s ? e - s : e - s + _dayMinutes;
+  if (span >= _dayMinutes) return AlarmDayAnchor.same; // 24 小时值班：见上
+  // `rel` = 钟点 t 在上班之后**最近那一次**出现距上班多少分钟。
+  final rel = ((t - s) % _dayMinutes + _dayMinutes) % _dayMinutes;
+  if (rel < span) {
+    // 窗口内：那一次出现在 `s + rel`。跨过午夜就是次日。
+    return s + rel >= _dayMinutes ? AlarmDayAnchor.next : AlarmDayAnchor.same;
   }
-  return alarm.minute > s;
+  if (t > s) return AlarmDayAnchor.prev;
+  final before = s - t; // 当天那一次落在窗口**之前**多远
+  final after = t + _dayMinutes - (s + span); // 次日那一次落在窗口**之后**多远
+  return after < before ? AlarmDayAnchor.next : AlarmDayAnchor.same;
 }
+
+/// 某条闹钟是不是落在上班的**前一天**。
+///
+/// **过渡期的兼容层**：界面那四处调用点还按布尔写的，等它们改成按
+/// [AlarmDayAnchor] 三路分支之后本函数就删（见实施计划 Task 4）。
+bool alarmFallsOnPreviousDay(ShiftClass shift, ShiftAlarm alarm) =>
+    alarmDayAnchor(shift, alarm) == AlarmDayAnchor.prev;
 
 const int _dayMinutes = 1440;
 

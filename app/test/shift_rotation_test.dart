@@ -447,4 +447,62 @@ void main() {
       expect(prev(8 * 60, null, 21 * 60), isTrue, reason: '退回旧规则：21:00 晚于 08:00 → 前一天');
     });
   });
+
+  group('alarmDayAnchor：三档落点（前一天 / 当天 / 次日）', () {
+    AlarmDayAnchor at(int? start, int? end, int alarm) => alarmDayAnchor(
+          ShiftClass(name: '班', startMinute: start, endMinute: end),
+          ShiftAlarm(minute: alarm),
+        );
+
+    test('中班 16:30–次日 00:30（回绕式）：班中与下班后都落次日', () {
+      expect(at(990, 30, 15), AlarmDayAnchor.next,
+          reason: '00:15 落在窗口内、出现在午夜之后 → 次日（下班前 15 分钟）');
+      expect(at(990, 30, 60), AlarmDayAnchor.next, reason: '01:00 下班之后 → 次日');
+      expect(at(990, 30, 509), AlarmDayAnchor.next, reason: '08:29：次日更近');
+      expect(at(990, 30, 510), AlarmDayAnchor.same, reason: '08:30：两边一样近 → 取当天');
+      expect(at(990, 30, 960), AlarmDayAnchor.same, reason: '16:00 上班之前');
+    });
+
+    test('同一条班次：累计式 endMinute 与回绕式逐钟点同解', () {
+      for (final t in [15, 60, 509, 510, 960, 1380]) {
+        expect(at(990, 30, t), at(990, 1470, t),
+            reason: '钟点 $t：编辑器产出回绕式、24 小时值班是累计式，两种必须同解');
+      }
+    });
+
+    test('夜班 20:30–次日 08:30：班中、正好下班、下班后都落次日', () {
+      expect(at(1230, 510, 120), AlarmDayAnchor.next, reason: '02:00 班中');
+      expect(at(1230, 510, 510), AlarmDayAnchor.next, reason: '08:30 正好下班');
+      expect(at(1230, 510, 540), AlarmDayAnchor.next, reason: '09:00 下班之后');
+      expect(at(1230, 510, 869), AlarmDayAnchor.next, reason: '14:29：次日更近');
+      expect(at(1230, 510, 870), AlarmDayAnchor.same, reason: '14:30：两边一样近 → 当天');
+      expect(at(1230, 510, 1140), AlarmDayAnchor.same, reason: '19:00 上班之前');
+    });
+
+    test('白班 08:00–20:00：晚于上班钟点的仍排前一天', () {
+      expect(at(480, 1200, 1380), AlarmDayAnchor.prev, reason: '23:00');
+      expect(at(480, 1200, 1230), AlarmDayAnchor.prev, reason: '20:30');
+      expect(at(480, 1200, 30), AlarmDayAnchor.next, reason: '00:30 次日更近');
+      expect(at(480, 1200, 300), AlarmDayAnchor.same, reason: '05:00 当天更近');
+      expect(at(480, 1200, 480), AlarmDayAnchor.same, reason: '08:00 正好上班');
+    });
+
+    test('24 小时值班：全天都算当天（含上班之前的 07:00）', () {
+      for (final t in [0, 420, 480, 720, 1320, 1439]) {
+        expect(at(480, 1920, t), AlarmDayAnchor.same,
+            reason: '钟点 $t：窗口长到一整天时保持既有行为');
+      }
+    });
+
+    test('没填时间：没下班 → 退回两档（永不次日）；没上班 → 当天', () {
+      expect(at(480, null, 1380), AlarmDayAnchor.prev,
+          reason: '下班没填 → 窗口算不出，晚于上班钟点仍是前一天');
+      expect(at(480, null, 360), AlarmDayAnchor.same, reason: '早于上班钟点 → 当天');
+      expect(at(null, 1200, 60), AlarmDayAnchor.same, reason: '上班没填 → 判不了，不瞎挪');
+    });
+
+    test('零点班 00:00–08:00：23:00 仍排前一天', () {
+      expect(at(0, 480, 1380), AlarmDayAnchor.prev);
+    });
+  });
 }

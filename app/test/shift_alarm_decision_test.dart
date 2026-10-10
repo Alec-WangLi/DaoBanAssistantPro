@@ -427,4 +427,35 @@ void main() {
           reason: 'id 撞上 = 两个闹钟互相取消（`setAlarmClock` 同号覆盖）');
     });
   });
+
+  // ⚠️ 这一组断言的是**算出来的日期与时刻**，不是 `alarmFallsOnPreviousDay` 那个
+  // 布尔值 —— 「次日」的布尔值也是 false，光断言布尔的话，把 24 小时值班的上班前
+  // 闹钟错判成次日这一类回归会**静默通过**（见 spec §7 末尾那条）。
+  group('shiftAlarmFireAt：三档落点', () {
+    ShiftClass cls(int? start, int? end) =>
+        ShiftClass(name: '班', startMinute: start, endMinute: end);
+    final d = DateTime(2026, 10, 12);
+
+    test('中班 16:30–次日 00:30：00:15 与 01:00 都落在次日', () {
+      expect(shiftAlarmFireAt(d, cls(990, 30), const ShiftAlarm(minute: 15)),
+          DateTime(2026, 10, 13, 0, 15), reason: '班中、下班前 15 分钟');
+      expect(shiftAlarmFireAt(d, cls(990, 30), const ShiftAlarm(minute: 60)),
+          DateTime(2026, 10, 13, 1, 0), reason: '下班之后');
+    });
+
+    test('夜班 20:30–次日 08:30：02:00 落在次日', () {
+      expect(shiftAlarmFireAt(d, cls(1230, 510), const ShiftAlarm(minute: 120)),
+          DateTime(2026, 10, 13, 2, 0));
+    });
+
+    test('白班 08:00–20:00：23:00 仍落在前一天', () {
+      expect(shiftAlarmFireAt(d, cls(480, 1200), const ShiftAlarm(minute: 1380)),
+          DateTime(2026, 10, 11, 23, 0));
+    });
+
+    test('24 小时值班：07:00 仍在班次当天（模板回归护栏）', () {
+      expect(shiftAlarmFireAt(d, cls(480, 1920), const ShiftAlarm(minute: 420)),
+          DateTime(2026, 10, 12, 7, 0));
+    });
+  });
 }
