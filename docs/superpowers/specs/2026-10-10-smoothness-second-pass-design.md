@@ -254,19 +254,34 @@
 - **`GlassDialog` / `GlassBlur` 的模糊是否该收**（它们合计约 0.5ms，收益不成比例）。
 - 液态玻璃那四层光谱模糊的层数。
 
-## 8. 版本与收尾
+## 8. 版本与收尾（分两步，2026-10-10 用户拍板）
 
-这一轮出 **v0.11.0 正式版**（末位 0），所以按仓库长期规则：
+这一轮原计划直接出 v0.11.0 正式版。之所以拆成两步，是因为本轮含三项**原生改动**
+（闹钟存储批量写、响铃自停、小组件非精确闹钟）—— **碰的是闹钟语义，而这个仓库的 Kotlin 侧
+没有测试目标**，仓库自己的规矩就是这类只能真机验。
 
-- 更新日志的 0.11.0 条目写成**归纳总结版**（合并 0.10.1~0.11.0），测试版条目原样保留，
-  窗口仍是 10 条。
-- **发布前过一遍仓库门面**：README 文案逐条核 + **配图管线重跑**
-  （`tool/promo` → `make_promo_images.py`）+ GitHub 描述与 topics + `PRODUCT_SPEC.md`
-  抬头与受影响条目 + `AGENTS.md` 版本史与「最近改动」+ `docs/coolapk-post.md`。
-- **酷安更新简介 + 对应动图**：`docs/v0.11.0-update-post.md` + `docs/images/v0110-*.png`。
-  动图按 v0.10.10 定死的规矩出：`--width` 取裁剪宽度（不缩放）、`--colors 256`、`--fps 62`。
-- **beta → main 用 `--no-ff`** 合并，正式版 tag 打在 **main** 上，发完 curl 一次
-  main 上的 `latest.json` 核对版本号。
+### 8.1 这一轮先出 **v0.10.22 测试版**（`beta` 分支）
+
+- 更新日志的 0.10.22 条目**原样写这一版改了什么**（测试版条目不归纳），窗口仍 10 条。
+- `AGENTS.md` 版本史 + 「最近改动」。
+- `beta` 提交 → `git push origin beta` → `git tag v0.10.22 && git push origin v0.10.22`
+  → `scripts/release.ps1 -SkipConfirm`。
+- 发完 curl 一次 main 上的 `latest.json` 核对版本号。
+
+### 8.2 用户真机点头之后，转 **v0.11.0 正式版**
+
+这一步才做正式版该做的那些（仓库长期规则）：
+
+- 0.11.0 条目改写成**归纳总结版**（合并 0.10.1~0.11.0），测试版条目原样保留。
+- **仓库门面**：README 文案逐条核 + **配图管线重跑**（`tool/promo/render_promo_test.dart`
+  → `scripts/make_promo_images.py`）+ GitHub 描述与 topics + `PRODUCT_SPEC.md` 抬头与受影响条目
+  + `docs/coolapk-post.md`。
+- **酷安更新简介 + 动图**：`docs/v0.11.0-update-post.md` + `docs/images/v0110-*.png`；
+  动图按 v0.10.10 定死的规矩出（`--width` 取裁剪宽度不缩放、`--colors 256`、`--fps 62`）。
+- **`beta` → `main` 用 `--no-ff`**，正式版 tag 打在 **main** 上，发完再 curl 一次 `latest.json`。
+
+⚠️ **8.2 的文案与配图不在 8.1 做** —— 它们要照的正是 8.1 之后、用户真机试出来的最终形态，
+提前做一遍，测出问题就得重做。
 
 ## 9. 已定的与未定的
 
