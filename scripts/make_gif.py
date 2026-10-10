@@ -53,9 +53,18 @@ def main() -> int:
     ap.add_argument("--width", type=int, default=640, help="输出宽度（等比缩放）")
     ap.add_argument("--fps", type=int, default=14, help="播放帧率")
     ap.add_argument("--colors", type=int, default=128, help="调色板色数（越少越小）")
+    ap.add_argument(
+        "--every",
+        type=int,
+        default=1,
+        help="每 N 帧取一帧（体积不够小时用：**同时要把 --fps 除以 N**，"
+             "否则整段会慢 N 倍）",
+    )
     args = ap.parse_args()
 
     files = sorted(glob.glob(os.path.join(FRAMES_DIR, f"{args.prefix}*.png")))
+    if args.every > 1:
+        files = files[::args.every]
     if not files:
         print(f"没有帧：{FRAMES_DIR}/{args.prefix}*.png", file=sys.stderr)
         return 1

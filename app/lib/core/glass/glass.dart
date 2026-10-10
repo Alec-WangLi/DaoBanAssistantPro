@@ -212,7 +212,7 @@ class GlassTile extends StatelessWidget {
   }
 }
 
-/// 仅在「高级材质」开启（[glassBlurDisabled]=false）时应用背景模糊；关闭时直接渲染 child。
+/// 仅在省电档关闭（[glassBlurDisabled]=false）时应用背景模糊；关闭时直接渲染 child。
 /// 供玻璃按钮、提示条等非 GlassPanel 的模糊点复用，统一受「高级材质」控制。
 class GlassBlur extends StatelessWidget {
   const GlassBlur({super.key, required this.sigma, required this.child});
