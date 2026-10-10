@@ -9,6 +9,7 @@ import '../domain/schedule_template.dart';
 import '../domain/shift_rotation.dart';
 import 'app_database.dart';
 import 'seed.dart';
+import 'todo_archive.dart';
 
 export 'app_database.dart';
 
@@ -850,6 +851,29 @@ class AppRepository {
   Future<void> deleteEvent(ScheduleEvent e) {
     return (db.delete(db.scheduleEvents)..where((r) => r.id.equals(e.id)))
         .go();
+  }
+
+  /// 把归档（已完成的待办）裁到最多 [keep] 条 —— 丢**日期最旧**的那几条。
+  ///
+  /// ⚠️ **只许碰 `isCompleted == true` 的行。** 这是硬约束：按总数截断的话，
+  /// 一条「很旧但一直没做」的待办会先被删掉 —— 那是数据丢失，不是归档。
+  ///
+  /// 为什么按 `date` 而不是「完成时间」：表里没有完成时间，也不为它加一列 ——
+  /// 归档不需要那么准，少一列就少一处要维护的迁移（spec §2 明说不改表）。
+  ///
+  /// 什么时候跑：`home_shell` 的启动就绪闸，**不在** `setEventCompleted` 里 ——
+  /// 用户完全可能勾一条去年完成过的待办，在那一刻裁会让它当场消失，连「先划掉
+  /// 再收走」的那一眼反馈都没有（spec §4）。
+  Future<int> pruneArchivedTodos({int keep = kArchivedTodoLimit}) async {
+    final done = await (db.select(db.scheduleEvents)
+          ..where((r) => r.isCompleted.equals(true))
+          ..orderBy([(r) => OrderingTerm.asc(r.date)]))
+        .get();
+    if (done.length <= keep) return 0;
+    final doomed =
+        done.sublist(0, done.length - keep).map((e) => e.id).toList();
+    await (db.delete(db.scheduleEvents)..where((r) => r.id.isIn(doomed))).go();
+    return doomed.length;
   }
 
   // ---------------------------------------------------------------------------

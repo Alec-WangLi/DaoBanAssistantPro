@@ -45,18 +45,21 @@ Future<void> _disposeShell(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 20));
 }
 
-Future<void> _pumpShell(WidgetTester tester) async {
+Future<void> _pumpShell(WidgetTester tester, {AppDatabase? db}) async {
   tester.view.physicalSize = const Size(420, 900);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  final raw = sqlite3.sqlite3.openInMemory();
-  final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
-  addTearDown(db.close);
+  // 调用方可以先把库建好、往里种东西，再传进来挂壳 —— 启动就绪闸只在三个流
+  // 第一次到齐时跑一次，挂完壳再种就赶不上了。
+  final database = db ??
+      AppDatabase.forTesting(
+          NativeDatabase.opened(sqlite3.sqlite3.openInMemory()));
+  addTearDown(database.close);
 
   await tester.pumpWidget(ProviderScope(
-    overrides: [databaseProvider.overrideWithValue(db)],
+    overrides: [databaseProvider.overrideWithValue(database)],
     child: const MaterialApp(home: HomeShell()),
   ));
   await _pumpFrames(tester);
@@ -211,6 +214,31 @@ void main() {
     expect(calls.where((m) => m == 'widgetPushSnapshot'), isNotEmpty,
         reason: '换了主色没重推 —— 桌面小组件还停在旧配色上，而 App 里已经变了');
 
+    await _disposeShell(tester);
+  });
+
+  testWidgets('启动就绪闸顺手裁一次归档：老库里积了 105 条已完成 → 只剩 100',
+      (tester) async {
+    // 老库（升级上来、或者长期用下来）里早积了一堆已完成的待办 —— 截断放在启动闸
+    // 里就是为了兜住它。勾选那一刻**不**裁：那会让「勾一条去年的待办」当场消失，
+    // 「先划掉再收走」那一趟反馈就没了。
+    final db = AppDatabase.forTesting(
+        NativeDatabase.opened(sqlite3.sqlite3.openInMemory()));
+    final repo = AppRepository(db);
+    await repo.ensureSeeded();
+    for (var i = 0; i < 105; i++) {
+      await repo.addEvent(title: 'd$i', date: DateTime.utc(2026, 1, 1 + i));
+    }
+    // `addEvent` 回的是行 id，不是行 —— 勾选要一个 `ScheduleEvent`，读回来再勾。
+    for (final e in await repo.listEvents()) {
+      await repo.setEventCompleted(e, true);
+    }
+
+    await _pumpShell(tester, db: db);
+
+    expect(
+        (await repo.listEvents()).where((e) => e.isCompleted), hasLength(100),
+        reason: '启动闸没裁 —— 归档会无限长下去');
     await _disposeShell(tester);
   });
 }

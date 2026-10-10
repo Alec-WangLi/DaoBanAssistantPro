@@ -5,8 +5,9 @@
 //   ② 归档超上限时丢最旧的那几条（`pruneArchivedTodos`，要一个真库）—— 下面那组。
 //
 // 界面怎么摆（折叠区收起 / 展开、勾完先划掉再收走）在 `todo_archive_screen_test.dart`。
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shiftassistantpro/data/app_database.dart';
+import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/data/todo_archive.dart';
 
 ScheduleEvent _e(int id, DateTime date, {bool done = false}) => ScheduleEvent(
@@ -56,6 +57,76 @@ void main() {
       final s = splitTodos(const [], const {});
       expect(s.active, isEmpty);
       expect(s.archived, isEmpty);
+    });
+  });
+
+  group('pruneArchivedTodos', () {
+    late AppDatabase db;
+    late AppRepository repo;
+
+    setUp(() async {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      repo = AppRepository(db);
+      await repo.ensureSeeded();
+    });
+    tearDown(() => db.close());
+
+    test('上限就是 100（用户点名要的那个数）', () {
+      expect(kArchivedTodoLimit, 100);
+    });
+
+    test('截断到 100：丢日期最旧的那些，一条未完成都不许少', () async {
+      for (var i = 0; i < 105; i++) {
+        await repo.addEvent(title: 'done$i', date: DateTime.utc(2026, 1, 1 + i));
+      }
+      // `addEvent` 回的是行 id，不是行 —— 勾选要一个 `ScheduleEvent`，读回来再勾。
+      for (final e in await repo.listEvents()) {
+        await repo.setEventCompleted(e, true);
+      }
+      for (var i = 0; i < 3; i++) {
+        await repo.addEvent(title: 'open$i', date: DateTime.utc(2026, 6, 1 + i));
+      }
+
+      expect(await repo.pruneArchivedTodos(), 5);
+
+      final all = await repo.listEvents();
+      expect(all.where((e) => !e.isCompleted), hasLength(3),
+          reason: '截断只许碰已完成的行');
+      final done = all.where((e) => e.isCompleted).toList();
+      expect(done, hasLength(100));
+      expect(done.map((e) => e.title).contains('done0'), isFalse,
+          reason: '丢的必须是日期最旧的那几条');
+      expect(done.map((e) => e.title).contains('done104'), isTrue,
+          reason: '最新的那条要留着');
+    });
+
+    test('截断绝不碰未完成的行 —— 哪怕它比所有已完成的行都旧', () async {
+      await repo.addEvent(title: '很旧但没做', date: DateTime.utc(2020, 1, 1));
+      for (var i = 0; i < 101; i++) {
+        await repo.addEvent(title: 'd$i', date: DateTime.utc(2026, 1, 1 + i));
+      }
+      for (final e in await repo.listEvents()) {
+        if (e.title == '很旧但没做') continue;
+        await repo.setEventCompleted(e, true);
+      }
+
+      await repo.pruneArchivedTodos();
+
+      final all = await repo.listEvents();
+      expect(all.where((e) => !e.isCompleted).single.title, '很旧但没做');
+      expect(all.where((e) => e.isCompleted), hasLength(100));
+    });
+
+    test('不够上限时什么都不删', () async {
+      for (var i = 0; i < 3; i++) {
+        await repo.addEvent(title: 'd$i', date: DateTime.utc(2026, 1, 1 + i));
+      }
+      for (final e in await repo.listEvents()) {
+        await repo.setEventCompleted(e, true);
+      }
+      expect(await repo.pruneArchivedTodos(), 0);
+      expect(
+          (await repo.listEvents()).where((e) => e.isCompleted), hasLength(3));
     });
   });
 }
