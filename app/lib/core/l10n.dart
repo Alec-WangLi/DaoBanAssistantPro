@@ -264,6 +264,14 @@ class L10n {
   /// 中英语序不同（中文把数字夹在中间、英文是「N completed」），整串交给 [t]，
   /// 别拼前缀 —— 直接拼会在英文界面下露出中文语序。
   static String archivedTodos(int n) => t('已完成 $n 条', '$n completed');
+
+  /// 勾掉一条待办之后那条提示条上的话，以及它的动作。
+  ///
+  /// 为什么要有这一条：用户 2026-10-11 的原话是「刚勾错想马上改回来」。那条待办
+  /// 确实还留在主列表里、再点一下勾也能取消，但它**淡到 35% 不透明度、还带删除线**，
+  /// 读起来是「已经处理完、别碰了」—— 一个写着「撤销」的提示条才看得出来。
+  static String get todoCheckedOff => t('已划掉', 'Marked done');
+  static String get undo => t('撤销', 'Undo');
   static String get addEvent => t('添加待办事项', 'Add todo');
   static String get editEvent => t('编辑待办事项', 'Edit todo');
   static String get title => t('标题', 'Title');

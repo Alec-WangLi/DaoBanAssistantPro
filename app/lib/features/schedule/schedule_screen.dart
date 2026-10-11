@@ -13,6 +13,7 @@ import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_segment.dart';
+import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_check.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
@@ -280,7 +281,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   }
 
   /// 勾上 / 取消一条待办。**主列表与归档区共用这一份** —— 写两遍迟早走样。
-  Future<void> _toggleDone(WidgetRef ref, ScheduleEvent e, bool v) async {
+  Future<void> _toggleDone(
+      BuildContext context, WidgetRef ref, ScheduleEvent e, bool v) async {
+    // 「撤销」是异步的、而且可能在页面已经被切走之后才被点到 —— 那一下再 `setState`
+    // 就会打在已经销毁的 State 上（仓库里 `dialogCloser` 那条老规矩的同类）。
+    if (!context.mounted) return;
     // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassCheck`，它在自己的
     // `onTap` 里发一次 `select()`（「选中变了」正是它的语义，与开关同一处）。
     // 再加一次就是每点一下震两下 —— 两下比一下信息量**更少**，正是这套设计要消灭的噪音。
@@ -295,6 +300,14 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     setState(() => _sessionRows.add(e.id));
     await ref.read(appRepositoryProvider).setEventCompleted(e, v);
     await _rescheduleReminders(ref);
+    if (!v || !context.mounted) return;
+    // 勾错了要能一眼改回来：那一条虽然还在主列表里、再点一下那个勾也能取消，但它
+    // 淡到 35% 不透明度、还带删除线，读起来是「已经处理完、别碰了」—— 一个写着
+    // 「撤销」的提示条才看得出来（2026-10-11 用户：「刚勾错想马上改回来」）。
+    showGlassSnack(context, L10n.todoCheckedOff,
+        icon: Icons.check_circle_outline,
+        actionLabel: L10n.undo,
+        onAction: () => _toggleDone(context, ref, e, false));
   }
 
   Widget _eventTile(BuildContext context, WidgetRef ref, ScheduleEvent e,
@@ -334,7 +347,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
             // 回到主列表、不带删除线。
             GlassCheck(
               value: e.isCompleted,
-              onChanged: (v) => _toggleDone(ref, e, v),
+              onChanged: (v) => _toggleDone(context, ref, e, v),
             ),
           const SizedBox(width: 12),
           Expanded(

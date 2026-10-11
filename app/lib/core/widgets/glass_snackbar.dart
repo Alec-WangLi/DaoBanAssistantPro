@@ -8,11 +8,16 @@ import 'app_icon.dart';
 ///
 /// 透明底 + `BackdropFilter` 背景模糊 + 渐变 + 顶部镜面高光 + 主色圆形图标。
 /// 通过共享函数一次覆盖所有提示（切换排班 / 保存 / 重置 / 复制日志 / 更新失败等）。
+///
+/// [actionLabel] 与 [onAction] 是给「这条提示要能当场反悔」那一类用的（待办勾错了
+/// 要能撤销）—— 两个都给了才画那颗动作，**既有调用点一个字都不用改**。
 void showGlassSnack(
   BuildContext context,
   String message, {
   IconData? icon,
   Color? iconColor,
+  String? actionLabel,
+  VoidCallback? onAction,
 }) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final primary = Theme.of(context).colorScheme.primary;
@@ -24,12 +29,18 @@ void showGlassSnack(
         backgroundColor: Colors.transparent,
         elevation: 0,
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        duration: const Duration(seconds: 2),
+        // 带动作的那一条要留给手指够得着的工夫（2 秒是「看一眼就够」的档，不够点）；
+        // 没动作的照旧 2 秒。
+        duration: actionLabel == null
+            ? const Duration(seconds: 2)
+            : const Duration(seconds: 5),
         content: _GlassSnackContent(
           isDark: isDark,
           icon: icon,
           iconColor: iconColor ?? primary,
           message: message,
+          actionLabel: actionLabel,
+          onAction: onAction,
         ),
       ),
     );
@@ -41,16 +52,21 @@ class _GlassSnackContent extends StatelessWidget {
     required this.icon,
     required this.iconColor,
     required this.message,
+    this.actionLabel,
+    this.onAction,
   });
 
   final bool isDark;
   final IconData? icon;
   final Color iconColor;
   final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final primary = Theme.of(context).colorScheme.primary;
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppTokens.radiusL),
       child: GlassBlur(
@@ -98,6 +114,26 @@ class _GlassSnackContent extends StatelessWidget {
                   style: AppTokens.rowPrimary.copyWith(color: onSurface),
                 ),
               ),
+              // 动作走**主色文字**：底是玻璃面，`onSolid` 那套（黑白二选一）在这儿
+              // 用不上；与「排班管理」页那些行内动作是同一个配方。字号取 13/w600 的
+              // `labelSecondary` —— 它得压得住这条提示，但又不该跟正文一样重。
+              if (actionLabel != null) ...[
+                const SizedBox(width: AppTokens.gapIconTextLg),
+                InkWell(
+                  onTap: onAction,
+                  borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppTokens.spaceSm,
+                        vertical: AppTokens.spaceXs),
+                    child: Text(
+                      actionLabel!,
+                      style:
+                          AppTokens.labelSecondary.copyWith(color: primary),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

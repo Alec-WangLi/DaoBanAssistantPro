@@ -317,4 +317,51 @@ void main() {
 
     await _dispose(tester);
   });
+
+  testWidgets('勾掉一条之后出现「撤销」，点它那一条回到未完成', (tester) async {
+    await add('第一条', DateTime(2026, 1, 1));
+    await add('第二条', DateTime(2026, 1, 2));
+    await pumpScreen(tester);
+
+    await tester.tap(find.byType(GlassCheck).first);
+    await _settle(tester);
+
+    expect(find.text(L10n.undo), findsOneWidget,
+        reason: '勾错了要能一眼改回来 —— 那条淡掉的行看不出来还能点');
+    expect(tester.widget<Text>(find.text('第一条')).style?.decoration,
+        TextDecoration.lineThrough);
+
+    await tester.tap(find.text(L10n.undo));
+    await _settle(tester);
+
+    expect(tester.widget<Text>(find.text('第一条')).style?.decoration,
+        isNot(TextDecoration.lineThrough),
+        reason: '「撤销」之后它回到未完成');
+    expect(
+        (await repo.listEvents())
+            .firstWhere((e) => e.title == '第一条')
+            .isCompleted,
+        isFalse);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('「撤销」点下去时那一条已经被删掉：不许崩', (tester) async {
+    await add('第一条', DateTime(2026, 1, 1));
+    await pumpScreen(tester);
+
+    await tester.tap(find.byType(GlassCheck).first);
+    await _settle(tester);
+    expect(find.text(L10n.undo), findsOneWidget);
+
+    // 先把那一行从库里删掉，再去点提示条上那颗「撤销」。
+    await repo.deleteEvent((await repo.listEvents()).single);
+    await tester.tap(find.text(L10n.undo));
+    await _settle(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(ScheduleScreen), findsOneWidget, reason: '页面还在');
+
+    await _dispose(tester);
+  });
 }
