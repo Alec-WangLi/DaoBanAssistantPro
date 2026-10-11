@@ -39,7 +39,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.5\n'
+const String _changelogZh = 'v0.11.6\n'
+    '· 班次颜色从 8 种扩到 16 种：色相铺满一圈，红、品红、琥珀、深橙、深绿、深青、棕、粉是这一版新加的（原来那 8 种一颗没动）\n'
+    '· 新增「自定义颜色」：点班次行末那颗色点，里面有色相条和一块饱和度/明度方盘，也可以直接填颜色值（例如 #4C8DFF）\n'
+    '· 取色的时候旁边摆着两颗真的日历小样，能当场看到这个颜色落到日历上是什么样\n'
+    '· 那 16 种默认颜色都保证在日历格子与桌面小组件上看得清（这一版为此逐颗量过，并有测试盯着）\n'
+    '\n'
+
+    'v0.11.5\n'
     '· 修好一处崩溃：重复待办的管理面板在极少数情况下点开就闪退（那个系列短时间里有两条「没做完」的行时，比如刚把当前那一条勾回来、而生成器还没跑）\n'
     '· 勾完那条「已划掉 · 撤销」的提示条，点完「撤销」会自己收掉 —— 之前它会继续挂在那里，说的还是反话\n'
     '\n'
@@ -103,14 +110,17 @@ const String _changelogZh = 'v0.11.5\n'
     '· 打开 App 快了一点；翻月、勾待办、改排班之后的卡顿也少了\n'
     '· 桌面小组件：内容没变时不再重复推一遍（从后台切回来不再白算一次整月数据）\n\n'
 
-    'v0.10.19\n'
-    '· 修好一处崩溃：长按拖选当中用另一根手指点 ‹ / › 换月，日历会当场报错（那一段的日子不在新月里，落点算不出来却还在硬画那条带子）\n'
-    '· 上一版那枚水带「按住四面鼓起来」的判据补严了一格：它本来就画得出来，但一直靠同层里阴影顺带重画 —— 现在把它算进「该不该重画」\n\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.5\n'
+const String _changelogEn = 'v0.11.6\n'
+    '· Shift colors go from 8 to 16: the full hue circle, with red, magenta, amber, deep orange, deep green, deep teal, brown and pink added (the original 8 are untouched)\n'
+    '· New custom colors: tap the color dot on a shift row for a hue strip, a saturation/brightness pad, and a field for typing a value such as #4C8DFF\n'
+    '· Two live calendar samples sit next to the picker, so you can see how the color will look on a real cell\n'
+    '· All 16 built-in colors are guaranteed readable on calendar cells and on the desktop widget (each one measured, with a test keeping watch)\n'
+    '\n'
+
+    'v0.11.5\n'
     '· Fixed a crash: the recurring-todo panel could crash on open in a rare case (when a series briefly holds two unfinished rows — for example right after you un-tick the current one and the generator has not run yet)\n'
     '· The "Marked done · Undo" bar now dismisses itself once you tap Undo — it used to linger and keep saying the opposite\n'
     '\n'
@@ -173,10 +183,6 @@ const String _changelogEn = 'v0.11.5\n'
     '· Lighter on the battery: the slowly drifting glow no longer repaints the page along with it (it pauses while you drag and carries on after — you will not notice)\n'
     '· Faster start-up, and less stutter after switching months, ticking a to-do or saving a schedule\n'
     '· Home-screen widgets: an unchanged snapshot is no longer pushed again (returning to the app no longer recomputes the whole month for nothing)\n\n'
-
-    'v0.10.19\n'
-    '· Fixed a crash: with a range drag in progress, using a second finger to tap the month arrows left the calendar throwing errors (those days are not in the new month, so the band had nothing to anchor to yet was still drawn)\n'
-    '· Tightened one repaint criterion for the previous version water band: the press swell did render, but only because the shadow in the same layer happened to repaint alongside it — it is now part of the check\n\n'
 
         '\n'
 ;
