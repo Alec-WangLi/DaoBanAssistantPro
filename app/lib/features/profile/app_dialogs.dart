@@ -39,7 +39,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.8\n'
+const String _changelogZh = 'v0.11.9\n'
+    '· 桌面小组件贴齐了 App：月历卡恢复成「每一格一张白卡」（底板改成页面那样的浅灰，卡片才显出来），今天那一格变成一块实心主色块，格子里的班次胶囊也跟着转实心\n'
+    '· 周条里今天那一列同样铺一块实心主色；今日卡上那枚「今天」也从淡染改成实心主色 —— 三处现在是同一件事\n'
+    '· 块上的字按对比度自己挑黑或白（青、橙那两档主色调下会挑黑字），不用你操心\n'
+    '· 说明一句：桌面上没有实时的背景模糊，那点玻璃感只能靠描边、圆角与渐变去近似，卡片不会真的透出壁纸\n'
+    '\n'
+
+    'v0.11.8\n'
     '· 「再睡一会」的时长可以自己定了：我的 → 闹钟 → 贪睡时长，可选 1 / 5 / 10 / 15 / 20 / 30 分钟（默认仍是 5 分钟，不动它就跟以前一样）\n'
     '· 响铃界面那颗按钮上现在写着时长（「再睡一会 · 10 分钟」），按下之前就知道会睡多久\n'
     '\n'
@@ -99,20 +106,18 @@ const String _changelogZh = 'v0.11.8\n'
     '· 液态玻璃关着的时候，底栏、分段器与日历都和之前一模一样\n'
     '\n'
 
-    'v0.10.22\n'
-    '· 滑动更跟手了：真正的开销一直在「画面合成」那一侧，这一版把其中最贵的一道工序省掉了 —— 编辑排班、日历、闹钟、待办这几页每帧的合成开销降到原来的三分之一上下（编辑排班 13.1ms → 6.0ms、日历 10.4ms → 2.3ms）\n'
-    '· 手指按住不动时，背景那层光晕不再冻住（之前是按着就停）\n'
-    '· 顺手把「换月」也算进光晕该停的那一刻\n'
-    '· 拨一下触觉开关不再把整个界面重建一遍\n'
-    '· 待办 / 闹钟 / 排班上的日期文案不再每次重算\n'
-    '· 响铃 15 分钟没人管会自己停（之前会一直响、一直震）\n'
-    '· 排闹钟时不再反复解析整份清单（那一步是白付的）\n'
-    '· 桌面小组件的刷新改用非精确闹钟，少占一份系统唤醒额度\n'
 
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.8\n'
+const String _changelogEn = 'v0.11.9\n'
+    '· The home-screen widgets now match the app: the month card is back to one white card per day (its panel became the page colour, which is what makes the cards read as cards), and today is a solid accent block with the shift chip inside it going solid too\n'
+    '· The week strip marks today with the same solid block, and the today card\'s "Today" pill went from a washed-out tint to solid accent — the three now look like the same thing\n'
+    '· Text on those blocks picks black or white by contrast (it picks black on the teal and orange accents), so you do not have to think about it\n'
+    '· One note: there is no live background blur on the home screen, so that bit of glass can only be approximated with borders, corners and gradients — the cards do not really show the wallpaper through\n'
+    '\n'
+
+    'v0.11.8\n'
     '· You can now choose how long Snooze waits: Me → Alarm → Snooze length, with 1 / 5 / 10 / 15 / 20 or 30 minutes (the default is still 5, so leaving it alone changes nothing)\n'
     '· The snooze button now shows that length ("Snooze · 10 min"), so you know how long you are getting before you tap it\n'
     '\n'
@@ -172,15 +177,6 @@ const String _changelogEn = 'v0.11.8\n'
     '· With Liquid Glass off, the tab bar, the segmented control and the calendar are pixel-for-pixel what they were\n'
     '\n'
 
-    'v0.10.22\n'
-    '· Smoother scrolling: the real cost was on the compositing side, and this version drops the most expensive step of it — per-frame compositing on the editor, calendar, alarm and todo screens is now about a third of what it was (editor 13.1ms → 6.0ms, calendar 10.4ms → 2.3ms)\n'
-    '· The background glow no longer freezes while you simply hold your finger down\n'
-    '· Month switching is now part of when the glow pauses, too\n'
-    '· Toggling the haptics switch no longer rebuilds the whole interface\n'
-    '· Date strings on the todo, alarm and schedule screens are no longer rebuilt every time\n'
-    '· A ringing alarm stops itself after 15 minutes if nobody attends to it (it used to ring and buzz forever)\n'
-    '· Scheduling alarms no longer re-parses the whole alarm list on every entry\n'
-    '· The home-screen widget refresh now uses an inexact alarm, spending less of the system wake-up budget\n'
 
         '\n'
 ;
