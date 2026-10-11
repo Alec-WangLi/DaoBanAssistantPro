@@ -64,6 +64,17 @@ final List<VisualScreen> visualScreens = [
     needsOnboardingPrefs: false,
   ),
   (
+    // **新加的那几颗色落到日历格子上**（v0.11.6）。单测只量得出「描边对卡底的
+    // 对比度」，量不出「一整张日历排在一起好不好认」—— 那件事只有出图看得见。
+    slug: '56_calendar_new_colors',
+    title: '日历 · 新配色',
+    build: (db) async {
+      await makeNewPaletteShiftCurrent(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
     slug: '02_editor',
     title: '排班编辑器',
     build: (db) async =>

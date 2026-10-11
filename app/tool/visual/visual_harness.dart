@@ -451,6 +451,40 @@ Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
   );
 }
 
+/// 把当前方案换成「新加的那几颗色」—— 用来出「新色落到日历格子上」那一屏。
+///
+/// 为什么单单为它加一个种子：`shift_palette_test.dart` 量的是**描边对卡底的
+/// 对比度**，量不出「整张日历上好不好认」。新色能不能读出来，是这一版算得出来
+/// 但**没看过**的那件事（v0.11.6 的 Review Focus 5）。四个班次刻意挑了四处不同的
+/// 色相、深浅各半，而且**不留休班** —— 每天都有胶囊才看得出排在一起的观感。
+Future<void> makeNewPaletteShiftCurrent(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final today = dateOnly(DateTime.now());
+  await repo.saveSchedule(
+    name: '新配色 · 四班',
+    anchorDate: today.subtract(const Duration(days: 3)),
+    classes: const [
+      ShiftClass(
+          name: '早班', abbr: '早', startMinute: 480, endMinute: 960,
+          color: 0xFF2E7D32), // 深绿
+      ShiftClass(
+          name: '中班', abbr: '中', startMinute: 960, endMinute: 1440,
+          color: 0xFFB8860B), // 琥珀
+      ShiftClass(
+          name: '夜班', abbr: '夜', startMinute: 0, endMinute: 480,
+          color: 0xFF795548), // 棕
+      ShiftClass(
+          name: '培训', abbr: '训', startMinute: 540, endMinute: 660,
+          color: 0xFFF06292), // 粉
+    ],
+    cycle: const [0, 1, 2, 3],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: L10n.defaultTeamNames(1),
+    ourTeamIndex: 0,
+    teamOffsets: const [0],
+  );
+}
 /// 把当前方案里那个班次改成带 [count] 个闹钟，其中一个带名字。
 ///
 /// [nightShift] 为真时改用「零点班」形状（00:00–08:00、起床 23:00 + 班中 03:00）：

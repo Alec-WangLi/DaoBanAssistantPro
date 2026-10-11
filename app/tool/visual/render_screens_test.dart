@@ -22,6 +22,8 @@ import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
+import 'package:shiftassistantpro/features/calendar/shift_color_picker.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
 import 'visual_harness.dart';
@@ -347,6 +349,58 @@ void main() {
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
       beforeCapture: (t) async {
         await t.tap(find.byType(GlassCheck).first);
+        await settleVisual(t);
+      },
+    );
+  });
+
+  // 取色层（v0.11.6）：16 颗预设 + 色相条 + 饱和度/明度方盘 + 两颗真的日历小样
+  // 同框。它是**命令式弹层**，静止帧拍不到 —— 首帧之后真点一下班次行末那颗色点，
+  // 走的正是用户那条路。深浅两档各出一张：方盘与游标在深色下的边界靠什么读出来，
+  // 只有出图才知道。
+  for (final (String suffix, Brightness b) in <(String, Brightness)>[
+    ('', Brightness.light),
+    ('_dark', Brightness.dark),
+  ]) {
+    visualTest('取色层${suffix.isEmpty ? " · 浅色" : " · 深色"}', (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '57_shift_color_picker$suffix',
+        home: ScheduleEditorScreen(scheduleId: await currentScheduleId(db)),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: b,
+        beforeCapture: (t) async {
+          await t.tap(find.byKey(const ValueKey('shift-color-dot-0')));
+          await settleVisual(t);
+        },
+      );
+    });
+  }
+
+  // 颜色值敲错时输入框的样子：警示色是界面层的配色，单测只能断言 `errorText` 在不在，
+  // 「看着像不像一句提示」只有出图知道。
+  visualTest('取色层 · 颜色值非法', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '58_shift_color_bad_hex',
+      home: ScheduleEditorScreen(scheduleId: await currentScheduleId(db)),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      beforeCapture: (t) async {
+        await t.tap(find.byKey(const ValueKey('shift-color-dot-0')));
+        await settleVisual(t);
+        // ⚠️ **必须限定在取色层里**：后面那一页编辑器自己也有输入框
+        // （班次名称 / 简称），不加限定 `enterText` 会报 "Too many elements"。
+        await t.enterText(
+          find.descendant(
+            of: find.byType(ShiftColorPickerBody),
+            matching: find.byType(TextField),
+          ),
+          '#zzz',
+        );
         await settleVisual(t);
       },
     );
