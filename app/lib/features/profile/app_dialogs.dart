@@ -39,7 +39,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.9\n'
+const String _changelogZh = 'v0.11.10\n'
+    '· 内部收口，界面看不出变化：上一版那三张卡里有几处边角没算干净，这一版补齐\n'
+    '· 卡片底板那层浅灰的暗端，与落在它上面的灰字差了 0.01（4.49 对标准的 4.5），已经调过来\n'
+    '· 桌面小组件重绘时少做 41 次跨进程查询（原先每一格都要问一次屏幕尺寸）\n'
+    '· 又补了三条自动护栏，把「块的图层顺序」「块尺寸必须按真实格子算」「渐变的每个端色都要过对比度」都钉住了\n'
+    '\n'
+
+    'v0.11.9\n'
     '· 桌面小组件贴齐了 App：月历卡恢复成「每一格一张白卡」（底板改成页面那样的浅灰，卡片才显出来），今天那一格变成一块实心主色块，格子里的班次胶囊也跟着转实心\n'
     '· 周条里今天那一列同样铺一块实心主色；今日卡上那枚「今天」也从淡染改成实心主色 —— 三处现在是同一件事\n'
     '· 块上的字按对比度自己挑黑或白（青、橙那两档主色调下会挑黑字），不用你操心\n'
@@ -92,25 +99,19 @@ const String _changelogZh = 'v0.11.9\n'
     '· 一个班次能挂的联动闹钟从 6 条提到 10 条\n'
     '\n'
 
-    'v0.11.0\n'
-    '· 液态玻璃铺满全 app：底栏重做成一枚真的、会动的玻璃滴 —— 按住它吸附到手指上、放大并凸出胶囊，拖动时形状沿运动方向拉伸，松手带过冲地落回，边缘一圈彩色的折射光。随后分段器、开关、日历上那枚选中的块也换成同一套玻璃：按住时四面鼓出来、底下浮起一层影子，边上那圈彩色折射光一动就亮、停下就没了\n'
-    '· 日历上多了两处「水」的动作：点别的日期再点「今天」，那枚选中的块是飞回去的（途中彩边亮起、形状按飞行方向拉长压扁、飞过哪几格哪几格的字被轻轻挤一下）；长按拖选一段日子时，逐格的淡色方块换成一条连着的水带，同一周里是一整条、格子之间的缝也盖住\n'
-    '· 弹窗与底部弹层出现时从模糊里凝出来、关掉时化开散掉；响铃页的「上滑关闭」从圆钮换成一枚玻璃药丸\n'
-    '· 明显更顺、也更省电（两轮动画与流畅性优化）：先把「每一帧重建整页」收掉 —— 液态档一帧重建的界面元素从 436 个降到 42 个、光晕每走一步重绘的画面节点从 139 个降到 1 个；再量出真正的瓶颈在「画面合成」那一侧，把其中最贵的一道工序省掉 —— 编辑排班页每帧的合成开销 13.1ms → 6.0ms、日历 10.4ms → 2.3ms、闹钟 9.8ms → 2.3ms、待办 6.5ms → 2.5ms\n'
-    '· 那层缓缓流动的光晕不再牵着整页一起重画：你按住拖动、换月的时候它会先停一下，松手接着走（观感上几乎看不出来）\n'
-    '· 响铃 15 分钟没人管会自己停 —— 之前它会一直响、一直震，手机扔在包里也停不下来\n'
-    '· 桌面小组件的刷新改用非精确闹钟，少占一份系统唤醒额度；排闹钟时也不再反复解析整份清单\n'
-    '· 修好一串「改完之后界面没跟上」的毛病：调整某一天的班次、或者换语言之后，桌面小组件现在会跟着变；改周期之后，信息卡那行「本月统计」也会跟着变 —— 此前它们都停着旧的\n'
-    '· 顺手收掉两处白付的活：拨一下触觉开关不再把整个界面重建一遍；待办 / 闹钟 / 排班上的日期文案不再每次重算\n'
-    '· 修好一串只在特定操作下才现形的问题：弹窗顶进状态栏 / 手势条（21 个弹窗都受影响）、底部弹层往下拖着要关掉时被压暗发糊、拖着日历上的块跨月换页会当场报错、拖完那枚块再点一下日期它会自己抽一下\n'
-    '· 液态玻璃关着的时候，底栏、分段器与日历都和之前一模一样\n'
-    '\n'
 
 
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.9\n'
+const String _changelogEn = 'v0.11.10\n'
+    '· An internal tidy-up; nothing looks different: a few edges left over from the previous version are now closed\n'
+    '· The dark end of the panel gradient was 4.49:1 against the grey text on it, just under the 4.5 bar — that is fixed\n'
+    '· Redrawing the home-screen widgets now makes 41 fewer cross-process queries (it used to ask for the screen size once per day cell)\n'
+    '· Three more automated guards now pin the block layer order, the block sizing, and the contrast of every gradient end\n'
+    '\n'
+
+    'v0.11.9\n'
     '· The home-screen widgets now match the app: the month card is back to one white card per day (its panel became the page colour, which is what makes the cards read as cards), and today is a solid accent block with the shift chip inside it going solid too\n'
     '· The week strip marks today with the same solid block, and the today card\'s "Today" pill went from a washed-out tint to solid accent — the three now look like the same thing\n'
     '· Text on those blocks picks black or white by contrast (it picks black on the teal and orange accents), so you do not have to think about it\n'
@@ -163,19 +164,6 @@ const String _changelogEn = 'v0.11.9\n'
     '· Up to 10 linked alarms per shift, up from 6\n'
     '\n'
 
-    'v0.11.0\n'
-    '· Liquid Glass across the whole app: the tab bar is now a real, moving glass drop — hold it and it sticks to your finger, growing and swelling out past the capsule; drag and it stretches along the direction of travel, then overshoots back on release, with a prismatic rim around it. The segmented control, the switch and the calendar selection block then got the same glass: it swells on all four sides while held, lifts a shadow, and the prismatic rim lights up only while it is moving\n'
-    '· Two new "water" motions on the calendar: tapping another date and then Today flies the selected block back (the rim lights up on the way, the shape stretches along its direction of travel, and every day it sweeps over gets a slight squeeze); long-press selecting a run of days draws one continuous water band that covers the gaps between cells\n'
-    '· Dialogs and bottom sheets condense out of blur and dissolve away; the ringing screen\'s "swipe up to dismiss" knob became a glass pill\n'
-    '· Noticeably smoother and lighter on the battery (two rounds of animation and smoothness work): first the "rebuild the whole page every frame" was removed — in the Liquid Glass tier one frame rebuilt 436 interface elements, now 42, and one step of the glow repainted 139 paint nodes, now 1; then the real bottleneck turned out to be compositing, and the most expensive step of it is gone — the editor went from 13.1ms of compositing per frame to 6.0ms, the calendar 10.4ms to 2.3ms, alarms 9.8ms to 2.3ms and to-dos 6.5ms to 2.5ms\n'
-    '· The slowly drifting glow no longer repaints the page along with it: while you drag or switch months it pauses, then carries on afterwards (you will not notice)\n'
-    '· A ringing alarm now stops itself after 15 minutes if nobody attends to it — it used to ring and buzz forever, even from inside a bag\n'
-    '· Home-screen widget refreshes now use an inexact alarm, spending less of the system wake-up budget, and scheduling alarms no longer re-parses the whole list every time\n'
-    '· Fixed a run of "the screen did not keep up" cases: after adjusting a single day, or switching language, the home-screen widget now updates, and after editing the cycle the info card\'s monthly tally does too — both used to stay on the old values\n'
-    '· Also removed two pieces of work that bought nothing: toggling the haptics switch rebuilt the whole interface, and date strings on the todo, alarm and schedule screens were recomputed every time\n'
-    '· Fixed a run of problems that only showed up in specific operations: dialogs sitting under the status bar or gesture bar (21 of them were affected), a bottom sheet dimming and blurring while dragged down to dismiss, a crash when switching months mid range-drag, and the selection block twitching when tapped right after a drag\n'
-    '· With Liquid Glass off, the tab bar, the segmented control and the calendar are pixel-for-pixel what they were\n'
-    '\n'
 
 
         '\n'

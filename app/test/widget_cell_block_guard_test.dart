@@ -10,7 +10,9 @@
 // 任务 2 加月历格那三条，任务 3 扩到周条并把下界提到 6，任务 4 提到 7。
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
 
 /// 读一个相对 `app/` 的文件（Dart 测试的工作目录就是 `app/`）。
 String _read(String rel) {
@@ -100,5 +102,82 @@ void main() {
     expect(uses, greaterThanOrEqualTo(7),
         reason: 'onSolidInk 的**调用点**只有 $uses 处 —— 月格三处 + 周条三处 '
             '+ 今日卡药丸一处应当凑齐 7 处');
+  });
+
+  test('页面底的**每一个**端色都要让 muted 过 AA', () {
+    // 这条是补一个真实的漏：判「不透明」只查了 alpha 是不是 FF，
+    // 于是渐变**暗端** #F1F3F8 上 muted 只有 4.487:1（差 0.013 就不过 AA）也没人报。
+    // 现在按端色逐个真算对比度。
+    final colors = _read('android/app/src/main/res/values/widget_colors.xml');
+    int token(String name) {
+      // ⚠️ 收 6 位与 8 位两种写法：`widget_colors.xml` 里两种都有
+      // （`wg_muted_light` 是 `#6E6E82`，格子卡底是 `#FFFFFFFF`）。
+      final m = RegExp('<color name="$name">#([0-9A-Fa-f]{6,8})</color>')
+          .firstMatch(colors);
+      expect(m, isNotNull, reason: '$name 不见了');
+      final hex = m!.group(1)!;
+      return int.parse(hex.length == 6 ? 'FF$hex' : hex, radix: 16);
+    }
+
+    for (final tier in ['light', 'dark']) {
+      final src = _read('android/app/src/main/res/drawable/widget_page_$tier.xml');
+      final ends = RegExp(r'#([0-9A-Fa-f]{8})')
+          .allMatches(src)
+          .map((m) => int.parse(m.group(1)!, radix: 16))
+          .toList();
+      expect(ends.length, greaterThanOrEqualTo(2),
+          reason: '页面底 $tier 档扫不到两端色 —— 正则跟源码对不上了');
+      final ink = Color(token('wg_muted_$tier'));
+      for (final e in ends) {
+        final r = AppTokens.contrastRatio(ink, Color(e));
+        expect(r, greaterThanOrEqualTo(4.5),
+            reason: '页面底 $tier 档的端色 #${e.toRadixString(16)} 上，'
+                'muted 只有 ${r.toStringAsFixed(3)}:1 —— 跌破 AA 4.5');
+      }
+    }
+  });
+
+  test('「今天」块的尺寸在循环**外**算，且行数来自 monthGridRows', () {
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    // ① 尺寸不能放在 42 格的循环里：`getAppWidgetOptions` 是一次 binder IPC，
+    //    一格一次就是每次渲染 42 次。
+    // ⚠️ 取**最后**一个 42 格循环：`monthGridRows` 自己也有一个「数 42 个槽位」的
+    // 循环，而它排在 `monthCard` **前面** —— 拿 `indexOf` 会对着那个比，结论正好相反
+    // （这条护栏第一版就是这么错的：它报「在循环里」，而代码其实已经提到了循环外）。
+    final loop = kt.lastIndexOf('for (slot in 0 until 42)');
+    expect(loop, greaterThanOrEqualTo(0), reason: '月历那个 42 格循环不见了');
+    final calls = RegExp(r'monthCellPx\(').allMatches(kt).toList();
+    expect(calls.length, 2,
+        reason: 'monthCellPx 出现了 ${calls.length} 次（应当是「定义 1 次 + 调用 1 次」）');
+    final callAt = calls.last.start;
+    expect(callAt, lessThan(loop),
+        reason: 'monthCellPx 的调用落在 42 格循环**里面**了 —— 一格一次 binder IPC，'
+            '应当提到循环外（`stripCellPx` 就是这么做的）');
+    // ② 行数必须真的喂进去：写死 rows = 6 的话，5 行月那格会偏矮、四角露白尖。
+    final m = RegExp(r'monthCellPx\(context, widgetId, (\w+)\)').firstMatch(kt);
+    expect(m, isNotNull,
+        reason: 'monthCellPx 的第三个实参不是变量 —— 行数写死就失去了「按真实行数反推」的意义');
+    final arg = m!.group(1)!;
+    expect(kt.contains('val $arg = monthGridRows('), true,
+        reason: '传给 monthCellPx 的 $arg 不是 monthGridRows(...) 算出来的');
+  });
+
+  test('两张 cell 布局里，块排在内容**之前**（后画的盖在上面）', () {
+    // 层序反了 = 块盖住日期与胶囊，而「id 存在」「有 GONE 分支」两条照样绿 ——
+    // 与 `AGENTS.md` 里 `removeAllViews` 那条「只查出现过、不查顺序」是同一类缺口。
+    for (final entry in {
+      'widget_month_cell': 'wg_mc_block',
+      'widget_strip_cell': 'wg_sc_block',
+    }.entries) {
+      final xml = _read('android/app/src/main/res/layout/${entry.key}.xml');
+      final block = xml.indexOf('android:id="@+id/${entry.value}"');
+      final content = xml.indexOf('<LinearLayout');
+      expect(block, greaterThanOrEqualTo(0), reason: '${entry.key} 里没有 ${entry.value}');
+      expect(content, greaterThanOrEqualTo(0), reason: '${entry.key} 里没有内容层');
+      expect(block, lessThan(content),
+          reason: '${entry.value} 排在了内容**之后** —— 那一层会盖住日期与胶囊，'
+              '而真机上看起来就是「格子里什么都没有」');
+    }
   });
 }

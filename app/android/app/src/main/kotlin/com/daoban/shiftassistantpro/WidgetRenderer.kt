@@ -615,8 +615,10 @@ object WidgetRenderer {
             context.resources.getIdentifier("wg_m_slot${i + 1}", "id", context.packageName)
         }
         // 「今天」那块块的位图尺寸要按**当月真实可见行数**反推（5 行月与 6 行月的
-        // 格子高差约 18%）。整月只算一次，别放进循环。
+        // 格子高差约 18%）。整月只算一次 —— 它里面那次 `getAppWidgetOptions` 是
+        // 一次 binder IPC，放进 42 格的循环里就是每次渲染 42 次。
         val cellRows = monthGridRows(snap, gridStart)
+        val (cellW, cellH) = monthCellPx(context, widgetId, cellRows)
 
         for (slot in 0 until 42) {
             // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
@@ -665,7 +667,7 @@ object WidgetRenderer {
             // ── 「今天」那块**实心主色块** ──
             // App 里选中那一天是一枚**半透明**的玻璃块；桌面这版有意做成实心的
             // （见规格 §1 末尾：桌面没有实时模糊，半透明块压在任意壁纸上会消失）。
-            val (cellW, cellH) = monthCellPx(context, widgetId, cellRows)
+            // 尺寸在循环外算好了（`cellW` / `cellH`），这里只贴。
             if (isToday) {
                 c.setViewVisibility(R.id.wg_mc_block, android.view.View.VISIBLE)
                 c.setImageViewBitmap(
