@@ -12,7 +12,6 @@ import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
-import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_check.dart';
 import '../../core/widgets/glass_switch.dart';
@@ -235,34 +234,45 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     );
   }
 
-  /// 折叠区那一行：`已完成 N 条` + 一个随展开状态转的箭头。整行可点。
+  /// 折叠区那一行：`已完成 N 条` + 一个随展开状态转的箭头。
+  ///
+  /// **走 `GlassPill`（非 accent 那一档）** —— 全 app 的入口都是胶囊（「今天」
+  /// 「重复待办」「管理」），唯独这一行原来是**裸文字 + 一个小箭头**，读起来像正文
+  /// 而不是一件可点的东西（2026-10-11 用户：「是不是没融入咱们的设计理念？」；
+  /// v0.8.1 把信息卡的「已调整」从裸文字改成胶囊，是同一个毛病）。
+  ///
+  /// **不用 accent**：实心主色会跟这一页悬浮的「新建」按钮抢眼睛 —— 那颗才是主操作。
+  /// 胶囊**收缩到内容宽度、靠左**（`IntrinsicWidth` 是必须的：`GlassPill` 里那个
+  /// `Container` 带了 `alignment`，拿到有限宽度就会**铺满**，于是长得跟一条待办行
+  /// 一模一样，反而看不出这里是分节的地方 —— 出图看出来的第一版就是这样）。
   Widget _archiveHeader(BuildContext context, int count) {
     final muted = AppTokens.inkMuted(context);
-    return GlassPressable(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppTokens.radiusM),
-        onTap: () => setState(() => _archiveOpen = !_archiveOpen),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceSm),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: IntrinsicWidth(
+          child: GlassPill(
+            onTap: () => setState(() => _archiveOpen = !_archiveOpen),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
                   L10n.archivedTodos(count),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTokens.rowSecondary.copyWith(color: muted),
                 ),
-              ),
-              AppIcon(
-                _archiveOpen
-                    ? Icons.keyboard_arrow_up
-                    : Icons.keyboard_arrow_down,
-                size: AppTokens.iconSm,
-                color: muted,
-              ),
-            ],
+                const SizedBox(width: AppTokens.gapIconText),
+                AppIcon(
+                  _archiveOpen
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  size: AppTokens.iconSm,
+                  color: muted,
+                ),
+              ],
+            ),
           ),
         ),
       ),
