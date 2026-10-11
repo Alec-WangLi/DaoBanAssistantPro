@@ -20,7 +20,7 @@
 - **不改 Drift 表** → 不需要 `dart run build_runner build`。
 - **不要跑 `dart format`**（本仓工具链的格式化器会重排整个文件）。只跑 `flutter analyze`。
 - 构建环境：`source tools/build-env.sh`，然后用 `"$FLUTTER_ROOT/bin/flutter"`（`flutter` 不在 PATH 上）。
-- **门槛的精确值 `1.3490`**（不是 1.35，也不是更早一稿的 1.3947 —— 那个数只算了 App 两处卡底，已作废）。
+- **门槛的精确值 `1.3501`**（权威值是实现算出来的 **1.35018838**；不是 1.35，也不是更早那两稿的 1.3947 / 1.34906 —— 前者只算了 App 两处卡底，后者是拿浮点混合算的、没按 8 位通道取整。见账本 Task 1 的 Ruling）。
 
 ## Review Focus
 
@@ -45,7 +45,7 @@
   - `const List<int> kShiftPalette`（**16** 颗，顺序即规格 §3 的表；**第一颗必须是 `0xFF4C8DFF`**，见 Task 5）
   - `const double kShiftChipTintAlpha = 0.14;`、`const double kShiftChipStrokeAlpha = 0.45;`
   - `const List<int> kShiftCardSurfaces`（**4** 处卡底，顺序见下）
-  - `const double kShiftColorBar = 1.3490;`
+  - `const double kShiftColorBar = 1.3501;`（下界是 1.35018838，常量取它下面一点）
   - `int compoundOver(int argb, int cardArgb, double alpha)` —— 把 `argb` 按 `alpha` 压在 `cardArgb` 上，返回不透明结果
   - `double shiftChipStrokeContrast(int argb, int cardArgb)` —— `contrastRatio(compoundOver(argb, cardArgb, kShiftChipStrokeAlpha), cardArgb)`
 
@@ -101,7 +101,7 @@ void main() {
     // 谁改了卡底常量、或动了现有某颗色，这个数就会漂 —— 让它当场红，而不是
     // 悄悄把门槛放宽（门槛是「不比现在差」，漂了就失去意义）。
     expect(shiftChipStrokeContrast(0xFFFF9F0A, kShiftCardWidgetLight),
-        closeTo(1.34906, 0.00001));
+        closeTo(1.350188, 0.00001));
     var worst = 99.0;
     for (final c in kShiftPalette.take(8)) {
       for (final card in kShiftCardSurfaces) {
