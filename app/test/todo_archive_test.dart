@@ -10,10 +10,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/data/todo_archive.dart';
 
-ScheduleEvent _e(int id, DateTime date, {bool done = false}) => ScheduleEvent(
+ScheduleEvent _e(int id, DateTime date, {bool done = false, int? minute}) =>
+    ScheduleEvent(
       id: id,
       title: 't$id',
       date: date,
+      timeMinute: minute,
       isCompleted: done,
       alarmEnabled: false,
       createdAt: DateTime.utc(2026),
@@ -46,11 +48,15 @@ void main() {
       expect(s.archived.map((e) => e.id).toList(), [3]);
     });
 
-    test('同一天的两条：折叠区按 id 降序兜底，顺序是确定的', () {
+    test('同一天的多条按钟点从晚到早；没填钟点的排在这一天最后', () {
       final d = DateTime.utc(2026, 1, 5);
-      final s =
-          splitTodos([_e(7, d, done: true), _e(9, d, done: true)], const {});
-      expect(s.archived.map((e) => e.id).toList(), [9, 7]);
+      final s = splitTodos([
+        _e(7, d, done: true, minute: 8 * 60),
+        _e(9, d, done: true), // 没填钟点
+        _e(11, d, done: true, minute: 20 * 60),
+      ], const {});
+      expect(s.archived.map((e) => e.id).toList(), [11, 7, 9],
+          reason: '20:00 → 08:00 → 没钟点的；钟点降序，没钟点的垫底');
     });
 
     test('空表不炸', () {
