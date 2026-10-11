@@ -1,6 +1,7 @@
 package com.daoban.shiftassistantpro
 
 import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -62,6 +63,62 @@ object WidgetRenderer {
      */
     private fun dpToPx(context: Context, dp: Int): Int =
         (dp * context.resources.displayMetrics.density).toInt()
+
+    /**
+     * 实心块上的字色：黑或白里对比更高的那个。
+     *
+     * 与 App 的 `AppTokens.onSolid` 是同一件事 —— 主色与班次色都是**用户选的**，
+     * 白字压在 teal / orange 上过不了 AA（见 `AGENTS.md` 那条：实测 2.63 / 2.55），
+     * 黑字也未必行，所以按相对亮度二选一，恒有 4.58:1 以上。
+     *
+     * ⚠️ **不是**「浅色档一套、深色档一套」两个固定值 —— 那两个资源是它的**候选**。
+     */
+    private fun onSolidInk(context: Context, color: Int): Int {
+        val r = (color shr 16) and 0xFF
+        val g = (color shr 8) and 0xFF
+        val b = color and 0xFF
+        val lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+        return context.getColor(
+            if (lum > 0.55) R.color.wg_on_solid_dark else R.color.wg_on_solid_light,
+        )
+    }
+
+    /**
+     * 月历一格的**真实像素尺寸**，用来烤「今天」那块实心块。
+     *
+     * 为什么非要贴近真实尺寸：宿主是 `fitXY` 拉伸位图的，宽高比对不上时圆角会被
+     * 拉成椭圆。格子的尺寸是 `GridLayout` 的 `rowWeight` 在布局期算出来的，渲染这侧
+     * 拿不到 —— 所以按 `AppWidgetOptions` 给的实际 dp 反推（卡 padding 8dp×2、
+     * 标题行 28dp、周几行约 20dp、格缝 2dp×2）。
+     *
+     * ⚠️ **行数必须按当月真实可见行数传进来**：5 行月每行约 77dp、6 行月约 65dp
+     * （差约 18%），拿固定值去反推会让其中一档明显偏矮、四角露出白卡的角尖。
+     */
+    private fun monthCellPx(context: Context, widgetId: Int, rows: Int): Pair<Int, Int> {
+        val opt = AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId)
+        val wDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+        val hDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 320)
+        val density = context.resources.displayMetrics.density
+        val cellW = (((wDp - 16) / 7f) - 4f) * density
+        val cellH = (((hDp - 16 - 28 - 20) / rows.toFloat()) - 4f) * density
+        return cellW.toInt().coerceAtLeast(1) to cellH.toInt().coerceAtLeast(1)
+    }
+
+    /**
+     * 网格里**真正会被布局的行数**：槽位按周一开头排 42 个，行数 = ceil(可见槽位 / 7)。
+     *
+     * 「可见」= 这一天在快照窗口里（`widget_month_card.xml` 顶部那两行注释讲了
+     * `rowWeight` 是按可见行数均分的）。窗口到头那几格会被设成 GONE、不参与布局。
+     */
+    private fun monthGridRows(snap: WidgetStore.Snapshot, gridStart: LocalDate): Int {
+        val epochs = HashSet<Long>(snap.days.size * 2)
+        for (d in snap.days) epochs.add(d.day)
+        var visible = 0
+        for (slot in 0 until 42) {
+            if (epochs.contains(gridStart.plusDays(slot.toLong()).toEpochDay())) visible++
+        }
+        return ((visible + 6) / 7).coerceAtLeast(1)
+    }
 
     /**
      * 小组件点击用的 requestCode 基址。
@@ -424,10 +481,13 @@ object WidgetRenderer {
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_month_card)
         val dark = isDark(context, snap.themeMode)
+        // 面板底**扮 App 的「日历页」**（浅灰 / 深底），42 张白格垫在它上面 ——
+        // App 里就是这层关系（白卡垫在 `bgLight #F5F6FA` 上），桌面上没有「页面」
+        // 这一层，得让面板去扮，白卡才显出来。见 `widget_page_*.xml`。
         v.setInt(
             R.id.wg_m_root,
             "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+            if (dark) R.drawable.widget_page_dark else R.drawable.widget_page_light,
         )
         v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, rootRequestCode(widgetId)))
 
@@ -495,6 +555,9 @@ object WidgetRenderer {
         val slotIds = IntArray(42) { i ->
             context.resources.getIdentifier("wg_m_slot${i + 1}", "id", context.packageName)
         }
+        // 「今天」那块块的位图尺寸要按**当月真实可见行数**反推（5 行月与 6 行月的
+        // 格子高差约 18%）。整月只算一次，别放进循环。
+        val cellRows = monthGridRows(snap, gridStart)
 
         for (slot in 0 until 42) {
             // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
@@ -524,17 +587,50 @@ object WidgetRenderer {
             val isToday = epoch == todayEpoch
             val c = RemoteViews(context.packageName, R.layout.widget_month_cell)
 
+            // ── 格子卡底（贴齐 App：白卡垫在「页面」上）──
+            // 用**静态 `<shape>`**：圆角随控件尺寸走，天然不会被 `fitXY` 拉成椭圆。
+            // ⚠️ **今天那一格置 0**（不给它白卡）：块是烤好的位图、卡底是静态 drawable，
+            // 两者的圆角在宽高比不一致时会错开，叠着就会在四角露出白卡的角尖。
+            // **两个方向都要设满** —— 宿主 `reapply` 只重放新动作，漏了「置空」这一支，
+            // 翻月之后白卡会留在一格不落。
+            c.setInt(
+                R.id.wg_mc_root,
+                "setBackgroundResource",
+                when {
+                    isToday -> 0
+                    dark -> R.drawable.widget_cell_dark
+                    else -> R.drawable.widget_cell_light
+                },
+            )
+
+            // ── 「今天」那块**实心主色块** ──
+            // App 里选中那一天是一枚**半透明**的玻璃块；桌面这版有意做成实心的
+            // （见规格 §1 末尾：桌面没有实时模糊，半透明块压在任意壁纸上会消失）。
+            val (cellW, cellH) = monthCellPx(context, widgetId, cellRows)
+            if (isToday) {
+                c.setViewVisibility(R.id.wg_mc_block, android.view.View.VISIBLE)
+                c.setImageViewBitmap(
+                    R.id.wg_mc_block,
+                    WidgetChip.block(
+                        snap.accent, cellW, cellH, dpToPx(context, 12).toFloat(),
+                    ),
+                )
+            } else {
+                c.setViewVisibility(R.id.wg_mc_block, android.view.View.GONE)
+            }
+
             // 可见性两个方向都要设满：宿主 `reapply` 只重放新动作，漏设的一边会留着
             // 上一次的状态。
             c.setViewVisibility(R.id.wg_mc_day, android.view.View.VISIBLE)
             c.setTextViewText(R.id.wg_mc_day, date.dayOfMonth.toString())
-            // 「今天」只走主色，**不许加粗**（`TextView` 没有 `setTypeface(int)`，
-            // 反射会在宿主进程抛 `ActionException`）。相邻月的日数字走 muted ——
-            // 那是这张卡上唯一表达「这个月从哪天开始」的地方。
+            // 三种字色：今天在实心块上走 `onSolidInk`；本月的日子走 ink（相邻月的走
+            // muted —— 那是这张卡上唯一表达「这个月从哪天开始」的地方）。
+            // **字重仍然只能靠布局里的 `textStyle`**：`TextView` 没有 `setTypeface(int)`，
+            // 反射会在宿主进程抛 `ActionException`。
             c.setTextColor(
                 R.id.wg_mc_day,
                 when {
-                    isToday -> snap.accent
+                    isToday -> onSolidInk(context, snap.accent)
                     inMonth -> ink
                     else -> muted
                 },
@@ -551,12 +647,28 @@ object WidgetRenderer {
                 c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.VISIBLE)
                 // 尺寸恒定 40×18dp：一格一尺寸会让 `WidgetChip` 的位图缓存失效
                 // （key 含尺寸），42 格就把缓存冲爆。见本函数的 KDoc。
+                // 今天那格里的胶囊跟 App 一样转**实心**（淡染压在实心主色块上会糊成
+                // 一片），于是字走 `onSolidInk`。
                 c.setImageViewBitmap(
                     R.id.wg_mc_pill,
-                    WidgetChip.tintedChip(d.color, dpToPx(context, 40), dpToPx(context, 18)),
+                    if (isToday) {
+                        WidgetChip.block(
+                            d.color,
+                            dpToPx(context, 40),
+                            dpToPx(context, 18),
+                            dpToPx(context, 9).toFloat(),
+                        )
+                    } else {
+                        WidgetChip.tintedChip(
+                            d.color, dpToPx(context, 40), dpToPx(context, 18),
+                        )
+                    },
                 )
                 c.setTextViewText(R.id.wg_mc_abbr, d.shiftAbbr)
-                c.setTextColor(R.id.wg_mc_abbr, ink)
+                c.setTextColor(
+                    R.id.wg_mc_abbr,
+                    if (isToday) onSolidInk(context, d.color) else ink,
+                )
             } else {
                 c.setViewVisibility(R.id.wg_mc_pill, android.view.View.GONE)
                 c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.GONE)
@@ -564,7 +676,17 @@ object WidgetRenderer {
 
             c.setViewVisibility(R.id.wg_mc_lunar, android.view.View.VISIBLE)
             c.setTextViewText(R.id.wg_mc_lunar, d.lunarShort)
-            c.setTextColor(R.id.wg_mc_lunar, if (d.lunarIsHoliday) holiday else muted)
+            // ⚠️ **今天那格走块上字，不走 `holiday` 的红字** —— 红字压在实心主色块上
+            // 读不出来。代价是**这一天看不出「是节假日」**（一个月至多一次），
+            // 可读性优先。这一条在规格的「Review Focus」里点了名。
+            c.setTextColor(
+                R.id.wg_mc_lunar,
+                when {
+                    isToday -> onSolidInk(context, snap.accent)
+                    d.lunarIsHoliday -> holiday
+                    else -> muted
+                },
+            )
 
             v.addView(slotIds[slot], c)
         }
