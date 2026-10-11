@@ -69,6 +69,14 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
   /// 当前选中的颜色。**这是唯一真源** —— 预览、小样、预设的选中描边都由它推。
   late int _color = widget.current;
 
+  /// 色相 / 饱和度 / 明度。
+  ///
+  /// **拖动色相条与方盘时由它推 [_color]，不反过来。** 每帧都做
+  /// `int → HSV → int` 会让色相一点点漂（round-trip 不是恒等变换）。
+  /// 而点预设、敲颜色值时**反向灌进来** —— 两边始终同步，否则用户拖完再点预设，
+  /// 方盘上的游标会停在上一次的位置，下一次一碰方盘颜色就跳回旧色相。
+  late HSVColor _hsv = HSVColor.fromColor(Color(widget.current));
+
   late final TextEditingController _hexCtrl =
       TextEditingController(text: formatHexColor(widget.current));
 
@@ -81,11 +89,23 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
     super.dispose();
   }
 
+  /// 从外面来的一颗色（预设 / 颜色值）：连 HSV 一起灌，保证方盘跟着走。
   void _setColor(int c) {
     setState(() {
       _color = c;
+      _hsv = HSVColor.fromColor(Color(c));
       _hexBad = false;
       _hexCtrl.text = formatHexColor(c);
+    });
+  }
+
+  /// 从色相条 / 方盘来的一个 HSV：由它推颜色，再回头把颜色值显示跟上。
+  void _applyHsv(HSVColor next) {
+    setState(() {
+      _hsv = next;
+      _color = next.toColor().toARGB32();
+      _hexBad = false;
+      _hexCtrl.text = formatHexColor(_color);
     });
   }
 
@@ -95,7 +115,10 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
     final c = parseHexColor(s);
     setState(() {
       _hexBad = c == null;
-      if (c != null) _color = c;
+      if (c != null) {
+        _color = c;
+        _hsv = HSVColor.fromColor(Color(c));
+      }
     });
   }
 
@@ -141,6 +164,10 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
                               AppTokens.microText.copyWith(color: muted)),
                       const SizedBox(height: AppTokens.spaceSm),
                       _sampleRow(context),
+                      const SizedBox(height: AppTokens.spaceLg),
+                      _hueStrip(),
+                      const SizedBox(height: AppTokens.spaceMd),
+                      _svSquare(),
                       const SizedBox(height: AppTokens.spaceLg),
                       _presetGrid(context, onSurface),
                     ],
@@ -223,6 +250,60 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
     );
   }
 
+  /// 色相条：横向一条七色彩虹，点 / 拖都在它上面取色相。
+  ///
+  /// 那一串颜色**只能用字面量**（色相环本来就是七个固定色），但走 `int` 常量 +
+  /// `Color(int)` 而不是 `Color(0x…)`，于是不必去动令牌守门的豁免名单。
+  Widget _hueStrip() {
+    return _DragArea(
+      key: const ValueKey('shift-hue'),
+      height: 28,
+      onFraction: (fx, _) => _applyHsv(_hsv.withHue((fx * 360).clamp(0.0, 360.0))),
+      builder: (w) => CustomPaint(painter: _HueStripPainter(_hsv.hue)),
+    );
+  }
+
+  /// 饱和度（横）× 明度（纵）方盘。
+  ///
+  /// 游标是一个**真的 widget**（不是画上去的），因为「游标有没有跟着预设走」
+  /// 这件事只有它是 widget 才量得到（`shift_color_picker_test.dart` 用它钉
+  /// 「预设 ↔ HSV 双向同步」）。
+  Widget _svSquare() {
+    const double thumb = 20;
+    return _DragArea(
+      key: const ValueKey('shift-sv'),
+      height: _svSquareH,
+      onFraction: (fx, fy) => _applyHsv(_hsv
+          .withSaturation(fx)
+          .withValue((1 - fy).clamp(0.0, 1.0))),
+      builder: (w) => Stack(
+        children: [
+          Positioned.fill(child: CustomPaint(painter: _SvPainter(_hsv.hue))),
+          Positioned(
+            left: (_hsv.saturation * w - thumb / 2).clamp(0.0, w - thumb),
+            top: ((1 - _hsv.value) * _svSquareH - thumb / 2)
+                .clamp(0.0, _svSquareH - thumb),
+            child: Container(
+              key: const ValueKey('shift-sv-thumb'),
+              width: thumb,
+              height: thumb,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _presetGrid(BuildContext context, Color onSurface) {
     return Wrap(
       spacing: AppTokens.spaceLg,
@@ -274,4 +355,142 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
       ),
     );
   }
+}
+
+/// 方盘的高度。
+///
+/// **固定 160，不按「可用高」缩。** 面板里上面那一格是可滚动的、动作行钉在它下面
+/// （见文件头），所以「小窗装不下」这件事由滚动承担；让方盘跟着小窗变小只会让它
+/// 更难瞄准。计划里原先写的是 `min(160, 可用高)` —— 在滚动区里「可用高」是无界的，
+/// 那句实现不了，也不必要。
+const double _svSquareH = 160;
+
+/// 色相环的七个锚点（红 → 黄 → 绿 → 青 → 蓝 → 品红 → 红）。
+///
+/// 存 `int` 的理由与 `shift_palette.dart` 同：界面层不许写 `Color(0x…)` 字面量
+/// （`design_tokens_test.dart` 守门），而这里只有数据。
+const List<int> _hueStops = <int>[
+  0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
+  0xFF0000FF, 0xFFFF00FF, 0xFFFF0000,
+];
+
+/// 「在一块矩形区域上取一个 0~1 的分数」——色相条与方盘共用的手势外壳。
+///
+/// 分数用 `localPosition` 除以实测宽高（`LayoutBuilder` 现取），**不用
+/// `globalPosition` 再减原点** —— 后者多一步就多一处能错的地方。
+class _DragArea extends StatelessWidget {
+  const _DragArea({
+    super.key,
+    required this.height,
+    required this.onFraction,
+    required this.builder,
+  });
+
+  final double height;
+  final void Function(double fx, double fy) onFraction;
+
+  /// 拿实测宽度建内容（游标要按它定位）。
+  final Widget Function(double width) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        void emit(Offset p) => onFraction(
+              (p.dx / w).clamp(0.0, 1.0),
+              (p.dy / height).clamp(0.0, 1.0),
+            );
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => emit(d.localPosition),
+          onPanStart: (d) => emit(d.localPosition),
+          onPanUpdate: (d) => emit(d.localPosition),
+          child: SizedBox(height: height, width: w, child: builder(w)),
+        );
+      },
+    );
+  }
+}
+
+/// 横向那条七色彩虹 + 一个游标。
+class _HueStripPainter extends CustomPainter {
+  const _HueStripPainter(this.hue);
+
+  final double hue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+        rect, const Radius.circular(AppTokens.radiusS));
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..shader = LinearGradient(
+          colors: [for (final c in _hueStops) Color(c)],
+        ).createShader(rect),
+    );
+
+    final x = (hue / 360 * size.width).clamp(6.0, size.width - 6);
+    final c = Offset(x, size.height / 2);
+    canvas.drawCircle(
+      c,
+      7,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = Colors.white,
+    );
+    canvas.drawCircle(
+      c,
+      8.5,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Colors.black.withValues(alpha: 0.35),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HueStripPainter old) => old.hue != hue;
+}
+
+/// 饱和度 × 明度方盘：底色是当前色相的纯色，横向压一层白、纵向压一层黑。
+class _SvPainter extends CustomPainter {
+  const _SvPainter(this.hue);
+
+  final double hue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+        rect, const Radius.circular(AppTokens.radiusS));
+    canvas.save();
+    canvas.clipRRect(rrect);
+
+    canvas.drawRect(
+        rect, Paint()..color = HSVColor.fromAHSV(1, hue, 1, 1).toColor());
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          colors: [Colors.white, Colors.white.withValues(alpha: 0)],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.black.withValues(alpha: 0), Colors.black],
+        ).createShader(rect),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_SvPainter old) => old.hue != hue;
 }

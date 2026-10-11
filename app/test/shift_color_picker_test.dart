@@ -208,4 +208,74 @@ void main() {
 
     await _dispose(tester);
   });
+
+  testWidgets('点色相条 / 拖方盘：当下就有反应，且两处游标跟着走', (tester) async {
+    await _openPicker(tester, current: 0xFF4C8DFF);
+
+    final before = tester.widget<TextField>(find.byType(TextField)).controller!.text;
+
+    // 色相条：靠左（红端）与靠右各点一次，两次得到不同的颜色。
+    final hue = tester.getRect(find.byKey(const ValueKey('shift-hue')));
+    await tester.tapAt(Offset(hue.left + hue.width * 0.05, hue.center.dy));
+    await _settle(tester);
+    final leftHex = tester.widget<TextField>(find.byType(TextField)).controller!.text;
+    expect(leftHex, isNot(before), reason: '点了色相条要立刻有反应');
+
+    await tester.tapAt(Offset(hue.left + hue.width * 0.62, hue.center.dy));
+    await _settle(tester);
+    final rightHex = tester.widget<TextField>(find.byType(TextField)).controller!.text;
+    expect(rightHex, isNot(leftHex), reason: '色相条上不同位置要是不同的颜色');
+
+    // 方盘：左下角 = 暗、右上角 = 饱和且亮。
+    final sv = tester.getRect(find.byKey(const ValueKey('shift-sv')));
+    final thumb = find.byKey(const ValueKey('shift-sv-thumb'));
+    await tester.tapAt(Offset(sv.right - 4, sv.top + 4));
+    await _settle(tester);
+    expect(tester.getCenter(thumb).dx, greaterThan(sv.center.dx),
+        reason: '右上角 = 饱和度高，游标要跟过去');
+    await tester.tapAt(Offset(sv.left + 4, sv.bottom - 4));
+    await _settle(tester);
+    expect(tester.getCenter(thumb).dx, lessThan(sv.center.dx),
+        reason: '左下角 = 暗且不饱和，游标要跟过去');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('灰阶当前色：打开不崩，一动就有反应', (tester) async {
+    // #9AA0B4 / #5A5F73 这种低饱和色的**色相是没有定义的**，往返 HSV 一定有损。
+    // 判据不是「往返回来还是同一个色」（那做不到），是「不崩 + 一动就有反应」。
+    await _openPicker(tester, current: 0xFF9AA0B4);
+
+    expect(tester.takeException(), isNull);
+
+    final sv = tester.getRect(find.byKey(const ValueKey('shift-sv')));
+    final before = tester.widget<TextField>(find.byType(TextField)).controller!.text;
+    await tester.tapAt(Offset(sv.left + sv.width * 0.9, sv.top + 6));
+    await _settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isNot(before));
+
+    await _dispose(tester);
+  });
+
+  testWidgets('拖过方盘之后再点一颗预设：游标要跟着回到那一颗', (tester) async {
+    // 这条钉「预设 ↔ HSV 是双向同步的」。只单向的话，用户拖完再点预设，
+    // 方盘上的游标会停在上一次拖到的位置 —— 下一次一碰方盘，颜色就跳回旧色相。
+    await _openPicker(tester, current: 0xFF4C8DFF);
+
+    final sv = tester.getRect(find.byKey(const ValueKey('shift-sv')));
+    final thumb = find.byKey(const ValueKey('shift-sv-thumb'));
+
+    await tester.tapAt(Offset(sv.left + 6, sv.bottom - 6)); // 拖到暗角
+    await _settle(tester);
+    expect(tester.getCenter(thumb).dx, lessThan(sv.center.dx));
+
+    await tester.tap(find.byKey(const ValueKey('shift-preset-8'))); // 红，高饱和
+    await _settle(tester);
+    expect(tester.getCenter(thumb).dx, greaterThan(sv.center.dx),
+        reason: '点了预设之后游标要回到那一颗 —— 不跟的话下一次一拖颜色就跳回旧色相');
+
+    await _dispose(tester);
+  });
 }
