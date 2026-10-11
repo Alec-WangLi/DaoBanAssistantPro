@@ -14,6 +14,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/shift_palette.dart';
 import 'package:shiftassistantpro/core/widgets/glass_choice_chip.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
@@ -500,6 +501,50 @@ void main() {
     await _tapDeleteAndConfirm(
         tester, find.byType(GlassDeleteButton).at(3));
     expect(find.byType(GlassDeleteButton), findsNWidgets(3));
+  });
+
+  testWidgets('新建班次：循环取色走的是那 16 颗的盘，顺序没漂', (tester) async {
+    // ⚠️ **这条是这一版新加的护栏。** 原来那条「chip 带上班次色与名称」看着像在钉
+    // 这件事，其实它自己造了一个带指定颜色的班次、压根没走 `_addClass` 里那句
+    // `kShiftPalette[idx % length]`（builder check 查出来的）。
+    //
+    // 夹具里已经有 3 条班次，所以第 4 条取下标 3、第 9 条取下标 8 —— **下标 8 那一条
+    // 才是有鉴别力的**：老的 8 颗盘在 8 % 8 = 0 处会给回第一颗，而 16 颗的盘给的是
+    // 新加的「红」。
+    final repo = await _pumpEditor(tester, _domain(cycle: const [0, 0, 1, 1, 2, 2]));
+
+    for (var i = 0; i < 6; i++) {
+      await tester.tap(find.text(L10n.addShiftClass));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    final colors = repo.saved!.classes.map((c) => c.color).toList();
+    expect(colors[3], kShiftPalette[3], reason: '第 4 条：走下标 3');
+    expect(colors[8], kShiftPalette[8],
+        reason: '第 9 条走下标 8 —— 老盘在这里会绕回第一颗（8 % 8 = 0），红是新加的');
+    expect(colors[8], isNot(kShiftPalette.first));
+  });
+
+  testWidgets('点班次行末的色点 → 取色层 → 挑一颗 → 确定 → 那颗班次换了色',
+      (tester) async {
+    final repo = await _pumpEditor(tester, _domain(cycle: const [0, 0, 1, 1, 2, 2]));
+
+    await tester.tap(find.byKey(const ValueKey('shift-color-dot-0')));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.shiftColor), findsOneWidget, reason: '取色层要弹出来');
+
+    await tester.tap(find.byKey(const ValueKey('shift-preset-8')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.classes.first.color, kShiftPalette[8],
+        reason: '挑的那颗要真的落到班次上，而不只是改了预览');
   });
 
   testWidgets('把班次切成休息：时间被清空，周期里引用它的行显示「休息」',

@@ -16,6 +16,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/shift_palette.dart';
 import 'package:shiftassistantpro/core/theme/app_colors.dart';
 
 import 'support/source_scan.dart';
@@ -987,17 +988,14 @@ Text('x', style: TextStyle(
   test('onSolid：任何底色上的文字对比度都 ≥ 4.5', () {
     // 白/黑两条对比度曲线在亮度 0.179 处交叉，交叉点上各是 4.58:1 ——
     // 所以「取对比度高的一侧」对**任何**底色都能过 AA。
-    const samples = <Color>[
-      Color(0xFF4C8DFF),
-      Color(0xFF7A5CFF),
-      Color(0xFF9AA0B4),
-      Color(0xFF5A5F73),
-      Color(0xFF34C759),
-      Color(0xFFFF9F0A),
-      Color(0xFFFF375F),
-      Color(0xFF00C7BE),
-      Color(0xFFFFFFFF),
-      Color(0xFF000000),
+    // **盘的 16 颗直接引用 `kShiftPalette`，别手抄一遍** —— 手抄的那份迟早与盘
+    // 走岔（这一版从 8 颗扩到 16 颗就是这么发现的：原来这里写着 8 个字面量）。
+    // 这一条**不会**给新预设添负担：`max(对白, 对黑)` 的最小值落在亮度 0.179 处、
+    // 恒 ≥ 4.58:1，任何底色都过（见上面那两行注释）。
+    final samples = <Color>[
+      for (final c in kShiftPalette) Color(c),
+      const Color(0xFFFFFFFF),
+      const Color(0xFF000000),
     ];
     for (final bg in samples) {
       expect(_wcagContrast(AppTokens.onSolid(bg), bg), greaterThanOrEqualTo(4.5),

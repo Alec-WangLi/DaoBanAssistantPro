@@ -5,6 +5,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
+import '../../core/shift_palette.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_choice_chip.dart';
@@ -20,6 +21,7 @@ import '../../data/app_repository.dart';
 import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
+import 'shift_color_picker.dart';
 
 /// 排班方案编辑器。
 ///
@@ -39,10 +41,6 @@ class ScheduleEditorScreen extends ConsumerStatefulWidget {
 }
 
 class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
-  static const _palette = [
-    0xFF4C8DFF, 0xFF7A5CFF, 0xFF9AA0B4, 0xFF5A5F73,
-    0xFF34C759, 0xFFFF9F0A, 0xFFFF375F, 0xFF00C7BE,
-  ];
 
   /// 简称输入框宽度：放得下 2 个汉字（`maxLength: 2`）再加边框内边距。
   ///
@@ -833,6 +831,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     return GestureDetector(
       onTap: () => _pickColor(index),
       child: Container(
+        key: ValueKey('shift-color-dot-$index'),
         width: 24,
         height: 24,
         decoration: BoxDecoration(
@@ -1479,58 +1478,23 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   // 编辑动作
   // ---------------------------------------------------------------------------
 
+  /// 点行末那颗色点 → 弹取色层 → 把结果写回这一条班次。
+  ///
+  /// 取色那三百行搬到 `shift_color_picker.dart` 了（16 颗预设、色相条、饱和度/明度
+  /// 方盘、十六进制输入）。这里只剩「传当前色进去、把结果写回」两件事。
+  ///
+  /// ⚠️ **`_editClass` 那套别动** —— 它有意的**不走 `copyWith`**（`copyWith` 把可空
+  /// 字段写成 `xx ?? this.xx`，没有「把可空字段清成 null」的通道；切休班时时间就
+  /// 永远清不掉）。这一版只是换了颜色的来源。
   Future<void> _pickColor(int index) async {
-    final picked = await showGlassSheet<int>(
-      context: context,
-      builder: (context) => GlassPanel(
-        solid: true,
-        margin: const EdgeInsets.all(AppTokens.spaceMd),
-        borderRadius:
-            const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
-                AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceXl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  L10n.shiftColor,
-                  style: AppTokens.titleStrong,
-                ),
-                const SizedBox(height: AppTokens.spaceLg),
-                Wrap(
-                  spacing: AppTokens.spaceLg,
-                  runSpacing: AppTokens.spaceLg,
-                  children: _palette.map((c) {
-                    final selected = _classes[index].color == c;
-                    return GestureDetector(
-                      onTap: () => Navigator.pop(context, c),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Color(c),
-                          shape: BoxShape.circle,
-                          border: selected
-                              ? Border.all(
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  width: 3)
-                              : null,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    final picked = await showShiftColorPicker(
+      context,
+      current: _classes[index].color,
+      sampleLabel: _classes[index].abbr ?? _classes[index].name,
     );
-    if (picked != null) {
-      setState(() => _classes[index] = _editClass(_classes[index], color: picked));
-    }
+    if (picked == null || !mounted) return;
+    setState(
+        () => _classes[index] = _editClass(_classes[index], color: picked));
   }
 
   /// 把当前这套存成「我的模板」（新建排班时可以再选它）。
@@ -1588,11 +1552,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         icon: Icons.bookmark_added_outlined);
   }
 
-  void _addClass() {    setState(() {
+  void _addClass() {
+    setState(() {
       final idx = _classes.length;
       final c = ShiftClass(
         name: L10n.newShiftName,
-        color: _palette[idx % _palette.length],
+        color: kShiftPalette[idx % kShiftPalette.length],
         startMinute: toMinutes(8, 0),
         endMinute: toMinutes(20, 0),
       );
