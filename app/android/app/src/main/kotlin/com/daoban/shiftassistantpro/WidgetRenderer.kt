@@ -64,23 +64,44 @@ object WidgetRenderer {
     private fun dpToPx(context: Context, dp: Int): Int =
         (dp * context.resources.displayMetrics.density).toInt()
 
+    /** WCAG 相对亮度（sRGB 线性化）—— 与 App 的 `AppTokens.contrastRatio` 同一套算式。 */
+    private fun relLuminance(color: Int): Double {
+        fun lin(c: Int): Double {
+            val s = c / 255.0
+            return if (s <= 0.03928) s / 12.92 else Math.pow((s + 0.055) / 1.055, 2.4)
+        }
+
+        return 0.2126 * lin((color shr 16) and 0xFF) +
+            0.7152 * lin((color shr 8) and 0xFF) +
+            0.0722 * lin(color and 0xFF)
+    }
+
+    /** WCAG 对比度。 */
+    private fun contrastRatio(fg: Int, bg: Int): Double {
+        val a = relLuminance(fg)
+        val b = relLuminance(bg)
+        return (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05)
+    }
+
     /**
-     * 实心块上的字色：黑或白里对比更高的那个。
+     * 实心块上的字色：**黑或白里对比更高的那一个**。
      *
-     * 与 App 的 `AppTokens.onSolid` 是同一件事 —— 主色与班次色都是**用户选的**，
-     * 白字压在 teal / orange 上过不了 AA（见 `AGENTS.md` 那条：实测 2.63 / 2.55），
-     * 黑字也未必行，所以按相对亮度二选一，恒有 4.58:1 以上。
+     * ⚠️ **按对比度二选一，不是拿相对亮度卡一个阈值。** 这是与 App 的
+     * `AppTokens.onSolid` 逐字同一条判据 —— 那条判据之所以能保证「恒 ≥ 4.58:1」，
+     * 靠的正是「两个极值里取更大的那个」，与阈值无关。
      *
-     * ⚠️ **不是**「浅色档一套、深色档一套」两个固定值 —— 那两个资源是它的**候选**。
+     * 第一版这里写成了 `亮度 > 0.55 ? 黑 : 白`，于是 **teal（`#00B3A6`，亮度 0.549）
+     * 选了白字：实测 2.63:1** —— 而 `AGENTS.md` 记着「用户自己用的就是 teal」，
+     * 这一格又正是本轮唯一「字压在用户自选的颜色上」的地方。判据错在这里是**静默**的：
+     * 默认的蓝选出来是对的，只有换到 teal / 橙 / 粉那几档才现形。
+     *
+     * ⚠️ 两个候选必须是**纯白与纯黑**：那条 ≥ 4.58 的保证是按两个极值推的，
+     * 换成近黑（第一版用的是 `#111818`）最坏一档会掉到约 4.1。
      */
     private fun onSolidInk(context: Context, color: Int): Int {
-        val r = (color shr 16) and 0xFF
-        val g = (color shr 8) and 0xFF
-        val b = color and 0xFF
-        val lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
-        return context.getColor(
-            if (lum > 0.55) R.color.wg_on_solid_dark else R.color.wg_on_solid_light,
-        )
+        val white = context.getColor(R.color.wg_on_solid_light)
+        val black = context.getColor(R.color.wg_on_solid_dark)
+        return if (contrastRatio(white, color) >= contrastRatio(black, color)) white else black
     }
 
     /**

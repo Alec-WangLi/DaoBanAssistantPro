@@ -58,8 +58,11 @@
     <color name="wg_cell_border_dark">#1AFFFFFF</color>    <!-- 白 10% -->
 
     <!-- 实心块上的字：`onSolidInk` 的**两个候选**（不是「浅色档一套、深色档一套」）——
-         块的颜色是用户选的主色 / 班次色，所以选黑还是选白要按那个颜色现算。 -->
+         块的颜色是用户选的主色 / 班次色，所以选黑还是选白要**按对比度现算**
+         （与 App 的 `AppTokens.onSolid` 同一条判据）。
+         ⚠️ **必须是纯白与纯黑**：那条「恒 ≥ 4.58:1」的保证是按两个极值推的，
+         换成近黑之后最坏一档会掉到约 4.1。 -->
     <color name="wg_on_solid_light">#FFFFFFFF</color>
-    <color name="wg_on_solid_dark">#FF111818</color>
+    <color name="wg_on_solid_dark">#FF000000</color>
 </resources>
 
