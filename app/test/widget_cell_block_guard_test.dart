@@ -95,9 +95,10 @@ void main() {
     // 阈值就整体低一格，于是「少了一处分支」正好卡在边界上溜过去。
     final uses = RegExp(r'onSolidInk\(context, ').allMatches(kt).length;
     // ⚠️ 这是一个**下界**（不是精确计数）：它抓的是「漏了一处分支」。
-    // 月格三处（日数字 / 农历 / 胶囊简称）+ 周条三处（周几 / 日数字 / 简称）＝ 6。
-    // 少一处就是「假期撞上今天时红字压在实心块上读不出来」这类情况。
-    expect(uses, greaterThanOrEqualTo(6),
-        reason: 'onSolidInk 的**调用点**只有 $uses 处 —— 月格三处 + 周条三处应当凑齐 6 处');
+    // 月格三处（日数字 / 农历 / 胶囊简称）+ 周条三处（周几 / 日数字 / 简称）
+    // + 今日卡药丸一处 ＝ 7。少一处就是「红字 / 蓝字压在实心块上读不出来」这类情况。
+    expect(uses, greaterThanOrEqualTo(7),
+        reason: 'onSolidInk 的**调用点**只有 $uses 处 —— 月格三处 + 周条三处 '
+            '+ 今日卡药丸一处应当凑齐 7 处');
   });
 }

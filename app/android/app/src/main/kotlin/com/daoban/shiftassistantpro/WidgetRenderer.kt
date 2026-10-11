@@ -801,14 +801,21 @@ object WidgetRenderer {
         v.setTextColor(R.id.wg_tc_date, ink)
 
         // 「今天」徽章。宽度写死在布局里 —— RemoteViews 量不到文字宽度。
-        // 高同样要与布局的 `wg_tc_today_wrap`（24dp）一致：`tintedChip` 的 radius 与
-        // strokeWidth 都按**位图**高算，拉了 fitXY 会让两端的半圆变椭圆、上下描边偏重。
+        // 高同样要与布局的 `wg_tc_today_wrap`（24dp）一致：`block` 的 radius 也按
+        // **位图**高算，拉了 fitXY 会让两端的半圆变椭圆、上下描边偏重。
+        // **实心主色 + 块上字**（贴齐 App 那枚药丸：App 里它就是实心主色 + 白字；
+        // 桌面上原来是 14% 淡染，读起来是被冲淡的）。
         v.setImageViewBitmap(
             R.id.wg_tc_today_bg,
-            WidgetChip.tintedChip(snap.accent, dpToPx(context, 52), dpToPx(context, 24)),
+            WidgetChip.block(
+                snap.accent,
+                dpToPx(context, 52),
+                dpToPx(context, 24),
+                dpToPx(context, 12).toFloat(),
+            ),
         )
         v.setTextViewText(R.id.wg_tc_today_text, snap.today)
-        v.setTextColor(R.id.wg_tc_today_text, snap.accent)
+        v.setTextColor(R.id.wg_tc_today_text, onSolidInk(context, snap.accent))
 
         // 「N 项待办」徽章。`todoBadge` 为空（没有待办）或快照跨天 → 整块隐藏。
         val todoText = if (stale) null else tc.todoBadge
