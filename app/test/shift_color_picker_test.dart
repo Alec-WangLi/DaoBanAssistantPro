@@ -194,6 +194,33 @@ void main() {
     await _dispose(tester);
   });
 
+  testWidgets('键盘弹起时：整块面板顶到键盘上面', (tester) async {
+    // 十六进制框是这一层的主入口，而它是全 app **唯一**一个长在底部弹层里的输入框
+    // —— 其余弹层的件（时间 / 日期 / 月份 / 选项）都没有输入。
+    //
+    // 这里只能断言**几何**：测试里的键盘只是一条 `viewInsets`，不是真的命中障碍物，
+    // `hitTestOnBinding` 照旧打得中那颗被盖住的按钮。所以「按不按得到」在测试里
+    // 量不出来，能量的是「它落在键盘区域里没有」。
+    await _openPicker(tester, current: 0xFF4C8DFF);
+
+    const keyboard = 320.0;
+    tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+    addTearDown(tester.view.resetViewInsets);
+    await _settle(tester);
+
+    final screenH = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    final keyboardTop = screenH - keyboard;
+
+    final confirm = tester.getRect(find.text(L10n.confirm));
+    expect(confirm.bottom, lessThanOrEqualTo(keyboardTop),
+        reason: '「确定」被压在键盘底下（${confirm.bottom} > $keyboardTop）'
+            '—— 敲完颜色值点不下去，这条主路径就断了');
+    expect(tester.getRect(find.text(L10n.cancel)).bottom,
+        lessThanOrEqualTo(keyboardTop));
+
+    await _dispose(tester);
+  });
+
   testWidgets('预览与日历小样跟着当前色走（用十六进制框驱动一次）', (tester) async {
     await _openPicker(tester, current: 0xFF4C8DFF, sampleLabel: '早');
 

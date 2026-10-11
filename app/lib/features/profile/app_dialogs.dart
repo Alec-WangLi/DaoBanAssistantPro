@@ -39,7 +39,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.6\n'
+const String _changelogZh = 'v0.11.7\n'
+    '· 修好一处「颜色值填好了，却点不到确定」：软键盘弹起来的时候，会正好盖住取色层底下那颗「确定」按钮（填写颜色值本来是这一层的主要入口，键盘一弹按钮就落在键盘底下了）\n'
+    '· 现在键盘弹起来，整块取色面板会顶到键盘上面去\n'
+    '\n'
+
+    'v0.11.6\n'
     '· 班次颜色从 8 种扩到 16 种：色相铺满一圈，红、品红、琥珀、深橙、深绿、深青、棕、粉是这一版新加的（原来那 8 种一颗没动）\n'
     '· 新增「自定义颜色」：点班次行末那颗色点，里面有色相条和一块饱和度/明度方盘，也可以直接填颜色值（例如 #4C8DFF）\n'
     '· 取色的时候旁边摆着两颗真的日历小样，能当场看到这个颜色落到日历上是什么样\n'
@@ -104,16 +109,15 @@ const String _changelogZh = 'v0.11.6\n'
     '· 调整班次、改周期之后，信息卡那行「本月统计」现在会跟着变（之前还是旧数字）\n'
     '· 长按拖选一段日子时，日历不再每一帧重算整页 —— 上一版的更新说明里写了这一条，当时其实还没做到\n\n'
 
-    'v0.10.20\n'
-    '· 更顺了：点日期、「今天」飞回去、按住拖动那枚选中的块、长按拖选一段日子时，日历不再每帧重算整页\n'
-    '· 更省电了：那层缓缓流动的光晕不再牵着整页一起重画（你按住拖动的时候它会停一下、松手接着走 —— 观感上几乎看不出来）\n'
-    '· 打开 App 快了一点；翻月、勾待办、改排班之后的卡顿也少了\n'
-    '· 桌面小组件：内容没变时不再重复推一遍（从后台切回来不再白算一次整月数据）\n\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.6\n'
+const String _changelogEn = 'v0.11.7\n'
+    '· Fixed "the color value is typed, but OK cannot be tapped": with the software keyboard up, it covered the OK button at the bottom of the color picker (typing a value is the main way into that screen, and the button landed right underneath the keyboard)\n'
+    '· The whole picker panel now rides up above the keyboard\n'
+    '\n'
+
+    'v0.11.6\n'
     '· Shift colors go from 8 to 16: the full hue circle, with red, magenta, amber, deep orange, deep green, deep teal, brown and pink added (the original 8 are untouched)\n'
     '· New custom colors: tap the color dot on a shift row for a hue strip, a saturation/brightness pad, and a field for typing a value such as #4C8DFF\n'
     '· Two live calendar samples sit next to the picker, so you can see how the color will look on a real cell\n'
@@ -177,12 +181,6 @@ const String _changelogEn = 'v0.11.6\n'
     '· Fixed three "the screen did not keep up" cases from the previous version: after adjusting a single day or switching language the home-screen widget now updates (it used to stay on the old shifts)\n'
     '· After adjusting a day or editing the cycle, the info card\'s monthly tally now updates (it used to keep the old numbers)\n'
     '· Long-press selecting a run of days no longer rebuilds the whole calendar every frame — the previous release notes claimed this, but it was not actually done yet\n\n'
-
-    'v0.10.20\n'
-    '· Smoother: tapping a date, flying back to Today, dragging the selection block and long-press selecting a run of days no longer rebuild the whole calendar every frame\n'
-    '· Lighter on the battery: the slowly drifting glow no longer repaints the page along with it (it pauses while you drag and carries on after — you will not notice)\n'
-    '· Faster start-up, and less stutter after switching months, ticking a to-do or saving a schedule\n'
-    '· Home-screen widgets: an unchanged snapshot is no longer pushed again (returning to the app no longer recomputes the whole month for nothing)\n\n'
 
         '\n'
 ;

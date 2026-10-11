@@ -132,50 +132,61 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
         MediaQuery.viewInsetsOf(context).bottom -
         AppTokens.spaceMd * 2;
 
-    return GlassPanel(
-      solid: true,
-      margin: const EdgeInsets.all(AppTokens.spaceMd),
-      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-      child: SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxH),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
-                    AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceSm),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(L10n.shiftColor, style: AppTokens.titleStrong),
-                ),
-              ),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg, 0,
-                      AppTokens.spaceLg, AppTokens.spaceMd),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _previewRow(context, onSurface),
-                      const SizedBox(height: AppTokens.spaceLg),
-                      Text(L10n.shiftColorPreview,
-                          style:
-                              AppTokens.microText.copyWith(color: muted)),
-                      const SizedBox(height: AppTokens.spaceSm),
-                      _sampleRow(context),
-                      const SizedBox(height: AppTokens.spaceLg),
-                      _hueStrip(),
-                      const SizedBox(height: AppTokens.spaceMd),
-                      _svSquare(),
-                      const SizedBox(height: AppTokens.spaceLg),
-                      _presetGrid(context, onSurface),
-                    ],
+    // ⚠️ **只夹高度是不够的，必须把面板顶上去。** 底部弹层那一层布局
+    // （`_ModalBottomSheetLayout`）把面板钉在**屏幕底边**：`size.height -
+    // child.height`，它**完全不看 `viewInsets`**（SDK 那个文件里一处都没有）。
+    // 于是只夹高度的话，面板变矮了、可底边还在屏幕底 —— 动作行照样落在键盘底下，
+    // 「敲完颜色值点确定」这条**主路径**当场断掉（能量到：900 高的屏 + 320 键盘下
+    // 「确定」底边在 838，而键盘顶边是 580）。
+    //
+    // 键盘不弹时这里是 0 高度，与本条修复之前逐像素相同。
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: GlassPanel(
+        solid: true,
+        margin: const EdgeInsets.all(AppTokens.spaceMd),
+        borderRadius:
+            const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+        child: SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
+                      AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceSm),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(L10n.shiftColor, style: AppTokens.titleStrong),
                   ),
                 ),
-              ),
-              _actionsRow(context),
-            ],
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg, 0,
+                        AppTokens.spaceLg, AppTokens.spaceMd),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _previewRow(context, onSurface),
+                        const SizedBox(height: AppTokens.spaceLg),
+                        Text(L10n.shiftColorPreview,
+                            style: AppTokens.microText.copyWith(color: muted)),
+                        const SizedBox(height: AppTokens.spaceSm),
+                        _sampleRow(context),
+                        const SizedBox(height: AppTokens.spaceLg),
+                        _hueStrip(),
+                        const SizedBox(height: AppTokens.spaceMd),
+                        _svSquare(),
+                        const SizedBox(height: AppTokens.spaceLg),
+                        _presetGrid(context, onSurface),
+                      ],
+                    ),
+                  ),
+                ),
+                _actionsRow(context),
+              ],
+            ),
           ),
         ),
       ),

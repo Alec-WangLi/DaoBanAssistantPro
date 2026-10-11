@@ -405,6 +405,13 @@ Future<T?> showGlassDialog<T>({
 ///
 /// 遮罩色与「底色透明」写在一处（原来是 9 处各写一遍 `backgroundColor: Colors.transparent`
 /// 与 `barrierColor: Colors.black26`）。
+///
+/// ⚠️ **这个入口不看键盘。** 它底下那层布局（SDK 的 `_ModalBottomSheetLayout`）把面板
+/// 钉在**屏幕底边**（`size.height - child.height`），`viewInsets` 一次都没读 —— 所以
+/// 弹层里一旦长出输入框，软键盘会直接盖住贴底的那一行（通常是动作行）。**只给内容夹
+/// 一个 `maxHeight - viewInsets.bottom` 是没用的**：面板是变矮了，底边还在屏幕底。
+/// 得自己按 `viewInsets.bottom` 把整块顶上去，见 `shift_color_picker.dart` 那处
+/// （它是全 app 唯一一个带输入框的弹层）。
 Future<T?> showGlassSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
