@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 月历一格的白卡（贴齐 App 的格子：白色 + 6% 黑描边 + 小圆角）。
+     用**静态 shape** 而不是烤位图：圆角随控件尺寸走，天然不会被 fitXY 拉成椭圆。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <solid android:color="@color/wg_cell_fill_light" />
+    <stroke android:width="1dp" android:color="@color/wg_cell_border_light" />
+</shape>
