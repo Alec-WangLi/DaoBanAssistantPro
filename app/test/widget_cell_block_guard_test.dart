@@ -51,44 +51,53 @@ void main() {
     }
   });
 
-  test('月历格有「今天」那块 ImageView，且 id 与 Kotlin 引用逐字一致', () {
-    const id = 'wg_mc_block';
-    final kt = _read(
-        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
-    final xml = _read('android/app/src/main/res/layout/widget_month_cell.xml');
-    expect(RegExp('android:id="\\@\\+id/$id"').hasMatch(xml), true,
-        reason: 'widget_month_cell.xml 里没有 $id —— 块画不出来，而且**不报错**');
-    // 两个方向都要设满：只 setImageViewBitmap 不 setViewVisibility(GONE)，
-    // 翻月之后非今天那一格会挂着上一次的块（宿主 reapply 只重放新动作）。
-    expect(kt.contains('R.id.$id'), true,
-        reason: 'WidgetRenderer.kt 里没引用 $id —— 布局改了、Kotlin 没跟');
-    expect(kt.contains('R.id.$id, android.view.View.GONE'), true,
-        reason: '$id 没有显式 GONE 那一支 —— 块会残留到别的格子上');
+  test('两张 cell 布局都有「今天」那块 ImageView，且 id 与 Kotlin 引用逐字一致', () {
+    void check(String layout, String id) {
+      final kt = _read(
+          'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+      final xml = _read('android/app/src/main/res/layout/$layout.xml');
+      expect(RegExp('android:id="\\@\\+id/$id"').hasMatch(xml), true,
+          reason: '$layout.xml 里没有 $id —— 块画不出来，而且**不报错**');
+      // 两个方向都要设满：只 setImageViewBitmap 不 setViewVisibility(GONE)，
+      // 翻月 / 翻周之后非今天那一格会挂着上一次的块（宿主 reapply 只重放新动作）。
+      expect(kt.contains('R.id.$id'), true,
+          reason: 'WidgetRenderer.kt 里没引用 $id —— 布局改了、Kotlin 没跟');
+      expect(kt.contains('R.id.$id, android.view.View.GONE'), true,
+          reason: '$id 没有显式 GONE 那一支 —— 块会残留到别的格子上');
+    }
+
+    check('widget_month_cell', 'wg_mc_block');
+    check('widget_strip_cell', 'wg_sc_block');
   });
 
   test('「今天」块的位图尺寸来自 AppWidgetOptions，不是写死的', () {
     final kt = _read(
         'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
     expect(kt.contains('WidgetChip.block('), true, reason: '一处都没用上块原语');
-    final i = kt.indexOf('private fun monthCellPx');
-    expect(i, greaterThanOrEqualTo(0), reason: 'monthCellPx 不见了');
-    final body = kt.substring(i, kt.indexOf('\n    }', i));
-    expect(body.contains('OPTION_APPWIDGET_MIN_WIDTH'), true,
-        reason: 'monthCellPx 没读 AppWidgetOptions —— 尺寸写死的话，5 行月与 6 行月'
-            '（格子高差约 18%）里必有一档的圆角被拉变形、四角露出白卡的角尖');
-    expect(body.contains('OPTION_APPWIDGET_MIN_HEIGHT'), true,
-        reason: '同上，高度那一路');
+    for (final fn in ['monthCellPx', 'stripCellPx']) {
+      final i = kt.indexOf('private fun $fn');
+      expect(i, greaterThanOrEqualTo(0), reason: '$fn 不见了');
+      final body = kt.substring(i, kt.indexOf('\n    }', i));
+      expect(body.contains('OPTION_APPWIDGET_MIN_WIDTH'), true,
+          reason: '$fn 没读 AppWidgetOptions —— 尺寸写死的话，5 行月与 6 行月'
+              '（格子高差约 18%）里必有一档的圆角被拉变形、四角露出白卡的角尖');
+      expect(body.contains('OPTION_APPWIDGET_MIN_HEIGHT'), true,
+          reason: '同上，高度那一路');
+    }
   });
 
   test('今天那格的字都过 onSolidInk', () {
     final kt = _read(
         'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
     expect(kt.contains('private fun onSolidInk'), true, reason: 'onSolidInk 不见了');
-    final uses = RegExp(r'onSolidInk\(').allMatches(kt).length;
+    // ⚠️ 匹配的是**调用点**（`onSolidInk(context, `），不是 `onSolidInk(` ——
+    // 后者会把**函数定义**那一行也算进去（`onSolidInk(context: Context, …)`），
+    // 阈值就整体低一格，于是「少了一处分支」正好卡在边界上溜过去。
+    final uses = RegExp(r'onSolidInk\(context, ').allMatches(kt).length;
     // ⚠️ 这是一个**下界**（不是精确计数）：它抓的是「漏了一处分支」。
-    // 本任务做完应当是 3 处（日数字 / 农历 / 胶囊简称）—— 少一处，就是
-    // 「假期撞上今天时红字压在实心块上读不出来」这类情况。
-    expect(uses, greaterThanOrEqualTo(3),
-        reason: 'onSolidInk 只用到了 $uses 处，月格那三处（日数字 / 农历 / 简称）没凑齐');
+    // 月格三处（日数字 / 农历 / 胶囊简称）+ 周条三处（周几 / 日数字 / 简称）＝ 6。
+    // 少一处就是「假期撞上今天时红字压在实心块上读不出来」这类情况。
+    expect(uses, greaterThanOrEqualTo(6),
+        reason: 'onSolidInk 的**调用点**只有 $uses 处 —— 月格三处 + 周条三处应当凑齐 6 处');
   });
 }

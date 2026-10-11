@@ -13,49 +13,66 @@
   没班次（空白表方案）时渲染侧把 `wg_sc_pill` 与 `wg_sc_abbr` 都设 GONE（不画胶囊，
   与 App 日历格一致）。外层那个 36×18dp 的 FrameLayout **没有 id**，因此塌不掉、
   那 18dp + 3dp 仍然占着 —— 这是有意的：一周七列高度因此恒定，不随有班/没班跳动。
+
+  2026-10-11（贴齐 App）：多了一层 `wg_sc_block` —— 「今天」那一列的**实心主色块**。
+  它与月历卡那张是同一件事（两张卡就摆在桌面同一屏上，不能一个有一个没有）；
+  颜色是用户选的主色，只能烤位图，压在内容**下面**。
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_sc_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/wg_sc_weekday"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="11sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
+    <ImageView
+        android:id="@+id/wg_sc_block"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="2dp"
+        android:scaleType="fitXY"
+        android:contentDescription="@null" />
 
-    <TextView
-        android:id="@+id/wg_sc_day"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textSize="15sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
-
-    <FrameLayout
-        android:layout_width="36dp"
-        android:layout_height="18dp"
-        android:layout_marginTop="3dp">
-
-        <ImageView
-            android:id="@+id/wg_sc_pill"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="fitXY"
-            android:contentDescription="@null" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center">
 
         <TextView
-            android:id="@+id/wg_sc_abbr"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:textSize="10sp"
-            android:maxLines="1" />
-    </FrameLayout>
-</LinearLayout>
+            android:id="@+id/wg_sc_weekday"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/wg_sc_day"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textSize="15sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <FrameLayout
+            android:layout_width="36dp"
+            android:layout_height="18dp"
+            android:layout_marginTop="3dp">
+
+            <ImageView
+                android:id="@+id/wg_sc_pill"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/wg_sc_abbr"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textSize="10sp"
+                android:maxLines="1" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

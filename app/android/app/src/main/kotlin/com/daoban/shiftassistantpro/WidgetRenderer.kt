@@ -353,6 +353,8 @@ object WidgetRenderer {
             R.id.wg_ws_col1, R.id.wg_ws_col2, R.id.wg_ws_col3, R.id.wg_ws_col4,
             R.id.wg_ws_col5, R.id.wg_ws_col6, R.id.wg_ws_col7,
         )
+        // 「今天」那一列那块位图的尺寸（见 `stripCellPx` 的 KDoc）。一周只算一次。
+        val (colW, colH) = stripCellPx(context, widgetId)
 
         for (col in columns.indices) {
             // **先清空再填** —— 这一句是「内容变了之后小组件重影」的修复，见本文件顶部
@@ -380,15 +382,36 @@ object WidgetRenderer {
             )
 
             val c = RemoteViews(context.packageName, R.layout.widget_strip_cell)
+
+            // ── 「今天」那一列铺一块**实心主色** ──
+            // 与月历卡那张是同一件事（两张卡在桌面同一屏上，不能一个有一个没有）。
+            // 主色是用户选的，静态 drawable 做不到，只能烤位图；一周只有一张。
+            if (isToday) {
+                c.setViewVisibility(R.id.wg_sc_block, android.view.View.VISIBLE)
+                c.setImageViewBitmap(
+                    R.id.wg_sc_block,
+                    WidgetChip.block(snap.accent, colW, colH, dpToPx(context, 12).toFloat()),
+                )
+            } else {
+                c.setViewVisibility(R.id.wg_sc_block, android.view.View.GONE)
+            }
+
             // 可见性无条件设满：宿主 reapply 时只重放新动作，漏设会保持上一次的状态。
             c.setViewVisibility(R.id.wg_sc_weekday, android.view.View.VISIBLE)
             c.setViewVisibility(R.id.wg_sc_day, android.view.View.VISIBLE)
 
+            // 块上的字走 `onSolidInk`（黑或白里更清楚的那个）—— 与月历格同一套。
             c.setTextViewText(R.id.wg_sc_weekday, d.weekday)
-            c.setTextColor(R.id.wg_sc_weekday, if (isToday) snap.accent else muted)
+            c.setTextColor(
+                R.id.wg_sc_weekday,
+                if (isToday) onSolidInk(context, snap.accent) else muted,
+            )
             // 日数字：与 App 的格子一样只印「日」，整串「9月19日」在 46dp 宽的列里排不下。
             c.setTextViewText(R.id.wg_sc_day, LocalDate.ofEpochDay(epoch).dayOfMonth.toString())
-            c.setTextColor(R.id.wg_sc_day, if (isToday) snap.accent else ink)
+            c.setTextColor(
+                R.id.wg_sc_day,
+                if (isToday) onSolidInk(context, snap.accent) else ink,
+            )
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块不画）。
             // 不能拿 `wg_empty_*` 顶：`tintedChip` 的 `Paint.setAlpha` 会覆盖颜色字节自带的
@@ -398,12 +421,27 @@ object WidgetRenderer {
             if (d.hasShift) {
                 c.setViewVisibility(R.id.wg_sc_pill, android.view.View.VISIBLE)
                 c.setViewVisibility(R.id.wg_sc_abbr, android.view.View.VISIBLE)
+                // 今天那列的胶囊跟月历格一样转**实心**（淡染压在实心主色块上会糊成一片）。
                 c.setImageViewBitmap(
                     R.id.wg_sc_pill,
-                    WidgetChip.tintedChip(d.color, dpToPx(context, 36), dpToPx(context, 18)),
+                    if (isToday) {
+                        WidgetChip.block(
+                            d.color,
+                            dpToPx(context, 36),
+                            dpToPx(context, 18),
+                            dpToPx(context, 9).toFloat(),
+                        )
+                    } else {
+                        WidgetChip.tintedChip(
+                            d.color, dpToPx(context, 36), dpToPx(context, 18),
+                        )
+                    },
                 )
                 c.setTextViewText(R.id.wg_sc_abbr, d.shiftAbbr)
-                c.setTextColor(R.id.wg_sc_abbr, ink)
+                c.setTextColor(
+                    R.id.wg_sc_abbr,
+                    if (isToday) onSolidInk(context, d.color) else ink,
+                )
             } else {
                 c.setViewVisibility(R.id.wg_sc_pill, android.view.View.GONE)
                 c.setViewVisibility(R.id.wg_sc_abbr, android.view.View.GONE)
@@ -691,6 +729,21 @@ object WidgetRenderer {
             v.addView(slotIds[slot], c)
         }
         return v
+    }
+
+    /**
+     * 本周条一列的真实像素尺寸（同 `monthCellPx` 的理由：位图被 `fitXY` 拉伸，
+     * 宽高比对不上时圆角会被拉成椭圆）。周条**没有标题行与周几行** ——
+     * 只有卡 padding 8dp×2 与格缝，所以比月历那格矮得多。
+     */
+    private fun stripCellPx(context: Context, widgetId: Int): Pair<Int, Int> {
+        val opt = AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId)
+        val wDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+        val hDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 40)
+        val density = context.resources.displayMetrics.density
+        val cellW = (((wDp - 16) / 7f) - 4f) * density
+        val cellH = (hDp - 20) * density
+        return cellW.toInt().coerceAtLeast(1) to cellH.toInt().coerceAtLeast(1)
     }
 
     /**
