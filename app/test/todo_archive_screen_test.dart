@@ -15,6 +15,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_check.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -80,10 +81,10 @@ void main() {
 
   /// 挂这一页。[key] 换一个就等于「下次进来」（视作被销毁重建）。
   ///
-  /// [repository] 给「写库那一趟」换成别的实现（见 `_SlowRepo`）。
+  /// [repository] 给「写库那一趟」换成别的实现（见 `_SlowRepo`）；[size] 换视口。
   Future<void> pumpScreen(WidgetTester tester,
-      {Key? key, AppRepository? repository}) async {
-    tester.view.physicalSize = const Size(420, 1200);
+      {Key? key, AppRepository? repository, Size size = const Size(420, 1200)}) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -191,6 +192,52 @@ void main() {
     await _dispose(tester);
   });
 
+  testWidgets('归档里的一次性待办：取消勾选，它回到主列表且不划掉', (tester) async {
+    await add('做完的甲', DateTime(2026, 1, 1), done: true);
+    await pumpScreen(tester);
+
+    // 展开折叠区：那一条现在有勾选框了（一次性待办没有系列，不受「一个系列两条
+    // 未完成的行」那条约束）。
+    await tester.tap(find.text(L10n.archivedTodos(1)));
+    await _settle(tester);
+    expect(find.byType(GlassCheck), findsOneWidget);
+    expect(find.text(L10n.noEvents), findsOneWidget, reason: '主列表是空的');
+
+    await tester.tap(find.byType(GlassCheck));
+    await _settle(tester);
+
+    expect(find.text(L10n.noEvents), findsNothing, reason: '主列表里已经有它了');
+    expect(find.text('做完的甲'), findsOneWidget);
+    expect(find.text(L10n.archivedTodos(1)), findsNothing,
+        reason: '归档空了，那一行标题也该没了');
+    final title = tester.widget<Text>(find.text('做完的甲'));
+    expect(title.style?.decoration, isNot(TextDecoration.lineThrough),
+        reason: '回到主列表的是一条**未完成**的待办，不该还带着删除线');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('归档里的重复待办历史行：不许出现勾选框', (tester) async {
+    final today = dateOnly(DateTime.now());
+    final sid = await repo.addRecurringTodo(
+        title: '每天交班', repeat: RecurRepeat.daily, startDate: today);
+    await repo.advanceRecurringTodos(today: today);
+    final row = (await repo.listEvents()).firstWhere((e) => e.seriesId == sid);
+    await repo.setEventCompleted(row, true);
+    await pumpScreen(tester);
+
+    await tester.tap(find.text(L10n.archivedTodos(1)));
+    await _settle(tester);
+
+    expect(find.text('每天交班'), findsOneWidget);
+    expect(find.byType(GlassCheck), findsNothing,
+        reason: '归档里的重复待办历史行可能是旧 occurrence —— 给了勾选框，取消勾选会让'
+            '那个系列出现两条未完成的行，recurring_panel 的 live.single 当场抛 '
+            'StateError；就算不崩，生成器下次一跑又会把它收回去');
+
+    await _dispose(tester);
+  });
+
   testWidgets('主列表为空、归档非空：那句提示还在，折叠区仍能点开', (tester) async {
     await add('做完的甲', DateTime(2026, 1, 1), done: true);
     await pumpScreen(tester);
@@ -241,6 +288,32 @@ void main() {
     expect(
         hit.path.any((e) => e.target == tester.renderObject(buttons.last)), isTrue,
         reason: '删除键的中心得真的打得中 —— 被 FAB 盖住时命中的是 FAB');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('小窗 200×400：两种历史行同框，标题与勾选框都不溢出', (tester) async {
+    // 一次性的一条 + 重复待办的一条历史行，同时摆在展开的归档里 ——
+    // 「有勾的」与「没勾的」两种形态一眼看得完，小窗排版也就一次验到。
+    final today = dateOnly(DateTime.now());
+    await add('做完的一次性', today, done: true);
+    final sid = await repo.addRecurringTodo(
+        title: '每天交班', repeat: RecurRepeat.daily, startDate: today);
+    await repo.advanceRecurringTodos(today: today);
+    final row = (await repo.listEvents()).firstWhere((e) => e.seriesId == sid);
+    await repo.setEventCompleted(row, true);
+
+    await pumpScreen(tester, size: const Size(200, 400));
+    await tester.tap(find.text(L10n.archivedTodos(2)));
+    await _settle(tester);
+
+    expect(find.text('做完的一次性'), findsOneWidget);
+    expect(find.text('每天交班'), findsOneWidget);
+    expect(find.byType(GlassCheck), findsOneWidget,
+        reason: '一次性那条有勾、重复那条没有 —— 两种形态同框');
+    expect(tester.getSize(find.text('做完的一次性')).width, greaterThan(0),
+        reason: '标题不许被右边的删除键挤成一个字都没有');
+    expect(tester.takeException(), isNull, reason: '小窗下不许有布局溢出');
 
     await _dispose(tester);
   });

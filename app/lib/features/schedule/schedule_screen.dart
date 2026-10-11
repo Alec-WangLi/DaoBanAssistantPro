@@ -269,6 +269,24 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     );
   }
 
+  /// 勾上 / 取消一条待办。**主列表与归档区共用这一份** —— 写两遍迟早走样。
+  Future<void> _toggleDone(WidgetRef ref, ScheduleEvent e, bool v) async {
+    // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassCheck`，它在自己的
+    // `onTap` 里发一次 `select()`（「选中变了」正是它的语义，与开关同一处）。
+    // 再加一次就是每点一下震两下 —— 两下比一下信息量**更少**，正是这套设计要消灭的噪音。
+    //
+    // **两个方向都记进集合、且都在 `await` 之前**（乐观写）：
+    //  · 勾上那半边是「先划掉再收走」—— 等 `await` 完再记的话，流会先吐出一帧
+    //    「已完成、又不在集合里」，那一条会离开主列表再被加回来；
+    //  · 取消那半边是「不许跳走」—— 这一刻库里记的还是「已完成」，不把它按在主列表里
+    //    的话，它会先离开、等写库回来才回来。用户看到的正是「点一下它跳一下」
+    //    （2026-10-11 真机反馈，用例在 `todo_archive_screen_test.dart` 的「取消勾选：
+    //    那一条整趟都留在主列表里，不许跳走」，靠一个刻意拖慢写库的仓库把窗口撑开）。
+    setState(() => _sessionRows.add(e.id));
+    await ref.read(appRepositoryProvider).setEventCompleted(e, v);
+    await _rescheduleReminders(ref);
+  }
+
   Widget _eventTile(BuildContext context, WidgetRef ref, ScheduleEvent e,
       {bool archived = false}) {
     final subtitle = [
@@ -288,37 +306,25 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
       onTap: () => showEditEventDialog(context, ref, e),
       child: Row(
         children: [
-          if (archived)
-            // 归档区**不画勾选框** —— 这一区不给取消勾选（spec §5：归档里的行可能
-            // 是旧 occurrence，取消勾选会让一个系列出现两条未完成的行，管理面板的
-            // `live.single` 会当场抛异常）。留一个与勾选框等宽的空位，免得这一区的
-            // 文字缩进跟主列表差一档。
+          if (archived && e.seriesId != null)
+            // **归档里的重复待办历史行不给勾选框。** 那一条可能是**旧 occurrence**，
+            // 而那个系列已经走到下一次了 —— 取消勾选会让一个系列出现两条未完成的行，
+            // `recurring_panel._edit` 的 `live.single` 当场抛 `StateError`；就算不崩，
+            // 生成器下次一跑又会把它收回去（用户看到的是「我明明取消了，它又变回去了」）。
+            // 留一个与勾选框等宽的空位，免得这一区的文字缩进跟主列表差一档。
             const SizedBox(
                 width: _archiveCheckSlot, height: _archiveCheckSlot)
           else
             // v0.10.10：待办原来用的是一枚**开关** —— 那不符合待办事项的逻辑
             // （用户 2026-10-01：「弄完之后打勾，给一个删除线表达」）。全 app 九处
             // `GlassSwitch` 里只有这一处是勾选语义，其余八处都是真开关，不动。
+            //
+            // **归档里的「一次性」待办也给勾**（2026-10-11 用户：「误点了想把它打勾
+            // 取消，让它回到外面」）：它没有系列，不受上面那条约束；取消之后它当场
+            // 回到主列表、不带删除线。
             GlassCheck(
               value: e.isCompleted,
-              onChanged: (v) async {
-                // 这里**不**加 `Haptics.commit()`：勾选的载体是 `GlassCheck`，
-                // 它在自己的 `onTap` 里发一次 `select()`（「选中变了」正是它的语义，
-                // 与开关同一处）。再加一次就是每点一下震两下 —— 两下比一下信息量
-                // **更少**，正是这套设计要消灭的噪音。
-                //
-                // **两个方向都记进集合、且都在 `await` 之前**（乐观写）：
-                //  · 勾上那半边是「先划掉再收走」—— 等 `await` 完再记的话，流会先吐出
-                //    一帧「已完成、又不在集合里」，那一条会离开主列表再被加回来；
-                //  · 取消那半边是「不许跳走」—— 这一刻库里记的还是「已完成」，不把它
-                //    按在主列表里的话，它会先离开、等写库回来才回来。用户看到的正是
-                //    「点一下它跳一下」（2026-10-11 真机反馈，用例在
-                //    `todo_archive_screen_test.dart` 的「取消勾选：那一条整趟都留在
-                //    主列表里，不许跳走」，靠一个刻意拖慢写库的仓库把那个窗口撑开）。
-                setState(() => _sessionRows.add(e.id));
-                await ref.read(appRepositoryProvider).setEventCompleted(e, v);
-                await _rescheduleReminders(ref);
-              },
+              onChanged: (v) => _toggleDone(ref, e, v),
             ),
           const SizedBox(width: 12),
           Expanded(
