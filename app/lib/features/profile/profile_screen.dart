@@ -12,6 +12,7 @@ import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
@@ -216,7 +217,19 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionAlarm),
-            _RingtoneTile(onPick: () => _showRingtonePicker(context, ref)),
+            // 铃声与贪睡时长是同一类东西（都是「响了之后怎么响」），摆在一张卡里，
+            // 中间用全 app 那条 `Divider(height: 1)` 配方（同「关于」那一节）。
+            GlassTile(
+              translucentFill: false,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _RingtoneRow(onPick: () => _showRingtonePicker(context, ref)),
+                  const Divider(height: 1),
+                  const _SnoozeRow(),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             _sectionTitle(context, L10n.sectionData),
             GlassTile(
@@ -650,17 +663,17 @@ class ProfileScreen extends ConsumerWidget {
 /// 副标题只区分**模式**，不显示系统铃声的具体名字：那要先过 `listRingtones()` 拿
 /// uri→名字的对应（列表里才有），为一行副标题多付一次原生通道调用不值当。自选铃声
 /// 的名字是选的时候顺手存下来的（`ringtoneTitle`），直接读就有。
-class _RingtoneTile extends ConsumerStatefulWidget {
-  const _RingtoneTile({required this.onPick});
+class _RingtoneRow extends ConsumerStatefulWidget {
+  const _RingtoneRow({required this.onPick});
 
   /// 弹出选择层；返回后本组件重读一次设置。
   final Future<void> Function() onPick;
 
   @override
-  ConsumerState<_RingtoneTile> createState() => _RingtoneTileState();
+  ConsumerState<_RingtoneRow> createState() => _RingtoneRowState();
 }
 
-class _RingtoneTileState extends ConsumerState<_RingtoneTile> {
+class _RingtoneRowState extends ConsumerState<_RingtoneRow> {
   String? _uri;
   String? _title;
 
@@ -709,21 +722,76 @@ class _RingtoneTileState extends ConsumerState<_RingtoneTile> {
   }
 
   @override
-  Widget build(BuildContext context) => GlassTile(
-        translucentFill: false,
-        padding: EdgeInsets.zero,
-        child: GlassPressable(
-          child: ListTile(
-            leading: const Icon(Icons.music_note_outlined),
-            title: Text(L10n.ringtone),
-            subtitle:
-                Text(_subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-            trailing: const Icon(Icons.chevron_right_outlined),
-            onTap: () async {
-              await widget.onPick();
-              if (mounted) await _load();
-            },
+  Widget build(BuildContext context) => GlassPressable(
+        child: ListTile(
+          leading: const Icon(Icons.music_note_outlined),
+          title: Text(L10n.ringtone),
+          subtitle:
+              Text(_subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: const Icon(Icons.chevron_right_outlined),
+          onTap: () async {
+            await widget.onPick();
+            if (mounted) await _load();
+          },
+        ),
+      );
+}
+
+/// 「贪睡时长」那一行。摆法照 `_RingtoneRow`：**自读自写 prefs、选完自己重读一次**。
+///
+/// 为什么不进 `appSettings`：响铃界面要读它，而那个界面是原生 intent 拉起来的、
+/// **不 watch** 任何 provider（见 `AlarmService.snoozeMinutes` 的注释）。prefs 是
+/// 两边的共同真源，铃声也是这么办的。
+class _SnoozeRow extends StatefulWidget {
+  const _SnoozeRow();
+
+  @override
+  State<_SnoozeRow> createState() => _SnoozeRowState();
+}
+
+class _SnoozeRowState extends State<_SnoozeRow> {
+  int _minutes = L10n.snoozeDefaultMinutes;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final m = await AlarmService.snoozeMinutes();
+    if (!mounted) return;
+    setState(() => _minutes = m);
+  }
+
+  Future<void> _pick() async {
+    final picked = await showGlassOptionPicker<int>(
+      context,
+      title: L10n.snoozeDuration,
+      options: L10n.snoozeOptions,
+      labelOf: L10n.snoozeOptionLabel,
+      selected: _minutes,
+    );
+    // null = 点外面关掉了，保持原值不动（与待办提醒那一处同一句判据）。
+    if (picked == null) return;
+    await AlarmService.setSnoozeMinutes(picked);
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) => GlassPressable(
+        child: ListTile(
+          leading: const Icon(Icons.snooze_outlined),
+          title: Text(L10n.snoozeDuration),
+          // 副标题把**现在是多少**写出来 —— 铃声那一行也是这个规矩：这一档设没设
+          // 成功，光看是看不出来的。
+          subtitle: Text(
+            L10n.snoozeDurationSubtitle(_minutes),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
+          trailing: const Icon(Icons.chevron_right_outlined),
+          onTap: _pick,
         ),
       );
 }

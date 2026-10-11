@@ -82,6 +82,10 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
 
   double _bodyDragDy = 0;
 
+  /// 设置里的贪睡时长（分钟），画在「再睡一会」那颗按钮上。
+  /// 首帧用默认值，`initState` 里读到真值后再刷（见 `_loadSnoozeMinutes`）。
+  int _snoozeMinutes = L10n.snoozeDefaultMinutes;
+
   @override
   void initState() {
     super.initState();
@@ -95,6 +99,16 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
       duration: AppTokens.durSlow,
     );
     _thumbLift = AnimationController(vsync: this, duration: AppTokens.durMed);
+    _loadSnoozeMinutes();
+  }
+
+  /// 把设置里的贪睡时长读出来写在按钮上。读设置要过一次异步，所以首帧用的是默认
+  /// 值 —— 读到之后再刷一次；读到的是坏值也没关系，`snoozeMinutes()` 自己会退回
+  /// 默认，按钮上写的与按下之后真排的**是同一个数**。
+  Future<void> _loadSnoozeMinutes() async {
+    final m = await AlarmService.snoozeMinutes();
+    if (!mounted) return;
+    setState(() => _snoozeMinutes = m);
   }
 
   @override
@@ -238,7 +252,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                         primary: true,
                         icon: const Icon(Icons.snooze_outlined),
                         onPressed: _snooze,
-                        child: Text(L10n.snooze),
+                        child: Text(L10n.snoozeWithDuration(_snoozeMinutes)),
                       ),
                     ),
                   ],

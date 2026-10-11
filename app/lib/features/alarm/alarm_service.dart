@@ -807,10 +807,41 @@ class AlarmService {
     } catch (_) {}
   }
 
-  /// 再睡一会：5 分钟后重新响铃（原生闹钟），标题与说明原样带过去。
+  /// 贪睡时长在 SharedPreferences 里的键（分钟）。
+  static const String snoozeMinutesKey = 'snoozeMinutes';
+
+  /// 当前贪睡时长（分钟）。
+  ///
+  /// ⚠️ **直接读 prefs，不走 `appSettingsProvider`。** 响铃界面是原生闹钟的
+  /// intent 拉起来的，它**不 watch** 那个 provider，而设置要等 `_load()` 才落到
+  /// 模块级标志上 —— 走那条路就多一处会静默失灵的依赖（v0.10.13 的
+  /// `47_ringing_liquid` 出图与真机逐字节相同，正是这个坑的现场）。prefs 是唯一
+  /// 真源，铃声那条路也是这么读的。
+  ///
+  /// 读到坏值（键被改成不在档位里的数）**退回默认**而不是照排：照排的话 `0`
+  /// 会变成「按下就再响」、负数会排到过去，都比不给这一项更糟。
+  static Future<int> snoozeMinutes() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final v = sp.getInt(snoozeMinutesKey);
+      if (v != null && L10n.snoozeOptions.contains(v)) return v;
+    } catch (_) {
+      // 读不到（极少见）就当没设过 —— 这一条不该把响铃动作带崩。
+    }
+    return L10n.snoozeDefaultMinutes;
+  }
+
+  static Future<void> setSnoozeMinutes(int minutes) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setInt(snoozeMinutesKey, minutes);
+    } catch (_) {}
+  }
+
+  /// 再睡一会：按设置里的时长重新响铃（原生闹钟），标题与说明原样带过去。
   static Future<void> snoozeAlarm(AlarmRing ring) async {
     try {
-      final fire = DateTime.now().add(const Duration(minutes: 5));
+      final fire = DateTime.now().add(Duration(minutes: await snoozeMinutes()));
       await scheduleNativeAlarm(99998, fire, ring.title, detail: ring.detail);
     } catch (e) {
       await appendLog('snoozeAlarm 排定失败: $e');

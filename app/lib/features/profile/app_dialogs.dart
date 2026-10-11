@@ -39,7 +39,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.7\n'
+const String _changelogZh = 'v0.11.8\n'
+    '· 「再睡一会」的时长可以自己定了：我的 → 闹钟 → 贪睡时长，可选 1 / 5 / 10 / 15 / 20 / 30 分钟（默认仍是 5 分钟，不动它就跟以前一样）\n'
+    '· 响铃界面那颗按钮上现在写着时长（「再睡一会 · 10 分钟」），按下之前就知道会睡多久\n'
+    '\n'
+
+    'v0.11.7\n'
     '· 修好一处「颜色值填好了，却点不到确定」：软键盘弹起来的时候，会正好盖住取色层底下那颗「确定」按钮（填写颜色值本来是这一层的主要入口，键盘一弹按钮就落在键盘底下了）\n'
     '· 现在键盘弹起来，整块取色面板会顶到键盘上面去\n'
     '\n'
@@ -104,15 +109,15 @@ const String _changelogZh = 'v0.11.7\n'
     '· 排闹钟时不再反复解析整份清单（那一步是白付的）\n'
     '· 桌面小组件的刷新改用非精确闹钟，少占一份系统唤醒额度\n'
 
-    'v0.10.21\n'
-    '· 修好上一版带进来的三处「改完之后界面没跟上」：调整某一天的班次、或者换语言之后，桌面小组件现在会跟着变（之前会一直停着旧的）\n'
-    '· 调整班次、改周期之后，信息卡那行「本月统计」现在会跟着变（之前还是旧数字）\n'
-    '· 长按拖选一段日子时，日历不再每一帧重算整页 —— 上一版的更新说明里写了这一条，当时其实还没做到\n\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.7\n'
+const String _changelogEn = 'v0.11.8\n'
+    '· You can now choose how long Snooze waits: Me → Alarm → Snooze length, with 1 / 5 / 10 / 15 / 20 or 30 minutes (the default is still 5, so leaving it alone changes nothing)\n'
+    '· The snooze button now shows that length ("Snooze · 10 min"), so you know how long you are getting before you tap it\n'
+    '\n'
+
+    'v0.11.7\n'
     '· Fixed "the color value is typed, but OK cannot be tapped": with the software keyboard up, it covered the OK button at the bottom of the color picker (typing a value is the main way into that screen, and the button landed right underneath the keyboard)\n'
     '· The whole picker panel now rides up above the keyboard\n'
     '\n'
@@ -176,11 +181,6 @@ const String _changelogEn = 'v0.11.7\n'
     '· A ringing alarm stops itself after 15 minutes if nobody attends to it (it used to ring and buzz forever)\n'
     '· Scheduling alarms no longer re-parses the whole alarm list on every entry\n'
     '· The home-screen widget refresh now uses an inexact alarm, spending less of the system wake-up budget\n'
-
-    'v0.10.21\n'
-    '· Fixed three "the screen did not keep up" cases from the previous version: after adjusting a single day or switching language the home-screen widget now updates (it used to stay on the old shifts)\n'
-    '· After adjusting a day or editing the cycle, the info card\'s monthly tally now updates (it used to keep the old numbers)\n'
-    '· Long-press selecting a run of days no longer rebuilds the whole calendar every frame — the previous release notes claimed this, but it was not actually done yet\n\n'
 
         '\n'
 ;

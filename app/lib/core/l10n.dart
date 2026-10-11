@@ -173,6 +173,10 @@ class L10n {
       'How to add the three cards (Xiaomi hides them in a sub-menu)');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
   static String get ringtoneSubtitle => t('选择内置、系统、你的铃声，或「仅震动」', 'Choose a built-in, system, or your own ringtone, or vibrate only');
+  static String get snoozeDuration => t('贪睡时长', 'Snooze length');
+  static String snoozeDurationSubtitle(int minutes) => t(
+      '「再睡一会」之后隔 $minutes 分钟重新响铃',
+      'A snooze rings again $minutes min later');
   static String get clearReset => t('清空重置', 'Clear & reset');
   static String get clearResetSubtitle => t(
       '排班、日程、闹钟与模板全清掉，回到刚安装的样子',
@@ -897,6 +901,21 @@ class L10n {
   // 响铃界面
   static String get snooze => t('再睡一会', 'Snooze');
   static String get swipeUpToDismiss => t('上滑关闭', 'Swipe up to dismiss');
+
+  /// 「再睡一会」的档位（分钟）。默认 5 = 这一项出现之前写死的那个值，
+  /// 所以升级上来的人行为一个字节不变。
+  ///
+  /// 档位是**封闭列表**而不是 1–60 的连续值：设成 1 分钟那种极端值要一次点到，
+  /// 而 30 分钟之后再长的「贪睡」其实是「今天先不上了」，那件事该去关闹钟。
+  static const int snoozeDefaultMinutes = 5;
+  static const List<int> snoozeOptions = [1, 5, 10, 15, 20, 30];
+  static String snoozeOptionLabel(int minutes) =>
+      isEn ? '$minutes min' : '$minutes 分钟';
+
+  /// 响铃界面那颗按钮：「再睡一会 · 10 分钟」。**时长要写在按钮上** —— 设成
+  /// 30 分钟而按钮纹丝不动的话，用户没法确认自己那一下改到底生效没有。
+  static String snoozeWithDuration(int minutes) =>
+      '$snooze · ${snoozeOptionLabel(minutes)}';
 
   // 外观设置
   static String get liquidGlass => t('液态玻璃', 'Liquid glass');
