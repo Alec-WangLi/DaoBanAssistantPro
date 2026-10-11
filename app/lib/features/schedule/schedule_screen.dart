@@ -42,12 +42,14 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     with WidgetsBindingObserver {
-  /// **本次进来之后刚勾掉的行 id**：这一趟它们仍留在主列表里（划掉、停在原位），
-  /// 下次进这一页才收进折叠区。清空的时机就是这一页被销毁重建 —— `home_shell`
-  /// 的 `PageView` 会把离屏那一页 dispose（v0.10.22 明确决定不做 tab 保活），
-  /// 所以「切走再回来」天然成立，不需要额外机制。`home_shell_nav_test` 里那条
-  /// 「切走之后待办页会被销毁」的用例钉着这个前提。
-  final Set<int> _justCompleted = {};
+  /// **本次进来之后动过的行 id**（勾上与取消都算）：这一趟它们一律留在主列表里
+  /// —— 勾完先划掉、停在原位；取消勾选也不许跳走。
+  ///
+  /// 清空的时机就是这一页被销毁重建 —— `home_shell` 的 `PageView` 会把离屏那一页
+  /// dispose（v0.10.22 明确决定不做 tab 保活），所以「切走再回来」天然成立，
+  /// 不需要额外机制。`home_shell_nav_test` 里那条「切走之后待办页会被销毁」的用例
+  /// 钉着这个前提。
+  final Set<int> _sessionRows = {};
 
   /// 折叠区展开了没有。默认收起。
   bool _archiveOpen = false;
@@ -85,7 +87,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
     final events = eventsAsync.valueOrNull ?? const [];
-    final split = splitTodos(events, _justCompleted);
+    final split = splitTodos(events, _sessionRows);
     ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
     return Scaffold(
@@ -305,16 +307,15 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                 // 与开关同一处）。再加一次就是每点一下震两下 —— 两下比一下信息量
                 // **更少**，正是这套设计要消灭的噪音。
                 //
-                // **先乐观地记进 `_justCompleted`、再去写库**：等 `await` 完再记的话，
-                // 流会先吐出一帧「这一行已经完成、又不在集合里」的状态 —— 那一帧里
-                // 它会离开主列表，正是「勾一条整页跳一下」。
-                setState(() {
-                  if (v) {
-                    _justCompleted.add(e.id);
-                  } else {
-                    _justCompleted.remove(e.id);
-                  }
-                });
+                // **两个方向都记进集合、且都在 `await` 之前**（乐观写）：
+                //  · 勾上那半边是「先划掉再收走」—— 等 `await` 完再记的话，流会先吐出
+                //    一帧「已完成、又不在集合里」，那一条会离开主列表再被加回来；
+                //  · 取消那半边是「不许跳走」—— 这一刻库里记的还是「已完成」，不把它
+                //    按在主列表里的话，它会先离开、等写库回来才回来。用户看到的正是
+                //    「点一下它跳一下」（2026-10-11 真机反馈，用例在
+                //    `todo_archive_screen_test.dart` 的「取消勾选：那一条整趟都留在
+                //    主列表里，不许跳走」，靠一个刻意拖慢写库的仓库把那个窗口撑开）。
+                setState(() => _sessionRows.add(e.id));
                 await ref.read(appRepositoryProvider).setEventCompleted(e, v);
                 await _rescheduleReminders(ref);
               },

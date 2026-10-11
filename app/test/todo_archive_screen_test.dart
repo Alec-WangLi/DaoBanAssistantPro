@@ -43,6 +43,22 @@ void _stubPluginChannels() {
   }
 }
 
+/// 一个把写库拖慢的仓库 —— 「取消勾选那一瞬间」那条用例要的就是写库还没回来那个窗口。
+///
+/// **为什么非要有它**：那条用例守的是「取消勾选时那一条不许离开主列表」，而那个
+/// 瞬间只存在于写库的往返之间。真库太快，窗口可能一帧都不到 —— 用例就会变成一句
+/// **永远为真的空话**（把实现改回 `_justCompleted.remove` 也照样绿）。拖慢之后窗口
+/// 是确定的，反向验证才作数。
+class _SlowRepo extends AppRepository {
+  _SlowRepo(super.db);
+
+  @override
+  Future<void> setEventCompleted(ScheduleEvent e, bool done) async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await super.setEventCompleted(e, done);
+  }
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh');
@@ -63,13 +79,20 @@ void main() {
   tearDown(() => db.close());
 
   /// 挂这一页。[key] 换一个就等于「下次进来」（视作被销毁重建）。
-  Future<void> pumpScreen(WidgetTester tester, {Key? key}) async {
+  ///
+  /// [repository] 给「写库那一趟」换成别的实现（见 `_SlowRepo`）。
+  Future<void> pumpScreen(WidgetTester tester,
+      {Key? key, AppRepository? repository}) async {
     tester.view.physicalSize = const Size(420, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db)],
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        if (repository != null)
+          appRepositoryProvider.overrideWithValue(repository),
+      ],
       child: MaterialApp(home: ScheduleScreen(key: key)),
     ));
     await _settle(tester);
@@ -141,6 +164,29 @@ void main() {
 
     expect(find.text('第一条'), findsNothing, reason: '收进折叠区了');
     expect(find.text(L10n.archivedTodos(1)), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('取消勾选：那一条整趟都留在主列表里，不许跳走', (tester) async {
+    await add('第一条', DateTime(2026, 1, 1));
+    await add('第二条', DateTime(2026, 1, 2));
+    await pumpScreen(tester, repository: _SlowRepo(db));
+
+    // 勾上：它留在原地（「先划掉」那一趟）。
+    await tester.tap(find.byType(GlassCheck).first);
+    await _settle(tester);
+    expect(find.text('第一条'), findsOneWidget);
+
+    // 取消勾选 —— **只推一帧**：此刻写库还没回来，库里记的还是「已完成」。
+    // 这一帧上它也不许离开主列表（离开再回来 = 用户报的「点一下跳一下」）。
+    await tester.tap(find.byType(GlassCheck).first);
+    await tester.pump();
+    expect(find.text('第一条'), findsOneWidget,
+        reason: '取消勾选的那一瞬间它不能从主列表里消失');
+
+    await _settle(tester);
+    expect(find.text('第一条'), findsOneWidget, reason: '落定之后当然还在');
 
     await _dispose(tester);
   });

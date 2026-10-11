@@ -36,13 +36,13 @@ void main() {
           reason: '折叠区是「回头看一眼」，最近做完的排最前');
     });
 
-    test('本次刚勾的留在主列表里、且停在原来的位置', () {
+    test('本次动过的行一律留在主列表 —— 勾上与取消都在原地', () {
       final events = [
         _e(1, DateTime.utc(2026, 1, 1), done: true),
         _e(2, DateTime.utc(2026, 1, 2)),
         _e(3, DateTime.utc(2026, 1, 3), done: true),
       ];
-      final s = splitTodos(events, const {1});
+      final s = splitTodos(events, const {1, 2});
       expect(s.active.map((e) => e.id).toList(), [1, 2],
           reason: '刚勾的那条还在主列表，且按日期排在 2 前面 —— 不能跳到末尾');
       expect(s.archived.map((e) => e.id).toList(), [3]);
