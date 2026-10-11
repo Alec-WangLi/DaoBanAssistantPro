@@ -244,7 +244,7 @@ void main() {
   });
 
   // 「勾完先划掉、下次进来才收走」这条**唯一**靠的就是：切走之后待办页那个 State
-  // 被销毁（`_justCompleted` 跟着清空）。它不是任何一处代码显式写的，而是
+  // 被销毁（`_sessionRows` 跟着清空）。它不是任何一处代码显式写的，而是
   // `PageView` 把离屏页 dispose 这个既有性质带来的 —— 所以这条用例钉的是那个性质。
   testWidgets('切走之后待办页会被销毁（「下次进来才收走」靠的就是这个）', (tester) async {
     await _pumpShell(tester);

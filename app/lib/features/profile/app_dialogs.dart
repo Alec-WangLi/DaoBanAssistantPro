@@ -39,7 +39,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.4\n'
+const String _changelogZh = 'v0.11.5\n'
+    '· 修好一处崩溃：重复待办的管理面板在极少数情况下点开就闪退（那个系列短时间里有两条「没做完」的行时，比如刚把当前那一条勾回来、而生成器还没跑）\n'
+    '· 勾完那条「已划掉 · 撤销」的提示条，点完「撤销」会自己收掉 —— 之前它会继续挂在那里，说的还是反话\n'
+    '\n'
+
+    'v0.11.4\n'
     '· 已完成的待办现在可以直接取消勾选、放回列表 —— 一次性待办在「已完成」里也带勾选框了（重复待办的旧记录仍然只有删除键：那个系列可能已经走到下一次，放回来会同时有两条没做完的）\n'
     '· 勾错了不用去那堆淡掉的行里找：勾完底下会弹一条「已划掉 · 撤销」，点一下就退回来\n'
     '· 修好一处像「点了没反应」的：在主列表里取消勾选的那一瞬间，那一条会先跳走再跳回来\n'
@@ -102,16 +107,15 @@ const String _changelogZh = 'v0.11.4\n'
     '· 修好一处崩溃：长按拖选当中用另一根手指点 ‹ / › 换月，日历会当场报错（那一段的日子不在新月里，落点算不出来却还在硬画那条带子）\n'
     '· 上一版那枚水带「按住四面鼓起来」的判据补严了一格：它本来就画得出来，但一直靠同层里阴影顺带重画 —— 现在把它算进「该不该重画」\n\n'
 
-    'v0.10.18\n'
-    '· 长按拖选一段日子时，那层逐格的淡色小方块换成了一条连着的水带：同一周内是一整条，格子之间的缝也盖住了\n'
-    '· 按住那一下它会四面鼓起来、像水一样漫上来；拖动时末端淌到新的一格，它探进哪一格、那一格的字就被轻轻挤一下\n'
-    '· 水带的两端是圆的；跨周时那两头切平（月历里跨周不是相邻的格子，是从最右列跳到下一行的最左列）\n'
-    '· 液态玻璃关着的时候，拖选与之前一模一样（逐格淡色方块，一个像素都没动）\n\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.4\n'
+const String _changelogEn = 'v0.11.5\n'
+    '· Fixed a crash: the recurring-todo panel could crash on open in a rare case (when a series briefly holds two unfinished rows — for example right after you un-tick the current one and the generator has not run yet)\n'
+    '· The "Marked done · Undo" bar now dismisses itself once you tap Undo — it used to linger and keep saying the opposite\n'
+    '\n'
+
+    'v0.11.4\n'
     '· Completed todos can now be un-ticked straight back into the list — one-off todos get a check box under "completed" too (older entries of a recurring todo still only offer delete: that series may already have rolled on to its next occurrence, and bringing the old one back would leave two open rows for the same series)\n'
     '· Mis-tapped one? No need to dig through the faded rows: an "Marked done · Undo" bar appears at the bottom and one tap puts it back\n'
     '· Fixed something that read as a dead tap: un-ticking from the main list used to make the row jump away and then jump back\n'
@@ -173,12 +177,6 @@ const String _changelogEn = 'v0.11.4\n'
     'v0.10.19\n'
     '· Fixed a crash: with a range drag in progress, using a second finger to tap the month arrows left the calendar throwing errors (those days are not in the new month, so the band had nothing to anchor to yet was still drawn)\n'
     '· Tightened one repaint criterion for the previous version water band: the press swell did render, but only because the shadow in the same layer happened to repaint alongside it — it is now part of the check\n\n'
-
-    'v0.10.18\n'
-    '· Long-pressing to select a run of days now draws one continuous water band instead of a pale block per cell — within a week it is a single strip that covers the gaps between cells\n'
-    '· Pressing swells it on all four sides, like water rising; dragging lets the tip flow into the next cell, and the day it reaches gets a slight squeeze\n'
-    '· The band ends are round; where it wraps to the next week the two ends are cut flat (in a month grid a week wrap is not an adjacent cell)\n'
-    '· With Liquid Glass off, selection is exactly as before (a pale block per cell, pixel for pixel)\n\n'
 
         '\n'
 ;

@@ -232,8 +232,9 @@ void main() {
     expect(find.text('每天交班'), findsOneWidget);
     expect(find.byType(GlassCheck), findsNothing,
         reason: '归档里的重复待办历史行可能是旧 occurrence —— 给了勾选框，取消勾选会让'
-            '那个系列出现两条未完成的行，recurring_panel 的 live.single 当场抛 '
-            'StateError；就算不崩，生成器下次一跑又会把它收回去');
+            '那个系列出现两条未完成的行：生成器下一次跑会把旧的重新标回完成'
+            '（「我明明取消了，它又变回去了」），在主列表里也会多出一条日期在过去、'
+            '再也做不完的待办');
 
     await _dispose(tester);
   });
@@ -334,6 +335,8 @@ void main() {
     await tester.tap(find.text(L10n.undo));
     await _settle(tester);
 
+    expect(find.text(L10n.undo), findsNothing,
+        reason: '点完之后那条提示条要收掉 —— 留着就是在说反话（用户刚撤销了）');
     expect(tester.widget<Text>(find.text('第一条')).style?.decoration,
         isNot(TextDecoration.lineThrough),
         reason: '「撤销」之后它回到未完成');

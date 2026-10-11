@@ -21,7 +21,10 @@ void showGlassSnack(
 }) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final primary = Theme.of(context).colorScheme.primary;
-  ScaffoldMessenger.of(context)
+  // 提前取一次 messenger：动作回调跑的时候那个页面可能已经不在了，到那时再
+  // `ScaffoldMessenger.of(context)` 会炸；messenger 本身活得比页面久。
+  final messenger = ScaffoldMessenger.of(context);
+  messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
@@ -40,7 +43,15 @@ void showGlassSnack(
           iconColor: iconColor ?? primary,
           message: message,
           actionLabel: actionLabel,
-          onAction: onAction,
+          // **点完动作先把这条收掉**：不收的话它会在剩下的几秒里继续挂着
+          // 「已划掉 · 撤销」，而用户刚刚做的正是**撤销** —— 一条说着反话的提示条。
+          // （Material 的 `SnackBarAction` 自带这个行为；这颗是自绘的，得自己来。）
+          onAction: onAction == null
+              ? null
+              : () {
+                  messenger.hideCurrentSnackBar();
+                  onAction();
+                },
         ),
       ),
     );

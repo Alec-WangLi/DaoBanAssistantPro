@@ -163,7 +163,8 @@ class _RecurringList extends ConsumerWidget {
     final repo = ref.read(appRepositoryProvider);
     final live = (await repo.listEvents())
         .where((e) => e.seriesId == s.id && !e.isCompleted)
-        .toList();
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
     if (!context.mounted) return;
     if (live.isEmpty) {
       // 没有「当前这一次」就没地方挂那个编辑弹窗（它编的是**行**，顺带写回系列）。
@@ -173,7 +174,15 @@ class _RecurringList extends ConsumerWidget {
           icon: Icons.info_outline);
       return;
     }
-    await showEditEventDialog(context, ref, live.single);
+    // **不写 `live.single`。** 库里短时间可能出现两条未完成（把当前那一条勾回来、
+    // 而生成器还没跑），`.single` 当场抛 `StateError`（「Bad state: Too many
+    // elements」）—— 这个系列点一下就崩。
+    //
+    // 取**日期最新的那条**，与 `advanceRecurringTodos` 收脏数据那条口径**一模一样**
+    // （`app_repository.dart` 里那句 `keep = live.last`，它也是先把 live 按日期升序
+    // 排过再取最后一条）。两处对「当前那一条」的定义必须一致 —— 不然面板编的是
+    // 这一条、生成器留的是那一条，用户改完看不出为什么没生效。
+    await showEditEventDialog(context, ref, live.last);
     ref.invalidate(recurringTodosProvider);
   }
 

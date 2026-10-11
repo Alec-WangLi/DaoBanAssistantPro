@@ -331,10 +331,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
         children: [
           if (archived && e.seriesId != null)
             // **归档里的重复待办历史行不给勾选框。** 那一条可能是**旧 occurrence**，
-            // 而那个系列已经走到下一次了 —— 取消勾选会让一个系列出现两条未完成的行，
-            // `recurring_panel._edit` 的 `live.single` 当场抛 `StateError`；就算不崩，
-            // 生成器下次一跑又会把它收回去（用户看到的是「我明明取消了，它又变回去了」）。
-            // 留一个与勾选框等宽的空位，免得这一区的文字缩进跟主列表差一档。
+            // 而那个系列已经走到下一次了 —— 取消勾选会让一个系列出现两条未完成的行：
+            // 生成器下一次跑会把旧的重新标回完成（`app_repository.dart` 那段「多条
+            // 未完成是脏数据，留日期最新的那条」，用户看到的是「我明明取消了，它又
+            // 变回去了」），而在它跑之前，主列表里会多出一条日期在过去、再也做不完
+            // 的待办。留一个与勾选框等宽的空位，免得这一区的文字缩进跟主列表差一档。
             const SizedBox(
                 width: _archiveCheckSlot, height: _archiveCheckSlot)
           else

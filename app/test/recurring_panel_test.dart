@@ -145,6 +145,43 @@ void main() {
     await _dispose(tester);
   });
 
+  testWidgets('库里短时间有两条未完成时，点开编辑不许崩', (tester) async {
+    final sid = await seedSeries();
+    await mount(tester);
+    await openPanel(tester);
+
+    // **这条插入必须放在挂载之后。** `ScheduleScreen` 一挂上就会跑一次生成器，
+    // 而生成器见到多条未完成会自己收掉（`app_repository.dart:1046` 那段「多条未完成
+    // 是脏数据」）—— 提前插的话，还没被读到就先被治好了，用例就成了空话。
+    //
+    // 真实路径是「把当前那一条勾回来，而生成器还没跑」（回前台 / 跨天各会跑一次）。
+    // 生成器迟早会收，但**在它收之前**面板点一下就先崩了。
+    final live = (await repo.listEvents()).firstWhere((e) => e.seriesId == sid);
+    await db.into(db.scheduleEvents).insert(ScheduleEventsCompanion.insert(
+          title: live.title,
+          date: live.date,
+          timeMinute: drift.Value(live.timeMinute),
+          createdAt: DateTime.now(),
+          seriesId: drift.Value(sid),
+        ));
+    expect(
+        (await repo.listEvents())
+            .where((e) => e.seriesId == sid && !e.isCompleted)
+            .length,
+        2,
+        reason: '脏状态摆好了');
+
+    await tester.tap(find.descendant(
+        of: find.byType(GlassDialog), matching: find.text('周三例会')));
+    await _settle(tester);
+
+    expect(tester.takeException(), isNull,
+        reason: '两条未完成时 `live.single` 会当场抛 StateError');
+    expect(find.text(L10n.editEvent), findsOneWidget, reason: '编辑弹窗照常打开');
+
+    await _dispose(tester);
+  });
+
   testWidgets('面板里删除要确认，确认后系列与它的行都没了', (tester) async {
     await seedSeries();
     await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
