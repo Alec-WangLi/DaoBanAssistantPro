@@ -311,12 +311,17 @@ void main() {
     );
   });
 
-  // 「折叠区展开后」：归档那几行的长相（**没有**勾选框、标题划掉、副标题也跟着淡）
-  // 只有展开才看得到，而展开是一次**点击** —— 静止帧拍不到。跟 `26_todo_dialog_weekly`
-  // 同一条路：首帧之后真点一下。
+  // 「折叠区展开后」：归档那几行的长相只有展开才看得到，而展开是一次**点击** ——
+  // 静止帧拍不到。跟 `26_todo_dialog_weekly` 同一条路：首帧之后真点一下。
+  //
+  // **库里要同时有「一次性」与「重复待办的历史行」两种已完成**（v0.11.4）：
+  // 前者在归档里有勾选框（取消就回主列表）、后者没有（那个系列可能已经走到下一次，
+  // 给了勾就会撞 `recurring_panel` 的 `live.single`）—— 两种形态同框才看得出来，
+  // 而这是这一版最要紧的一处判据。基础种子里只有一次性的，所以这里再补一条重复的。
   visualTest('待办 · 归档折叠区展开', (tester) async {
     failOnOverflow(tester);
     final db = await freshDb();
+    await seedRecurringTodo(db);
     await renderScreen(
       tester,
       name: '54_todos_archive_open',
@@ -324,6 +329,24 @@ void main() {
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
       beforeCapture: (t) async {
         await t.tap(find.byIcon(Icons.keyboard_arrow_down));
+        await settleVisual(t);
+      },
+    );
+  });
+
+  // 勾完那一条「已划掉 · 撤销」的提示条（v0.11.4）。提示条是命令式的（挂在
+  // `ScaffoldMessenger` 的覆盖层上），静止帧拍不到 —— 首帧之后真点一下那个勾才会出现。
+  // 「撤销」那颗动作的配色与触摸大小只有看图才知道对不对。
+  visualTest('待办 · 勾完出现的「撤销」', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '55_todos_undo_snack',
+      home: const ScheduleScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      beforeCapture: (t) async {
+        await t.tap(find.byType(GlassCheck).first);
         await settleVisual(t);
       },
     );

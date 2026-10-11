@@ -39,7 +39,15 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.3\n'
+const String _changelogZh = 'v0.11.4\n'
+    '· 已完成的待办现在可以直接取消勾选、放回列表 —— 一次性待办在「已完成」里也带勾选框了（重复待办的旧记录仍然只有删除键：那个系列可能已经走到下一次，放回来会同时有两条没做完的）\n'
+    '· 勾错了不用去那堆淡掉的行里找：勾完底下会弹一条「已划掉 · 撤销」，点一下就退回来\n'
+    '· 修好一处像「点了没反应」的：在主列表里取消勾选的那一瞬间，那一条会先跳走再跳回来\n'
+    '· 「已完成 N 条」那一行从一行灰字换成一颗胶囊，跟「今天」「重复待办」那些入口同一款\n'
+    '· 同一天里的多条待办，归档时改成按钟点从晚到早排（原来是按行号倒着来的）\n'
+    '\n'
+
+    'v0.11.3\n'
     '· 待办勾完不再一直堆在列表里了：主列表只列没做完的，做完的收进列表底部一条「已完成 N 条」里（点一下展开，看得出之前干完了什么）。勾完那一刻它仍留在原地、划掉，下次进这一页才收走\n'
     '· 归档最多留 100 条，更早的自己消失 —— 所以这个列表会一直干干净净\n'
     '· 顺带修好一处：删掉一条「重复待办」之后它又被自己补回来（从归档里删更旧的历史会踩到）\n'
@@ -100,16 +108,18 @@ const String _changelogZh = 'v0.11.3\n'
     '· 水带的两端是圆的；跨周时那两头切平（月历里跨周不是相邻的格子，是从最右列跳到下一行的最左列）\n'
     '· 液态玻璃关着的时候，拖选与之前一模一样（逐格淡色方块，一个像素都没动）\n\n'
 
-    'v0.10.17\n'
-    '· 日历上那枚选中的块，点别的日期、再点「今天」时，现在是飞回去的：飞的时候一圈彩色折射光亮起来，形状按飞行的方向拉长、变扁\n'
-    '· 它飞过哪几格，那几格的字就被轻轻挤一下（之前被挤的是终点那一格 —— 块还在半路上，终点就已经先动了）\n'
-    '· 落定之后这些自己收回去，静止时与之前一样\n'
-    '· 拖动那枚块时，形状是「开」出来的，不再一下拉满（与底栏滑块同一套手感）\n\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.3\n'
+const String _changelogEn = 'v0.11.4\n'
+    '· Completed todos can now be un-ticked straight back into the list — one-off todos get a check box under "completed" too (older entries of a recurring todo still only offer delete: that series may already have rolled on to its next occurrence, and bringing the old one back would leave two open rows for the same series)\n'
+    '· Mis-tapped one? No need to dig through the faded rows: an "Marked done · Undo" bar appears at the bottom and one tap puts it back\n'
+    '· Fixed something that read as a dead tap: un-ticking from the main list used to make the row jump away and then jump back\n'
+    '· The "N completed" row is now a capsule, matching the other entries such as "Today" and "Recurring"\n'
+    '· Several todos on the same day now sort by time of day, latest first (they used to come out in reverse row order)\n'
+    '\n'
+
+    'v0.11.3\n'
     '· Completed todos no longer pile up in the list: the main list shows only what is still open, and finished ones move into an "N completed" row at the bottom (tap it to expand and see what you got done). The moment you tick one it stays where it was, struck through, and only moves down there the next time you open this page\n'
     '· The archive keeps the latest 100; older ones drop off on their own, so this list stays tidy\n'
     '· Also fixed: deleting a recurring todo used to bring it straight back (it could happen when deleting an older occurrence from the archive)\n'
@@ -169,12 +179,6 @@ const String _changelogEn = 'v0.11.3\n'
     '· Pressing swells it on all four sides, like water rising; dragging lets the tip flow into the next cell, and the day it reaches gets a slight squeeze\n'
     '· The band ends are round; where it wraps to the next week the two ends are cut flat (in a month grid a week wrap is not an adjacent cell)\n'
     '· With Liquid Glass off, selection is exactly as before (a pale block per cell, pixel for pixel)\n\n'
-
-    'v0.10.17\n'
-    '· The calendar selection block now flies back when you tap another date and then Today: a prismatic rim lights up on the way, and the shape stretches along its direction of travel\n'
-    '· The days it sweeps over get a slight squeeze (before, the squeeze sat on the destination while the block was still in mid-air)\n'
-    '· All of it settles back once it lands — at rest it looks exactly as before\n'
-    '· While dragging, the shape blooms instead of snapping to full (the same feel as the tab bar pill)\n\n'
 
         '\n'
 ;
