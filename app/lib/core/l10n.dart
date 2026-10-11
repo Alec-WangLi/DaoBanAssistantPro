@@ -643,6 +643,16 @@ class L10n {
           : '$start – $end';
   static String get newShiftName => t('新班次', 'New shift');
   static String get shiftColor => t('班次颜色', 'Shift color');
+
+  /// 自我取色那一层里的三句。
+  ///
+  /// `shiftColorHex` 是那个输入框的标签；`shiftColorPreview` 标在那两颗真的日历小样
+  /// 上面；`shiftColorCustomHint` 只在敲进去的值解析不出来时出现 —— 它**举一个例子**
+  /// 而不是只说「格式不对」，因为「十六进制」这个词对多数人不构成提示。
+  static String get shiftColorHex => t('颜色值', 'Hex');
+  static String get shiftColorPreview => t('在日历上的样子', 'On a calendar cell');
+  static String get shiftColorCustomHint =>
+      t('颜色值格式不对，例如 #4C8DFF', 'Not a color — try #4C8DFF');
   static String get previewNext14 => t('未来 14 天', 'Next 14 days');
 
   // 排班管理
