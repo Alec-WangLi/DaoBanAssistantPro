@@ -74,17 +74,39 @@ void main() {
   });
 
   // ── 全屏 × 每一档 × 两个保证宽度 × 中英 ──
-  const configs = <({String label, Size size, AppFontSize font, String lang})>[
-    (label: '320·标准·中', size: Size(320, 640), font: AppFontSize.standard, lang: 'zh'),
-    (label: '320·小·中', size: Size(320, 640), font: AppFontSize.small, lang: 'zh'),
-    (label: '320·大·中', size: Size(320, 640), font: AppFontSize.large, lang: 'zh'),
-    (label: '320·特大·中', size: Size(320, 640), font: AppFontSize.extraLarge, lang: 'zh'),
-    (label: '320·标准·英', size: Size(320, 640), font: AppFontSize.standard, lang: 'en'),
-    (label: '320·特大·英', size: Size(320, 640), font: AppFontSize.extraLarge, lang: 'en'),
-    (label: '360·标准·中', size: Size(360, 780), font: AppFontSize.standard, lang: 'zh'),
-    (label: '360·大·中', size: Size(360, 780), font: AppFontSize.large, lang: 'zh'),
-    (label: '360·特大·中', size: Size(360, 780), font: AppFontSize.extraLarge, lang: 'zh'),
-    (label: '360·特大·英', size: Size(360, 780), font: AppFontSize.extraLarge, lang: 'en'),
+  // 矩阵：**保证线（320/360）× 每一档 × 中英**，外加两格既有档位的冒烟
+  // （420×900 常见机、200×400 小窗）—— 独立审查指出原先少了它们，而
+  // 小窗与横屏正是「最容易顺手弄坏、又最不容易被看见」的两档。
+  //
+  // `strict: false` 的那两格是**冒烟**：只把发现**打出来**、不算失败。
+  // 小窗（200×400）里编辑排班那种「一行并排三个控件」的版式**物理上放不下**
+  // 标签（标签字段只剩个位数宽度），要它不省略得把那一行改成两行排 —— 那是
+  // 独立的一件事，见 spec §8 的「200×400 冒烟」（原先写的就是冒烟）。
+  // **但发现照样打在输出里** —— 故意不查的东西要看得见（同 `design_tokens_test`
+  // 的豁免规矩）。
+  const configs = <({
+    String label,
+    Size size,
+    AppFontSize font,
+    String lang,
+    bool strict
+  })>[
+    (label: '320·小·中', size: Size(320, 640), font: AppFontSize.small, lang: 'zh', strict: true),
+    (label: '320·标准·中', size: Size(320, 640), font: AppFontSize.standard, lang: 'zh', strict: true),
+    (label: '320·大·中', size: Size(320, 640), font: AppFontSize.large, lang: 'zh', strict: true),
+    (label: '320·特大·中', size: Size(320, 640), font: AppFontSize.extraLarge, lang: 'zh', strict: true),
+    (label: '320·标准·英', size: Size(320, 640), font: AppFontSize.standard, lang: 'en', strict: true),
+    (label: '320·大·英', size: Size(320, 640), font: AppFontSize.large, lang: 'en', strict: true),
+    (label: '320·特大·英', size: Size(320, 640), font: AppFontSize.extraLarge, lang: 'en', strict: true),
+    (label: '360·小·中', size: Size(360, 780), font: AppFontSize.small, lang: 'zh', strict: true),
+    (label: '360·标准·中', size: Size(360, 780), font: AppFontSize.standard, lang: 'zh', strict: true),
+    (label: '360·大·中', size: Size(360, 780), font: AppFontSize.large, lang: 'zh', strict: true),
+    (label: '360·特大·中', size: Size(360, 780), font: AppFontSize.extraLarge, lang: 'zh', strict: true),
+    (label: '360·特大·英', size: Size(360, 780), font: AppFontSize.extraLarge, lang: 'en', strict: true),
+    (label: '420·标准·中', size: Size(420, 900), font: AppFontSize.standard, lang: 'zh', strict: true),
+    (label: '420·特大·中', size: Size(420, 900), font: AppFontSize.extraLarge, lang: 'zh', strict: true),
+    (label: '小窗·标准·中', size: Size(200, 400), font: AppFontSize.standard, lang: 'zh', strict: false),
+    (label: '小窗·特大·中', size: Size(200, 400), font: AppFontSize.extraLarge, lang: 'zh', strict: false),
   ];
 
   // 收进列表、**最后一次性报**（见文件末尾那条汇总用例）—— 在循环里当场 fail
@@ -112,7 +134,14 @@ void main() {
           extraPrefs: extraPrefs,
         );
         for (final hit in truncatedParagraphs(tester)) {
-          findings.add('${screen.slug}（${screen.title}）· ${cfg.label} ▸ $hit');
+          final line =
+              '${screen.slug}（${screen.title}）· ${cfg.label} ▸ $hit';
+          if (cfg.strict) {
+            findings.add(line);
+          } else {
+            // 冒烟档：发现照样**打出来**，只是不判失败（理由见上面 `configs`）。
+            debugPrint('[text-fit-guard 冒烟] $line');
+          }
         }
         await teardownVisual(tester);
         await db.close();

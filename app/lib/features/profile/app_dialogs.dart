@@ -39,8 +39,15 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.12\n'
-    '· 字号改成只由 App 自己决定：我的 → 外观 → 字体大小，小 / 标准 / 大 / 特大四档。系统字体调多大都不再影响界面\n'
+const String _changelogZh = 'v0.11.13\n'
+    '· 收上一版那份独立审查抓出的四处。主要一条是小窗里的日期与待办副标题在省略 —— 它们其实从上一版之前就在省略了，只是没人盯着小窗那一档\n'
+    '· 日历页「一屏构图」的保证线写准了：常见高度（360×780 及以上）四档都成立；矮屏（640 高）走既有的网格滚动兜底 —— 那里从最小档 0.9 就开始滚，是高度不够，与字号档位无关\n'
+    '· 常设护栏补上小窗与 420×900 两档（原先漏了）。小窗里仍会省略的那几处每次跑都会打在输出里，只是不判失败 —— 故意不查的东西要看得见\n'
+    '· 更新日志那句「系统字体调多大都不再影响界面」补上例外：桌面小组件是原生绘制的，仍跟随系统\n'
+    '\n'
+
+    'v0.11.12\n'
+    '· 字号改成只由 App 自己决定：我的 → 外观 → 字体大小，小 / 标准 / 大 / 特大四档。系统字体调多大都不再影响界面（桌面小组件除外 —— 它是原生绘制的，仍跟随系统）\n'
     '· 起因是有人反馈「系统字号调大之后，日历顶栏的月份被截成 2026年1…」。实拍下来，系统调到 200% 时信息卡会吃掉半个屏、日历网格只剩三行\n'
     '· 代价说在明处：把系统字号调到 150%~200% 的人，在这个 App 里拿不到那个大小 —— 最大就到「特大」\n'
     '· 顺带把全 App 的「字被悄悄省略」收干净：顶栏年月、信息卡那两行、列表副标题、编辑器的标签与值、14 天预览条、几个整页的标题\n'
@@ -97,18 +104,20 @@ const String _changelogZh = 'v0.11.12\n'
     '· 同一天里的多条待办，归档时改成按钟点从晚到早排（原来是按行号倒着来的）\n'
     '\n'
 
-    'v0.11.3\n'
-    '· 待办勾完不再一直堆在列表里了：主列表只列没做完的，做完的收进列表底部一条「已完成 N 条」里（点一下展开，看得出之前干完了什么）。勾完那一刻它仍留在原地、划掉，下次进这一页才收走\n'
-    '· 归档最多留 100 条，更早的自己消失 —— 所以这个列表会一直干干净净\n'
-    '· 顺带修好一处：删掉一条「重复待办」之后它又被自己补回来（从归档里删更旧的历史会踩到）\n'
-    '\n'
 
 
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.12\n'
-    '· Text size is now decided by the app alone: Me → Appearance → Text size, with Small / Standard / Large / XL. The system font setting no longer affects the interface\n'
+const String _changelogEn = 'v0.11.13\n'
+    '· Closes the four items the independent review of the last version turned up. The main one: the date and the to-do subtitles were being clipped in the small-window mode — they had been clipping since before the last version; nobody was watching that size\n'
+    '· The calendar page promise of everything-on-one-screen is now stated precisely: it holds at every text size on ordinary heights (360x780 and up); on short screens (640 tall) the grid falls back to the scrolling it always had — there it scrolls even at the smallest text size, because it is about height, not text size\n'
+    '· The standing guard now also covers the small window and 420x900 (it had missed both). The few places the small window still clips are printed on every run instead of failing — anything deliberately left unchecked has to be visible\n'
+    '· The changelog line saying the system font setting no longer affects the interface now carries its exception: the home-screen widgets are drawn natively and still follow it\n'
+    '\n'
+
+    'v0.11.12\n'
+    '· Text size is now decided by the app alone: Me → Appearance → Text size, with Small / Standard / Large / XL. The system font setting no longer affects the interface (the home-screen widgets are the exception — they are drawn natively and still follow it)\n'
     '· It started from a report that the month in the calendar header was cut to 2026年1… when the system font was large. Measured at 200%: the info card ate half the screen and the calendar grid kept only three rows\n'
     '· The cost, said plainly: anyone who set the system font to 150-200% will not get that size here — XL is the ceiling\n'
     '· Also cleaned up every place the app quietly ate text: the header month, the two info-card lines, list subtitles, the editor labels and values, the 14-day preview strip, and three page titles\n'
@@ -165,11 +174,6 @@ const String _changelogEn = 'v0.11.12\n'
     '· Several todos on the same day now sort by time of day, latest first (they used to come out in reverse row order)\n'
     '\n'
 
-    'v0.11.3\n'
-    '· Completed todos no longer pile up in the list: the main list shows only what is still open, and finished ones move into an "N completed" row at the bottom (tap it to expand and see what you got done). The moment you tick one it stays where it was, struck through, and only moves down there the next time you open this page\n'
-    '· The archive keeps the latest 100; older ones drop off on their own, so this list stays tidy\n'
-    '· Also fixed: deleting a recurring todo used to bring it straight back (it could happen when deleting an older occurrence from the archive)\n'
-    '\n'
 
 
         '\n'

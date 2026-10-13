@@ -62,7 +62,7 @@ void main() {
         lang: lang,
       );
       expect(truncatedParagraphs(tester), isEmpty,
-          reason: '`响铃时间` / `前一天 23:00` / `可选，如「午休」` 都在这一页');
+          reason: '这一页有 `名称` / `响铃` / `前一天 23:00` / `如「午休」` 这些标签与提示');
       await teardownVisual(tester);
     });
   }

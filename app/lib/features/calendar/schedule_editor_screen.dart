@@ -966,13 +966,17 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 标签优先折两行；折不了（单个词，比如英文的 `Alarm`）
-                      // 就按宽度缩小 —— 两者都不许省略（设计 §6.4）。
+                      // 标签**单行、按宽缩小**。
+                      //
+                      // ⚠️ 这里**不要**写 `maxLines: 2` 假装「先折两行」：`FittedBox`
+                      // 给子件的是无界宽约束，段落永远只排一行，那句「折行」是死代码
+                      // （独立审查指出）。走这个件的标签本来就是单字词
+                      // （开始 / 结束 / 响铃），缩才是对的那一档。
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text(label,
-                            maxLines: 2,
+                            maxLines: 1,
                             style:
                                 AppTokens.rowSecondary.copyWith(color: muted)),
                       ),

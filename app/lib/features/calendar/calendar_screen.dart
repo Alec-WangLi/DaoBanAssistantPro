@@ -2375,8 +2375,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                           // 「9月18…」，读不出日期；今天与否由旁边的徽章说。
                           // 完整卡仍然带星期。
                           L10n.monthDay(_selected),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          // 折两行、不省略（v0.11.12 的规矩）：这一行旁边还有
+                          // 今天徽章与「已调班」徽章，窄窗 + 大字号下一个月日
+                          // 都可能放不下 —— 高度这里有的是。
+                          maxLines: 2,
                           style: AppTokens.sectionTitle,
                         ),
                       ),
