@@ -40,6 +40,7 @@ class ProfileScreen extends ConsumerWidget {
           language: s.language,
           liquidGlass: s.liquidGlass,
           hapticsEnabled: s.hapticsEnabled,
+          fontSize: s.fontSize,
         )));
 
     return Scaffold(
@@ -115,6 +116,34 @@ class ProfileScreen extends ConsumerWidget {
                         .setLanguage(i == 0 ? 'zh' : 'en'),
                     itemBuilder: (i, selected) => Text(
                       i == 0 ? '中文' : 'English',
+                      // 基线 13px：未选中 w500、选中 w700。13 档最重的角色是 w600 的
+                      // labelSecondary，两个分支都由这里显式给字重，按 spec 走 copyWith。
+                      style: AppTokens.labelSecondary.copyWith(
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // 字号四档（设计 §3）：**这是全 app 唯一的字号来源** ——
+                  // 根部那层 `MediaQuery` 已经把系统报上来的 `textScaler` 整个换掉了。
+                  Text(L10n.fontSize, style: AppTokens.labelStrong),
+                  const SizedBox(height: 8),
+                  GlassSegment(
+                    count: AppFontSize.values.length,
+                    selectedIndex: settings.fontSize.index,
+                    onSelected: (i) => ref
+                        .read(appSettingsProvider.notifier)
+                        .setFontSize(AppFontSize.values[i]),
+                    itemBuilder: (i, selected) => Text(
+                      // ⚠️ 英文那几档**特意取短**（`XL` 而不是 `Extra large`）：
+                      // 320dp 上四格每格只有约 48dp 可用，长词会挤出格。
+                      [
+                        L10n.fontSmall,
+                        L10n.fontStandard,
+                        L10n.fontLarge,
+                        L10n.fontExtraLarge,
+                      ][i],
                       // 基线 13px：未选中 w500、选中 w700。13 档最重的角色是 w600 的
                       // labelSecondary，两个分支都由这里显式给字重，按 spec 走 copyWith。
                       style: AppTokens.labelSecondary.copyWith(

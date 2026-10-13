@@ -160,6 +160,11 @@ class L10n {
   static String get dark => t('深色', 'Dark');
   static String get accentColor => t('主色调', 'Accent color');
   static String get language => t('语言', 'Language');
+  static String get fontSize => t('字体大小', 'Text size');
+  static String get fontSmall => t('小', 'Small');
+  static String get fontStandard => t('标准', 'Standard');
+  static String get fontLarge => t('大', 'Large');
+  static String get fontExtraLarge => t('特大', 'XL');
 
   // 「我的」页其他
   static String get scheduleManagement => t('排班管理', 'Schedule management');

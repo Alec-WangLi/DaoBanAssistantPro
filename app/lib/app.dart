@@ -24,6 +24,7 @@ class ShiftAssistantApp extends ConsumerWidget {
           themeMode: s.themeMode,
           accentColor: s.accentColor,
           language: s.language,
+          fontSize: s.fontSize,
         )));
     L10n.locale = settings.language;
     return MaterialApp(
@@ -40,8 +41,17 @@ class ShiftAssistantApp extends ConsumerWidget {
       // 样式留在屏幕上（荣耀那条「进排班管理变白、退回来也不恢复」就是这么来的）。
       // 根部挂一层之后，任何一页的声明离开树，下一帧立刻被这一层顶回来。
       // `SystemChrome.setSystemUIOverlayStyle` 按值去重，同值不会重复跨端。
+      // 字号**整个换掉平台报上来的那一份**（设计 §3）：Android 14 起系统字号最高
+      // 200%，而且是非线性的（≤12sp 吃满倍率、≥30sp 不放大）—— 而本 App 的界面
+      // 几乎全建在 12–15sp 上，正好是吃满的那一档。系统调到 200% 时版式会被撑垮
+      // （实拍过：卡片吃掉半个屏、网格只剩三行）。
+      //
+      // 所以字号只由「我的 → 外观 → 字体大小」这四档决定，天花板是我们自己选的：
+      // 每一档都设计过、量过。**代价是有意的** —— 把系统调到 150%~200% 的人拿不到
+      // 那个大小。这条取舍由 `app_font_size_test.dart` 的「系统调到 2.0 也不变」钉着。
       builder: (context, child) => MediaQuery(
-        data: sanitizeSystemInsets(MediaQuery.of(context)),
+        data: sanitizeSystemInsets(MediaQuery.of(context))
+            .copyWith(textScaler: TextScaler.linear(settings.fontSize.scale)),
         child: AnnotatedRegion<SystemUiOverlayStyle>(
           value: statusBarStyleFor(Theme.of(context).brightness),
           child: child!,
