@@ -801,6 +801,12 @@ class L10n {
       '每月 $segments 段 · $teams 个班组',
       '$segments segments a month · $teams teams');
 
+  /// 排班管理页里按月方案那一行的尾巴。
+  ///
+  /// **替掉基准日**：按月不用它（每月 1 号恒等于第一段），印出来就是个不生效的值。
+  static String scheduleMonthlySummary(int segments) =>
+      t('每月 $segments 段', '$segments segments a month');
+
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');
   static String get nextMonth => t('下个月', 'Next month');

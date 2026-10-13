@@ -30,6 +30,13 @@ class ScheduleManagementScreen extends ConsumerWidget {
     final spans =
         ref.watch(scheduleSpansProvider).valueOrNull ?? const <ScheduleSpanRow>[];
 
+    // 按月方案那一行要印「每月几段」—— 段表在装配好的那一份里（`ActiveSchedules.all`），
+    // 方案行上没有。就地做一次 id → 段数的映射，不为它再查一次库。
+    final monthSegCounts = <int, int>{
+      for (final a in current?.all ?? const <ActiveSchedule>[])
+        a.schedule.id: a.monthSegments.length,
+    };
+
     return Scaffold(
       // 标题按宽度缩小而不是省略（设计 §2）：AppBar 的工具条高度是定死的，
       // 折不了行 —— 窄屏 + 大字号 + 英文下「Schedule management」会超出去。
@@ -76,7 +83,9 @@ class ScheduleManagementScreen extends ConsumerWidget {
                         subtitle: Text(
                             '${scheduleRoleLabel(s, spanCount: spanCountOf(spans, s.id), isCurrent: isCurrent, hasPeriods: spans.isNotEmpty)} · '
                             '${L10n.teamCountN(parseTeamNames(s.teamNames).length)} · '
-                            '${L10n.monthDay(s.anchorDate)}'
+                            // 按月那套印切法摘要，**不印基准日** —— 按月不用它
+                            // （每月 1 号恒等于第一段），印出来是个不生效的值。
+                            '${s.monthly ? L10n.scheduleMonthlySummary(monthSegCounts[s.id] ?? 0) : L10n.monthDay(s.anchorDate)}'
                             // 一个段都没有时左边的标签已经写着「正在使用」了，
                             // 尾巴上再挂一个「当前」是同一件事说两遍。
                             '${isCurrent && spans.isNotEmpty ? ' · ${L10n.current}' : ''}'),
