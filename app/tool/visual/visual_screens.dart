@@ -514,6 +514,23 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // **加载态此前从没进过屏单** —— 而把加载态收成共享件（`GlassLoading`）的
+    // 那一轮，整整七处调用点**全**长在加载态上，却一张图都没有。这正是上一个任务
+    // 刚立的规矩：没进屏单的界面等于没人看过。
+    //
+    // 工装是**等状态落定之后**才取像的（见 `settleVisual`），正常挂一个页面根本
+    // 拍不到加载态 —— 所以要一层「永远不落定」的宿主（`_LoadingHost`）：把这一页
+    // 依赖的流 provider 覆写成一条**永不发出、也永不结束**的流，`AsyncValue` 就
+    // 永远停在 `isLoading`，那颗圈（`GlassLoading`）被钉在屏幕正中。
+    //
+    // 取排班管理页是因为它的加载分支**整个 body 就是那颗圈**（外加一条标题栏）——
+    // 最干净、最不会与别的正在加载的区块混在一起，一眼就认得出「这是加载态」。
+    slug: '64_management_loading',
+    title: '排班管理 · 加载态',
+    build: (db) async => const _LoadingHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -681,6 +698,36 @@ class _DialogHostState extends State<_DialogHost> {
 
   @override
   Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 「加载态」的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 工装是**等状态落定之后**才取像的（`settleVisual` 逐帧推进到稳定），正常挂一个
+/// 页面根本拍不到加载态。所以这层薄壳用一层**内嵌的 `ProviderScope`** 把这一页
+/// 依赖的那条流覆写成**永不发出、也永不结束**的流（`Stream.multi` 的回调什么都不做）
+/// —— `StreamProvider` 的 `AsyncValue` 因此永远停在 `AsyncLoading`，页面的 loading
+/// 分支（`GlassLoading`）被钉在屏幕上。
+///
+/// 内嵌 `ProviderScope` 会**遮蔽**外层那个（`renderScreen` 传进来的
+/// `databaseProvider` 覆盖）—— 只影响这棵子树，别的 provider 照旧走真库。与
+/// `_ColorPickerHost` 那种「只为弹层而生的薄壳」同一路子。
+class _LoadingHost extends StatelessWidget {
+  const _LoadingHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return ProviderScope(
+      overrides: <Override>[
+        // `Stream.multi` 的建流回调什么都不做 ⇒ 既不 emit、也不 close ⇒
+        // 订阅者永远收不到事件，`AsyncValue` 停在 `AsyncLoading`。不用
+        // `Stream.empty()`：那条**会立刻结束**，落不进 loading 分支。
+        schedulesProvider.overrideWith(
+          (ref) => Stream<List<ShiftScheduleRow>>.multi((_) {}),
+        ),
+      ],
+      child: const ScheduleManagementScreen(),
+    );
+  }
 }
 
 /// 每个界面要出的变体。
