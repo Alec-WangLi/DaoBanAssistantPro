@@ -1623,17 +1623,17 @@ void main() {
 
     // v0.12.0 换件带出来的一条新几何：`GlassButton` 没有内在宽度（里面那个
     // `Center` 会撑到 `maxWidth`），而这一页给它的约束是**松的** —— 不套
-    // `IntrinsicWidth` 它会变成通栏长条（出图量到 388 = 屏宽−32、整幅内容宽），
-    // 而换件之前那颗 `FilledButton` 是按内容定宽的（约 180）。这条钉住
-    // 「它仍是一颗按内容定宽、居中悬浮的胶囊」。
+    // `IntrinsicWidth` 它会变成通栏长条（出图量到 388 = 屏宽−32、整幅内容宽）。
+    // 套上之后收缩到内容宽度，再补 `padding`（`GlassButton` 本身没有内边距）
+    // 免得文字贴到两端的圆头上：实测 **181.75**（换件前那颗 `FilledButton` 约 180）。
     testWidgets('保存胶囊按内容定宽，不是通栏', (tester) async {
       await _pumpEditor(tester, _domain(), size: const Size(420, 900));
       final save = tester.getRect(saveButton());
       expect(save.width, lessThan(300),
           reason: '通栏（≈388 = 屏宽−32）说明 `GlassButton` 撑满了松约束 —— '
-              '要套 `IntrinsicWidth` 才是按内容定宽（约 180）');
-      expect(save.width, greaterThan(120),
-          reason: '内容宽的一档约 180；太小说明内容没被正确测量');
+              '要套 `IntrinsicWidth` 才是按内容定宽（实测约 182）');
+      expect(save.width, greaterThan(150),
+          reason: '内容宽那一档约 182；明显更窄说明内边距没了、文字贴到了圆头上');
     });
   });
 

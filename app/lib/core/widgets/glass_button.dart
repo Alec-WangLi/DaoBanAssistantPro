@@ -16,6 +16,12 @@ import '../glass/glass.dart';
 /// 胶囊圆角恒为高度一半 = 24），**默认值 `radiusM` 等于加参数之前的行为** ——
 /// 三个既有调用点（闹钟页 ×2、响铃页 ×1）因此一个像素都不动。别再拿它去改
 /// 那些已经定了圆角的点位；它是给「要一颗更高或更矮的胶囊」准备的。
+///
+/// [padding] 是内容（图标 + 文字）与按钮左右边的内边距。**默认 `EdgeInsets.zero`**，
+/// 因为三个既有调用点都是**通栏**的（`Center` 把内容居中），加不加内边距一个像素都
+/// 不变。它只对**按内容定宽**的胶囊有用（编辑页那颗外面套了 `IntrinsicWidth`）：
+/// 不定宽时空内边距会让文字贴到胶囊两端的圆头上，很难看 —— 那一处传
+/// `EdgeInsets.symmetric(horizontal: AppTokens.spaceXl)`。
 class GlassButton extends StatefulWidget {
   const GlassButton({
     super.key,
@@ -24,6 +30,7 @@ class GlassButton extends StatefulWidget {
     this.primary = false,
     this.height = 56,
     this.radius = AppTokens.radiusM,
+    this.padding = EdgeInsets.zero,
     this.icon,
   });
 
@@ -32,6 +39,7 @@ class GlassButton extends StatefulWidget {
   final bool primary;
   final double height;
   final double radius;
+  final EdgeInsetsGeometry padding;
   final Widget? icon;
 
   @override
@@ -151,7 +159,12 @@ class _GlassButtonState extends State<GlassButton> {
                             ),
                           ),
                         ),
-                        Center(child: childRow),
+                        Center(
+                          child: Padding(
+                            padding: widget.padding,
+                            child: childRow,
+                          ),
+                        ),
                       ],
                     ),
                   ),

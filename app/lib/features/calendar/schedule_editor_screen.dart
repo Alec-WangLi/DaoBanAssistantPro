@@ -401,11 +401,17 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               // `IntrinsicWidth` 让它收缩到内容宽度，仍是「按内容定宽、靠 `Align`
               // 居中悬浮」的一颗胶囊（换件前那颗 `FilledButton` 约 180 宽）。
               // 同一招在 `schedule_screen` 的归档胶囊上也用过。
+              //
+              // 左右的 `padding` 只有**定宽**的按钮才需要：`GlassButton` 没有内边距
+              // （另外三个调用点都是通栏、内容居中，不加也看不出来），而这里收窄成
+              // 胶囊之后，文字会贴到两端的圆头上（出图看出来的）。
               child: IntrinsicWidth(
                 child: GlassButton(
                   primary: true,
                   height: _saveButtonHeight,
                   radius: _saveButtonHeight / 2,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.spaceXl),
                   onPressed: _saving ? null : _save,
                   icon: const Icon(Icons.check_outlined),
                   child: Text(L10n.saveAndReschedule),
