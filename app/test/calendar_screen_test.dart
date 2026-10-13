@@ -2368,4 +2368,45 @@ void main() {
         reason: '装得下装不下，卡片都该贴着这一栏的底边');
     await _disposeCalendar(tester);
   });
+
+  // ── 格子字号的上限按档位取（用户报的第 5 条） ────────────────────────
+
+  test('格子字号上限按档位取：宽屏 1.7、其余 1.25', () {
+    AppLayout at(double w, double h) => AppLayout(
+        isNarrow: w < 360,
+        isShort: h < 480,
+        isWide: w >= 720,
+        isWideLandscape: w >= 720 && h >= 480 && w > h,
+        availableWidth: w,
+        availableHeight: h);
+    expect(cellMaxScale(at(420, 900)), 1.25);
+    expect(cellMaxScale(at(200, 400)), 1.25);
+    expect(cellMaxScale(at(1280, 800)), 1.7);
+    expect(cellMaxScale(at(1920, 720)), 1.7);
+    // ⚠️ 判据是 `isWide`（不是 `isWideLandscape`）：竖着的平板也吃到宽屏上限。
+    expect(cellMaxScale(at(800, 1280)), 1.7);
+    // 宽且矮那一档格子只有 41dp 高，上限根本不生效 —— 给它宽屏值只是少一个分支。
+    expect(cellMaxScale(at(900, 420)), 1.7);
+  });
+
+  testWidgets('宽横屏下格子里的字真的更大', (tester) async {
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 1280, height: 800);
+    final wide = tester.getSize(find.descendant(
+        of: find.byKey(const ValueKey('day-card-13')),
+        matching: find.text('13')));
+    await _disposeCalendar(tester);
+
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 420, height: 900);
+    final phone = tester.getSize(find.descendant(
+        of: find.byKey(const ValueKey('day-card-13')),
+        matching: find.text('13')));
+
+    // 字号是按 `s` 乘上去的，而格子里的 `FittedBox` 给子件的是**无界约束**
+    // （缩放只改变绘制），所以这里量到的就是「按 s 排出来的自然尺寸」。
+    expect(wide.height / phone.height, greaterThan(1.15),
+        reason: '宽屏 ${wide.height} vs 手机 ${phone.height} —— 字没跟着档位长');
+    await _disposeCalendar(tester);
+  });
 }

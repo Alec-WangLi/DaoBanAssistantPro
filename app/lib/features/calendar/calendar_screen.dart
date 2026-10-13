@@ -1868,8 +1868,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 缩放系数按**去掉格子内缩后的可用高**算：内容排在被 `_cellInset` 收窄的
     // 盒子里，用 cellH 直接算会让内容恒比盒子高一点点，外层的 FittedBox 每次
     // 都缩回去一档，等于缩放没生效。
-    final s =
-        ((cellH - _cellInset * 2) / _cellDesignH).clamp(1.0, _cellMaxScale);
+    final s = ((cellH - _cellInset * 2) / _cellDesignH)
+        .clamp(1.0, cellMaxScale(AppLayout.of(context)));
     final contentW = cellW - _cellInset * 2;
     // 太窄就画不出胶囊（小窗里格宽只有 25），退回彩色文字。
     final chip = shift != null && contentW >= _chipMinContentW;
@@ -2980,7 +2980,30 @@ const double _cellDesignH = 55;
 /// 格子字号的缩放上限。再大就喧宾夺主：格子被字填满、格子之间的呼吸感没了。
 /// 1.25 是 v0.7.2 从 1.35 调下来的（配合 `cellShift` 15→13），单字胶囊的字号
 /// 上限从 20.25 降到 16.25。
+///
+/// **这条判断只在手机上成立** —— 宽屏档另有一档，见 [_cellMaxScaleWide]。
 const double _cellMaxScale = 1.25;
+
+/// 宽屏档（`AppLayout.isWide`）的格子字号上限。
+///
+/// **为什么宽屏要放开**：格子内容按 `(cellH − 内缩) / _cellDesignH(55)` 等比缩放、
+/// 再夹上限。车机上 cellH ≈ 90~120，`(104 − 12) / 55 ≈ 1.67` —— 1.25 那道天花板
+/// 早就顶到了，于是「调大字号 / 屏幕更大」都不再让字变大（用户 2026-10-13 报的
+/// 第 5 条：字号调到特大，日历界面看着还是小）。1.7 让内容占到格子的约 78%，
+/// 仍有呼吸。
+///
+/// **判据取 `isWide` 而不是 `isWideLandscape`**：宽且矮那一支格子只有 41dp 高，
+/// 上限根本不生效，多一个分支只是多一处要维护的东西。
+///
+/// ⚠️ **这是起手值**（照 1920×720 上 cellH≈90 反推的），出图之后可能还要回来调。
+const double _cellMaxScaleWide = 1.7;
+
+/// 格子内容的缩放上限，按档位取（见上面两个常量的说明）。
+///
+/// 抽成顶层纯函数（公开）是为了能直接断言「按档位分叉」——
+/// 与 [calendarCellHeight] 同一个理由。
+double cellMaxScale(AppLayout layout) =>
+    layout.isWide ? _cellMaxScaleWide : _cellMaxScale;
 
 /// 班次胶囊的左右内边距。用最小的一档栅格（4）：这里装的是 1–2 个字的简称，
 /// 信息卡色块那 8 会让单字胶囊的宽度接近文字的两倍，手机上（格内容宽约 52）
