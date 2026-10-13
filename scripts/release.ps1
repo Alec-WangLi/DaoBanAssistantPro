@@ -138,6 +138,70 @@ if (-not $SkipVerify) {
         Write-Warning "本地 $branch 与 origin/$branch 不一致，Release tag 将指向本地提交 $($localMain.Substring(0,7))（未推送的提交不会被其他人看到）。"
     }
 
+    # ---- 3b. 签名校验（2026-10-13 加，被一次真事故逼出来的）----
+    #
+    # v0.11.16 第一次发出去的那个 APK，是在一个 **git worktree** 里构建的 —— 而
+    # `app/android/key.properties` 与 `keystore/release.jks` **都是 gitignore 的**，
+    # worktree 里没有，`build.gradle.kts` 于是**静默回退到 debug 证书**。包发出去、
+    # 版本号 / 资产 / latest.json 全对，用户一装就报「Conflicting app signatures」
+    # （`Couldn't install (-7)`），只能卸载重装。**签名不对，上面那几条校验一条都照不出来。**
+    #
+    # 判据：APK 的签名证书必须与 `release.jks` 里那一枚**逐位相同**。
+    # 不拿 DN 比（DN 是人填的、可以重名），拿 SHA-256。
+    $kpPath = Join-Path $root 'app\android\key.properties'
+    if (-not (Test-Path $kpPath)) {
+        throw "app\android\key.properties 不存在 —— 这样构建出来的 APK 会用 **debug 证书**签名，用户装不上（Conflicting app signatures）。请从备份恢复 key.properties 与 keystore\release.jks，然后重新构建。"
+    }
+
+    $btDir = if ($env:ANDROID_HOME) { Join-Path $env:ANDROID_HOME 'build-tools' } else { $null }
+    $apksigner = $null
+    if ($btDir -and (Test-Path $btDir)) {
+        $apksigner = Get-ChildItem $btDir -Directory |
+            Sort-Object { try { [version]$_.Name } catch { [version]'0.0.0' } } |
+            ForEach-Object { Join-Path $_.FullName 'apksigner.bat' } |
+            Where-Object { Test-Path $_ } | Select-Object -Last 1
+    }
+    $keytool = if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin\keytool.exe' } else { $null }
+
+    if (-not $apksigner -or -not $keytool -or -not (Test-Path $keytool)) {
+        # 工具不全就**不拦**，只把话说清楚：这一步是保险，不是发布的必要条件。
+        Write-Warning "找不到 apksigner / keytool（ANDROID_HOME / JAVA_HOME 没设？），**跳过签名校验** —— 这次的 APK 到底是不是用 release.jks 签的，没人替你确认过。"
+    } else {
+        # 这一段全是原生命令、且 stderr 上写的都是常规输出，照 8b 那条规矩临时放宽
+        # ErrorActionPreference（`2>&1` 在 `Stop` 下会把常规提示包成异常抛出来）。
+        $prevEapSign = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $props = @{}
+            Get-Content $kpPath | ForEach-Object {
+                if ($_ -match '^\s*([^#=]+?)\s*=\s*(.+?)\s*$') { $props[$Matches[1]] = $Matches[2] }
+            }
+            $storeFile = $props['storeFile']
+            if ($storeFile -and -not [System.IO.Path]::IsPathRooted($storeFile)) {
+                $storeFile = Join-Path (Join-Path $root 'app\android') $storeFile
+            }
+            $ksOut = & $keytool -list -v -keystore $storeFile -storepass $props['storePassword'] -alias $props['keyAlias'] 2>&1 | Out-String
+            $ksDigest = ([regex]::Match($ksOut, 'SHA256:\s*([0-9A-Fa-f:]+)')).Groups[1].Value -replace ':', ''
+            $apkOut = & $apksigner verify --print-certs $apk 2>&1 | Out-String
+            $apkDigest = ([regex]::Match($apkOut, 'SHA-256 digest:\s*([0-9A-Fa-f:]+)')).Groups[1].Value -replace ':', ''
+        } finally {
+            $ErrorActionPreference = $prevEapSign
+        }
+
+        if (-not $ksDigest -or -not $apkDigest) {
+            Write-Warning "签名校验没跑成（keytool 或 apksigner 没吐出证书摘要），**跳过** —— 请人工确认这个 APK 是用 release.jks 签的。"
+        } elseif ($ksDigest -ne $apkDigest) {
+            throw @"
+APK 的签名证书与 release.jks 对不上 —— 用户会看到「Conflicting app signatures」而装不上（Couldn't install (-7)）。
+  release.jks : $($ksDigest.ToLower())
+  这个 APK    : $($apkDigest.ToLower())
+多半是在一个**没有 key.properties 的地方**构建的（比如 git worktree —— 它和 release.jks 都是 gitignore 的）。请在本仓库根目录下重新构建。
+"@
+        } else {
+            Write-Host "      ✅ 签名证书与 release.jks 一致（$($apkDigest.Substring(0, 16).ToLower())…）"
+        }
+    }
+
     Write-Host "      ✅ 工作区干净；无源码晚于构建；branch=$branch"
 } else {
     Write-Host "[4/6] 一致性校验: 已跳过 (-SkipVerify)"
