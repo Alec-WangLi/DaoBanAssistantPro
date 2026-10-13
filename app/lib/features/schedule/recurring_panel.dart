@@ -18,6 +18,7 @@ import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
@@ -52,7 +53,7 @@ class _RecurringList extends ConsumerWidget {
     if (series == null) {
       return const Padding(
         padding: EdgeInsets.all(AppTokens.spaceLg),
-        child: Center(child: CircularProgressIndicator()),
+        child: GlassLoading(),
       );
     }
     if (series.isEmpty) {

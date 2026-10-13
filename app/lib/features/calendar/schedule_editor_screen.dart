@@ -13,6 +13,7 @@ import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
@@ -341,7 +342,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               ),
             )
           : !_loaded
-              ? const Center(child: CircularProgressIndicator())
+              ? const GlassLoading()
               : CenteredContent(
                 child: ListView(
                   padding: EdgeInsets.fromLTRB(

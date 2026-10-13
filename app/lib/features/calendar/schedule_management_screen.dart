@@ -8,6 +8,7 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
@@ -48,7 +49,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
               alignment: Alignment.centerLeft,
               child: Text(L10n.scheduleManagement))),
       body: async.isLoading && schedules.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+          ? const GlassLoading()
           : CenteredContent(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

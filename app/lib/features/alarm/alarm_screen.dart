@@ -13,6 +13,7 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
@@ -148,7 +149,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   Widget _shiftAlarmSection(BuildContext context, ShiftSource? chain,
       List<_ShiftAlarmEntry> shiftAlarms) {
     if (chain == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const GlassLoading();
     }
     if (shiftAlarms.isEmpty) {
       return EmptyState(L10n.noUpcoming30);

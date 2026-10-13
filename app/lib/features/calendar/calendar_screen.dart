@@ -14,6 +14,7 @@ import '../../core/theme/animated_background.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -799,7 +800,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             // 网格区高度要先量出来，才能决定格子长多高（见 _buildGrid）。
             child: LayoutBuilder(
               builder: (context, c) => scheduleAsync.isLoading && chain == null
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const GlassLoading()
                   // 网格可滚动：格子保持全尺寸，小屏 6 行放不下时滚动而非被裁切，
                   // 避免底部行与信息卡重叠。
                   : SingleChildScrollView(

@@ -6,6 +6,7 @@ import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../alarm/alarm_service.dart';
 import 'help_entry.dart';
 
@@ -428,7 +429,7 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
             const SizedBox(
               width: 28,
               height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.6),
+              child: GlassLoading(size: 24),
             ),
             const SizedBox(height: AppTokens.gapIconTextLg),
             Text(L10n.downloadingUpdate,

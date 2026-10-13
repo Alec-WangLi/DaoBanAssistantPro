@@ -12,6 +12,7 @@ import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -944,7 +945,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
                   const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: GlassLoading(size: 24),
                   ),
                   const SizedBox(width: 12),
                   Text(L10n.permChecking),
