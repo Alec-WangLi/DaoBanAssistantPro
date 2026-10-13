@@ -8,6 +8,7 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../data/app_repository.dart';
 import '../../domain/monthly_pattern.dart';
@@ -206,10 +207,20 @@ class _ShiftTemplatePickerScreenState
                 style: AppTokens.labelSecondary
                     .copyWith(fontWeight: FontWeight.w700)),
           ),
+          // 「管理」入口：**玻璃胶囊**，与全 app 的入口同款（「今天」「重复待办」
+          // 「已完成 N 条」）。原来是一颗裸 `TextButton`，读起来像正文、不像能点的
+          // 东西（v0.9.13 / v0.11.4 收过同类两处，v0.12.0 收掉最后这处）。
+          // **非 accent 那一档**：实心主色会跟这一页的主操作（新建）抢眼睛。
           if (onManage != null)
-            TextButton(
-              onPressed: onManage,
-              child: Text(L10n.manageTemplates),
+            GlassPill(
+              onTap: onManage,
+              height: 32,
+              child: Text(
+                L10n.manageTemplates,
+                style: AppTokens.labelSecondary.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
             ),
         ],
       ),

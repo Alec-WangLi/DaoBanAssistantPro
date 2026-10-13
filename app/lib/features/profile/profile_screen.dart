@@ -13,6 +13,7 @@ import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pickers.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_sheet_header.dart';
@@ -1058,9 +1059,24 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
       subtitle: Text(subtitle),
       trailing: enabled == true
           ? null
-          : TextButton(
-              onPressed: onOpen,
-              child: Text(actionLabel ?? L10n.goEnable),
+          // 「去开启」：**玻璃胶囊**（与全 app 的入口同款）。原来是一颗裸
+          // `TextButton`，读起来像正文、不像能点的东西。**外面套 `IntrinsicWidth`
+          // 是必须的**：`ListTile.trailing` 给的是**有限宽度**，而 `GlassPill` 里那个
+          // `Container` 带了 `alignment`、拿到有限宽度就会**铺满整行**
+          // （同 v0.11.4「已完成 N 条」那个坑：不套的话它长得跟一条行一样宽）。
+          : IntrinsicWidth(
+              child: GlassPill(
+                onTap: onOpen,
+                height: 32,
+                child: Text(
+                  actionLabel ?? L10n.goEnable,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTokens.labelSecondary.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
             ),
     );
   }
