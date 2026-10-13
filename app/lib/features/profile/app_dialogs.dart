@@ -40,7 +40,13 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.17\n'
+const String _changelogZh = 'v0.11.18\n'
+    '· 「同一个东西长得不一样」的地方收了一批：底部弹层的标题现在跟弹窗一样带主色竖条，还能往下拉关闭；小节标题全 App 统一成一档（「我的」页那几个会比以前大一点、黑一点）；空态与加载中各自收成一个样子；卡片和列表行按下的反馈也统一了\n'
+    '· 两颗最显眼的主操作按钮换回自家的玻璃件：编辑排班页的「保存并重排闹钟」和排班管理页的「新增排班」，以前用的是系统按钮（按下是水波纹，跟别处不一致）\n'
+    '· 排班管理页的「新增排班」从列表末尾挪到了屏幕底部，跟另外两页一个位置，不再悬在页面中间\n'
+    '· 「管理模板」与权限卡里的「去开启」从裸文字换成胶囊 —— 全 App 的入口都是胶囊，裸文字读起来像正文\n'
+    '\n'
+    'v0.11.17\n'
     '· 「使用帮助」从弹窗改成整页：开头一段整体简介，下面每个功能块一句简介，再往下是一个入口\n'
     '· 新的下一层「遇到问题怎么解决」：按你想干的事分两组（「我想办一件事」/「它不对劲」），三十来条，每条说清去哪一页、点什么\n'
     '· 修好帮助里已经过时的说法：「一个班次最多挂 6 条闹钟」其实早就放到 10 条了；零点班的响铃到底落在哪一天也讲清楚了\n'
@@ -104,15 +110,16 @@ const String _changelogZh = 'v0.11.17\n'
     '· 说明一句：桌面上没有实时的背景模糊，那点玻璃感只能靠描边、圆角与渐变去近似，卡片不会真的透出壁纸\n'
     '\n'
 
-    'v0.11.8\n'
-    '· 「再睡一会」的时长可以自己定了：我的 → 闹钟 → 贪睡时长，可选 1 / 5 / 10 / 15 / 20 / 30 分钟（默认仍是 5 分钟，不动它就跟以前一样）\n'
-    '· 响铃界面那颗按钮上现在写着时长（「再睡一会 · 10 分钟」），按下之前就知道会睡多久\n'
-    '\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.17\n'
+const String _changelogEn = 'v0.11.18\n'
+    '· A sweep of the places where the same thing looked different: bottom sheets now carry the same accent-barred title as dialogs (and can be pulled down to close), section headings use one size everywhere (the ones on the Me page are a little larger and darker than before), empty states and loading spinners each have a single look, and pressing a card or a row now feels the same everywhere\n'
+    '· The two most prominent primary buttons went back to the app\'s own glass button: the editor\'s "Save and reschedule" and the management page\'s "Add schedule" used to be plain system buttons with a water-ripple press\n'
+    '· The management page\'s "Add schedule" moved from the end of its list to the bottom of the screen — the same place as on the other two pages, instead of floating in the middle of a short page\n'
+    '· "Manage templates" and the permission card\'s "Go enable" went from bare text to pills: every entry point in the app is a pill, because bare text reads like body copy\n'
+    '\n'
+    'v0.11.17\n'
     '· The usage guide is now a full page instead of a dialog: a short intro, a line for each feature, and one way in\n'
     '· A new level under it, "How to get things done", sorted by what you are trying to do ("I want to…" / "Something looks wrong") — thirty-odd entries, each saying which page to open and what to tap\n'
     '· Fixed wording in the guide that had gone stale: it claimed a shift carries at most 6 alarms, when the limit has been 10 for a while; which day a midnight shift\'s alarm falls on is spelled out too\n'
@@ -174,11 +181,6 @@ const String _changelogEn = 'v0.11.17\n'
     '· The week strip marks today with the same solid block, and the today card\'s "Today" pill went from a washed-out tint to solid accent — the three now look like the same thing\n'
     '· Text on those blocks picks black or white by contrast (it picks black on the teal and orange accents), so you do not have to think about it\n'
     '· One note: there is no live background blur on the home screen, so that bit of glass can only be approximated with borders, corners and gradients — the cards do not really show the wallpaper through\n'
-    '\n'
-
-    'v0.11.8\n'
-    '· You can now choose how long Snooze waits: Me → Alarm → Snooze length, with 1 / 5 / 10 / 15 / 20 or 30 minutes (the default is still 5, so leaving it alone changes nothing)\n'
-    '· The snooze button now shows that length ("Snooze · 10 min"), so you know how long you are getting before you tap it\n'
     '\n'
 
         '\n'
