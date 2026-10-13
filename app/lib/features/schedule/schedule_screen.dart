@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
@@ -201,6 +203,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
       )),
       floatingActionButtonLocation: const _AboveCapsuleFabLocation(),
       floatingActionButton: Container(
+        // 工装 / 用例量它落点的抓手（宽屏下它要跟着 720 的内容栏走）。
+        key: const Key('todo-fab'),
         width: 56,
         height: 56,
         decoration: BoxDecoration(
@@ -889,6 +893,15 @@ class _AboveCapsuleFabLocation extends FloatingActionButtonLocation {
   @override
   Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
     final base = FloatingActionButtonLocation.endFloat.getOffset(geometry);
-    return Offset(base.dx, base.dy - 76);
+    // 宽屏下正文被 `CenteredContent` 限宽到 720 并居中，FAB 跟着**内容栏的右缘**走，
+    // 不然它孤零零挂在屏幕右缘、与列表对不上（用户 2026-10-13 选「一起做了」）。
+    //
+    // 用**平移**而不是重算边距：`base.dx` 已经是「屏幕右缘 − 按钮宽 − 标准边距」，
+    // 减掉两侧各让出来的那一段就等价于「内容栏右缘 − 按钮宽 − 标准边距」——
+    // 于是不必知道 Flutter 那个边距常量是多少，手机上 `extra` 恒为 0、逐像素不变。
+    final contentW =
+        math.min(AppLayout.maxContentWidth, geometry.scaffoldSize.width);
+    final extra = (geometry.scaffoldSize.width - contentW) / 2;
+    return Offset(base.dx - extra, base.dy - 76);
   }
 }
