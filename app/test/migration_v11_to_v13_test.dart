@@ -31,10 +31,25 @@ CREATE TABLE shift_schedule_rows (
 )
 ''';
 
+/// 「我的模板」表（v9 建的那张）。本条迁移**不碰它**，但 v13→v14 会给它加三列，
+/// 而迁移分支一律按**倒序**跑，所以从 v11 升上来时那三个 `addColumn` 同样会执行。
+const _v11CustomTemplates = '''
+CREATE TABLE custom_templates (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  classes TEXT NOT NULL,
+  cycle TEXT NOT NULL,
+  team_count INTEGER NOT NULL,
+  team_offsets TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+)
+''';
+
 void main() {
   test('v11 → 最新：老方案原样、段表建了但是空的', () async {
     final raw = sqlite3.sqlite3.openInMemory();
     raw.execute(_v11ScheduleTable);
+    raw.execute(_v11CustomTemplates);
     raw.execute(
       'INSERT INTO shift_schedule_rows '
       '(id, name, anchor_date, is_current, team_count, team_names, '

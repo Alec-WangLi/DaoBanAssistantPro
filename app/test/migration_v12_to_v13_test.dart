@@ -31,6 +31,22 @@ CREATE TABLE shift_schedule_rows (
 )
 ''';
 
+/// 「我的模板」表（v9 建的那张）。本条迁移**不碰它**，但 v13→v14 会给它加三列，
+/// 而迁移分支一律按**倒序**跑（先 `from < 14`、再 `from < 13`），所以从 v12 升上来
+/// 时那三个 `addColumn` 同样会执行。真实 v12 库一定有这张表，fixture 就得有 ——
+/// 这与当年给更早的 fixture 补 `schedule_events` 是同一条。
+const _v12CustomTemplates = '''
+CREATE TABLE custom_templates (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  classes TEXT NOT NULL,
+  cycle TEXT NOT NULL,
+  team_count INTEGER NOT NULL,
+  team_offsets TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+)
+''';
+
 /// 开一个 v12 库并种方案 —— **列表顺序就是 id 顺序**（第一个 id = 1）。
 ///
 /// 元组是 `(名字, 起, 止, 是不是其余时间)`，`null` 表示那一端留空。
@@ -38,6 +54,7 @@ Future<AppDatabase> _openV12(
     List<(String, DateTime?, DateTime?, bool)> rows) async {
   final raw = sqlite3.sqlite3.openInMemory();
   raw.execute(_v12ScheduleTable);
+  raw.execute(_v12CustomTemplates);
   for (final (name, from, to, current) in rows) {
     raw.execute(
       'INSERT INTO shift_schedule_rows '

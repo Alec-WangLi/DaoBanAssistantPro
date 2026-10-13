@@ -52,11 +52,27 @@ CREATE TABLE shift_schedule_rows (
 )
 ''';
 
+/// 「我的模板」表（v9 建的那张）。本条迁移**不碰它**，但 v13→v14 会给它加三列，
+/// 而迁移分支一律按**倒序**跑，所以从 v10 升上来时那三个 `addColumn` 同样会执行。
+/// 真实 v10 库一定有这张表。
+const _v10CustomTemplates = '''
+CREATE TABLE custom_templates (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  classes TEXT NOT NULL,
+  cycle TEXT NOT NULL,
+  team_count INTEGER NOT NULL,
+  team_offsets TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+)
+''';
+
 void main() {
   test('v10 → v11：老待办一条不丢、series_id 为空、新表能写能读', () async {
     final raw = sqlite3.sqlite3.openInMemory();
     raw.execute(_v10ScheduleEvents);
     raw.execute(_v10ScheduleTable);
+    raw.execute(_v10CustomTemplates);
     // 两条老待办：一条未完成、一条已完成，值都写全（迁移把值吞了才看得出来）
     raw.execute(
       'INSERT INTO schedule_events '
@@ -87,7 +103,7 @@ void main() {
     addTearDown(db.close);
     // 从 v10 升上来会一路跑到**最新**的 schema（迁移分支按倒序全部执行），
     // 所以这里跟的是当前的 `schemaVersion`，不是 11 —— 每加一版 schema 都要回来改。
-    expect(db.schemaVersion, 13);
+    expect(db.schemaVersion, 14);
 
     // ① 老待办原样保留，且新列取到的是 null
     final events = await db.select(db.scheduleEvents).get();
