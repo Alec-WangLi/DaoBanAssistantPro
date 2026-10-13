@@ -58,10 +58,12 @@ List<({int row, int firstCol, int lastCol})> rangeRowRuns({
 /// `null` = 两端都按整格（静止帧）。哪一端会动由 [movingEnd] 说：
 /// `true` = 终点（右）、`false` = 起点（左）。
 ///
-/// [inflate] 是**按住时长出来的那一圈**（每侧 = `protrude × lift`）。它只能在这儿加，
+/// [inflate] 是**按住时长出来的那一圈**（左右每侧 = `protrude × lift`）。它只能在这儿加，
 /// 不能像那枚块那样交给形状算 —— 因为**轮廓本身就是最终几何**（形状那套是
 /// `LiquidLensShape` 内部按 `metrics` 拼出来的，协议这一维收不到）。
 /// **端头半径不跟着放大**（与那枚块同一个规矩：长出来的是体积，不是圆角）。
+///
+/// **它只往左右长，不往上下长**（2026-10-13 改，见下面 `rangeBandPath` 里那一处）。
 Path rangeBandPath({
   required List<({int row, int firstCol, int lastCol})> runs,
   required double cellW,
@@ -94,9 +96,20 @@ Path rangeBandPath({
     path.addRRect(RRect.fromRectAndCorners(
       Rect.fromLTRB(
           left - inflate,
-          weekdayH + run.row * cellH + inset - inflate,
+          // **纵向不鼓 —— 上下就是原样，`inflate` 只在左右生效。**
+          //
+          // 行的间距恰好是 `cellH`（`rangeRowRuns` 按 `slot ~/ 7` 分行），而带子
+          // 静止时已经是 `cellH − 2·inset`。原来上下也各鼓 `protrude`（6），于是
+          // 满升程时带子高 `cellH + 8` —— **顶进相邻那一行各 4px**。跨周拖选时
+          // 两行的带子同时存在、同时鼓，叠在一起最明显（用户 2026-10-13 真机反馈：
+          // 「拖出来的这条带子太宽了，导致相邻两行的带子有部分重叠」）。
+          //
+          // 收掉之后带子恒为 `cellH − 4`（`inset` = `gapHair` = 2），外面那圈 2px
+          // 描边再各占 1px，合计 `cellH − 2` —— **一像素都不越界**。
+          // 横向照旧鼓：那个方向没有邻居，越出去只是压住两边的留白。
+          weekdayH + run.row * cellH + inset,
           right + inflate,
-          weekdayH + (run.row + 1) * cellH - inset + inflate),
+          weekdayH + (run.row + 1) * cellH - inset),
       topLeft: Radius.circular(isFirst ? endRadius : 0),
       bottomLeft: Radius.circular(isFirst ? endRadius : 0),
       topRight: Radius.circular(isLast ? endRadius : 0),

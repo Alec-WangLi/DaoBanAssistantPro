@@ -102,19 +102,32 @@ void main() {
   Rect boundsOf(WidgetTester tester) =>
       outlineOf(tester).paintPath(Offset.zero).getBounds();
 
-  testWidgets('长按那一刻整条**漫上来**：升程从 0 涨到 1，几何四面各鼓出去',
+  testWidgets('长按那一刻整条**漫上来**：升程从 0 涨到 1，只往左右鼓',
       (tester) async {
+    // 这一段的**常态**宽度：从第一格外缘到最后一格外缘，左右各去掉一道缝。
+    // （挂上来的第一帧升程已经不完全是 0 了，所以别拿「首帧宽度 + 2·protrude」
+    //   当期望值 —— 那会差一个「首帧那点升程」。绝对值和首帧两处都要量。）
+    const double runW = (3 + 1 - 2) * cellW - 2 * AppTokens.gapHair;
+
     await mount(tester, tipCell: 3);
-    final double early = boundsOf(tester).height;
+    final double earlyW = boundsOf(tester).width;
+    final double earlyH = boundsOf(tester).height;
     await tester.pumpAndSettle();
-    final double settled = boundsOf(tester).height;
-    expect(early, lessThan(settled - 4),
+    final double settledW = boundsOf(tester).width;
+    expect(earlyW, lessThan(settledW - 4),
         reason: '一挂上来就满 —— 没有「漫上来」那一下');
-    expect(settled, closeTo(innerH + 2 * CalendarRangeBand.protrude, 0.2),
-        reason: '按住时四面各鼓 protrude（与那枚单格块同一个数）');
+    expect(settledW, closeTo(runW + 2 * CalendarRangeBand.protrude, 0.2),
+        reason: '按住时**左右**各鼓 protrude（与那枚单格块同一个数）');
+    // **纵向不鼓**（2026-10-13）。原来上下也各鼓 protrude，满升程时带子高
+    // `cellH + 8` —— 跨周拖选时两行的带子同时鼓、叠着顶进对方，正是用户真机
+    // 反馈的那一条。所以高度这一维从挂上来到升程涨满必须一动不动。
+    expect(boundsOf(tester).height, closeTo(earlyH, 0.2),
+        reason: '高度跟着升程动了 —— 跨周时就会顶进相邻那一行');
+    expect(boundsOf(tester).height, closeTo(innerH, 0.2),
+        reason: '带子的常态高度就是「一格去掉上下那两道 2px 缝」');
   });
 
-  testWidgets('按住那一下**画出来的**四面鼓出去（不是只有轮廓数据鼓）', (tester) async {
+  testWidgets('按住那一下**画出来的**左右鼓出去（不是只有轮廓数据鼓）', (tester) async {
     // 独立审查抓到的那个 Important：`outlineStamp` 里原先没有 `inflate` ——
     // 几何数据变了、戒指（指纹）没变 → 画家判定「不用重画」→ **屏幕上什么都不动**，
     // 只有阴影那一层在涨（它的 painter 自己有 `lift` 字段）。旧那条用例读的是
@@ -125,8 +138,10 @@ void main() {
     final Rect settled = await paintedBounds(tester);
     expect(settled.width, greaterThan(early.width + 6),
         reason: '按住之后**画出来的**没有变宽 —— 指纹漏了升程那一维（只有轮廓数据鼓了）');
-    expect(settled.height, greaterThan(early.height + 6),
-        reason: '同上（纵向）');
+    // 纵向自 2026-10-13 起本就不鼓，这里顺带把「本体高度不随升程变」也钉住。
+    // （取像走不透明度门槛，量到的是**本体**、不含跟着升程涨的浮起阴影。）
+    expect(settled.height, closeTo(early.height, 1.0),
+        reason: '按住之后**画出来的**变高了 —— 纵向不该鼓');
   });
 
   testWidgets('末端沿运动方向鼓出去，但**高度不变**', (tester) async {
