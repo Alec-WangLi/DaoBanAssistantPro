@@ -288,9 +288,19 @@ if ($repo) {
     # （主通道走 Releases API，与分支无关）。所以测试版在 beta 之类分支上发完之后，
     # 这份清单必须也落到 main —— 否则 GitHub API 被限流（403）时，App 读到的清单会
     # 停在旧版本，表现是「明明有更新的测试版，App 却说已是最新」。
+    #
+    # ⚠️ 只把**本次发布那个通道**的字段写进 main 那份，不是把本分支的整份文件搬过去。
+    #    原先这里写的是 `git checkout $branchNow -- latest.json`（整份覆盖）—— 而正式版
+    #    在 main 上发、测试版在 beta 上发，beta 那份的 `stable` 永远停在它自己上次见到的
+    #    旧值，于是**每在 beta 发一次测试版，就把 main 上正确的 stable 覆盖回去一次**。
+    #    v0.11.0 就是这么丢的：8d25b78（在 main 上）把 stable 写成 0.11.0，紧接着的
+    #    972192f（v0.11.1 同步 beta）整份搬过来，stable 退回 0.10.0 并一直卡在那里 ——
+    #    表现是停在 0.10.x 的用户在**正式通道**里永远看不到 0.11.0（2026-10-13 查清）。
     $branchNow = git rev-parse --abbrev-ref HEAD
     if ($branchNow -ne 'main') {
-        Write-Host "      同步 latest.json 到 main（兜底通道读的是 main 上那份）..."
+        # 本次发布写哪个通道，判据与第 8 步同一处。
+        $channel = if ($isPrerelease) { 'prerelease' } else { 'stable' }
+        Write-Host "      同步 latest.json 的 $channel 通道到 main（兜底通道读的是 main 上那份）..."
 
         # 这一段里的 git 调用，stderr 上写的全是**正常提示**（切换分支时 git 会往
         # stderr 写「Switched to branch 'main'」）。而在脚本顶部的
@@ -308,15 +318,25 @@ if ($repo) {
         try {
             git checkout main 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "git checkout main 失败" }
-            git checkout $branchNow -- latest.json 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw "从 $branchNow 取 latest.json 失败" }
+
+            # 读 main 自己那份，只改本次发布那个通道 —— 另一个通道原样留着，
+            # 它可能就是 main 上刚发过的正式版，正是「整份覆盖」会弄丢的东西。
+            $mainManifest = $null
+            if (Test-Path $manifestPath) {
+                $mainManifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+            }
+            if (-not $mainManifest) { $mainManifest = [pscustomobject]@{} }
+            $mainManifest | Add-Member -Force -MemberType NoteProperty -Name $channel -Value $update
+            $mainManifest | Add-Member -Force -MemberType NoteProperty -Name 'updatedAt' -Value ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))
+            [System.IO.File]::WriteAllText($manifestPath, ($mainManifest | ConvertTo-Json -Depth 4), [System.Text.UTF8Encoding]::new($false))
+
             if (@(git status --porcelain -- latest.json).Count -gt 0) {
                 git add latest.json | Out-Null
                 git commit -m "chore(release): 更新发布清单至 v$Version（同步 $branchNow）" | Out-Null
                 if ($LASTEXITCODE -ne 0) { throw "提交到 main 失败" }
                 git push origin main
                 if ($LASTEXITCODE -ne 0) { throw "推送 main 失败" }
-                Write-Host "      ✅ main 上的 latest.json 已同步"
+                Write-Host "      ✅ main 上的 latest.json 已同步（$channel = v$Version）"
             } else {
                 Write-Host "      main 上已经是这份，跳过"
             }
@@ -324,9 +344,10 @@ if ($repo) {
             # 发布本身已经成功（tag 与资产都在），别让这一步把它变成「失败」——
             # 告警 + 把手动命令打出来。
             Write-Warning "latest.json 同步到 main 失败：$_"
-            Write-Warning ("请手动执行：git checkout main && git checkout $branchNow -- latest.json " +
-                "&& git commit -m 'chore(release): 更新发布清单至 v$Version（同步 $branchNow）' " +
-                "&& git push origin main && git checkout $branchNow")
+            Write-Warning ("请手动切到 main，把 latest.json 的 '$channel' 改成本次发布的 v$Version" +
+                "（version / url / asset 照 $branchNow 那份），顺带更新 updatedAt，" +
+                "commit -m 'chore(release): 更新发布清单至 v$Version（同步 $branchNow）' 后 git push origin main，最后切回 $branchNow。")
+            Write-Warning "⚠️ 别用 'git checkout $branchNow -- latest.json' 整份覆盖 —— 那会把 main 上另一个通道一起改掉。"
         } finally {
             # 切回原分支这行同样会往 stderr 写提示，所以必须仍在 Continue 下跑，
             # 跑完再把 ErrorActionPreference 还原（脚本尾部还有别的动作）。
