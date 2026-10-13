@@ -28,14 +28,16 @@
 - **`main` 只在发正式版（`Z = 0`）时收一次合并**：`beta` → `main` 用 `--no-ff`（留一条合并记录），正式版的 tag 打在 **main** 上。
 - **`latest.json` 必须留在 `main` 上**：App 的**主**更新通道读的是 `raw.githubusercontent.com/<owner>/<repo>/main/latest.json`（`update_checker.dart`），而 `release.ps1` 第 7 步是把它提交到**当前分支**的。**这一步从 2026-09-21 起由脚本自动做**（第 7b 步：当前分支不是 main 时，切到 main、取这份清单、提交、推送、再切回来；失败只告警 + 打出手动命令，不让已成功的发布变成「失败」）。**7b 步曾经必然失败，2026-09-23 已修。** v0.9.4 与 v0.9.5 两次发布两次都挂在这一行、两次都是手动补的 main。根因既不是锁文件也不是网络：脚本顶部的 `$ErrorActionPreference = 'Stop'` 下，`git checkout … 2>&1 | Out-Null` 会把 git 写在 **stderr** 上的常规提示（「Switched to branch 'main'」）包成 `NativeCommandError` **抛出来** —— git 明明成功了也照抛，所以只要分支切成功就必挂。2026-09-23 实测（PowerShell 5.1）：带 `2>&1` 必抛、不带不抛、`2>$null` 也抛。修法是那一段临时放宽成 `Continue`（成败仍看本来就逐个查的 `$LASTEXITCODE`），`finally` 里还原。**`git` / `gh` 这类原生命令的 stderr 上写的都是常规输出，别用 `2>&1` 去接** —— 第 7 步（发布验证）也中过同一条，已一并改掉（那里还多一层：`ConvertFrom-Json` 更不该吃 stderr，gh 真失败时那串错误文本会被喂进 JSON 解析，报出的是「解析失败」而不是「gh 失败」）。当时看到的两个 0 字节残留锁 `.git/AUTO_MERGE.lock` / `.git/packed-refs.lock` 是脚本中途抛异常留下的**症状**，不是病因。
 
-  **发完仍要 curl 一次 main 上的 `latest.json` 核对版本号** —— 脚本打印的「发布成功」只覆盖 Release 上传那一步。万一 7b 又失败（它只告警、不影响发布本身），手动补：
+  **发完仍要 curl 一次 main 上的 `latest.json` 核对版本号** —— 脚本打印的「发布成功」只覆盖 Release 上传那一步。万一这一步又失败（它只告警、不影响发布本身），手动补 —— ⚠️ **只改本次发布那个通道那一个节点（+ `updatedAt`），别整份覆盖**：
   ```bash
-  git checkout main && git checkout beta -- latest.json \
-    && git commit -m "chore(release): 更新发布清单至 vX.Y.Z（同步 beta）" \
+  git checkout main \
+    && git commit -am "chore(release): 更新发布清单至 vX.Y.Z（同步 beta）" \
     && git push origin main && git checkout beta
   ```
   （手动补之前先确认没有 git.exe 在跑，并把残留的 `.git/AUTO_MERGE.lock` / `.git/packed-refs.lock` 删掉，否则会报「Another git process seems to be running」。）
   不这么做的话，App 读到的主通道清单会停在旧版本，表现是「明明有更新的测试版，却说已是最新」。**v0.9.4 起这条清单是首选通道**（以前只是 GitHub API 的兜底），所以这一步比过去更要紧。
+
+  **⚠️ 这段（脚本里现标作第 8b 步，从前叫 7b）原先写的是 `git checkout <分支> -- latest.json` —— 把当前分支的整份清单搬到 main，那是错的，2026-10-13 已改成「切到 main 后读 main 自己那份，只写本次发布那个通道的字段」。** 根因：**正式版在 main 上发、测试版在 beta 上发**，而 beta 那份的 `stable` 永远停在它自己上次见到的旧值 —— 于是**每在 beta 发一次测试版，就把 main 上正确的 `stable` 覆盖回去一次**。v0.11.0 就是这么丢的：`8d25b78`（在 main 上）把 stable 写成 0.11.0，紧接着的 `972192f`（v0.11.1 同步 beta）整份搬过来，stable 退回 **0.10.0** 并一直卡在那里 —— Releases 页上 v0.11.0 明明标着 Latest、资产也在，只有 `latest.json` 的 stable 是错的（2026-10-13 由用户发现）。判据记牢：**Release 标得对不对看 Releases 页，`latest.json` 对不对只能 curl 那一份 —— 两者会各自独立地错。** 修完 main 与 beta 两份都补成了 stable=0.11.0。
 - 历史注记：**0.9.1 / 0.9.2 / 0.9.3 三个测试版是直接在 main 上发的**（那时还没定这条规矩）；从这之后的测试版走 beta。
 
 ## 目录架构地图（app/lib）
