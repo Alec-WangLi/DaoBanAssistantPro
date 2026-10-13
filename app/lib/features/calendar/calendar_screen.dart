@@ -829,7 +829,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             return Padding(
               padding: const EdgeInsets.only(bottom: kNavCapsuleInset),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                // **`stretch` 是这一支的核心**：右栏必须**占满整列高**，
+                // 「今日卡贴右下角」才有意义。用 `start` 的话右栏会收缩到卡片高度
+                // （实测 1280×800 下只有 308），于是「贴底」与「顶对齐」看起来一样 ——
+                // Task 4 的用例第一版就是这么变成一句空话的。
+                // 左栏不受影响：它本来就有 `Expanded` 的子件，高度恒被拉满。
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
                     child: Column(
@@ -902,10 +907,27 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 宽屏右栏里的今日信息卡。
   ///
   /// 用的是 `inSidePane: true` 那条路（卡片高度交给内容，见 `_infoCard`）。
-  /// ⚠️ **这一步先照搬今天的写法（顶对齐 + 能滚）**，Task 4 才把它推到底部 ——
-  /// 一次只改一件事，Task 4 那条用例才有红转绿可言。
-  Widget _sideRail(BuildContext context, ScheduleChain? chain) =>
-      SingleChildScrollView(child: _infoCard(context, chain, inSidePane: true));
+  ///
+  /// **卡片推到底**（用户 2026-10-13：「就算是一小块，也得放在右下角吧」）：
+  /// `ConstrainedBox(minHeight: 视口高)` 撑满这一栏，`Column(end)` 再把卡片压到底边。
+  /// 有富余时这一层什么都不做（列高 = 视口高，卡片贴底）；**没富余时**（车机上开着
+  /// 特大字号、六班组那种最满的卡片）列会长过视口，于是**这一栏自己滚** ——
+  /// 外层的 `SingleChildScrollView` 就是这个兜底，别把它写成
+  /// `NeverScrollableScrollPhysics`，那样会直接溢出成黄黑条纹。
+  ///
+  /// ⚠️ 这一栏**不是「面板套滚动」**（AGENTS.md 禁的是面板里再套一层滚动）：它是一个
+  /// 布局列，卡片本身在 `inSidePane` 那条路上仍然是「高度交给内容」的。
+  Widget _sideRail(BuildContext context, ScheduleChain? chain) => LayoutBuilder(
+        builder: (context, c) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: c.maxHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [_infoCard(context, chain, inSidePane: true)],
+            ),
+          ),
+        ),
+      );
 
   /// 顶栏那一行装不装得下 —— **按排版实测**，不拿宽度阈值猜（理由见 `_header`）。
   ///

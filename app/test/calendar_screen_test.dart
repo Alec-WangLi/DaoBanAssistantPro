@@ -2322,4 +2322,50 @@ void main() {
         reason: '顶栏左缘 ${header.left} —— 它被居中了，没靠左');
     await _disposeCalendar(tester);
   });
+
+  testWidgets('宽横屏：今日卡贴在右下角，且右栏宽度跟着屏宽走', (tester) async {
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 1280, height: 800);
+
+    final rail = tester.getRect(find.byKey(const Key('info-rail')));
+    final card = tester.getRect(find.byKey(const Key('info-card-panel')));
+
+    // ⓪ **先钉住这一栏真的占满整列高**。不钉的话 ① 是句空话：
+    //    这一栏要是收缩到内容高度，`rail.bottom` 与 `card.bottom` 本来就只差内边距，
+    //    「贴底」与否都恒真（第一版就是这么写出来的，改之前它照样绿）。
+    //    1280×800 下右栏高 = 800 − 胶囊让位 96 = 704。
+    expect(rail.height, greaterThan(600),
+        reason: '右栏只有 ${rail.height} 高 —— 它收缩到内容高度了，① 就成了空话');
+    // ① **贴底**：卡片下方只剩这一栏自己的 16 内边距。从前是顶对齐，
+    //    卡片底下会空出几百 dp（用户报的「一小块缩在右上角」）。
+    expect(rail.bottom - card.bottom, lessThanOrEqualTo(20),
+        reason: '卡片底边离右栏底部还有 ${rail.bottom - card.bottom} —— 它还没贴底');
+    // ② 卡片水平方向在这一栏里。
+    expect(card.left, greaterThanOrEqualTo(rail.left - 0.5));
+    expect(card.right, lessThanOrEqualTo(rail.right + 0.5));
+    // ③ 右栏宽 = (1280 × 0.27).clamp(280, 340) = 340。
+    expect(rail.width, closeTo(340, 0.5));
+
+    await _disposeCalendar(tester);
+
+    // ④ 1024 那一档：0.27 × 1024 = 276.5 → 夹到下限 280。
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 1024, height: 600);
+    expect(tester.getSize(find.byKey(const Key('info-rail'))).width,
+        closeTo(280, 0.5));
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('宽横屏右栏装不下时自己滚，不溢出', (tester) async {
+    // 车机上用户开着「特大」字号：六班组那种最满的信息卡会高过这一栏。
+    // 期望是**这一栏自己滚**，而不是 BOTTOM OVERFLOWED（溢出会被框架当场判失败）。
+    // 1024×600 是最紧的一档：右栏只有 600 − 96 = 504 高。
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 1024, height: 600);
+    final rail = tester.getRect(find.byKey(const Key('info-rail')));
+    final card = tester.getRect(find.byKey(const Key('info-card-panel')));
+    expect(rail.bottom - card.bottom, lessThanOrEqualTo(20),
+        reason: '装得下装不下，卡片都该贴着这一栏的底边');
+    await _disposeCalendar(tester);
+  });
 }
