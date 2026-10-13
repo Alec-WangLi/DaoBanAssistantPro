@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
@@ -10,6 +11,7 @@ import '../../core/glass/liquid_lens_metrics.dart';
 import '../../core/l10n.dart';
 import '../../core/layout.dart';
 import '../../core/theme/animated_background.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/lens_warped_cell.dart';
@@ -190,9 +192,16 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     // 盖在锁屏上（见 MainActivity 的 setShowWhenLocked）。一次返回就退回主界面 =
     // 锁屏下把 App 内容露出来，所以这里只留「上滑关闭」与「再睡一会」两个显式出口
     // —— 它们走 `_finish`/`_snooze` 里的 `Navigator.pop`，不受 `canPop` 约束。
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
+    // 状态栏图标那一层：这一页**恒深**（底色 `AppTokens.bgDark`、下面几处
+    // `isDark: true` 都是写死的），而图标是按**主题档**发的 —— 浅色档下会压一排
+    // 深图标在这块深色底上，等于看不见。离开它之后由根部那一层顶回来。
+    //
+    // 两层包在一行里（`PopScope(canPop: false, child: Scaffold(`），好让下面这一大段
+    // 保持原缩进、不制造一片只有空白的 diff —— 与 `calendar_screen` 挂
+    // `FlowingBackground` 时同一条理由。
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: statusBarStyleFor(Brightness.dark),
+      child: PopScope(canPop: false, child: Scaffold(
         backgroundColor: AppTokens.bgDark,
         body: FlowingBackground(
           child: SafeArea(
@@ -262,7 +271,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
           ),
         ),
       ),
-    );
+    ));
   }
 
   /// 闹钟标签的玻璃胶囊：标题一行，待办的联动闹钟再加一行说明。

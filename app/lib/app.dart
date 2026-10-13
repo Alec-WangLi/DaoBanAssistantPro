@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,9 +32,20 @@ class ShiftAssistantApp extends ConsumerWidget {
       // 系统栏内边距先过一道体检再用：小米小窗会把 viewPadding.top 报成整个
       // 窗口的高度，SafeArea 会因此把整页吃掉（见 sanitizeSystemInsets）。
       // 放在这里是为了覆盖全应用 —— 每一页的 SafeArea 都读到同一份修好的值。
+      //
+      // 状态栏图标那一层**必须挂在根部、而且每一帧都在**：`MaterialApp` 自己是
+      // **命令式**发那一发的（只在它 rebuild 时发），而某一页挂上来的
+      // `AnnotatedRegion`（AppBar、响铃页）会在它离开树之后**没有东西接手** ——
+      // `RenderView._updateSystemChrome` 一份声明都找不到就直接早退，于是那一页的
+      // 样式留在屏幕上（荣耀那条「进排班管理变白、退回来也不恢复」就是这么来的）。
+      // 根部挂一层之后，任何一页的声明离开树，下一帧立刻被这一层顶回来。
+      // `SystemChrome.setSystemUIOverlayStyle` 按值去重，同值不会重复跨端。
       builder: (context, child) => MediaQuery(
         data: sanitizeSystemInsets(MediaQuery.of(context)),
-        child: child!,
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: statusBarStyleFor(Theme.of(context).brightness),
+          child: child!,
+        ),
       ),
       locale: Locale(settings.language),
       supportedLocales: const [Locale('zh'), Locale('en')],
