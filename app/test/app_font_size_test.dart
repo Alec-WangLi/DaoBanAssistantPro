@@ -20,11 +20,12 @@ import 'package:shiftassistantpro/app.dart';
 import 'package:shiftassistantpro/core/app_info.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
-import 'support/plugin_channels.dart';
+import '../tool/visual/visual_harness.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
   tester.view.physicalSize = const Size(420, 900);
@@ -70,10 +71,12 @@ BuildContext _ctx(WidgetTester tester) =>
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh');
+    await ensureVisualFonts();
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   });
 
   setUp(() => L10n.locale = 'zh');
+  tearDown(useStandardGlassTier);
 
   test('四档的倍率', () {
     expect(AppFontSize.small.scale, 0.9);
@@ -105,5 +108,32 @@ void main() {
             '（设计 §3 的取舍，代价写在那里）');
 
     await _disposeApp(tester);
+  });
+
+  // ── 工装那一侧 ──
+  //
+  // 工装原来的 `textScale` 参数是**直接改平台字号**的。字号自管之后那条路成了
+  // 空操作（根部会把它整个换掉）—— 留着就是一个骗后人的参数：给 `textScale: 1.8`
+  // 渲出来的图与 1.0 逐像素相同。所以它必须改走 prefs 里的 `fontSize`。
+  testWidgets('工装给「特大」：装出来就是我们那一档，平台字号随之作废', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    setUpVisualPrefs();
+
+    final db = await makeVisualDatabase();
+    addTearDown(db.close);
+    await pumpScreen(
+      tester,
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      size: const Size(360, 780),
+      fontSize: AppFontSize.extraLarge,
+    );
+    expect(
+      MediaQuery.textScalerOf(tester.element(find.byType(CalendarScreen)))
+          .scale(14),
+      closeTo(14 * 1.3, 0.01),
+    );
+    await teardownVisual(tester);
   });
 }

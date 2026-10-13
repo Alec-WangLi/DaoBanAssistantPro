@@ -38,6 +38,7 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 // 插件通道的桩搬到了 `test/support/plugin_channels.dart`（`test/` 下的用例也要
@@ -230,20 +231,23 @@ class VisualApp extends StatelessWidget {
     required this.home,
     this.brightness = Brightness.light,
     this.language = 'zh',
-    this.textScale = 1.0,
+    this.fontSize = AppFontSize.standard,
   });
 
   final Widget home;
   final Brightness brightness;
   final String language;
 
-  /// 系统字号。默认 1.0（与真机「设置 → 显示 → 字体大小」的默认档一致）。
+  /// 字号档位 —— **走 App 自己那一套**（`AppFontSize`），不是平台字号。
   ///
-  /// **这一档必须能改**：全 app 都没有钳制 `textScaler`，而工装此前每一屏都只在
-  /// 1.0× 下出图 —— 于是「系统字号放大之后文字被截」这一类问题在图上**结构性地
-  /// 看不见**（v0.9.9 修的那个日历农历截断就是这么漏掉的）。屏单里有一屏专门
-  /// 跑大字号（见 `render_screens_test.dart`）。
-  final double textScale;
+  /// v0.11.12 起字号只由 App 决定（设计 §3）：根部的 `MediaQuery` 会把平台报上来的
+  /// `textScaler` 整个换掉。工装是**另一个根**（`VisualApp` 是它自己的 `MaterialApp`），
+  /// 所以这里也得自己套一层，否则拍出来的图会跟着测试环境的平台字号走。
+  ///
+  /// **必须能改**：以前只有 1.0× 那一档出图，于是「字号一大就被截」这类问题在图上
+  /// **结构性地看不见**（v0.9.9 修的那个日历农历截断就是这么漏掉的，v0.11.12 那次
+  /// 静默省略也是一样）。
+  final AppFontSize fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -262,13 +266,14 @@ class VisualApp extends StatelessWidget {
       // 在 `builder` 里套：这个 context 在 App 自己的 `MediaQuery` **之下**，
       // 在这里 `of(context)` 拿到的是真实那一份，改文字缩放不会顺带把
       // `size` / `padding` 一起改掉。
-      builder: textScale == 1.0
-          ? null
-          : (context, child) => MediaQuery(
-                data: MediaQuery.of(context)
-                    .copyWith(textScaler: TextScaler.linear(textScale)),
-                child: child!,
-              ),
+      //
+      // **「标准」档也要套**（不再像从前那样 1.0 就返回 null）：套上才等于
+      // 「无论平台报什么，都以我们这一档为准」—— 与真机上的行为一致。
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(fontSize.scale)),
+        child: child!,
+      ),
       home: home,
     );
   }
@@ -858,7 +863,7 @@ Future<GlobalKey> pumpScreen(
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
   Size size = kVisualSize,
-  double textScale = 1.0,
+  AppFontSize fontSize = AppFontSize.standard,
   Future<void> Function(WidgetTester tester)? beforeCapture,
   bool settleAfterCapture = true,
 }) async {
@@ -873,7 +878,7 @@ Future<GlobalKey> pumpScreen(
   // 重建，而那个 notifier 会从 SharedPreferences 读语言、反过来把 L10n.locale 覆盖
   // 回默认值——不写进 prefs 的话，「英文界面」渲染出来的其实还是中文。
   SharedPreferences.setMockInitialValues(
-      <String, Object>{'language': language, ...extraPrefs});
+      <String, Object>{'language': language, 'fontSize': fontSize.name, ...extraPrefs});
   stubPluginChannels();
 
   tester.view.physicalSize = Size(
@@ -899,7 +904,7 @@ Future<GlobalKey> pumpScreen(
           home: home,
           brightness: brightness,
           language: language,
-          textScale: textScale,
+          fontSize: fontSize,
         ),
       ),
     ),
@@ -946,7 +951,7 @@ Future<void> renderScreen(
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
   Size size = kVisualSize,
-  double textScale = 1.0,
+  AppFontSize fontSize = AppFontSize.standard,
   Future<void> Function(WidgetTester tester)? beforeCapture,
   bool settleAfterCapture = true,
 }) async {
@@ -958,7 +963,7 @@ Future<void> renderScreen(
     language: language,
     extraPrefs: extraPrefs,
     size: size,
-    textScale: textScale,
+    fontSize: fontSize,
     beforeCapture: beforeCapture,
     settleAfterCapture: settleAfterCapture,
   );

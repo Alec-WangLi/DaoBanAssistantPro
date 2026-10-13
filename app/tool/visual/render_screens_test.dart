@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/widgets/glass_check.dart';
@@ -266,20 +267,18 @@ void main() {
     );
   });
 
-  // 「大字号」的日历：系统字号 1.8×（Android 字体大小设置里那一档）。
+  // 「大字号」的日历：**我们自己的最大档**（`AppFontSize.extraLarge`）。
   //
-  // 单出一张的理由与上面「两字简称」同源，而且更硬：**全 app 都没有钳制
-  // `textScaler`，而工装此前每一屏都只在 1.0× 下出图** —— 于是「系统字号放大之后
-  // 文字被截」这一类问题在图上结构性地看不见。2026-09-29 用户反馈的那张截图
-  // （农历被截成「财…」「地…」、周标题那行挤进格子）就是这么漏掉的。
+  // v0.11.12 起字号只由 App 决定（系统那一维被根部那层 `MediaQuery` 整个换掉了），
+  // 于是「大字号下长什么样」这件事**只由我们这一档决定** —— 它必须有一张图看着。
   //
-  // 1.8 这个值是按「能把两条都压出来」挑的：周标题 13×1.8×1.15 ≈ 26.9 > `_weekdayH`
-  // 的 26（原来会压进第一行格子），农历 11×1.25×1.8 ≈ 24.8、两个字就要 49.6 > 格
-  // 内容宽的 44（原来会省略成「财…」）。
+  // ⚠️ 它原来传的是 `textScale: 1.8`（平台字号）。那个参数在 v0.11.12 之后是
+  // **空操作**：根部会把平台报上来的 scaler 整个换掉，继续传它只会拍出一张与标准档
+  // 逐像素相同的图 —— 看着像在测，其实什么也没测。工装的字号入口现在是 `AppFontSize`。
   //
   // 与「搜索落空」那张同理，它没有进 `visualScreens`（记录类型加可选字段要改全部
   // 24 条），所以对比度审计不覆盖它 —— 这一屏用的也全是既有令牌与既有配色。
-  visualTest('日历 · 大字号', (tester) async {
+  visualTest('日历 · 大字号（最大档）', (tester) async {
     failOnOverflow(tester);
     final db = await freshDb();
     await renderScreen(
@@ -287,7 +286,7 @@ void main() {
       name: '20_calendar_large_font',
       home: const CalendarScreen(),
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
-      textScale: 1.8,
+      fontSize: AppFontSize.extraLarge,
     );
   });
 
