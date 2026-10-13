@@ -56,6 +56,18 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// （它是 Expanded），名字框与删除钮要保持可点 —— 这条由视觉工装出图核对。
   static const double _alarmLabelFieldWidth = 120;
 
+  /// 班次卡的**身份行**在卡片内宽小于这个值时把「简称」折到第二行。
+  ///
+  /// 非折叠那一行需要的固定宽度约 148（色点 20 + 两个间距 + 简称框 68 + 删除钮），
+  /// 取 160 留一点余量给名称框 —— 名称框是 `Expanded`，能缩到 0，但缩到十几个
+  /// 像素等于没法用。200dp 小窗里卡片内宽只有 116，所以那一档必然折行。
+  /// 见 [_classIdentityRow]。
+  static const double _classRowStackBelow = 160;
+
+  /// **闹钟那一行**折行阈值：名字框（`_alarmLabelFieldWidth` 120）+ 时间块 +
+  /// 删除钮，非折叠那一行要两百出头才排得开。见 [_alarmRow]。
+  static const double _alarmRowStackBelow = 200;
+
   /// 底部那颗「保存并重排闹钟」胶囊的高度：M3 的 `FilledButton` 默认值，
   /// 探针在 420×900 与 200×400 两档下量到的都是它。**只用来算投影的圆角**
   /// （胶囊的圆角恒为高度的一半），所以系统字号把它撑得更高时投影会小一圈 ——
@@ -641,41 +653,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 身份行：色点（点一下改色）· 名称 · 简称 · 删除
-          Row(
-            children: [
-              _colorDot(context, index, c),
-              const SizedBox(width: AppTokens.spaceSm),
-              Expanded(
-                child: TextField(
-                  controller: _nameCtrls[index],
-                  onChanged: (v) => setState(() =>
-                      _classes[index] = _editClass(_classes[index], name: v)),
-                  decoration: glassInputDecoration(context, L10n.shiftName,
-                      isDense: true),
-                ),
-              ),
-              const SizedBox(width: AppTokens.spaceSm),
-              SizedBox(
-                width: _abbrFieldWidth,
-                child: TextField(
-                  controller: _abbrCtrls[index],
-                  maxLength: 2,
-                  textAlign: TextAlign.center,
-                  onChanged: (v) => setState(() =>
-                      _classes[index] = _editClass(_classes[index], abbr: v)),
-                  decoration: glassInputDecoration(context, L10n.abbrLabel,
-                          isDense: true)
-                      .copyWith(counterText: ''),
-                ),
-              ),
-              const SizedBox(width: AppTokens.spaceXs),
-              GlassDeleteButton(
-                compact: true,
-                onPressed: () => _deleteClass(index),
-              ),
-            ],
-          ),
+          // 身份行：色点（点一下改色）· 名称 · 简称 · 删除。
+          // 窄到放不下时把「简称」折到第二行 —— 见 [_classIdentityRow]。
+          _classIdentityRow(context, index, c),
           const SizedBox(height: AppTokens.spaceMd),
           // 工作 / 休息用分段器：两个标签都在，不会像裸开关那样让人猜
           // 「拨过去是休息还是启用」。与闹钟页、我的页的选择器同款手感。
@@ -748,63 +728,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               for (var k = 0; k < c.alarms.length; k++)
                 Padding(
                   padding: const EdgeInsets.only(top: AppTokens.spaceXs),
-                  child: Row(
-                    key: Key('shift-alarm-row-$index-$k'),
-                    children: [
-                      Expanded(
-                        child: _timeChip(
-                          context,
-                          label: L10n.alarmTime,
-                          minutes: c.alarms[k].minute,
-                          // 不落在班次当天的那两档都带日前缀（「前一天 23:00」/
-                          // 「次日 00:15」）—— 只写钟点会被读成班次当天。
-                          valueText: _alarmDayLabel(c, c.alarms[k]),
-                          onPick: (m) {
-                            // `_timeChip` 的 onPick 类型是可空 int（没选就调不到
-                            // 这里），但闹钟必须有个钟点，所以空值直接忽略。
-                            if (m == null) return;
-                            setState(() => _classes[index] =
-                                _editClass(_classes[index], alarms: [
-                                  for (var j = 0; j < c.alarms.length; j++)
-                                    j == k
-                                        ? ShiftAlarm(
-                                            minute: m,
-                                            label: c.alarms[j].label)
-                                        : c.alarms[j],
-                                ]));
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: AppTokens.spaceSm),
-                      SizedBox(
-                        width: _alarmLabelFieldWidth,
-                        child: _AlarmLabelField(
-                          key: Key('shift-alarm-label-$index-$k'),
-                          label: c.alarms[k].label,
-                          onChanged: (v) => setState(
-                              () => _classes[index] =
-                                  _editClass(_classes[index], alarms: [
-                                    for (var j = 0; j < c.alarms.length; j++)
-                                      j == k
-                                          ? ShiftAlarm(
-                                              minute: c.alarms[j].minute,
-                                              label: v)
-                                          : c.alarms[j],
-                                  ])),
-                        ),
-                      ),
-                      const SizedBox(width: AppTokens.spaceXs),
-                      GlassDeleteButton(
-                        compact: true,
-                        onPressed: () => setState(() =>
-                            _classes[index] =
-                                _editClass(_classes[index], alarms: [
-                              for (var j = 0; j < c.alarms.length; j++)
-                                if (j != k) c.alarms[j],
-                            ])),
-                      ),
-                    ],
-                  ),
+                  child: _alarmRow(context, index, c, k),
                 ),
               // 不落在班次当天的小字：整组给一句就够 —— 它点的是**哪一条不在当天**，
               // 不是某一条的正文；多条各给一句会重复成一片。
@@ -867,6 +791,148 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   /// 可点的颜色圆点：外面加一圈描边，让它看起来是能点的。
+  /// 班次卡的身份行：色点 · 名称 · 简称 · 删除。
+  ///
+  /// **窄到放不下时把「简称」折到第二行。** 色点(20) + 名称 + 简称框(68) + 删除钮
+  /// 那三样固定宽度加起来约 148，而 200 宽的小窗里卡片内宽只有 116 —— 不折行就是
+  /// 一条溢出的横条（工装在小窗那一档当场报 32px）。
+  ///
+  /// 降级顺序照 v0.11.12 那条「折行 > 按宽缩小 > 换短串」：**折行优先**。收缩简称
+  /// 框到放不下两个汉字，等于把用户自己输的字吃掉，比折行糟。
+  ///
+  /// 这一处是 v0.11.15 加「按月」那一屏时**工装抓出来的既有缺陷**：之前没有任何
+  /// 一屏在 400 高的窗口里构建到这张卡（上面两张卡正好占满），所以它从没现形过。
+  Widget _classIdentityRow(BuildContext context, int index, ShiftClass c) {
+    final nameField = TextField(
+      controller: _nameCtrls[index],
+      onChanged: (v) => setState(
+          () => _classes[index] = _editClass(_classes[index], name: v)),
+      decoration: glassInputDecoration(context, L10n.shiftName, isDense: true),
+    );
+    final abbrField = SizedBox(
+      width: _abbrFieldWidth,
+      child: TextField(
+        controller: _abbrCtrls[index],
+        maxLength: 2,
+        textAlign: TextAlign.center,
+        onChanged: (v) => setState(
+            () => _classes[index] = _editClass(_classes[index], abbr: v)),
+        decoration: glassInputDecoration(context, L10n.abbrLabel, isDense: true)
+            .copyWith(counterText: ''),
+      ),
+    );
+    final dot = _colorDot(context, index, c);
+    final del = GlassDeleteButton(
+      compact: true,
+      onPressed: () => _deleteClass(index),
+    );
+
+    return LayoutBuilder(builder: (context, cons) {
+      if (cons.maxWidth >= _classRowStackBelow) {
+        return Row(
+          children: [
+            dot,
+            const SizedBox(width: AppTokens.spaceSm),
+            Expanded(child: nameField),
+            const SizedBox(width: AppTokens.spaceSm),
+            abbrField,
+            const SizedBox(width: AppTokens.spaceXs),
+            del,
+          ],
+        );
+      }
+      return Column(
+        children: [
+          Row(
+            children: [
+              dot,
+              const SizedBox(width: AppTokens.spaceSm),
+              Expanded(child: nameField),
+              const SizedBox(width: AppTokens.spaceXs),
+              del,
+            ],
+          ),
+          const SizedBox(height: AppTokens.spaceXs),
+          Align(alignment: Alignment.centerRight, child: abbrField),
+        ],
+      );
+    });
+  }
+
+  /// 一条联动闹钟那一行：时间块 · 名字框 · 删除。
+  ///
+  /// **窄到放不下时把名字框折到第二行** —— 与 [_classIdentityRow] 同一条降级顺序
+  /// （折行优先）。名字框写死 [_alarmLabelFieldWidth]、删除钮又不能压，200 宽的小窗
+  /// 里卡片内宽只有 116，这一行不折就是一条溢出的横条（工装报 52px）。
+  Widget _alarmRow(BuildContext context, int index, ShiftClass c, int k) {
+    final chip = Expanded(
+      child: _timeChip(
+        context,
+        label: L10n.alarmTime,
+        minutes: c.alarms[k].minute,
+        // 不落在班次当天的那两档都带日前缀（「前一天 23:00」/
+        // 「次日 00:15」）—— 只写钟点会被读成班次当天。
+        valueText: _alarmDayLabel(c, c.alarms[k]),
+        onPick: (m) {
+          // `_timeChip` 的 onPick 类型是可空 int（没选就调不到
+          // 这里），但闹钟必须有个钟点，所以空值直接忽略。
+          if (m == null) return;
+          setState(() => _classes[index] =
+              _editClass(_classes[index], alarms: [
+                for (var j = 0; j < c.alarms.length; j++)
+                  j == k
+                      ? ShiftAlarm(minute: m, label: c.alarms[j].label)
+                      : c.alarms[j],
+              ]));
+        },
+      ),
+    );
+    final labelField = SizedBox(
+      width: _alarmLabelFieldWidth,
+      child: _AlarmLabelField(
+        key: Key('shift-alarm-label-$index-$k'),
+        label: c.alarms[k].label,
+        onChanged: (v) => setState(
+            () => _classes[index] = _editClass(_classes[index], alarms: [
+                  for (var j = 0; j < c.alarms.length; j++)
+                    j == k
+                        ? ShiftAlarm(minute: c.alarms[j].minute, label: v)
+                        : c.alarms[j],
+                ])),
+      ),
+    );
+    final del = GlassDeleteButton(
+      compact: true,
+      onPressed: () => setState(() => _classes[index] =
+          _editClass(_classes[index], alarms: [
+            for (var j = 0; j < c.alarms.length; j++)
+              if (j != k) c.alarms[j],
+          ])),
+    );
+
+    return LayoutBuilder(builder: (context, cons) {
+      final rowKey = Key('shift-alarm-row-$index-$k');
+      if (cons.maxWidth >= _alarmRowStackBelow) {
+        return Row(key: rowKey, children: [
+          chip,
+          const SizedBox(width: AppTokens.spaceSm),
+          labelField,
+          const SizedBox(width: AppTokens.spaceXs),
+          del,
+        ]);
+      }
+      return Column(children: [
+        Row(key: rowKey, children: [
+          chip,
+          const SizedBox(width: AppTokens.spaceXs),
+          del,
+        ]),
+        const SizedBox(height: AppTokens.spaceXs),
+        Align(alignment: Alignment.centerRight, child: labelField),
+      ]);
+    });
+  }
+
   Widget _colorDot(BuildContext context, int index, ShiftClass c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(

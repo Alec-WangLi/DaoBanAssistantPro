@@ -35,6 +35,7 @@ import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/app_theme.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -641,6 +642,59 @@ Future<void> makeCrewClashCurrent(AppDatabase db) async {
 /// 而它正好是本轮唯一新增的界面元素（分组标题旁边的「管理」、卡片上的
 /// 「N 天一轮 · N 个班组」副标题）。两条故意不同长：一条 4 天、一条 10 天，
 /// 好看出副标题与色条不是写死的。
+/// 按月排班：每月的 1–10 中班、11–20 白班、21 号到月底夜班，三个班组按**段**错开
+/// （0/1/2）—— 就是 2026-10-13 那位用户报上来的形状。
+///
+/// 时钟正是**回绕式**的写法（夜班 23:30 → 07:30 存成 450 < 1410），与内置模板和
+/// 编辑器产出的同一种 —— 顺手让「跨午夜班次的时段文案」也在这张图里过一次。
+Future<void> makeMonthlyScheduleCurrent(AppDatabase db) async {
+  final repo = AppRepository(db);
+  await repo.saveSchedule(
+    name: '按月三班倒',
+    // 按月不读基准日（每月 1 号恒等于第一段），给今天就行。
+    anchorDate: dateOnly(DateTime.now()),
+    classes: const [
+      ShiftClass(
+          name: '中班',
+          abbr: '中',
+          startMinute: 15 * 60 + 30,
+          endMinute: 23 * 60 + 30,
+          color: 0xFF7A5CFF,
+          alarmEnabled: true,
+          alarms: [ShiftAlarm(minute: 14 * 60 + 30)]),
+      ShiftClass(
+          name: '白班',
+          abbr: '白',
+          startMinute: 7 * 60 + 30,
+          endMinute: 15 * 60 + 30,
+          color: 0xFF4C8DFF,
+          alarmEnabled: true,
+          alarms: [ShiftAlarm(minute: 6 * 60 + 30)]),
+      ShiftClass(
+          name: '夜班',
+          abbr: '夜',
+          startMinute: 23 * 60 + 30,
+          endMinute: 7 * 60 + 30,
+          color: 0xFFFF9F0A,
+          alarmEnabled: true,
+          alarms: [ShiftAlarm(minute: 22 * 60 + 30)]),
+    ],
+    cycle: const [],
+    monthly: true,
+    monthSegments: const [
+      MonthlySegment(startDay: 1, classIndex: 0),
+      MonthlySegment(startDay: 11, classIndex: 1),
+      MonthlySegment(startDay: 21, classIndex: 2),
+    ],
+    makeCurrent: true,
+    teamCount: 3,
+    teamNames: L10n.defaultTeamNames(3),
+    ourTeamIndex: 0,
+    teamOffsets: const [],
+    teamSegOffsets: const [0, 1, 2],
+  );
+}
+
 Future<void> seedMyTemplates(AppDatabase db) async {
   final repo = AppRepository(db);
   final domain = await repo.getActiveSchedule();

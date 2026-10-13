@@ -429,6 +429,26 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const CalendarScreen(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 按月排班（v0.11.15）：编辑器那一屏拍的是**按月那一支**——顶上的二选一分段器、
+    // 「每月第 N 天起」的段列表、以及下面几张卡。段列表在班次卡之下，所以它同时
+    // 进了 `visualScrollDown`（不滚只看得到预览条与名称卡）。
+    slug: '57_editor_monthly',
+    title: '排班编辑器 · 按月',
+    build: (db) async {
+      await makeMonthlyScheduleCurrent(db);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 选择页最底下那两张「从零开始」的卡（按月排班 / 我自己排）。它们在 20 来个
+    // 模板卡之后，首屏拍不到 —— 所以这一屏也是靠 `visualScrollDown` 滚到底。
+    slug: '58_template_picker_monthly',
+    title: '倒班方式选择 · 按月排班',
+    build: (db) async => const ShiftTemplatePickerScreen(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -624,4 +644,8 @@ const Map<String, double> visualScrollDown = {
   // 撞班提示挂在「周期设置」卡的末尾，10 行周期表的下面；给足量让它滚到底，
   // 靠到底后的钳位保证那张卡的下半段（提示 + 均分按钮）在画面里。
   '15_editor_crew_clash': 2400,
+  // 按月那一支：班次卡下面才是段列表（顶上两张卡占掉一屏），再往下是班组卡。
+  '57_editor_monthly': 1500,
+  // 选择页那两张「从零开始」的卡在 20 来个模板之后，滚到底才看得到。
+  '58_template_picker_monthly': 4000,
 };

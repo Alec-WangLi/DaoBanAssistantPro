@@ -131,21 +131,28 @@ class _GlassActionButtonState extends State<GlassActionButton> {
         break;
     }
 
-    final content = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (widget.icon != null) ...[
-          IconTheme(
-            data: IconThemeData(color: contentColor, size: AppTokens.iconMd),
-            child: widget.icon!,
+    // `FittedBox(scaleDown)`：地方够时**逐像素不变**，挤不下时按宽缩小而不是溢出。
+    // 触发它的是 200dp 小窗里卡片内宽只有 116 那一档（图标 + 「添加闹钟」比那宽
+    // 1px，工装当场报出来）。降级顺序照 v0.11.12 那条：**按宽缩小优先于省略** ——
+    // 按钮标签被吃掉一个字比整体缩一点难读得多。
+    final content = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.icon != null) ...[
+            IconTheme(
+              data: IconThemeData(color: contentColor, size: AppTokens.iconMd),
+              child: widget.icon!,
+            ),
+            const SizedBox(width: AppTokens.gapIconText),
+          ],
+          Text(
+            widget.label,
+            style: AppTokens.labelStrong.copyWith(color: contentColor),
           ),
-          const SizedBox(width: AppTokens.gapIconText),
         ],
-        Text(
-          widget.label,
-          style: AppTokens.labelStrong.copyWith(color: contentColor),
-        ),
-      ],
+      ),
     );
 
     return QScale(
