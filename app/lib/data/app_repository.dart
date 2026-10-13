@@ -590,6 +590,9 @@ class AppRepository {
             cycle: encodeTemplateCycle(t.cycle),
             teamCount: t.teamCount,
             teamOffsets: encodeTemplateOffsets(t.teamOffsets),
+            monthly: Value(t.monthly),
+            monthSegments: Value(encodeTemplateMonthSegments(t.monthlySegments)),
+            teamSegOffsets: Value(encodeTemplateOffsets(t.teamSegOffsets)),
             createdAt: DateTime.now(),
           ),
         );
@@ -618,6 +621,11 @@ class AppRepository {
         cycle: decodeTemplateCycle(r.cycle),
         teamCount: r.teamCount,
         teamOffsets: decodeTemplateOffsets(r.teamOffsets),
+        // 老模板（v13 及更早存的）这三列是默认值：monthly = false、
+        // monthSegments = '' —— 解出来就是「一套周期模板」，与升级前一字不差。
+        monthly: r.monthly,
+        monthlySegments: decodeTemplateMonthSegments(r.monthSegments),
+        teamSegOffsets: decodeTemplateOffsets(r.teamSegOffsets),
       ));
     }
     return out;
