@@ -24,10 +24,13 @@ class HelpEntry extends StatelessWidget {
 
   final IconData icon;
 
-  /// 条目标题。**为空时整行标题不画**（连那 8dp 间距一起）—— 「我的 → 桌面小组件」
-  /// 那个说明弹层只有一份并列的短句，弹窗标题已经说了是什么，条目再顶一行标题
-  /// 就是同一句话说两遍。
-  final String? title;
+  /// 条目标题。
+  ///
+  /// **v0.11.17 之前它是可空的** —— 当时「我的 → 桌面小组件」那个说明弹层复用
+  /// 这个件、且不顶标题（弹窗标题已经把「是什么」说了）。那份弹层并进《使用帮助》
+  /// 之后**没有任何调用点再传 null**，于是可空与那条分支一起删了：留着的话，
+  /// 下一个人得先想一遍「什么时候会没有标题」才能改这一行。
+  final String title;
   final List<String> lines;
   final bool bulleted;
 
@@ -62,10 +65,8 @@ class HelpEntry extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (title != null) ...[
-                Text(title!, style: AppTokens.labelStrong),
-                const SizedBox(height: AppTokens.padChipV),
-              ],
+              Text(title, style: AppTokens.labelStrong),
+              const SizedBox(height: AppTokens.padChipV),
               for (var i = 0; i < lines.length; i++) ...[
                 if (i > 0) const SizedBox(height: AppTokens.spaceXs),
                 if (!bulleted)

@@ -9,7 +9,7 @@ import '../../core/widgets/glass_dialog.dart';
 import '../alarm/alarm_service.dart';
 import 'help_entry.dart';
 
-/// 统一风格的应用弹窗（版本更新 / 使用帮助），配色跟随主题主色。
+/// 统一风格的应用弹窗（版本更新），配色跟随主题主色。
 void showAppInfoDialog(
   BuildContext context, {
   required String title,
