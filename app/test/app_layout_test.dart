@@ -73,6 +73,35 @@ void main() {
     expect(withBar.availableWidth, 420);
   });
 
+  testWidgets('宽横屏：够宽、够高、而且是横着的', (tester) async {
+    // 平板 / 车机 —— 只有这三档才算「宽横屏」。
+    for (final s in const [Size(1024, 600), Size(1280, 800), Size(1920, 720)]) {
+      expect((await _layoutAt(tester, s)).isWideLandscape, isTrue, reason: '$s');
+    }
+    // **竖着的平板**：isWide 成立，但它是竖的，该走竖屏版式。
+    expect((await _layoutAt(tester, const Size(800, 1280))).isWideLandscape,
+        isFalse, reason: '竖屏平板不该被拆成左右两栏');
+    // **宽且矮**（手机横屏）：宽够了，但高不够 —— 分栏之后网格每行只剩 41dp。
+    expect((await _layoutAt(tester, const Size(900, 420))).isWideLandscape,
+        isFalse);
+    // 其余各档一律 false。
+    for (final s in const [
+      Size(420, 900),
+      Size(360, 780),
+      Size(200, 400),
+      Size(320, 360),
+    ]) {
+      expect((await _layoutAt(tester, s)).isWideLandscape, isFalse, reason: '$s');
+    }
+    // 键盘弹起把可用高压到 480 以下时也不算 —— 判据走的是**可用区域**。
+    expect(
+        (await _layoutAt(tester, const Size(1280, 800),
+                viewInsets: const EdgeInsets.only(bottom: 400)))
+            .isWideLandscape,
+        isFalse,
+        reason: '键盘占掉一半高之后就不该再分栏');
+  });
+
   group('sanitizeSystemInsets：系统栏内边距体检', () {
     // 实测数据（Redmi K90 Pro Max + 小米小窗）：
     //   win=199.7x400.0 dpr=3.0 pad(t400.0,b22.7) vpad(t400.0,b22.7)

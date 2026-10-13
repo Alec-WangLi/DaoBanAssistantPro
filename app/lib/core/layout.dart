@@ -99,6 +99,7 @@ class AppLayout {
     required this.isNarrow,
     required this.isShort,
     required this.isWide,
+    required this.isWideLandscape,
     required this.availableWidth,
     required this.availableHeight,
   });
@@ -111,6 +112,19 @@ class AppLayout {
 
   /// 可用宽 >= 720：平板、车机、手机横屏。
   final bool isWide;
+
+  /// 平板 / 车机的**横屏**：**够宽、够高、而且是横着的**。三个条件缺一不可。
+  ///
+  ///   · [isWide]     —— 宽 ≥ 720，有横向余量才谈得上分栏；
+  ///   · `!isShort`   —— 高 ≥ 480，手机横屏只有 420 高，分栏之后网格每行只剩 41dp
+  ///                     （日历格子那道可读下限 `_minCellH` 是 58），比不分栏还差；
+  ///   · 宽 > 高      —— **竖着的平板**（800×1280）也是 [isWide]，但它该走竖屏那套：
+  ///                     七列格子要的是宽度，不是分栏。
+  ///
+  /// ⚠️ **[isWide] 本身不许跟着改**：`CenteredContent`（另外三个 tab 与三个编辑页）
+  /// 靠它把内容限宽到 720。把方向条件并进 `isWide`，竖屏平板会从「居中 720」
+  /// 变成「拉满整屏」—— 那是另一个 bug。
+  final bool isWideLandscape;
 
   /// 扣掉键盘与系统栏之后的可用区域。
   final double availableWidth;
@@ -135,6 +149,7 @@ class AppLayout {
       isNarrow: w < _narrowWidth,
       isShort: h < _shortHeight,
       isWide: w >= _wideWidth,
+      isWideLandscape: w >= _wideWidth && h >= _shortHeight && w > h,
       availableWidth: w,
       availableHeight: h,
     );
