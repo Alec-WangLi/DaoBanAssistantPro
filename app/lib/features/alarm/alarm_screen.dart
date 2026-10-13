@@ -163,17 +163,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
 
   Widget _customAlarmSection(BuildContext context, List<CustomAlarm> alarms) {
     if (alarms.isEmpty) {
-      return Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            L10n.noCustomAlarms,
-            style: AppTokens.rowSecondary
-                .copyWith(color: AppTokens.inkMuted(context)),
-          ),
-        ),
-      );
+      // 与上面「班次闹钟」那处同一个角色、同一种形状 —— 收进同一个共享件，
+      // 两处同时为空时留白一致（原先这里是 `fromLTRB(16,16,16,8)`、上面是
+      // `fromLTRB(16,24,16,24)`，同屏两种空态留白）。
+      return EmptyState(L10n.noCustomAlarms);
     }
     return ListView.builder(
       // 这是页面上最下面那段列表，而底部按钮条**悬浮**在它上面：不留底部空白
