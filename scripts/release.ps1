@@ -319,6 +319,18 @@ if ($repo) {
             git checkout main 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "git checkout main 失败" }
 
+            # **先把本地 main 对齐到 origin/main。** 本地那个 ref 很容易是旧的：
+            # 在 beta 上干活时它一动不动，而从别处（比如 worktree）直接
+            # `git push origin HEAD:main` 也只更新远端。一旦落后，下面那次
+            # `git push origin main` 会被拒（non-fast-forward）—— v0.11.16 那次
+            # 就是这么挂的，靠手工 reset 才补上。
+            # 只允许**快进**：真有未推送的提交（那才是该由人看一眼的情况）就抛出去
+            # 走下面那条告警路径，绝不替人丢掉东西。
+            git fetch origin main 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "git fetch origin main 失败" }
+            git merge --ff-only origin/main 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "本地 main 无法快进到 origin/main（可能有未推送的提交）" }
+
             # 读 main 自己那份，只改本次发布那个通道 —— 另一个通道原样留着，
             # 它可能就是 main 上刚发过的正式版，正是「整份覆盖」会弄丢的东西。
             $mainManifest = $null
@@ -348,6 +360,7 @@ if ($repo) {
                 "（version / url / asset 照 $branchNow 那份），顺带更新 updatedAt，" +
                 "commit -m 'chore(release): 更新发布清单至 v$Version（同步 $branchNow）' 后 git push origin main，最后切回 $branchNow。")
             Write-Warning "⚠️ 别用 'git checkout $branchNow -- latest.json' 整份覆盖 —— 那会把 main 上另一个通道一起改掉。"
+            Write-Warning "⚠️ 若挂在 'git push origin main' 的 non-fast-forward 上，是**本地 main 落后于 origin/main**：先 'git fetch origin' 再 'git reset --hard origin/main'，然后照上面重做一遍。"
         } finally {
             # 切回原分支这行同样会往 stderr 写提示，所以必须仍在 Continue 下跑，
             # 跑完再把 ErrorActionPreference 还原（脚本尾部还有别的动作）。
