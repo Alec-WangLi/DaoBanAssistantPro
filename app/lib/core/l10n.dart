@@ -873,6 +873,12 @@ class L10n {
   static String get gettingStartedMore => t('完整说明在「我的 → 使用帮助」，随时能看',
       'The full guide lives under Me → Usage guide, whenever you need it');
 
+  // 使用帮助 · 第二层（「遇到问题怎么解决」）的页标题。
+  //
+  // 页面标题由**需要它的那个页面**声明（`help_faq_screen.dart`）；第一级那颗
+  // 入口按钮的文案与第一级的页标题在 Task 4 那一批里，见下面的「使用帮助 · 第一级」。
+  static String get faqTitle => t('遇到问题怎么解决', 'How to get things done');
+
   // 使用帮助（图标化条目）
   //
   // 每条正文是一**串短句**而不是一整段：这份说明出现在「我的 → 使用帮助」，

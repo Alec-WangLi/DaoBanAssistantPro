@@ -4,7 +4,6 @@
 // 显示中文），以及**数字与实现漂了** —— 后者这个仓库真犯过：帮助里写着
 // 「一个班次最多挂 6 条闹钟」，而 v0.11.1 早就放到 10 条了（这一版才发现）。
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/profile/help_content.dart';
 
