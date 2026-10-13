@@ -14,6 +14,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
@@ -84,6 +85,9 @@ class _FakeRepo extends AppRepository {
     List<String> teamNames = const ['一班', '二班', '三班', '四班'],
     int ourTeamIndex = 0,
     List<int> teamOffsets = const [],
+    bool monthly = false,
+    List<MonthlySegment> monthSegments = const [],
+    List<int> teamSegOffsets = const [],
   }) async {
     createdName = name;
     createdClasses = List.of(classes);

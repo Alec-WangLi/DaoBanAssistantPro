@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
@@ -662,5 +663,43 @@ void main() {
     final crews = ((s['todayCard']! as Map)['crews']! as List).cast<Map>();
     expect(crews, isNotEmpty);
     expect(crews.first['name'], startsWith('A'));
+  });
+
+  // RF-2：按月方案**跨月**那两天各归各的。
+  //
+  // 这条是「快照不需要为按月模式做任何改动」的证据 —— 它逐天问 `shiftOn`，
+  // 与日历 / 闹钟走同一条路。绿着进仓库，是为了以后谁动了这条路它立刻红。
+  test('按月方案：窗口跨月，12/31 与次年 1/1 各归各的', () {
+    final monthly = ShiftSchedule(
+      name: '按月',
+      anchorDate: DateTime.utc(2026, 1, 1),
+      classes: const [
+        ShiftClass(id: 21, name: '中班', abbr: '中', color: 0xFF00AA00),
+        ShiftClass(id: 22, name: '白班', abbr: '白', color: 0xFF0055FF),
+        ShiftClass(id: 23, name: '夜班', abbr: '夜', color: 0xFFFF8800),
+      ],
+      cycle: const [],
+      monthly: true,
+      monthlySegments: const [
+        MonthlySegment(startDay: 1, classIndex: 0),
+        MonthlySegment(startDay: 11, classIndex: 1),
+        MonthlySegment(startDay: 21, classIndex: 2),
+      ],
+    );
+    final s = buildWidgetSnapshot(
+      chain: _chain(monthly),
+      now: DateTime(2026, 12, 20, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+
+    expect(s['hasSchedule'], true, reason: '按月方案不是空白表');
+    expect(_rowOf(s, DateTime(2026, 12, 31))['shiftAbbr'], '夜');
+    // **跨过月界就归零** —— 这正是固定周期做不到的那件事
+    expect(_rowOf(s, DateTime(2027, 1, 1))['shiftAbbr'], '中');
+    expect(_rowOf(s, DateTime(2027, 1, 10))['shiftAbbr'], '中');
+    expect(_rowOf(s, DateTime(2027, 1, 11))['shiftAbbr'], '白');
+    expect(_rowOf(s, DateTime(2027, 1, 21))['shiftAbbr'], '夜');
   });
 }

@@ -21,6 +21,7 @@ import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
@@ -37,6 +38,9 @@ class _Saved {
     required this.teamNames,
     required this.ourTeamIndex,
     required this.teamOffsets,
+    required this.monthly,
+    required this.monthSegments,
+    required this.teamSegOffsets,
   });
 
   final String name;
@@ -47,6 +51,9 @@ class _Saved {
   final List<String> teamNames;
   final int ourTeamIndex;
   final List<int> teamOffsets;
+  final bool monthly;
+  final List<MonthlySegment> monthSegments;
+  final List<int> teamSegOffsets;
 }
 
 class _FakeRepository extends AppRepository {
@@ -86,6 +93,9 @@ class _FakeRepository extends AppRepository {
     List<String> teamNames = const ['一班', '二班', '三班', '四班'],
     int ourTeamIndex = 0,
     List<int> teamOffsets = const [],
+    bool monthly = false,
+    List<MonthlySegment> monthSegments = const [],
+    List<int> teamSegOffsets = const [],
   }) async {
     saved = _Saved(
       name: name,
@@ -96,6 +106,9 @@ class _FakeRepository extends AppRepository {
       teamNames: List.of(teamNames),
       ourTeamIndex: ourTeamIndex,
       teamOffsets: List.of(teamOffsets),
+      monthly: monthly,
+      monthSegments: List.of(monthSegments),
+      teamSegOffsets: List.of(teamSegOffsets),
     );
     return 7;
   }
