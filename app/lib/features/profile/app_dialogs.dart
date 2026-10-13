@@ -39,7 +39,15 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.14\n'
+const String _changelogZh = 'v0.11.15\n'
+    '· 排班方案多了一种规则：按月排班 —— 每月 1 号重新开始，比如「1–10 号中班、11–20 号白班、21 号到月底夜班」\n'
+    '· 以前只能按固定周期轮，而月份长度不一样（28 / 29 / 30 / 31 天），走过几个月就会错一天，12 月 1 日会显示成夜班\n'
+    '· 想切几段就切几段：加一段、删一段、改「每月第几天起」都行；删掉的那一段并进上一段，不会留出空档\n'
+    '· 多班组按段错开（甲班从第 1 段、乙班从第 2 段……），都在同一天换班、只是换到不同的班次上\n'
+    '· 新建排班时多一张「按月排班」的卡片；老的周期排班一点没变，两种规则在编辑器顶上切换，来回切都不会丢\n'
+    '\n'
+
+    'v0.11.14\n'
     '· 横屏（平板 / 车机）重新适配：日历页在横屏下改成左右两栏 —— 顶栏收进左栏不再横跨整屏、今日信息卡贴到右下角、日期网格不再被底部胶囊压住\n'
     '· 格子里的字在宽屏上放大一档：车机上格子本来就大，而字一直卡在手机那一档的上限，屏幕再大也不会变大\n'
     '· 底部导航胶囊在宽屏上不再铺满整屏（限到 440、居中）；待办那颗「＋」与闹钟页底部那两颗按钮也跟着内容栏对齐了\n'
@@ -98,15 +106,18 @@ const String _changelogZh = 'v0.11.14\n'
     '· 那 16 种默认颜色都保证在日历格子与桌面小组件上看得清（这一版为此逐颗量过，并有测试盯着）\n'
     '\n'
 
-    'v0.11.5\n'
-    '· 修好一处崩溃：重复待办的管理面板在极少数情况下点开就闪退（那个系列短时间里有两条「没做完」的行时，比如刚把当前那一条勾回来、而生成器还没跑）\n'
-    '· 勾完那条「已划掉 · 撤销」的提示条，点完「撤销」会自己收掉 —— 之前它会继续挂在那里，说的还是反话\n'
-    '\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.14\n'
+const String _changelogEn = 'v0.11.15\n'
+    '· Schedules can now be driven by the month: the pattern resets on the 1st, for example days 1-10 on the middle shift, 11-20 on days, and the rest on nights\n'
+    '· Until now only a fixed-length cycle was possible, and since months differ in length (28 / 29 / 30 / 31 days) the cycle drifted within a few months — December 1 came out as a night shift\n'
+    '· Split the month into as many segments as you like: add one, remove one, or change the day it starts on. A removed segment merges into the previous one, so no day is ever left out\n'
+    '· Crews offset by segment (crew A enters at segment 1, crew B at segment 2, ...), so every crew changes shift on the same day — just onto a different shift\n'
+    '· A new "Monthly roster" card when you create a schedule. Existing cycle schedules are untouched, and the editor switches between the two rules without losing either\n'
+    '\n'
+
+    'v0.11.14\n'
     '· Landscape adapted for tablets and car head units: the calendar page goes two-column — the toolbar moves into the left column instead of spanning the whole screen, the today card pins to the bottom right, and the date grid is no longer covered by the floating capsule\n'
     '· The text inside the day cells steps up a size on wide screens: the cells are bigger there, but the text was pinned to the phone cap and never grew\n'
     '· The bottom navigation capsule no longer stretches across the whole screen on wide displays (capped at 440, centred); the todo "+" button and the two buttons at the bottom of the alarm page line up with the content column too\n'
@@ -163,11 +174,6 @@ const String _changelogEn = 'v0.11.14\n'
     '· New custom colors: tap the color dot on a shift row for a hue strip, a saturation/brightness pad, and a field for typing a value such as #4C8DFF\n'
     '· Two live calendar samples sit next to the picker, so you can see how the color will look on a real cell\n'
     '· All 16 built-in colors are guaranteed readable on calendar cells and on the desktop widget (each one measured, with a test keeping watch)\n'
-    '\n'
-
-    'v0.11.5\n'
-    '· Fixed a crash: the recurring-todo panel could crash on open in a rare case (when a series briefly holds two unfinished rows — for example right after you un-tick the current one and the generator has not run yet)\n'
-    '· The "Marked done · Undo" bar now dismisses itself once you tap Undo — it used to linger and keep saying the opposite\n'
     '\n'
 
         '\n'
