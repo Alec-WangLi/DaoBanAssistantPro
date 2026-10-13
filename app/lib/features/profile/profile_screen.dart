@@ -135,20 +135,28 @@ class ProfileScreen extends ConsumerWidget {
                     onSelected: (i) => ref
                         .read(appSettingsProvider.notifier)
                         .setFontSize(AppFontSize.values[i]),
-                    itemBuilder: (i, selected) => Text(
-                      // ⚠️ 英文那几档**特意取短**（`XL` 而不是 `Extra large`）：
-                      // 320dp 上四格每格只有约 48dp 可用，长词会挤出格。
-                      [
-                        L10n.fontSmall,
-                        L10n.fontStandard,
-                        L10n.fontLarge,
-                        L10n.fontExtraLarge,
-                      ][i],
-                      // 基线 13px：未选中 w500、选中 w700。13 档最重的角色是 w600 的
-                      // labelSecondary，两个分支都由这里显式给字重，按 spec 走 copyWith。
-                      style: AppTokens.labelSecondary.copyWith(
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
+                    itemBuilder: (i, selected) => FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        // 英文那几档**特意取短**（`XL` 而不是 `Extra large`）：
+                        // 320dp 上四格每格只有约 48dp 可用。
+                        //
+                        // 外面那层 `FittedBox(scaleDown)` 是护栏逼出来的：`Standard`
+                        // 在 320dp@英文下比格子宽 4px，`GlassSegment` 会**静默裁掉**
+                        // 那 4px —— 而那正是「字被吃掉」的一种，段落自己（`maxLines`）
+                        // 一点都不知道。按设计 §2 的第 2 档降级：缩，不省略。
+                        [
+                          L10n.fontSmall,
+                          L10n.fontStandard,
+                          L10n.fontLarge,
+                          L10n.fontExtraLarge,
+                        ][i],
+                        // 基线 13px：未选中 w500、选中 w700。13 档最重的角色是 w600 的
+                        // labelSecondary，两个分支都由这里显式给字重，按 spec 走 copyWith。
+                        style: AppTokens.labelSecondary.copyWith(
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
