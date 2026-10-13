@@ -1274,31 +1274,40 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         borderRadius:
             const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 头部走共享件（把手 + 主色竖条 + 标题 + 分隔线）。
-                //
-                // 标题是 `titleStrong`（16）—— 与另外四个弹层同角色。
-                // ⚠️ 这行注释此前写着「底部弹层标题走 `dialogTitle`，与其它弹层同
-                // 角色」，那是**错的**：另外四个弹层一直走 `titleStrong`，只有这里
-                // 用了 `dialogTitle`（20）。v0.12.0 统一到 16。
-                GlassSheetHeader(
-                  title: L10n.scheduleTimeline,
-                  // 说法与排班管理页那条时间线**同源**：一个段都没有时不说「其余
-                  // 时间」（没有「这一段」，「其余」就没有着落），整行写「全部
-                  // 日子」。两处各写一份的话，同一个状态会有两种解释。
-                  subtitle: hasPeriods
-                      ? L10n.remainingHint
-                      : (remaining == null
-                          ? L10n.allDatesNoneHint
-                          : L10n.allDatesHint),
-                ),
-                const SizedBox(height: 8),
-                Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            // **`stretch` 而不是 `start`。** 头部下面那块内容自带一圈
+            // `Padding(all: 16)`，而 `start` 给子件的是**松宽度约束** —— ListView
+            // （视口）会一路撑到 `maxWidth`、Padding 再给它加出左右各 16，直接横向
+            // 溢出。`stretch` 给的是紧宽度，Padding 减掉 32 之后才是 ListView 该有的宽。
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 头部走共享件（把手 + 主色竖条 + 标题 + 分隔线）。
+              //
+              // ⚠️ **那圈 16 的 padding 只能包住头部以下的内容，不能包住整个
+              // Column**（本轮修的就是它）。原来它包在最外层，于是 `GlassSheetHeader`
+              // 被**二次内缩**：分隔线比另外四个弹层窄 16dp、把手低 16dp、标题也跟着
+              // 与下面的行错开 —— 「五处统一头部」只成四成不算成。
+              //
+              // 标题是 `titleStrong`（16）—— 与另外四个弹层同角色。
+              // ⚠️ 这行注释此前写着「底部弹层标题走 `dialogTitle`，与其它弹层同
+              // 角色」，那是**错的**：另外四个弹层一直走 `titleStrong`，只有这里
+              // 用了 `dialogTitle`（20）。v0.12.0 统一到 16。
+              GlassSheetHeader(
+                title: L10n.scheduleTimeline,
+                // 说法与排班管理页那条时间线**同源**：一个段都没有时不说「其余
+                // 时间」（没有「这一段」，「其余」就没有着落），整行写「全部
+                // 日子」。两处各写一份的话，同一个状态会有两种解释。
+                subtitle: hasPeriods
+                    ? L10n.remainingHint
+                    : (remaining == null
+                        ? L10n.allDatesNoneHint
+                        : L10n.allDatesHint),
+              ),
+              const SizedBox(height: AppTokens.spaceSm),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppTokens.spaceLg),
                   child: ListView(
                     shrinkWrap: true,
                     children: [
@@ -1334,8 +1343,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

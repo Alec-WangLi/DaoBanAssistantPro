@@ -14,6 +14,7 @@ import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
+import 'package:shiftassistantpro/features/calendar/shift_color_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
@@ -468,6 +469,24 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const _OptionPickerHost(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 取色层（`showShiftColorPicker`）。
+    //
+    // `render_screens_test.dart` 里有**两条手写的** `visualTest` 渲它（浅色 / 深色，
+    // 点班次行末那颗色点弹出来、**背后是编辑器现场**），但它们是临时用例、**不在本
+    // 清单里** —— 而**对比度审计只扫这份清单**。于是取色层**至今没进过对比度审计**，
+    // 正是 AGENTS.md 里 v0.11.7 记下的那句「取色层那两屏没进对比度审计的屏单」。
+    // 这一条把它并进共享清单（背后是空棚架，形态与手写那两条不同 —— 那两条要留着，
+    // 它们带 `beforeCapture` 交互，替代不了）。
+    //
+    // ⚠️ **slug 不能取 `57_shift_color_picker`。** 共享清单出的文件名是
+    // `'${slug}_${variant.suffix}'`，而手写那条正好也会写出 `57_shift_color_picker_dark.png`
+    // —— 两条同屏但现场不同，谁后跑谁覆盖，图会随机变成另一个样子。所以另起一号。
+    slug: '61_shift_color_picker',
+    title: '取色层（对比度审计）',
+    build: (db) async => const _ColorPickerHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -572,6 +591,33 @@ class _OptionPickerHostState extends State<_OptionPickerHost> {
         labelOf: L10n.snoozeOptionLabel,
         selected: L10n.snoozeOptions[1],
       );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 取色层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 与 `_OptionPickerHost` 同一套路：`showShiftColorPicker` 是命令式的，没有可以
+/// 直接放进 `home:` 的 widget。首帧后把它弹出来，`build` 只交一个空 `Scaffold`。
+class _ColorPickerHost extends StatefulWidget {
+  const _ColorPickerHost();
+
+  @override
+  State<_ColorPickerHost> createState() => _ColorPickerHostState();
+}
+
+class _ColorPickerHostState extends State<_ColorPickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showModalBottomSheet` 要用 `context` 的 `Overlay`，而
+    // `initState` 里 context 还没挂进树。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showShiftColorPicker(context, current: 0xFF4C8DFF, sampleLabel: '早');
     });
   }
 

@@ -23,6 +23,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/layout.dart';
 import 'package:shiftassistantpro/core/theme/animated_background.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
+import 'package:shiftassistantpro/core/widgets/glass_sheet_header.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
@@ -718,6 +719,44 @@ void main() {
     // 弹层关闭，改用带 scheduleId 的编辑器（不再靠 makeCurrent 的隐式约定）。
     expect(find.byType(ScheduleEditorScreen), findsOneWidget);
 
+    await _disposeCalendar(tester);
+  });
+
+  // 「五处弹层统一头部」那条要求：**时段总览这屏的头部必须与另外四处同内缩。**
+  //
+  // 它一度保留着外层 `Padding(all: 16)` 包住整个 `Column`，于是
+  // `GlassSheetHeader` 被**二次内缩** —— 分隔线比另外四个弹层窄 16dp、把手低
+  // 16dp、标题也跟着与下面的行错开（出图量到的）。那种错**任何一条既有用例都照
+  // 不出来**（弹层仍然打得开、内容仍然对），所以按几何钉住：头部那条分隔线要贴到
+  // `GlassPanel` 的内容盒左缘。
+  testWidgets('时段总览：头部与另外四处同内缩（分隔线贴面板内容盒左缘）',
+      (tester) async {
+    await _pumpCalendar(tester, 'day_night_rest_rest');
+
+    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(GlassSheetHeader);
+    final panel = find.ancestor(of: sheet, matching: find.byType(GlassPanel));
+    final headerDivider =
+        find.descendant(of: sheet, matching: find.byType(Divider));
+    expect(headerDivider, findsOneWidget);
+
+    // 面板**内容盒**的左缘 = 面板缘 + 12 的 margin + 1 的描边 + `GlassPanel` 自己的
+    // `spaceXl` 内边距。头部那条分隔线要**贴到它** —— 再往里缩 16 就是被外面那圈
+    // padding 二次缩进了（那正是这一屏原来的样子：分隔线比另外四个弹层窄 16、
+    // 把手低 16、标题与下面的行错开）。
+    final panelRect = tester.getRect(panel);
+    final contentLeft =
+        panelRect.left + AppTokens.spaceMd + 1 + AppTokens.spaceXl;
+    final header = tester.getRect(headerDivider);
+    expect(header.left, moreOrLessEquals(contentLeft, epsilon: 1.0),
+        reason: '头部的分隔线要贴面板内容盒的左缘（$contentLeft），实测 ${header.left}；'
+            '多出 16 就是头部被二次内缩了');
+
+    // 关掉弹层：点遮罩。
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
     await _disposeCalendar(tester);
   });
 
