@@ -34,6 +34,20 @@ import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
+/// 量一段文字在给定样式与缩放下的宽度。
+///
+/// 顶栏那个「一行放不放得下」的判据用它（见 `_oneRowFits`）—— 与
+/// `schedule_editor_screen.dart` 里那个私有的同款；两边各自私有，不为一个十行的
+/// 小函数开一个共享件。
+double _textWidth(String text, TextStyle style, TextScaler scaler) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+    textScaler: scaler,
+  )..layout();
+  return painter.width;
+}
+
 /// 与**这个月**有关、且只跟**方案本身**有关的那两样（见 `_factsFor`）。
 ///
 /// 它们原来每次重建都要重算（各是整月 × 一次链查询 + 拼字符串），而输入只跟
@@ -808,20 +822,48 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     );
   }
 
+  /// 顶栏那一行装不装得下 —— **按排版实测**，不拿宽度阈值猜（理由见 `_header`）。
+  ///
+  /// 固定件全是量得出来的：左右留白、三个圆形钮、四个 `gapIconText`、两个胶囊的
+  /// 内边距、「今天」胶囊里的图标与文字；可变件只有年月那一串。
+  bool _oneRowFits(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    // 量宽必须**带上当时那一套字体**：`Text` 会从环境继承 family（工装里中英双字体
+    // 就是这么挂上去的），而裸的 `TextPainter` 只会用兜底字体 —— 两者的中文宽度
+    // 差得很远（实测同一个「2026年10月」：兜底 128、真字体 86）。
+    final ambient = DefaultTextStyle.of(context).style;
+    TextStyle styled(TextStyle t) => t.copyWith(
+          fontFamily: ambient.fontFamily,
+          fontFamilyFallback: ambient.fontFamilyFallback,
+        );
+    final need = 24.0 + // 左右留白 12×2
+        40.0 * 3 + // 三个圆形钮
+        AppTokens.gapIconText * 4 +
+        8.0 * 2 * 2 + // 两个 GlassPill 的内边距（各两侧 8）
+        AppTokens.iconMd +
+        4 + // 「今天」胶囊里图标与文字之间的间距
+        _textWidth(L10n.today, styled(AppTokens.labelStrong), scaler) +
+        _textWidth(L10n.yearMonth(_month), styled(AppTokens.titleStrong), scaler);
+    return need <= MediaQuery.sizeOf(context).width;
+  }
+
   Widget _header(BuildContext context) {
     // 上下留白归到节奏档：10 → spaceMd(12)、6 → spaceSm(8)。
     const pad =
         EdgeInsets.fromLTRB(12, AppTokens.spaceMd, 12, AppTokens.spaceSm);
-    // 窄档（小窗实测 200 逻辑像素宽）一行放不下 —— 四个圆形钮加年月胶囊的
-    // **固定**宽度是 184，而 200 宽的屏扣掉左右留白只剩 176：年月那个
-    // Expanded 会被挤成 0 宽，整行溢出。
-    // 拆成两行：上行只放「‹ 年月 ›」（年月能拿到 104），下行放「切换排班 / 今天」。
-    // 控件收到 32 见方：一是给年月腾出完整显示「2026年9月」的宽度（36 见方时
-    // 真机上只剩 76 可用，MiSans 下会被省略成「2026年…」），二是省下 10px 高度。
-    if (AppLayout.of(context).isNarrow) {
+    // 一行放不下就拆两行：上行只放「‹ 年月 ›」，下行放「时段总览 / 今天」。
+    // 控件收到 32 见方：一是给年月腾出完整显示「2026年10月」的宽度，二是省下 10px 高度。
+    //
+    // **判据是排版实测，不是宽度阈值**（v0.11.12 改）。从前判的是
+    // `AppLayout.isNarrow`（宽 < 360），于是「2026年10月」比「2026年9月」多一个字
+    // 就悄悄溢出了 —— 用户 2026-10-13 报的正是它（真我 GT7 Pro）。
+    // 固定件全是量得出来的：三个圆形钮 + 四个间距 + 「今天」胶囊，年月那串用
+    // `TextPainter` 量。**大 / 特大档下走两行是常态版式**，不是应急。
+    if (!_oneRowFits(context)) {
       const narrowSide = 32.0;
       const narrowGap = 4.0;
       return Padding(
+        key: const Key('header-two-row'),
         padding: pad,
         child: Column(
           children: [
@@ -838,11 +880,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     child: _monthSlide(
                       month: _month,
                       tag: 'pill',
-                      child: Text(
-                        L10n.yearMonth(_month),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTokens.titleStrong,
+                      // `FittedBox(scaleDown)` 是**兜底**：上面那个「一行放不放得下」
+                      // 是预估（差几个 dp 就可能误判 —— 实测英文特大档差约 1dp），
+                      // 而这里要的是「绝不省略」。设计 §2 的第 2 档降级：缩，不省略。
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          L10n.yearMonth(_month),
+                          maxLines: 1,
+                          style: AppTokens.titleStrong,
+                        ),
                       ),
                     ),
                   ),
@@ -877,6 +924,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     }
 
     return Padding(
+      key: const Key('header-single-row'),
       padding: pad,
       child: Row(
         children: [
@@ -890,11 +938,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               child: _monthSlide(
                 month: _month,
                 tag: 'pill',
-                child: Text(
-                  L10n.yearMonth(_month),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTokens.titleStrong,
+                // 兜底同 `_header` 的两行档：预估差几个 dp 时缩一点，而不是省略。
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    L10n.yearMonth(_month),
+                    maxLines: 1,
+                    style: AppTokens.titleStrong,
+                  ),
                 ),
               ),
             ),
