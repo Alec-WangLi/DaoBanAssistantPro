@@ -211,10 +211,12 @@ class _ShiftTemplatePickerScreenState
           // 「已完成 N 条」）。原来是一颗裸 `TextButton`，读起来像正文、不像能点的
           // 东西（v0.9.13 / v0.11.4 收过同类两处，v0.12.0 收掉最后这处）。
           // **非 accent 那一档**：实心主色会跟这一页的主操作（新建）抢眼睛。
+          // `height: 36` 是「紧凑入口」那一档（见 `GlassPill` 文档注释）—— 别退回
+          // 32：它是**唯一入口**，命中区缩水要两头（观感 + 手感）一起付代价。
           if (onManage != null)
             GlassPill(
               onTap: onManage,
-              height: 32,
+              height: 36,
               child: Text(
                 L10n.manageTemplates,
                 style: AppTokens.labelSecondary.copyWith(

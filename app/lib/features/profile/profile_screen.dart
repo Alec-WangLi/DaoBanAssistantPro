@@ -1064,10 +1064,12 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
           // 是必须的**：`ListTile.trailing` 给的是**有限宽度**，而 `GlassPill` 里那个
           // `Container` 带了 `alignment`、拿到有限宽度就会**铺满整行**
           // （同 v0.11.4「已完成 N 条」那个坑：不套的话它长得跟一条行一样宽）。
+          // `height: 36` 是「紧凑入口」那一档（见 `GlassPill` 文档注释）—— 别退回
+          // 32：这几项权限只有这一处入口，命中区缩水不值当。
           : IntrinsicWidth(
               child: GlassPill(
                 onTap: onOpen,
-                height: 32,
+                height: 36,
                 child: Text(
                   actionLabel ?? L10n.goEnable,
                   maxLines: 1,
