@@ -466,4 +466,66 @@ void main() {
     // 周期那一半**照旧带过去**（切换模式不丢数据，模板是整块快照）
     expect(templates.single.cycle, [0, 1, 2]);
   });
+
+  // ── 独立审查抓出来的两条 Important ───────────────────────────────────────
+
+  testWidgets('段数用的是「段」这个单位，不是「天」', (tester) async {
+    await _pumpEditor(
+        tester,
+        _domain(
+          monthly: true,
+          monthSegments: const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 11, classIndex: 1),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ],
+          teamSegOffsets: const [0, 1, 2],
+          teamCount: 3,
+        ));
+    expect(find.text(L10n.monthlySegmentCount(3)), findsOneWidget);
+    // 别用周期的「天」：界面上写「3天」是个说不通的数
+    expect(find.text('3${L10n.cycleLengthUnit}'), findsNothing);
+  });
+
+  testWidgets('均分之后每一行显示的段号都落在 1..段数 里', (tester) async {
+    // 甲、乙两组都从第 3 段入场（**撞班**，所以「均分」那个动作才在），而均分要
+    // 保住我们班组（甲）的偏移 —— 于是其余两组会被挪到 3、4 去
+    // （`evenTeamOffsets` 是直接减出来的），班组行就会显示「从第 4 段开始」/
+    // 「从第 5 段开始」，而总共只有 3 段。
+    await _pumpEditor(
+        tester,
+        _domain(
+          monthly: true,
+          monthSegments: const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 11, classIndex: 1),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ],
+          teamSegOffsets: const [2, 2, 1],
+          teamCount: 3,
+        ));
+    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.crewSegmentStart(3)), findsNWidgets(2), reason: '甲乙都在第 3 段');
+
+    await tester.tap(find.text(L10n.evenCrewSegments));
+    await tester.pumpAndSettle();
+
+    final nums = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.data)
+        .whereType<String>()
+        .map((s) => RegExp(r'^从第 (\d+) 段开始$').firstMatch(s))
+        .whereType<RegExpMatch>()
+        .map((m) => int.parse(m.group(1)!))
+        .toList();
+    expect(nums.length, 3);
+    for (final n in nums) {
+      expect(n, inInclusiveRange(1, 3), reason: '段号必须落在 1..3 里，实际是 $n');
+    }
+    // 我们班组原地不动（均分的既有约定）
+    expect(nums.first, 3);
+    // 均分之后不该再撞班
+    expect(find.byKey(const Key('editor-crew-clash-hint')), findsNothing);
+  });
 }

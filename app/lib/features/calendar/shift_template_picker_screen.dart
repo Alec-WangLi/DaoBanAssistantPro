@@ -667,5 +667,13 @@ Future<int?> createScheduleFromTemplatePicker(
         // 「我这组从这个周期开始」即可。
         ourTeamIndex: 0,
         teamOffsets: picked?.teamOffsets ?? mine?.teamOffsets ?? d.teamOffsets,
+        // ⚠️ **按月模板那三个字段要一起带过去**（`ShiftTemplate` 那一边恒为空，
+        // 内置模板全是周期方案）。漏了它们的后果不是「少点东西」而是**整套空掉**：
+        // 按月模板的 `cycle` 本来就是空的，于是建出来的方案 `monthly = false`
+        // 且 `cycle = []` —— `isBlank` 为真，日历整月什么都不画、桌面小组件写
+        // 「还没有排班」，而且**不报错**。（独立审查抓的 Critical。）
+        monthly: mine?.monthly ?? false,
+        monthSegments: mine?.monthlySegments ?? const [],
+        teamSegOffsets: mine?.teamSegOffsets ?? const [],
       );
 }

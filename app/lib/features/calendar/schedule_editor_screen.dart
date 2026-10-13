@@ -1160,7 +1160,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         children: [
           Text(L10n.monthlySection, style: AppTokens.titleStrong),
           const Spacer(),
-          Text('${_monthlySegments.length}${L10n.cycleLengthUnit}',
+          Text(L10n.monthlySegmentCount(_monthlySegments.length),
               style: AppTokens.labelStrong),
         ],
       ),
@@ -1496,7 +1496,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       if (even.length != _teamSegOffsets.length) return; // 理论上不会发生
       setState(() {
         for (var i = 0; i < even.length; i++) {
-          _teamSegOffsets[i] = even[i];
+          // **要取模**：`evenTeamOffsets` 是「保住我们班组那一格、整组一起平移」，
+          // 平移量一为负（我们的偏移比均分给它的那一格小）就会算出负数或 ≥ 段数
+          // 的值。段偏移的单位是段，落回 0..段数-1 才是同一个旋转 —— 不取模的话
+          // 班组行会显示「从第 -1 段开始」/「从第 4 段开始」而总共只有 3 段
+          // （班次算出来是对的，只有数字是废话）。Dart 的 `%` 对正除数恒非负。
+          _teamSegOffsets[i] = even[i] % n;
         }
       });
       return;

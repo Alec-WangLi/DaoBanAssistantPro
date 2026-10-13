@@ -670,6 +670,13 @@ class L10n {
   /// 按月那张卡的小标题（周期那张卡对应的是 [cycleSection]）。
   static String get monthlySection => t('按月切法', 'Monthly split');
 
+  /// 按月切法有几段。
+  ///
+  /// **单位是「段」，不是 [cycleLengthUnit] 那个「天」** —— 用「天」会写出
+  /// 「3 天」这种说不通的数（独立审查抓的：那是这个功能的**主面板**上的数字）。
+  static String monthlySegmentCount(int n) =>
+      t('$n 段', n == 1 ? '1 segment' : '$n segments');
+
   /// 段列表左边那一列：「每月第 N 天起」。
   static String monthlyFromDay(int n) => t('每月第 $n 天起', 'From day $n');
 

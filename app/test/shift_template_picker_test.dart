@@ -7,6 +7,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/monthly_pattern.dart';
+import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
@@ -499,5 +500,67 @@ void main() {
     expect(repo.lastScheduleName, L10n.monthlyPattern);
     // 班次定义借默认四班两倒那四个
     expect(repo.lastClasses.length, 4);
+  });
+
+  // 独立审查抓出来的 Critical：**用「我的模板」里那套按月模板建方案**那条路
+  // 原先只把 `cycle` 传了过去，于是建出来的是一张**空白表**
+  // （monthly=false、cycle 又是空的）—— 日历上什么都不画、小组件写「还没有排班」。
+  testWidgets('按月模板：用它建出来的必须还是按月方案，不是空白表', (tester) async {
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    // 真仓库：要读回建出来的那套方案，看它到底是不是空白表。
+    final repo = AppRepository(db);
+
+    final monthly = ShiftSchedule(
+      name: '按月三班倒',
+      anchorDate: DateTime.utc(2026, 1, 1),
+      classes: const [
+        ShiftClass(name: '中班', abbr: '中'),
+        ShiftClass(name: '白班', abbr: '白'),
+        ShiftClass(name: '夜班', abbr: '夜'),
+      ],
+      cycle: const [],
+      monthly: true,
+      monthlySegments: const [
+        MonthlySegment(startDay: 1, classIndex: 0),
+        MonthlySegment(startDay: 11, classIndex: 1),
+        MonthlySegment(startDay: 21, classIndex: 2),
+      ],
+      teamCount: 3,
+      ourTeamIndex: 0,
+      teamSegOffsets: const [0, 1, 2],
+    );
+    await repo.saveTemplate(
+        ScheduleTemplate.fromSchedule(monthly, name: '我的按月'));
+
+    late BuildContext ctx;
+    late WidgetRef ref;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appRepositoryProvider.overrideWithValue(repo)],
+      child: MaterialApp(
+        home: Consumer(builder: (context, r, _) {
+          ctx = context;
+          ref = r;
+          return const Scaffold();
+        }),
+      ),
+    ));
+
+    final fut = createScheduleFromTemplatePicker(ctx, ref, makeCurrent: true);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我的按月'));
+    await tester.pumpAndSettle();
+    final id = (await fut)!;
+
+    final built = (await repo.getScheduleDomain(id))!;
+    expect(built.monthly, isTrue, reason: '按月模板建出来的必须还是按月方案');
+    expect(built.isBlank, isFalse,
+        reason: '空白表的话日历整月不画东西、小组件写「还没有排班」');
+    expect(built.monthlySegments.map((s) => s.startDay), [1, 11, 21]);
+    expect(built.teamSegOffsets, [0, 1, 2]);
+    // 端到端：那天真的算得出班次（不是空白表才有的 null）
+    expect(built.shiftOn(DateTime(2026, 12, 1))!.name, '中班');
+    expect(built.shiftOn(DateTime(2026, 12, 21))!.name, '夜班');
   });
 }
