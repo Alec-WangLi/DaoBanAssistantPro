@@ -759,6 +759,14 @@ class L10n {
   static String get monthlyPatternHint =>
       t('每个月重复一套切法', 'The same split repeats every month');
 
+  /// 选择页最后那一组的组名，装「按月排班」与「我自己排」两张卡。
+  ///
+  /// **这两张卡原来没有组名**，是裸挂在分组循环后面的 —— 而最后一个分组是
+  /// 「常白」，于是它们看起来就归在常白里（用户 2026-10-13 真机反馈：「它把倒班
+  /// 方式归类到了长白班那里，这是不对的吧？」）。它们本来也不是内置的轮转方式，
+  /// 而是两条**从零开始**的路。
+  static String get fromScratchGroup => t('从零开始', 'Start from scratch');
+
   static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');
 
   /// 搜索落空时的下一句。

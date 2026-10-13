@@ -50,6 +50,11 @@ class ScheduleTemplate {
 
   /// 每天同时在上班的班组数（与 `ShiftTemplate.workingTeamsPerDay` 同一口径，
   /// 供选择页卡片上那行「每天在岗 N 个班组」用）。
+  ///
+  /// ⚠️ **按月那一档自 2026-10-13 起不再画到卡片上**（用户真机反馈「每天在岗两个
+  /// 班组，这是啥意思啊？」）—— 选择页两处调用点都改成 `t.monthly ? null : …` 了。
+  /// 这个分支留着是因为它本身是个有意义的领域问题、用例也钉着（`schedule_template_
+  /// test.dart` 的「按月模式数『每月 1 日那一档』上非休班的班组」），只是不再当展示文案。
   int get workingTeamsPerDay {
     if (monthly) {
       // 按月模式：段的长短随月份变，所以取一个**代表性的一天**（每月 1 日）

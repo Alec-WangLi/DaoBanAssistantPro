@@ -182,6 +182,11 @@ class _ShiftTemplatePickerScreenState
         ),
       ));
     }
+    // ⚠️ **「按月排班」与「我自己排」要有自己的组名。** 这两张卡此前是裸挂在
+    // 分组循环后面的，头上什么都不写 —— 而最后一个分组是「常白」，于是它们看起来
+    // 就归在常白里（用户 2026-10-13 真机反馈：「它把倒班方式归类到了长白班那里，
+    // 这是不对的吧？」）。它们本来也不是内置的轮转方式，而是两条**从零开始**的路。
+    out.add(_groupHeader(context, L10n.fromScratchGroup));
     out.add(_monthlyCard(context));
     out.add(_customCard(context));
     return out;
@@ -221,7 +226,11 @@ class _ShiftTemplatePickerScreenState
     required String subtitle,
     required List<ShiftClass> classes,
     required List<int> cycle,
-    required int workingTeamsPerDay,
+    // null = 这一档对**这套排法**不适用，整行不出现。按月排班就是这种：
+    // 它的段长短随月份变，「每天在岗几个班组」没有单一答案（而且那张起步卡片
+    // 的班次是借四班两倒的，算出来的数本身就是借来的副产物 —— 用户 2026-10-13
+    // 真机反馈「每天在岗两个班组，这是啥意思啊？」）。
+    required int? workingTeamsPerDay,
     required VoidCallback onTap,
   }) {
     final muted = AppTokens.inkMuted(context);
@@ -232,7 +241,7 @@ class _ShiftTemplatePickerScreenState
         const SizedBox(height: 4),
         Text(subtitle,
             style: AppTokens.rowSecondary.copyWith(color: muted)),
-        if (workingTeamsPerDay > 1) ...[
+        if (workingTeamsPerDay != null && workingTeamsPerDay > 1) ...[
           const SizedBox(height: 4),
           Text(
             L10n.crewsOnDutyCount(workingTeamsPerDay),
@@ -316,7 +325,8 @@ class _ShiftTemplatePickerScreenState
         cycle: t.monthly
             ? [for (final s in t.monthlySegments) s.classIndex]
             : t.cycle,
-        workingTeamsPerDay: t.workingTeamsPerDay,
+        // 按月模板同样不写「每天在岗几个班组」—— 理由与 `_monthlyCard` 同一处。
+        workingTeamsPerDay: t.monthly ? null : t.workingTeamsPerDay,
         onTap: () => Navigator.of(context).pop(ShiftTemplateChoice.saved(t)),
       );
 
@@ -349,7 +359,9 @@ class _ShiftTemplatePickerScreenState
       subtitle: L10n.monthlyPatternHint,
       classes: starter.classes,
       cycle: [for (final s in starter.monthlySegments) s.classIndex],
-      workingTeamsPerDay: starter.workingTeamsPerDay,
+      // 不写「每天在岗几个班组」：段的长短随月份变，这个数没有单一答案；
+      // 而这张起步卡片的班次是借四班两倒的，算出来那个「2」只是借来的副产物。
+      workingTeamsPerDay: null,
       onTap: () =>
           Navigator.of(context).pop(const ShiftTemplateChoice.monthly()),
     );

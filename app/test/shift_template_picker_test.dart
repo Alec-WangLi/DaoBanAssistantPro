@@ -454,6 +454,55 @@ void main() {
     expect(L10n.crewsOnDutyCount(2), '每天在岗 2 个班组');
   });
 
+  testWidgets('「按月排班」与「我自己排」有自己的组名，不再挂在「常白」下面', (tester) async {
+    // 视口放高，让整份列表一次全在屏内 —— `ListView` 是懒构建的，屏外的卡片
+    // 根本不在树上，那样 `find.text` 会静默找不到。
+    tester.view.physicalSize = const Size(1200, 6000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final results = <Object?>[];
+    await _openPicker(tester, results);
+
+    // 这两张卡原来裸挂在分组循环后面、头上什么都不写 —— 而最后一个分组是「常白」，
+    // 于是看起来就归在常白里（用户 2026-10-13 真机反馈：「它把倒班方式归类到了
+    // 长白班那里，这是不对的吧？」）。旧代码上这一条是 findsNothing。
+    expect(find.text(L10n.fromScratchGroup), findsOneWidget);
+    final headerY = tester.getTopLeft(find.text(L10n.fromScratchGroup)).dy;
+    expect(headerY,
+        lessThan(tester.getTopLeft(find.text(L10n.monthlyPattern)).dy),
+        reason: '组名要压在「按月排班」上面');
+    expect(
+        headerY, lessThan(tester.getTopLeft(find.text(L10n.customPattern)).dy),
+        reason: '组名要压在「我自己排」上面');
+  });
+
+  testWidgets('按月排班那张卡片不写「每天在岗 N 个班组」', (tester) async {
+    tester.view.physicalSize = const Size(1200, 6000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final results = <Object?>[];
+    await _openPicker(tester, results);
+
+    // 先证这一行**本身还在**（内置轮转模板照旧写着它）—— 少了这半条，下面那半条
+    // 会因为「整页都没有」而恒真，那就是一句空话。
+    final crew = find.textContaining('每天在岗');
+    expect(crew.evaluate().length, greaterThan(0),
+        reason: '内置模板应当照旧写着「每天在岗 N 个班组」');
+
+    // 两张卡各自的纵向区间内都不许出现这一行。取「按月排班」标题到「我自己排」
+    // 标题之间那一段 —— 那正是按月那张卡占的位置。
+    final monthlyY = tester.getTopLeft(find.text(L10n.monthlyPattern)).dy;
+    final customY = tester.getTopLeft(find.text(L10n.customPattern)).dy;
+    for (var i = 0; i < crew.evaluate().length; i++) {
+      final y = tester.getTopLeft(crew.at(i)).dy;
+      expect(y < monthlyY || y > customY, isTrue,
+          reason: '「每天在岗」落在了「按月排班」那张卡片里 —— '
+              '按月的段长短随月份变，这个数没有单一答案');
+    }
+  });
+
   testWidgets('「按月排班」卡片在「我自己排」旁边，点它建出来的是一套按月方案', (tester) async {
     final raw = sqlite3.sqlite3.openInMemory();
     final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
