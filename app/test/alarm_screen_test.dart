@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/layout.dart';
 import 'package:shiftassistantpro/core/widgets/glass_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
@@ -46,8 +47,9 @@ Future<AppDatabase> _pumpAlarmScreen(
   required int startMinute,
   required int endMinute,
   required List<ShiftAlarm> alarms,
+  Size size = const Size(420, 1400),
 }) async {
-  tester.view.physicalSize = const Size(420, 1400);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -349,6 +351,33 @@ void main() {
         isTrue,
         reason: '删除键的中心得真的打得中 —— 被按钮条盖住时命中的是按钮条');
 
+    await _dispose(tester);
+  });
+
+  testWidgets('宽屏下底部按钮条跟着 720 的内容栏走，手机上位置不变', (tester) async {
+    // 与待办页那颗 FAB 同一处毛病：正文限宽 720 居中，而按钮条原来按**整屏宽**铺满，
+    // 在最右边那两台按钮孤零零地挂在屏幕两端（1280 的图上看得一清二楚）。
+    Future<void> pump(WidgetTester tester, Size size) => _pumpAlarmScreen(
+          tester,
+          name: '早班',
+          startMinute: 8 * 60,
+          endMinute: 16 * 60,
+          alarms: const [],
+          size: size,
+        );
+
+    // ① 手机：与从前逐像素同一条（左缘 16、宽 = 屏宽 − 32）。
+    await pump(tester, const Size(420, 1400));
+    final phone = tester.getRect(find.byKey(const Key('alarm-action-bar')));
+    expect(phone.left, closeTo(16, 0.5));
+    expect(phone.width, closeTo(420 - 32, 0.5));
+    await _dispose(tester);
+
+    // ② 1280：内容栏是 [280, 1000]，按钮条在它里面再各留 16 → [296, 984]。
+    await pump(tester, const Size(1280, 900));
+    final wide = tester.getRect(find.byKey(const Key('alarm-action-bar')));
+    expect(wide.left, closeTo((1280 - AppLayout.maxContentWidth) / 2 + 16, 0.5));
+    expect(wide.width, closeTo(AppLayout.maxContentWidth - 32, 0.5));
     await _dispose(tester);
   });
 }

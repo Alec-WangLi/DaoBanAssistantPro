@@ -39,7 +39,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.13\n'
+const String _changelogZh = 'v0.11.14\n'
+    '· 横屏（平板 / 车机）重新适配：日历页在横屏下改成左右两栏 —— 顶栏收进左栏不再横跨整屏、今日信息卡贴到右下角、日期网格不再被底部胶囊压住\n'
+    '· 格子里的字在宽屏上放大一档：车机上格子本来就大，而字一直卡在手机那一档的上限，屏幕再大也不会变大\n'
+    '· 底部导航胶囊在宽屏上不再铺满整屏（限到 440、居中）；待办那颗「＋」与闹钟页底部那两颗按钮也跟着内容栏对齐了\n'
+    '· 手机竖屏与小窗的版式一个像素都没动\n'
+    '\n'
+
+    'v0.11.13\n'
     '· 收上一版那份独立审查抓出的四处。主要一条是小窗里的日期与待办副标题在省略 —— 它们其实从上一版之前就在省略了，只是没人盯着小窗那一档\n'
     '· 日历页「一屏构图」的保证线写准了：常见高度（360×780 及以上）四档都成立；矮屏（640 高）走既有的网格滚动兜底 —— 那里从最小档 0.9 就开始滚，是高度不够，与字号档位无关\n'
     '· 常设护栏补上小窗与 420×900 两档（原先漏了）。小窗里仍会省略的那几处每次跑都会打在输出里，只是不判失败 —— 故意不查的东西要看得见\n'
@@ -96,20 +103,17 @@ const String _changelogZh = 'v0.11.13\n'
     '· 勾完那条「已划掉 · 撤销」的提示条，点完「撤销」会自己收掉 —— 之前它会继续挂在那里，说的还是反话\n'
     '\n'
 
-    'v0.11.4\n'
-    '· 已完成的待办现在可以直接取消勾选、放回列表 —— 一次性待办在「已完成」里也带勾选框了（重复待办的旧记录仍然只有删除键：那个系列可能已经走到下一次，放回来会同时有两条没做完的）\n'
-    '· 勾错了不用去那堆淡掉的行里找：勾完底下会弹一条「已划掉 · 撤销」，点一下就退回来\n'
-    '· 修好一处像「点了没反应」的：在主列表里取消勾选的那一瞬间，那一条会先跳走再跳回来\n'
-    '· 「已完成 N 条」那一行从一行灰字换成一颗胶囊，跟「今天」「重复待办」那些入口同一款\n'
-    '· 同一天里的多条待办，归档时改成按钟点从晚到早排（原来是按行号倒着来的）\n'
-    '\n'
-
-
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.13\n'
+const String _changelogEn = 'v0.11.14\n'
+    '· Landscape adapted for tablets and car head units: the calendar page goes two-column — the toolbar moves into the left column instead of spanning the whole screen, the today card pins to the bottom right, and the date grid is no longer covered by the floating capsule\n'
+    '· The text inside the day cells steps up a size on wide screens: the cells are bigger there, but the text was pinned to the phone cap and never grew\n'
+    '· The bottom navigation capsule no longer stretches across the whole screen on wide displays (capped at 440, centred); the todo "+" button and the two buttons at the bottom of the alarm page line up with the content column too\n'
+    '· Phone portrait and small-window layouts are unchanged, pixel for pixel\n'
+    '\n'
+
+    'v0.11.13\n'
     '· Closes the four items the independent review of the last version turned up. The main one: the date and the to-do subtitles were being clipped in the small-window mode — they had been clipping since before the last version; nobody was watching that size\n'
     '· The calendar page promise of everything-on-one-screen is now stated precisely: it holds at every text size on ordinary heights (360x780 and up); on short screens (640 tall) the grid falls back to the scrolling it always had — there it scrolls even at the smallest text size, because it is about height, not text size\n'
     '· The standing guard now also covers the small window and 420x900 (it had missed both). The few places the small window still clips are printed on every run instead of failing — anything deliberately left unchecked has to be visible\n'
@@ -165,16 +169,6 @@ const String _changelogEn = 'v0.11.13\n'
     '· Fixed a crash: the recurring-todo panel could crash on open in a rare case (when a series briefly holds two unfinished rows — for example right after you un-tick the current one and the generator has not run yet)\n'
     '· The "Marked done · Undo" bar now dismisses itself once you tap Undo — it used to linger and keep saying the opposite\n'
     '\n'
-
-    'v0.11.4\n'
-    '· Completed todos can now be un-ticked straight back into the list — one-off todos get a check box under "completed" too (older entries of a recurring todo still only offer delete: that series may already have rolled on to its next occurrence, and bringing the old one back would leave two open rows for the same series)\n'
-    '· Mis-tapped one? No need to dig through the faded rows: an "Marked done · Undo" bar appears at the bottom and one tap puts it back\n'
-    '· Fixed something that read as a dead tap: un-ticking from the main list used to make the row jump away and then jump back\n'
-    '· The "N completed" row is now a capsule, matching the other entries such as "Today" and "Recurring"\n'
-    '· Several todos on the same day now sort by time of day, latest first (they used to come out in reverse row order)\n'
-    '\n'
-
-
 
         '\n'
 ;

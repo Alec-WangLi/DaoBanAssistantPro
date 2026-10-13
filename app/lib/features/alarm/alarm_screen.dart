@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -191,8 +192,15 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   }
 
   Widget _bottomActionBar(BuildContext context) {
-    final width = MediaQuery.of(context).size.width - 32;
+    // 宽屏下正文被 `CenteredContent` 限宽 720 并居中，这条按钮条也要跟着那个栏宽 ——
+    // 不然它在 1280 的车机上从左边缘铺到右边缘，两台按钮孤零零挂在屏幕两端
+    // （与待办页那颗「＋」是同一处毛病，2026-10-13 一起收）。
+    final contentW = math.min(
+        MediaQuery.sizeOf(context).width, AppLayout.maxContentWidth.toDouble());
+    final width = contentW - 32;
     return SizedBox(
+      // 工装 / 用例量它落点的抓手。
+      key: const Key('alarm-action-bar'),
       width: width,
       height: 56,
       child: Row(
@@ -561,7 +569,13 @@ class _AboveCapsuleBarLocation extends FloatingActionButtonLocation {
   @override
   Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
     final base = FloatingActionButtonLocation.endFloat.getOffset(geometry);
-    return Offset(16, base.dy - 76);
+    // 宽屏下按钮条自己已经缩到 720 栏宽（见 `_bottomActionBar`），这里把它**推到
+    // 那一条栏的左缘**：手机上是 `0 + 16`（与从前逐像素相同），1280 上是
+    // `280 + 16`（栏 [280, 1000] 里各留 16）。
+    final contentW = math.min(
+        geometry.scaffoldSize.width, AppLayout.maxContentWidth.toDouble());
+    final extra = (geometry.scaffoldSize.width - contentW) / 2;
+    return Offset(extra + 16, base.dy - 76);
   }
 }
 

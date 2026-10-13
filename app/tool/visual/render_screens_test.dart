@@ -130,6 +130,48 @@ void main() {
     }
   }
 
+  // 「宽横屏」（平板 / 车机）这两档（v0.11.14 新增）。
+  //
+  // 在此之前屏单里**从来没有过「宽且不矮」这一档**（只有 900×420 那个「宽且矮」的
+  // 手机横屏），于是日历页的宽屏版式在图上**结构性地看不见**——用户 2026-10-13 从
+  // 车机上拍回来的五条反馈，全都是这一档的事。这条循环就是那双眼睛。
+  //
+  // **不做成 `visualVariants` 的新变体**：那会给 39 屏各加两档（+78 张），
+  // 而真正需要人眼的只有这六屏。
+  for (final cfg in const <({String suffix, Size size})>[
+    (suffix: 'wide', size: Size(1280, 800)),
+    (suffix: 'car', size: Size(1920, 720)),
+  ]) {
+    for (final slug in const <String>[
+      '00_home_shell',
+      '01_calendar',
+      '05_todos',
+      '06_alarm',
+      '07_profile',
+      '02_editor',
+    ]) {
+      final screen = visualScreens.firstWhere((s) => s.slug == slug,
+          orElse: () => throw StateError('屏单里没有 $slug —— 屏改名了？'));
+      visualTest('${screen.title} · ${cfg.suffix}', (tester) async {
+        failOnOverflow(tester);
+        final db = await freshDb();
+        final extraPrefs = <String, Object>{
+          ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
+          ...screenExtraPrefs(screen.slug),
+        };
+        if (extraPrefs['liquidGlass'] == true) useLiquidGlassTier();
+        await renderScreen(
+          tester,
+          name: '${screen.slug}_${cfg.suffix}',
+          home: await screen.build(db),
+          overrides: <Override>[databaseProvider.overrideWithValue(db)],
+          size: cfg.size,
+          extraPrefs: extraPrefs,
+        );
+      });
+    }
+  }
+
   // 「向下滚动后」：首屏之下的内容（权限卡、自定义闹钟列表……）也要拍得到，
   // 清单见 `visualScrollDown`。只出浅色 / 深色两档——滚动后要看的是**版式与
   // 文案**，跟语言、横竖屏无关，每档都出一份只是把图数翻倍。
