@@ -20,6 +20,7 @@ import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/layout.dart';
 import 'package:shiftassistantpro/core/theme/animated_background.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
@@ -2252,6 +2253,49 @@ void main() {
         tester.widgetList<BackdropFilter>(find.byType(BackdropFilter)).length;
     // 改之前这里是 **1**（完整信息卡那一张）。小窗档那张用的是另一个夹具尺寸。
     expect(layers, 0, reason: '实测 $layers 层');
+    await _disposeCalendar(tester);
+  });
+
+  // ── 宽屏（平板 / 车机）的版式 ────────────────────────────────────────
+
+  testWidgets('手机横屏（900×420）上日历仍然画格子', (tester) async {
+    // ⚠️ **回归用例**：分栏判据换成「宽横屏」之后，这一档会掉进竖屏那一支，
+    // 而竖屏那一支里有 `if (!layout.isShort) gridArea` —— 不加第二支的话
+    // 网格会被整块删掉：界面上只是少一块，**不报任何错**。
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 900, height: 420);
+    expect(find.byKey(const ValueKey('day-card-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('day-card-31')), findsOneWidget);
+    await _disposeCalendar(tester);
+  });
+
+  testWidgets('宽屏两支都让开底部胶囊：网格底边 ≤ 屏高 − 96', (tester) async {
+    // 96 = `kNavCapsuleInset`。竖屏不用管（那一支把让位写在信息卡自己的内边距里）。
+    for (final s in const [(w: 1280.0, h: 800.0), (w: 900.0, h: 420.0)]) {
+      await _pumpCalendar(tester, 'six_crew_three_shift',
+          width: s.w, height: s.h);
+      final grid = tester.getRect(find.byKey(const Key('calendar-grid')));
+      expect(grid.bottom, lessThanOrEqualTo(s.h - kNavCapsuleInset + 0.5),
+          reason: '${s.w}×${s.h}：网格底边 ${grid.bottom} 越过了胶囊让位线');
+      await _disposeCalendar(tester);
+    }
+  });
+
+  testWidgets('宽横屏：最后一行格子完整落在底部胶囊之上', (tester) async {
+    // ⚠️ 断言写成「**最下面那一格**的底边」而不是「第 6 行」：月份的行数随月份变
+    // （2026-10 是 5 行），钉死行号会写成一句只在某几个月成立的用例。
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 1280, height: 800);
+    final bottoms = <double>[];
+    for (var d = 1; d <= 31; d++) {
+      final f = find.byKey(ValueKey('day-card-$d'));
+      if (f.evaluate().isEmpty) continue;
+      bottoms.add(tester.getRect(f).bottom);
+    }
+    expect(bottoms, isNotEmpty);
+    expect(bottoms.reduce(math.max),
+        lessThanOrEqualTo(800 - kNavCapsuleInset + 0.5),
+        reason: '最下面那一格的底边被胶囊压住了');
     await _disposeCalendar(tester);
   });
 }

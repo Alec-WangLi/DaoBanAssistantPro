@@ -791,7 +791,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         freezeWhenBlurDisabled: true,
         child: SafeArea(child: Builder(builder: (context) {
           final layout = AppLayout.of(context);
-          final gridArea = Expanded(
+          final grid = Expanded(
+            // 给下面两支宽屏的几何用例一个抓手。
+            key: const Key('calendar-grid'),
             // 网格区高度要先量出来，才能决定格子长多高（见 _buildGrid）。
             child: LayoutBuilder(
               builder: (context, c) => scheduleAsync.isLoading && chain == null
@@ -808,43 +810,92 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             ),
           );
 
+          // 宽屏两支共用的右栏。
+          Widget rail() => SizedBox(
+                key: const Key('info-rail'),
+                width: _railWidth(layout),
+                child: _sideRail(context, chain),
+              );
+
+          // **三支，不是两支。**
+          //   · 宽横屏（平板 / 车机）→ 新版式：顶栏进左栏、今日卡贴右下；
+          //   · 宽且矮（手机横屏）  → **今天的版式原样保留**，只多一层让位；
+          //   · 其余                → 竖屏版式，一个像素不动。
+          // ⚠️ 第二支存在的唯一理由：分栏判据换成 `isWideLandscape` 之后，900×420
+          // 会掉进竖屏那一支、被 `if (!layout.isShort)` 把网格整块删掉 ——
+          // 界面上只会少一块，**不报任何错**。
+          if (layout.isWideLandscape) {
+            // 顶栏在**左栏里面**（与网格一起），所以这一支不套外层 Column。
+            return Padding(
+              padding: const EdgeInsets.only(bottom: kNavCapsuleInset),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Column(children: [_header(context), grid])),
+                  const SizedBox(width: AppTokens.spaceMd),
+                  rail(),
+                ],
+              ),
+            );
+          }
+
+          if (layout.isWide) {
+            // 宽屏左右分栏：网格与信息卡并排，网格拿到的可用高度从
+            // 「减去底部信息卡」变成「整屏高度」，格子不用再被压扁。
+            // 底下那 96 是给悬浮导航胶囊让位（从前没有它，最后一行被压在胶囊下）。
+            return Column(
+              children: [
+                _header(context),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: kNavCapsuleInset),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        grid,
+                        const SizedBox(width: AppTokens.spaceMd),
+                        rail(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
           return Column(
             children: [
               _header(context),
-              // 宽屏左右分栏：网格与信息卡并排，网格拿到的可用高度从
-              // 「减去底部信息卡」变成「整屏高度」，格子不用再被压扁。
-              if (layout.isWide)
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      gridArea,
-                      const SizedBox(width: AppTokens.spaceMd),
-                      SizedBox(
-                        width: 300,
-                        child: SingleChildScrollView(
-                          child: _infoCard(context, chain, inSidePane: true),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else ...[
-                // **小窗（高 < 480dp）不画网格，只留今日信息卡。**
-                //
-                // 这个尺寸下两者都想要的结果是两者都看不清：200×400 的窗口里
-                // 网格只塞得下两三行格子、还被压扁，而「哪天被调过」这个标记
-                // 本来就在信息卡上 —— 卡留下、信息就齐了。
-                // 各机型小窗的默认尺寸 400×640 高 640 > 480，**不受影响**。
-                if (!layout.isShort) gridArea,
-                _infoCard(context, chain, compact: layout.isShort),
-              ],
+              // **小窗（高 < 480dp）不画网格，只留今日信息卡。**
+              //
+              // 这个尺寸下两者都想要的结果是两者都看不清：200×400 的窗口里
+              // 网格只塞得下两三行格子、还被压扁，而「哪天被调过」这个标记
+              // 本来就在信息卡上 —— 卡留下、信息就齐了。
+              // 各机型小窗的默认尺寸 400×640 高 640 > 480，**不受影响**。
+              if (!layout.isShort) grid,
+              _infoCard(context, chain, compact: layout.isShort),
             ],
           );
         })),
       ),
     );
   }
+
+  /// 宽屏右栏的宽度：按屏宽取比例，再夹在 280~340。
+  ///
+  /// 为什么不是写死 300（本版之前的做法）：720/800 这种刚过线的宽度上，
+  /// 写死 300 会把左栏挤到 360（格子 48dp）；比例 + 上下限在小屏上收窄右栏、
+  /// 把宽度让给日历。
+  double _railWidth(AppLayout layout) =>
+      (layout.availableWidth * 0.27).clamp(280.0, 340.0);
+
+  /// 宽屏右栏里的今日信息卡。
+  ///
+  /// 用的是 `inSidePane: true` 那条路（卡片高度交给内容，见 `_infoCard`）。
+  /// ⚠️ **这一步先照搬今天的写法（顶对齐 + 能滚）**，Task 4 才把它推到底部 ——
+  /// 一次只改一件事，Task 4 那条用例才有红转绿可言。
+  Widget _sideRail(BuildContext context, ScheduleChain? chain) =>
+      SingleChildScrollView(child: _infoCard(context, chain, inSidePane: true));
 
   /// 顶栏那一行装不装得下 —— **按排版实测**，不拿宽度阈值猜（理由见 `_header`）。
   ///
