@@ -1366,7 +1366,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final clashes = crewClashes(_draftSchedule());
     if (clashes.isEmpty) return const [];
 
-    final days = clashes.map((c) => c.cycleDay).toSet().length;
+    // 按月那一支**连 `days` 都不算**：四年扫描按当日号数去重得到的是「各种月长的
+    // 并集」，那个数字说不清是哪个月里的几天（spec §5.2）—— 报出来是个偏大的假数。
+    final days = _monthly ? 0 : clashes.map((c) => c.cycleDay).toSet().length;
     final perPair = <(int, int), int>{};
     for (final c in clashes) {
       perPair[(c.teamA, c.teamB)] = (perPair[(c.teamA, c.teamB)] ?? 0) + 1;
@@ -1382,7 +1384,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     return [
       const SizedBox(height: AppTokens.spaceSm),
       Text(
-        L10n.crewClashHint(days, _teamNames[top.$1], _teamNames[top.$2]),
+        _monthly
+            ? L10n.crewClashHintMonthly(_teamNames[top.$1], _teamNames[top.$2])
+            : L10n.crewClashHint(days, _teamNames[top.$1], _teamNames[top.$2]),
         key: const Key('editor-crew-clash-hint'),
         style: AppTokens.rowSecondary.copyWith(color: muted),
       ),
@@ -1396,7 +1400,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           leading: AppIcon(Icons.restart_alt,
               size: AppTokens.iconMd, color: action),
           title: Text(
-            L10n.evenCrewStarts,
+            _monthly ? L10n.evenCrewSegments : L10n.evenCrewStarts,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTokens.rowSecondary.copyWith(color: action),
@@ -1407,11 +1411,30 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     ];
   }
 
-  /// 把各组的错位按周期长度均分 —— **我们班组原地不动**。
+  /// 把各组按**当前模式的单位**均分 —— **我们班组原地不动**。
   ///
-  /// 均分是为了让别人不再和自己撞班，顺手把用户自己的周期起始日挪走是不可接受的
+  /// 均分是为了让别人不再和自己撞班，顺手把用户自己的错位挪走是不可接受的
   /// （他的班次会跟着整体平移）。所以整组一起平移，保持「我」那一项不变。
+  ///
+  /// 按月模式把 `n` 传**段数**、写回 `_teamSegOffsets` —— `evenTeamOffsets` 的算式
+  /// 两边同形（第 i 组落在 `i × n ÷ 班组数` 处），只是单位换成了段。
   void _evenCrewStarts() {
+    if (_monthly) {
+      final n = _monthlySegments.length;
+      if (n == 0) return;
+      final ours = _ourTeamIndex < _teamSegOffsets.length
+          ? _teamSegOffsets[_ourTeamIndex]
+          : 0;
+      final even = evenTeamOffsets(n, _teamCount,
+          keepIndex: _ourTeamIndex, keepOffset: ours);
+      if (even.length != _teamSegOffsets.length) return; // 理论上不会发生
+      setState(() {
+        for (var i = 0; i < even.length; i++) {
+          _teamSegOffsets[i] = even[i];
+        }
+      });
+      return;
+    }
     final ours = _ourTeamIndex < _teamOffsets.length
         ? _teamOffsets[_ourTeamIndex]
         : 0;
@@ -1551,7 +1574,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             ),
             const SizedBox(height: AppTokens.spaceXs),
             ...List.generate(_teamCount, (i) => _crewRow(context, i)),
-            Text(L10n.teamHint,
+            Text(_monthly ? L10n.monthlyCrewHint : L10n.teamHint,
                 style: AppTokens.rowSecondary.copyWith(color: muted)),
           ],
         ],
@@ -1621,28 +1644,53 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               ),
             ],
           ),
-          InkWell(
-            borderRadius: BorderRadius.circular(AppTokens.radiusS),
-            onTap: () => _pickCrewStartDate(i),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.gapHair, vertical: AppTokens.spaceXs),
-              child: Row(
-                children: [
-                  AppIcon(Icons.event_outlined,
-                      size: AppTokens.iconSm, color: muted),
-                  const SizedBox(width: AppTokens.spaceSm),
-                  Text(L10n.crewCycleStart,
-                      style: AppTokens.rowSecondary.copyWith(color: muted)),
-                  const SizedBox(width: AppTokens.spaceSm),
-                  Text(
-                    L10n.yearMonthDay(_crewStartDate(i)),
-                    style: AppTokens.labelSecondary,
-                  ),
-                ],
+          // 第二行：周期模式给「周期起始日」，按月模式给「从第几段入场」——
+          // 按月不读基准日，摆一个日期在那儿就是让用户操作一个不生效的值。
+          if (_monthly)
+            InkWell(
+              borderRadius: BorderRadius.circular(AppTokens.radiusS),
+              onTap: () => _pickCrewSegmentStart(i),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.gapHair, vertical: AppTokens.spaceXs),
+                child: Row(
+                  children: [
+                    AppIcon(Icons.format_list_numbered,
+                        size: AppTokens.iconSm, color: muted),
+                    const SizedBox(width: AppTokens.spaceSm),
+                    Text(
+                      L10n.crewSegmentStart(
+                          (i < _teamSegOffsets.length ? _teamSegOffsets[i] : 0) +
+                              1),
+                      style: AppTokens.labelSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            InkWell(
+              borderRadius: BorderRadius.circular(AppTokens.radiusS),
+              onTap: () => _pickCrewStartDate(i),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.gapHair, vertical: AppTokens.spaceXs),
+                child: Row(
+                  children: [
+                    AppIcon(Icons.event_outlined,
+                        size: AppTokens.iconSm, color: muted),
+                    const SizedBox(width: AppTokens.spaceSm),
+                    Text(L10n.crewCycleStart,
+                        style: AppTokens.rowSecondary.copyWith(color: muted)),
+                    const SizedBox(width: AppTokens.spaceSm),
+                    Text(
+                      L10n.yearMonthDay(_crewStartDate(i)),
+                      style: AppTokens.labelSecondary,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -1656,6 +1704,28 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       lastDate: DateTime(2100),
     );
     if (picked != null) _setCrewStartDate(i, picked);
+  }
+
+  /// 按月模式：改某个班组**从第几段入场**（段序 1 起，界面上写给人看）。
+  ///
+  /// 存的是 0 起的下标（`teamSegOffsets`），选项里 +1 显示。
+  Future<void> _pickCrewSegmentStart(int i) async {
+    final n = _monthlySegments.length;
+    if (n == 0) return;
+    final picked = await showGlassOptionPicker<int>(
+      context,
+      title: L10n.monthlySection,
+      options: [for (var k = 0; k < n; k++) k],
+      labelOf: (k) => L10n.crewSegmentStart(k + 1),
+      selected: i < _teamSegOffsets.length ? _teamSegOffsets[i] : 0,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      while (_teamSegOffsets.length <= i) {
+        _teamSegOffsets.add(0);
+      }
+      _teamSegOffsets[i] = picked;
+    });
   }
 
   void _setTeamCount(int n) {
@@ -1673,6 +1743,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       }
       if (_teamOffsets.length > n) {
         _teamOffsets.removeRange(n, _teamOffsets.length);
+      }
+      // 段偏移跟着班组数一起长/缩（它与 `_teamOffsets` 长度恒等于 teamCount）。
+      while (_teamSegOffsets.length < n) {
+        _teamSegOffsets.add(_teamSegOffsets.length);
+      }
+      if (_teamSegOffsets.length > n) {
+        _teamSegOffsets.removeRange(n, _teamSegOffsets.length);
       }
       _syncTeamNameCtrls();
     });
@@ -1749,9 +1826,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     setState(() {
       _followHoliday = v;
       if (v) {
-        // 切到空白表：清空班次与周期，班组收敛为「我」
+        // 切到空白表：清空班次与周期，班组收敛为「我」。
+        //
+        // **按月那一套也要一起清**：空白表没有班次定义，段表指着不存在的下标
+        // 就是一堆悬空引用（保存时会被 `saveSchedule` 的悬空清理连带删掉，
+        // 但留着它在编辑器里也只会让预览算出一堆 null）。
         _classes = [];
         _cycle = [];
+        _monthly = false;
+        _monthlySegments = [];
+        _teamSegOffsets = [];
         _syncClassCtrls();
         _teamCount = 1;
         _teamNames = [L10n.isEn ? 'Me' : '我'];
@@ -1763,10 +1847,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           _scheduleNameCtrl.text = _name;
         }
       } else if (_classes.isEmpty) {
-        // 从空白表切回普通表：恢复默认四班两倒
+        // 从空白表切回普通表：恢复默认四班两倒（因为空白表把两边都清空了）
         final d = defaultSchedule();
         _classes = List.of(d.classes);
         _cycle = List.of(d.cycle);
+        _monthly = false;
+        _monthlySegments = [];
+        // 空表而不是 [0,1,2,3]：那时它本来就不参与计算，而塞一份**天偏移**进去
+        // 只会让「这个字段存的是段」这条约定在库里看起来是假的。
+        // （落库是 ''，`toDomain` 会按「相对我们班组」补回来。）
+        _teamSegOffsets = [];
         _teamCount = d.teamCount;
         _teamNames = List.of(d.teamNames);
         _ourTeamIndex = d.ourTeamIndex;
@@ -1805,8 +1895,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 取的是 [_draftSchedule] —— 也就是**编辑器眼下的草稿状态**，与预览条同一个
   /// 来源：用户可以把一套还没保存的改动直接存成模板，不必先保存成方案。
   Future<void> _saveAsTemplate() async {
-    if (_followHoliday || _classes.isEmpty || _cycle.isEmpty) {
-      // 空白表（跟随法定节假日）没有班次与周期，存下来是一张空卡
+    // **周期与按月段表，有一边有内容就存得下来**：只判周期的话，按月方案会被
+    // 当成「没有排班规则」拦下（而它明明有一套切法）。
+    if (_followHoliday ||
+        _classes.isEmpty ||
+        (_cycle.isEmpty && _monthlySegments.isEmpty)) {
+      // 空白表（跟随法定节假日）没有班次与规则，存下来是一张空卡
       // （读回时也会被跳过），不如当场说清楚。
       showGlassSnack(context, L10n.templateNeedsPattern,
           icon: Icons.info_outline);
@@ -1871,9 +1965,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   Future<void> _deleteClass(int index) async {
-    final used = _cycle.where((c) => c == index).length;
+    // **周期与按月段表都要数**：只数周期的话，按月方案里被「段」引用的班次会被
+    // 放行 —— 删掉之后段的下标整体前移、指向别的班次，不报错、只是那几天显示成
+    // 别的班（与「覆盖指飞」是同一类静默错）。
+    final used = _cycle.where((c) => c == index).length +
+        _monthlySegments.where((s) => s.classIndex == index).length;
     if (used > 0) {
-      // 仍被周期引用：直接拦下，不弹确认 —— 这条路本来就删不掉。
+      // 仍被引用：直接拦下，不弹确认 —— 这条路本来就删不掉。
       showGlassSnack(
         context,
         L10n.deleteShiftClassInUse.replaceAll('{n}', '$used'),
@@ -1928,6 +2026,14 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       // 删掉一个定义后，周期里所有比它大的下标整体前移一位
       for (var i = 0; i < _cycle.length; i++) {
         if (_cycle[i] > index) _cycle[i]--;
+      }
+      // 段表**同待遇**：引用检查与下标重映射都要做，否则段会静默指到别的班次。
+      for (var i = 0; i < _monthlySegments.length; i++) {
+        final s = _monthlySegments[i];
+        if (s.classIndex > index) {
+          _monthlySegments[i] = MonthlySegment(
+              startDay: s.startDay, classIndex: s.classIndex - 1);
+        }
       }
     });
   }

@@ -421,6 +421,29 @@ class L10n {
   /// 撞班提示下面那个动作：按「均分」规则重排各组的周期起始日。
   static String get evenCrewStarts =>
       t('按周期长度均分各组起始日', 'Spread team start dates evenly');
+
+  /// 按月模式下的撞班提示：**不带天数**。
+  ///
+  /// 四年扫描按当日号数去重得到的是**各种月长的并集**，那个数字说不清是「哪个月
+  /// 里的几天」（spec §5.2）—— 报出来会是个偏大的假数。按月模式的撞班本来就是
+  /// 「班组数比段数还多」这类配置错误，说清**是谁撞谁**就够了。
+  static String crewClashHintMonthly(String teamA, String teamB) => t(
+      '有班组会在同一天上同一个班（$teamA与$teamB）—— 班组数与切法的段数对不上',
+      'Two teams share the same shift on the same day — $teamA and $teamB');
+
+  /// 按月模式下的均分动作：按段数把各组「入场的那一段」摊开。
+  static String get evenCrewSegments =>
+      t('按段数均分各组入场', 'Spread team entry segments evenly');
+
+  /// 按月模式下班组那一行：「从第 N 段开始」（N 是段序，1 起）。
+  static String crewSegmentStart(int n) =>
+      t('从第 $n 段开始', 'Starts at segment $n');
+
+  /// 按月模式下的班组说明（换掉了讲「周期起始日」的那一句）。
+  static String get monthlyCrewHint => t(
+      '各班组按段错开 —— 都在每月同一天换班，只是换到不同的班次上。',
+      'Teams offset by segment — all swap shifts on the same day of the month, just to different shifts.');
+
   static String get rest => t('休息', 'Rest');
   static String get work => t('工作', 'Work');
   static String get workday => t('上班', 'Workday');

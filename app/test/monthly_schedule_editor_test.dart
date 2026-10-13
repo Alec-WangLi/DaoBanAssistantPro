@@ -13,6 +13,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
+import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
@@ -87,13 +89,14 @@ ShiftSchedule _domain({
   List<MonthlySegment> monthSegments = const [],
   List<int> teamSegOffsets = const [],
   int teamCount = 4,
+  List<int> cycle = const [0, 1, 2],
 }) =>
     ShiftSchedule(
       name: '测试排班',
       anchorDate: DateTime.utc(2025, 6, 1),
       classes: const [_zhong, _bai, _ye, _xiu],
       // 周期与段表**同时非空**：这正是「切换模式不丢数据」之后库里的样子。
-      cycle: const [0, 1, 2],
+      cycle: cycle,
       monthly: monthly,
       monthlySegments: monthSegments,
       teamCount: teamCount,
@@ -164,6 +167,16 @@ List<int> _rowDays(WidgetTester tester) {
   }
   return out;
 }
+
+/// 「跟随法定节假日」那个开关。
+///
+/// **不能裸用 `find.byType(GlassSwitch)`**：班次定义那一排每一条都带一个联动闹钟
+/// 开关（`shift-alarm-switch-N`），页面上不止一个。
+Finder _followHolidaySwitch() => find.descendant(
+      of: find.ancestor(
+          of: find.text(L10n.followHoliday), matching: find.byType(GlassTile)),
+      matching: find.byType(GlassSwitch),
+    );
 
 void main() {
   setUpAll(() async {
@@ -306,5 +319,151 @@ void main() {
     await tester.tap(find.text(L10n.monthlyFromDay(5)).last);
     await tester.pumpAndSettle();
     expect(_rowDays(tester), [1, 5, 22]);
+  });
+
+  // ── 班组那一块 ──────────────────────────────────────────────────────────
+
+  testWidgets('按月模式：班组行写「从第 N 段开始」，且换成按月那句说明', (tester) async {
+    await _pumpEditor(
+        tester,
+        _domain(
+          monthly: true,
+          monthSegments: const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 11, classIndex: 1),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ],
+          // 三组分别从第 3 / 1 / 2 段入场 —— 界面上的数字要跟着它走
+          teamSegOffsets: const [2, 0, 1],
+          teamCount: 3,
+        ));
+    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.crewSegmentStart(3)), findsOneWidget);
+    expect(find.text(L10n.crewSegmentStart(1)), findsOneWidget);
+    expect(find.text(L10n.crewSegmentStart(2)), findsOneWidget);
+    expect(find.text(L10n.crewCycleStart), findsNothing,
+        reason: '按月模式不显示「周期起始日」');
+    expect(find.text(L10n.monthlyCrewHint), findsOneWidget);
+    expect(find.text(L10n.teamHint), findsNothing);
+  });
+
+  testWidgets('按月撞班：报得出、文案里没有数字；均分之后提示消失', (tester) async {
+    // 两组四段、两组都挤在第 1 段 → 天天撞
+    final repo = await _pumpEditor(
+        tester,
+        _domain(
+          monthly: true,
+          monthSegments: const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 9, classIndex: 1),
+            MonthlySegment(startDay: 17, classIndex: 2),
+            MonthlySegment(startDay: 24, classIndex: 3),
+          ],
+          teamSegOffsets: const [0, 0],
+          teamCount: 2,
+        ));
+    expect(find.byKey(const Key('editor-crew-clash-hint')), findsOneWidget);
+    final hint = tester
+        .widget<Text>(find.byKey(const Key('editor-crew-clash-hint')))
+        .data!;
+    expect(hint, isNot(matches(RegExp(r'\d'))),
+        reason: '按月提示的天数是「各种月长的并集」，说不清是哪个月里的几天 —— 干脆不带');
+
+    await tester.tap(find.text(L10n.evenCrewSegments));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editor-crew-clash-hint')), findsNothing,
+        reason: '两组四段均分成 0/2 之后不该再撞');
+
+    await _save(tester);
+    expect(repo.saved!.teamSegOffsets, [0, 2]);
+  });
+
+  // ── 与另外两个开关的相互影响 ────────────────────────────────────────────
+
+  testWidgets('删一个还被「段」引用着的班次：拦下', (tester) async {
+    // 周期只用休班（下标 3），所以前三个班次只被段表引用
+    await _pumpEditor(
+        tester,
+        _domain(
+          monthly: true,
+          cycle: const [3],
+          monthSegments: const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 11, classIndex: 1),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ],
+          teamSegOffsets: const [0, 1, 2],
+          teamCount: 3,
+        ));
+    // 第一个班次（中班）只被第一段引用一次
+    await tester.tap(find.byType(GlassDeleteButton).first);
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.deleteShiftClassInUse.replaceAll('{n}', '1')),
+        findsOneWidget);
+  });
+
+  testWidgets('切到「跟随法定节假日」再切回来：按月那套被清干净，回到默认四班两倒',
+      (tester) async {
+    final repo = await _pumpEditor(
+        tester,
+        _domain(
+          monthly: true,
+          monthSegments: const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 11, classIndex: 1),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ],
+          teamSegOffsets: const [0, 1, 2],
+          teamCount: 3,
+        ));
+    expect(_rowDays(tester), [1, 11, 21]);
+
+    await tester.tap(_followHolidaySwitch());
+    await tester.pumpAndSettle();
+    expect(_rowDays(tester), isEmpty, reason: '空白表没有段列表');
+    expect(find.text(L10n.cycleSection), findsNothing);
+
+    await tester.tap(_followHolidaySwitch());
+    await tester.pumpAndSettle();
+    // 切回来是**默认四班两倒**：周期模式、不是按月
+    expect(find.text(L10n.cycleSection), findsOneWidget);
+    expect(_rowDays(tester), isEmpty);
+
+    await _save(tester);
+    expect(repo.saved!.monthly, isFalse);
+    expect(repo.saved!.monthSegments, isEmpty);
+    expect(repo.saved!.teamSegOffsets, isEmpty);
+    expect(repo.saved!.cycle, isNotEmpty);
+  });
+
+  testWidgets('按月方案可以存成模板（不再被「没有周期」拦下）', (tester) async {
+    final repo = await _pumpEditor(
+        tester,
+        _domain(
+          monthly: true,
+          monthSegments: const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 11, classIndex: 1),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ],
+          teamSegOffsets: const [0, 1, 2],
+          teamCount: 3,
+        ));
+
+    await tester.tap(find.byIcon(Icons.bookmark_add_outlined));
+    await tester.pumpAndSettle();
+    // 弹窗预填方案名，直接点「保存」
+    await tester.tap(find.text(L10n.save));
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.templateNeedsPattern), findsNothing,
+        reason: '按月方案有切法，不该被「没有周期」拦下');
+    final templates = await repo.listTemplates();
+    expect(templates.single.monthly, isTrue);
+    expect(templates.single.monthlySegments.map((s) => s.startDay), [1, 11, 21]);
+    // 周期那一半**照旧带过去**（切换模式不丢数据，模板是整块快照）
+    expect(templates.single.cycle, [0, 1, 2]);
   });
 }
