@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -81,6 +82,44 @@ Future<void> _dispose(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 20));
 }
 
+/// 造 [count] 套方案并挂上管理页（视口给定）。
+///
+/// **条数要真的撑破视口** —— 太少了列表滚不动，「滑到底」那条用例就成了一句
+/// 永远为真的空话（v0.9.18 的教训：夹具 1200 高、12 条待办根本滚不动，把留白
+/// 改回旧值照样绿）。这一页 12 套方案在三个视口下都滚得动（用例里有断言）。
+Future<AppDatabase> _pumpMany(WidgetTester tester, Size size,
+    {int count = 12}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  final raw = sqlite3.sqlite3.openInMemory();
+  final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+  addTearDown(db.close);
+
+  final repo = AppRepository(db);
+  for (var i = 0; i < count; i++) {
+    await repo.saveSchedule(
+      name: '方案 $i',
+      anchorDate: DateTime.utc(2026, 1, 6),
+      classes: const [ShiftClass(name: '白班', abbr: '白')],
+      cycle: const [0],
+      makeCurrent: i == 0,
+      teamCount: 1,
+      teamNames: const ['我'],
+      teamOffsets: const [0],
+    );
+  }
+
+  await tester.pumpWidget(ProviderScope(
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: const MaterialApp(home: ScheduleManagementScreen()),
+  ));
+  await tester.pumpAndSettle();
+  return db;
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh');
@@ -112,4 +151,64 @@ void main() {
     expect(find.textContaining(L10n.teamCountN(1)), findsOneWidget);
     await _dispose(tester);
   });
+
+  // ── 底部那颗「新增排班」不能挡住最后一行的删除键 ──
+  //
+  // 排班管理页此前**没有**任何几何用例，这是第一条。它的主操作原先挂在 ListView
+  // 的**最后一个孩子**上（只有一两套方案时悬在页面中间、下面一大片空白），改成
+  // 与闹钟页同款的**悬浮按钮条**之后，正文不给自己留位置就会被压住：列表一多，
+  // 最后一行正好落在它下面，「删除」就点不到了。症状是**静默**的（界面上看不出
+  // 「还得再往上滑一点」，用户只知道「点了没反应」）。
+  //
+  // 判据走**几何 + 命中测试**而不是「列表 padding 是多少」：后者换个写法（把留白
+  // 挪进某一项的 margin）就失效，这条要守的是「那一行到底点不点得到」。
+  // 三个视口各跑一遍（Review Focus #4）：竖屏 420×900、小窗 200×400、横屏 900×420。
+  for (final size in const [Size(420, 900), Size(200, 400), Size(900, 420)]) {
+    testWidgets(
+        '滑到底：最后一行的删除键整个抬到按钮条之上，且中心真的打得中（${size.width.toInt()}×${size.height.toInt()}）',
+        (tester) async {
+      await _pumpMany(tester, size);
+
+      // 先确认夹具真的撑破了视口 —— `maxScrollExtent > 0` 才有「滑到底」可言。
+      // 不加这一道的话，哪天这页变短了、夹具滚不动了，下面那条断言会变成空话。
+      final position =
+          tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+      expect(position.maxScrollExtent, greaterThan(0),
+          reason: '夹具必须真的撑破视口 —— 滚不动这条用例就是一句空话');
+
+      // 滑到用户能滑到的最下面那一屏。
+      //
+      // **一次拖不到底**：`ListView(children:)` 是**惰性**建行的，一开始
+      // `maxScrollExtent` 只是**估**出来的，滑下去新行建出来之后它还会变大
+      // （实测 200×400 下一次性拖 −8000 只走了 2136 / 3478）。所以要反复拖、
+      // 每步之后重新看 extent，直到真的到底。
+      for (var i = 0; i < 8 && position.pixels < position.maxScrollExtent; i++) {
+        await tester.drag(find.byType(ListView), const Offset(0, -1600));
+        await tester.pumpAndSettle();
+      }
+      // 到底了才谈得上「最后一行的删除键在哪儿」—— 没到底这条用例就测错了位置。
+      expect(position.pixels, greaterThanOrEqualTo(position.maxScrollExtent - 0.5),
+          reason: '必须真的滑到底（max=${position.maxScrollExtent}）');
+
+      final barTop = tester
+          .getRect(find.byKey(const Key('management-action-bar')))
+          .top;
+      final buttons = find.byType(GlassDeleteButton);
+      final last = tester.getRect(buttons.last);
+
+      expect(last.bottom, lessThanOrEqualTo(barTop),
+          reason: '最后一行的删除键底边（${last.bottom}）应当在按钮条的顶边'
+              '（$barTop）之上 —— 被压住就点不到了');
+
+      // **主判据**：在它自己的中心做一次命中测试，它必须真的在命中路径里。
+      // 只断言几何的话，「被别的层吃掉手势」这类照样漏。
+      final hit = tester.hitTestOnBinding(last.center);
+      expect(
+          hit.path.any((e) => e.target == tester.renderObject(buttons.last)),
+          isTrue,
+          reason: '删除键的中心得真的打得中 —— 被按钮条盖住时命中的是按钮条');
+
+      await _dispose(tester);
+    });
+  }
 }

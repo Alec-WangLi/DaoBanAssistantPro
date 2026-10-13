@@ -166,3 +166,42 @@ class AppLayout {
     );
   }
 }
+
+/// 把底部悬浮控件（待办页那颗「＋」FAB、闹钟页与排班管理页的底部按钮条）抬到
+/// **底部导航玻璃胶囊之上**，并在宽屏下跟着 720 的内容栏走。
+///
+/// **三个页面共用这一份**：从前每页各写一个私有类（`_AboveCapsuleFabLocation` /
+/// `_AboveCapsuleBarLocation`），抄到第三处的时候就抽到这里 —— 抄第二份，下次
+/// 改一个数（比如胶囊长高了 4dp）就会漂开，而漂开**不会报错**，只是两页错开
+/// 几像素，那正是这套设计语言收口要治的病。
+///
+/// 两条共用的规则：
+///   · **纵向恒为 `endFloat` 再上移 76** —— 底部导航胶囊约 76 高，控件底边贴它
+///     上沿（探针实测 FAB 与按钮条的**顶边都落在距屏底 148**，见 [kFloatingActionInset]）；
+///   · **横向跟着 720 的内容栏**：宽屏下正文被 `CenteredContent` 限宽 720 居中，
+///     控件不跟的话会孤零零挂在屏幕两端。两种形态的横向落点不同（都是「内容栏
+///     内再各留 16」的不同侧面）：
+///       - [AboveCapsuleLocation.fab]：右对齐的**圆形浮钮**，贴内容栏**右缘**；
+///       - [AboveCapsuleLocation.bar]：通栏的**底部按钮条**，从内容栏**左缘**起铺满。
+class AboveCapsuleLocation extends FloatingActionButtonLocation {
+  /// 右对齐的圆形浮钮（待办页那颗「＋」）。
+  const AboveCapsuleLocation.fab() : _alignRight = true;
+
+  /// 通栏的底部按钮条（闹钟页、排班管理页）。
+  const AboveCapsuleLocation.bar() : _alignRight = false;
+
+  final bool _alignRight;
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
+    final base = FloatingActionButtonLocation.endFloat.getOffset(geometry);
+    // 宽屏下内容栏两侧各让出来的那一段（手机上是 0，逐像素不变）。
+    final contentW =
+        math.min(geometry.scaffoldSize.width, AppLayout.maxContentWidth);
+    final extra = (geometry.scaffoldSize.width - contentW) / 2;
+    // FAB 用**平移**：`base.dx` 已经是「屏宽 − 按钮宽 − 标准边距」，减掉 extra
+    // 就等价于「内容栏右缘 − 按钮宽 − 标准边距」，于是不必知道 Flutter 那个边距
+    // 常量是多少。按钮条从左缘起算，直接写「内容栏左缘 + 16」。
+    return Offset(_alignRight ? base.dx - extra : extra + 16, base.dy - 76);
+  }
+}

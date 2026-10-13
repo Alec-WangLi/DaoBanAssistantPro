@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
@@ -186,7 +184,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
           ],
         ),
       )),
-      floatingActionButtonLocation: const _AboveCapsuleFabLocation(),
+      floatingActionButtonLocation: const AboveCapsuleLocation.fab(),
       floatingActionButton: GlassPressable(
         child: GestureDetector(
           // 按压反馈 = 玻璃的 Q 弹缩放（整颗钮一起缩，不是只缩里面那颗图标）；
@@ -875,22 +873,3 @@ Future<_DeleteChoice?> _askDeleteRecurring(BuildContext context, String name) {
   );
 }
 
-/// FAB 上移，避开底部悬浮玻璃胶囊。
-class _AboveCapsuleFabLocation extends FloatingActionButtonLocation {
-  const _AboveCapsuleFabLocation();
-
-  @override
-  Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
-    final base = FloatingActionButtonLocation.endFloat.getOffset(geometry);
-    // 宽屏下正文被 `CenteredContent` 限宽到 720 并居中，FAB 跟着**内容栏的右缘**走，
-    // 不然它孤零零挂在屏幕右缘、与列表对不上（用户 2026-10-13 选「一起做了」）。
-    //
-    // 用**平移**而不是重算边距：`base.dx` 已经是「屏幕右缘 − 按钮宽 − 标准边距」，
-    // 减掉两侧各让出来的那一段就等价于「内容栏右缘 − 按钮宽 − 标准边距」——
-    // 于是不必知道 Flutter 那个边距常量是多少，手机上 `extra` 恒为 0、逐像素不变。
-    final contentW =
-        math.min(AppLayout.maxContentWidth, geometry.scaffoldSize.width);
-    final extra = (geometry.scaffoldSize.width - contentW) / 2;
-    return Offset(base.dx - extra, base.dy - 76);
-  }
-}

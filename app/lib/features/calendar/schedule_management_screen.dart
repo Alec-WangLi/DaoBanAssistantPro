@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
+import '../../core/layout.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
@@ -52,7 +55,22 @@ class ScheduleManagementScreen extends ConsumerWidget {
           ? const GlassLoading()
           : CenteredContent(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              // 底部让位：主操作改成**悬浮**按钮条之后（见 `_bottomActionBar`），
+              // 不留白的话列表最后一行会被它压住、删除键点不到。用共享常量
+              // `kFloatingActionInset`（与待办页、闹钟页同一档）。
+              //
+              // **要叠系统栏**：按钮条跟着手势条一起上移，测试视口都没有系统栏，
+              // 这类错只能靠算式堵（叠 `MediaQuery.paddingOf` 而不是写死一个数）。
+              //
+              // **不给短屏/窄屏再叠一层 156**（闹钟页在那边叠了）：那一页是
+              // **不滚动**的 Column（两段列表各自 Expanded），不留白正文就会被
+              // 压住；这一页是**单一可滚列表**，`kFloatingActionInset` 已经够让
+              // 最后一行滑到按钮条之上 —— 再叠 156 反而把最后一行顶出屏幕：实测
+              // 200×400 下（一行 249 高、视口 344）叠完之后滑到底时最后一行只剩
+              // 顶上 28px 露在屏里、它的删除键整个跑到视口上方去了，
+              // `schedule_management_test.dart` 那条几何用例当场照出来。
+              padding: EdgeInsets.fromLTRB(16, 8, 16,
+                  MediaQuery.paddingOf(context).bottom + kFloatingActionInset),
               children: [
                 // 两节各带一个标题（2026-09-30 用户反馈：「排班管理页面有点乱，
                 // 应该分成两个功能区……现在它们连在一起，感觉有点混乱」）。
@@ -101,16 +119,41 @@ class ScheduleManagementScreen extends ConsumerWidget {
                     ),
                   );
                 }),
-                const SizedBox(height: 8),
-                GlassButton(
-                  primary: true,
-                  onPressed: () => _addSchedule(context, ref),
-                  icon: const Icon(Icons.add_outlined),
-                  child: Text(L10n.addSchedule),
-                ),
               ],
             ),
             ),
+      // 主操作走**闹钟页那套**：底部悬浮按钮条 + 共用的落点
+      // （`AboveCapsuleLocation.bar` 把按钮条抬到底部导航胶囊之上）。
+      // **不是** `bottomNavigationBar` + `extendBody` —— 那是编辑器那颗
+      // 「保存并重排闹钟」胶囊的路子（那边要正文铺到屏幕底）。这一页要的是
+      // 「新建」在三个列表页里是同一个东西、同一个位置：待办页的 FAB、闹钟页的
+      // 按钮条、这一页的按钮条。
+      floatingActionButtonLocation: const AboveCapsuleLocation.bar(),
+      floatingActionButton: _bottomActionBar(context, ref),
+    );
+  }
+
+  /// 底部按钮条：一颗通栏的「新增排班」。
+  ///
+  /// 从前它是 ListView 的**最后一个孩子** —— 只有一两套方案时它会悬在页面中间、
+  /// 下面留一大片空白（用户看到的正是这个）。改成悬浮按钮条之后，页面再短、
+  /// 主操作也稳稳贴在底部。
+  Widget _bottomActionBar(BuildContext context, WidgetRef ref) {
+    // 宽屏下正文被 `CenteredContent` 限宽 720 并居中，这条按钮条也要跟着那个栏宽
+    // —— 不然它在 1280 的车机上从左边缘铺到右边缘（与闹钟页逐字同一条）。
+    final contentW = math.min(
+        MediaQuery.sizeOf(context).width, AppLayout.maxContentWidth.toDouble());
+    return SizedBox(
+      // 工装 / 用例量它落点的抓手。
+      key: const Key('management-action-bar'),
+      width: contentW - 32,
+      height: 56,
+      child: GlassButton(
+        primary: true,
+        icon: const Icon(Icons.add_outlined),
+        onPressed: () => _addSchedule(context, ref),
+        child: Text(L10n.addSchedule),
+      ),
     );
   }
 

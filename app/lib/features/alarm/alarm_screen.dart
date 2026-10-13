@@ -129,7 +129,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           ],
         ),
       )),
-      floatingActionButtonLocation: const _AboveCapsuleBarLocation(),
+      floatingActionButtonLocation: const AboveCapsuleLocation.bar(),
       floatingActionButton: _bottomActionBar(context),
     );
   }
@@ -538,23 +538,6 @@ String _fmt(int minutes) {
   final h = (minutes ~/ 60).toString().padLeft(2, '0');
   final m = (minutes % 60).toString().padLeft(2, '0');
   return '$h:$m';
-}
-
-/// 底部按钮条上移，避开悬浮玻璃胶囊（与待办页 FAB 的 `_AboveCapsuleFabLocation` 同一 76px 偏移，底边对齐）。
-class _AboveCapsuleBarLocation extends FloatingActionButtonLocation {
-  const _AboveCapsuleBarLocation();
-
-  @override
-  Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
-    final base = FloatingActionButtonLocation.endFloat.getOffset(geometry);
-    // 宽屏下按钮条自己已经缩到 720 栏宽（见 `_bottomActionBar`），这里把它**推到
-    // 那一条栏的左缘**：手机上是 `0 + 16`（与从前逐像素相同），1280 上是
-    // `280 + 16`（栏 [280, 1000] 里各留 16）。
-    final contentW = math.min(
-        geometry.scaffoldSize.width, AppLayout.maxContentWidth.toDouble());
-    final extra = (geometry.scaffoldSize.width - contentW) / 2;
-    return Offset(extra + 16, base.dy - 76);
-  }
 }
 
 /// 这条闹钟不落在班次当天时的标记（`前一天` / `次日`）；落在当天返回 null。
