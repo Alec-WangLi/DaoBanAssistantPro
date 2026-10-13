@@ -88,7 +88,12 @@ class _ShiftTemplatePickerScreenState
         ref.watch(savedTemplatesProvider).valueOrNull ?? const <ScheduleTemplate>[];
 
     return Scaffold(
-      appBar: AppBar(title: Text(L10n.pickShiftPattern)),
+      // 同上：标题按宽度缩小，不省略。
+      appBar: AppBar(
+          title: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(L10n.pickShiftPattern))),
       body: CenteredContent(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

@@ -31,7 +31,13 @@ class ScheduleManagementScreen extends ConsumerWidget {
         ref.watch(scheduleSpansProvider).valueOrNull ?? const <ScheduleSpanRow>[];
 
     return Scaffold(
-      appBar: AppBar(title: Text(L10n.scheduleManagement)),
+      // 标题按宽度缩小而不是省略（设计 §2）：AppBar 的工具条高度是定死的，
+      // 折不了行 —— 窄屏 + 大字号 + 英文下「Schedule management」会超出去。
+      appBar: AppBar(
+          title: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(L10n.scheduleManagement))),
       body: async.isLoading && schedules.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : CenteredContent(
@@ -526,21 +532,25 @@ Widget _labelValueRow(
         child: Row(
           children: [
             Expanded(
+              // 标签允许折两行（设计 §6.4）：这一行**不允许**出现省略号。
               child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTokens.rowPrimary),
+                  maxLines: 2, style: AppTokens.rowPrimary),
             ),
             const SizedBox(width: AppTokens.spaceSm),
             Flexible(
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: mutedValue
-                    ? AppTokens.rowSecondary.copyWith(color: muted)
-                    : AppTokens.labelStrong,
+              // 值按可用宽度**等比缩小**，不省略 —— 它短、且是这一行的主角。
+              // `FittedBox(scaleDown)` 只在装不下时才动手，装得下逐像素不变。
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  textAlign: TextAlign.right,
+                  style: mutedValue
+                      ? AppTokens.rowSecondary.copyWith(color: muted)
+                      : AppTokens.labelStrong,
+                ),
               ),
             ),
             const SizedBox(width: AppTokens.gapIconText),

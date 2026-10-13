@@ -513,12 +513,12 @@ class L10n {
   static String followHolidayDropsOverrides(int n) => t(
       '本方案有 $n 天单独调整过。切到「跟随法定节假日」会清空班次定义，保存后这些天的调整会一并消失，且无法恢复。',
       'This schedule has $n individually adjusted day(s). Switching to "follow legal holidays" clears every shift definition, so after saving those adjustments are gone for good.');
-  static String get shiftName => t('班次名称', 'Shift name');
+  static String get shiftName => t('名称', 'Name');
   static String get start => t('开始', 'Start');
   static String get end => t('结束', 'End');
   static String get crossesMidnight => t('（结束早于开始，或晚于 24:00 = 跨午夜）', '(ends before start, or past 24:00 = crosses midnight)');
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
-  static String get alarmTime => t('响铃时间', 'Alarm time');
+  static String get alarmTime => t('响铃', 'Alarm');
 
   static String get addAlarm => t('添加闹钟', 'Add alarm');
 
@@ -529,7 +529,7 @@ class L10n {
   /// —— 那里最长的值是「前一天 22:00」（v0.8.9 专门做出来的一档），被截更糟。
   /// 「可选」那半句挪进 hint：点进去（或填了字）就看得见。
   static String get alarmNameOptional => t('名称', 'Name');
-  static String get alarmNameHint => t('可选，如「午休」', 'Optional, e.g. "Nap"');
+  static String get alarmNameHint => t('如「午休」', 'e.g. "Nap"');
 
   /// 每个班次几个闹钟的上限。
   ///

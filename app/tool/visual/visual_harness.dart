@@ -1020,6 +1020,52 @@ void failOnOverflow(WidgetTester tester) {
   });
 }
 
+/// **具名白名单：本来就该缩写的展示。**
+///
+/// 每条都要写清「为什么这里缩写是对的」—— 与 `design_tokens_test.dart` 的豁免
+/// 同一套规矩：**故意不查的东西要看得见**（命中会打日志）。
+const Map<String, String> kDeliberateEllipsis = <String, String>{};
+
+/// 这一段文本是不是「本来就该被截」的。
+bool _isDeliberate(String text) {
+  if (kDeliberateEllipsis.containsKey(text)) {
+    debugPrint('[text-fit] 白名单命中：「$text」 —— ${kDeliberateEllipsis[text]}');
+    return true;
+  }
+  // 字符串自己就以 `…` 结尾 ⟹ 那个省略号是**我们烘进去的**（`LunarInfo.cellLabel`
+  // 一类），不是 `TextOverflow.ellipsis` 画上去的。
+  return text.endsWith('…') || text.endsWith('...');
+}
+
+/// 抓出这一帧里**所有被吃掉了字的段落**。
+///
+/// 两条判据，缺一不可：
+///   ① 段落自己按 `maxLines` 截了（`didExceedMaxLines`）；
+///   ② **容器把段落裁短了** —— 这一种 `didExceedMaxLines` 是 false，只查①会瞎。
+///      判据是「在它自己的宽度下本来需要的高度 > 实际拿到的高度」，容差 2px
+///      （0.5 会把 1px 的亚像素差当成裁切）。
+///
+/// 常设护栏在 `tool/visual/text_fit_guard_test.dart`；单屏的用例也用它。
+List<String> truncatedParagraphs(WidgetTester tester) {
+  final hits = <String>[];
+  for (final ro in tester.allRenderObjects.whereType<RenderParagraph>()) {
+    final text = ro.text.toPlainText().replaceAll('\n', ' ').trim();
+    if (text.isEmpty) continue;
+    if (_isDeliberate(text)) continue;
+    if (ro.didExceedMaxLines) {
+      hits.add('方式 1（段落自己截）▸ 「$text」');
+      continue;
+    }
+    if (ro.size.width > 0 &&
+        ro.getMaxIntrinsicHeight(ro.size.width) > ro.size.height + 2.0) {
+      hits.add('方式 2（容器裁短）▸ 「$text」'
+          '（本来需要 ${ro.getMaxIntrinsicHeight(ro.size.width).toStringAsFixed(1)}，'
+          '只拿到 ${ro.size.height.toStringAsFixed(1)}）');
+    }
+  }
+  return hits;
+}
+
 /// 当前生效方案的 id，给「打开编辑器」一类需要显式 id 的屏用。
 Future<int> currentScheduleId(AppDatabase db) async {
   final row = await (db.select(db.shiftScheduleRows)

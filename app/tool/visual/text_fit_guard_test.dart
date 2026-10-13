@@ -17,7 +17,6 @@
 // 档位矩阵见下面的 `_configs`：**我们提供的每一档 × 两个保证宽度 × 中英双语**。
 // 深色档不改变文字排版，不单独跑。
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -27,49 +26,8 @@ import 'package:shiftassistantpro/state/app_settings.dart';
 import 'visual_harness.dart';
 import 'visual_screens.dart';
 
-/// **具名白名单：本来就该缩写的展示。**
-///
-/// 每条都要写清「为什么这里缩写是对的」—— 与 `design_tokens_test.dart` 的豁免
-/// 同一套规矩：**故意不查的东西要看得见**（命中会打日志）。
-///
-/// 现在为空：唯一已知的缩写（日历格子里的农历，`LunarInfo.cellLabel`）是**在
-/// 字符串里就烘好了 `…`** 的，由下面 `_isDeliberate` 的第二条规则覆盖。
-const Map<String, String> kDeliberateEllipsis = <String, String>{};
-
-/// 这一段文本是不是「本来就该被截」的。
-bool _isDeliberate(String text) {
-  if (kDeliberateEllipsis.containsKey(text)) {
-    debugPrint('[text-fit-guard] 白名单命中：「$text」'
-        ' —— ${kDeliberateEllipsis[text]}');
-    return true;
-  }
-  // 字符串自己就以 `…` 结尾 ⟹ 那个省略号是**我们烘进去的**（`cellLabel` 一类），
-  // 不是 `TextOverflow.ellipsis` 画上去的。
-  return text.endsWith('…') || text.endsWith('...');
-}
-
-/// 抓出这一帧里**所有被吃掉了字的段落**。
-///
-/// 返回的每一项都带上是哪一条判据抓到的，方便直接当施工单读。
-List<String> truncatedParagraphs(WidgetTester tester) {
-  final hits = <String>[];
-  for (final ro in tester.allRenderObjects.whereType<RenderParagraph>()) {
-    final text = ro.text.toPlainText().replaceAll('\n', ' ').trim();
-    if (text.isEmpty) continue;
-    if (_isDeliberate(text)) continue;
-    if (ro.didExceedMaxLines) {
-      hits.add('方式 1（段落自己截）▸ 「$text」');
-      continue;
-    }
-    if (ro.size.width > 0 &&
-        ro.getMaxIntrinsicHeight(ro.size.width) > ro.size.height + 2.0) {
-      hits.add('方式 2（容器裁短）▸ 「$text」'
-          '（本来需要 ${ro.getMaxIntrinsicHeight(ro.size.width).toStringAsFixed(1)}，'
-          '只拿到 ${ro.size.height.toStringAsFixed(1)}）');
-    }
-  }
-  return hits;
-}
+// `truncatedParagraphs` / `kDeliberateEllipsis` 已抽进 `visual_harness.dart`
+// —— 单屏的用例（Task 5~8）也要用它，抄两份迟早走样。
 
 void main() {
   setUpAll(() async {

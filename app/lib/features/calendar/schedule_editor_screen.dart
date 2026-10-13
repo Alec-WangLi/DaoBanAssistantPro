@@ -274,7 +274,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       // 正文到那里就没了；`extendBody` 让它继续铺下去，而浮动层照旧画在上面。
       extendBody: true,
       appBar: AppBar(
-        title: Text(L10n.editSchedule),
+        // 标题按宽度缩小而不是省略（与另外两张整页同一个配方）。
+        title: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(L10n.editSchedule)),
         actions: [
           IconButton(
             tooltip: L10n.saveAsTemplate,
@@ -449,11 +453,15 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final color = s == null ? muted : Color(s.color);
     return Column(
       children: [
-        // 单行：窄格子里 `12/25` 这种 5 字符日期换行会把两行的高度撑破
-        // （大字号系统字体下同理）。
-        Text('${date.month}/${date.day}',
-            maxLines: 1,
-            style: AppTokens.microText.copyWith(color: muted)),
+        // 单行：窄格子里 `12/25` 这种 5 字符日期换行会把两行的高度撑破。
+        // **按可用宽度等比缩小而不是省略**（设计 §6.5）：它是定尺的点阵，
+        // 与日历格子同一条规矩 —— 折行会撑破，省略会吃掉字。
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text('${date.month}/${date.day}',
+              maxLines: 1,
+              style: AppTokens.microText.copyWith(color: muted)),
+        ),
         const SizedBox(height: AppTokens.spaceXs),
         Container(
           padding: const EdgeInsets.symmetric(
@@ -463,18 +471,19 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             borderRadius: BorderRadius.circular(AppTokens.radiusS),
             border: Border.all(color: color.withValues(alpha: 0.5)),
           ),
-          child: Text(
-            s?.shortLabel ?? '—',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTokens.microStrong.copyWith(
-                // 底色是班次色 16% 的淡染，字得按它算可读版本，不能直接用班次色
-                // （橙 `#FF9F0A` 这类浅色压上去几乎看不见）。
-                color: AppTokens.inkFor(
-                    color,
-                    Color.alphaBlend(
-                        color.withValues(alpha: 0.16),
-                        Theme.of(context).colorScheme.surface))),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              s?.shortLabel ?? '—',
+              maxLines: 1,
+              style: AppTokens.microStrong.copyWith(
+                  // 底色是班次色 16% 的淡染，字得按它算可读版本，不能直接用班次色
+                  // （橙 `#FF9F0A` 这类浅色压上去几乎看不见）。
+                  color: AppTokens.inkFor(
+                      color,
+                      Color.alphaBlend(color.withValues(alpha: 0.16),
+                          Theme.of(context).colorScheme.surface))),
+            ),
           ),
         ),
       ],
@@ -957,18 +966,23 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              AppTokens.rowSecondary.copyWith(color: muted)),
+                      // 标签优先折两行；折不了（单个词，比如英文的 `Alarm`）
+                      // 就按宽度缩小 —— 两者都不许省略（设计 §6.4）。
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(label,
+                            maxLines: 2,
+                            style:
+                                AppTokens.rowSecondary.copyWith(color: muted)),
+                      ),
                       const SizedBox(height: AppTokens.spaceXs),
-                      Text(value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          // 基线是 14/w600（值要比上面 w400 的「开始/结束」重）。
-                          // 14 档没有 w600，取最接近的 labelStrong —— +100 而非精确。
-                          style: AppTokens.labelStrong),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(value,
+                            maxLines: 1, style: AppTokens.labelStrong),
+                      ),
                     ],
                   ),
                 ),
