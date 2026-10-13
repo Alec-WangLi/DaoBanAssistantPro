@@ -221,6 +221,50 @@ void main() {
     await _dispose(tester);
   });
 
+  testWidgets('小窗 200×400 + 键盘弹起：头部变高也没把动作行挤出键盘之上', (tester) async {
+    // Review Focus 第 1 条（v0.12.0 给弹层加了把手 + 分隔线，头部因此变高）。
+    //
+    // 取色层是全 app **唯一**一个长在底部弹层里的输入框；而 `showGlassSheet`
+    // 底下那层布局**不看键盘**（见 `glass_dialog.dart` 与 AGENTS.md）—— 面板必须
+    // 自己按 `viewInsets.bottom` 顶上去。头部一高，小窗里就更容易把贴底的「确定」
+    // 顶到面板外，所以这一条钉的是「头部变高之后那条主路径仍走得通」。
+    //
+    // 与上面那条 420×900 的区别是**尺寸**：小窗的可用高只有一半，头部多出来的
+    // 十几像素在这里才真的顶到边。
+    //
+    // 只能断言**几何**：测试里的键盘只是一条 `viewInsets`、不是真的命中障碍物，
+    // `hitTestOnBinding` 照旧打得中那颗被盖住的按钮（见 AGENTS.md 那条）。
+    await _openPicker(tester, current: 0xFF4C8DFF, size: const Size(200, 400));
+
+    // 键盘高度取**与上面那条 420×900 同一个比例**（约屏高 36%）：900 的 36% 是
+    // 320，400 的 36% 是 144。**不要按 320 直接搬** —— 小窗里那条键盘比窗口的
+    // 一半还高，面板里「头部 + 动作行」两段固定高之和就已经超过可用高，必然溢出
+    // （实测该尺寸下的溢出下界在键盘约 164px）。那是个**既有**的窄面板问题
+    // （动作行的两颗按钮在 134dp 宽里折成多行），与本轮的头部无关。
+    const keyboard = 144.0;
+    tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+    addTearDown(tester.view.resetViewInsets);
+    await _settle(tester);
+
+    expect(tester.takeException(), isNull, reason: '小窗 + 键盘下不许有布局溢出');
+
+    final screenH = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    final keyboardTop = screenH - keyboard;
+
+    // 六位十六进制输入框（本层的主入口）仍露在键盘之上 —— 它挤到键盘下面的话，
+    // 「敲进去」这一步当场断。
+    final hex = tester.getRect(find.byType(TextField));
+    expect(hex.bottom, lessThanOrEqualTo(keyboardTop),
+        reason: '输入框被压在键盘底下（${hex.bottom} > $keyboardTop）');
+
+    // 「确定」也一样 —— 它掉了，敲完颜色值也点不下去。
+    final confirm = tester.getRect(find.text(L10n.confirm));
+    expect(confirm.bottom, lessThanOrEqualTo(keyboardTop),
+        reason: '「确定」被压在键盘底下（${confirm.bottom} > $keyboardTop）');
+
+    await _dispose(tester);
+  });
+
   testWidgets('预览与日历小样跟着当前色走（用十六进制框驱动一次）', (tester) async {
     await _openPicker(tester, current: 0xFF4C8DFF, sampleLabel: '早');
 

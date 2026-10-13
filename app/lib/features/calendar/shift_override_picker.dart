@@ -13,6 +13,7 @@ import '../../core/layout.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pressable.dart';
+import '../../core/widgets/glass_sheet_header.dart';
 import '../../domain/shift_rotation.dart';
 
 /// 选择层的结果：改成某个班次，或恢复轮转。
@@ -88,27 +89,16 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
           // 弹层里两种对齐，看着就是「没排过版」。全 app 的列表内容都左对齐。
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
-                  AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceSm),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // **这个弹层是干什么的，得由它自己说。** 用户 2026-10-13 真机反馈：
-                  // 长按那天弹出来一屏班次，全屏没有一处写着「调整班次」—— 光看
-                  // 几个班次名，不知道这屏是干嘛的、点了会发生什么。
-                  Text(L10n.adjustShift, style: AppTokens.titleStrong),
-                  const SizedBox(height: AppTokens.spaceXs),
-                  // 日期区间退到第二行：它回答的是**这次改哪几天**（范围和上下文），
-                  // 不是这个弹层的名字。原来它是标题 —— `calendar_screen_test` 当时
-                  // 还专门断言过「标题是日期区间，不是『调整班次』四个字」，那一条随
-                  // 本轮一起改掉。
-                  Text(range,
-                      style: AppTokens.labelSecondary
-                          .copyWith(color: AppTokens.inkMuted(sheetContext))),
-                ],
-              ),
-            ),
+            // 头部走共享件：拖拽把手 + 主色竖条 + 标题 + 分隔线。
+            //
+            // **这个弹层是干什么的，得由它自己说。** 用户 2026-10-13 真机反馈：
+            // 长按那天弹出来一屏班次，全屏没有一处写着「调整班次」—— 光看几个
+            // 班次名，不知道这屏是干嘛的、点了会发生什么。
+            //
+            // 日期区间退到**副标题槽**：它回答的是**这次改哪几天**（范围和上下文），
+            // 不是这个弹层的名字。原来它是标题 —— `calendar_screen_test` 当时还专门
+            // 断言过「标题是日期区间，不是『调整班次』四个字」，那一条随本轮一起改掉。
+            GlassSheetHeader(title: L10n.adjustShift, subtitle: range),
             Flexible(
               child: ListView(
                 shrinkWrap: true,

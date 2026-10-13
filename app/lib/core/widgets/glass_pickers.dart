@@ -10,6 +10,7 @@ import 'app_icon.dart';
 import 'glass_action_button.dart';
 import 'glass_dialog.dart';
 import 'glass_pressable.dart';
+import 'glass_sheet_header.dart';
 
 /// 玻璃时间选择器：底部玻璃弹层 + 时/分滚轮 + Q弹按钮。
 Future<TimeOfDay?> showGlassTimePicker(
@@ -484,10 +485,7 @@ Future<T?> showGlassOptionPicker<T>(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(title, style: AppTokens.titleStrong),
-            ),
+            GlassSheetHeader(title: title),
             Flexible(
               child: ListView(
                 shrinkWrap: true,

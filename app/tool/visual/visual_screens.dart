@@ -5,6 +5,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_pickers.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
@@ -455,6 +457,17 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const ShiftTemplatePickerScreen(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 选项弹层（`showGlassOptionPicker`）——**一个件带六个调用点**：贪睡时长、
+    // 待办提醒档位（新建 / 编辑各一处）、编辑器两处、待办两处，所以它的头部一改
+    // 六处一起变。而它此前**从没有过可看的图**：命令式弹层（静止帧拍不到），
+    // 六个调用点又都藏在「点某一行下拉」之后。按「新界面一律补进屏单」那条规矩
+    // 补上这只眼睛（v0.12.0 统一了它内部那份头部）。
+    slug: '60_option_picker',
+    title: '选项弹层（贪睡时长那种）',
+    build: (db) async => const _OptionPickerHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -523,6 +536,41 @@ class _OverridePickerHostState extends State<_OverridePickerHost> {
         to: widget.to,
         currentClass: widget.currentClass,
         canRestore: widget.canRestore,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 「选项弹层」的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// `showGlassOptionPicker` 与别处一样是命令式的：调一下就弹、返回一个 Future，
+/// 没有可以直接放进 `home:` 的 widget。这一层薄壳在首帧后把它弹出来，`build` 只交
+/// 一个空 `Scaffold` 让弹层浮在它上面（与 `_OverridePickerHost` 同一套路）。
+/// 取贪睡时长那一档当样本：标题 + 六个选项 + 当前项打勾，正是那六个调用点的形态。
+class _OptionPickerHost extends StatefulWidget {
+  const _OptionPickerHost();
+
+  @override
+  State<_OptionPickerHost> createState() => _OptionPickerHostState();
+}
+
+class _OptionPickerHostState extends State<_OptionPickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showModalBottomSheet` 要用 `context` 的 `Overlay`，而
+    // `initState` 里 context 还没挂进树。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showGlassOptionPicker<int>(
+        context,
+        title: L10n.snoozeDuration,
+        options: L10n.snoozeOptions,
+        labelOf: L10n.snoozeOptionLabel,
+        selected: L10n.snoozeOptions[1],
       );
     });
   }

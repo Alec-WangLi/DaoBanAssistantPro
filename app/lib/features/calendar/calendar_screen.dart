@@ -16,6 +16,7 @@ import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
+import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
 import '../../domain/lunar_info.dart';
@@ -1279,19 +1280,23 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 底部弹层标题走 `dialogTitle`，与其它弹层同角色。
-                Text(L10n.scheduleTimeline, style: AppTokens.dialogTitle),
-                const SizedBox(height: 4),
-                // 说法与排班管理页那条时间线**同源**：一个段都没有时不说「其余
-                // 时间」（没有「这一段」，「其余」就没有着落），整行写「全部
-                // 日子」。两处各写一份的话，同一个状态会有两种解释。
-                Text(hasPeriods
-                    ? L10n.remainingHint
-                    : (remaining == null
-                        ? L10n.allDatesNoneHint
-                        : L10n.allDatesHint),
-                    style: AppTokens.rowSecondary
-                        .copyWith(color: AppTokens.inkMuted(sheetContext))),
+                // 头部走共享件（把手 + 主色竖条 + 标题 + 分隔线）。
+                //
+                // 标题是 `titleStrong`（16）—— 与另外四个弹层同角色。
+                // ⚠️ 这行注释此前写着「底部弹层标题走 `dialogTitle`，与其它弹层同
+                // 角色」，那是**错的**：另外四个弹层一直走 `titleStrong`，只有这里
+                // 用了 `dialogTitle`（20）。v0.12.0 统一到 16。
+                GlassSheetHeader(
+                  title: L10n.scheduleTimeline,
+                  // 说法与排班管理页那条时间线**同源**：一个段都没有时不说「其余
+                  // 时间」（没有「这一段」，「其余」就没有着落），整行写「全部
+                  // 日子」。两处各写一份的话，同一个状态会有两种解释。
+                  subtitle: hasPeriods
+                      ? L10n.remainingHint
+                      : (remaining == null
+                          ? L10n.allDatesNoneHint
+                          : L10n.allDatesHint),
+                ),
                 const SizedBox(height: 8),
                 Flexible(
                   child: ListView(

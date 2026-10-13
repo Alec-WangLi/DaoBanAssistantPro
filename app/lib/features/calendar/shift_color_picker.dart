@@ -28,6 +28,7 @@ import '../../core/shift_palette.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/glass/glass.dart';
 
 /// 打开班次配色层。
@@ -153,14 +154,8 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
-                      AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceSm),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(L10n.shiftColor, style: AppTokens.titleStrong),
-                  ),
-                ),
+                // 头部走共享件（把手 + 主色竖条 + 标题 + 分隔线）。
+                GlassSheetHeader(title: L10n.shiftColor),
                 Flexible(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg, 0,

@@ -15,6 +15,7 @@ import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
+import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/section_heading.dart';
@@ -468,10 +469,8 @@ class ProfileScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(L10n.ringtone, style: AppTokens.titleStrong),
-              ),
+              // 头部走共享件（把手 + 主色竖条 + 标题 + 分隔线）。
+              GlassSheetHeader(title: L10n.ringtone),
               Flexible(
                 child: ListView(
                   shrinkWrap: true,
