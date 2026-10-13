@@ -230,29 +230,42 @@ class _GlassNavBarState extends State<GlassNavBar>
     // 手势与动画状态机两档**共用**（上面那一段），所以交互契约（点按即切页 /
     // 长按吸附不切页 / 松手才提交）两档一字不差 —— 交互由同一份代码产生，
     // 就不可能不一致。
-    return ValueListenableBuilder<bool>(
-      valueListenable: liquidGlassActive,
-      builder: (BuildContext context, bool liquid, Widget? _) => liquid
-          ? _buildLiquid(
-              isDark: isDark,
-              isShort: isShort,
-              capsuleH: capsuleH,
-              outerPad: outerPad,
-              activeColor: activeColor,
-              inactiveColor: inactiveColor,
-              fg: fg,
-              selectedIndex: selectedIndex,
-            )
-          : _buildStandard(
-              isDark: isDark,
-              isShort: isShort,
-              capsuleH: capsuleH,
-              outerPad: outerPad,
-              activeColor: activeColor,
-              inactiveColor: inactiveColor,
-              fg: fg,
-              selectedIndex: selectedIndex,
-            ),
+    // 胶囊的宽度上限要在**外面**加：胶囊本体外面还套着
+    // `Padding(horizontal: outerPad)`，约束加在里面的话实际宽度会变成
+    // 440 − 48 = 392。窄屏上这个数比可用宽还大 → 约束不生效 → 逐像素不变。
+    final maxOuter = kNavCapsuleMaxWidth + outerPad * 2;
+
+    return Center(
+      // `heightFactor: 1.0`：高度照旧收缩到胶囊高（Scaffold 的底部栏槽位给的是
+      // 松高度约束，不写它 `Center` 会去够无穷大）。
+      heightFactor: 1.0,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxOuter),
+        child: ValueListenableBuilder<bool>(
+          valueListenable: liquidGlassActive,
+          builder: (BuildContext context, bool liquid, Widget? _) => liquid
+              ? _buildLiquid(
+                  isDark: isDark,
+                  isShort: isShort,
+                  capsuleH: capsuleH,
+                  outerPad: outerPad,
+                  activeColor: activeColor,
+                  inactiveColor: inactiveColor,
+                  fg: fg,
+                  selectedIndex: selectedIndex,
+                )
+              : _buildStandard(
+                  isDark: isDark,
+                  isShort: isShort,
+                  capsuleH: capsuleH,
+                  outerPad: outerPad,
+                  activeColor: activeColor,
+                  inactiveColor: inactiveColor,
+                  fg: fg,
+                  selectedIndex: selectedIndex,
+                ),
+        ),
+      ),
     );
   }
 
@@ -296,6 +309,8 @@ class _GlassNavBarState extends State<GlassNavBar>
                 child: GlassBlur(
                   sigma: AppTokens.blurPanel,
                   child: Container(
+                    // 工装/用例量胶囊宽度的抓手（两棵树各一处，见 `_buildLiquid`）。
+                    key: const Key('nav-capsule'),
                     height: capsuleH,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(capsuleH / 2),
@@ -409,6 +424,8 @@ class _GlassNavBarState extends State<GlassNavBar>
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: outerPad),
           child: LiquidTrack(
+            // 与标准档那棵树同一个 key：两档的胶囊尺寸必须一致，用例也是同一条。
+            key: const Key('nav-capsule'),
             slots: items.length,
             capsuleH: capsuleH,
             pad: _innerPad,

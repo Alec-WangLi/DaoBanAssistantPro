@@ -76,6 +76,17 @@ MediaQueryData sanitizeSystemInsets(MediaQueryData mq) {
 const double kNavCapsuleInset = 96;
 const double kFloatingActionInset = 160;
 
+/// 底部导航胶囊的**宽度上限**。
+///
+/// 胶囊原来只有左右各 `outerPad` 的外边距、没有上限，于是 1920 的车机上四个 tab
+/// 摊开 1900px（用户 2026-10-13 报的「被拉太长」）。440 ≈ **手机那一条的宽度**
+/// （420 宽的屏上是 372），四个 tab 各 110dp，比手机上的 93dp 还宽一点。
+///
+/// **窄屏上它必须是不生效的**：约束取 `kNavCapsuleMaxWidth + outerPad × 2` 与可用宽
+/// 的较小值，420 / 320 / 200 各档都拿不到更小的数 —— 那几档逐像素不变
+/// （`glass_tier_test.dart` 的「底栏胶囊有宽度上限」四条断言钉着）。
+const double kNavCapsuleMaxWidth = 440;
+
 /// 整页编辑器底部那颗悬浮「保存并重排闹钟」胶囊：正文要留的底部空白。
 ///
 /// = 按钮条自身 80（上下各 16 的留白 + 按钮 48）+ 12 的呼吸 = 92。**是探针量出来的**，

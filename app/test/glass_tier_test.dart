@@ -29,6 +29,7 @@ import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
+import 'package:shiftassistantpro/core/layout.dart';
 import 'package:shiftassistantpro/core/motion.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -328,9 +329,14 @@ void main() {
   }
 
   /// 从底栏 `.85` 处（第 3 格）按下要用的位置。
+  ///
+  /// ⚠️ **量的是胶囊（`nav-capsule`），不是整个 `glass-nav-bar`。** 从前两者是一回事
+  /// （胶囊把整条底栏铺满），限宽 440 之后就不是了：900×420 上胶囊居中都只占中段，
+  /// 拿底栏算出来的 0.85 会落在胶囊**外面** —— 手势够不到底栏，透镜压根不提起，
+  /// 而那条用例报的是「矮屏下没凸出」，看着像几何问题。
   Offset lastTab(WidgetTester tester) {
-    final Rect nav = tester.getRect(find.byKey(const Key('glass-nav-bar')));
-    return Offset(nav.left + nav.width * 0.85, nav.center.dy);
+    final Rect cap = tester.getRect(find.byKey(const Key('nav-capsule')));
+    return Offset(cap.left + cap.width * 0.85, cap.center.dy);
   }
 
   /// 取**底栏那一枚**透镜。
@@ -679,6 +685,50 @@ void main() {
     expect(m(), lessThan(0.1), reason: '停手 480ms 了还亮着 —— 淡不干净');
 
     await g.up();
+    await disposeShell(tester);
+  });
+
+  // ── 胶囊的宽度上限（用户 2026-10-13 报的「被拉太长」） ──────────────
+
+  testWidgets('底栏胶囊有宽度上限：宽屏不再摊到屏幕两端', (tester) async {
+    // 420 竖屏：**逐像素级不变** —— 上限比它宽，约束不该生效。
+    await pumpShell(tester, liquid: false, size: const Size(420, 900));
+    expect(tester.getSize(find.byKey(const Key('nav-capsule'))).width,
+        closeTo(372, 0.5));
+    await disposeShell(tester);
+
+    // 1280 车机：1232 → 440。
+    await pumpShell(tester, liquid: false, size: const Size(1280, 800));
+    expect(tester.getSize(find.byKey(const Key('nav-capsule'))).width,
+        closeTo(kNavCapsuleMaxWidth, 0.5));
+    await disposeShell(tester);
+
+    // 1920 超宽车机：同样夹在 440。
+    await pumpShell(tester, liquid: false, size: const Size(1920, 720));
+    expect(tester.getSize(find.byKey(const Key('nav-capsule'))).width,
+        closeTo(kNavCapsuleMaxWidth, 0.5));
+    await disposeShell(tester);
+
+    // ⚠️ **液态档那棵树也要一起查**：两棵树各自建胶囊，只在一棵里加约束的话，
+    // 开着液态玻璃的用户看到的是「限宽没生效」，而上面三条全绿。
+    await pumpShell(tester, liquid: true, size: const Size(1280, 800));
+    expect(tester.getSize(find.byKey(const Key('nav-capsule'))).width,
+        closeTo(kNavCapsuleMaxWidth, 0.5));
+    await disposeShell(tester);
+  });
+
+  testWidgets('限宽之后点第 4 格仍然切到第 4 页', (tester) async {
+    // 限宽把 `LayoutBuilder` 算出的 `itemW` 改了（1232/4 → (440 − 内边距)/4）。
+    // 点按坐标必须仍然对得上 —— 判据照本文件既有的写法，读 `PageController.page`。
+    await pumpShell(tester, liquid: false, size: const Size(1280, 800));
+    final cap = tester.getRect(find.byKey(const Key('nav-capsule')));
+    await tester.tapAt(Offset(cap.left + cap.width * 0.88, cap.center.dy));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+    }
+    final c = tester.widget<PageView>(find.byType(PageView)).controller!;
+    expect(c.page!.round(), 3,
+        reason: '点了第 4 格却没切到第 4 页 —— 限宽之后坐标没跟着走');
     await disposeShell(tester);
   });
 }
