@@ -1620,6 +1620,21 @@ void main() {
             reason: '卡片底边那一点要落在列表内容上（命中路径里不该只有胶囊）');
       });
     }
+
+    // v0.12.0 换件带出来的一条新几何：`GlassButton` 没有内在宽度（里面那个
+    // `Center` 会撑到 `maxWidth`），而这一页给它的约束是**松的** —— 不套
+    // `IntrinsicWidth` 它会变成通栏长条（出图量到 388 = 屏宽−32、整幅内容宽），
+    // 而换件之前那颗 `FilledButton` 是按内容定宽的（约 180）。这条钉住
+    // 「它仍是一颗按内容定宽、居中悬浮的胶囊」。
+    testWidgets('保存胶囊按内容定宽，不是通栏', (tester) async {
+      await _pumpEditor(tester, _domain(), size: const Size(420, 900));
+      final save = tester.getRect(saveButton());
+      expect(save.width, lessThan(300),
+          reason: '通栏（≈388 = 屏宽−32）说明 `GlassButton` 撑满了松约束 —— '
+              '要套 `IntrinsicWidth` 才是按内容定宽（约 180）');
+      expect(save.width, greaterThan(120),
+          reason: '内容宽的一档约 180；太小说明内容没被正确测量');
+    });
   });
 
   // ── 这一轮的性能护栏 ─────────────────────────────────────────────────

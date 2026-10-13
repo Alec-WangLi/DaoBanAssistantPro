@@ -394,13 +394,22 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               // blur 14、offset (0,4)），所以这里**不再自己叠一层**（两层会叠成
               // 两重影）。高度与圆角仍按 48 的胶囊来（`kFloatingSaveInset` 就是
               // 按这个 48 推的），圆角取高度的一半。
-              child: GlassButton(
-                primary: true,
-                height: _saveButtonHeight,
-                radius: _saveButtonHeight / 2,
-                onPressed: _saving ? null : _save,
-                icon: const Icon(Icons.check_outlined),
-                child: Text(L10n.saveAndReschedule),
+              //
+              // 外面套的 `IntrinsicWidth` **是必须的**：`GlassButton` 没有内在宽度
+              // （里面那个 `Center` 会一路撑到 `maxWidth`），而这里的约束是**松的**
+              // —— 直接放进去它会变成通栏长条（换件后出图量到 388 宽）。套一层
+              // `IntrinsicWidth` 让它收缩到内容宽度，仍是「按内容定宽、靠 `Align`
+              // 居中悬浮」的一颗胶囊（换件前那颗 `FilledButton` 约 180 宽）。
+              // 同一招在 `schedule_screen` 的归档胶囊上也用过。
+              child: IntrinsicWidth(
+                child: GlassButton(
+                  primary: true,
+                  height: _saveButtonHeight,
+                  radius: _saveButtonHeight / 2,
+                  onPressed: _saving ? null : _save,
+                  icon: const Icon(Icons.check_outlined),
+                  child: Text(L10n.saveAndReschedule),
+                ),
               ),
             ),
           ),

@@ -10,11 +10,15 @@ import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/widgets/glass_button.dart';
 
 Future<void> _pump(WidgetTester tester, {double? radius}) async {
-  await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-          body: GlassButton(
-              onPressed: () {}, radius: radius ?? AppTokens.radiusM,
-              child: const Text('保存')))));
+  // radius 为空时**真的不传**（而不是回落到 `AppTokens.radiusM` 再传）——
+  // 否则「不传 radius 时圆角就是 radiusM」那条根本走不到默认值那条路，
+  // 把默认值改成别的档它照样绿（空用例）。
+  final button = radius == null
+      ? GlassButton(onPressed: () {}, child: const Text('保存'))
+      : GlassButton(
+          onPressed: () {}, radius: radius, child: const Text('保存'));
+  await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: button)));
 }
 
 /// 按钮那层填充装饰挂在 `Ink` 上（`GlassButton` 里没有 `Container`，构件是
