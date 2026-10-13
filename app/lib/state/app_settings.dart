@@ -33,8 +33,8 @@ enum AppFontSize {
   double get scale => switch (this) {
         AppFontSize.small => 0.9,
         AppFontSize.standard => 1.0,
-        AppFontSize.large => 1.15,
-        AppFontSize.extraLarge => 1.3,
+        AppFontSize.large => 1.1,
+        AppFontSize.extraLarge => 1.2,
       };
 }
 

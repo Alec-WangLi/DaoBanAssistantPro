@@ -678,7 +678,7 @@ class L10n {
   static String get pickShiftPattern => t('选择你的倒班方式', 'Pick your shift pattern');
   static String get pickShiftPatternHint =>
       t('选一个和你班表最像的，建好之后还能随时改', 'Pick the closest one — you can tweak it anytime');
-  static String get searchPattern => t('搜索，如「四班三倒」「上24休48」', 'Search, e.g. "4-crew 3-shift"');
+  static String get searchPattern => t('搜索倒班方式', 'Search shifts');
   // 英文原标题是 `Start from scratch`，但这条路并不给空白 —— 它塞一套默认
   // 四班两倒进去（见 `createScheduleFromTemplatePicker` 里 `?? d.cycle` 那一串），
   // 中文副标题「从默认四班两倒开始」才是实情。标题跟副标题不能自相矛盾。

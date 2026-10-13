@@ -81,11 +81,11 @@ void main() {
   test('四档的倍率', () {
     expect(AppFontSize.small.scale, 0.9);
     expect(AppFontSize.standard.scale, 1.0);
-    expect(AppFontSize.large.scale, 1.15);
-    expect(AppFontSize.extraLarge.scale, 1.3);
+    expect(AppFontSize.large.scale, 1.1);
+    expect(AppFontSize.extraLarge.scale, 1.2);
   });
 
-  testWidgets('拨「大」：根部的 textScaler 跟着变成 1.15', (tester) async {
+  testWidgets('拨「大」：根部的 textScaler 跟着变成 1.1', (tester) async {
     await _pumpApp(tester);
     expect(MediaQuery.textScalerOf(_ctx(tester)).scale(14), closeTo(14, 0.01),
         reason: '默认是「标准」');
@@ -93,7 +93,7 @@ void main() {
     await _notifier(tester).setFontSize(AppFontSize.large);
     await tester.pump();
     expect(MediaQuery.textScalerOf(_ctx(tester)).scale(14),
-        closeTo(14 * 1.15, 0.01));
+        closeTo(14 * 1.1, 0.01));
 
     await _disposeApp(tester);
   });
@@ -132,7 +132,7 @@ void main() {
     expect(
       MediaQuery.textScalerOf(tester.element(find.byType(CalendarScreen)))
           .scale(14),
-      closeTo(14 * 1.3, 0.01),
+      closeTo(14 * 1.2, 0.01),
     );
     await teardownVisual(tester);
   });

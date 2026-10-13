@@ -822,10 +822,11 @@ class _SnoozeRowState extends State<_SnoozeRow> {
           title: Text(L10n.snoozeDuration),
           // 副标题把**现在是多少**写出来 —— 铃声那一行也是这个规矩：这一档设没设
           // 成功，光看是看不出来的。
+          // 折两行、不省略（设计 §6.3）：`「再睡一会」之后隔 5 分钟重新响铃`
+          // 在 360dp 标准档下就已经超出一行 —— 那是**最常见**的配置，不是极端。
           subtitle: Text(
             L10n.snoozeDurationSubtitle(_minutes),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
           ),
           trailing: const Icon(Icons.chevron_right_outlined),
           onTap: _pick,

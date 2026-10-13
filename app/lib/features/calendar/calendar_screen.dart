@@ -34,6 +34,30 @@ import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
+/// 一行文字在给定样式与缩放下的**自然行高**。
+///
+/// 信息卡那行班次用它把行高钉死：外面套的那层 `FittedBox` 会连高度一起缩，
+/// 于是「三条闹钟」那天的一行会比「一条」那天矮几 dp —— 而卡片高度**不许**
+/// 跟着当天内容变（`calendar_screen_test.dart` 那条用例盯着）。
+///
+/// 与 `info_card_metrics.dart` 量同一行用的是同一个办法（同一个样式、同一串
+/// 占位文字），两处必须同源。
+double _oneLineHeight(BuildContext context, TextStyle style) {
+  // **必须 `merge` 环境样式，不能只抄字体族。**
+  //
+  // `info_card_metrics.dart` 的 `_Measure.text` 用的是 `def.style.merge(style)` ——
+  // 于是行高里带着环境那层的 `height`（Material 的 1.43）。只抄 family 的话量出来
+  // 会矮 7dp，而卡片高度正是拿它钉的：卡片比内容高出 7dp，白占网格，
+  // `calendar_screen_test.dart` 那条用例当场就红（v0.11.12 栽过一次）。
+  final def = DefaultTextStyle.of(context);
+  final painter = TextPainter(
+    text: TextSpan(text: '班次', style: def.style.merge(style)),
+    textDirection: TextDirection.ltr,
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  return painter.height;
+}
+
 /// 量一段文字在给定样式与缩放下的宽度。
 ///
 /// 顶栏那个「一行放不放得下」的判据用它（见 `_oneRowFits`）—— 与
@@ -831,11 +855,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 量宽必须**带上当时那一套字体**：`Text` 会从环境继承 family（工装里中英双字体
     // 就是这么挂上去的），而裸的 `TextPainter` 只会用兜底字体 —— 两者的中文宽度
     // 差得很远（实测同一个「2026年10月」：兜底 128、真字体 86）。
-    final ambient = DefaultTextStyle.of(context).style;
-    TextStyle styled(TextStyle t) => t.copyWith(
-          fontFamily: ambient.fontFamily,
-          fontFamilyFallback: ambient.fontFamilyFallback,
-        );
+    final ambient = DefaultTextStyle.of(context);
+    TextStyle styled(TextStyle t) =>
+        ambient.style.merge(t); // 与 `info_card_metrics` 的 `_Measure` 同一配方
     final need = 24.0 + // 左右留白 12×2
         40.0 * 3 + // 三个圆形钮
         AppTokens.gapIconText * 4 +
@@ -2523,9 +2545,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         ],
         Text(
           lunar.fullDescription,
-          // 两行封顶：整行宽度下通常一行就够，窄屏最多两行，再长就省略号。
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+          // 三行封顶（v0.11.12 从 2 提上来）：宽屏一行就够，窄屏 + 大字号下
+          // 两行装不完最长的那些农历串 —— 而**不许省略**（设计 §6.2）。
+          maxLines: 3,
           style: AppTokens.rowSecondary.copyWith(
             color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
           ),
@@ -2575,7 +2597,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text.rich(
+                    // 班次名 + 时间 + 闹钟是**一段**富文本，折行会把「闹钟」那段
+                    // 甩到第二行、把定高模型的账算歪（见 `info_card_metrics.dart`
+                    // 里按 1 行量那一处）。所以这里走设计 §2 的第 2 档：**缩，不省略**。
+                    //
+                    // ⚠️ **外面那层 `SizedBox` 不能省**：`FittedBox` 的高度会跟着
+                    // 缩放比例一起缩 —— 于是「三条闹钟」那天的这一行反而比「一条」
+                    // 那天矮 3dp，卡片内容高度跟着变，`calendar_screen_test.dart`
+                    // 那条「多条闹钟不该把卡片顶高」当场就红。高度按**一行的自然
+                    // 行高**钉死（与 `info_card_metrics` 量的是同一个数）。
+                    child: SizedBox(
+                      height: _oneLineHeight(context, AppTokens.titleStrong),
+                      child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text.rich(
                       key: const Key('info-card-shift-line'),
                       TextSpan(
                         children: [
@@ -2600,8 +2633,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                         ],
                       ),
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    ))),
                   ),
                   // 这天被单独调动过：形状抄同一行的邻居，理由见 `_adjustedBadge`。
                   // （外层 `if (shift != null && daySchedule != null)` 已经把它收窄了。）
