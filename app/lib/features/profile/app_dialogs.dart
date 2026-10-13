@@ -39,7 +39,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.16\n'
+const String _changelogZh = 'v0.11.17\n'
+    '· 「使用帮助」从弹窗改成整页：开头一段整体简介，下面每个功能块一句简介，再往下是一个入口\n'
+    '· 新的下一层「遇到问题怎么解决」：按你想干的事分两组（「我想办一件事」/「它不对劲」），三十来条，每条说清去哪一页、点什么\n'
+    '· 修好帮助里已经过时的说法：「一个班次最多挂 6 条闹钟」其实早就放到 10 条了；零点班的响铃到底落在哪一天也讲清楚了\n'
+    '· 补上四个此前在帮助里一个字都没提过的功能：重复待办、字体大小、按月排班、待办自动归档\n'
+    '· 「我的 → 桌面」那一行改成跳进使用帮助的「桌面小组件」那一节，全 app 只剩一份说明\n'
+    '\n'
+    'v0.11.16\n'
     '· 新建排班时，「按月排班」和「我自己排」有了自己的分组「从零开始」—— 以前它们头上没有组名，看起来像是归在「常白」那一类里的\n'
     '· 「按月排班」那张卡片不再写「每天在岗 2 个班组」：按月的段长短随月份变，这个数没有单一答案\n'
     '· 长按某天弹出的调班界面补上了标题「调整班次」—— 以前只有一行日期，看不出这一屏是干嘛的\n'
@@ -101,15 +108,17 @@ const String _changelogZh = 'v0.11.16\n'
     '· 响铃界面那颗按钮上现在写着时长（「再睡一会 · 10 分钟」），按下之前就知道会睡多久\n'
     '\n'
 
-    'v0.11.7\n'
-    '· 修好一处「颜色值填好了，却点不到确定」：软键盘弹起来的时候，会正好盖住取色层底下那颗「确定」按钮（填写颜色值本来是这一层的主要入口，键盘一弹按钮就落在键盘底下了）\n'
-    '· 现在键盘弹起来，整块取色面板会顶到键盘上面去\n'
-    '\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.16\n'
+const String _changelogEn = 'v0.11.17\n'
+    '· The usage guide is now a full page instead of a dialog: a short intro, a line for each feature, and one way in\n'
+    '· A new level under it, "How to get things done", sorted by what you are trying to do ("I want to…" / "Something looks wrong") — thirty-odd entries, each saying which page to open and what to tap\n'
+    '· Fixed wording in the guide that had gone stale: it claimed a shift carries at most 6 alarms, when the limit has been 10 for a while; which day a midnight shift\'s alarm falls on is spelled out too\n'
+    '· Added four features the guide had never mentioned: repeating todos, text size, monthly rosters and todo auto-archiving\n'
+    '· The "Me → Home screen" row now jumps into the guide\'s widget section, so there is only one copy of that explanation\n'
+    '\n'
+    'v0.11.16\n'
     '· "Monthly roster" and "Build my own" now sit under their own heading, "Start from scratch" - before, they had no heading and looked like part of "Day shift only"\n'
     '· The "Monthly roster" card no longer says "2 crews on duty": a monthly roster\'s segments vary in length, so that number has no single answer\n'
     '· The sheet that opens when you long-press a day now has a title, "Adjust shift" - it used to show only a date\n'
@@ -169,11 +178,6 @@ const String _changelogEn = 'v0.11.16\n'
     'v0.11.8\n'
     '· You can now choose how long Snooze waits: Me → Alarm → Snooze length, with 1 / 5 / 10 / 15 / 20 or 30 minutes (the default is still 5, so leaving it alone changes nothing)\n'
     '· The snooze button now shows that length ("Snooze · 10 min"), so you know how long you are getting before you tap it\n'
-    '\n'
-
-    'v0.11.7\n'
-    '· Fixed "the color value is typed, but OK cannot be tapped": with the software keyboard up, it covered the OK button at the bottom of the color picker (typing a value is the main way into that screen, and the button landed right underneath the keyboard)\n'
-    '· The whole picker panel now rides up above the keyboard\n'
     '\n'
 
         '\n'
