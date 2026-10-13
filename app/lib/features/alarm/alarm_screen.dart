@@ -120,7 +120,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             _sectionTitleRow(L10n.customAlarms),
             Expanded(child: _customAlarmSection(context, alarms)),
             // 底部按钮条是 floatingActionButton、**悬浮在内容之上**
-            // （见 _AboveCapsuleBarLocation），正文不给自己留位置就会被压住：
+            // （见 `AboveCapsuleLocation.bar`），正文不给自己留位置就会被压住：
             // 小窗里「自定义闹钟」的空状态提示正好落在它下面。
             // 竖屏内容本来就够短、轮不到压，所以只在小窗/横屏补这块留白。
             if (AppLayout.of(context).isShort ||

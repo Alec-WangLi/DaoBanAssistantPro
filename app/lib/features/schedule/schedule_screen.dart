@@ -246,6 +246,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
         child: IntrinsicWidth(
           child: GlassPill(
             onTap: () => setState(() => _archiveOpen = !_archiveOpen),
+            // 36 = `GlassPill` 的**紧凑入口**那一档（分组标题旁、列表行 trailing
+            // 那种），与本页顶栏那颗「重复待办」入口同档 —— `GlassPill` 的注释
+            // 把「已完成 N 条」列在这一档，这里显式传上，别让它落到默认的 40。
+            height: 36,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

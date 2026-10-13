@@ -69,10 +69,13 @@ MediaQueryData sanitizeSystemInsets(MediaQueryData mq) {
 /// 按钮挡住了删除键）。**别凭感觉调小**：探针实测 96 那一档下，最后一颗删除键
 /// 的最低点在距底 115，而按钮占 92~148 —— 整整压住 33px。
 ///
-/// 只对「页面底部**且**有悬浮控件压着」的列表用它；push 出来的整页里，
-/// **排班编辑器**的底部那颗「保存并重排闹钟」胶囊用的是下面那条
-/// [kFloatingSaveInset]（它的位置不是 FAB 那一套），排班管理 / 模板选择把按钮
-/// 放在列表末尾、跟着内容滚，不需要留白。
+/// 只对「页面底部**且**有悬浮控件压着」的列表用它；push 出来的整页里：
+///   · **排班编辑器**的底部那颗「保存并重排闹钟」胶囊用的是下面那条
+///     [kFloatingSaveInset]（它的位置不是 FAB 那一套）；
+///   · **排班管理**页的「新增排班」也从列表里搬进了一条悬浮按钮条
+///     （`AboveCapsuleLocation.bar`），所以这一页**同样**要用本条
+///     （`schedule_management_screen.dart` 的列表底部留白就是它）；
+///   · **只有模板选择**把按钮留在列表末尾、跟着内容滚，不需要留白。
 const double kNavCapsuleInset = 96;
 const double kFloatingActionInset = 160;
 

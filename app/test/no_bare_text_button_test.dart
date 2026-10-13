@@ -33,7 +33,13 @@ List<String> _hits(List<String> needles) {
 
 void main() {
   test('lib/features 下不许出现裸 TextButton / ElevatedButton / OutlinedButton', () {
-    final hits = _hits(const ['TextButton(', 'ElevatedButton(', 'OutlinedButton(']);
+    // 带上 `.icon(` 那种构造形态：`TextButton.icon(` 里**没有** `TextButton(`
+    // 这个子串，只查后者会让它悄悄溜过去（今天还没有这种调用点，所以现在仍绿）。
+    final hits = _hits(const [
+      'TextButton(', 'TextButton.icon(',
+      'ElevatedButton(', 'ElevatedButton.icon(',
+      'OutlinedButton(', 'OutlinedButton.icon(',
+    ]);
     expect(hits, isEmpty,
         reason: '这些读起来像正文、不像能点的东西；换 GlassPill 或现成的玻璃件：\n'
             '${hits.join('\n')}');
