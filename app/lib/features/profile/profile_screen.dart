@@ -249,7 +249,14 @@ class ProfileScreen extends ConsumerWidget {
                   title: Text(L10n.guideWidgetTitle),
                   subtitle: Text(L10n.widgetEntrySubtitle),
                   trailing: const Icon(Icons.chevron_right_outlined),
-                  onTap: () => showWidgetGuideDialog(context),
+                  // 从前这里弹自己那一份小组件说明；v0.11.17 起**跳进《使用帮助》
+                  // 并翻到「桌面小组件」那一节** —— 全 app 只剩一份文案。
+                  // 这一行本身留着：它也是「原来还有桌面小组件」的发现点。
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            const HelpCenterScreen(scrollToWidgets: true)),
+                  ),
                 ),
               ),
             ),

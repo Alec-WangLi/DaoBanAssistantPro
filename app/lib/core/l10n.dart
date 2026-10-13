@@ -174,8 +174,8 @@ class L10n {
 
   /// 「我的 → 桌面」那一行（打开的是小组件说明弹层）。
   static String get widgetEntrySubtitle => t(
-      '三张卡怎么加到桌面（小米机型在二级分类里）',
-      'How to add the three cards (Xiaomi hides them in a sub-menu)');
+      '说明在《使用帮助》里，小米机型在二级分类里',
+      'Explained in the usage guide; Xiaomi hides them in a sub-menu');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
   static String get ringtoneSubtitle => t('选择内置、系统、你的铃声，或「仅震动」', 'Choose a built-in, system, or your own ringtone, or vibrate only');
   static String get snoozeDuration => t('贪睡时长', 'Snooze length');

@@ -85,4 +85,36 @@ void main() {
     }
     L10n.locale = 'zh';
   });
+
+  // 「我的 → 桌面」那一行从「弹自己那份小组件说明」改成「跳进这里并翻到
+  // 『桌面小组件』那一节」（全 app 只剩一份文案）。这两条钉住那一次滚动 ——
+  // 视口必须**矮到装不下**，否则整页都在屏里、滚不滚都一样。
+  testWidgets('scrollToWidgets 一路滚到「桌面小组件」那一条', (tester) async {
+    L10n.locale = 'zh';
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const MaterialApp(
+        home: HelpCenterScreen(scrollToWidgets: true)));
+    await tester.pumpAndSettle();
+
+    final rect = tester.getRect(find.text(L10n.guideWidgetTitle));
+    expect(rect.top, greaterThanOrEqualTo(0));
+    expect(rect.bottom, lessThanOrEqualTo(800),
+        reason: '滚完之后「桌面小组件」那一条必须真的在视口里');
+  });
+
+  testWidgets('不传 scrollToWidgets 时停在页首', (tester) async {
+    L10n.locale = 'zh';
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const MaterialApp(home: HelpCenterScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.helpIntro), findsOneWidget);
+  });
 }

@@ -271,8 +271,10 @@ Widget _updateChannelRow(
 /// 帮助类弹窗的公共外壳：同一个 [GlassDialog]、同样的滚动上限与「知道了」。
 ///
 /// **《使用帮助》自 v0.11.17 起不再是弹窗**（它是整页了，见
-/// `help_center_screen.dart`），所以这里只剩「开始使用」与「桌面小组件」两份；
-/// 壳子仍然只有这一处 —— 各写一套的话圆角、滚动上限、按钮措辞会慢慢漂开。
+/// `help_center_screen.dart`），「桌面小组件」那份说明也并进了它 ——
+/// 于是这个壳子只剩「开始使用」一个用户。**留着它**：那是全 app 唯一一个
+/// 「内容是一份短条目清单」的弹窗，下一个要弹类似东西的人照它办，
+/// 而不是又造一套圆角 / 滚动上限 / 按钮措辞。
 void _showHelpDialog(
   BuildContext context, {
   required String title,
@@ -340,23 +342,6 @@ void showGettingStartedDialog(BuildContext context) {
         Text(L10n.gettingStartedMore,
             style: AppTokens.rowSecondary.copyWith(height: 1.45, color: muted)),
       ],
-    ),
-  );
-}
-
-/// 「我的 → 桌面小组件」那一行的说明弹层。
-///
-/// 正文与《使用帮助》里的同一条目**共用一份文案**（`L10n.guideWidgetDesc`）——
-/// 各写一份的话，改了这边忘了那边，就成了「说明书和 App 说的不一样」。
-/// 弹窗标题已经把「是什么」说了，条目里不再顶一行标题（`title: null`）。
-void showWidgetGuideDialog(BuildContext context) {
-  _showHelpDialog(
-    context,
-    title: L10n.guideWidgetTitle,
-    content: HelpEntry(
-      icon: Icons.widgets_outlined,
-      title: null,
-      lines: L10n.guideWidgetDesc,
     ),
   );
 }

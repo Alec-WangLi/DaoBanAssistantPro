@@ -329,14 +329,6 @@ final List<VisualScreen> visualScreens = [
     needsOnboardingPrefs: false,
   ),
   (
-    // 「我的 → 桌面」那一行的说明弹层（v0.9.20 新增）。与《使用帮助》里那条
-    // **共用同一份文案**，但它单独有个入口，所以也要单独看一眼。
-    slug: '35_widget_guide',
-    title: '桌面小组件说明',
-    build: (db) async => const _DialogHost(showWidgetGuideDialog),
-    needsOnboardingPrefs: false,
-  ),
-  (
     // 多排班表按日期衔接：种子给第二套方案一个时段、边界落在**本月 15 日** ——
     // 于是同一张图上左半月的格子画第一套、右半月的画第二套。这一屏是检验
     // 「按天解析」的唯一一只眼睛（单测只看得到断言，看不到「两半张得一样」）。
