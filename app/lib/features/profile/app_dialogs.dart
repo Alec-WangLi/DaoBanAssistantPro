@@ -39,7 +39,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.15\n'
+const String _changelogZh = 'v0.11.16\n'
+    '· 新建排班时，「按月排班」和「我自己排」有了自己的分组「从零开始」—— 以前它们头上没有组名，看起来像是归在「常白」那一类里的\n'
+    '· 「按月排班」那张卡片不再写「每天在岗 2 个班组」：按月的段长短随月份变，这个数没有单一答案\n'
+    '· 长按某天弹出的调班界面补上了标题「调整班次」—— 以前只有一行日期，看不出这一屏是干嘛的\n'
+    '· 日历上长按拖选一段日子时，那条选中带子不再上下鼓起：以前它比一格还高，跨周时相邻两行的带子会叠在一起\n'
+    '\n'
+
+    'v0.11.15\n'
     '· 排班方案多了一种规则：按月排班 —— 每月 1 号重新开始，比如「1–10 号中班、11–20 号白班、21 号到月底夜班」\n'
     '· 以前只能按固定周期轮，而月份长度不一样（28 / 29 / 30 / 31 天），走过几个月就会错一天，12 月 1 日会显示成夜班\n'
     '· 想切几段就切几段：加一段、删一段、改「每月第几天起」都行；删掉的那一段并进上一段，不会留出空档\n'
@@ -99,17 +106,17 @@ const String _changelogZh = 'v0.11.15\n'
     '· 现在键盘弹起来，整块取色面板会顶到键盘上面去\n'
     '\n'
 
-    'v0.11.6\n'
-    '· 班次颜色从 8 种扩到 16 种：色相铺满一圈，红、品红、琥珀、深橙、深绿、深青、棕、粉是这一版新加的（原来那 8 种一颗没动）\n'
-    '· 新增「自定义颜色」：点班次行末那颗色点，里面有色相条和一块饱和度/明度方盘，也可以直接填颜色值（例如 #4C8DFF）\n'
-    '· 取色的时候旁边摆着两颗真的日历小样，能当场看到这个颜色落到日历上是什么样\n'
-    '· 那 16 种默认颜色都保证在日历格子与桌面小组件上看得清（这一版为此逐颗量过，并有测试盯着）\n'
-    '\n'
-
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.15\n'
+const String _changelogEn = 'v0.11.16\n'
+    '· "Monthly roster" and "Build my own" now sit under their own heading, "Start from scratch" - before, they had no heading and looked like part of "Day shift only"\n'
+    '· The "Monthly roster" card no longer says "2 crews on duty": a monthly roster\'s segments vary in length, so that number has no single answer\n'
+    '· The sheet that opens when you long-press a day now has a title, "Adjust shift" - it used to show only a date\n'
+    '· The band drawn while you drag-select days no longer bulges up and down: it used to be taller than one cell, so bands in neighbouring weeks overlapped\n'
+    '\n'
+
+    'v0.11.15\n'
     '· Schedules can now be driven by the month: the pattern resets on the 1st, for example days 1-10 on the middle shift, 11-20 on days, and the rest on nights\n'
     '· Until now only a fixed-length cycle was possible, and since months differ in length (28 / 29 / 30 / 31 days) the cycle drifted within a few months — December 1 came out as a night shift\n'
     '· Split the month into as many segments as you like: add one, remove one, or change the day it starts on. A removed segment merges into the previous one, so no day is ever left out\n'
@@ -167,13 +174,6 @@ const String _changelogEn = 'v0.11.15\n'
     'v0.11.7\n'
     '· Fixed "the color value is typed, but OK cannot be tapped": with the software keyboard up, it covered the OK button at the bottom of the color picker (typing a value is the main way into that screen, and the button landed right underneath the keyboard)\n'
     '· The whole picker panel now rides up above the keyboard\n'
-    '\n'
-
-    'v0.11.6\n'
-    '· Shift colors go from 8 to 16: the full hue circle, with red, magenta, amber, deep orange, deep green, deep teal, brown and pink added (the original 8 are untouched)\n'
-    '· New custom colors: tap the color dot on a shift row for a hue strip, a saturation/brightness pad, and a field for typing a value such as #4C8DFF\n'
-    '· Two live calendar samples sit next to the picker, so you can see how the color will look on a real cell\n'
-    '· All 16 built-in colors are guaranteed readable on calendar cells and on the desktop widget (each one measured, with a test keeping watch)\n'
     '\n'
 
         '\n'
