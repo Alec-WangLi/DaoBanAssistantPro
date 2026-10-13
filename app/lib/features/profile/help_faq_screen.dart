@@ -4,6 +4,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/centered_content.dart';
+import '../../core/widgets/section_heading.dart';
 import 'help_content.dart';
 
 /// 《使用帮助》第二层：「遇到问题怎么解决」。
@@ -32,7 +33,7 @@ class HelpFaqScreen extends StatelessWidget {
               AppTokens.spaceSm, AppTokens.spaceLg, AppTokens.space2xl),
           children: [
             for (final group in helpFaqGroups) ...[
-              _groupHeading(context, group.title.value),
+              SectionHeading(group.title.value),
               for (final section in group.sections) ...[
                 _sectionCard(context, section),
                 const SizedBox(height: AppTokens.spaceMd),
@@ -45,13 +46,6 @@ class HelpFaqScreen extends StatelessWidget {
     );
   }
 }
-
-/// 页面级的小节标题。与排班管理页那是同一款（各留一份，不为它去动那一页）。
-Widget _groupHeading(BuildContext context, String title) => Padding(
-      padding: const EdgeInsets.fromLTRB(
-          AppTokens.spaceXs, 0, AppTokens.spaceXs, AppTokens.spaceSm),
-      child: Text(title, style: AppTokens.sectionTitle),
-    );
 
 /// 一个小节 = 一张卡。`heading` 为 null 时不画小节标题（「它不对劲」那一组不分小节）。
 Widget _sectionCard(BuildContext context, HelpFaqSection section) {

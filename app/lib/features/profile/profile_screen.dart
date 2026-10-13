@@ -17,6 +17,7 @@ import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/section_heading.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_repository.dart';
 import '../../state/app_settings.dart';
@@ -52,7 +53,7 @@ class ProfileScreen extends ConsumerWidget {
           children: [
             Text(L10n.titleProfile, style: AppTokens.pageTitle),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionAppearance),
+            SectionHeading(L10n.sectionAppearance),
             GlassTile(
               translucentFill: false,
               padding: const EdgeInsets.all(16),
@@ -221,7 +222,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionSchedule),
+            SectionHeading(L10n.sectionSchedule),
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
@@ -239,7 +240,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionDesktop),
+            SectionHeading(L10n.sectionDesktop),
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
@@ -261,7 +262,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionAlarm),
+            SectionHeading(L10n.sectionAlarm),
             // 铃声与贪睡时长是同一类东西（都是「响了之后怎么响」），摆在一张卡里，
             // 中间用全 app 那条 `Divider(height: 1)` 配方（同「关于」那一节）。
             GlassTile(
@@ -276,7 +277,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionData),
+            SectionHeading(L10n.sectionData),
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
@@ -291,10 +292,10 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionPermission),
+            SectionHeading(L10n.sectionPermission),
             const _PermissionCheck(),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionAbout),
+            SectionHeading(L10n.sectionAbout),
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
@@ -346,17 +347,6 @@ class ProfileScreen extends ConsumerWidget {
           ],
         ),
       )),
-    );
-  }
-
-  Widget _sectionTitle(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        title,
-        style: AppTokens.labelSecondary
-            .copyWith(color: AppTokens.inkMuted(context)),
-      ),
     );
   }
 

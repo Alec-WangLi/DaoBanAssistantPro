@@ -17,6 +17,7 @@ import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
+import '../../core/widgets/section_heading.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
@@ -111,10 +112,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ),
             ),
             const SizedBox(height: 12),
-            _sectionTitleRow(context, L10n.upcoming30),
+            _sectionTitleRow(L10n.upcoming30),
             Expanded(child: _shiftAlarmSection(context, chain, shiftAlarms)),
             const SizedBox(height: 8),
-            _sectionTitleRow(context, L10n.customAlarms),
+            _sectionTitleRow(L10n.customAlarms),
             Expanded(child: _customAlarmSection(context, alarms)),
             // 底部按钮条是 floatingActionButton、**悬浮在内容之上**
             // （见 _AboveCapsuleBarLocation），正文不给自己留位置就会被压住：
@@ -131,12 +132,14 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     );
   }
 
-  Widget _sectionTitleRow(BuildContext context, String title) {
+  /// 小节标题 + 整行水平 16 的留白（本节的行也走同一档水平内缩）。
+  /// 标题本体是共享件 [SectionHeading]（v0.12.0 收口）。
+  Widget _sectionTitleRow(String title) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: _sectionTitle(context, title),
+        child: SectionHeading(title),
       ),
     );
   }
@@ -222,16 +225,6 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _sectionTitle(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        title,
-        style: AppTokens.titleStrong,
       ),
     );
   }

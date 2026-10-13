@@ -10,6 +10,7 @@ import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
+import '../../core/widgets/section_heading.dart';
 import '../../data/app_repository.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -55,14 +56,14 @@ class ScheduleManagementScreen extends ConsumerWidget {
                 // 应该分成两个功能区……现在它们连在一起，感觉有点混乱」）。
                 // 标题在卡片**外面**、两节同一种写法 —— 一节有标题、另一节没有
                 // 正是「连在一起」的来源。
-                _sectionHeading(context, L10n.scheduleTimeline),
+                SectionHeading(L10n.scheduleTimeline),
                 _TimelineSection(
                   schedules: schedules,
                   current: current,
                   spans: spans,
                 ),
                 const SizedBox(height: AppTokens.spaceMd),
-                _sectionHeading(context, L10n.schedulesSection),
+                SectionHeading(L10n.schedulesSection),
                 ...schedules.map((s) {
                   final isCurrent = s.id == current?.currentScheduleId;
                   return GlassTile(
@@ -154,17 +155,6 @@ class ScheduleManagementScreen extends ConsumerWidget {
     }
   }
 }
-
-/// 页面级小节标题 —— 两节共用一份写法。
-///
-/// 与「我的」页、闹钟页那两处的 `_sectionTitle` 同形（`fromLTRB(4, 0, 4, 8)` +
-/// 小节标题角色）：三页各写一份迟早有一页走样，但**没有**抽成共享件 —— 这已经是
-/// 页面级标题的第三种复制，等第四种出现时再抽（现在抽要一次改三页，收益只有几行）。
-Widget _sectionHeading(BuildContext context, String title) => Padding(
-      padding: const EdgeInsets.fromLTRB(
-          AppTokens.spaceXs, 0, AppTokens.spaceXs, AppTokens.spaceSm),
-      child: Text(title, style: AppTokens.sectionTitle),
-    );
 
 /// 排班管理页顶部那一节「排班时段」。
 ///
