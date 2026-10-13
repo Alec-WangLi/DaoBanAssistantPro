@@ -386,8 +386,9 @@ git commit -m "feat(help): 第二层「遇到问题怎么解决」整页"
 
 **Interfaces:**
 - Consumes: `HelpEntry`（Task 1）、`HelpFaqScreen`（Task 3）
-- Produces: `class HelpCenterScreen extends StatelessWidget { const HelpCenterScreen({super.key, this.scrollToWidgets = false}); final bool scrollToWidgets; }`
-  （`scrollToWidgets` 这一版由 Task 5 用；Task 4 先把它实现出来。）
+- Produces: `class HelpCenterScreen extends StatefulWidget { const HelpCenterScreen({super.key, this.scrollToWidgets = false}); final bool scrollToWidgets; }`
+  （`scrollToWidgets` 这一版由 Task 5 用；Task 4 先把它实现出来。**是 StatefulWidget**，
+  因为它要持有 `GlobalKey` 并在挂载后滚到那一节 —— 见 Step 5。）
 
 - [ ] **Step 1: 写页面用例（先看着它红）**
 
