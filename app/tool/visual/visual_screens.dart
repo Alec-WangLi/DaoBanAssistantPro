@@ -16,6 +16,8 @@ import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
+import 'package:shiftassistantpro/features/profile/help_center_screen.dart';
+import 'package:shiftassistantpro/features/profile/help_faq_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
@@ -297,11 +299,23 @@ final List<VisualScreen> visualScreens = [
     needsOnboardingPrefs: false,
   ),
   (
-    // 完整说明。正文从「一整段」改成了「短句 + 圆点」，是最容易在版式上跑偏的
-    // 一处 —— 圆点的对齐、英文条目折行后的缩进，只有看图才知道对不对。
-    slug: '18_usage_guide',
+    // 《使用帮助》自 v0.11.17 起是**整页**（从前是弹窗）：一段整体简介 + 九条
+    // 功能简介 + 一个进第二层的入口。它是全 app 最长的一屏之一，窄屏上滚起来
+    // 才对 —— 弹窗那个形态早该换了。
+    slug: '18_help_center',
     title: '使用帮助',
-    build: (db) async => const _DialogHost(showUsageGuideDialog),
+    build: (db) async => const HelpCenterScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 第二层「遇到问题怎么解决」：31 条按用户的诉求排。
+    //
+    // 这一屏的风险全在长文案上 —— 答案句子比第一级那九条任何一句都长，
+    // 窄屏 + 大字号下会不会被吃掉、英文折行后问题与答案还分不分得开，
+    // 单测只量得出「两个 Text 的 top 不同」，看不出「读起来乱不乱」。
+    slug: '59_help_faq',
+    title: '使用帮助 · 遇到问题',
+    build: (db) async => const HelpFaqScreen(),
     needsOnboardingPrefs: false,
   ),
   (
@@ -629,6 +643,9 @@ final List<
 /// 只列**确实有下半屏内容**的屏：没列的屏拖了也是同一张图，白出一份；
 /// 顺带逼着加新屏的人想一下「这屏下面还有东西吗」。
 const Map<String, double> visualScrollDown = {
+  // 《使用帮助》整页：九条功能简介之后才是那颗进第二层的入口，而首屏只露得出
+  // 前三条。**这一条不加的话，本轮新加的那个入口在任何一张图上都看不到。**
+  '18_help_center': 3000,
   '07_profile': 620, // 权限卡 + 关于
   '06_alarm': 360, // 自定义闹钟那一段
   '03_management': 280, // 排班列表

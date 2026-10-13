@@ -270,8 +270,9 @@ Widget _updateChannelRow(
 
 /// 帮助类弹窗的公共外壳：同一个 [GlassDialog]、同样的滚动上限与「知道了」。
 ///
-/// 「开始使用」与「使用帮助」只有内容不同，壳子必须一模一样 —— 各写一套的话
-/// 两个弹窗的圆角、滚动上限、按钮措辞会慢慢漂开。
+/// **《使用帮助》自 v0.11.17 起不再是弹窗**（它是整页了，见
+/// `help_center_screen.dart`），所以这里只剩「开始使用」与「桌面小组件」两份；
+/// 壳子仍然只有这一处 —— 各写一套的话圆角、滚动上限、按钮措辞会慢慢漂开。
 void _showHelpDialog(
   BuildContext context, {
   required String title,
@@ -356,35 +357,6 @@ void showWidgetGuideDialog(BuildContext context) {
       icon: Icons.widgets_outlined,
       title: null,
       lines: L10n.guideWidgetDesc,
-    ),
-  );
-}
-
-void showUsageGuideDialog(BuildContext context) {
-  final items = <(IconData, String, List<String>)>[
-    (Icons.calendar_month_outlined, L10n.guideCalTitle, L10n.guideCalDesc),
-    (Icons.tune_outlined, L10n.guideSchedTitle, L10n.guideSchedDesc),
-    (Icons.alarm_outlined, L10n.guideAlarmTitle, L10n.guideAlarmDesc),
-    (Icons.event_note_outlined, L10n.guideTodoTitle, L10n.guideTodoDesc),
-    (Icons.widgets_outlined, L10n.guideWidgetTitle, L10n.guideWidgetDesc),
-    (Icons.palette_outlined, L10n.guideAppearanceTitle,
-        L10n.guideAppearanceDesc),
-    (Icons.aspect_ratio_outlined, L10n.guideLayoutTitle, L10n.guideLayoutDesc),
-    (Icons.shield_outlined, L10n.guidePermTitle, L10n.guidePermDesc),
-    (Icons.system_update_outlined, L10n.guideUpdateTitle,
-        L10n.guideUpdateDesc),
-  ];
-
-  _showHelpDialog(
-    context,
-    title: L10n.usageGuide,
-    content: Column(
-      children: [
-        for (final it in items) ...[
-          HelpEntry(icon: it.$1, title: it.$2, lines: it.$3),
-          const SizedBox(height: 16),
-        ],
-      ],
     ),
   );
 }

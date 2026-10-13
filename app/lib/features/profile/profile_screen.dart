@@ -23,6 +23,7 @@ import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import '../calendar/schedule_management_screen.dart';
 import 'app_dialogs.dart';
+import 'help_center_screen.dart';
 
 /// 「我的」页：外观（主题/主色调）、数据（清空重置）、关于。
 class ProfileScreen extends ConsumerWidget {
@@ -318,7 +319,10 @@ class ProfileScreen extends ConsumerWidget {
                       leading: const Icon(Icons.help_outlined),
                       title: Text(L10n.usageGuide),
                       subtitle: Text(L10n.usageGuideSubtitle),
-                      onTap: () => showUsageGuideDialog(context),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const HelpCenterScreen()),
+                      ),
                     ),
                   ),
                   GlassPressable(

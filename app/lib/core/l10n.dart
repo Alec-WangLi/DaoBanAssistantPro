@@ -216,8 +216,9 @@ class L10n {
       'Download failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
   static String get jumpToMonth => t('跳转月份', 'Jump to month');
   static String get usageGuide => t('使用帮助', 'Usage guide');
-  static String get usageGuideSubtitle =>
-      t('每个功能在哪、怎么用', 'Where each feature lives and how to use it');
+  static String get usageGuideSubtitle => t(
+      '每个功能在哪、怎么用；遇到问题也能进来查',
+      'Where each feature lives, how to use it — and what to do when something looks wrong');
   static String get viewLog => t('查看日志', 'View log');
   static String get viewLogSubtitle => t('排错时把这里的内容复制给我', 'Copy the log here for debugging');
   static String get confirmResetTitle => t('确认清空重置？', 'Clear & reset?');
@@ -873,10 +874,23 @@ class L10n {
   static String get gettingStartedMore => t('完整说明在「我的 → 使用帮助」，随时能看',
       'The full guide lives under Me → Usage guide, whenever you need it');
 
-  // 使用帮助 · 第二层（「遇到问题怎么解决」）的页标题。
+  // 使用帮助 · 第一级（整页：简介 + 九条功能简介 + 进第二层的入口）
   //
-  // 页面标题由**需要它的那个页面**声明（`help_faq_screen.dart`）；第一级那颗
-  // 入口按钮的文案与第一级的页标题在 Task 4 那一批里，见下面的「使用帮助 · 第一级」。
+  // **简介只讲「这是什么、由哪几块组成」**，不是目录 —— 目录是下面那九条的事。
+  static String get helpIntro => t(
+      '倒班助手Pro 是一个纯离线的排班助手：班表设一次，它替你算好每天什么班、什么时候响闹钟，还能放到手机桌面上随时看。底部四个页面各管一件事——日历看班、闹钟管响铃、待办记事情、我的做设置。',
+      'Shift Assistant Pro is an offline scheduling helper. Set your shift pattern once and it works out every day for you, rings when it should, and keeps a card on your home screen. The four tabs each do one job — Calendar for shifts, Alarm for ringing, Todo for notes, Me for settings.');
+
+  /// 第一级那颗进第二层的入口。
+  ///
+  /// 标题写「遇到问题？」而不是「点我」；副标题说清**里面是什么**（两组各是什么），
+  /// 因为用户点之前得先知道自己那件事归哪边。
+  static String get faqEntryTitle => t('遇到问题？', 'Stuck?');
+  static String get faqEntrySubtitle => t(
+      '「我想办一件事」与「它不对劲」——进来找怎么解决',
+      'Things you want to do, and things that look wrong — find the answer here');
+
+  // 使用帮助 · 第二层（「遇到问题怎么解决」）的页标题。
   static String get faqTitle => t('遇到问题怎么解决', 'How to get things done');
 
   // 使用帮助（图标化条目）
@@ -907,6 +921,8 @@ class L10n {
             'Nothing matches exactly? Edit the closest one, or choose "Build my own"'),
         t('班次时间、几天一轮、各班组周期起始日都能改；各组起始日与几天一轮对不上会提示「撞班」，可一键均分',
             'Shift times, cycle length and each team\'s cycle start date are all editable; if start dates stop matching the cycle length the app flags it and can spread them evenly in one tap'),
+        t('不是固定循环的（比如每个月都不一样），可以切到「按月」，每月 1 号重新开始排',
+            'For patterns that are not a fixed cycle — a different rota each month, say — switch to "By month" and set each month up from the 1st'),
         t('调好之后「存为模板」，下次新建时直接选',
             'Once it looks right, "Save as template" and pick it next time you create one'),
         t('要换哪套上场：在「排班时段」加一段，或改「其余时间」那一行；想只跟着法定节假日休班，开「跟随法定节假日（无班次）」',
@@ -916,14 +932,14 @@ class L10n {
   static List<String> get guideAlarmDesc => [
         t('白班、夜班到点自动响铃，时间在排班编辑器里改',
             'Day and night shifts ring automatically; the times are set in the schedule editor'),
-        t('一个班次最多挂 6 条闹钟，每条可以起名字（「起床」「午休」）',
-            'Each shift can carry up to 6 alarms, each with an optional name ("Wake up", "Nap")'),
+        t('一个班次最多挂 10 条闹钟，每条可以起名字（「起床」「午休」）',
+            'Each shift can carry up to 10 alarms, each with an optional name ("Wake up", "Nap")'),
         t('闹钟页列出未来 30 天，每天能单独关',
             'The alarm page lists the next 30 days, each with its own toggle'),
         t('也能加自定义闹钟：一次性 / 每天 / 每周',
             'Add custom alarms too: once / daily / weekly'),
-        t('零点班（00:00 上班）的响铃排在上班前 1 小时，也就是前一天晚上，列表里写明「前一天」',
-            'A midnight shift (00:00 start) rings an hour before work starts — the evening before, marked "day before" in the list'),
+        t('响铃落在前一天、当天还是次日，是按上班时间算出来的，班次列表里会标出来',
+            'Whether an alarm lands the day before, the same day or the next day is worked out from the shift times, and the list marks which'),
         t('铃声可用内置、系统铃声、从手机里自选，或选「仅震动」只震不响',
             'Pick a built-in, system or your own ringtone — or "Vibrate only" to ring silently'),
       ];
@@ -934,6 +950,10 @@ class L10n {
         t('到点弹通知；给某条开「联动闹钟」会像班次闹钟一样全屏响铃',
             'A notification appears at that moment; a todo can also ring as a full-screen alarm like a shift does'),
         t('完成后勾一下（变暗 + 删除线）', 'Tick an item when done (dims + strikethrough)'),
+        t('可以设成每天 / 每周几 / 每月某日自动出现，不用每次手填',
+            'A todo can repeat daily, on chosen weekdays or on a day of the month, so you do not type it in again'),
+        t('做完的会收进列表底部「已完成 N 条」里，主列表只留没做的',
+            'Completed items drop into a "completed" section at the bottom, leaving only the open ones in the list'),
         t('选中的那天有待办时，日历底栏信息卡会显示「N 项待办」',
             'When the selected day has todos, the calendar\'s info card shows "N todos"'),
       ];
@@ -945,6 +965,8 @@ class L10n {
             '"Liquid glass" lights up the glass rim, and the slider and switch swell into a lens while you press them — turn it off to save battery'),
         t('「触觉反馈」控制开关、选中、拖选与改班时的轻微震动，默认开',
             'Haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change) is on by default and lives here too'),
+        t('「字体大小」四档，App 自己管，不跟系统字号走',
+            '"Text size" has four steps, managed by the app rather than by the system font setting'),
       ];
   static String get guideLayoutTitle =>
       t('横屏 · 宽屏 · 小窗', 'Landscape · wide screens · small windows');
