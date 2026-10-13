@@ -14,6 +14,7 @@ import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
+import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_check.dart';
@@ -202,35 +203,39 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
         ),
       )),
       floatingActionButtonLocation: const _AboveCapsuleFabLocation(),
-      floatingActionButton: Container(
-        // 工装 / 用例量它落点的抓手（宽屏下它要跟着 720 的内容栏走）。
-        key: const Key('todo-fab'),
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primary.withValues(alpha: 0.72),
-            ],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+      floatingActionButton: GlassPressable(
+        child: GestureDetector(
+          // 按压反馈 = 玻璃的 Q 弹缩放（整颗钮一起缩，不是只缩里面那颗图标）；
+          // 原先是 `Material → InkWell`，水波纹在这里最扎眼（spec §7）。
+          // `opaque`：让整颗 56dp 都吃点击，不只在图标那点面积上。
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _showAddDialog(context, ref),
+          child: Container(
+            // 工装 / 用例量它落点的抓手（宽屏下它要跟着 720 的内容栏走）。
+            key: const Key('todo-fab'),
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.72),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.4),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => _showAddDialog(context, ref),
             child: const AppIcon(Icons.add_outlined,
                 color: Colors.white, size: AppTokens.iconLg),
           ),

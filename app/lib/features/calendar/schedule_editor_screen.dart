@@ -567,42 +567,46 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 顶部那张卡的第二行：「我这组从这个周期开始」。**只有周期模式用得上。**
   List<Widget> _myCycleStartRow(BuildContext context, Color muted) => [
         const SizedBox(height: AppTokens.spaceSm),
-        InkWell(
-          borderRadius: BorderRadius.circular(AppTokens.radiusM),
-          onTap: () async {
-            final picked = await showGlassDatePicker(
-              context,
-              initialDate: _myCrewStart,
-              firstDate: DateTime(2000),
-              lastDate: DateTime(2100),
-            );
-            if (picked != null) _setMyCycleStart(picked);
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceMd),
-            child: Row(
-              children: [
-                AppIcon(Icons.today_outlined,
-                    size: AppTokens.iconMd,
-                    color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: AppTokens.spaceMd),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(L10n.myCycleStart, style: AppTokens.titleStrong),
-                      const SizedBox(height: AppTokens.spaceXs),
-                      Text(
-                        L10n.yearMonthDay(_myCrewStart),
-                        style: AppTokens.rowSecondary.copyWith(color: muted),
-                      ),
-                    ],
+        // 按压反馈 = 玻璃的 Q 弹缩放（`GlassPressable` 没有 `onTap`，点击交给
+        // `GestureDetector`）；这条行套 `InkWell` 会凭空多一圈水波纹（spec §7）。
+        GlassPressable(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () async {
+              final picked = await showGlassDatePicker(
+                context,
+                initialDate: _myCrewStart,
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) _setMyCycleStart(picked);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceMd),
+              child: Row(
+                children: [
+                  AppIcon(Icons.today_outlined,
+                      size: AppTokens.iconMd,
+                      color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: AppTokens.spaceMd),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(L10n.myCycleStart, style: AppTokens.titleStrong),
+                        const SizedBox(height: AppTokens.spaceXs),
+                        Text(
+                          L10n.yearMonthDay(_myCrewStart),
+                          style: AppTokens.rowSecondary.copyWith(color: muted),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                AppIcon(Icons.edit_outlined,
-                    size: AppTokens.iconMd, color: muted),
-              ],
+                  AppIcon(Icons.edit_outlined,
+                      size: AppTokens.iconMd, color: muted),
+                ],
+              ),
             ),
           ),
         ),
@@ -1044,8 +1048,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 时间块的统一外观：可点的圆角玻璃块，标签小字在上、值在下方。
   ///
-  /// 外面垫一层透明 [Material]：班次行本身是带底色的 `Container`，
-  /// 而水波纹要画在最近的 `Material` 上，否则会被底色盖住。
+  /// 按压反馈 = 玻璃的 Q 弹缩放（`GlassPressable`，它自带垫在玻璃上的透明
+  /// `Material`），点击交给 `GestureDetector` —— 不再需要自己垫 `Material`
+  /// 承载水波纹，也不再叠一层 `InkWell`（原先两个反馈叠着来，spec §7）。
   Widget _chipBody(
     BuildContext context, {
     required String label,
@@ -1054,53 +1059,50 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }) {
     final primary = Theme.of(context).colorScheme.primary;
     final muted = AppTokens.inkMuted(context);
-    return Material(
-      color: Colors.transparent,
-      child: GlassPressable(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppTokens.radiusM),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceSm),
-            decoration: BoxDecoration(
-              color: primary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(AppTokens.radiusM),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 标签**单行、按宽缩小**。
-                      //
-                      // ⚠️ 这里**不要**写 `maxLines: 2` 假装「先折两行」：`FittedBox`
-                      // 给子件的是无界宽约束，段落永远只排一行，那句「折行」是死代码
-                      // （独立审查指出）。走这个件的标签本来就是单字词
-                      // （开始 / 结束 / 响铃），缩才是对的那一档。
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(label,
-                            maxLines: 1,
-                            style:
-                                AppTokens.rowSecondary.copyWith(color: muted)),
-                      ),
-                      const SizedBox(height: AppTokens.spaceXs),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(value,
-                            maxLines: 1, style: AppTokens.labelStrong),
-                      ),
-                    ],
-                  ),
+    return GlassPressable(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceSm),
+          decoration: BoxDecoration(
+            color: primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(AppTokens.radiusM),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 标签**单行、按宽缩小**。
+                    //
+                    // ⚠️ 这里**不要**写 `maxLines: 2` 假装「先折两行」：`FittedBox`
+                    // 给子件的是无界宽约束，段落永远只排一行，那句「折行」是死代码
+                    // （独立审查指出）。走这个件的标签本来就是单字词
+                    // （开始 / 结束 / 响铃），缩才是对的那一档。
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(label,
+                          maxLines: 1,
+                          style:
+                              AppTokens.rowSecondary.copyWith(color: muted)),
+                    ),
+                    const SizedBox(height: AppTokens.spaceXs),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(value,
+                          maxLines: 1, style: AppTokens.labelStrong),
+                    ),
+                  ],
                 ),
-                AppIcon(Icons.access_time_outlined,
-                    size: AppTokens.iconMd, color: muted),
-              ],
-            ),
+              ),
+              AppIcon(Icons.access_time_outlined,
+                  size: AppTokens.iconMd, color: muted),
+            ],
           ),
         ),
       ),
@@ -1318,27 +1320,30 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               // 第一段固定从 1 日起，不给点（点开也只有 1 这一个选项）。
               Expanded(
                 flex: 3,
-                child: InkWell(
+                child: GlassPressable(
                   key: monthRowDayKey(index),
-                  borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                  onTap: index == 0 ? null : () => _pickMonthStartDay(index),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        vertical: AppTokens.spaceXs),
-                    child: Row(
-                      children: [
-                        Flexible(
-                          child: Text(L10n.monthlyFromDay(seg.startDay),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTokens.labelSecondary),
-                        ),
-                        if (index > 0) ...[
-                          const SizedBox(width: AppTokens.spaceXs),
-                          AppIcon(Icons.edit_outlined,
-                              size: AppTokens.iconSm, color: muted),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap:
+                        index == 0 ? null : () => _pickMonthStartDay(index),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: AppTokens.spaceXs),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(L10n.monthlyFromDay(seg.startDay),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTokens.labelSecondary),
+                          ),
+                          if (index > 0) ...[
+                            const SizedBox(width: AppTokens.spaceXs),
+                            AppIcon(Icons.edit_outlined,
+                                size: AppTokens.iconSm, color: muted),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -1610,23 +1615,26 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(AppTokens.radiusS),
-            onTap: () => setState(() => _crewExpanded = !_crewExpanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      L10n.crewSettingsOptional,
-                      style: AppTokens.titleStrong,
+          GlassPressable(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _crewExpanded = !_crewExpanded),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        L10n.crewSettingsOptional,
+                        style: AppTokens.titleStrong,
+                      ),
                     ),
-                  ),
-                  Icon(_crewExpanded
-                      ? Icons.expand_less_outlined
-                      : Icons.expand_more_outlined),
-                ],
+                    Icon(_crewExpanded
+                        ? Icons.expand_less_outlined
+                        : Icons.expand_more_outlined),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1699,26 +1707,29 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 ),
               ),
               const SizedBox(width: AppTokens.spaceSm),
-              InkWell(
-                borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                onTap: () => setState(() => _ourTeamIndex = i),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceXs),
-                  decoration: BoxDecoration(
-                    color:
-                        isOurs ? primary : primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                  ),
-                  child: Text(
-                    isOurs ? L10n.myTeam : L10n.setAsMine,
-                    // 可点的 chip 按钮标签，原本就是 w700（比同行的说明文字重），
-                    // 13 档最重只到 w600，按 spec 的「角色内个别变化」走 copyWith。
-                    style: AppTokens.labelSecondary.copyWith(
-                      color: isOurs
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : primary,
-                    ).copyWith(fontWeight: FontWeight.w700),
+              GlassPressable(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _ourTeamIndex = i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppTokens.spaceMd,
+                        vertical: AppTokens.spaceXs),
+                    decoration: BoxDecoration(
+                      color:
+                          isOurs ? primary : primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                    ),
+                    child: Text(
+                      isOurs ? L10n.myTeam : L10n.setAsMine,
+                      // 可点的 chip 按钮标签，原本就是 w700（比同行的说明文字重），
+                      // 13 档最重只到 w600，按 spec 的「角色内个别变化」走 copyWith。
+                      style: AppTokens.labelSecondary.copyWith(
+                        color: isOurs
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : primary,
+                      ).copyWith(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ),
@@ -1727,47 +1738,56 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           // 第二行：周期模式给「周期起始日」，按月模式给「从第几段入场」——
           // 按月不读基准日，摆一个日期在那儿就是让用户操作一个不生效的值。
           if (_monthly)
-            InkWell(
-              borderRadius: BorderRadius.circular(AppTokens.radiusS),
-              onTap: () => _pickCrewSegmentStart(i),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppTokens.gapHair, vertical: AppTokens.spaceXs),
-                child: Row(
-                  children: [
-                    AppIcon(Icons.format_list_numbered,
-                        size: AppTokens.iconSm, color: muted),
-                    const SizedBox(width: AppTokens.spaceSm),
-                    Text(
-                      L10n.crewSegmentStart(
-                          (i < _teamSegOffsets.length ? _teamSegOffsets[i] : 0) +
-                              1),
-                      style: AppTokens.labelSecondary,
-                    ),
-                  ],
+            GlassPressable(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _pickCrewSegmentStart(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.gapHair,
+                      vertical: AppTokens.spaceXs),
+                  child: Row(
+                    children: [
+                      AppIcon(Icons.format_list_numbered,
+                          size: AppTokens.iconSm, color: muted),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      Text(
+                        L10n.crewSegmentStart(
+                            (i < _teamSegOffsets.length
+                                    ? _teamSegOffsets[i]
+                                    : 0) +
+                                1),
+                        style: AppTokens.labelSecondary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             )
           else
-            InkWell(
-              borderRadius: BorderRadius.circular(AppTokens.radiusS),
-              onTap: () => _pickCrewStartDate(i),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppTokens.gapHair, vertical: AppTokens.spaceXs),
-                child: Row(
-                  children: [
-                    AppIcon(Icons.event_outlined,
-                        size: AppTokens.iconSm, color: muted),
-                    const SizedBox(width: AppTokens.spaceSm),
-                    Text(L10n.crewCycleStart,
-                        style: AppTokens.rowSecondary.copyWith(color: muted)),
-                    const SizedBox(width: AppTokens.spaceSm),
-                    Text(
-                      L10n.yearMonthDay(_crewStartDate(i)),
-                      style: AppTokens.labelSecondary,
-                    ),
-                  ],
+            GlassPressable(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _pickCrewStartDate(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.gapHair,
+                      vertical: AppTokens.spaceXs),
+                  child: Row(
+                    children: [
+                      AppIcon(Icons.event_outlined,
+                          size: AppTokens.iconSm, color: muted),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      Text(L10n.crewCycleStart,
+                          style:
+                              AppTokens.rowSecondary.copyWith(color: muted)),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      Text(
+                        L10n.yearMonthDay(_crewStartDate(i)),
+                        style: AppTokens.labelSecondary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

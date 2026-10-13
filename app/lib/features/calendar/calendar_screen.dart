@@ -1114,10 +1114,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
+      // 按压反馈 = 玻璃的 Q 弹缩放（`GlassPressable` 没有 `onTap`，点击由
+      // `GestureDetector` 承载）。水波纹只该出现在弹层的 `ListTile` 里 ——
+      // 这颗手搓的圆钮套 `InkWell` 会在圆外凭空多一圈波纹（spec §7）。
+      // `opaque`：让整颗 40dp 都吃点击，不只在图标那点面积上。
+      child: GlassPressable(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Container(
             width: size,
@@ -2445,10 +2448,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           daySchedule?.dayOverrides.containsKey(dayNumber(_selected)) ?? false;
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 76),
-        // 与完整信息卡那行班次同源：套 `GlassPressable` 承载点击（它自己没
-        // `onTap`），内层 `InkWell` 负责手势 —— 见上面完整卡那段的说明。
+        // 与完整信息卡那行班次**同一条规则**：`GlassPressable` 承载按压缩放
+        // （它自己没 `onTap`），点击由 `GestureDetector` 拿 —— 这条玻璃卡套
+        // `InkWell` 会凭空多一圈水波纹，最扎眼（完整卡那段说明了同一条；spec §7）。
         child: GlassPressable(
-          child: InkWell(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: (daySchedule == null || daySchedule.classes.isEmpty)
                 ? null
                 : () => adjustDays(_selected, _selected),

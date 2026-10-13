@@ -271,7 +271,8 @@ class _ShiftTemplatePickerScreenState
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: EdgeInsets.zero,
       child: GlassPressable(
-        child: InkWell(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(AppTokens.spaceMd),
@@ -511,8 +512,10 @@ class _ShiftTemplatePickerScreenState
       translucentFill: false,
       padding: EdgeInsets.zero,
       child: GlassPressable(
-        child: InkWell(
-          onTap: () => Navigator.of(context).pop(const ShiftTemplateChoice.custom()),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () =>
+              Navigator.of(context).pop(const ShiftTemplateChoice.custom()),
           child: Padding(
             padding: const EdgeInsets.all(AppTokens.spaceMd),
             child: Row(

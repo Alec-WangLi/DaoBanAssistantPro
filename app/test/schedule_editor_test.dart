@@ -260,7 +260,7 @@ String _chipValueOf(WidgetTester tester, String label) {
 String _myCrewStartText(WidgetTester tester) {
   final texts = tester.widgetList<Text>(find.descendant(
     of: find.ancestor(
-        of: find.text(L10n.myCycleStart), matching: find.byType(InkWell)),
+        of: find.text(L10n.myCycleStart), matching: find.byType(GlassPressable)),
     matching: find.byType(Text),
   ));
   return texts.last.data!;
@@ -269,7 +269,7 @@ String _myCrewStartText(WidgetTester tester) {
 /// 点开顶部「我这组从这个周期开始」的日期选择器。
 Future<void> _tapMyCrewStart(WidgetTester tester) async {
   await tester.tap(find.ancestor(
-      of: find.text(L10n.myCycleStart), matching: find.byType(InkWell)));
+      of: find.text(L10n.myCycleStart), matching: find.byType(GlassPressable)));
   await tester.pumpAndSettle();
 }
 
@@ -501,6 +501,55 @@ void main() {
     expect(repo.saved!.anchorDate, DateTime.utc(2025, 6, 10));
     // 各班组相对错位保持不变（否则整个日历会多平移一份）
     expect(repo.saved!.teamOffsets, [0, 1, 2, 3]);
+  });
+
+  // ── 按压反馈（v0.12.0：行从 InkWell 换成 GlassPressable + GestureDetector）────
+  //
+  // 换件最容易被忽略的是**手势归属**：`InkWell` 参与手势竞技场，`GestureDetector`
+  // 也参与 —— 但层数与 hit 行为一旦写错，行就会把拖拽当成点击。这两条用例把
+  // 「拖拽不算点击、点击照旧、长按与从前一致、全程不抛异常」钉在真手势上。
+
+  testWidgets('换成玻璃按压缩放的行：拖拽不算点击，点击照旧', (tester) async {
+    await _pumpEditor(tester, _domain(anchor: DateTime.utc(2025, 6, 1)));
+    final row = find.ancestor(
+        of: find.text(L10n.myCycleStart),
+        matching: find.byType(GlassPressable));
+    expect(row, findsOneWidget);
+    // 这一行换件之后不再是自己写的水波纹（`InkWell` 只属于共享件）。
+    expect(
+      find.ancestor(
+          of: find.text(L10n.myCycleStart), matching: find.byType(InkWell)),
+      findsNothing,
+    );
+
+    // ① 拖拽（这是一次滚动，不是点击）→ 不该弹出日期选择器。
+    await tester.drag(row, const Offset(0, -80));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing, reason: '拖拽不该被当成点击');
+    expect(tester.takeException(), isNull);
+
+    // ② 拖完这一行还活着 —— 普通点击照旧弹出日期选择器。
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('换成玻璃按压缩放的行：长按（无位移）算一次点击 —— 与从前的 InkWell 一致',
+      (tester) async {
+    // 「按住不动再松开」在 Flutter 的 tap 手势里就是一次合法点击（没有
+    // `onLongPress` 竞争时 tap 会赢下竞技场）。`InkWell` 从前也是这样
+    // （一次性探针量过：两者都是 1 次），换件不许改这一条。
+    await _pumpEditor(tester, _domain(anchor: DateTime.utc(2025, 6, 1)));
+    final row = find.ancestor(
+        of: find.text(L10n.myCycleStart),
+        matching: find.byType(GlassPressable));
+
+    await tester.longPress(row);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget,
+        reason: '长按（无位移）是一次点击，与 InkWell 的旧行为一致');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('添加班次：新增一条定义，周期里没引用所以可以删掉', (tester) async {
