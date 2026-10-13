@@ -25,6 +25,10 @@ class _RecordingRepository extends AppRepository {
   List<String> lastTeamNames = const [];
   String lastScheduleName = '';
   List<ShiftClass> lastClasses = const [];
+  bool lastMonthly = false;
+  List<MonthlySegment> lastMonthSegments = const [];
+  List<int> lastTeamSegOffsets = const [];
+  List<int> lastCycle = const [];
 
   @override
   Future<int> saveSchedule({
@@ -47,6 +51,10 @@ class _RecordingRepository extends AppRepository {
     lastTeamNames = List.of(teamNames);
     lastScheduleName = name;
     lastClasses = List.of(classes);
+    lastMonthly = monthly;
+    lastMonthSegments = List.of(monthSegments);
+    lastTeamSegOffsets = List.of(teamSegOffsets);
+    lastCycle = List.of(cycle);
     return 1;
   }
 }
@@ -443,5 +451,53 @@ void main() {
 
     L10n.locale = 'zh';
     expect(L10n.crewsOnDutyCount(2), '每天在岗 2 个班组');
+  });
+
+  testWidgets('「按月排班」卡片在「我自己排」旁边，点它建出来的是一套按月方案', (tester) async {
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final repo = _RecordingRepository(db);
+
+    // 直接驱动入口函数（日历「切换排班 → 新增排班」与「我的 → 排班管理 → 新增」
+    // 两条路共用的就是它），省掉一层宿主页。
+    late BuildContext ctx;
+    late WidgetRef ref;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appRepositoryProvider.overrideWithValue(repo)],
+      child: MaterialApp(
+        home: Consumer(builder: (context, r, _) {
+          ctx = context;
+          ref = r;
+          return const Scaffold();
+        }),
+      ),
+    ));
+
+    final fut = createScheduleFromTemplatePicker(ctx, ref, makeCurrent: true);
+    await tester.pumpAndSettle();
+    // 先过滤：两张卡都在列表最底下，不过滤就还在屏外（ListView 是懒构建的）。
+    await tester.enterText(find.byType(TextField), 'zzzzzz');
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.monthlyPattern), findsOneWidget);
+    expect(find.text(L10n.customPattern), findsOneWidget, reason: '两张卡并排');
+
+    await tester.tap(find.text(L10n.monthlyPattern));
+    await tester.pumpAndSettle();
+    await fut;
+
+    expect(repo.saveCalls, 1);
+    expect(repo.lastMonthly, isTrue);
+    expect(repo.lastCycle, isEmpty);
+    // 三段、1/11/22 起（`defaultMonthlySegments(3)` 把 31 天均分）
+    expect(repo.lastMonthSegments.map((s) => s.startDay), [1, 11, 22]);
+    expect(repo.lastMonthSegments.map((s) => s.classIndex), [0, 1, 2]);
+    // **班组数取 3、段偏移 0/1/2**：默认的 4 组配 3 段必然撞班
+    // （`round(i×3÷4)` = 0/1/2/2），选完卡片当场弹撞班提示。
+    expect(repo.lastTeamCount, 3);
+    expect(repo.lastTeamSegOffsets, [0, 1, 2]);
+    expect(repo.lastScheduleName, L10n.monthlyPattern);
+    // 班次定义借默认四班两倒那四个
+    expect(repo.lastClasses.length, 4);
   });
 }

@@ -746,6 +746,12 @@ class L10n {
         _ => key,
       };
   static String get customPatternHint => t('从默认四班两倒开始，边看边改', 'Start from the default and edit as you go');
+
+  /// 选择页那张「按月排班」的卡 —— 与「我自己排」平级，都是「从零开始」那一类。
+  static String get monthlyPattern => t('按月排班', 'Monthly roster');
+  static String get monthlyPatternHint =>
+      t('每个月重复一套切法', 'The same split repeats every month');
+
   static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');
 
   /// 搜索落空时的下一句。
@@ -788,6 +794,12 @@ class L10n {
   /// 没有这句文案，只能按结构现算 —— 所以中英语序同样整串交给 [t]。
   static String savedTemplateSubtitle(int days, int teams) => t(
       '$days 天一轮 · $teams 个班组', '$days-day cycle · $teams teams');
+
+  /// 按月模板的副标题 —— 它的「轮换长度」不是一个天数，而是**每月切几段**。
+  /// 沿用 [savedTemplateSubtitle] 会写出「0 天一轮」（月方案的周期本来就是空的）。
+  static String savedTemplateSubtitleMonthly(int segments, int teams) => t(
+      '每月 $segments 段 · $teams 个班组',
+      '$segments segments a month · $teams teams');
 
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');
