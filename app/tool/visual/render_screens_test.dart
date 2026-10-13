@@ -86,6 +86,50 @@ void main() {
     }
   }
 
+  // 「窄屏 × 大字号」这两档（v0.11.12 新增）。
+  //
+  // 字号自管（设计 §3）之后，「大字号下长什么样」**只由我们自己那一档决定**，
+  // 而此前屏单里一屏都没有 —— 那一维在图上结构性地看不见，v0.9.9 那个农历截断
+  // 与 v0.11.12 这一整轮都是这么漏出去的。
+  //
+  // **只铺常用的那几屏**：全部 39 屏 × 多档会把图数翻几倍，而
+  // `text_fit_guard_test.dart` 已经在**每一档 × 两个保证宽度 × 中英**下盯着
+  // 「有没有字被吃掉」了 —— 这里要的是「还读不读得出来」，只需要看那几屏。
+  for (final cfg in const <({String suffix, Size size})>[
+    (suffix: 'xl360', size: Size(360, 780)),
+    (suffix: 'xl320', size: Size(320, 640)),
+  ]) {
+    for (final slug in const <String>[
+      '00_home_shell',
+      '01_calendar',
+      '05_todos',
+      '02_editor',
+      '03_management',
+      '07_profile',
+    ]) {
+      final screen = visualScreens.firstWhere((s) => s.slug == slug,
+          orElse: () => throw StateError('屏单里没有 $slug —— 屏改名了？'));
+      visualTest('${screen.title} · ${cfg.suffix}', (tester) async {
+        failOnOverflow(tester);
+        final db = await freshDb();
+        final extraPrefs = <String, Object>{
+          ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
+          ...screenExtraPrefs(screen.slug),
+        };
+        if (extraPrefs['liquidGlass'] == true) useLiquidGlassTier();
+        await renderScreen(
+          tester,
+          name: '${screen.slug}_${cfg.suffix}',
+          home: await screen.build(db),
+          overrides: <Override>[databaseProvider.overrideWithValue(db)],
+          size: cfg.size,
+          fontSize: AppFontSize.extraLarge,
+          extraPrefs: extraPrefs,
+        );
+      });
+    }
+  }
+
   // 「向下滚动后」：首屏之下的内容（权限卡、自定义闹钟列表……）也要拍得到，
   // 清单见 `visualScrollDown`。只出浅色 / 深色两档——滚动后要看的是**版式与
   // 文案**，跟语言、横竖屏无关，每档都出一份只是把图数翻倍。

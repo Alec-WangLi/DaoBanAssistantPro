@@ -39,7 +39,15 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.11\n'
+const String _changelogZh = 'v0.11.12\n'
+    '· 字号改成只由 App 自己决定：我的 → 外观 → 字体大小，小 / 标准 / 大 / 特大四档。系统字体调多大都不再影响界面\n'
+    '· 起因是有人反馈「系统字号调大之后，日历顶栏的月份被截成 2026年1…」。实拍下来，系统调到 200% 时信息卡会吃掉半个屏、日历网格只剩三行\n'
+    '· 代价说在明处：把系统字号调到 150%~200% 的人，在这个 App 里拿不到那个大小 —— 最大就到「特大」\n'
+    '· 顺带把全 App 的「字被悄悄省略」收干净：顶栏年月、信息卡那两行、列表副标题、编辑器的标签与值、14 天预览条、几个整页的标题\n'
+    '· 窄屏或大字号下会自动换版式（顶栏改两行、副标题折行、定尺的地方等比缩小），而不是把字吃掉\n'
+    '\n'
+
+    'v0.11.11\n'
     '· 修一条状态栏的毛病：浅色主题下进「排班管理」，状态栏那几个图标会反成白的、退回来也不恢复；深色主题下没事。根子是我们从来没自己声明过这件事，一直靠各家系统的默认值，所以同一版在有的手机上出、有的手机上不出\n'
     '· 现在它跟着「主题模式」那一档走：浅色档配深色图标、深色档配白色图标，判据全 app 只有一处\n'
     '· 响铃界面顺带修了：它是整屏深色，浅色档下从前会压一排看不见的深图标\n'
@@ -95,14 +103,19 @@ const String _changelogZh = 'v0.11.11\n'
     '· 顺带修好一处：删掉一条「重复待办」之后它又被自己补回来（从归档里删更旧的历史会踩到）\n'
     '\n'
 
-    'v0.11.2\n'
-    '· 修好上一版带进来的一处：次日档的闹钟（0:15「准备下班」那类、夜班的上午时段）在它响的那一天重排时会被取消掉、再也排不回去，等于不响 —— 打开 App、回到前台、开机自动重排都会走到这条路\n'
-    '\n'
 
         '\n'
 ;
 
-const String _changelogEn = 'v0.11.11\n'
+const String _changelogEn = 'v0.11.12\n'
+    '· Text size is now decided by the app alone: Me → Appearance → Text size, with Small / Standard / Large / XL. The system font setting no longer affects the interface\n'
+    '· It started from a report that the month in the calendar header was cut to 2026年1… when the system font was large. Measured at 200%: the info card ate half the screen and the calendar grid kept only three rows\n'
+    '· The cost, said plainly: anyone who set the system font to 150-200% will not get that size here — XL is the ceiling\n'
+    '· Also cleaned up every place the app quietly ate text: the header month, the two info-card lines, list subtitles, the editor labels and values, the 14-day preview strip, and three page titles\n'
+    '· On narrow screens or at larger text sizes the layout changes instead (a two-row header, wrapping subtitles, fixed-size bits scaled down) rather than dropping characters\n'
+    '\n'
+
+    'v0.11.11\n'
     '· Fixed a status-bar glitch: with the light theme, opening Schedule management turned the status-bar icons white and they stayed that way after going back. The dark theme was unaffected. It happened because the app never declared this itself and left it to each phone maker\'s default, which is why the same build showed it on some phones and not others\n'
     '· It now follows your Theme mode: dark icons in the light theme, white icons in the dark theme, decided in one place\n'
     '· The ringing screen got the same fix: it is dark all over, so in the light theme it used to show dark icons you could not read\n'
@@ -158,9 +171,6 @@ const String _changelogEn = 'v0.11.11\n'
     '· Also fixed: deleting a recurring todo used to bring it straight back (it could happen when deleting an older occurrence from the archive)\n'
     '\n'
 
-    'v0.11.2\n'
-    '· Fixed a regression from the previous version: next-day alarms (the 00:15 "get ready to clock off" kind, or a night shift\'s morning alarms) were cancelled and never scheduled again when the app rescheduled on the very day they were due — which happens on every launch, on every return to the foreground, and after a reboot\n'
-    '\n'
 
         '\n'
 ;

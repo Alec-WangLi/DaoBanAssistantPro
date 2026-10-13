@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 版本号：本轮为 **0.11.12(+159)**（测试版，`X.Y` 由用户定，AI 只改 `Z` 与 `build`）。`app/pubspec.yaml` 与 `app/lib/core/app_info.dart` 必须同步（`app/test/app_info_test.dart` 盯着）。
-- 四条字号档位起步值：**小 0.9 / 标准 1.0 / 大 1.15 / 特大 1.3**。**「特大」最终取哪一档由 Task 9 的出图 + 断言决定**，不许在本计划里提前拍死。
+- 四条字号档位起步值：**小 0.9 / 标准 1.0 / 大 1.15 / 特大 1.3**（**最终落定 0.9 / 1.0 / 1.1 / 1.2**，理由见 spec §5）。**「特大」最终取哪一档由 Task 9 的出图 + 断言决定**，不许在本计划里提前拍死。
 - 界面层不许写死字号 / 字重 / 圆角 / 时长字面量（`app/test/design_tokens_test.dart` 扫源码守门），一律走 `AppTokens`。
 - 文案一律进 `app/lib/core/l10n.dart` 的 `t('中文','English')`，不许在界面里写死中文。
 - **本地验收两条都要跑**：`flutter analyze`（0 error / 0 warning）与 `flutter test` 全绿；涉及界面的任务额外跑 `flutter test tool/visual/`。
