@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
+import '../../core/layout.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
@@ -98,7 +99,11 @@ class _RecurringList extends ConsumerWidget {
     //
     // 所以窄窗改成两行排：开关与删除键一行、标题与副标题**拿回整行宽度**在下一行。
     // **一个控件都没有摘**（对比：摘掉那个删除键也能腾出 36px，但那是交互改动）。
-    final bool tight = MediaQuery.sizeOf(context).width < 260;
+    // v0.11.12 起**窄屏也走这一支**：320dp 上这一行即使两行封顶，英文那串
+    // （`Every day · 07:00 · Next Oct 14`）仍然装不下 —— 而「把标题与副标题拿回
+    // 整行宽度」正是这一支本来要解决的问题，只是从前只按 260 这个像素阈值判。
+    final bool tight =
+        MediaQuery.sizeOf(context).width < 260 || AppLayout.of(context).isNarrow;
 
     final Widget switchTile = GlassSwitch(
       value: s.enabled,
@@ -111,12 +116,11 @@ class _RecurringList extends ConsumerWidget {
     final Widget texts = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(s.title,
-            maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTokens.rowPrimary),
+        // 两行封顶、不省略（设计 §6.3）：`每天 · 07:00 · 下次 10月14日` 这一串
+        // 在窄屏大字号下装不下，吃掉尾段比换行难读得多。
+        Text(s.title, maxLines: 2, style: AppTokens.rowPrimary),
         Text(parts.join(' · '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTokens.microText.copyWith(color: muted)),
+            maxLines: 2, style: AppTokens.microText.copyWith(color: muted)),
       ],
     );
 

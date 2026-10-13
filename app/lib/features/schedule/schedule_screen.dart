@@ -368,10 +368,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                 Row(
                   children: [
                     Flexible(
+                      // 折两行，不省略（设计 §6.3）：这一行有地方长高 ——
+                      // 「10月13日 星期二 · 14:30 · 提前15分钟」在窄屏大字号下
+                      // 一行装不下，把最后那段吃掉比换行难读得多。
                       child: Text(
                         subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
                         style: AppTokens.microText.copyWith(
                           color: e.isCompleted
                               ? AppTokens.inkFaint(context)
