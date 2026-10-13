@@ -5,6 +5,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
+import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pickers.dart';
@@ -100,10 +101,11 @@ class ScheduleManagementScreen extends ConsumerWidget {
                   );
                 }),
                 const SizedBox(height: 8),
-                FilledButton.icon(
+                GlassButton(
+                  primary: true,
                   onPressed: () => _addSchedule(context, ref),
                   icon: const Icon(Icons.add_outlined),
-                  label: Text(L10n.addSchedule),
+                  child: Text(L10n.addSchedule),
                 ),
               ],
             ),

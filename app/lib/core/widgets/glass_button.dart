@@ -10,6 +10,12 @@ import '../glass/glass.dart';
 /// [primary]=true 为主色渐变玻璃实心（用于「新建」这类主操作）；
 /// false 为白色半透明玻璃描边（用于「测试」这类次操作）。
 /// 自带背景模糊、顶部镜面高光与 Q 弹按压缩放。
+///
+/// [radius] 是这个按钮四个角的圆角半径。加它**只为**让编辑页那颗 48 高的
+/// 「保存并重排闹钟」胶囊也用上自家的件（那颗原来是 Material 的 `FilledButton`，
+/// 胶囊圆角恒为高度一半 = 24），**默认值 `radiusM` 等于加参数之前的行为** ——
+/// 三个既有调用点（闹钟页 ×2、响铃页 ×1）因此一个像素都不动。别再拿它去改
+/// 那些已经定了圆角的点位；它是给「要一颗更高或更矮的胶囊」准备的。
 class GlassButton extends StatefulWidget {
   const GlassButton({
     super.key,
@@ -17,6 +23,7 @@ class GlassButton extends StatefulWidget {
     required this.child,
     this.primary = false,
     this.height = 56,
+    this.radius = AppTokens.radiusM,
     this.icon,
   });
 
@@ -24,6 +31,7 @@ class GlassButton extends StatefulWidget {
   final Widget child;
   final bool primary;
   final double height;
+  final double radius;
   final Widget? icon;
 
   @override
@@ -40,7 +48,7 @@ class _GlassButtonState extends State<GlassButton> {
 
     final decoration = widget.primary
         ? BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTokens.radiusM),
+            borderRadius: BorderRadius.circular(widget.radius),
             gradient: AppTokens.accentGradient(primary),
             border: Border.all(color: primary.withValues(alpha: 0.55)),
             boxShadow: [
@@ -52,7 +60,7 @@ class _GlassButtonState extends State<GlassButton> {
             ],
           )
         : BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTokens.radiusM),
+            borderRadius: BorderRadius.circular(widget.radius),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -107,14 +115,14 @@ class _GlassButtonState extends State<GlassButton> {
       child: SizedBox(
         height: widget.height,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppTokens.radiusM),
+          borderRadius: BorderRadius.circular(widget.radius),
           child: GlassBlur(
             sigma: 12,
             child: Material(
               color: Colors.transparent,
               child: InkWell(
                 onTap: widget.onPressed,
-                borderRadius: BorderRadius.circular(AppTokens.radiusM),
+                borderRadius: BorderRadius.circular(widget.radius),
                 child: Listener(
                   onPointerDown: (_) => setState(() => _pressed = true),
                   onPointerUp: (_) => setState(() => _pressed = false),
@@ -128,7 +136,7 @@ class _GlassButtonState extends State<GlassButton> {
                           child: IgnorePointer(
                             child: DecoratedBox(
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(AppTokens.radiusM),
+                                borderRadius: BorderRadius.circular(widget.radius),
                                 gradient: LinearGradient(
                                   begin: Alignment.topCenter,
                                   end: Alignment.center,

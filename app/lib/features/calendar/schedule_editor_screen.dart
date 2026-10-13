@@ -8,6 +8,7 @@ import '../../core/l10n.dart';
 import '../../core/shift_palette.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_action_button.dart';
+import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
@@ -69,9 +70,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   static const double _alarmRowStackBelow = 200;
 
   /// 底部那颗「保存并重排闹钟」胶囊的高度：M3 的 `FilledButton` 默认值，
-  /// 探针在 420×900 与 200×400 两档下量到的都是它。**只用来算投影的圆角**
-  /// （胶囊的圆角恒为高度的一半），所以系统字号把它撑得更高时投影会小一圈 ——
-  /// 2~4px 的差在 blur 14 的投影里看不出来，不值得为它去量一次布局。
+  /// 探针在 420×900 与 200×400 两档下量到的都是它。v0.12.0 换成自家的
+  /// `GlassButton` 之后**这颗胶囊不再由字体撑高**（`GlassButton` 是定高），
+  /// 圆角取它的一半（= `AppTokens.pillOf(_saveButtonHeight)` 的半径）。
+  /// **`kFloatingSaveInset = 92` 是按这个 48 推出来的**（16 + 48 + 16 + 12），
+  /// 改它必须一并重算那条常量。
   static const double _saveButtonHeight = 48;
 
   bool _loaded = false;
@@ -386,27 +389,18 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                   maxWidth: AppLayout.maxContentWidth),
-              // 胶囊是**浮在正文上**的，给它一层投影 —— 不然正文从它底下穿过去时，
-              // 实心胶囊看着像贴上去的一张纸。配方取自 `GlassButton` 的 primary
-              // 那一档（全 app「悬浮的主操作」用的是同一套），圆角与按钮同形
-              // （M3 的 `FilledButton` 是胶囊，圆角恒为高度的一半）。
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: AppTokens.pillOf(_saveButtonHeight),
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.30),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: FilledButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: const Icon(Icons.check_outlined),
-                  label: Text(L10n.saveAndReschedule),
-                ),
+              // 胶囊是**浮在正文上**的 —— 它现在是自家的 `GlassButton`（primary
+              // 那一档），自带全 app「悬浮的主操作」同一套投影（主色 @0.30、
+              // blur 14、offset (0,4)），所以这里**不再自己叠一层**（两层会叠成
+              // 两重影）。高度与圆角仍按 48 的胶囊来（`kFloatingSaveInset` 就是
+              // 按这个 48 推的），圆角取高度的一半。
+              child: GlassButton(
+                primary: true,
+                height: _saveButtonHeight,
+                radius: _saveButtonHeight / 2,
+                onPressed: _saving ? null : _save,
+                icon: const Icon(Icons.check_outlined),
+                child: Text(L10n.saveAndReschedule),
               ),
             ),
           ),

@@ -15,6 +15,7 @@ import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/shift_palette.dart';
+import 'package:shiftassistantpro/core/widgets/glass_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_choice_chip.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
@@ -1564,8 +1565,11 @@ void main() {
   //   ② 滑到底最后一张卡整个抬到胶囊之上、那块地方真的点得到 —— 少了它，
   //      `extendBody` 一开就会把最后一行塞到胶囊底下。
   group('底部悬浮胶囊', () {
+    // v0.12.0：这颗胶囊从 Material 的 `FilledButton` 换成了自家的 `GlassButton`
+    // （几何不变：仍是 48 高、圆角恒为高度一半）。两条用例的断言一字未改，
+    // 只有这个类型查找器跟着换件走。
     Finder saveButton() =>
-        find.widgetWithText(FilledButton, L10n.saveAndReschedule);
+        find.widgetWithText(GlassButton, L10n.saveAndReschedule);
 
     testWidgets('正文铺到屏幕底：内容从胶囊下面穿过去，不再被一块板子硬切',
         (tester) async {
@@ -1632,8 +1636,9 @@ void main() {
     final int layers =
         tester.widgetList<BackdropFilter>(find.byType(BackdropFilter)).length;
     // 夹具是**标准档**（`liquidGlass` 默认关）：分段器与开关只在液态档下才带模糊，
-    // 所以这里应当是 **0**（改之前是 **6** —— 六张卡各一层）。
-    // 液态档下那两族会各带一层，那是浮在正文上的控件、有意保留。
-    expect(layers, 0, reason: '实测 $layers 层');
+    // 所以这里只该剩**底部那颗保存胶囊**自己的那一层（v0.12.0 起它是 `GlassButton`，
+    // 自带 `GlassBlur`）—— 它正是本测试注释说的「浮在滚动正文之上的控件」，允许保留。
+    // 改之前是 **6**（六张卡各一层）；这一层是那颗悬浮胶囊的，不是卡片的。
+    expect(layers, 1, reason: '实测 $layers 层');
   });
 }
