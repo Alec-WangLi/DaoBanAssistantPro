@@ -637,6 +637,28 @@ class L10n {
   static String get crewSettingsOptional =>
       t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
 
+  // ── 按月排班 ────────────────────────────────────────────────────────────
+  //
+  // 「一套方案二选一：按周期轮换（连续周期）还是按月（每月 1 号归零）」。
+  // 措辞上**不用「排班方式」那类大词**：这一处切换的只是「日子怎么数」。
+  static String get scheduleModeCycle => t('按周期', 'By cycle');
+  static String get scheduleModeMonthly => t('按月', 'By month');
+
+  /// 按月那张卡的小标题（周期那张卡对应的是 [cycleSection]）。
+  static String get monthlySection => t('按月切法', 'Monthly split');
+
+  /// 段列表左边那一列：「每月第 N 天起」。
+  static String monthlyFromDay(int n) => t('每月第 $n 天起', 'From day $n');
+
+  static String get monthlyAddSegment => t('添加一段', 'Add a segment');
+
+  static String get monthlyDeleteSegmentTitle => t('删掉这一段', 'Remove this segment');
+
+  /// 删一段 = **并进上一段**（唯一能保持「不空档」的删法），所以要把这件事说出来。
+  static String monthlyDeleteSegmentContent(int day) => t(
+      '从每月第 $day 天起的这一段会并进上一段 —— 那些天改用上一段的班次。',
+      'From day $day on will be merged into the previous segment and take its shift.');
+
   /// 「结束时间落在次日」的前缀（中文直接接钟点，英文要留空格）。
   ///
   /// 只作前缀用；成串的「开始 – 结束」走 [timeRange]，那里中英语序不同。

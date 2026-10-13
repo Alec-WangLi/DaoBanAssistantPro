@@ -18,6 +18,7 @@ import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
+import '../../domain/monthly_pattern.dart';
 import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
@@ -89,6 +90,18 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 周期序列：长度即周期，元素是 [_classes] 的下标。
   List<int> _cycle = [];
 
+  /// 这套方案走**按月锚定**吗（每月 1 号归零）。**模式唯一的判据**。
+  ///
+  /// 与 [_cycle] **各存各的、切换不丢数据**：切到按月再切回来，周期还在；反之
+  /// 亦然。所以别拿「哪一边是空的」去猜模式（详见 `ShiftSchedule` 的类文档）。
+  bool _monthly = false;
+
+  /// 按月切法：一段 = 「每月的第 N 天起 → 某个班次」，第一段恒从 1 起。
+  List<MonthlySegment> _monthlySegments = [];
+
+  /// 各班组的**段**偏移（单位是段，不是天）。
+  List<int> _teamSegOffsets = [];
+
   int _teamCount = 4;
   List<String> _teamNames = ['一班', '二班', '三班', '四班'];
   int _ourTeamIndex = 0;
@@ -144,6 +157,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         _overrideDays = dd.dayOverrides.length;
         _overridesByClassId = _countOverridesByClassId(dd);
         _cycle = List.of(dd.cycle);
+        _monthly = dd.monthly;
+        _monthlySegments = List.of(dd.monthlySegments);
         _teamCount = dd.teamCount;
         _teamNames = List.of(dd.teamNames);
         _ourTeamIndex = dd.ourTeamIndex;
@@ -155,6 +170,15 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     ((i - dd.ourTeamIndex) % dd.teamCount + dd.teamCount) %
                     dd.teamCount,
               );
+        // 段偏移与天偏移同一个补位口径（长度不够就按「相对我们班组」补），
+        // 只是取模的单位是**段数**；没有段表时补 0（那时它本来就不参与计算）。
+        final segCount = dd.monthlySegments.length;
+        _teamSegOffsets = dd.teamSegOffsets.length == dd.teamCount
+            ? List.of(dd.teamSegOffsets)
+            : [
+                for (var i = 0; i < dd.teamCount; i++)
+                  segCount == 0 ? 0 : (i - dd.ourTeamIndex) % segCount,
+              ];
         _followHoliday = dd.isBlank;
         _syncClassCtrls();
         _syncTeamNameCtrls();
@@ -393,6 +417,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         teamNames: _teamNames,
         ourTeamIndex: _ourTeamIndex,
         teamOffsets: _teamOffsets,
+        monthly: _monthly,
+        monthlySegments: _monthlySegments,
+        teamSegOffsets: _teamSegOffsets,
       );
 
   /// 0) 未来 14 天预览：改任何设置都能立刻看出对不对。
@@ -508,52 +535,57 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             onChanged: (v) => _name = v,
             decoration: glassInputDecoration(context, L10n.scheduleName),
           ),
-          const SizedBox(height: AppTokens.spaceSm),
-          InkWell(
-            borderRadius: BorderRadius.circular(AppTokens.radiusM),
-            onTap: () async {
-              final picked = await showGlassDatePicker(
-                context,
-                initialDate: _myCrewStart,
-                firstDate: DateTime(2000),
-                lastDate: DateTime(2100),
-              );
-              if (picked != null) _setMyCycleStart(picked);
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceMd),
-              child: Row(
-                children: [
-                  AppIcon(Icons.today_outlined,
-                      size: AppTokens.iconMd,
-                      color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: AppTokens.spaceMd),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(L10n.myCycleStart,
-                            style: AppTokens.titleStrong),
-                        const SizedBox(height: AppTokens.spaceXs),
-                        Text(
-                          L10n.yearMonthDay(_myCrewStart),
-                          style:
-                              AppTokens.rowSecondary.copyWith(color: muted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  AppIcon(Icons.edit_outlined,
-                      size: AppTokens.iconMd, color: muted),
-                ],
-              ),
-            ),
-          ),
+          // 按月模式**不显示**这一行：按月不读基准日（每月 1 号恒等于第一段），
+          // 摆一个改不动结果的日期在那儿，就是让用户在界面上操作一个不生效的值。
+          if (!_monthly) ..._myCycleStartRow(context, muted),
         ],
       ),
     );
   }
+
+  /// 顶部那张卡的第二行：「我这组从这个周期开始」。**只有周期模式用得上。**
+  List<Widget> _myCycleStartRow(BuildContext context, Color muted) => [
+        const SizedBox(height: AppTokens.spaceSm),
+        InkWell(
+          borderRadius: BorderRadius.circular(AppTokens.radiusM),
+          onTap: () async {
+            final picked = await showGlassDatePicker(
+              context,
+              initialDate: _myCrewStart,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) _setMyCycleStart(picked);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceMd),
+            child: Row(
+              children: [
+                AppIcon(Icons.today_outlined,
+                    size: AppTokens.iconMd,
+                    color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: AppTokens.spaceMd),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(L10n.myCycleStart, style: AppTokens.titleStrong),
+                      const SizedBox(height: AppTokens.spaceXs),
+                      Text(
+                        L10n.yearMonthDay(_myCrewStart),
+                        style: AppTokens.rowSecondary.copyWith(color: muted),
+                      ),
+                    ],
+                  ),
+                ),
+                AppIcon(Icons.edit_outlined,
+                    size: AppTokens.iconMd, color: muted),
+              ],
+            ),
+          ),
+        ),
+      ];
 
   /// 3) 班次设置：每个班次定义一次，周期里直接引用。
   Widget _classesCard(BuildContext context) {
@@ -1023,11 +1055,264 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _cycleStepper(context),
+          // 「日子怎么数」的二选一：连续周期，还是每月 1 号归零。
+          //
+          // **不把「跟随法定节假日」并进这个分段器**：那一条是破坏性的（切过去
+          // 会清空班次定义与全部按天覆盖，所以现在才要弹确认框 + 单独一张卡 +
+          // 一个开关）。把破坏性选项混进日常切换里，等于把「问一次」的机会抹掉。
+          GlassSegment(
+            count: 2,
+            selectedIndex: _monthly ? 1 : 0,
+            onSelected: (i) => _setMonthly(i == 1),
+            itemBuilder: (i, selected) => Text(
+              i == 0 ? L10n.scheduleModeCycle : L10n.scheduleModeMonthly,
+              // 与「我的」页那个主题分段器同一套写法：未选中 w500、选中 w700。
+              style: AppTokens.labelSecondary.copyWith(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
           const SizedBox(height: AppTokens.spaceSm),
-          ...List.generate(_cycle.length, (i) => _cycleRow(context, i)),
-          ..._crewClashNotice(context),
+          if (_monthly) ..._monthlyBody(context) else ..._cycleBody(context),
         ],
+      ),
+    );
+  }
+
+  /// 按周期那一支（原本就是这张卡的全部内容）。
+  List<Widget> _cycleBody(BuildContext context) => [
+        _cycleStepper(context),
+        const SizedBox(height: AppTokens.spaceSm),
+        ...List.generate(_cycle.length, (i) => _cycleRow(context, i)),
+        ..._crewClashNotice(context),
+      ];
+
+  /// 按月那一支：一个小标题 + 段列表 + 「添加一段」。
+  List<Widget> _monthlyBody(BuildContext context) {
+    return [
+      Row(
+        children: [
+          Text(L10n.monthlySection, style: AppTokens.titleStrong),
+          const Spacer(),
+          Text('${_monthlySegments.length}${L10n.cycleLengthUnit}',
+              style: AppTokens.labelStrong),
+        ],
+      ),
+      const SizedBox(height: AppTokens.spaceXs),
+      ...List.generate(_monthlySegments.length, (i) => _monthRow(context, i)),
+      GlassPressable(
+        child: ListTile(
+          key: const Key('month-add-segment'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          horizontalTitleGap: AppTokens.gapIconText,
+          leading: AppIcon(Icons.add_circle_outline_outlined,
+              size: AppTokens.iconMd, color: Theme.of(context).colorScheme.primary),
+          title: Text(L10n.monthlyAddSegment, style: AppTokens.rowPrimary),
+          // 最后一段已经能开到 31 号时，再加一段就只能挤在 31 号那天 —— 收掉按钮
+          // 比加出一段「从 31 号起、到月底」的摆设好。
+          onTap: _monthlySegments.isEmpty ||
+                  _monthlySegments.last.startDay >= 31
+              ? null
+              : _addMonthSegment,
+        ),
+      ),
+      ..._crewClashNotice(context),
+    ];
+  }
+
+  /// 切「按周期 / 按月」。**两边各存各的，切换不丢数据**，只是换一个生效。
+  void _setMonthly(bool v) {
+    setState(() {
+      _monthly = v;
+      if (v) _seedMonthlyIfEmpty();
+    });
+  }
+
+  /// 段表为空时种一套起步切法：**按班组数种段**、均分 31 天，第 i 段指向第 i 个
+  /// 班次定义，并把各组的段偏移设成 0..n-1。
+  ///
+  /// 为什么不只种一段：班组数 > 1 时「N 个班组抢一段」必然撞班，用户一进来就看到
+  /// 撞班提示 —— 一个刚切过来就报错的初体验。按班组数种则天然不撞，而且班组数 = 1
+  /// 时正好退化成 `[(1, 0)]`（一整月一个班次），与 spec §6.2 写的是同一个意图。
+  ///
+  /// **只在空的时候种**：否则会把用户上一次切过来时排好的段表冲掉（那也是「切换
+  /// 不丢数据」这条约定的一部分）。
+  void _seedMonthlyIfEmpty() {
+    if (_monthlySegments.isNotEmpty || _classes.isEmpty) return;
+    _monthlySegments = [
+      for (final s in defaultMonthlySegments(_teamCount))
+        MonthlySegment(
+          startDay: s.startDay,
+          // 班次定义比班组还少时绕回来用 —— 那种配置本来就排不开（同一天
+          // 必有两个班组上同一个班），界面上会当场报撞班，比留一段「没有班次」
+          // 的空段好：空段是不报错的。
+          classIndex: s.classIndex % _classes.length,
+        ),
+    ];
+    _teamSegOffsets = [for (var i = 0; i < _teamCount; i++) i];
+  }
+
+  /// 加一段：接在最后一段之后，班次沿用最后一段的（与周期「变长时沿用最后一天」
+  /// 同一条手感）。
+  void _addMonthSegment() {
+    if (_monthlySegments.isEmpty) return;
+    setState(() {
+      final last = _monthlySegments.last;
+      final next = last.startDay + 1;
+      if (next > 31) return;
+      _monthlySegments.add(
+          MonthlySegment(startDay: next, classIndex: last.classIndex));
+    });
+  }
+
+  /// 删一段 = **把它并进上一段**。
+  ///
+  /// 这是唯一能保持「不覆盖出现空档」的删法：段只带起始日、结束日由下一段的起始日
+  /// 决定，所以删掉中间那一段之后，它的日子自然归上一段。第一段删不了 —— 它恒从
+  /// 1 日起，删了就没有「每月 1 号」这个锚了（所以第一行不给删除键）。
+  Future<void> _deleteMonthSegment(int index) async {
+    if (index <= 0 || index >= _monthlySegments.length) return;
+    final day = _monthlySegments[index].startDay;
+    final ok = await showGlassDialog<bool>(
+      context: context,
+      builder: (dialogContext) => GlassDialog(
+        title: L10n.monthlyDeleteSegmentTitle,
+        content: Text(L10n.monthlyDeleteSegmentContent(day)),
+        actions: [
+          GlassActionButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            label: L10n.cancel,
+          ),
+          const SizedBox(width: AppTokens.spaceSm),
+          GlassActionButton(
+            variant: GlassActionVariant.danger,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            label: L10n.delete,
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _monthlySegments.removeAt(index));
+  }
+
+  /// 改某一段的起始日。**只列合法的日号**：要比上一段大、又要给后面的段留位置。
+  Future<void> _pickMonthStartDay(int index) async {
+    if (index <= 0 || index >= _monthlySegments.length) return;
+    final min = _monthlySegments[index - 1].startDay + 1;
+    // 后面还有 `n - 1 - index` 段，每段至少要占一天，所以这一段最大到
+    // `31 - 后面几段`。
+    final max = 31 - (_monthlySegments.length - 1 - index);
+    if (min > max) return;
+    final picked = await showGlassOptionPicker<int>(
+      context,
+      title: L10n.monthlySection,
+      options: [for (var d = min; d <= max; d++) d],
+      labelOf: L10n.monthlyFromDay,
+      selected: _monthlySegments[index].startDay,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _monthlySegments[index] = MonthlySegment(
+        startDay: picked,
+        classIndex: _monthlySegments[index].classIndex,
+      );
+    });
+  }
+
+  /// 按月段列表的一行：左边是可点的「每月第 N 天起」，中间是班次胶囊，右边删除。
+  Widget _monthRow(BuildContext context, int index) {
+    final muted = AppTokens.inkMuted(context);
+    final seg = _monthlySegments[index];
+    final classIndex =
+        seg.classIndex >= 0 && seg.classIndex < _classes.length ? seg.classIndex : -1;
+    final timeText = classIndex < 0 ? '' : _rangeText(_classes[classIndex]);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showTime = classIndex >= 0 &&
+              cycleRowFitsTime(
+                rowWidth: constraints.maxWidth,
+                classNames: [for (final c in _classes) c.name],
+                timeText: timeText,
+              );
+          return Row(
+            children: [
+              // 第一段固定从 1 日起，不给点（点开也只有 1 这一个选项）。
+              Expanded(
+                flex: 3,
+                child: InkWell(
+                  key: monthRowDayKey(index),
+                  borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                  onTap: index == 0 ? null : () => _pickMonthStartDay(index),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: AppTokens.spaceXs),
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(L10n.monthlyFromDay(seg.startDay),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTokens.labelSecondary),
+                        ),
+                        if (index > 0) ...[
+                          const SizedBox(width: AppTokens.spaceXs),
+                          AppIcon(Icons.edit_outlined,
+                              size: AppTokens.iconSm, color: muted),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppTokens.spaceSm),
+              Expanded(
+                flex: 5,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < _classes.length; i++)
+                        Padding(
+                          padding: EdgeInsets.only(
+                              right: i == _classes.length - 1
+                                  ? 0
+                                  : AppTokens.spaceSm),
+                          child: GlassChoiceChip(
+                            key: cycleChipKey(index, i),
+                            label: _classes[i].name,
+                            color: Color(_classes[i].color),
+                            selected: i == seg.classIndex,
+                            onTap: () => setState(() {
+                              _monthlySegments[index] = MonthlySegment(
+                                startDay: seg.startDay,
+                                classIndex: i,
+                              );
+                            }),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (classIndex >= 0 && showTime) ...[
+                const SizedBox(width: AppTokens.spaceMd),
+                Text(timeText,
+                    style: AppTokens.rowSecondary.copyWith(color: muted)),
+              ],
+              // 第一行不给删除键 —— 第一段恒从 1 日起，删了就没有「1 号」了。
+              if (index > 0)
+                GlassDeleteButton(
+                  key: monthRowDeleteKey(index),
+                  compact: true,
+                  onPressed: () => _deleteMonthSegment(index),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1665,6 +1950,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             teamNames: _teamNames,
             ourTeamIndex: _ourTeamIndex,
             teamOffsets: _teamOffsets,
+            monthly: _monthly,
+            monthSegments: _monthlySegments,
+            teamSegOffsets: _teamSegOffsets,
           );
       // 重排读的是**整条链**（`rescheduleAll` → `getActiveSchedules`），链上既有
       // 刚编辑的这套、也有「其余时间」那套 —— 所以「编辑的是一套非当前方案」
@@ -1775,6 +2063,16 @@ class _AlarmLabelFieldState extends State<_AlarmLabelField> {
 /// 周期行里某个 chip 的 Key —— 让测试能精确点到「第几天选哪个班次」。
 Key cycleChipKey(int dayIndex, int classIndex) =>
     ValueKey('cycle-chip-$dayIndex-$classIndex');
+
+/// 按月段列表里第 [i] 行那一整块「每月第 N 天起」的 Key —— 点它就是改这一段的
+/// 起始日（第一行不给点）。与 [cycleChipKey] 同一套：让测试能按行定位。
+Key monthRowDayKey(int i) => ValueKey('month-row-day-$i');
+
+/// 按月段列表第 [i] 行的删除键（第一行没有）。
+///
+/// 单独给 Key 是因为页面上还有**班次定义那一排**的紧凑删除钮 ——
+/// `find.byType(GlassDeleteButton)` 会一起数进来，按行定位只能靠 Key。
+Key monthRowDeleteKey(int i) => ValueKey('month-row-del-$i');
 
 /// 量一段文字在给定样式下的宽度（不依赖 BuildContext，便于单测）。
 double _textWidth(String text, TextStyle style) {
