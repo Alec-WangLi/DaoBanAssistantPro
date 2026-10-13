@@ -2298,4 +2298,28 @@ void main() {
         reason: '最下面那一格的底边被胶囊压住了');
     await _disposeCalendar(tester);
   });
+
+  testWidgets('宽横屏：顶栏收在左栏里、年月胶囊不再被拉伸', (tester) async {
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 1280, height: 800);
+
+    // ① 顶栏整块在左栏里 —— 它的右缘不超过信息卡的左缘。
+    final header = tester.getRect(find.byKey(const Key('header-single-row')));
+    final card = tester.getRect(find.byKey(const Key('info-card-panel')));
+    expect(header.right, lessThanOrEqualTo(card.left),
+        reason: '顶栏右缘 ${header.right} 越到了信息卡（${card.left}）那边');
+
+    // ② 不再被拉伸：整行收缩到内容宽度。
+    //    ⚠️ **判据取「顶栏自己的宽度」而不是「内层 Row 比外层 Padding 窄」**：
+    //    收缩之后连外层那个 `Padding` 也一起收缩了（它外面是 `Column`，给的是松约束），
+    //    两者只差内边距 24 —— 那个判据写成 `width - 100` 会永远为假。
+    //    改之前顶栏是 928（整条左栏），收缩之后约 386。
+    expect(header.width, lessThan(500),
+        reason: '顶栏宽 ${header.width} —— 还在被撑满整条左栏');
+    // ③ **靠左**：收缩之后 `Column` 默认的 `crossAxisAlignment: center` 会把它
+    //    居中，而设计要的是贴着左缘。这一条就是钉它的。
+    expect(header.left, lessThanOrEqualTo(20),
+        reason: '顶栏左缘 ${header.left} —— 它被居中了，没靠左');
+    await _disposeCalendar(tester);
+  });
 }

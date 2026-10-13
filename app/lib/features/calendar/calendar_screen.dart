@@ -831,7 +831,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: Column(children: [_header(context), grid])),
+                  Expanded(
+                    child: Column(
+                      // **必须 `start`**：顶栏在宽横屏下会收缩到内容宽度，而 `Column`
+                      // 默认的 `crossAxisAlignment: center` 会把它摆到左栏正中
+                      // （实测 1280 下左缘落在 270.75）—— 设计要的是贴着左缘。
+                      // 网格那一支不受影响：`Expanded` 里的 `LayoutBuilder` 拿到的
+                      // 松约束 `maxWidth` 仍是整栏宽，它按 `constraints.biggest` 铺满。
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [_header(context), grid],
+                    ),
+                  ),
                   const SizedBox(width: AppTokens.spaceMd),
                   rail(),
                 ],
@@ -996,33 +1006,40 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       );
     }
 
+    // 年月这几个字跟着网格一起滑（见 `_monthSlide`），方向才一致。
+    final monthPill = GlassPill(
+      onTap: _showMonthPicker,
+      child: _monthSlide(
+        month: _month,
+        tag: 'pill',
+        // 兜底同两行档：预估差几个 dp 时缩一点，而不是省略。
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            L10n.yearMonth(_month),
+            maxLines: 1,
+            style: AppTokens.titleStrong,
+          ),
+        ),
+      ),
+    );
+
+    // 宽横屏下**不套 `Expanded`**：套着它就会拿到多宽撑多宽，1280 的屏上那是
+    // 一条 1600px 的长条（用户 2026-10-13 报的「顶栏太长」）。整行也一起收缩到
+    // 内容宽度 → 靠左。其余档位照旧撑满整行（`Expanded` 保证年月完整显示）。
+    final wide = AppLayout.of(context).isWideLandscape;
+
     return Padding(
+      // 宽横屏沿用同一个 key：它仍然是「一行档」，只是排布不同。
       key: const Key('header-single-row'),
       padding: pad,
       child: Row(
+        mainAxisSize: wide ? MainAxisSize.min : MainAxisSize.max,
         children: [
           _circleIcon(
               context, Icons.chevron_left_outlined, L10n.prevMonth, _prev),
           const SizedBox(width: AppTokens.gapIconText),
-          Expanded(
-            child: GlassPill(
-              onTap: _showMonthPicker,
-              // 年月这几个字跟着网格一起滑（见 `_monthSlide`），方向才一致。
-              child: _monthSlide(
-                month: _month,
-                tag: 'pill',
-                // 兜底同 `_header` 的两行档：预估差几个 dp 时缩一点，而不是省略。
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    L10n.yearMonth(_month),
-                    maxLines: 1,
-                    style: AppTokens.titleStrong,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          if (wide) monthPill else Expanded(child: monthPill),
           const SizedBox(width: AppTokens.gapIconText),
           _circleIcon(
               context, Icons.chevron_right_outlined, L10n.nextMonth, _next),
