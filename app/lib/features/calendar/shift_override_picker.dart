@@ -63,7 +63,7 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
   String Function(ShiftClass) timeRangeOf = _defaultTimeRange,
 }) {
   final days = daysBetween(from, to) + 1;
-  final title = L10n.overrideRangeTitle(
+  final range = L10n.overrideRangeTitle(
       L10n.monthDay(from), L10n.monthDay(to), days);
   // 提在循环外：它不随班次变，而下面每行都要用（见那里的说明）。
   final narrow = AppLayout.of(context).isNarrow;
@@ -91,7 +91,23 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
             Padding(
               padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
                   AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceSm),
-              child: Text(title, style: AppTokens.titleStrong),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // **这个弹层是干什么的，得由它自己说。** 用户 2026-10-13 真机反馈：
+                  // 长按那天弹出来一屏班次，全屏没有一处写着「调整班次」—— 光看
+                  // 几个班次名，不知道这屏是干嘛的、点了会发生什么。
+                  Text(L10n.adjustShift, style: AppTokens.titleStrong),
+                  const SizedBox(height: AppTokens.spaceXs),
+                  // 日期区间退到第二行：它回答的是**这次改哪几天**（范围和上下文），
+                  // 不是这个弹层的名字。原来它是标题 —— `calendar_screen_test` 当时
+                  // 还专门断言过「标题是日期区间，不是『调整班次』四个字」，那一条随
+                  // 本轮一起改掉。
+                  Text(range,
+                      style: AppTokens.labelSecondary
+                          .copyWith(color: AppTokens.inkMuted(sheetContext))),
+                ],
+              ),
             ),
             Flexible(
               child: ListView(

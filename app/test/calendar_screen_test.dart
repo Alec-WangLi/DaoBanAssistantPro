@@ -880,8 +880,9 @@ void main() {
     // 点开入口
     await tester.tap(find.byKey(const Key('info-card-shift-line')));
     await tester.pumpAndSettle();
-    expect(find.text(L10n.adjustShift), findsNothing,
-        reason: '标题是日期区间，不是「调整班次」四个字');
+    expect(find.text(L10n.adjustShift), findsOneWidget,
+        reason: '弹层要自己说明是干什么的 —— 2026-10-13 反馈：只写日期区间，'
+            '长按弹出的那一屏没有任何一处说它是「调整班次」');
 
     // 挑一个与当前不同的班次
     final before = _shiftLine(tester);

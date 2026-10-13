@@ -58,9 +58,24 @@ void main() {
     }
   });
 
-  testWidgets('多日时标题写「起 – 止 · N 天」', (tester) async {
+  testWidgets('多日时写出「起 – 止 · N 天」的区间', (tester) async {
     await pumpPicker(tester);
     expect(find.textContaining('3 天'), findsOneWidget);
+  });
+
+  testWidgets('弹层自己说明是干什么的：写着「调整班次」，且压在区间上面', (tester) async {
+    await pumpPicker(tester);
+    // 2026-10-13 用户真机反馈：长按那天弹出来的一屏里**没有任何一处**说明它是
+    // 「调整班次」—— 光看几个班次名，不知道这屏是干嘛的、点了会发生什么。
+    // 这一轮把名字补成标题、日期区间退到第二行。用例钉住「两句都在」以及
+    // **谁在上面**：反过来（区间当标题）正是用户看不懂的那一版。
+    expect(find.text(L10n.adjustShift), findsOneWidget);
+    expect(find.textContaining('3 天'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text(L10n.adjustShift)).dy,
+      lessThan(tester.getTopLeft(find.textContaining('3 天')).dy),
+      reason: '名字在上、区间在下',
+    );
   });
 
   testWidgets('选中一项后返回「改成这个班次」', (tester) async {
