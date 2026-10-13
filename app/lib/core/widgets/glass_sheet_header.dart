@@ -72,8 +72,10 @@ class GlassSheetHeader extends StatelessWidget {
               AppTokens.spaceLg, AppTokens.spaceSm),
           child: GlassTitleRow(
             title: title,
-            subtitle:
-                subtitle == null ? null : Text(subtitle!, style: _subtitleStyle(context)),
+            // 裸 `Text` 就行 —— [GlassTitleRow] 的副标题槽自己把排版（次要说明那一档
+            // 字号 + 次要文字明度）**叠在环境样式之上**（`DefaultTextStyle.merge`），
+            // 字体族因此跟得住、工装里不会渲成豆腐块。
+            subtitle: subtitle == null ? null : Text(subtitle!),
           ),
         ),
         // 全 app 那个分隔线配方（`const Divider(height: 1)`）。
@@ -81,21 +83,4 @@ class GlassSheetHeader extends StatelessWidget {
       ],
     );
   }
-
-  /// 副标题的排版。
-  ///
-  /// ⚠️ **不能只往 [GlassTitleRow] 的副标题槽里塞个裸 `Text`。** 那个槽用的是
-  /// `DefaultTextStyle(style: …)` —— 它是**替换**、而不是 `DefaultTextStyle.merge`，
-  /// 于是**主题那层的 `fontFamily` 会一起被丢掉**。生产上几乎看不出（本 App 没有
-  /// 自定义字体族，`fontFamily: null` 落回平台默认，与别处同一个字体），但工装里
-  /// 一望即知：字体是 `visual_harness` 用 `textTheme.apply(fontFamily: …)` 注入的，
-  /// 掉了就渲染成**豆腐块** —— 实测 `11_override_picker_dark` 那行日期区间整行成了
-  /// 方块，而它上面的标题（`Text` 会与祖先 merge）照旧正常，同一屏里两种字。
-  ///
-  /// 因此在**调用点**先把当前环境那层接住、再叠上副标题的角色令牌，字体族就跟着走了。
-  /// （根治是 `glass_title_row.dart` 那行改成 `DefaultTextStyle.merge` —— 那是 Task 2
-  /// 的文件，本轮不动，已在 `task-3-report.md` 里单列。）
-  TextStyle _subtitleStyle(BuildContext context) =>
-      DefaultTextStyle.of(context).style.merge(AppTokens.labelSecondary).copyWith(
-          color: AppTokens.inkMuted(context));
 }
