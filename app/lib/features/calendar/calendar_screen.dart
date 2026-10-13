@@ -854,7 +854,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             );
           }
 
-          if (layout.isWide) {
+          // ⚠️ **判据是 `isWide && isShort`，不能只写 `isWide`。**
+          // 只写 `isWide` 的话，**竖着的平板**（800×1280）也落进这一支、被拆成左右
+          // 两栏 —— 而 spec §4.1 要修的恰恰是这处怪相（七列格子要的是宽度，
+          // 不是分栏）。加上 `isShort` 之后，这一支就只剩「宽且矮」的手机横屏。
+          // 独立审查抓出来的（`calendar_screen_test.dart` 的「竖着的平板」钉着）。
+          if (layout.isWide && layout.isShort) {
             // 宽屏左右分栏：网格与信息卡并排，网格拿到的可用高度从
             // 「减去底部信息卡」变成「整屏高度」，格子不用再被压扁。
             // 底下那 96 是给悬浮导航胶囊让位（从前没有它，最后一行被压在胶囊下）。

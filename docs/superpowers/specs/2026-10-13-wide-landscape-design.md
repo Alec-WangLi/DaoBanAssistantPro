@@ -120,10 +120,22 @@ final bool isWideLandscape;
 | 档 | 判据 | 版式 |
 |---|---|---|
 | **宽横屏**（平板 / 车机） | `isWideLandscape` | §3 的新版式（顶栏进左栏、卡片贴右下、字号上限放开） |
-| **宽且矮**（手机横屏） | `isWide && isShort` | **今天的版式原样保留**（顶栏仍横跨全屏、卡片仍在右上栏）**＋ 让开胶囊**（§4.2）**＋ 字号上限放开**（§4.5，格子小，实际不生效） |
-| 其余 | 其余全部 | 竖屏版式，**一个像素不动** |
+| **宽且矮**（手机横屏） | `isWide && isShort` | **今天的版式原样保留**（顶栏仍横跨全屏）**＋ 让开胶囊**（§4.2）**＋ 字号上限放开**（§4.5，格子小，实际不生效）**＋ 卡片与宽横屏共用同一根右栏，于是也跟着挪到了右下**（见下面的订正） |
+| 其余 | 其余全部 | 竖屏版式，**一个像素不动**（含**竖着的平板** 800×1280） |
 
 第二支的存在只为一件事：**不改手机横屏的既有观感**，但把「最后一行被胶囊压住」修掉。
+
+**⚠️ 实施后的两处订正**（独立审查抓的，2026-10-13）：
+
+1. **判据必须写成 `isWide && isShort`，不能只写 `isWide`。** 只写 `isWide` 的话
+   **竖着的平板**（800×1280）也会落进第二支、被拆成左右两栏 —— 而 §4.1 要修的
+   恰恰是这处怪相。用例：`calendar_screen_test.dart` 的「竖着的平板（800×1280）
+   走竖屏版式」。
+2. **第二支的卡片也挪到了右下**，不是「仍在右上栏」。两支持**共用同一根右栏**
+   （`_sideRail`），而右栏在 Task 4 里被改成「把卡片推到底」—— 900×420 上
+   右栏只有 324 高、卡片约 250，所以顶对齐与贴底只差几十 dp，观感上无碍，
+   而且**与用户要的「放右下角」一致**。这里改的是文档，不是代码：
+   让第二支单独再写一份顶对齐的右栏，只是为了维持一句已经过时的描述。
 
 ### 4.2 网格必须让开胶囊（**两支宽屏都要**）
 
@@ -200,27 +212,38 @@ final railW = (layout.availableWidth * 0.27).clamp(280.0, 340.0);
 
 所以这一轮它们**只跟着 §4.6 的胶囊限宽一起变**，内容版式不动。
 
-**唯一一处看得出不一致的**（**用户 2026-10-13 拍板：收**）：待办页那颗悬浮「＋」按钮
-落在**屏幕**右下角，而列表限宽在中间 —— 在 1280 上两者对不上。
+**宽屏下看得出不一致的悬浮件**（**用户 2026-10-13 拍板：都收**）：
+① 待办页那颗「＋」落在**屏幕**右下角，而列表限宽在中间；
+② **闹钟页底部那两颗「新建闹钟 / 测试闹钟」** 更明显 —— 正文限宽 720 居中，
+而那条按钮带按整屏宽从左边缘铺到右边缘（1920 上看得一清二楚）。
+**② 是出图时才发现的**：写这一节时只看了 1280 的图，把那条按钮带看成了「没问题」，
+于是这里原本写的是「唯一一处」。两处的病根与治法完全同源。
 
 ⚠️ **不能靠给 FAB 套一层 `CenteredContent`** —— FAB 的落点由
-`FloatingActionButtonLocation` 算（`schedule_screen.dart:886` 的 `_AboveCapsuleFabLocation`），
+`FloatingActionButtonLocation` 算（`schedule_screen.dart` 的 `_AboveCapsuleFabLocation`），
 外面套盒子只会跟 Scaffold 的定位打架。**要改的是那个 location 的 `getOffset`**：
 
 ```dart
 // 内容栏宽度（与 CenteredContent 的判据同源：宽 ≥ 720 才限宽）
 final contentW = math.min(AppLayout.maxContentWidth, geometry.scaffoldSize.width);
-final rightEdge = (geometry.scaffoldSize.width + contentW) / 2;
-return Offset(rightEdge - geometry.floatingActionButtonSize.width - _fabMargin,
-              base.dy - 76);
+final extra = (geometry.scaffoldSize.width - contentW) / 2;   // 两侧各让出多少
+return Offset(base.dx - extra, base.dy - 76);                 // 平移，不重算边距
 ```
 
+- **不重算边距、只做平移**：`base.dx` 已经是「屏幕右缘 − 按钮宽 − 标准边距」，
+  减掉两侧让出的那一段就等价于「内容栏右缘 − 按钮宽 − 标准边距」—— 于是不必知道
+  Flutter 那个边距常量是多少。
 - **手机上逐像素不变**：`scaffoldSize.width = 420 < 720` → `contentW = 420` →
-  `rightEdge = 420` → `dx` 与 `endFloat` 一模一样。
-- 1280 上 FAB 从屏幕右缘（x≈1208）挪到内容栏右缘（x≈928）。
+  `extra = 0` → `dx` 与 `endFloat` 一模一样。
+- 1280 上 FAB 从屏幕右缘挪到内容栏右缘（各往左 280）。
 - 那个 `-76`（抬到胶囊之上）**不动**。
 
-范围因此变成：日历页 + 三个 tab + 一个 location。
+**② 闹钟页那条按钮带**不一样：它不是一个定尺的方块，而是一条铺满宽的带子
+（`_bottomActionBar` 自己按 `MediaQuery.size.width − 32` 定宽）。所以两处都要改：
+宽度取 `min(屏宽, 720) − 32`，`_AboveCapsuleBarLocation.getOffset` 的 x 从写死的
+`16` 改成 `(屏宽 − 栏宽) / 2 + 16`（手机上恒为 16 → 逐像素不变）。
+
+范围因此变成：日历页 + 三个 tab + 两个 location。
 
 ### 4.8 一个字不动的东西
 
@@ -241,7 +264,7 @@ return Offset(rightEdge - geometry.floatingActionButtonSize.width - _fabMargin,
 |---|---|---|
 | 全部竖屏档（`light` / `dark` / `en` / `xl360` / `xl320`） | **逐像素不变** | 没碰竖屏任何一支 |
 | `small 200×400` | **逐像素不变** | `isShort` 且不宽，胶囊尺寸与版式都不动 |
-| `landscape 900×420` | **变**（39 屏） | ① 胶囊限宽 **868→440**；② 日历多出 96 的胶囊让位（版式本身不变，见 §4.1.1）；③ `05_todos` 的 FAB 跟着 720 栏往左挪了一截（900 宽也触发限宽） |
+| `landscape 900×420` | **变**（39 屏） | ① 胶囊限宽 **868→440**；② 日历多出 96 的胶囊让位；③ 今日卡从右上挪到右下（两支撑共用同一根右栏，见 §4.1.1 的订正）；④ `05_todos` 的 FAB 与 `06_alarm` 的按钮条跟着 720 栏往左挪（900 宽也触发限宽） |
 | 新增的宽屏档 | 新图 | 见 §6.2 |
 
 **「竖屏一张都不变」必须实测**，不能靠推理 —— 用 `scripts/diff_visual.py` 逐张比。

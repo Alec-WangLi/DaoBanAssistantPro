@@ -354,7 +354,12 @@ void main() {
       find.text(L10n.monthDayWeekday(dateOnly(DateTime.now())));
 
   testWidgets('宽屏：日历改左右分栏，信息卡在右不在下', (tester) async {
-    await _pumpCalendar(tester, 'four_crew_three_shift', width: 1280);
+    // ⚠️ **尺寸必须写成「宽且横」**（1280×800）。原来只传了 `width: 1280`、
+    // 高度取 `_pumpCalendar` 的默认 1600 —— 那其实是一台**竖着的平板**，
+    // 而分栏的判据是「宽且矮」（手机横屏）与「宽且高且横向」（平板/车机），
+    // 竖屏平板本该走竖屏那一套。这条用例以前能过，是因为当时判据只看了宽度。
+    await _pumpCalendar(tester, 'four_crew_three_shift',
+        width: 1280, height: 800);
     expect(tester.getTopLeft(cardDate()).dx, greaterThan(640),
         reason: '宽屏下信息卡应当被排在右栏，而不是底栏');
     await _disposeCalendar(tester);
@@ -2299,6 +2304,21 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  testWidgets('竖着的平板（800×1280）走竖屏版式：不分栏、也不画右栏', (tester) async {
+    // ⚠️ **独立审查抓出来的一条**：第二支的判据原来只写了 `isWide`，
+    // 于是「宽但竖着」的平板也落进那一支、被拆成左右两栏 —— 而 spec §4.1 说的
+    // 恰恰是要修掉这处怪相（七列格子要的是宽度，不是分栏）。
+    await _pumpCalendar(tester, 'six_crew_three_shift',
+        width: 800, height: 1280);
+    expect(find.byKey(const Key('info-rail')), findsNothing,
+        reason: '竖屏平板被拆成了左右两栏 —— 该走竖屏那套');
+    // 网格仍然在，而且铺满整个宽度。
+    final grid = tester.getRect(find.byKey(const Key('calendar-grid')));
+    expect(grid.width, closeTo(800, 1));
+    expect(find.byKey(const ValueKey('day-card-13')), findsOneWidget);
+    await _disposeCalendar(tester);
+  });
+
   testWidgets('宽横屏：顶栏收在左栏里、年月胶囊不再被拉伸', (tester) async {
     await _pumpCalendar(tester, 'six_crew_three_shift',
         width: 1280, height: 800);
@@ -2356,16 +2376,31 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  testWidgets('宽横屏右栏装不下时自己滚，不溢出', (tester) async {
-    // 车机上用户开着「特大」字号：六班组那种最满的信息卡会高过这一栏。
-    // 期望是**这一栏自己滚**，而不是 BOTTOM OVERFLOWED（溢出会被框架当场判失败）。
-    // 1024×600 是最紧的一档：右栏只有 600 − 96 = 504 高。
+  testWidgets('宽横屏最紧的一档：今日卡仍然装得下，而且贴底', (tester) async {
+    // ⚠️ **这条用例原来是句空话**（独立审查指出来的）。原文写「右栏装不下时自己滚」，
+    // 跑的是 1024×600 —— 但那一档卡片本来**装得下**，断言里的
+    // `rail.bottom − card.bottom ≤ 20` 恒真，它测的其实是「贴底」，与「装不下」无关。
+    //
+    // 而且**「装不下」在宽横屏这一支今天根本到不了**：宽横屏要求高 ≥ 480 ⇒
+    // 右栏高 ≥ 480 − 96 = 384，而今日卡在我们最大的字号档下也只有三百六十出头
+    // （实测 362.3 —— 余量只有 22dp）。所以那句承诺无从验证；与其留一条读起来像
+    // 覆盖了的假用例，不如把**真实的最紧几何**钉住：卡片必须仍然矮于右栏。
+    // 卡片再长高 6% 这条就红 —— 那时右栏会开始滚，是「要么调阈值、要么承认走滚动」
+    // 的岔路口。
+    //
+    // ⚠️ **贴底那半句在**这里**鉴别力很弱**（362 装在 384 里，顶对齐与贴底只差
+    // 十几 dp）—— **强的那条在 1280×800 那条用例里**（那里差 412dp）。
+    // 右栏外面那层 `SingleChildScrollView` 是结构性兜底：溢出的表现是「这一栏自己滚」
+    // 而不是黄黑条纹。
     await _pumpCalendar(tester, 'six_crew_three_shift',
-        width: 1024, height: 600);
+        width: 1024, height: 480);
     final rail = tester.getRect(find.byKey(const Key('info-rail')));
     final card = tester.getRect(find.byKey(const Key('info-card-panel')));
+    expect(card.height, lessThan(rail.height),
+        reason: '最紧的宽横屏档下卡片 ${card.height} 高过了右栏 ${rail.height} —— '
+            '这一档的「装得下」不再成立，要么调阈值、要么承认走滚动兜底');
     expect(rail.bottom - card.bottom, lessThanOrEqualTo(20),
-        reason: '装得下装不下，卡片都该贴着这一栏的底边');
+        reason: '装得下的时候，卡片就该贴着这一栏的底边');
     await _disposeCalendar(tester);
   });
 
