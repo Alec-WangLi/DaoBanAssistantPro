@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
 import 'app_icon.dart';
+import 'glass_title_row.dart';
 
 /// 抓一个「关掉本弹窗」的回调，给弹窗里的动作在 `await` 之后用。
 ///
@@ -97,25 +98,10 @@ class _GlassDialogState extends State<GlassDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 4,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                  ),
-                ),
-                const SizedBox(width: AppTokens.gapIconTextLg),
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: AppTokens.dialogTitle,
-                  ),
-                ),
-                if (widget.showClose) const _GlassCloseButton(),
-              ],
+            GlassTitleRow(
+              title: widget.title,
+              titleStyle: AppTokens.dialogTitle,
+              trailing: widget.showClose ? const _GlassCloseButton() : null,
             ),
             const SizedBox(height: _gap),
             // 内容过长时**卡内滚动**，而不是把弹窗撑到屏幕外。
