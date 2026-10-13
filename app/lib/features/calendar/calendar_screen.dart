@@ -12,6 +12,7 @@ import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/theme/animated_background.dart';
 import '../../core/widgets/app_icon.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
@@ -1411,7 +1412,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       BuildContext context, ScheduleChain? chain, double availHeight) {
     final body = _gridBody(context, chain, availHeight);
     if (!_factsFor(chain).hasNoSchedule) return body;
-    final muted = AppTokens.inkMuted(context);
     return Stack(
       children: [
         body,
@@ -1423,22 +1423,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     horizontal: AppTokens.spaceXl),
                 // **必须是一张（近）不透明的面板**：直接铺两行字会压在格子的
                 // 日期与农历上，两边都看不清（出图当场看出来的）。
+                //
+                // 面板**只留左右 + 顶部**：下面那句是共享空态件
+                // （`EmptyState`，v0.12.0 收口），它自带 `all(spaceLg)` 留白 ——
+                // 面板再留一份纵向就会叠成 `12 + 16`。标题自己留顶部那 12。
                 child: GlassPanel(
                   solid: true,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.spaceLg,
-                      vertical: AppTokens.spaceMd),
+                  padding: const EdgeInsets.fromLTRB(
+                      AppTokens.spaceLg, AppTokens.spaceMd, AppTokens.spaceLg, 0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(L10n.noScheduleHere,
                           textAlign: TextAlign.center,
                           style: AppTokens.sectionTitle),
-                      const SizedBox(height: AppTokens.spaceXs),
-                      Text(L10n.noScheduleHereHint,
-                          textAlign: TextAlign.center,
-                          style:
-                              AppTokens.rowSecondary.copyWith(color: muted)),
+                      EmptyState(L10n.noScheduleHereHint),
                     ],
                   ),
                 ),

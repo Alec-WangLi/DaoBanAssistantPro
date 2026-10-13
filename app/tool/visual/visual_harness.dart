@@ -868,6 +868,24 @@ Future<void> seedBlankSchedule(AppDatabase db) async {
   );
 }
 
+/// 空态屏（`62_alarm_empty` / `63_todos_empty`）用的库。
+///
+/// **空态此前从没进过屏单**（41 屏里零覆盖）—— 而它正是 v0.8.1 那类「没进屏单 =
+/// 没人真正看过」的界面。两条空态各要一份**真的空**的库，否则拍出来的是一张排满
+/// 内容的页、那一条等于没拍：
+///   · 闹钟页那句「近 30 天无班次闹钟」只在**有班表在管、而未来 30 天一个班次闹钟
+///     都没有**时出现（`chain == null` 时走的是转圈，不是空态）。所以**不能**给一份
+///     「一张排班都没有」的空库 —— 那样 `seedIfEmpty` 会补回默认的四班两倒、反而画
+///     满闹钟。要的是 `seedBlankSchedule` 那张**没有班次**的空白表。
+///   · 待办页那句「还没有待办事项」只在**一条待办都没有**时出现。
+Future<void> seedEmptyStates(AppDatabase db) async {
+  await seedBlankSchedule(db);
+  final repo = AppRepository(db);
+  for (final e in await repo.listEvents()) {
+    await repo.deleteEvent(e);
+  }
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});

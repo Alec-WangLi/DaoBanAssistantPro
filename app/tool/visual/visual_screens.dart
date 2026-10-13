@@ -487,6 +487,33 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const _ColorPickerHost(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // **空态此前从没进过屏单**（41 屏里零覆盖）—— 而它正是 AGENTS.md 记的
+    // v0.8.1 那类：「没进屏单 = 没人真正看过」。收了共享件（`EmptyState`）之后
+    // 必须补上这只眼睛，否则「那一句话摆在页面里是什么观感」还是只有断言、没有图。
+    //
+    // 这一屏是闹钟页在**有班表在管、但未来 30 天没有班次闹钟**时的样子（空白表：
+    // `hasScheduleOn` 为真、`shiftOn` 为假）—— 库里**不能**是真空的，理由见
+    // `seedEmptyStates`。
+    slug: '62_alarm_empty',
+    title: '闹钟 · 空态',
+    build: (db) async {
+      await seedEmptyStates(db);
+      return const AlarmScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 待办页在**一条待办都没有**时的空态：那句话**垂直居中**（四处里唯一一处）、
+    // 横向留白走共享件。这屏同时是 `05_todos`（有内容）的反面证据。
+    slug: '63_todos_empty',
+    title: '待办 · 空态',
+    build: (db) async {
+      await seedEmptyStates(db);
+      return const ScheduleScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。

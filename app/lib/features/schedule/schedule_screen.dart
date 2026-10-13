@@ -8,6 +8,7 @@ import '../../core/widgets/centered_content.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/layout.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
@@ -153,20 +154,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
             ),
             Expanded(
               child: events.isEmpty
-                  ? Center(
-                      // 左右留白 + 居中换行：小窗（200 宽）里这一句话比屏还宽，
-                      // 居中之后两头都被切掉 —— Text 的横向溢出不是 RenderFlex
-                      // 溢出，工装的 failOnOverflow 抓不到，只能靠出图看。
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Text(
-                          L10n.noEvents,
-                          textAlign: TextAlign.center,
-                          style: AppTokens.rowSecondary
-                              .copyWith(color: AppTokens.inkMuted(context)),
-                        ),
-                      ),
-                    )
+                  // 整页没有任何待办：**垂直居中**（四处空态里唯一一处居中的 ——
+                  // 其余三处都在一个区块里、本来就顶对齐）。横向留白走共享件的
+                  // `all(spaceLg)`，与从前那句 24 同量级；这句话在小窗（200 宽）里
+                  // 比屏还宽，靠共享件的 `textAlign: center` 换行居中（Text 的横向
+                  // 溢出不是 RenderFlex 溢出，工装的 failOnOverflow 抓不到，只能靠出图看）。
+                  ? EmptyState(L10n.noEvents, alignment: Alignment.center)
                   : ListView(
                       // 底部留白走 `kFloatingActionInset`：这一页的「新建」按钮是
                       // **悬浮**在列表之上的，96 那一档下最后一行会被它压住
@@ -180,16 +173,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                         // 主列表空了、归档还有：那句话仍要出现，而折叠区挂在它下面
                         // —— 不能让归档被空态顶掉（那几条就再也点不开了）。
                         if (split.active.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 24),
-                            child: Text(
-                              L10n.noEvents,
-                              textAlign: TextAlign.center,
-                              style: AppTokens.rowSecondary
-                                  .copyWith(color: AppTokens.inkMuted(context)),
-                            ),
-                          ),
+                          EmptyState(L10n.noEvents),
                         if (split.archived.isNotEmpty) ...[
                           _archiveHeader(context, split.archived.length),
                           if (_archiveOpen)

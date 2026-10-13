@@ -8,6 +8,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
@@ -150,17 +151,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
       return const Center(child: CircularProgressIndicator());
     }
     if (shiftAlarms.isEmpty) {
-      return Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-          child: Text(
-            L10n.noUpcoming30,
-            style: AppTokens.rowSecondary
-                .copyWith(color: AppTokens.inkMuted(context)),
-          ),
-        ),
-      );
+      return EmptyState(L10n.noUpcoming30);
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),

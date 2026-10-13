@@ -14,6 +14,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/layout.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
@@ -55,14 +56,7 @@ class _RecurringList extends ConsumerWidget {
       );
     }
     if (series.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(AppTokens.spaceLg),
-        child: Text(
-          L10n.recurringEmpty,
-          style:
-              AppTokens.rowSecondary.copyWith(color: AppTokens.inkMuted(context)),
-        ),
-      );
+      return EmptyState(L10n.recurringEmpty);
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
