@@ -324,34 +324,67 @@ class AppTokens {
   static const double iconMd = 20;
   static const double iconLg = 24;
 
-  /// **实心面的主色** —— 比 `colorScheme.primary` 深一档（保持色相与饱和度，
-  /// 明度 × 0.62）。
+  /// **实心面的主色** —— 压到「白字刚好过 AA」为止，能不动就不动。
   ///
   /// 为什么需要它：**白字/白图标压在实心主色上**的那些面（主按钮、弹窗动作钮、
   /// 导航选中、分段器滑块、待办那颗悬浮按钮、勾选块、液态档的玻璃滴）里，
-  /// `teal` / `orange` / `rose` 三颗主色配白字是**到不了 AA 的**（teal 2.63、
-  /// orange 2.55、rose 4.09 —— 而用户自己用的就是 teal）。
+  /// `teal` / `orange` 两颗主色配白字是**到不了 AA 的**（teal 2.63、orange 2.55）。
   ///
-  /// 2026-10-15 出对照图让用户挑，选了「实色压深一档 + 白字」这一条：
-  /// 字保持白、实心面比设置里那颗主色深一档。实测五种主色在白卡上
-  /// **10.5 / 9.3 / 6.1 / 5.9 / 8.0**，全部过线（另一条路是黑白自动给字色，
-  /// 那会让 teal/orange/rose 的三颗变黑字，用户不要）。
+  /// ## 力度：**按需压，不搞一刀切**（v0.11.22 收的）
+  ///
+  /// v0.11.21 第一版是**一律**「明度 × 0.62」—— 不问原来多深都再砍四成。可默认
+  /// 那颗蓝配白字本来就有 **5.26:1**，根本不需要压，被砍成 11.35:1，浅色档下
+  /// 那块面看着就是一块黑（用户 2026-10-15 真机：「浅色模式下太暗了」「胶囊的颜色
+  /// 之前是稍微浅一点的颜色，挺好看的」）。现在的规则是**它在定义上不可能压过头**：
+  /// 本来就够的主色原样返回，不够的压到**刚过线**就停。
+  ///
+  /// ⚠️ **判据落在「真正画出来的那一层」** —— 渐变最浅的那一端（0.92 不透明度）
+  /// 压在白底上是白字最不利的一点，线取 4.52（AA 4.5 + 8 位取整的余量）。
   ///
   /// **只用在「压着白内容」的实心面上**；主色做文字色 / 图标色 / 描边 / 淡染底
   /// （日历选中块、「今天」那一格、CapsuleRim 之类）**照旧用 `colorScheme.primary`** ——
-  /// 那些地方压的不是白字，深一档反而会让整套配色偏暗。
+  /// 那些地方压的不是白字，压深反而会让整套配色偏暗。
   static Color solidAccent(Color accent) {
+    // **本来够就一个像素都不动**（默认那颗蓝配白字 5.26:1，根本不需要压）。
+    if (_whiteFitsOnSolid(accent)) return accent;
+
+    // 不够才压，而且**压到刚好够就停** —— 再亮一档就不够了。
     final hsl = HSLColor.fromColor(accent);
-    return hsl.withLightness((hsl.lightness * 0.62).clamp(0.0, 1.0)).toColor();
+    var lightness = hsl.lightness;
+    while (lightness > 0) {
+      lightness -= _solidStep;
+      final candidate = hsl.withLightness(lightness.clamp(0.0, 1.0)).toColor();
+      if (_whiteFitsOnSolid(candidate)) return candidate;
+    }
+    return hsl.withLightness(0.0).toColor();
   }
 
-  /// 实心面的填充（按钮 / 导航选中 / 填充条用）：**深一档的主色**，顶 1.0 → 底 0.92。
+  /// 实心面渐变**最浅的那一端**的不透明度（`accentGradient` 的第二端）。
+  static const double _solidBottomAlpha = 0.92;
+
+  /// 压深的搜索步长（HSL 明度）。0.004 ≈ 8 位通道上的一次跳动。
+  static const double _solidStep = 0.004;
+
+  /// 白字压在实心面上要到的线。WCAG AA 是 4.5，留 0.02 给 8 位取整。
+  static const double _solidInkTarget = 4.52;
+
+  /// 白字压在 [surface] 上过不过 AA —— 按渐变**最浅**的那一端、压在**白底**上算
+  /// （白底是最坏情况：底越暗对比度越高）。
+  static bool _whiteFitsOnSolid(Color surface) =>
+      contrastRatio(
+        Colors.white,
+        Color.lerp(surface, Colors.white, 1 - _solidBottomAlpha)!,
+      ) >=
+      _solidInkTarget;
+
+  /// 实心面的填充（按钮 / 导航选中 / 填充条用）：[solidAccent] 那一档主色，
+  /// 顶 1.0 → 底 0.92（**按需压深**，本来就够的主色就是原色本身）。
   ///
   /// 以前是「原主色 0.85 → 0.50」的两端半透明渐变，两个问题：**① 压在白卡上，
   /// 连 primary 的渐变尽头都只有 2.1:1**（半透明的 50% 端几乎是一层淡色），
   /// ② 底下那 0.50 端让 `teal`/`orange` 这类浅主色上的白字彻底读不出来。
-  /// 现在两端都接近不透明，白字在**整条渐变上**都过 AA（最差的一档是 orange
-  /// 的 0.92 端，白卡上 4.9:1；深色卡上全部 ≥ 6.5）。
+  /// 现在两端都接近不透明，白字在**整条渐变上**都过 AA —— 而且是**按需**过：
+  /// 底色的深浅由 [solidAccent] 只压到刚好够，不再多压。
   static LinearGradient accentGradient(Color accent) {
     final solid = solidAccent(accent);
     return LinearGradient(
@@ -528,12 +561,19 @@ class AppTokens {
       ? Colors.white.withValues(alpha: 0.16)
       : inkLight.withValues(alpha: 0.14);
 
-  /// 胶囊滑块选中项前景（图标/文字）：浅色模式滑块被白底冲淡，恒用深字；
-  /// 暗色模式按明度选黑/白——当前 5 个主题色均低于 0.45 阈值，走白字。
-  static Color navForeground(bool isDark, Color accent) {
-    if (!isDark) return inkLight;
-    return accent.computeLuminance() > 0.45 ? inkLight : inkDark;
-  }
+  /// 胶囊滑块**选中项**的前景（图标与文字）—— 由**它压着的那块底**决定。
+  ///
+  /// ⚠️ **判据是「压在哪块底上」，不是「现在是浅色档还是深色档」。** 老实现写的是
+  /// `if (!isDark) return inkLight;`（浅色档恒近黑字），那在滑块还是**半透明**的
+  /// 年代是对的：浅色下透出来是一片亮蓝，深字正好读。
+  ///
+  /// v0.11.21 把滑块换成不透明 + 压深之后没人动这一处 ⇒ 浅色档下变成
+  /// **`#111118` 压在 `#1925AC` 上 = 1.66:1**，基本不可读。用户 2026-10-15 真机
+  /// 一眼看出来（「浅色模式下黑色字怎么感觉看不清了呀」，例子就是底部导航栏）。
+  /// 现在跟 `AppTokens.onSolid` 同一族：**按真正的底取**，五种主色两档主题都恒为白。
+  ///
+  /// 同类的地方还有一处：分段器选中项的字（`GlassSegment` 里统一给白，见那件）。
+  static Color navForeground(Color accent) => onSolid(solidAccent(accent));
 
   /// 导航胶囊上**未选中**项的前景（图标与文字）。
   ///

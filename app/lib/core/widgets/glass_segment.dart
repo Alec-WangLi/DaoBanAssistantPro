@@ -42,6 +42,11 @@ class GlassSegment extends StatefulWidget {
   final ValueChanged<int> onSelected;
 
   /// 每个分段的内容（index, 是否选中）。
+  ///
+  /// ⚠️ **选中那一格的内容一律是白字** —— 它压在**实心主色**的滑块上（浅色档下
+  /// 也是一块深底），见 [_GlassSegmentState._content]。调用点的 `Text` 只要**不显式
+  /// 指定颜色**就会拿到白；要指定就得自己给白（`Work/Rest` 那一处就是这么写的）。
+  /// 未选中那一格不受影响，照常吃主题的正文色。
   final Widget Function(int index, bool selected) itemBuilder;
   final double height;
 
@@ -299,8 +304,19 @@ class _GlassSegmentState extends State<GlassSegment>
         : (lensItemW + LiquidLensMetrics.forCapsule(widget.height).liftWidth) / 2;
     return Row(
       children: List<Widget>.generate(widget.count, (int i) {
-        final Widget cell =
+        Widget cell =
             Center(child: widget.itemBuilder(i, i == selectedIdx));
+        // **选中那一格的字一律白**：它压在那枚**实心主色**的滑块上（浅色档下也是
+        // 一块深底、两档主题同一个颜色）。不这么收口的话字色跟着主题走 ——
+        // 浅色档就是「近黑字压深蓝块」，实测 1.55:1（v0.11.21 之后的样子，
+        // 用户 2026-10-15 真机报的）。调用点自己显式给了颜色的，以调用点为准。
+        if (i == selectedIdx) {
+          cell = DefaultTextStyle(
+            style:
+                DefaultTextStyle.of(context).style.copyWith(color: Colors.white),
+            child: cell,
+          );
+        }
         if (lensItemW == null) return Expanded(child: cell);
         return Expanded(
           child: LensWarpedCell(

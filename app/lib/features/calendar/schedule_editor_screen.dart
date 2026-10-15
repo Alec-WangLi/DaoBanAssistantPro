@@ -688,9 +688,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 // 13 档最重的角色是 w600，分段器标签原本就是 w700：选中态只改
                 // 色不改重，字重是控件自己的标签强调，按 spec 走 copyWith。
                 style: AppTokens.labelSecondary.copyWith(
-                  color: selected
-                      ? Theme.of(context).colorScheme.onSurface
-                      : muted,
+                  // ⚠️ **选中的那一格压在实心主色滑块上 ⇒ 必须白字。**
+                  // 这里取的是 `onSurface`（浅色档下就是近黑），在滑块还是半透明的
+                  // 年代读得出来，换成不透明 + 压深之后就是「深底压深字」
+                  // （`GlassSegment` 也会给选中格一层白 `DefaultTextStyle`，
+                  // 但这里显式写了颜色，以调用点为准 —— 所以这一处必须自己改）。
+                  color: selected ? Colors.white : muted,
                 ).copyWith(fontWeight: FontWeight.w700),
               ),
             ),

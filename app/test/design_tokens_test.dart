@@ -44,6 +44,14 @@ const List<String> _scanDirs = [
   'lib/core/theme',
 ];
 
+/// 白字压在**实心主色面**上过不过 AA —— 按渐变**最浅**的那一端（0.92 不透明度）
+/// 压在页面底上算，那是最坏的一点。
+bool _whiteFitsOnSolid(Color surface) => _wcagContrast(
+      Colors.white,
+      _over(surface.withValues(alpha: 0.92), const Color(0xFFF5F6FA)),
+    ) >=
+    4.5;
+
 /// 文件级豁免：**配色层本身**。
 ///
 /// 这两个文件是颜色的**定义处**，不是颜色的**用法** —— 主色板与中性 seed 本来
@@ -954,9 +962,9 @@ Text('x', style: TextStyle(
   });
 
   test('实心面：白字在渐变两端、两档底色上都过 AA（5 个主题色）', () {
-    // 2026-10-15 用户从三条对照路里选了「实色压深一档 + 白字」：实心面（主按钮 /
+    // 2026-10-15 用户从三条对照路里选了 ②「字白 + 压深收手」：实心面（主按钮 /
     // 弹窗动作钮 / 导航选中 / 分段器滑块 / 悬浮按钮 / 开关 / 勾选块 / 液态档玻璃滴）
-    // 一律用 `solidAccent`（主色明度 × 0.62），字保持白。
+    // 走 `solidAccent` 压深，字一律白。
     //
     // **这条钉的就是那件事**：原主色配白字，teal 2.63 / orange 2.55 / rose 4.09，
     // 三颗都到不了 AA（而用户自己用的就是 teal）；而且旧渐变是半透明的
@@ -974,12 +982,36 @@ Text('x', style: TextStyle(
               reason: '$accent 的白字在 ${stop.a} 这一端（底色 $bg）不达 AA');
         }
       }
-      // 压深是「同一个色更暗」，不是换一个颜色：色相不变、明度更小。
+    }
+  });
+
+  test('压深「刚好够」：过 AA 就停，本来就够的主色一个像素都不许动', () {
+    // v0.11.22 的收口。旧规则是**一律**把主色明度 ×0.62 —— 不问原来多深。
+    // 默认那颗蓝配白字本来就有 5.26:1，被砍成 11.35:1，浅色档下那块面看着就是
+    // 一块黑（用户 2026-10-15 真机：「太暗了」「胶囊的颜色之前浅一点挺好看的」）。
+    // 真正需要压的只有 teal（2.63）与 orange（2.55）。
+    for (final accent in AppColors.accentPalette) {
+      final solid = AppTokens.solidAccent(accent);
       final before = HSLColor.fromColor(accent);
-      final after = HSLColor.fromColor(AppTokens.solidAccent(accent));
+      final after = HSLColor.fromColor(solid);
+
       expect(after.hue, closeTo(before.hue, 1), reason: '$accent 的色相不该被改掉');
-      expect(after.lightness, lessThan(before.lightness),
-          reason: '$accent 应该更暗');
+      expect(after.lightness, lessThanOrEqualTo(before.lightness + 1e-9),
+          reason: '$accent 只该压深、不该变亮');
+
+      if (_whiteFitsOnSolid(accent)) {
+        // 本来就够 —— 不许再压。
+        expect(solid, accent, reason: '$accent 本来就过 AA，不该再压一档');
+      } else {
+        expect(_whiteFitsOnSolid(solid), isTrue, reason: '$accent 压完必须过 AA');
+        // **「刚好够」的鉴别力全在这一条**：再亮 2% 就不该过。
+        // 仍然过 ⇒ 压过头了（旧的 ×0.62 就是压过头的极端情形）。
+        expect(
+            _whiteFitsOnSolid(
+                after.withLightness(after.lightness + 0.02).toColor()),
+            isFalse,
+            reason: '$accent 压过头了：再亮 2% 白字照样过线');
+      }
     }
   });
 
@@ -997,23 +1029,28 @@ Text('x', style: TextStyle(
     expect(light.a, greaterThan(0.08));
   });
 
-  test('5 个主题色在胶囊滑块上文字对比度 ≥ 4.5', () {
-    // 模拟滑块：主题色渐变与玻璃底按 60% 混合（文字所在区域的近似比例）
+  test('导航选中项的字色：压在那块实心面上必须过 AA（5 个主题色 × 两档主题）', () {
+    // ⚠️ **这条以前是「假的绿」**：它把滑块模拟成「主色与底色按 60% 混合」的
+    // **半透明**面，于是 `navForeground` 在浅色档返回近黑字一直是"对"的。
+    // v0.11.21 把滑块换成不透明 + 压深，谁也没回来改这里 —— 浅色档下实测
+    // `#111118` 压在 `#1925AC` 上 = **1.66:1**（用户 2026-10-15 一眼看出来）。
+    //
+    // 判据改成按**真正画出来的那一层**算：底就是 `solidAccent`（与那个常量同源），
+    // 两档主题都得过 —— 因为这块底在两档下是同一个颜色。
     const bgLight = Color(0xFFF5F6FA);
     const bgDark = Color(0xFF16161E);
     for (final accent in AppColors.accentPalette) {
-      final sliderLight = Color.lerp(bgLight, accent, 0.6)!;
-      expect(
-        _wcagContrast(AppTokens.navForeground(false, accent), sliderLight),
-        greaterThanOrEqualTo(4.5),
-        reason: '亮色模式 $accent',
-      );
-      final sliderDark = Color.lerp(bgDark, accent, 0.6)!;
-      expect(
-        _wcagContrast(AppTokens.navForeground(true, accent), sliderDark),
-        greaterThanOrEqualTo(4.5),
-        reason: '暗色模式 $accent',
-      );
+      final surface = AppTokens.solidAccent(accent);
+      final ink = AppTokens.navForeground(accent);
+      for (final stop in <Color>[
+        surface,
+        surface.withValues(alpha: 0.92),
+      ]) {
+        for (final bg in <Color>[bgLight, bgDark]) {
+          expect(_wcagContrast(ink, _over(stop, bg)), greaterThanOrEqualTo(4.5),
+              reason: '$accent：导航选中项的字压在实心块上（底色 $bg）不达 AA');
+        }
+      }
     }
   });
 

@@ -21,9 +21,9 @@ import '../design_tokens.dart';
 /// 「主色 30% 透明度 + 主色字」，实测对比度浅色 3.0:1 / 深色 2.7:1，都低于 AA；
 /// 改成实心后 5.3:1（渐变深处 7:1），也与主按钮的实心主色形态一致。
 ///
-/// **已知遗留**：teal / orange / rose 三种主色下，白字压在这个实心面上仍不达 AA
-/// （见 `AGENTS.md` 的「白字压在实心主色上」那条）—— 与 `GlassActionButton` /
-/// `GlassButton` 的 primary 是同一个待办，不是这里引入的。
+/// ⚠️ **内容必须显式写白**：底色走 `solidAccent`（按需压深），而**字色跟着主题
+/// 走的话，浅色档就是「近黑字压深底」** —— 用户 2026-10-15 真机报的那条就是这么
+/// 来的（底栏与分段器）。浅色档下 `colorScheme.primary` 只会更暗，别拿它当字色。
 class GlassPill extends StatelessWidget {
   const GlassPill({
     super.key,

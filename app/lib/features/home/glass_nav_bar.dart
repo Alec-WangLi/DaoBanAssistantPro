@@ -218,7 +218,7 @@ class _GlassNavBarState extends State<GlassNavBar>
     final activeColor = Theme.of(context).colorScheme.primary;
     final inactiveColor =
         AppTokens.navInactiveForeground(context, isDark: isDark);
-    final fg = AppTokens.navForeground(isDark, activeColor); // 滑块上选中项前景
+    final fg = AppTokens.navForeground(activeColor); // 滑块上选中项前景
     final selectedIndex = _lens.previewIndex ?? _committedIndex;
 
     // **两棵树，不是一棵树上的两处开关。**

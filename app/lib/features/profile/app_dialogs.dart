@@ -40,7 +40,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh =         'v0.11.21\n'
+const String _changelogZh =         'v0.11.22\n'
+    '· 修上一版带出来的一处：浅色模式下，压在实心主色上的字是黑的 —— 底部导航选中的那两个字、「我的」页那几条分段器（主题模式 / 语言 / 字体大小）都读不清，现在一律白字\n'
+    '· 压深改成「够用就好」：以前不管原来多浅都再压掉四成，默认那颗蓝明明够亮也被压成近黑；现在只有真不够的（青、橙）才压，而且压到刚读得清就停\n'
+    '· 于是胶囊、按钮、导航、开关这几处的颜色都回到了接近「我的 → 外观」里那颗主色 —— 上一版说的「实心面比主色深一档」那个代价，现在只在青和橙上还看得到\n'
+    '\n'
+'v0.11.21\n'
     '· 实心主色面换成深一档的主色：主按钮、弹窗按钮、导航选中、开关、勾选、待办那颗悬浮按钮、顶栏的实心胶囊 —— 以前白字压在原主色上，teal 只有 2.6:1、orange 2.6:1，等于读不清；现在五种主色都在 5.9:1 以上\n'
     '· 顺带修掉一件更早就有的毛病：那层实心填充原来是半透明的（85% 到 50%），压在白底上连默认蓝的渐变尽头都只有 2.1:1\n'
     '· 代价：实心面比「我的 → 外观」里那颗主色深一档（大致是同一个色更暗一截），字保持白\n'
@@ -99,17 +104,14 @@ const String _changelogZh =         'v0.11.21\n'
     '· 更新日志那句「系统字体调多大都不再影响界面」补上例外：桌面小组件是原生绘制的，仍跟随系统\n'
     '\n'
 
-    'v0.11.12\n'
-    '· 字号改成只由 App 自己决定：我的 → 外观 → 字体大小，小 / 标准 / 大 / 特大四档。系统字体调多大都不再影响界面（桌面小组件除外 —— 它是原生绘制的，仍跟随系统）\n'
-    '· 起因是有人反馈「系统字号调大之后，日历顶栏的月份被截成 2026年1…」。实拍下来，系统调到 200% 时信息卡会吃掉半个屏、日历网格只剩三行\n'
-    '· 代价说在明处：把系统字号调到 150%~200% 的人，在这个 App 里拿不到那个大小 —— 最大就到「特大」\n'
-    '· 顺带把全 App 的「字被悄悄省略」收干净：顶栏年月、信息卡那两行、列表副标题、编辑器的标签与值、14 天预览条、几个整页的标题\n'
-    '· 窄屏或大字号下会自动换版式（顶栏改两行、副标题折行、定尺的地方等比缩小），而不是把字吃掉\n'
-    '\n'
-
     ;
 
-const String _changelogEn =         'v0.11.21\n'
+const String _changelogEn =         'v0.11.22\n'
+    '· Fixed what the previous release brought in: in light mode the text on solid accent surfaces was dark, so the selected bottom-nav item and the segments on Me (theme mode / language / font size) were hard to read. They are white now\n'
+    '· Darkening is now "just enough". It used to take 40% off the accent no matter how dark it already was, which crushed the default blue into near-black; now only the accents that genuinely need it (teal, orange) are darkened, and only until white text just passes\n'
+    '· So pills, buttons, the nav item and switches are back near the accent you picked under Me, Appearance. The "one step darker" trade-off from the last release only shows on teal and orange now\n'
+    '\n'
+'v0.11.21\n'
     '· Solid accent surfaces now use a one-step darker accent: primary buttons, dialog buttons, the selected nav item, switches, checkboxes, the todo floating button and the top-bar accent pills. White text on the original accent was only 2.6:1 for teal and orange — effectively unreadable; all five accents are now 5.9:1 or better\n'
     '· Fixed a longer-standing problem on the way: that fill used to be semi-transparent (85% to 50%), which left even the default blue at 2.1:1 at the far end against a white card\n'
     '· The trade-off: solid surfaces are one step darker than the accent shown under Me > Appearance; the text stays white\n'
@@ -166,14 +168,6 @@ const String _changelogEn =         'v0.11.21\n'
     '· The calendar page promise of everything-on-one-screen is now stated precisely: it holds at every text size on ordinary heights (360x780 and up); on short screens (640 tall) the grid falls back to the scrolling it always had — there it scrolls even at the smallest text size, because it is about height, not text size\n'
     '· The standing guard now also covers the small window and 420x900 (it had missed both). The few places the small window still clips are printed on every run instead of failing — anything deliberately left unchecked has to be visible\n'
     '· The changelog line saying the system font setting no longer affects the interface now carries its exception: the home-screen widgets are drawn natively and still follow it\n'
-    '\n'
-
-    'v0.11.12\n'
-    '· Text size is now decided by the app alone: Me → Appearance → Text size, with Small / Standard / Large / XL. The system font setting no longer affects the interface (the home-screen widgets are the exception — they are drawn natively and still follow it)\n'
-    '· It started from a report that the month in the calendar header was cut to 2026年1… when the system font was large. Measured at 200%: the info card ate half the screen and the calendar grid kept only three rows\n'
-    '· The cost, said plainly: anyone who set the system font to 150-200% will not get that size here — XL is the ceiling\n'
-    '· Also cleaned up every place the app quietly ate text: the header month, the two info-card lines, list subtitles, the editor labels and values, the 14-day preview strip, and three page titles\n'
-    '· On narrow screens or at larger text sizes the layout changes instead (a two-row header, wrapping subtitles, fixed-size bits scaled down) rather than dropping characters\n'
     '\n'
 
     ;
