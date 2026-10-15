@@ -40,14 +40,19 @@
             android:maxLines="1" />
 
         <FrameLayout
-            android:layout_width="40dp"
-            android:layout_height="18dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_marginTop="3dp">
 
+            <!-- ⚠️ 位图这一层是**尺寸的驱动者**（`wrap_content`，ImageView 带着
+                 drawable 时按位图固有尺寸量），上面那层 `match_parent` 的 TextView
+                 只是填进去。反过来的话（FrameLayout 定尺 / ImageView match_parent）
+                 位图的尺寸在布局里写死，字放大之后就会**从胶囊里溢出来**。
+                 位图的宽高在渲染侧按格子缩放算（`cardScale`），基准 40×18dp。 -->
             <ImageView
                 android:id="@+id/wg_mc_pill"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:scaleType="fitXY"
                 android:contentDescription="@null" />
 

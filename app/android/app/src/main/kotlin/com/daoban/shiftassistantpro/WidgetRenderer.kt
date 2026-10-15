@@ -700,7 +700,14 @@ object WidgetRenderer {
         // 字号按格子尺寸缩放（见 `cardScale`）。`monthCellPx` 给的是**格子卡**的高
         // （行槽减去上下各 2dp 的外边距），加回那 4dp 才是 App 那个 `cellH` 的口径。
         // 42 格共用同一个 s —— 尺寸在循环外算一次，别按格子算（那会把位图缓存冲爆）。
-        val cellScale = cardScale(cellH / context.resources.displayMetrics.density + 4f)
+        val cellDensity = context.resources.displayMetrics.density
+        val cellScale = cardScale(cellH / cellDensity + 4f)
+
+        // 胶囊位图的尺寸。基准 40×18dp × 缩放 —— 布局里那两层是 `wrap_content`，
+        // **位图就是尺寸的驱动者**（见 `widget_month_cell.xml` 那段注释）。
+        // 同样 42 格共用一对：按格子造唯一尺寸会冲爆 `WidgetChip` 的 LruCache。
+        val pillW = (40f * cellScale * cellDensity).toInt().coerceAtLeast(1)
+        val pillH = (18f * cellScale * cellDensity).toInt().coerceAtLeast(1)
 
         for (slot in 0 until 42) {
             // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
@@ -732,30 +739,37 @@ object WidgetRenderer {
 
             // ── 格子卡底（贴齐 App：白卡垫在「页面」上）──
             // 用**静态 `<shape>`**：圆角随控件尺寸走，天然不会被 `fitXY` 拉成椭圆。
-            // ⚠️ **今天那一格置 0**（不给它白卡）：块是烤好的位图、卡底是静态 drawable，
-            // 两者的圆角在宽高比不一致时会错开，叠着就会在四角露出白卡的角尖。
-            // **两个方向都要设满** —— 宿主 `reapply` 只重放新动作，漏了「置空」这一支，
-            // 翻月之后白卡会留在一格不落。
+            //
+            // 2026-10-15：**今天那一格不再置 0 了**。原先置 0 是因为块是实心位图、
+            // 卡底是静态 drawable，两者圆角在宽高比不一致时会错开、四角露出白卡的尖。
+            // 现在块改回**半透明**（见下面那段），它本来就该压在白卡上 —— 与 App 里
+            // 「页面底 → 白卡 → 主色块」三层同构。
             c.setInt(
                 R.id.wg_mc_root,
                 "setBackgroundResource",
-                when {
-                    isToday -> 0
-                    dark -> R.drawable.widget_cell_dark
-                    else -> R.drawable.widget_cell_light
-                },
+                if (dark) R.drawable.widget_cell_dark else R.drawable.widget_cell_light,
             )
 
-            // ── 「今天」那块**实心主色块** ──
-            // App 里选中那一天是一枚**半透明**的玻璃块；桌面这版有意做成实心的
-            // （见规格 §1 末尾：桌面没有实时模糊，半透明块压在任意壁纸上会消失）。
+            // ── 「今天」那块**半透明玻璃块**（2026-10-15 从实心改回来）──
+            // 用户原话：「问题就出在这格子的外观跟 App 里的差别太多了，尤其是那个
+            // 半透明块，如果你能实现的话，那基本上就很好了」。
+            //
+            // 当初（v0.11.9）做诚实的理由已经不成立了：那条写的是「半透明块压在任意
+            // 壁纸上会消失」，而**同一轮**已经把月历的面板底换成了不透明的页面色、
+            // 格子换回了白卡 —— 块压在白卡上，跟 App 里是同一个结构。App 那枚块自己
+            // 也**不带模糊**（模糊在页面背景那一层）。详见规格 §5。
+            //
             // 尺寸在循环外算好了（`cellW` / `cellH`），这里只贴。
             if (isToday) {
                 c.setViewVisibility(R.id.wg_mc_block, android.view.View.VISIBLE)
                 c.setImageViewBitmap(
                     R.id.wg_mc_block,
-                    WidgetChip.block(
-                        snap.accent, cellW, cellH, dpToPx(context, 12).toFloat(),
+                    WidgetChip.glassBlock(
+                        snap.accent,
+                        cellW,
+                        cellH,
+                        dpToPx(context, 12).toFloat(),
+                        dpToPx(context, 2).toFloat(),
                     ),
                 )
             } else {
@@ -772,18 +786,12 @@ object WidgetRenderer {
             applyScale(c, R.id.wg_mc_day, 13f, cellScale)
             applyScale(c, R.id.wg_mc_abbr, 12f, cellScale)
             applyScale(c, R.id.wg_mc_lunar, 11f, cellScale)
-            // 三种字色：今天在实心块上走 `onSolidInk`；本月的日子走 ink（相邻月的走
-            // muted —— 那是这张卡上唯一表达「这个月从哪天开始」的地方）。
-            // **字重仍然只能靠布局里的 `textStyle`**：`TextView` 没有 `setTypeface(int)`，
+            // 三种字色：今天**不再**走 `onSolidInk` —— 半透明块是**浅底**，
+            // 而 `onSolidInk` 对 teal / orange 会给白字，白压浅底读不出来
+            // （静默：默认那颗蓝是对的，只有换到浅主色才现形）。
+            // 字重仍然只能靠布局里的 `textStyle`：`TextView` 没有 `setTypeface(int)`，
             // 反射会在宿主进程抛 `ActionException`。
-            c.setTextColor(
-                R.id.wg_mc_day,
-                when {
-                    isToday -> onSolidInk(context, snap.accent)
-                    inMonth -> ink
-                    else -> muted
-                },
-            )
+            c.setTextColor(R.id.wg_mc_day, if (inMonth) ink else muted)
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块根本不画）。
             // **相邻月的格照样画**（用户 2026-09-30 选的「日数变灰、胶囊照画」）。
@@ -794,30 +802,17 @@ object WidgetRenderer {
             if (d.hasShift) {
                 c.setViewVisibility(R.id.wg_mc_pill, android.view.View.VISIBLE)
                 c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.VISIBLE)
-                // 尺寸恒定 40×18dp：一格一尺寸会让 `WidgetChip` 的位图缓存失效
-                // （key 含尺寸），42 格就把缓存冲爆。见本函数的 KDoc。
-                // 今天那格里的胶囊跟 App 一样转**实心**（淡染压在实心主色块上会糊成
-                // 一片），于是字走 `onSolidInk`。
+                // 尺寸恒定（循环外算好的 pillW × pillH）：一格一尺寸会让
+                // `WidgetChip` 的位图缓存失效（key 含尺寸），42 格就把缓存冲爆。
+                // **今天那格也走淡染**：以前它转实心是因为淡染压在实心主色块上会糊成
+                // 一片 —— 块改成半透明浅底之后那条理由没了，与 App 的普通格一致。
                 c.setImageViewBitmap(
                     R.id.wg_mc_pill,
-                    if (isToday) {
-                        WidgetChip.block(
-                            d.color,
-                            dpToPx(context, 40),
-                            dpToPx(context, 18),
-                            dpToPx(context, 9).toFloat(),
-                        )
-                    } else {
-                        WidgetChip.tintedChip(
-                            d.color, dpToPx(context, 40), dpToPx(context, 18),
-                        )
-                    },
+                    WidgetChip.tintedChip(d.color, pillW, pillH),
                 )
                 c.setTextViewText(R.id.wg_mc_abbr, d.shiftAbbr)
-                c.setTextColor(
-                    R.id.wg_mc_abbr,
-                    if (isToday) onSolidInk(context, d.color) else ink,
-                )
+                // 字色走中性 `ink`（淡染底 + 近不透明的卡底，两者都够对比度）
+                c.setTextColor(R.id.wg_mc_abbr, ink)
             } else {
                 c.setViewVisibility(R.id.wg_mc_pill, android.view.View.GONE)
                 c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.GONE)
@@ -828,13 +823,13 @@ object WidgetRenderer {
             // ⚠️ **今天那格走块上字，不走 `holiday` 的红字** —— 红字压在实心主色块上
             // 读不出来。代价是**这一天看不出「是节假日」**（一个月至多一次），
             // 可读性优先。这一条在规格的「Review Focus」里点了名。
+            // 农历的字色：**今天那格不再吃掉节假日红字**。
+            // 原先 `isToday -> onSolidInk(...)` 是为了压在实心块上读得出来，代价是
+            // 「这一天看不出是节假日」。块改回半透明（浅底）之后那条理由没有了，
+            // 红字自然回来。
             c.setTextColor(
                 R.id.wg_mc_lunar,
-                when {
-                    isToday -> onSolidInk(context, snap.accent)
-                    d.lunarIsHoliday -> holiday
-                    else -> muted
-                },
+                if (d.lunarIsHoliday) holiday else muted,
             )
 
             v.addView(slotIds[slot], c)

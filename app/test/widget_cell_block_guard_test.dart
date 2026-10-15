@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/theme/app_colors.dart';
 
 /// 读一个相对 `app/` 的文件（Dart 测试的工作目录就是 `app/`）。
 String _read(String rel) {
@@ -88,20 +89,51 @@ void main() {
     }
   });
 
-  test('今天那格的字都过 onSolidInk', () {
+  test('月历「今天」那格的字**不许**走 onSolidInk（块是半透明的浅底）', () {
+    // 2026-10-15 反转：那枚块从实心改回**半透明**之后，块上字走 `onSolidInk` 就会
+    // 在 teal / orange 上给白字 —— 白压浅底读不出来，而且是**静默**的（默认那颗蓝
+    // 选出来是对的，只有换到浅主色才现形）。
     final kt = _read(
         'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
-    expect(kt.contains('private fun onSolidInk'), true, reason: 'onSolidInk 不见了');
-    // ⚠️ 匹配的是**调用点**（`onSolidInk(context, `），不是 `onSolidInk(` ——
-    // 后者会把**函数定义**那一行也算进去（`onSolidInk(context: Context, …)`），
-    // 阈值就整体低一格，于是「少了一处分支」正好卡在边界上溜过去。
+    final monthCard = kt.substring(
+      kt.indexOf('private fun monthCard('),
+      kt.indexOf('private fun stripCellPx('),
+    );
+    expect(monthCard.length, greaterThan(500), reason: '没截出 monthCard —— 护栏自己跟源码对不上了');
+    expect(monthCard.contains('onSolidInk(context,'), false,
+        reason: 'monthCard 里还有 onSolidInk 的调用 —— 半透明块是浅底，那会给白字');
+    expect(monthCard.contains('glassBlock'), true, reason: '块没换成半透明那一支');
+
+    // 而周条那一列与今日卡的「今天」药丸**仍然**要它（那两处还是实心块，
+    // 药丸更是白字压主色）。这是一个**下界**：4 处 = 周条三处 + 今日卡药丸一处。
     final uses = RegExp(r'onSolidInk\(context, ').allMatches(kt).length;
-    // ⚠️ 这是一个**下界**（不是精确计数）：它抓的是「漏了一处分支」。
-    // 月格三处（日数字 / 农历 / 胶囊简称）+ 周条三处（周几 / 日数字 / 简称）
-    // + 今日卡药丸一处 ＝ 7。少一处就是「红字 / 蓝字压在实心块上读不出来」这类情况。
-    expect(uses, greaterThanOrEqualTo(7),
-        reason: 'onSolidInk 的**调用点**只有 $uses 处 —— 月格三处 + 周条三处 '
-            '+ 今日卡药丸一处应当凑齐 7 处');
+    expect(uses, greaterThanOrEqualTo(4),
+        reason: 'onSolidInk 的调用点只剩 $uses 处 —— 周条三处 + 今日卡药丸一处应当凑齐 4 处');
+  });
+
+  test('半透明块上的字：五种主色下 ink 都过 AA，而白字都过不了', () {
+    // Review Focus 第 2 条（规格 §5）：今天那格的块从实心改成半透明之后，
+    // 块上字改走中性 `ink`。这条把「为什么必须改」也算出来 —— 旧代码走
+    // `onSolidInk(accent)`（黑/白二选一），而对 **teal** 它会选白字，白字压在
+    // 「白卡 + 22% teal」这种浅底上根本读不出来。
+    //
+    // 这是**静默**的：默认那颗蓝选出来是对的，只有换到浅主色才现形。
+    for (final accent in AppColors.accentPalette) {
+      // 块的最深那一端（22%）叠在白卡上 —— 那是对深字最不利的一档。
+      final blockOverCard =
+          Color.alphaBlend(accent.withValues(alpha: 56 / 255), Colors.white);
+      const ink = Color(0xFF111118); // wg_ink_light
+      expect(AppTokens.contrastRatio(ink, blockOverCard), greaterThanOrEqualTo(4.5),
+          reason: '$accent 下 ink 压在半透明块上只有 '
+              '${AppTokens.contrastRatio(ink, blockOverCard).toStringAsFixed(2)}:1');
+
+      // 自证这条判据有鉴别力：**白字**压在同一块上过不了 AA。
+      // （旧做法走 `onSolidInk(accent)` —— 那是「按**实心主色**在黑/白里二选一」，
+      //  而半透明块是浅底，两者的底色根本不是一回事。它今天恰好没选中白色，
+      //  但那是巧合，不是保证 —— 所以块上字改成写死的中性 `ink`。）
+      expect(AppTokens.contrastRatio(Colors.white, blockOverCard), lessThan(4.5),
+          reason: '$accent 下白字居然过得去？那这条判据就抓不住「选错字色」这一类');
+    }
   });
 
   test('页面底的**每一个**端色都要让 muted 过 AA', () {
@@ -179,5 +211,26 @@ void main() {
           reason: '${entry.value} 排在了内容**之后** —— 那一层会盖住日期与胶囊，'
               '而真机上看起来就是「格子里什么都没有」');
     }
+  });
+
+  test('月历胶囊的尺寸由**位图**驱动，不是布局里写死的 40×18dp', () {
+    // 写死盒子的话，字号按格子放大之后文字会从胶囊里溢出来（2026-10-15 那一轮把
+    // 字号改成按格子缩放，盒子必须跟着走）。做法：外面那两层 wrap_content，
+    // 带着 drawable 的 ImageView 按位图固有尺寸量 —— 位图尺寸在渲染侧算。
+    final xml = _read('android/app/src/main/res/layout/widget_month_cell.xml');
+    expect(xml.contains('android:layout_width="40dp"'), false,
+        reason: '胶囊盒子还写着 40dp —— 字放大之后会溢出来');
+    expect(xml.contains('android:id="@+id/wg_mc_pill"'), true);
+    // ImageView 必须是 wrap_content 且排在 TextView 之前（层序见上一条）
+    final pill = xml.indexOf('android:id="@+id/wg_mc_pill"');
+    final abbr = xml.indexOf('android:id="@+id/wg_mc_abbr"');
+    expect(pill, lessThan(abbr), reason: '胶囊底要排在简称之前（后画的在上面）');
+    final pillBlock = xml.substring(pill, abbr);
+    expect(pillBlock.contains('wrap_content'), true,
+        reason: 'ImageView 不是 wrap_content —— 它就驱动不了盒子的尺寸');
+
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    expect(kt.contains('pillW'), true, reason: '渲染侧没按缩放算胶囊位图尺寸');
   });
 }
