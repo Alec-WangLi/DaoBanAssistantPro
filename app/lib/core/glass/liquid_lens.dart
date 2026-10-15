@@ -1100,8 +1100,9 @@ class _LensBodyPainter extends CustomPainter {
   /// 0** 的原因（它自己的注释写着「真实的 iOS UI 玻璃几乎没有虹彩」）—— 我们比它
   /// 更显眼，因为我们是**刻意**让它显眼的。
   ///
-  /// 颜色锚在 `accent` 的**色相**上：绕一圈走 300°，于是它既「五颜六色」又始终
-  /// 属于这个主题。
+  /// 颜色锚在 `accent` 的**色相**上：绕一圈走**满 360°**（2026-10-15 之前是 300°，
+  /// 那会在正右方留一道 60° 的硬边，见 [spectralSweep] 里那段），于是它既
+  /// 「五颜六色」又始终属于这个主题。
   void _paintSpectralRing(Canvas canvas, Path lensPath) {
     canvas.drawPath(
       lensPath,
@@ -1178,7 +1179,16 @@ SweepGradient spectralSweep({
     final double w = pow2 ? toward * toward : toward;
     colors.add(HSLColor.fromAHSL(
       (floor + span * w).clamp(0.0, 1.0) * alpha,
-      (base.hue + hueLag + 300 * t) % 360, // 走色相，但绕回主色
+      // **走满 360°，不是 300°。** `SweepGradient` 的 `t = 0` 与 `t = 1` 落在
+      // **同一个屏幕方位**（正右方），走 300° 会让那里留一道 60° 的色相硬边 ——
+      // 真机上沿轮廓量到那一步跳 **62°**，而别的地方每 5° 只有 0~11°。用户
+      // 2026-10-15 的原话就是「右边两个颜色的交界处过渡不自然，像是被一刀切了一样」。
+      // 走满一圈之后两端同色，边就不存在了。
+      //
+      // **别改成往复活（0°→300°→0°）**：那也接得上，但色相在轮廓上会变成镜像对称的，
+      // 读起来像两半拼的。也别把接缝「挪到最暗处」—— 接缝那一点的亮度是
+      // `floor + span × 0.0214` ≈ 满亮的 59%，本来就不暗，挪到哪都一样看得见。
+      (base.hue + hueLag + 360 * t) % 360,
       base.saturation.clamp(0.55, 0.95),
       0.66,
     ).toColor());
