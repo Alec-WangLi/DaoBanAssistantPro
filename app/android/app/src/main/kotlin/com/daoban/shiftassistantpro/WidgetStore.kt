@@ -40,10 +40,27 @@ object WidgetStore {
         val lunarShort: String,
         /** 这一天的农历是否落在法定节假日（Dart 侧 `LunarInfo.isLegalHoliday`）。 */
         val lunarIsHoliday: Boolean,
+        /**
+         * 今日卡班次那一行后面的备注（「休息日 · 不响闹钟」/「闹钟 07:00」/
+         * 「闹钟 07:00 等 2 个」）。没有排班的那天为 null。
+         *
+         * **按日烘焙**（与 [lunarShort] 同类）：挂 `todayCard` 的话，跨天刷新时
+         * 原生只重渲染旧快照、不跑 Dart，它每天过零点就消失了。
+         */
+        val shiftNote: String?,
     )
 
     /** 窗口覆盖到的某个月的标题（「2026年9月」/「September 2026」）。 */
-    data class MonthTitle(val y: Int, val m: Int, val title: String)
+    data class MonthTitle(
+        val y: Int,
+        val m: Int,
+        val title: String,
+        /**
+         * 那个月的班次统计串（「本月 大休13 · 白7 · 上夜6 · 下夜5」）。
+         * 没有排班、或整月没有班次定义（空白表跟随法定节假日）时为 null。
+         */
+        val tally: String?,
+    )
 
     /** 今日卡片里的一条「其他班组」。 */
     data class Crew(
@@ -105,6 +122,12 @@ object WidgetStore {
         val accent: Int,
         val hasSchedule: Boolean,
         val emptyHint: String,
+        /**
+         * 今日卡「其他班组」那四个字（顶层 `otherCrews`）。
+         *
+         * 它看着像个常量，但它是**文案** —— 原生不许有用户可见的中文字面量。
+         */
+        val otherCrews: String,
         /**
          * 「今天 / 明天 / 后天」三个相对文案（顶层 `labels`）。
          *
@@ -243,6 +266,10 @@ object WidgetStore {
                 timeRange = if (d.isNull("timeRange")) null else d.optString("timeRange"),
                 lunarShort = d.optString("lunarShort", ""),
                 lunarIsHoliday = d.optBoolean("lunarIsHoliday", false),
+                // 同 timeRange 那条：先 isNull 判。`optString(k, fallback)` 在
+                // 「键存在而值是 JSON null」时返回的是**四字符串 "null"**，
+                // 那样卡片上会印出字面的 null。
+                shiftNote = if (d.isNull("shiftNote")) null else d.optString("shiftNote"),
             )
         }
         if (days.isEmpty()) return null
@@ -265,6 +292,7 @@ object WidgetStore {
                 y = m.optInt("y", 0),
                 m = m.optInt("m", 0),
                 title = m.optString("title", ""),
+                tally = if (m.isNull("tally")) null else m.optString("tally"),
             )
         }
 
@@ -300,6 +328,7 @@ object WidgetStore {
             accent = o.optInt("accent", 0),
             hasSchedule = o.optBoolean("hasSchedule", false),
             emptyHint = o.optString("emptyHint", ""),
+            otherCrews = o.optString("otherCrews", ""),
             today = labels.optString("today", ""),
             tomorrow = labels.optString("tomorrow", ""),
             dayAfter = labels.optString("dayAfter", ""),

@@ -12,15 +12,17 @@
   `widget_today_standalone` 的槽位里，外壳根已经铺了一层同一张卡片底
   （`renderTodayCard` 也不再设）。两层同图叠放会多出一圈圆角描边、悬在外壳边框内侧。
 
-  ⚠️ 这是 **4×3 独立卡**的排版（根 padding 22dp、日期 22sp、班次 18sp、行距 16dp、
-  农历两行）—— 不再跟着网格装配壳走。字号与间距在 2026-09-20 的真机反馈后整体提了一档：
-  原先 18dp padding / 20sp / 12dp 时上下会各留一截空白（用户原话「上下留了好大的空白」），
-  提一档把内容从约 202dp 撑到 **实测约 232dp**。**行高与结构没动**（仍只有一个日期行 +
-  农历两行 + 班次行 + 时间行 + 班组行），改的只有字号、间距与徽章/色条这几处尺子上的一档。
+  ⚠️ **上一版头注里那组数（外壳 266dp / 内容 232dp / 余量 34dp）是错的，2026-10-15
+  已按真机实测订正。** 那是 2026-09-20 按一张「各处 +Δ 加起来」的估算表推的，不是量的；
+  而外壳高度由启动器给，换台机器就不是一个数。
 
-  ⚠️ **没到裁决时定的「余量 ≤ 25dp」**：4×3 外壳实测 266dp，232dp 内容留出约 34dp 余量
-  （改前约 65dp，确实收了一半）。短的那 9dp 出在这一档自己身上 —— 表里各处的 +Δ 加起来
-  约 +29dp，而「245dp」这个目标数隐含的是 +43dp。要么再提一档字号，要么承认这版就到这里。
+  **2026-10-15 实测**（Redmi K90 Pro Max · 1200×2608 @480dpi = 3× · 系统字号 1.0 ·
+  逐行取墨迹、x 取 160~1040 避开卡边）：
+    · 外壳 256.3dp、内容约 168dp、**上下各空 43.0 / 44.7dp**。
+  —— 也就是说「提一档字号」并没有把它撑满，只是把空白从 65dp 收到 88dp 里的一半。
+  这一版的处理是**补内容**（下面第 3b / 5 / 6 三处：班次备注、其他班组标签、本月统计，
+  与 App 的信息卡对齐），再靠渲染侧按卡内可用高度缩放去吃掉剩下的余量。
+  **改这个文件时别再凭估算往头注里写数** —— 量一次，把设备与量法一起写下来。
 -->
 
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -137,6 +139,19 @@
             android:maxLines="1"
             android:ellipsize="end" />
 
+        <!-- 3b. 班次备注（「休息日 · 不响闹钟」/「闹钟 07:00」/「闹钟 07:00 等 2 个」）。
+             位置照 App 的信息卡：在**班次名之后、已调班徽章之前**。文案与判据都来自
+             Dart 侧快照（`days[].shiftNote`）—— 原生不写文案、更不重算闹钟规则。
+             整串也可能为空 / 缺失（没有排班的那些天），那时由渲染侧设 GONE。 -->
+        <TextView
+            android:id="@+id/wg_tc_note"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
         <FrameLayout
             android:id="@+id/wg_tc_adj_wrap"
             android:layout_width="96dp"
@@ -185,6 +200,17 @@
         android:layout_marginTop="16dp"
         android:orientation="horizontal">
 
+        <!-- 零号槽位：「其他班组」四个字。用 `wrap_content` 而不是写死列宽 ——
+             它是文案，中英长度差得多，写死必然把英文挤掉。四个胶囊在后面按权重分。 -->
+        <TextView
+            android:id="@+id/wg_tc_crew_label"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:gravity="center_vertical"
+            android:textSize="11sp"
+            android:maxLines="1" />
+
         <FrameLayout
             android:id="@+id/wg_tc_crew_slot1"
             android:layout_width="0dp"
@@ -209,4 +235,17 @@
             android:layout_height="match_parent"
             android:layout_weight="1" />
     </LinearLayout>
+
+    <!-- 6. 「本月 大休13 · 白7 · 上夜6 · 下夜5」（App 的信息卡 v0.9.7 就有了）。
+         整串由 Dart 侧算好挂在快照的 `months[].tally` 上 —— 原生拿当天的 day
+         反算年月再查。查不到（窗口外 / 没有排班）时由渲染侧设 GONE，
+         **不画一句空话、也不留一行空白**。 -->
+    <TextView
+        android:id="@+id/wg_tc_tally"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:textSize="12sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
 </LinearLayout>

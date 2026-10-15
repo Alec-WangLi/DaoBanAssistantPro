@@ -888,6 +888,18 @@ object WidgetRenderer {
         v.setTextViewText(R.id.wg_tc_shift, if (d.hasShift) d.shiftName else d.weekday)
         v.setTextColor(R.id.wg_tc_shift, ink)
 
+        // ── 3b. 班次备注（「休息日 · 不响闹钟」/「闹钟 07:00」） ──
+        // 位置与 App 的信息卡一致：**班次名之后、已调班徽章之前**。
+        // ⚠️ 取值走 `d.shiftNote`（按日烘焙）而不是 `tc.*` —— 跨天之后 `tc` 整块
+        // 过期，而这一行不该跟着消失（它描述的是**今天那个班次**，`d` 永远是对的）。
+        if (d.shiftNote.isNullOrEmpty()) {
+            v.setViewVisibility(R.id.wg_tc_note, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_note, android.view.View.VISIBLE)
+            v.setTextViewText(R.id.wg_tc_note, d.shiftNote)
+            v.setTextColor(R.id.wg_tc_note, muted)
+        }
+
         // 「已调班」徽章：底色跟当天班次色走（与 App 信息卡的 `_adjustedBadge` 同源）。
         // 与色条/色点一致地**回落**：休班日 `d.color` 是 Dart 侧的 `shift?.color ?? 0`
         // = 0（全透明），直接用会得到一个占 96dp 却什么也看不见的徽章。
@@ -926,6 +938,10 @@ object WidgetRenderer {
             v.setViewVisibility(R.id.wg_tc_crew_row, android.view.View.GONE)
         } else {
             v.setViewVisibility(R.id.wg_tc_crew_row, android.view.View.VISIBLE)
+            // 行首那个「其他班组」标签。它是一行里的**零号槽位**，所以只设一次，
+            // 不参与下面按槽位循环（循环只清 4 个 crew_slot）。
+            v.setTextViewText(R.id.wg_tc_crew_label, snap.otherCrews)
+            v.setTextColor(R.id.wg_tc_crew_label, muted)
             for (slot in crewSlots.indices) {
                 // 先清空再填，理由与 `weekStrip` 那处逐字相同。
                 v.removeAllViews(crewSlots[slot])
@@ -952,6 +968,27 @@ object WidgetRenderer {
                 chip.setTextColor(R.id.wg_cc_text, muted)
                 v.addView(crewSlots[slot], chip)
             }
+        }
+
+        // ── 6. 本月统计 ──
+        // 「本月 大休13 · 白7 · 上夜6 · 下夜5」（App 的信息卡 v0.9.7 就有）。
+        //
+        // 取值链路：当天那条 `days[todayIndex]` 的 `day`（epochDay）→ 年月 → 在
+        // `months[]` 里查那个月的 `tally`。**这样跨天与翻月都自动是对的** ——
+        // `d` 永远指向"今天"，而 `months[]` 是按月存的（不是逐日烘）。
+        // 查不到（窗口外、或没有排班）就 GONE：不画一句空话，也不留一行空白。
+        val tally = run {
+            val todayDate = LocalDate.ofEpochDay(d.day)
+            snap.months
+                .firstOrNull { it.y == todayDate.year && it.m == todayDate.monthValue }
+                ?.tally
+        }
+        if (tally.isNullOrEmpty()) {
+            v.setViewVisibility(R.id.wg_tc_tally, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_tally, android.view.View.VISIBLE)
+            v.setTextViewText(R.id.wg_tc_tally, tally)
+            v.setTextColor(R.id.wg_tc_tally, muted)
         }
 
         return v
