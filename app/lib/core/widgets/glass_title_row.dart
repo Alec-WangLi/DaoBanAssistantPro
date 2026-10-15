@@ -32,6 +32,9 @@ class GlassTitleRow extends StatelessWidget {
   /// 可空的尾部控件（弹窗传关闭钮；弹层一律不传）。
   final Widget? trailing;
 
+  /// 那根主色竖条的 key —— 用例与工装要量它的落点（2026-10-15 那处修复的对象）。
+  static const Key barKey = ValueKey('glass-title-row-bar');
+
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
@@ -80,18 +83,52 @@ class GlassTitleRow extends StatelessWidget {
           ? CrossAxisAlignment.center
           : CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 4,
-          height: 18,
-          decoration: BoxDecoration(
-            color: accent,
-            borderRadius: BorderRadius.circular(AppTokens.radiusS),
-          ),
-        ),
+        _bar(context, accent),
         const SizedBox(width: AppTokens.gapIconTextLg),
         Expanded(child: headline),
         if (trailing != null) trailing!,
       ],
     );
+  }
+
+  /// 那根主色竖条 —— **有副标题时先套一层「标题首行那么高」的槽位、在里面居中**。
+  ///
+  /// 2026-10-15 用户真机反馈：「调整班次那个界面，标题左边那个徽章位置有点偏」。
+  /// 量出来是**竖条中心比标题字形中心高 1.75dp**（同一根竖条在弹窗里只差 0.75dp、
+  /// 看着是正的），所以只错在「有副标题 → `start`」这一档。
+  ///
+  /// 机制：字是**在行盒里居中**的，而 `start` 对齐的是**行盒顶**；弹层标题 16sp 的
+  /// 行盒（≈21dp）比竖条（18dp）高，于是竖条被顶到字形中心上面去了。
+  ///
+  /// 修法就是给它一个**正好一行高**的盒子、在里面居中 —— 折两行时它仍然跟着第一行
+  /// （槽位高度取的是一行的行盒高，外层 `Row` 走 `start`），单行时与弹窗那档视觉一致。
+  /// 行盒高必须**量**出来：`titleStrong` / `dialogTitle` 都不带 `height`，行高由字体
+  /// 自己的 ascent/descent 决定，写死一个系数（比如 ×1.3）换个字体就又偏回去。
+  Widget _bar(BuildContext context, Color accent) {
+    final bar = Container(
+      key: barKey,
+      width: 4,
+      height: 18,
+      decoration: BoxDecoration(
+        color: accent,
+        borderRadius: BorderRadius.circular(AppTokens.radiusS),
+      ),
+    );
+    if (subtitle == null) return bar;
+
+    final style = DefaultTextStyle.of(context)
+        .style
+        .merge(titleStyle ?? AppTokens.titleStrong);
+    final painter = TextPainter(
+      text: TextSpan(text: title, style: style),
+      textDirection: Directionality.of(context),
+      // 字号是自管的（设计 §3），但仍要跟上这一层 —— textScaler 用错会让量出来的
+      // 行盒比真渲染的那一行矮，竖条又回到「偏高」的老样子。
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final lineHeight = painter.height;
+    painter.dispose();
+    return SizedBox(height: lineHeight, child: Center(child: bar));
   }
 }

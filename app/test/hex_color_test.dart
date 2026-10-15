@@ -20,6 +20,20 @@ void main() {
     expect(parseHexColor('f0a'), 0xFFFF00AA);
   });
 
+  // 2026-10-15：`0x` 前缀也收。设计稿 / 代码里到处都写 `0xFF4C8DFF` 这种，
+  // 用户从别处复制过来会带着它；只收 `#` 的话那个输入框会「看着像对的、
+  // 一敲确定什么也没变」（非法输入按约定什么都不改）。
+  test('0x / 0X 前缀也收（大小写都收，可以跟在 # 后面）', () {
+    expect(parseHexColor('0x4C8DFF'), 0xFF4C8DFF);
+    expect(parseHexColor('0X4C8DFF'), 0xFF4C8DFF);
+    expect(parseHexColor('  0x4c8dff  '), 0xFF4C8DFF);
+    expect(parseHexColor('#0x4C8DFF'), 0xFF4C8DFF);
+    expect(parseHexColor('0xABC'), 0xFFAABBCC, reason: '三位缩写同样成立');
+    // `0x` 后面什么都不剩 = 空串 = 非法（不是 0）。
+    expect(parseHexColor('0x'), isNull);
+    expect(parseHexColor('#0x'), isNull);
+  });
+
   test('非法输入一律 null，不抛异常', () {
     for (final bad in <String>[
       '', '   ', '#', '#12', '#12345', '#1234567',

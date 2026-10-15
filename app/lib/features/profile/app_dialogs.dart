@@ -40,7 +40,14 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.18\n'
+const String _changelogZh = 'v0.11.19\n'
+    '· 「调整班次」弹层里，标题左边那根主色竖条往下挪了一点：以前它比标题的字高半行，看着有点歪\n'
+    '· 排班管理页的「新增排班」按钮落到了屏幕底部：上一版把它抬高了 76，而那一抬是给主界面底部的导航胶囊让位的，这一页底下没有胶囊\n'
+    '· 日历格子上能看出哪天有闹钟了：班次挂过闹钟的那天，胶囊左上角有个小圆点（右上角那个仍然是「这天调过班」）\n'
+    '· 自定义班次颜色时，色值前面带 0x 的写法也认了（以前只认 #）\n'
+    '· 小窗（分屏）下帮助界面的正文不再被左边的圆图标挤成四五个字一行：一窄，图标就自己站一行\n'
+    '\n'
+'v0.11.18\n'
     '· 「同一个东西长得不一样」的地方收了一批：底部弹层的标题现在跟弹窗一样带主色竖条，还能往下拉关闭；小节标题全 App 统一成一档（「我的」页那几个会比以前大一点、黑一点）；空态与加载中各自收成一个样子；卡片和列表行按下的反馈也统一了\n'
     '· 两颗最显眼的主操作按钮换回自家的玻璃件：编辑排班页的「保存并重排闹钟」和排班管理页的「新增排班」，以前用的是系统按钮（按下是水波纹，跟别处不一致）\n'
     '· 排班管理页的「新增排班」从列表末尾挪到了屏幕底部，跟另外两页一个位置，不再悬在页面中间\n'
@@ -103,17 +110,16 @@ const String _changelogZh = 'v0.11.18\n'
     '· 又补了三条自动护栏，把「块的图层顺序」「块尺寸必须按真实格子算」「渐变的每个端色都要过对比度」都钉住了\n'
     '\n'
 
-    'v0.11.9\n'
-    '· 桌面小组件贴齐了 App：月历卡恢复成「每一格一张白卡」（底板改成页面那样的浅灰，卡片才显出来），今天那一格变成一块实心主色块，格子里的班次胶囊也跟着转实心\n'
-    '· 周条里今天那一列同样铺一块实心主色；今日卡上那枚「今天」也从淡染改成实心主色 —— 三处现在是同一件事\n'
-    '· 块上的字按对比度自己挑黑或白（青、橙那两档主色调下会挑黑字），不用你操心\n'
-    '· 说明一句：桌面上没有实时的背景模糊，那点玻璃感只能靠描边、圆角与渐变去近似，卡片不会真的透出壁纸\n'
+    ;
+
+const String _changelogEn = 'v0.11.19\n'
+    '· In the "Adjust shift" sheet the accent bar left of the title moved down a little: it used to sit half a line above the title text\n'
+    '· "Add schedule" on the Schedule management page dropped to the bottom of the screen: the previous release lifted it by 76, which is what the main screen\'s nav capsule needs — this page has no capsule\n'
+    '· The calendar grid now shows which days carry alarms: a dot at the top-left of the shift chip (the top-right one still means the day was adjusted)\n'
+    '· Custom shift colours now accept a 0x prefix as well as #\n'
+    '· In a small window the round icon no longer squeezes help text into four or five characters a line — it moves onto its own line\n'
     '\n'
-
-        '\n'
-;
-
-const String _changelogEn = 'v0.11.18\n'
+'v0.11.18\n'
     '· A sweep of the places where the same thing looked different: bottom sheets now carry the same accent-barred title as dialogs (and can be pulled down to close), section headings use one size everywhere (the ones on the Me page are a little larger and darker than before), empty states and loading spinners each have a single look, and pressing a card or a row now feels the same everywhere\n'
     '· The two most prominent primary buttons went back to the app\'s own glass button: the editor\'s "Save and reschedule" and the management page\'s "Add schedule" used to be plain system buttons with a water-ripple press\n'
     '· The management page\'s "Add schedule" moved from the end of its list to the bottom of the screen — the same place as on the other two pages, instead of floating in the middle of a short page\n'
@@ -176,15 +182,7 @@ const String _changelogEn = 'v0.11.18\n'
     '· Three more automated guards now pin the block layer order, the block sizing, and the contrast of every gradient end\n'
     '\n'
 
-    'v0.11.9\n'
-    '· The home-screen widgets now match the app: the month card is back to one white card per day (its panel became the page colour, which is what makes the cards read as cards), and today is a solid accent block with the shift chip inside it going solid too\n'
-    '· The week strip marks today with the same solid block, and the today card\'s "Today" pill went from a washed-out tint to solid accent — the three now look like the same thing\n'
-    '· Text on those blocks picks black or white by contrast (it picks black on the teal and orange accents), so you do not have to think about it\n'
-    '· One note: there is no live background blur on the home screen, so that bit of glass can only be approximated with borders, corners and gradients — the cards do not really show the wallpaper through\n'
-    '\n'
-
-        '\n'
-;
+    ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
 void showChangelogDialog(BuildContext context) {

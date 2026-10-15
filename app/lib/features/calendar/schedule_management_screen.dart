@@ -55,22 +55,25 @@ class ScheduleManagementScreen extends ConsumerWidget {
           ? const GlassLoading()
           : CenteredContent(
             child: ListView(
-              // 底部让位：主操作改成**悬浮**按钮条之后（见 `_bottomActionBar`），
-              // 不留白的话列表最后一行会被它压住、删除键点不到。用共享常量
-              // `kFloatingActionInset`（与待办页、闹钟页同一档）。
+              // 底部让位：主操作改成**贴屏幕底部**的悬浮按钮条之后（见
+              // `_bottomActionBar`），不留白的话列表最后一行会被它压住、
+              // 删除键点不到。常量是 `kFloatingBarInset`（= 16 边距 + 56 条高
+              // + 12 呼吸）—— **不是** `kFloatingActionInset`（160）：那一档多
+              // 出来的 76 是给**底部导航胶囊**让位的，而这一页底下没有胶囊
+              // （2026-10-15 用户报的「按钮偏高」就是按那一档摆的后果）。
               //
               // **要叠系统栏**：按钮条跟着手势条一起上移，测试视口都没有系统栏，
               // 这类错只能靠算式堵（叠 `MediaQuery.paddingOf` 而不是写死一个数）。
               //
               // **不给短屏/窄屏再叠一层 156**（闹钟页在那边叠了）：那一页是
               // **不滚动**的 Column（两段列表各自 Expanded），不留白正文就会被
-              // 压住；这一页是**单一可滚列表**，`kFloatingActionInset` 已经够让
+              // 压住；这一页是**单一可滚列表**，`kFloatingBarInset` 已经够让
               // 最后一行滑到按钮条之上 —— 再叠 156 反而把最后一行顶出屏幕：实测
               // 200×400 下（一行 249 高、视口 344）叠完之后滑到底时最后一行只剩
               // 顶上 28px 露在屏里、它的删除键整个跑到视口上方去了，
               // `schedule_management_test.dart` 那条几何用例当场照出来。
               padding: EdgeInsets.fromLTRB(16, 8, 16,
-                  MediaQuery.paddingOf(context).bottom + kFloatingActionInset),
+                  MediaQuery.paddingOf(context).bottom + kFloatingBarInset),
               children: [
                 // 两节各带一个标题（2026-09-30 用户反馈：「排班管理页面有点乱，
                 // 应该分成两个功能区……现在它们连在一起，感觉有点混乱」）。
@@ -122,13 +125,15 @@ class ScheduleManagementScreen extends ConsumerWidget {
               ],
             ),
             ),
-      // 主操作走**闹钟页那套**：底部悬浮按钮条 + 共用的落点
-      // （`AboveCapsuleLocation.bar` 把按钮条抬到底部导航胶囊之上）。
+      // 主操作与闹钟页同一套：底部悬浮按钮条 + 共用的落点。**但这一页底下没有
+      // 底部导航胶囊**（它是 push 出来的整页），所以传 `aboveCapsule: false` ——
+      // 按钮条贴屏幕底部，不再往上抬那 76。
       // **不是** `bottomNavigationBar` + `extendBody` —— 那是编辑器那颗
       // 「保存并重排闹钟」胶囊的路子（那边要正文铺到屏幕底）。这一页要的是
-      // 「新建」在三个列表页里是同一个东西、同一个位置：待办页的 FAB、闹钟页的
-      // 按钮条、这一页的按钮条。
-      floatingActionButtonLocation: const AboveCapsuleLocation.bar(),
+      // 「新建」在三个列表页里是同一个东西：待办页的 FAB、闹钟页的按钮条、
+      // 这一页的按钮条。
+      floatingActionButtonLocation:
+          const AboveCapsuleLocation.bar(aboveCapsule: false),
       floatingActionButton: _bottomActionBar(context, ref),
     );
   }

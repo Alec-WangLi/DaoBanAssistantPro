@@ -1968,25 +1968,27 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 children: [
                   _shiftChip(context, shift, s, solid,
                       ValueKey('day-chip-${date.day}')),
+                  // **两个角各一个点**（2026-10-15 用户反馈「设了闹钟的日子在
+                  // 网格里看不出来，得点开信息卡」）：
+                  //   · 右上角 = 这天被单独调过班（`day-adjusted-N`）；
+                  //   · 左上角 = 这个班次挂着**联动闹钟**（`day-alarm-N`）。
+                  // 配方逐字共用一份（`_cornerDot`）—— 尺寸固定在 3–4dp、颜色跟
+                  // 班次色，靠**位置**区分是哪一件事；两处都写一遍会慢慢漂开。
                   if (adjusted)
                     Positioned(
                       right: -2,
                       top: -2,
-                      child: Container(
-                        key: ValueKey('day-adjusted-${date.day}'),
-                        // spec §7.4：**固定在 3–4dp、不跟格子高度缩放** ——
-                        // 格子里的字是按格子高等比缩放的，小窗里缩到 1–2px 就
-                        // 等于没有。这里借间距刻度上的 4dp 一档（`spaceXs`）：
-                        // 光学刻度（`gapHair` / `padChipV` …）最高的 3dp 也在
-                        // 区间内，但它们表达的是"控件内部两个元素贴合的微距"，
-                        // 用在标记的**尺寸**上语义不对。
-                        width: AppTokens.spaceXs,
-                        height: AppTokens.spaceXs,
-                        decoration: BoxDecoration(
-                          color: Color(shift.color),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
+                      child: _cornerDot(
+                          key: ValueKey('day-adjusted-${date.day}'),
+                          color: Color(shift.color)),
+                    ),
+                  if (_shiftHasAlarms(shift))
+                    Positioned(
+                      left: -2,
+                      top: -2,
+                      child: _cornerDot(
+                          key: ValueKey('day-alarm-${date.day}'),
+                          color: Color(shift.color)),
                     ),
                 ],
               ),
@@ -2952,9 +2954,27 @@ String _timeRange(ShiftClass t) {
   return L10n.timeRange(formatClock(t.startMinute!), formatClock(e), nextDay);
 }
 
+/// 格子角上那个小圆点（右上 = 这天调过班，左上 = 这个班挂了闹钟）。
+///
+/// spec §7.4：**固定在 3–4dp、不跟格子高度缩放** —— 格子里的字是按格子高等比
+/// 缩放的，小窗里缩到 1–2px 就等于没有。这里借间距刻度上的 4dp 一档
+/// （`spaceXs`）：光学刻度（`gapHair` / `padChipV` …）最高的 3dp 也在区间内，
+/// 但它们表达的是「控件内部两个元素贴合的微距」，用在标记的**尺寸**上语义不对。
+Widget _cornerDot({required Key key, required Color color}) => Container(
+      key: key,
+      width: AppTokens.spaceXs,
+      height: AppTokens.spaceXs,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+
+/// 「这个班次挂没挂联动闹钟」—— 格子左上角那个点与下面 `_alarmText` **共用这一份
+/// 判据**。两处各写一遍的话，哪天规则变了就会出现「格子上有点、信息卡却写着
+/// 未开启」这种自相矛盾的画面，而它不会报错。
+bool _shiftHasAlarms(ShiftClass t) => t.alarmEnabled && t.alarms.isNotEmpty;
+
 String _alarmText(ShiftClass t) {
   if (t.isRest) return L10n.restNoAlarm;
-  if (!t.alarmEnabled || t.alarms.isEmpty) return L10n.alarmOff;
+  if (!_shiftHasAlarms(t)) return L10n.alarmOff;
   final alarm = t.alarms.first;
   final clock = formatClock(alarm.minute);
   // 不落在班次**当天**的必须标出来：不标的话，这一行会跟前面的「00:00 – 08:00」

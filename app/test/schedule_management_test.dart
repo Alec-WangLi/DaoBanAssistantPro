@@ -152,6 +152,24 @@ void main() {
     await _dispose(tester);
   });
 
+  // ── 底部那颗「新增排班」落在哪儿 ──
+  //
+  // 2026-10-15 用户真机反馈：「排班管理的新增排班按钮位置看着有点偏高」。根因是
+  // 它用了 tab 页（闹钟页）那条**抬到底部导航胶囊之上**的落点 —— 而那 76dp 是给
+  // 胶囊让位的，这一页是 push 出来的整页、底下什么都没有，于是白让一条。
+  // 症状是**静默**的：按钮照旧能点，只是浮在半空、底下空一片。
+  testWidgets('「新增排班」贴着屏幕底部（这一页底下没有导航胶囊，不该再抬 76）',
+      (tester) async {
+    await _pump(tester);
+    final h = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    final bar = tester.getRect(find.byKey(const Key('management-action-bar')));
+    expect(bar.height, 56);
+    expect(bar.bottom, closeTo(h - 16, 0.5),
+        reason: '按钮条底边距屏底 16（FAB 的标准边距）—— 抬 76 是页面底下真有'
+            '导航胶囊时才有的事（闹钟页仍在那一档）');
+    await _dispose(tester);
+  });
+
   // ── 底部那颗「新增排班」不能挡住最后一行的删除键 ──
   //
   // 排班管理页此前**没有**任何几何用例，这是第一条。它的主操作原先挂在 ListView

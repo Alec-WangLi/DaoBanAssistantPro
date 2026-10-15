@@ -20,10 +20,19 @@
 library;
 
 /// `#RRGGBB` / `RRGGBB` / `#RGB` / `RGB`（大小写都收、前后空白容忍）→ 不透明的 ARGB。
+///
+/// **`0x` / `0X` 前缀也收**（可以跟在 `#` 后面）：设计稿与代码里到处写着
+/// `0xFF4C8DFF` 这种，用户从别处复制过来会带着它 —— 不收的话那个输入框会「看着
+/// 像是对的、一敲确定什么也没变」（非法输入按约定什么都不改，见文件头）。
+/// `0x` 后面什么都不剩仍判非法（**不是** 0：0 是桌面小组件「这天没班」的哨兵）。
+///
 /// 非法返回 `null`。
 int? parseHexColor(String input) {
   var s = input.trim();
   if (s.startsWith('#')) s = s.substring(1);
+  if (s.length > 2 && (s.startsWith('0x') || s.startsWith('0X'))) {
+    s = s.substring(2);
+  }
 
   if (s.length == 3) {
     // 三位缩写：每一位翻倍（#ABC → #AABBCC）。

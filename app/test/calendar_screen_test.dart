@@ -1028,6 +1028,41 @@ void main() {
     await _disposeCalendar(tester);
   });
 
+  // ── 格子左上角的点 = 这个班挂了闹钟（2026-10-15） ──
+  //
+  // 用户原话：「现在设了闹钟的日子在网格里看不出来，得点开信息卡」—— 账本里
+  // 记了一阵子的一条。判据与信息卡那行 `_alarmText` **同源**（`_shiftHasAlarms`），
+  // 所以这条用例不去猜轮转：直接从真库里挑一个「挂了闹钟」的班次与一个「没挂」的，
+  // 把今天分别改成它们，看点在不在了。
+  testWidgets('这天有闹钟就在胶囊左上角点一个点；换成没闹钟的班次它就消失',
+      (tester) async {
+    final db = await _pumpCalendar(tester, 'day_night_rest_rest');
+    final today = dateOnly(DateTime.now());
+    final classes = await db.select(db.shiftClassRows).get();
+    final alarms = await db.select(db.shiftClassAlarms).get();
+    final repo = AppRepository(db);
+
+    bool hasAlarm(row) =>
+        row.alarmEnabled && alarms.any((a) => a.classId == row.id);
+    final withAlarm = classes.firstWhere(hasAlarm);
+    final without = classes.firstWhere((c) => !hasAlarm(c));
+
+    await repo.setDayOverrides([today], classId: withAlarm.id);
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('day-alarm-${today.day}')), findsOneWidget,
+        reason: '挂了闹钟的班次，格子上要看得出来');
+    // 尺寸与「调过班」那个点同一档（固定在 3–4dp、不跟格子高度缩放）。
+    final dot = tester.getSize(find.byKey(ValueKey('day-alarm-${today.day}')));
+    expect(dot.width, inInclusiveRange(3, 4));
+
+    await repo.setDayOverrides([today], classId: without.id);
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('day-alarm-${today.day}')), findsNothing,
+        reason: '换成没挂闹钟的班次，点要跟着消失 —— 判据与信息卡那行同源');
+
+    await _disposeCalendar(tester);
+  });
+
   // 设计语言：新加的东西要抄**最近的同类件配方**。
   //
   // 「已调整」原先是班次行里唯一的**裸文字** —— 而同一页的两个邻居（日期行上的

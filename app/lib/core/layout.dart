@@ -70,14 +70,24 @@ MediaQueryData sanitizeSystemInsets(MediaQueryData mq) {
 /// 的最低点在距底 115，而按钮占 92~148 —— 整整压住 33px。
 ///
 /// 只对「页面底部**且**有悬浮控件压着」的列表用它；push 出来的整页里：
-///   · **排班编辑器**的底部那颗「保存并重排闹钟」胶囊用的是下面那条
-///     [kFloatingSaveInset]（它的位置不是 FAB 那一套）；
-///   · **排班管理**页的「新增排班」也从列表里搬进了一条悬浮按钮条
-///     （`AboveCapsuleLocation.bar`），所以这一页**同样**要用本条
-///     （`schedule_management_screen.dart` 的列表底部留白就是它）；
+///   · **排班编辑器**的底部那颗「保存并重排闹钟」胶囊用的是 [kFloatingSaveInset]；
+///   · **排班管理**页的「新增排班」是一条**贴屏幕底部**的悬浮按钮条（那一页底下
+///     没有导航胶囊），用的是 [kFloatingBarInset]；
 ///   · **只有模板选择**把按钮留在列表末尾、跟着内容滚，不需要留白。
 const double kNavCapsuleInset = 96;
 const double kFloatingActionInset = 160;
+
+/// **push 出来的整页**底部那条悬浮按钮条（排班管理页的「新增排班」）：正文要留的空白。
+///
+/// = 按钮条底边距屏底 16（`endFloat` 的标准边距）+ 条高 56 + 12 的呼吸 = 84。
+///
+/// 与 [kFloatingActionInset]（160）的差别就是那 76：160 那档是给**底部导航胶囊**
+/// 让位的，而这一页底下没有胶囊 —— 2026-10-15 用户报的「新增排班按钮偏高」就是
+/// 把它按 160 那一档摆的（按钮浮在半空、底下空一条）。**两者别互相顶替。**
+///
+/// 与 [kFloatingSaveInset] 一样**不含系统栏**：按钮条跟着手势条一起上移，调用点
+/// 要自己叠 `MediaQuery.paddingOf(context).bottom`。
+const double kFloatingBarInset = 84;
 
 /// 底部导航胶囊的**宽度上限**。
 ///
@@ -188,12 +198,20 @@ class AppLayout {
 ///       - [AboveCapsuleLocation.bar]：通栏的**底部按钮条**，从内容栏**左缘**起铺满。
 class AboveCapsuleLocation extends FloatingActionButtonLocation {
   /// 右对齐的圆形浮钮（待办页那颗「＋」）。
-  const AboveCapsuleLocation.fab() : _alignRight = true;
+  const AboveCapsuleLocation.fab() : _alignRight = true, _aboveCapsule = true;
 
   /// 通栏的底部按钮条（闹钟页、排班管理页）。
-  const AboveCapsuleLocation.bar() : _alignRight = false;
+  ///
+  /// [aboveCapsule] 默认 true = **页面底下真有底部导航胶囊**（闹钟页在 tab 里），
+  /// 按钮条抬到胶囊上沿。**push 出来的整页要传 false**：那一页底下什么都没有，
+  /// 再抬 76 就是浮在半空（2026-10-15 用户报的「新增排班按钮位置偏高」正是它 ——
+  /// 按钮照旧能点，只是底下空出一条，界面上看不出哪里错）。
+  const AboveCapsuleLocation.bar({bool aboveCapsule = true})
+      : _alignRight = false,
+        _aboveCapsule = aboveCapsule;
 
   final bool _alignRight;
+  final bool _aboveCapsule;
 
   @override
   Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
@@ -205,6 +223,7 @@ class AboveCapsuleLocation extends FloatingActionButtonLocation {
     // FAB 用**平移**：`base.dx` 已经是「屏宽 − 按钮宽 − 标准边距」，减掉 extra
     // 就等价于「内容栏右缘 − 按钮宽 − 标准边距」，于是不必知道 Flutter 那个边距
     // 常量是多少。按钮条从左缘起算，直接写「内容栏左缘 + 16」。
-    return Offset(_alignRight ? base.dx - extra : extra + 16, base.dy - 76);
+    return Offset(_alignRight ? base.dx - extra : extra + 16,
+        base.dy - (_aboveCapsule ? 76 : 0));
   }
 }
