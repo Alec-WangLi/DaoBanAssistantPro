@@ -207,6 +207,9 @@ Map<String, Object?> buildWidgetSnapshot({
     // 写着「还没有排班，点一下去设置」（2026-09-30 用户反馈的同一类错）。
     'hasSchedule': chain?.hasAnySchedule ?? false,
     'emptyHint': L10n.widgetEmptyHint,
+    // 今日卡班组行前面那四个字。Kotlin 里不许有用户可见的中文字面量，所以这个
+    // 「标签」也得由快照下发 —— 它看着是个常量，但它是**文案**。
+    'otherCrews': L10n.otherCrews,
     'labels': {
       'today': L10n.widgetToday,
       'tomorrow': L10n.widgetTomorrow,
@@ -215,7 +218,11 @@ Map<String, Object?> buildWidgetSnapshot({
     },
     'boundaries': sorted,
     'days': days,
-    'weekdays': List.generate(7, L10n.weekday),
+    // 月历卡**标题行**那七个格：单字（「一 二 … 日」），与 App 日历页同一份文案
+    // （`L10n.weekdays`）。**别换回 `L10n.weekday(i)`**（那是「周一」）—— 用户
+    // 2026-10-15：「月视图跟 App 里的界面差别挺大」，第一条就是它。
+    // ⚠️ 周条那一列与今日卡读的是 `days[].weekday`，是另一条路，不受这里影响。
+    'weekdays': L10n.weekdays,
     'months': _monthsInWindow(window.from, window.to),
     'todayCard': todayCard,
   };

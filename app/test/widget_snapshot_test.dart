@@ -159,7 +159,9 @@ void main() {
       expect(d.containsKey('abbrInk'), false, reason: 'abbrInk 已删 —— 胶囊文字改走 wg_ink_*');
     }
     expect((s['weekdays']! as List).length, 7);
-    expect((s['weekdays']! as List).first, L10n.weekday(0));
+    // 2026-10-15 起这里是**单字**（`L10n.weekdays`，与 App 日历页同一份文案），
+    // 不再是「周一」那套 —— 那套仍给 `days[].weekday` 用（周条与今日卡）。
+    expect((s['weekdays']! as List).first, L10n.weekdays.first);
 
     // 2026-10-01 → 窗口从 6/29（−3 月的 1 日 7/1 是周三 → 所在周的周一）起、到
     // 2027-02-07（+3 月的 1 日 2027/1/1 是周五 → 周一 12/28 + 41 天）止，覆盖
@@ -701,5 +703,28 @@ void main() {
     expect(_rowOf(s, DateTime(2027, 1, 10))['shiftAbbr'], '中');
     expect(_rowOf(s, DateTime(2027, 1, 11))['shiftAbbr'], '白');
     expect(_rowOf(s, DateTime(2027, 1, 21))['shiftAbbr'], '夜');
+  });
+
+  test('周标题是**单字**（与 App 日历页同源），而 days[].weekday 仍是「周一」', () {
+    // 用户 2026-10-15：月视图「跟 App 里的界面差别挺大」，第一条就是周标题 ——
+    // App 的日历页是「一 二 三 四 五 六 日」，桌面写的是「周一 周二 …」，
+    // 宽度差一倍，桌面那一行因此比 App 抢眼得多。
+    //
+    // ⚠️ 只有**月历卡**的标题行读 `weekdays`；周条那一列与今日卡读的是
+    // `days[].weekday`（`WidgetRenderer.kt:425 / 888`），两条路互不相干 ——
+    // 所以这条用例两头都要断言，免得哪天有人「顺手统一」把周条也改掉。
+    final s = buildWidgetSnapshot(
+      chain: _chain(_schedule()),
+      now: DateTime(2026, 10, 15, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+
+    expect(s['weekdays'], ['一', '二', '三', '四', '五', '六', '日']);
+    expect(_rowOf(s, DateTime(2026, 10, 15))['weekday'], '周四',
+        reason: '周条那一列要的是「周几」这个词，不是单字');
+    expect(s['otherCrews'], '其他班组',
+        reason: '今日卡的「其他班组」标签 —— Kotlin 里不许有中文，只能由快照下发');
   });
 }
