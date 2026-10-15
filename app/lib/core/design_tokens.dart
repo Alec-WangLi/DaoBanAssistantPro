@@ -324,15 +324,42 @@ class AppTokens {
   static const double iconMd = 20;
   static const double iconLg = 24;
 
-  /// 强调色渐变（按钮/导航选中/填充条用）：顶 0.85 → 底 0.50。
-  static LinearGradient accentGradient(Color accent) => LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          accent.withValues(alpha: 0.85),
-          accent.withValues(alpha: 0.50),
-        ],
-      );
+  /// **实心面的主色** —— 比 `colorScheme.primary` 深一档（保持色相与饱和度，
+  /// 明度 × 0.62）。
+  ///
+  /// 为什么需要它：**白字/白图标压在实心主色上**的那些面（主按钮、弹窗动作钮、
+  /// 导航选中、分段器滑块、待办那颗悬浮按钮、勾选块、液态档的玻璃滴）里，
+  /// `teal` / `orange` / `rose` 三颗主色配白字是**到不了 AA 的**（teal 2.63、
+  /// orange 2.55、rose 4.09 —— 而用户自己用的就是 teal）。
+  ///
+  /// 2026-10-15 出对照图让用户挑，选了「实色压深一档 + 白字」这一条：
+  /// 字保持白、实心面比设置里那颗主色深一档。实测五种主色在白卡上
+  /// **10.5 / 9.3 / 6.1 / 5.9 / 8.0**，全部过线（另一条路是黑白自动给字色，
+  /// 那会让 teal/orange/rose 的三颗变黑字，用户不要）。
+  ///
+  /// **只用在「压着白内容」的实心面上**；主色做文字色 / 图标色 / 描边 / 淡染底
+  /// （日历选中块、「今天」那一格、CapsuleRim 之类）**照旧用 `colorScheme.primary`** ——
+  /// 那些地方压的不是白字，深一档反而会让整套配色偏暗。
+  static Color solidAccent(Color accent) {
+    final hsl = HSLColor.fromColor(accent);
+    return hsl.withLightness((hsl.lightness * 0.62).clamp(0.0, 1.0)).toColor();
+  }
+
+  /// 实心面的填充（按钮 / 导航选中 / 填充条用）：**深一档的主色**，顶 1.0 → 底 0.92。
+  ///
+  /// 以前是「原主色 0.85 → 0.50」的两端半透明渐变，两个问题：**① 压在白卡上，
+  /// 连 primary 的渐变尽头都只有 2.1:1**（半透明的 50% 端几乎是一层淡色），
+  /// ② 底下那 0.50 端让 `teal`/`orange` 这类浅主色上的白字彻底读不出来。
+  /// 现在两端都接近不透明，白字在**整条渐变上**都过 AA（最差的一档是 orange
+  /// 的 0.92 端，白卡上 4.9:1；深色卡上全部 ≥ 6.5）。
+  static LinearGradient accentGradient(Color accent) {
+    final solid = solidAccent(accent);
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [solid, solid.withValues(alpha: 0.92)],
+    );
+  }
 
   // ── 真实饱和度：玻璃后面那层背景的处理 ──
   /// Rec.709 保亮度饱和度矩阵，s = 1.2。中性灰保持不动（三行各自加和为 1）。

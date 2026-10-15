@@ -40,7 +40,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh =     'v0.11.20\n'
+const String _changelogZh =         'v0.11.21\n'
+    '· 实心主色面换成深一档的主色：主按钮、弹窗按钮、导航选中、开关、勾选、待办那颗悬浮按钮、顶栏的实心胶囊 —— 以前白字压在原主色上，teal 只有 2.6:1、orange 2.6:1，等于读不清；现在五种主色都在 5.9:1 以上\n'
+    '· 顺带修掉一件更早就有的毛病：那层实心填充原来是半透明的（85% 到 50%），压在白底上连默认蓝的渐变尽头都只有 2.1:1\n'
+    '· 代价：实心面比「我的 → 外观」里那颗主色深一档（大致是同一个色更暗一截），字保持白\n'
+    '\n'
+'v0.11.20\n'
     '· 输入框的名字改成写在框的上方 —— 你截图里那两个字被压成半截，是 Android 上 Material「浮动标签」在系统字体（MiSans）下的毛病，这边复现不出、也没法从参数上调平，就干脆不用它了\n'
     '· 日历格子上那个「有闹钟」的小圆点去掉了 —— 挂过闹钟的日子接近一半，半个网格都顶着一个小点，是不好看；「这天调过班」那个点还在（右上角那个）\n'
     '· 顺带：所有输入框会比以前高一点点（名字从压在框线上，变成框上面单独一行）\n'
@@ -102,15 +107,14 @@ const String _changelogZh =     'v0.11.20\n'
     '· 窄屏或大字号下会自动换版式（顶栏改两行、副标题折行、定尺的地方等比缩小），而不是把字吃掉\n'
     '\n'
 
-    'v0.11.11\n'
-    '· 修一条状态栏的毛病：浅色主题下进「排班管理」，状态栏那几个图标会反成白的、退回来也不恢复；深色主题下没事。根子是我们从来没自己声明过这件事，一直靠各家系统的默认值，所以同一版在有的手机上出、有的手机上不出\n'
-    '· 现在它跟着「主题模式」那一档走：浅色档配深色图标、深色档配白色图标，判据全 app 只有一处\n'
-    '· 响铃界面顺带修了：它是整屏深色，浅色档下从前会压一排看不见的深图标\n'
-    '\n'
-
     ;
 
-const String _changelogEn =     'v0.11.20\n'
+const String _changelogEn =         'v0.11.21\n'
+    '· Solid accent surfaces now use a one-step darker accent: primary buttons, dialog buttons, the selected nav item, switches, checkboxes, the todo floating button and the top-bar accent pills. White text on the original accent was only 2.6:1 for teal and orange — effectively unreadable; all five accents are now 5.9:1 or better\n'
+    '· Fixed a longer-standing problem on the way: that fill used to be semi-transparent (85% to 50%), which left even the default blue at 2.1:1 at the far end against a white card\n'
+    '· The trade-off: solid surfaces are one step darker than the accent shown under Me > Appearance; the text stays white\n'
+    '\n'
+'v0.11.20\n'
     '· Field labels are now drawn above the box instead of floating on its border. The two squashed characters in your screenshot come from Android\'s Material floating label under the system font (MiSans): it does not reproduce here and cannot be tuned away from our side, so the app no longer uses it\n'
     '· Removed the little "has an alarm" dot from the calendar cells — nearly half the days carry alarms, so half the grid was speckled. The "shift was adjusted" dot (top-right) stays\n'
     '· Side effect: every input box is a little taller, because the label now takes its own line above the box\n'
@@ -170,12 +174,6 @@ const String _changelogEn =     'v0.11.20\n'
     '· The cost, said plainly: anyone who set the system font to 150-200% will not get that size here — XL is the ceiling\n'
     '· Also cleaned up every place the app quietly ate text: the header month, the two info-card lines, list subtitles, the editor labels and values, the 14-day preview strip, and three page titles\n'
     '· On narrow screens or at larger text sizes the layout changes instead (a two-row header, wrapping subtitles, fixed-size bits scaled down) rather than dropping characters\n'
-    '\n'
-
-    'v0.11.11\n'
-    '· Fixed a status-bar glitch: with the light theme, opening Schedule management turned the status-bar icons white and they stayed that way after going back. The dark theme was unaffected. It happened because the app never declared this itself and left it to each phone maker\'s default, which is why the same build showed it on some phones and not others\n'
-    '· It now follows your Theme mode: dark icons in the light theme, white icons in the dark theme, decided in one place\n'
-    '· The ringing screen got the same fix: it is dark all over, so in the light theme it used to show dark icons you could not read\n'
     '\n'
 
     ;

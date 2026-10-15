@@ -29,6 +29,14 @@ double _wcagContrast(Color a, Color b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/// 把半透明的 [fg] 压到 [bg] 上（对比度要按**真正画出来**的那层算）。
+Color _over(Color fg, Color bg) => Color.fromARGB(
+      255,
+      (fg.r * 255 * fg.a + bg.r * 255 * (1 - fg.a)).round(),
+      (fg.g * 255 * fg.a + bg.g * 255 * (1 - fg.a)).round(),
+      (fg.b * 255 * fg.a + bg.b * 255 * (1 - fg.a)).round(),
+    );
+
 const List<String> _scanDirs = [
   'lib/features',
   'lib/core/widgets',
@@ -945,10 +953,34 @@ Text('x', style: TextStyle(
     expect(AppTokens.danger, const Color(0xFFE53935));
   });
 
-  test('accentGradient 用 accent 色：顶 0.85 底 0.50', () {
-    final g = AppTokens.accentGradient(const Color(0xFF00C7BE));
-    expect(g.colors.first, const Color(0xFF00C7BE).withValues(alpha: 0.85));
-    expect(g.colors.last, const Color(0xFF00C7BE).withValues(alpha: 0.50));
+  test('实心面：白字在渐变两端、两档底色上都过 AA（5 个主题色）', () {
+    // 2026-10-15 用户从三条对照路里选了「实色压深一档 + 白字」：实心面（主按钮 /
+    // 弹窗动作钮 / 导航选中 / 分段器滑块 / 悬浮按钮 / 开关 / 勾选块 / 液态档玻璃滴）
+    // 一律用 `solidAccent`（主色明度 × 0.62），字保持白。
+    //
+    // **这条钉的就是那件事**：原主色配白字，teal 2.63 / orange 2.55 / rose 4.09，
+    // 三颗都到不了 AA（而用户自己用的就是 teal）；而且旧渐变是半透明的
+    // （0.85 → 0.50），压在白卡上连 primary 的尽头都只有 2.1:1。
+    const bgLight = Color(0xFFF5F6FA);
+    const bgDark = Color(0xFF16161E);
+    for (final accent in AppColors.accentPalette) {
+      final g = AppTokens.accentGradient(accent);
+      for (final stop in g.colors) {
+        expect(stop.a, greaterThanOrEqualTo(0.9),
+            reason: '$accent：实心面不能是半透明的 —— 白字会在浅底色上读不出来');
+        for (final bg in <Color>[bgLight, bgDark]) {
+          expect(_wcagContrast(Colors.white, _over(stop, bg)),
+              greaterThanOrEqualTo(4.5),
+              reason: '$accent 的白字在 ${stop.a} 这一端（底色 $bg）不达 AA');
+        }
+      }
+      // 压深是「同一个色更暗」，不是换一个颜色：色相不变、明度更小。
+      final before = HSLColor.fromColor(accent);
+      final after = HSLColor.fromColor(AppTokens.solidAccent(accent));
+      expect(after.hue, closeTo(before.hue, 1), reason: '$accent 的色相不该被改掉');
+      expect(after.lightness, lessThan(before.lightness),
+          reason: '$accent 应该更暗');
+    }
   });
 
   test('玻璃配方随明暗变化（暗色更淡）', () {

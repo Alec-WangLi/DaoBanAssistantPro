@@ -155,10 +155,10 @@ class _GlassCheckState extends State<GlassCheck>
                   // `navBorder` 是「浅色下一道深线、深色下一道亮线」那一档。
                   ringColor: Color.lerp(
                       AppTokens.navBorder(isDark).withValues(alpha: 0.45),
-                      accent.withValues(alpha: 0.55),
+                      AppTokens.solidAccent(accent).withValues(alpha: 0.55),
                       t)!,
-                  fillColor: Color.lerp(
-                      AppTokens.glassTint(isDark, true).first, accent, t)!,
+                  fillColor: Color.lerp(AppTokens.glassTint(isDark, true).first,
+                      AppTokens.solidAccent(accent), t)!,
                 ),
               ),
             ),

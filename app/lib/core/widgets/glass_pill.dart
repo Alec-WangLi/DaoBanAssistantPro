@@ -45,6 +45,9 @@ class GlassPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
+    // 实心那一档用**深一档的主色**（`solidAccent`）：白字压在原主色上，
+    // teal / orange / rose 三颗到不了 AA（见那个常量的文档）。
+    final solid = AppTokens.solidAccent(primary);
     final decoration = accent
         ? BoxDecoration(
             borderRadius: BorderRadius.circular(AppTokens.radiusL),
@@ -52,11 +55,11 @@ class GlassPill extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                primary,
-                Color.lerp(primary, Colors.black, 0.18)!,
+                solid,
+                Color.lerp(solid, Colors.black, 0.18)!,
               ],
             ),
-            border: Border.all(color: primary),
+            border: Border.all(color: solid),
             boxShadow: [
               BoxShadow(
                 color: primary.withValues(alpha: isDark ? 0.45 : 0.28),

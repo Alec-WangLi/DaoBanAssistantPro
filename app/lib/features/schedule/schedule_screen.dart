@@ -204,8 +204,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.72),
+                  // 深一档的主色（白「＋」压在原主色上，teal / orange / rose 不过 AA）
+                  AppTokens.solidAccent(
+                      Theme.of(context).colorScheme.primary),
+                  AppTokens.solidAccent(Theme.of(context).colorScheme.primary)
+                      .withValues(alpha: 0.92),
                 ],
               ),
               boxShadow: [
