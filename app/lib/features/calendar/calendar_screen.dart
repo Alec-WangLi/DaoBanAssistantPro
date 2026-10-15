@@ -1968,26 +1968,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 children: [
                   _shiftChip(context, shift, s, solid,
                       ValueKey('day-chip-${date.day}')),
-                  // **两个角各一个点**（2026-10-15 用户反馈「设了闹钟的日子在
-                  // 网格里看不出来，得点开信息卡」）：
-                  //   · 右上角 = 这天被单独调过班（`day-adjusted-N`）；
-                  //   · 左上角 = 这个班次挂着**联动闹钟**（`day-alarm-N`）。
-                  // 配方逐字共用一份（`_cornerDot`）—— 尺寸固定在 3–4dp、颜色跟
-                  // 班次色，靠**位置**区分是哪一件事；两处都写一遍会慢慢漂开。
+                  // 右上角那个点 = 这天被单独调过班（`day-adjusted-N`）。
+                  //
+                  // **左上角那个「有闹钟」的点 v0.11.20 又去掉了**：用户装上
+                  // v0.11.19 看了一眼就说「不美观」—— 挂了闹钟的日子接近一半，
+                  // 半个网格都顶着一个小点，看着像脏东西。判据 `_shiftHasAlarms`
+                  // 与 `_cornerDot` 都留着（信息卡那行还在用它；下一个想标什么
+                  // 的人也能直接复用），只是不在格子上画了。
                   if (adjusted)
                     Positioned(
                       right: -2,
                       top: -2,
                       child: _cornerDot(
                           key: ValueKey('day-adjusted-${date.day}'),
-                          color: Color(shift.color)),
-                    ),
-                  if (_shiftHasAlarms(shift))
-                    Positioned(
-                      left: -2,
-                      top: -2,
-                      child: _cornerDot(
-                          key: ValueKey('day-alarm-${date.day}'),
                           color: Color(shift.color)),
                     ),
                 ],

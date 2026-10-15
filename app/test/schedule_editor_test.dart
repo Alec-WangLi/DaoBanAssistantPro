@@ -14,6 +14,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_field.dart';
 import 'package:shiftassistantpro/core/shift_palette.dart';
 import 'package:shiftassistantpro/core/widgets/glass_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_choice_chip.dart';
@@ -1264,8 +1265,16 @@ void main() {
     final before = domain.classes.map((c) => c.id).toList();
 
     // 只改第一个班次的简称：这正是「改一个字段就丢 id」的最小复现。
+    // 简称那个框现在由 `GlassField` 包着（标签画在框**上方**，不再挂在
+    // TextField 自己的 decoration 上），所以按「GlassField 里带这个标签的那个
+    // TextField」去找。
     await tester.enterText(
-        find.widgetWithText(TextField, L10n.abbrLabel).first, 'X');
+        find
+            .descendant(
+                of: find.widgetWithText(GlassField, L10n.abbrLabel).first,
+                matching: find.byType(TextField))
+            .first,
+        'X');
     await tester.pumpAndSettle();
 
     await tester.tap(find.text(L10n.saveAndReschedule));

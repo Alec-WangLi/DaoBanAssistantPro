@@ -40,7 +40,12 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.19\n'
+const String _changelogZh =     'v0.11.20\n'
+    '· 输入框的名字改成写在框的上方 —— 你截图里那两个字被压成半截，是 Android 上 Material「浮动标签」在系统字体（MiSans）下的毛病，这边复现不出、也没法从参数上调平，就干脆不用它了\n'
+    '· 日历格子上那个「有闹钟」的小圆点去掉了 —— 挂过闹钟的日子接近一半，半个网格都顶着一个小点，是不好看；「这天调过班」那个点还在（右上角那个）\n'
+    '· 顺带：所有输入框会比以前高一点点（名字从压在框线上，变成框上面单独一行）\n'
+    '\n'
+'v0.11.19\n'
     '· 「调整班次」弹层里，标题左边那根主色竖条往下挪了一点：以前它比标题的字高半行，看着有点歪\n'
     '· 排班管理页的「新增排班」按钮落到了屏幕底部：上一版把它抬高了 76，而那一抬是给主界面底部的导航胶囊让位的，这一页底下没有胶囊\n'
     '· 日历格子上能看出哪天有闹钟了：班次挂过闹钟的那天，胶囊左上角有个小圆点（右上角那个仍然是「这天调过班」）\n'
@@ -103,16 +108,14 @@ const String _changelogZh = 'v0.11.19\n'
     '· 响铃界面顺带修了：它是整屏深色，浅色档下从前会压一排看不见的深图标\n'
     '\n'
 
-    'v0.11.10\n'
-    '· 内部收口，界面看不出变化：上一版那三张卡里有几处边角没算干净，这一版补齐\n'
-    '· 卡片底板那层浅灰的暗端，与落在它上面的灰字差了 0.01（4.49 对标准的 4.5），已经调过来\n'
-    '· 桌面小组件重绘时少做 41 次跨进程查询（原先每一格都要问一次屏幕尺寸）\n'
-    '· 又补了三条自动护栏，把「块的图层顺序」「块尺寸必须按真实格子算」「渐变的每个端色都要过对比度」都钉住了\n'
-    '\n'
-
     ;
 
-const String _changelogEn = 'v0.11.19\n'
+const String _changelogEn =     'v0.11.20\n'
+    '· Field labels are now drawn above the box instead of floating on its border. The two squashed characters in your screenshot come from Android\'s Material floating label under the system font (MiSans): it does not reproduce here and cannot be tuned away from our side, so the app no longer uses it\n'
+    '· Removed the little "has an alarm" dot from the calendar cells — nearly half the days carry alarms, so half the grid was speckled. The "shift was adjusted" dot (top-right) stays\n'
+    '· Side effect: every input box is a little taller, because the label now takes its own line above the box\n'
+    '\n'
+'v0.11.19\n'
     '· In the "Adjust shift" sheet the accent bar left of the title moved down a little: it used to sit half a line above the title text\n'
     '· "Add schedule" on the Schedule management page dropped to the bottom of the screen: the previous release lifted it by 76, which is what the main screen\'s nav capsule needs — this page has no capsule\n'
     '· The calendar grid now shows which days carry alarms: a dot at the top-left of the shift chip (the top-right one still means the day was adjusted)\n'
@@ -173,13 +176,6 @@ const String _changelogEn = 'v0.11.19\n'
     '· Fixed a status-bar glitch: with the light theme, opening Schedule management turned the status-bar icons white and they stayed that way after going back. The dark theme was unaffected. It happened because the app never declared this itself and left it to each phone maker\'s default, which is why the same build showed it on some phones and not others\n'
     '· It now follows your Theme mode: dark icons in the light theme, white icons in the dark theme, decided in one place\n'
     '· The ringing screen got the same fix: it is dark all over, so in the light theme it used to show dark icons you could not read\n'
-    '\n'
-
-    'v0.11.10\n'
-    '· An internal tidy-up; nothing looks different: a few edges left over from the previous version are now closed\n'
-    '· The dark end of the panel gradient was 4.49:1 against the grey text on it, just under the 4.5 bar — that is fixed\n'
-    '· Redrawing the home-screen widgets now makes 41 fewer cross-process queries (it used to ask for the screen size once per day cell)\n'
-    '· Three more automated guards now pin the block layer order, the block sizing, and the contrast of every gradient end\n'
     '\n'
 
     ;

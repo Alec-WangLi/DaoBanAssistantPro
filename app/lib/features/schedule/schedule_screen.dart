@@ -11,6 +11,7 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -457,10 +458,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: titleCtrl,
-                    autofocus: true,
-                    decoration: glassInputDecoration(context, L10n.title),
+                  GlassField(
+                    label: L10n.title,
+                    child: TextField(
+                      controller: titleCtrl,
+                      autofocus: true,
+                      decoration: glassInputDecoration(context),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ...fields.build(context, setState),
@@ -805,10 +809,13 @@ Future<void> showEditEventDialog(
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: titleCtrl,
-                  autofocus: true,
-                  decoration: glassInputDecoration(context, L10n.title),
+                GlassField(
+                  label: L10n.title,
+                  child: TextField(
+                    controller: titleCtrl,
+                    autofocus: true,
+                    decoration: glassInputDecoration(context),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 ...fields.build(context, setState),

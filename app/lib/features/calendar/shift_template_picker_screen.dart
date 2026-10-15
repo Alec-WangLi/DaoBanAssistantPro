@@ -8,6 +8,7 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../data/app_repository.dart';
@@ -122,9 +123,12 @@ class _ShiftTemplatePickerScreenState
                   .copyWith(color: AppTokens.inkMuted(context)),
             ),
             const SizedBox(height: 12),
-            TextField(
-              onChanged: (v) => setState(() => _query = v),
-              decoration: glassInputDecoration(context, L10n.searchPattern),
+            GlassField(
+              label: L10n.searchPattern,
+              child: TextField(
+                onChanged: (v) => setState(() => _query = v),
+                decoration: glassInputDecoration(context),
+              ),
             ),
             const SizedBox(height: 16),
             ..._buildGrouped(context, matched, saved),
@@ -451,10 +455,13 @@ class _ShiftTemplatePickerScreenState
       context: context,
       builder: (dialogContext) => GlassDialog(
         title: L10n.renameTemplate,
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: glassInputDecoration(context, L10n.templateName),
+        content: GlassField(
+          label: L10n.templateName,
+          child: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: glassInputDecoration(context),
+          ),
         ),
         actions: [
           GlassActionButton(

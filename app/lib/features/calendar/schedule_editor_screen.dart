@@ -13,6 +13,7 @@ import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
@@ -552,10 +553,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            controller: _scheduleNameCtrl,
-            onChanged: (v) => _name = v,
-            decoration: glassInputDecoration(context, L10n.scheduleName),
+          GlassField(
+            label: L10n.scheduleName,
+            child: TextField(
+              controller: _scheduleNameCtrl,
+              onChanged: (v) => _name = v,
+              decoration: glassInputDecoration(context),
+            ),
           ),
           // 按月模式**不显示**这一行：按月不读基准日（每月 1 号恒等于第一段），
           // 摆一个改不动结果的日期在那儿，就是让用户在界面上操作一个不生效的值。
@@ -817,22 +821,30 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 这一处是 v0.11.15 加「按月」那一屏时**工装抓出来的既有缺陷**：之前没有任何
   /// 一屏在 400 高的窗口里构建到这张卡（上面两张卡正好占满），所以它从没现形过。
   Widget _classIdentityRow(BuildContext context, int index, ShiftClass c) {
-    final nameField = TextField(
-      controller: _nameCtrls[index],
-      onChanged: (v) => setState(
-          () => _classes[index] = _editClass(_classes[index], name: v)),
-      decoration: glassInputDecoration(context, L10n.shiftName, isDense: true),
+    final nameField = GlassField(
+      label: L10n.shiftName,
+      isDense: true,
+      child: TextField(
+        controller: _nameCtrls[index],
+        onChanged: (v) => setState(
+            () => _classes[index] = _editClass(_classes[index], name: v)),
+        decoration: glassInputDecoration(context, isDense: true),
+      ),
     );
     final abbrField = SizedBox(
       width: _abbrFieldWidth,
-      child: TextField(
-        controller: _abbrCtrls[index],
-        maxLength: 2,
-        textAlign: TextAlign.center,
-        onChanged: (v) => setState(
-            () => _classes[index] = _editClass(_classes[index], abbr: v)),
-        decoration: glassInputDecoration(context, L10n.abbrLabel, isDense: true)
-            .copyWith(counterText: ''),
+      child: GlassField(
+        label: L10n.abbrLabel,
+        isDense: true,
+        child: TextField(
+          controller: _abbrCtrls[index],
+          maxLength: 2,
+          textAlign: TextAlign.center,
+          onChanged: (v) => setState(
+              () => _classes[index] = _editClass(_classes[index], abbr: v)),
+          decoration: glassInputDecoration(context, isDense: true)
+              .copyWith(counterText: ''),
+        ),
       ),
     );
     final dot = _colorDot(context, index, c);
@@ -2015,10 +2027,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       context: context,
       builder: (dialogContext) => GlassDialog(
         title: L10n.saveAsTemplate,
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: glassInputDecoration(context, L10n.templateName),
+        content: GlassField(
+          label: L10n.templateName,
+          child: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: glassInputDecoration(context),
+          ),
         ),
         actions: [
           GlassActionButton(
@@ -2254,16 +2269,19 @@ class _AlarmLabelFieldState extends State<_AlarmLabelField> {
   }
 
   @override
-  Widget build(BuildContext context) => TextField(
-        controller: _ctrl,
+  Widget build(BuildContext context) => GlassField(
+        label: L10n.alarmNameOptional,
+        isDense: true,
+        child: TextField(
+          controller: _ctrl,
         // 名字有长度上限：不封顶的话，闹钟页那一行会被超长名字顶到溢出
         // （独立审查提的）。12 个字对「起床 / 午休 / 交接班提醒」这类名字绰绰有余，
         // 与旁边的简称框一样**不显示计数器**（120 宽的框里那是噪音）。
         maxLength: _alarmNameMaxLength,
         onChanged: (v) => widget.onChanged(v.trim().isEmpty ? null : v.trim()),
-        decoration: glassInputDecoration(context, L10n.alarmNameOptional,
-                isDense: true)
+        decoration: glassInputDecoration(context, isDense: true)
             .copyWith(hintText: L10n.alarmNameHint, counterText: ''),
+        ),
       );
 }
 

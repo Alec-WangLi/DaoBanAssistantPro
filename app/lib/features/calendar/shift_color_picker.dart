@@ -28,6 +28,7 @@ import '../../core/shift_palette.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/glass/glass.dart';
 
@@ -189,8 +190,12 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
   }
 
   /// 当前色一颗大圆点 + 颜色值输入框。
+  ///
+  /// 行内对齐用 `end`：标签现在画在框**上方**（`GlassField`），居中对齐的话那颗
+  /// 圆点会跟着「标签 + 框」整块居中、看着比框高一截。
   Widget _previewRow(BuildContext context, Color onSurface) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Container(
           width: 44,
@@ -206,16 +211,18 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
         ),
         const SizedBox(width: AppTokens.spaceMd),
         Expanded(
-          child: TextField(
-            controller: _hexCtrl,
-            onChanged: _onHexChanged,
-            autocorrect: false,
-            enableSuggestions: false,
-            textCapitalization: TextCapitalization.characters,
-            style: AppTokens.rowPrimary.copyWith(color: onSurface),
-            decoration: glassInputDecoration(context, L10n.shiftColorHex)
-                .copyWith(
-              errorText: _hexBad ? L10n.shiftColorCustomHint : null,
+          child: GlassField(
+            label: L10n.shiftColorHex,
+            child: TextField(
+              controller: _hexCtrl,
+              onChanged: _onHexChanged,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.characters,
+              style: AppTokens.rowPrimary.copyWith(color: onSurface),
+              decoration: glassInputDecoration(context).copyWith(
+                errorText: _hexBad ? L10n.shiftColorCustomHint : null,
+              ),
             ),
           ),
         ),
