@@ -31,7 +31,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="6dp"
-        android:textSize="11sp"
+        android:textSize="11dp"
         android:maxLines="1"
         android:ellipsize="end" />
 </LinearLayout>

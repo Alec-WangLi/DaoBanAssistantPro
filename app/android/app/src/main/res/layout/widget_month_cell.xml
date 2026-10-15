@@ -36,7 +36,7 @@
             android:id="@+id/wg_mc_day"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
+            android:textSize="13dp"
             android:maxLines="1" />
 
         <FrameLayout
@@ -56,7 +56,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:gravity="center"
-                android:textSize="11sp"
+                android:textSize="12dp"
                 android:maxLines="1" />
         </FrameLayout>
 
@@ -65,7 +65,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:textSize="11sp"
+            android:textSize="11dp"
             android:maxLines="1"
             android:ellipsize="end" />
     </LinearLayout>

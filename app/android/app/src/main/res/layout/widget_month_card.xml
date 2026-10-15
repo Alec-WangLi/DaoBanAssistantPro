@@ -44,7 +44,7 @@
             android:layout_width="32dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="16sp"
+            android:textSize="16dp"
             android:maxLines="1"
             android:text="&#8249;" />
 
@@ -54,7 +54,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:textSize="13sp"
+            android:textSize="13dp"
             android:maxLines="1"
             android:ellipsize="end" />
 
@@ -63,7 +63,7 @@
             android:layout_width="32dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="16sp"
+            android:textSize="16dp"
             android:maxLines="1"
             android:text="&#8250;" />
     </LinearLayout>
@@ -80,7 +80,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -89,7 +89,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -98,7 +98,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -107,7 +107,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -116,7 +116,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -125,7 +125,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -134,7 +134,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
     </LinearLayout>
 

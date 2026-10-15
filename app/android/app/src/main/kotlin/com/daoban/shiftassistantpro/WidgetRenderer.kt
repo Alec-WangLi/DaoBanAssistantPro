@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.util.TypedValue
 import android.widget.RemoteViews
 
 import java.time.LocalDate
@@ -63,6 +64,82 @@ object WidgetRenderer {
      */
     private fun dpToPx(context: Context, dp: Int): Int =
         (dp * context.resources.displayMetrics.density).toInt()
+
+    // ── 字号缩放（2026-10-15） ─────────────────────────────────────────────
+    //
+    // 用户 2026-10-15：「桌面小组件仍按系统 sp 排版 —— 系统字号调到 200% 时桌面那张
+    // 卡还会跟着变大」。真机实测（font_scale=2.0）今日卡的时间行被切、班组整行不见；
+    // 根因是**卡片尺寸编译期定死（resizeMode="none"）而字号写 `sp`**。
+    //
+    // 两件事一起做：① 布局里全部改用 `dp`（不乘 fontScale）；② 这里按**真实格子
+    // 尺寸**算一个缩放系数再 set 回去 —— 与 App 日历格同一条规则
+    // （`app/lib/features/calendar/calendar_screen.dart:1893` 的
+    // `s = (cellH - _cellInset*2) / _cellDesignH`）。
+    //
+    // 基准数与 App 的 `app/lib/core/design_tokens.dart` 同源：
+    //   `cellDateSm` 13 / `cellShift` 12 / `tinyLabel` 11，
+    //   以及 `calendar_screen.dart:3015` 的 `_cellDesignH = 55`、`_cellInset = gapHair = 2`。
+    // **改那边要回来改这里。**
+
+    /** 与 `_cellDesignH` 同一个数。 */
+    private const val CARD_DESIGN_H = 55f
+
+    /**
+     * 下限 0.85（App 是 1.0）：App 的格子永远 ≥ 设计尺寸，而桌面的格高**由启动器给**，
+     * 可能更矮 —— 那时宁可字小一档，也不要溢出（桌面外壳没有滚动，溢出就是切字）。
+     * 上限 1.25 与 App 同档。
+     */
+    private const val MIN_CARD_SCALE = 0.85f
+    private const val MAX_CARD_SCALE = 1.25f
+
+    /**
+     * 今日卡的**设计高度**（dp）：按基准字号排布时，**去掉根内边距之后**内容占多高。
+     *
+     * 与 App 的 `_cellDesignH = 55` 同一种做法 —— 而且同样是量出来的，不是推的。
+     * 推法（真机实测反推，Redmi K90 Pro Max · 3× · 2026-10-15）：
+     *   卡片 256.3dp，上下余量 27.3 / 37.0dp ⟹ 居中项 = 44（根内边距）+ C
+     *   ⟹ C = 256.3 − 27.3 − 37.0 − 44 = **148**。
+     *
+     * ⚠️ **别拿「内容墨迹高度」当它**：墨迹量到的是 192dp，那里面**含**了上下那
+     * 44dp 内边距，而且不含行盒的行距。第一版按 192 写，s 算成 1.16、内容溢出，
+     * 真机上「本月统计」那一行直接被切掉（真机出图才看见）。
+     *
+     * **改布局里的字号或间距就要重新量一次。**
+     */
+    private const val TODAY_CARD_DESIGN_H = 148f
+
+    /**
+     * 月历格的缩放系数。[slotDp] 是**行槽**的高度（含格子卡两侧各 2dp 的外边距）——
+     * 与 App 那个 `cellH` 同一个口径。
+     */
+    private fun cardScale(slotDp: Float): Float =
+        ((slotDp - 4f) / CARD_DESIGN_H).coerceIn(MIN_CARD_SCALE, MAX_CARD_SCALE)
+
+    /**
+     * 按内容可用高算的缩放系数（今日卡用）。[availDp] 是**去掉根内边距之后**能放内容
+     * 的那一段，[designDp] 是「按基准字号自然排布时内容占多高」—— 那个数要**在真机上量**，
+     * 与 App 的 `_cellDesignH = 55` 同一种做法。
+     *
+     * ⚠️ [maxScale] 默认 1.0 —— **今日卡只缩不放**。原因是量出来的：那三样补上之后
+     * 内容自然高 148dp，而 4×3 的格子给它 212dp，`fitScale` 会一路顶到 1.25；但
+     * **行距（16/14/8dp）与徽章盒（24dp）是写死的、不跟着缩放**，字一放大，农历那行
+     * 就折成两行、整体高过可用高 —— 真机出图时「本月统计」那一行**被整行切掉**。
+     *
+     * 桌面外壳是定尺寸、**没有滚动**，溢出就是静默丢内容。所以宁可留着那点余量。
+     * 想真正填满它得改卡片的尺寸（4×2），或再补内容 —— 两件都不在这一轮里。
+     */
+    private fun fitScale(availDp: Float, designDp: Float, maxScale: Float = 1f): Float =
+        (availDp / designDp).coerceIn(MIN_CARD_SCALE, maxScale)
+
+    /**
+     * 把字号设成「基准 × 缩放」。
+     *
+     * ⚠️ **必须 `COMPLEX_UNIT_DIP`**：`COMPLEX_UNIT_SP` 会乘 `fontScale`，那正是这一轮
+     * 要脱开的东西。`dp` 只乘 density。
+     */
+    private fun applyScale(v: RemoteViews, id: Int, baseDp: Float, s: Float) {
+        v.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_DIP, baseDp * s)
+    }
 
     /** WCAG 相对亮度（sRGB 线性化）—— 与 App 的 `AppTokens.contrastRatio` 同一套算式。 */
     private fun relLuminance(color: Int): Double {
@@ -620,6 +697,11 @@ object WidgetRenderer {
         val cellRows = monthGridRows(snap, gridStart)
         val (cellW, cellH) = monthCellPx(context, widgetId, cellRows)
 
+        // 字号按格子尺寸缩放（见 `cardScale`）。`monthCellPx` 给的是**格子卡**的高
+        // （行槽减去上下各 2dp 的外边距），加回那 4dp 才是 App 那个 `cellH` 的口径。
+        // 42 格共用同一个 s —— 尺寸在循环外算一次，别按格子算（那会把位图缓存冲爆）。
+        val cellScale = cardScale(cellH / context.resources.displayMetrics.density + 4f)
+
         for (slot in 0 until 42) {
             // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
             // 前面的取舍）。42 格每格都要清 —— 窗外那几格也走这里。
@@ -684,6 +766,12 @@ object WidgetRenderer {
             // 上一次的状态。
             c.setViewVisibility(R.id.wg_mc_day, android.view.View.VISIBLE)
             c.setTextViewText(R.id.wg_mc_day, date.dayOfMonth.toString())
+            // 三个字号一起按格子缩放。基准数与 `widget_month_cell.xml` 里的初值、
+            // 以及 `design_tokens.dart` 的三个令牌**三处同源**：
+            //   日数字 = cellDateSm 13 / 胶囊字 = cellShift 12 / 农历 = tinyLabel 11
+            applyScale(c, R.id.wg_mc_day, 13f, cellScale)
+            applyScale(c, R.id.wg_mc_abbr, 12f, cellScale)
+            applyScale(c, R.id.wg_mc_lunar, 11f, cellScale)
             // 三种字色：今天在实心块上走 `onSolidInk`；本月的日子走 ink（相邻月的走
             // muted —— 那是这张卡上唯一表达「这个月从哪天开始」的地方）。
             // **字重仍然只能靠布局里的 `textStyle`**：`TextView` 没有 `setTypeface(int)`，
@@ -802,6 +890,16 @@ object WidgetRenderer {
         val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+
+        // 字号按**卡内可用高**缩放（今日卡没有「格子」，用的是整张卡能放内容的那一段）。
+        // 可用高 = 宿主给的卡高 − 布局根那 22dp 内边距 × 2。
+        // ⚠️ **徽章那三个文字不参与缩放**（今天 / N 项待办 / 已调班）：它们的盒子是
+        // 写死的 52/84/96dp，而改容器尺寸的 `setViewLayoutWidth` 要 API 31（本仓
+        // minSdk 26）—— 字放大了盒子不动就会挤。见规格 §8。
+        val cardH = AppWidgetManager.getInstance(context)
+            .getAppWidgetOptions(widgetId)
+            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 180)
+        val s = fitScale(cardH - 44f, TODAY_CARD_DESIGN_H)
 
         // 日期/班次/时间/色点一律取 `days[todayIndex]` 而**不是** `todayCard` ——
         // `days[]` 会被原生对表右移、永远是对的；`todayCard` 不会。
@@ -990,6 +1088,17 @@ object WidgetRenderer {
             v.setTextViewText(R.id.wg_tc_tally, tally)
             v.setTextColor(R.id.wg_tc_tally, muted)
         }
+
+        // ── 字号：一律按卡内可用高缩放（`s` 在函数开头算好了） ──
+        // 数值与 `widget_today_card.xml` 里的 dp 初值一一对应。
+        // **徽章那三个不在里面**（见开头那段说明）。
+        applyScale(v, R.id.wg_tc_date, 22f, s)
+        applyScale(v, R.id.wg_tc_lunar, 14f, s)
+        applyScale(v, R.id.wg_tc_shift, 18f, s)
+        applyScale(v, R.id.wg_tc_note, 13f, s)
+        applyScale(v, R.id.wg_tc_time, 13f, s)
+        applyScale(v, R.id.wg_tc_crew_label, 11f, s)
+        applyScale(v, R.id.wg_tc_tally, 12f, s)
 
         return v
     }

@@ -37,5 +37,5 @@
         android:maxLines="1"
         android:ellipsize="end"
         android:textColor="@color/wg_muted_light"
-        android:textSize="12sp" />
+        android:textSize="12dp" />
 </LinearLayout>
