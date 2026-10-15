@@ -40,7 +40,16 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh =         'v0.11.22\n'
+const String _changelogZh =
+'v0.11.23\n'
+    '· 底部导航滑块滑动时那圈彩色光晕，右边不再有「一刀切」的硬边：以前那圈颜色绕一圈到右边时接不上、差了 60 度，看着像被切开。分段器、开关、日历那枚块共用同一份，一处修全都好\n'
+    '· 桌面小组件不再跟着系统字体大小变：系统字号调到 200% 时，今日卡的时间行与「其他班组」那一行会被切掉、周条的星期几挤成一团；现在三张卡的尺寸和字都不随系统字号动\n'
+    '· 月历小组件的周标题改成「一 二 三 四 五 六 日」（与 App 日历页同一份），以前是「周一 周二 …」，宽度差一倍、那一行比 App 抢眼得多\n'
+    '· 月历里「今天」那一格改成 App 同款的半透明块（主色淡染 + 主色描边），不再是实心一块；那天要是法定节假日，农历的红色也回来了\n'
+    '· 今日卡补齐了 App 信息卡上有的三行：班次后面那句备注（「休息日 · 不响闹钟」/「闹钟 07:00」）、「其他班组」四个字、以及「本月 大休13 · 白7 · 上夜6 · 下夜5」\n'
+    '· 顺带：那三行补上之后今日卡上下的空白小了一半；月历格子里的班次胶囊也跟着格子大小缩放了，不再是一成不变的小号\n'
+    '\n'
+'v0.11.22\n'
     '· 修上一版带出来的一处：浅色模式下，压在实心主色上的字是黑的 —— 底部导航选中的那两个字、「我的」页那几条分段器（主题模式 / 语言 / 字体大小）都读不清，现在一律白字\n'
     '· 压深改成「够用就好」：以前不管原来多浅都再压掉四成，默认那颗蓝明明够亮也被压成近黑；现在只有真不够的（青、橙）才压，而且压到刚读得清就停\n'
     '· 于是胶囊、按钮、导航、开关这几处的颜色都回到了接近「我的 → 外观」里那颗主色 —— 上一版说的「实心面比主色深一档」那个代价，现在只在青和橙上还看得到\n'
@@ -97,16 +106,18 @@ const String _changelogZh =         'v0.11.22\n'
     '· 手机竖屏与小窗的版式一个像素都没动\n'
     '\n'
 
-    'v0.11.13\n'
-    '· 收上一版那份独立审查抓出的四处。主要一条是小窗里的日期与待办副标题在省略 —— 它们其实从上一版之前就在省略了，只是没人盯着小窗那一档\n'
-    '· 日历页「一屏构图」的保证线写准了：常见高度（360×780 及以上）四档都成立；矮屏（640 高）走既有的网格滚动兜底 —— 那里从最小档 0.9 就开始滚，是高度不够，与字号档位无关\n'
-    '· 常设护栏补上小窗与 420×900 两档（原先漏了）。小窗里仍会省略的那几处每次跑都会打在输出里，只是不判失败 —— 故意不查的东西要看得见\n'
-    '· 更新日志那句「系统字体调多大都不再影响界面」补上例外：桌面小组件是原生绘制的，仍跟随系统\n'
-    '\n'
-
     ;
 
-const String _changelogEn =         'v0.11.22\n'
+const String _changelogEn =
+'v0.11.23\n'
+    '· The coloured rim on the bottom-nav slider no longer has a hard edge on the right: the hues went 300 degrees around and did not meet, leaving a 60-degree step that read as a cut. The segment control, the switch and the calendar block share the same gradient, so all of them are fixed at once\n'
+    '· Desktop widgets no longer scale with the system font size. At 200% the today card had its time row and the other-crews row clipped, and the week strip squeezed its weekday labels together; all three cards now keep their layout and their type whatever the system font size is\n'
+    '· The month widget header now reads the single-character 一 二 三 form, the same one the app calendar page uses, instead of 周一 周二 … — twice as wide and far more prominent than the app row\n'
+    '· The month widget marks today with the same translucent block the app uses (accent wash plus accent outline) instead of a solid fill; and if that day is a public holiday, the lunar date is red again\n'
+    '· The today card gained the three rows the app info card has: the note after the shift name (Rest day · no alarm / Alarm 07:00), the Other crews label, and the month tally (This month · 13 off · 7 day · …)\n'
+    '· Along the way: with those three rows the card top and bottom gaps are about half what they were, and the shift chips in the month grid now scale with the cell instead of staying one small size\n'
+    '\n'
+'v0.11.22\n'
     '· Fixed what the previous release brought in: in light mode the text on solid accent surfaces was dark, so the selected bottom-nav item and the segments on Me (theme mode / language / font size) were hard to read. They are white now\n'
     '· Darkening is now "just enough". It used to take 40% off the accent no matter how dark it already was, which crushed the default blue into near-black; now only the accents that genuinely need it (teal, orange) are darkened, and only until white text just passes\n'
     '· So pills, buttons, the nav item and switches are back near the accent you picked under Me, Appearance. The "one step darker" trade-off from the last release only shows on teal and orange now\n'
@@ -161,13 +172,6 @@ const String _changelogEn =         'v0.11.22\n'
     '· The text inside the day cells steps up a size on wide screens: the cells are bigger there, but the text was pinned to the phone cap and never grew\n'
     '· The bottom navigation capsule no longer stretches across the whole screen on wide displays (capped at 440, centred); the todo "+" button and the two buttons at the bottom of the alarm page line up with the content column too\n'
     '· Phone portrait and small-window layouts are unchanged, pixel for pixel\n'
-    '\n'
-
-    'v0.11.13\n'
-    '· Closes the four items the independent review of the last version turned up. The main one: the date and the to-do subtitles were being clipped in the small-window mode — they had been clipping since before the last version; nobody was watching that size\n'
-    '· The calendar page promise of everything-on-one-screen is now stated precisely: it holds at every text size on ordinary heights (360x780 and up); on short screens (640 tall) the grid falls back to the scrolling it always had — there it scrolls even at the smallest text size, because it is about height, not text size\n'
-    '· The standing guard now also covers the small window and 420x900 (it had missed both). The few places the small window still clips are printed on every run instead of failing — anything deliberately left unchecked has to be visible\n'
-    '· The changelog line saying the system font setting no longer affects the interface now carries its exception: the home-screen widgets are drawn natively and still follow it\n'
     '\n'
 
     ;
