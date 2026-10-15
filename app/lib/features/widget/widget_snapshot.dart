@@ -16,6 +16,7 @@
 library;
 
 import '../../core/l10n.dart';
+import '../../domain/day_summary.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -150,6 +151,11 @@ Map<String, Object?> buildWidgetSnapshot({
       // （今日卡用的是 `lunarFull`，不受影响。）
       'lunarShort': lunar.cellLabel,
       'lunarIsHoliday': lunar.isLegalHoliday,
+      // 今日卡班次那一行后面的备注（「休息日 · 不响闹钟」/「闹钟 07:00」…）。
+      // **挂在每条 day 上**（而不是 todayCard 里）：todayCard 只要跨天就整块留空，
+      // 而小组件跨天刷新时**只重渲染旧快照、不跑 Dart** —— 挂那边等于每天过零点
+      // 它消失、直到用户打开一次 App。
+      'shiftNote': shift == null ? null : alarmNote(shift),
       // v1 的 `abbrInk`（`AppTokens.onSolid` 算出的胶囊字色）在本版**删掉**：
       // 胶囊底从实心班次色改成 14% 淡染后，`onSolid` 给的黑/白字在淡染底上是错的
       // （深色班次的淡染底接近白，它却会给白字）。字色改走原生 `wg_ink_*`。
@@ -223,17 +229,28 @@ Map<String, Object?> buildWidgetSnapshot({
     // 2026-10-15：「月视图跟 App 里的界面差别挺大」，第一条就是它。
     // ⚠️ 周条那一列与今日卡读的是 `days[].weekday`，是另一条路，不受这里影响。
     'weekdays': L10n.weekdays,
-    'months': _monthsInWindow(window.from, window.to),
+    'months': _monthsInWindow(window.from, window.to, chain),
     'todayCard': todayCard,
   };
 }
 
 /// 窗口覆盖到的月份（含起止月），升序。月历标题行按「年-月」查它。
-List<Map<String, Object?>> _monthsInWindow(DateTime from, DateTime to) {
+///
+/// 每条还带一个 `tally`（今日卡最后那行「本月 大休13 · 白7 …」）。**按月在
+/// 这里给一份、而不是逐日烘**：它是按月的量，逐日烘会让快照多背两三百份一模
+/// 一样的串；而原生拿当天的 `day` 反算年月再查这张表，跨天与翻月都自动是对的
+/// （窗口覆盖到的月份都有，翻到窗口外就查不到 —— 那时那一行不画）。
+List<Map<String, Object?>> _monthsInWindow(
+    DateTime from, DateTime to, ScheduleChain? chain) {
   final out = <Map<String, Object?>>[];
   var y = from.year, m = from.month;
   while (y < to.year || (y == to.year && m <= to.month)) {
-    out.add({'y': y, 'm': m, 'title': L10n.yearMonth(DateTime(y, m))});
+    out.add({
+      'y': y,
+      'm': m,
+      'title': L10n.yearMonth(DateTime(y, m)),
+      'tally': monthTallyFor(chain, DateTime(y, m)),
+    });
     if (++m > 12) {
       m = 1;
       y++;

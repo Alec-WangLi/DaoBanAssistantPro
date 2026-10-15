@@ -21,6 +21,7 @@ import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
+import '../../domain/day_summary.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -264,7 +265,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 与**这个月**有关、且**只跟方案本身**有关的那两样 —— 一次算好，键变了才重量。
   ///
   /// 为什么是这两样、而不是全部五样：它们才是每次重建都要重算的大头
-  /// （`_computeMonthTally` 是整月 × `shiftOn` + 拼字符串，`_computeMonthHasNoSchedule`
+  /// （`monthTallyFor` 是整月 × `shiftOn` + 拼字符串，`_computeMonthHasNoSchedule`
   /// 是整月 × `hasScheduleOn`），而它们的输入**恰好就是** `chain.cacheKey` 覆盖的
   /// 那些（组名 / 简称 / 空白表 / 时段）。
   ///
@@ -273,7 +274,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 「调整了一次班次」之后拿到旧值（`已调班` 胶囊的高度再也不留）。那两样本来
   /// 也便宜（一次扫待办 / 整月 `scheduleOn`），现算即可。
   ///
-  /// ⚠️ 键里**必须有语言**：`_computeMonthTally` 那一行是本地化的（`L10n.monthTally`
+  /// ⚠️ 键里**必须有语言**：`monthTallyFor` 那一行是本地化的（`L10n.monthTally`
   /// 与班次简称都可能随语言变）。
   _MonthFacts _factsFor(ScheduleChain? chain) {
     final String key = <String>[
@@ -287,7 +288,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     ].join('|');
     if (key == _factsKey && _facts != null) return _facts!;
     final _MonthFacts f = _MonthFacts(
-      tally: _computeMonthTally(chain),
+      tally: monthTallyFor(chain, _month),
       hasNoSchedule: _computeMonthHasNoSchedule(chain),
     );
     _factsKey = key;
@@ -427,24 +428,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 一到两个字的简称：早 / 午 / 夜 / 休，英文是 M / A / N / O），一行放得下；
   /// 班次多的排班会折到第二行，折行的高度也照量（见 `measureInfoCardLine`）。
   ///
-  /// **按简称累加、不按 `classes` 下标计数**：跨时段的一个月里两套方案的班次定义
-  /// 不同，按下标数会把 A 的第 0 个班次和 B 的第 0 个班次算成同一个 —— 数字会错得
-  /// 看不出来（spec §7.1）。跨方案时同名的「休」合并成一个数，本来就该合。
-  ///
-  /// 没有排班、或整月都没有班次（空白表跟随法定节假日）时返回 null。
-  String? _computeMonthTally(ScheduleChain? chain) {
-    if (chain == null) return null;
-    final counts = <String, int>{};
-    final days = DateTime(_month.year, _month.month + 1, 0).day;
-    for (var d = 1; d <= days; d++) {
-      final shift = chain.shiftOn(DateTime(_month.year, _month.month, d));
-      if (shift == null) continue;
-      counts.update(shift.shortLabel, (n) => n + 1, ifAbsent: () => 1);
-    }
-    if (counts.isEmpty) return null;
-    final parts = [for (final e in counts.entries) '${e.key}${e.value}'];
-    return '${L10n.monthTally} ${parts.join(' · ')}';
-  }
+  /// 实现在 `domain/day_summary.dart` 的 [monthTallyFor] —— 桌面小组件的今日卡
+  /// 要用**同一份**（那边按月查，见 `widget_snapshot.dart`）。
 
   @override
   void initState() {
@@ -1972,7 +1957,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                   //
                   // **左上角那个「有闹钟」的点 v0.11.20 又去掉了**：用户装上
                   // v0.11.19 看了一眼就说「不美观」—— 挂了闹钟的日子接近一半，
-                  // 半个网格都顶着一个小点，看着像脏东西。判据 `_shiftHasAlarms`
+                  // 半个网格都顶着一个小点，看着像脏东西。判据 `shiftHasAlarms`
                   // 与 `_cornerDot` 都留着（信息卡那行还在用它；下一个想标什么
                   // 的人也能直接复用），只是不在格子上画了。
                   if (adjusted)
@@ -2737,7 +2722,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                               style: AppTokens.rowPrimary,
                             ),
                           TextSpan(
-                            text: '   ${_alarmText(shift)}',
+                            text: '   ${alarmNote(shift)}',
                             style:
                                 AppTokens.rowSecondary.copyWith(color: muted),
                           ),
@@ -2960,32 +2945,10 @@ Widget _cornerDot({required Key key, required Color color}) => Container(
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
 
-/// 「这个班次挂没挂联动闹钟」—— 格子左上角那个点与下面 `_alarmText` **共用这一份
-/// 判据**。两处各写一遍的话，哪天规则变了就会出现「格子上有点、信息卡却写着
-/// 未开启」这种自相矛盾的画面，而它不会报错。
-bool _shiftHasAlarms(ShiftClass t) => t.alarmEnabled && t.alarms.isNotEmpty;
-
-String _alarmText(ShiftClass t) {
-  if (t.isRest) return L10n.restNoAlarm;
-  if (!_shiftHasAlarms(t)) return L10n.alarmOff;
-  final alarm = t.alarms.first;
-  final clock = formatClock(alarm.minute);
-  // 不落在班次**当天**的必须标出来：不标的话，这一行会跟前面的「00:00 – 08:00」
-  // 读成同一天的两件事（00:00 上班的夜班配 23:00、16:30–次日 00:30 的中班配
-  // 00:15 都是这一类）。
-  final shown = switch (alarmDayAnchor(t, alarm)) {
-    AlarmDayAnchor.prev => L10n.clockPrevDay(clock),
-    AlarmDayAnchor.next => L10n.clockNextDay(clock),
-    AlarmDayAnchor.same => clock,
-  };
-  // 多条的只写首条 + 「等 N 个」：这一行本来就是 `maxLines: 1` + 省略号，把每条
-  // 时刻都铺开会把后面的内容挤掉 —— 而卡片是**定高**的，多一行就顶高卡片、
-  // 连带把日历网格挤矮（`info_card_metrics.dart` 那边的前提）。
-  return t.alarms.length == 1
-      ? L10n.alarmAt(shown)
-      : L10n.alarmFirstOfMany(shown, t.alarms.length);
-}
-
+/// 「这个班次挂没挂联动闹钟」与「那一行怎么写」已经搬到 `domain/day_summary.dart`
+/// （`shiftHasAlarms` / `alarmNote`）—— 桌面小组件的今日卡要用**同一份**，
+/// 两处各写一遍必然分岔，而分岔时不报错。
+///
 /// 信息卡（完整版）在**底栏**时的高度不再是写死的常数，改成按当前月最满的
 /// 一天算出来 —— 实现在 `info_card_metrics.dart`，那里写了为什么。
 ///

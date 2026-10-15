@@ -727,4 +727,44 @@ void main() {
     expect(s['otherCrews'], '其他班组',
         reason: '今日卡的「其他班组」标签 —— Kotlin 里不许有中文，只能由快照下发');
   });
+
+  test('days[] 带 shiftNote；months[] 每条带 tally（同月只有一条）', () {
+    final s = buildWidgetSnapshot(
+      chain: _chain(_schedule()),
+      now: DateTime(2026, 10, 15, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+
+    // 班次备注按日烘 —— 跨天刷新时原生只重渲染旧快照，挂 todayCard 的话
+    // 每天过零点它就消失了。
+    expect(_rowOf(s, DateTime(2026, 10, 15))['shiftNote'], isNotNull);
+    expect(_rowOf(s, DateTime(2026, 10, 15))['shiftNote'], isA<String>());
+
+    // 本月统计按月给一份。**同一个月的两天必须查到同一个串** —— 原生是拿当天的
+    // `day` 反算年月再查 months[]，这条把「一个月只有一条」钉住。
+    final months = (s['months']! as List).cast<Map>();
+    final oct = months.where((m) => m['y'] == 2026 && m['m'] == 10).toList();
+    expect(oct, hasLength(1));
+    expect(oct.first['tally'], startsWith('${L10n.monthTally} '));
+    // 窗口里的每一条都得有 tally 这个键（值可以是 null，但不能没有）
+    for (final m in months) {
+      expect(m.containsKey('tally'), true);
+    }
+  });
+
+  test('降级：没有链时 shiftNote 与 tally 都是 null（卡上不画那两行）', () {
+    final s = buildWidgetSnapshot(
+      chain: null,
+      now: DateTime(2026, 10, 15, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+    expect(_rowOf(s, DateTime(2026, 10, 15))['shiftNote'], isNull);
+    for (final m in (s['months']! as List).cast<Map>()) {
+      expect(m['tally'], isNull, reason: '没有排班就不该有本月统计');
+    }
+  });
 }
