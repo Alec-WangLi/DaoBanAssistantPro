@@ -9,12 +9,24 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
 
 String _read(String rel) {
   final f = File(rel);
   expect(f.existsSync(), true,
       reason: '$rel 不存在 —— 要么实现还没做，要么这条护栏自己跟源码对不上了');
   return f.readAsStringSync();
+}
+
+/// 某个 id 那个视图上写的 `android:textSize="…dp"`。找不到就返回 null
+/// （由调用点给出「护栏自己跟源码对不上」的理由，而不是在解析里抛）。
+double? _textSizeDp(String xml, String id) {
+  final i = xml.indexOf('@+id/$id');
+  if (i < 0) return null;
+  final end = xml.indexOf('/>', i);
+  final block = xml.substring(i, end < 0 ? xml.length : end);
+  final m = RegExp(r'android:textSize="([0-9.]+)dp"').firstMatch(block);
+  return m == null ? null : double.parse(m.group(1)!);
 }
 
 /// 把注释**剥成等长空格**（保留行号、不改变索引），字符串字面量原样留着。
@@ -100,5 +112,39 @@ void main() {
       expect(kt.contains(zh), false,
           reason: '「$zh」是用户可见文案，必须由 Dart 侧快照下发');
     }
+  });
+
+  test('「其他班组」那一行与 App 同一档字号（三处一起对账）', () {
+    // 用户 2026-10-16 真机反馈：「『其他班组』那里的字体有点小……如果可以的话，
+    // 可以整体再放大一些」。量下来**不是没位置**（卡内上下各还剩约 13dp 富余），
+    // 是这一行**写小了一档**：11dp，而 App 同一行 12、这张卡自己的「本月统计」
+    // 也是 12 —— App 里「其他班组 / 色块 / 本月统计」本来同一档，是搬到桌面时
+    // 这行掉了一级。
+    //
+    // 这条把**三处**钉在一起：Kotlin 的基准字号、两份布局里的 dp 初值、Dart 令牌。
+    // 任何一处单独被改（最典型的是有人调 `design_tokens` 而没回头看桌面），
+    // 桌面就与 App 静默分岔 —— 而那种分岔在真机上只能靠肉眼看出来。
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    final m = RegExp(r'applyScale\(v, R\.id\.wg_tc_crew_label, ([0-9.]+)f, s\)')
+        .firstMatch(kt);
+    expect(m, isNotNull,
+        reason: '找不到 wg_tc_crew_label 的 applyScale —— 护栏自己跟源码对不上了');
+    expect(double.parse(m!.group(1)!), AppTokens.microText.fontSize,
+        reason: '标签的基准字号与 App 的 `microText` 分岔了');
+
+    final card = _read('android/app/src/main/res/layout/widget_today_card.xml');
+    expect(_textSizeDp(card, 'wg_tc_crew_label'), AppTokens.microText.fontSize,
+        reason: 'widget_today_card.xml 里那个 dp 初值没跟上（它与上面那行要一起改）');
+
+    final chip = _read('android/app/src/main/res/layout/widget_crew_chip.xml');
+    expect(_textSizeDp(chip, 'wg_cc_text'), AppTokens.microLabel.fontSize,
+        reason: '色块里的文字与 App 的 `microLabel` 分岔了');
+
+    // 自证这条判据有鉴别力：两个令牌**都是 12**，所以「随手写死一个 11」会被抓住，
+    // 而「两边都写成别的同一个数」抓不住 —— 那本来就是设计变更，不是分岔。
+    expect(AppTokens.microText.fontSize, AppTokens.microLabel.fontSize,
+        reason: '两个令牌不再同档了 —— 「其他班组」这一行是按它们同档才对齐的，'
+            '重新定档要连带复核桌面这两处');
   });
 }

@@ -201,14 +201,22 @@
         android:orientation="horizontal">
 
         <!-- 零号槽位：「其他班组」四个字。用 `wrap_content` 而不是写死列宽 ——
-             它是文案，中英长度差得多，写死必然把英文挤掉。四个胶囊在后面按权重分。 -->
+             它是文案，中英长度差得多，写死必然把英文挤掉。四个胶囊在后面按权重分。
+
+             ⚠️ 字号 **12dp = App 的 `AppTokens.microText`**（2026-10-16 用户真机反馈：
+             「『其他班组』那里的字体有点小……可以整体再放大一些」）。它原来是 11dp，
+             比 App 同一行、也比这张卡自己的「本月统计」（12dp）**小一档** —— App 里
+             「其他班组 / 色块 / 本月统计」本来就是同一档，是搬到桌面时这行掉了一级。
+             不是没位置：卡内上下各还剩约 13dp 富余，纯粹是写小了。
+             字号由渲染侧 `applyScale(..., 12f, s)` 设，这里这个值只在没走到那段时生效
+             —— 两处要一起改，由 `widget_cell_block_guard_test.dart` 对着 Dart 的令牌盯。 -->
         <TextView
             android:id="@+id/wg_tc_crew_label"
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:layout_marginEnd="6dp"
             android:gravity="center_vertical"
-            android:textSize="11dp"
+            android:textSize="12dp"
             android:maxLines="1" />
 
         <FrameLayout

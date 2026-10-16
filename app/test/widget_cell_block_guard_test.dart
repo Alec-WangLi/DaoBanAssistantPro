@@ -23,6 +23,15 @@ String _read(String rel) {
   return f.readAsStringSync();
 }
 
+/// XML 注释**剥成等长空格**（保留行号与索引）—— 注释里写一句
+/// `android:padding="8dp"` 是在解释「为什么不许那么写」，不该算违规；
+/// 不剥的话这条护栏会逼着后人不敢在注释里举反例。
+/// 与 `widget_font_scale_guard_test.dart` 里那个剔除注释的做法同一套。
+String _stripXmlComments(String s) => s.replaceAllMapped(
+      RegExp(r'<!--.*?-->', dotAll: true),
+      (m) => m.group(0)!.replaceAll(RegExp(r'[^\n]'), ' '),
+    );
+
 void main() {
   test('四张资源成对存在：格子卡底与页面底，浅深各一', () {
     for (final base in ['widget_cell', 'widget_page']) {
@@ -292,5 +301,65 @@ void main() {
         reason: 'monthCard 还在用写死的胶囊宽度');
     expect(monthCard.contains('40f * cellScale'), false,
         reason: '月历胶囊宽度还是「40dp × 缩放」那个定值');
+  });
+
+  test('周条：「今天」那块占满它那一格 —— 布局让掉多少，stripCellPx 就得减掉多少', () {
+    // 块是 `fitXY` 拉伸的：布局里让出的边距与 `stripCellPx` 反推的尺寸必须同源，
+    // 否则块的宽高比与它真正占的那一格不一致、圆角被拉成椭圆 —— **什么都不报**。
+    //
+    // 2026-10-16 改过一次纵向：用户真机反馈「周几和下边的班次离遮罩边缘太近」，
+    // 块从 59dp 长到约 70dp（卡纵向内边距 8 → 3dp、块纵向外边距 2 → 0dp），
+    // 横向一个数没动。这条把三个数绑在一起：谁改了都必须回来改另两个。
+    double attr(String xml, String pattern, String where) {
+      final m = RegExp(pattern).firstMatch(xml);
+      expect(m, isNotNull, reason: '$where 上找不到 $pattern —— 护栏自己跟源码对不上了');
+      return double.parse(m!.group(1)!);
+    }
+
+    final card = _stripXmlComments(
+        _read('android/app/src/main/res/layout/widget_week_strip.xml'));
+    final cell = _stripXmlComments(
+        _read('android/app/src/main/res/layout/widget_strip_cell.xml'));
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+
+    // ⚠️ 内边距**逐个方向**写（`paddingLeft`/`paddingTop`/…），不用四个方向一起定的
+    // `android:padding` —— 这一版里横向与纵向是**故意不同**的（横向 8 不许动、
+    // 纵向 3 才是这一轮要的），合并写法表达不了。
+    final padL = attr(card, r'android:paddingLeft="([0-9.]+)dp"', '周条外壳');
+    final padR = attr(card, r'android:paddingRight="([0-9.]+)dp"', '周条外壳');
+    final padT = attr(card, r'android:paddingTop="([0-9.]+)dp"', '周条外壳');
+    final padB = attr(card, r'android:paddingBottom="([0-9.]+)dp"', '周条外壳');
+    expect(card.contains('android:padding="'), false,
+        reason: '别退回合并的 `android:padding` —— 那会把四个方向一次定死，'
+            '而纵向与横向在这一版里是**故意不同**的（见布局头注）');
+    // 块那一层：从它的 id 起截到自闭合为止，免得匹配到别的视图上的同名属性。
+    final blockStart = cell.indexOf('@+id/wg_sc_block');
+    expect(blockStart, greaterThanOrEqualTo(0), reason: '没有 wg_sc_block');
+    final block = cell.substring(blockStart, cell.indexOf('/>', blockStart));
+    final marginL = attr(block, r'android:layout_marginLeft="([0-9.]+)dp"', 'wg_sc_block');
+    final marginR = attr(block, r'android:layout_marginRight="([0-9.]+)dp"', 'wg_sc_block');
+    final marginT = attr(block, r'android:layout_marginTop="([0-9.]+)dp"', 'wg_sc_block');
+    final marginB = attr(block, r'android:layout_marginBottom="([0-9.]+)dp"', 'wg_sc_block');
+
+    final body = kt.substring(kt.indexOf('private fun stripCellPx('));
+    expect(body.length, greaterThan(200), reason: '没截出 stripCellPx');
+    final wPad = attr(body, r'\(wDp - ([0-9.]+)\)', 'stripCellPx 的宽度算式');
+    final wMargin = attr(body, r'/ 7f\) - ([0-9.]+)f\)', 'stripCellPx 的宽度算式');
+    final hPad = attr(body, r'\(hDp - ([0-9.]+)\) \* density', 'stripCellPx 的高度算式');
+
+    expect(wPad, padL + padR,
+        reason: '宽度算式减掉的 $wPad 与外壳左右内边距 $padL + $padR 对不上');
+    expect(wMargin, marginL + marginR,
+        reason: '宽度算式减掉的 $wMargin 与块左右外边距 $marginL + $marginR 对不上');
+    expect(hPad, padT + padB + marginT + marginB,
+        reason: '高度算式减掉的 $hPad 与「外壳上下内边距 $padT + $padB + 块上下外边距 '
+            '$marginT + $marginB」对不上 —— 块会被 fitXY 拉成与那一格不同的宽高比');
+
+    // 自证这条判据有鉴别力：把纵向那两个数改回上一版的「内边距 8 + 外边距 2」
+    // 必须报红。写在这里而不是「心里知道」—— 三个数一起改的护栏，最怕的是它恒真。
+    expect(hPad == 2 * 8 + 2 * 2, false,
+        reason: '纵向那两个数又变回「内边距 8 + 外边距 2」了？那是块贴住字的旧配置'
+            '（真机上块里的字离上下沿只剩 3.7 / 5.3dp）');
   });
 }

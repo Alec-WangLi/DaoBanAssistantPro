@@ -19,6 +19,19 @@
   2026-10-16（与月历同步）：`wg_sc_block` 从**实心主色块**换成**半透明玻璃块**
   （`WidgetChip.glassBlock`，与月历那格同参数）；周标题改单字；块上字改中性色。
   两张卡摆在同一屏上，这三处不一致就会露馅。
+
+  ⚠️ **2026-10-16 更晚（用户真机反馈）：块的外边距从四面 2dp 改成「只留左右」。**
+  块原来四边各让 2dp，而卡那侧纵向也让 8dp —— 加起来块离卡上下沿 8.7dp，可块
+  **里面**周几离上沿只剩 3.7dp、下夜胶囊离下沿 5.3dp（左右反倒有 6.7dp）。纵向这
+  2dp 让出来、`widget_week_strip.xml` 那边的纵向内边距从 8dp 收到 3dp，块就从
+  59dp 长到约 70dp，上下各松到约 6.8dp。
+  **横向那 2dp 一个字不许动** —— 七列的胶囊与格子边距全靠它。三处数（这里的
+  margin、那边的上下内边距、`stripCellPx` 的 `hDp - 6`）是一组，改一个要
+  改三个，由 `widget_cell_block_guard_test.dart` 盯着。
+  四个方向同样**分开写** `layout_marginLeft/Right/Top/Bottom`（合并写法能用，
+  分开写只为一眼看出纵向那两份是 0）；另外**这份布局改了立刻就能看到** ——
+  每格这份子 `RemoteViews` 每次渲染都重新 inflate，与外层那份不同
+  （理由见 `widget_week_strip.xml` 头注里那条 reapply 的说明）。
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_sc_root"
@@ -29,7 +42,10 @@
         android:id="@+id/wg_sc_block"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_margin="2dp"
+        android:layout_marginLeft="2dp"
+        android:layout_marginRight="2dp"
+        android:layout_marginTop="0dp"
+        android:layout_marginBottom="0dp"
         android:scaleType="fitXY"
         android:contentDescription="@null" />
 

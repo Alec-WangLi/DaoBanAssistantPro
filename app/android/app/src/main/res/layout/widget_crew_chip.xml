@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  今日卡「其他班组」那一行里的**一个色块**：圆点（淡染胶囊位图 + 实心小圆）+ 文字。
+
+  ⚠️ 与 App 的信息卡**有意不同源**：那边是「淡染胶囊把圆点和文字一起包住」
+  （`calendar_surface.dart` 的 `_otherCrewChips`），这里是「圆点带一圈、文字裸着」。
+  桌面这一行是**四个等分槽位**（`widget_today_card.xml` 的 `wg_tc_crew_slot1..4`），
+  套上胶囊之后每颗都要按文字宽撑开，一行放不下 —— 真机量过：卡内可用宽 296.7dp，
+  「其他班组」标签占 48.7dp，三个班组时每槽 82.7dp；四个班组时每槽只剩 62dp，而
+  一颗「一班 上夜」在 11dp 下就要 66dp。所以这个形态是**为桌面收的**，不是漏做。
+
+  ⚠️ 字号 **12dp = App 的 `AppTokens.microLabel`**（2026-10-16 用户真机反馈
+  「『其他班组』那里的字体有点小」）。11dp 时：标签与文字都比 App 小一档，且与
+  这张卡自己的「本月统计」（12dp）也不齐。三个班组时每槽 82.7dp、一颗约 71dp，
+  放得下；**四个班组时每槽 62dp，这一档本来就放不下**（11dp 时就已经在省略），
+  这一版只是把差的那 5dp 一并带上，没有引入新的失败形态。
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_cc_root"
     android:layout_width="match_parent"
@@ -31,7 +47,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="6dp"
-        android:textSize="11dp"
+        android:textSize="12dp"
         android:maxLines="1"
         android:ellipsize="end" />
 </LinearLayout>

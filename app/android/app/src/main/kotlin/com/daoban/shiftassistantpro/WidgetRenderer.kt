@@ -868,7 +868,18 @@ object WidgetRenderer {
     /**
      * 本周条一列的真实像素尺寸（同 `monthCellPx` 的理由：位图被 `fitXY` 拉伸，
      * 宽高比对不上时圆角会被拉成椭圆）。周条**没有标题行与周几行** ——
-     * 只有卡 padding 8dp×2 与格缝，所以比月历那格矮得多。
+     * 只有卡 padding 与块自己的外边距，所以比月历那格矮得多。
+     *
+     * ⚠️ **那两个减数是「布局里让掉了多少」，三个地方是一组，改一个要改三个**
+     * （2026-10-16 用户真机反馈那轮改过一次，由 `widget_cell_block_guard_test.dart`
+     * 逐个数对账）：
+     *   · 宽：`- 16` 是 `widget_week_strip.xml` 的横向内边距 8dp × 2，
+     *         `- 4` 是 `widget_strip_cell.xml` 里块自己的 2dp × 2。
+     *   · 高：`- 6` 是那边的**纵向**内边距 3dp × 2 + 块纵向外边距 0。
+     *
+     * 纵向那两个数为什么与横向不同：块在纵向要长到「周几离上沿、下夜胶囊离下沿」
+     * 与横向那 6.7dp 同一个量级 —— 原来横向 8dp + 块 2dp 时，块离卡上下沿 8.7dp，
+     * 可块**里面**只剩 3.7dp / 5.3dp。真机量出来的数写在两份布局的头注里。
      */
     private fun stripCellPx(context: Context, widgetId: Int): Pair<Int, Int> {
         val opt = AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId)
@@ -876,7 +887,7 @@ object WidgetRenderer {
         val hDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 40)
         val density = context.resources.displayMetrics.density
         val cellW = (((wDp - 16) / 7f) - 4f) * density
-        val cellH = (hDp - 20) * density
+        val cellH = (hDp - 6) * density
         return cellW.toInt().coerceAtLeast(1) to cellH.toInt().coerceAtLeast(1)
     }
 
@@ -1115,12 +1126,16 @@ object WidgetRenderer {
         // ── 字号：一律按卡内可用高缩放（`s` 在函数开头算好了） ──
         // 数值与 `widget_today_card.xml` 里的 dp 初值一一对应。
         // **徽章那三个不在里面**（见开头那段说明）。
+        // 「其他班组」那两处（这里与 `widget_crew_chip.xml`）的 12 = App 的
+        // `AppTokens.microText` / `microLabel` —— 原来是 11，比 App 与这张卡自己的
+        // 「本月统计」都小一档（2026-10-16 用户真机反馈），由
+        // `widget_today_card_guard_test.dart` 对着 Dart 令牌盯住两边不跑偏。
         applyScale(v, R.id.wg_tc_date, 22f, s)
         applyScale(v, R.id.wg_tc_lunar, 14f, s)
         applyScale(v, R.id.wg_tc_shift, 18f, s)
         applyScale(v, R.id.wg_tc_note, 13f, s)
         applyScale(v, R.id.wg_tc_time, 13f, s)
-        applyScale(v, R.id.wg_tc_crew_label, 11f, s)
+        applyScale(v, R.id.wg_tc_crew_label, 12f, s)
         applyScale(v, R.id.wg_tc_tally, 12f, s)
 
         return v
