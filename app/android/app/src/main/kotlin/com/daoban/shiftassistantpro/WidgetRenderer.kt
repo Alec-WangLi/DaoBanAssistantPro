@@ -941,15 +941,23 @@ object WidgetRenderer {
         val tc = snap.todayCard
         val stale = tc == null || tc.day != LocalDate.now().toEpochDay()
 
-        // ── 1. 日期行 ──
-        // 位图高**必须等于布局里视图的高**（色条 24dp）：ImageView 是 `fitXY`，
-        // 两者不等就是非等比拉伸，而 `bar()` 的圆头半径是按位图宽/高算的。
+        // ── 0. 左边那条通高的主色竖条 ──
+        // 与 App 的信息卡对齐（`Positioned(left: 0, top/bottom: spaceLg, width: 6)`）：
+        // **6dp 宽、通到内容底、圆头**。颜色跟当天班次色走、没班次退回主色（与 App
+        // `accent = shift != null ? shift.color : primary` 同一条）。
+        //
+        // ⚠️ 位图高给 **200dp 这个「够长的常量」**，由 `fitXY` 拉到真实内容高
+        // （约 168~192dp）：`bar()` 的圆头半径是 `w/2 = 3dp`，200 → 168~192 这一步
+        // 缩放让两端半圆半径浮动在 2.5~3.4dp，肉眼看不出。**别去精算内容高** ——
+        // 它随农历折行与「本月统计」有无而变化。
+        // ⚠️ 布局那一侧必须能让它拉到内容高：根是**横向 LinearLayout**（`match_parent`
+        // 高的子层会被二次测量成邻列高）；换成 FrameLayout 就会解析成固定 200dp。
         v.setImageViewBitmap(
             R.id.wg_tc_bar,
             WidgetChip.bar(
                 if (d.hasShift) d.color else snap.accent,
-                dpToPx(context, 4),
-                dpToPx(context, 24),
+                dpToPx(context, 6),
+                dpToPx(context, 200),
             ),
         )
         v.setTextViewText(R.id.wg_tc_date, d.dateShort)

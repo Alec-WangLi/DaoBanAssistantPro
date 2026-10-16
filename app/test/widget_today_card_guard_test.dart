@@ -147,4 +147,30 @@ void main() {
         reason: '两个令牌不再同档了 —— 「其他班组」这一行是按它们同档才对齐的，'
             '重新定档要连带复核桌面这两处');
   });
+
+  test('竖条通高：根是横向 LinearLayout，竖条 6dp 宽、match_parent 高', () {
+    final xml = _read('android/app/src/main/res/layout/widget_today_card.xml');
+    // 根是**横向** LinearLayout —— 竖条贴左、内容列占满剩余宽，竖条 match_parent 高才能
+    // 被二次测量成内容列高（FrameLayout 只量一次、match_parent 会解析成位图自己的高，
+    // 于是竖条固定 200dp、与内容脱钩，还把卡片撑高）。
+    // 根是文件里第一个 <LinearLayout>（头注释之后）。
+    final rootStart = xml.indexOf('<LinearLayout');
+    final rootBlock = xml.substring(rootStart, xml.indexOf('>', rootStart));
+    expect(rootBlock.contains('orientation="horizontal"'), true,
+        reason: '根不是横向 LinearLayout —— 竖条 match_parent 高不会被量成内容高');
+    // 竖条那一层：从 id 截到自闭合，免得匹配到别的视图。
+    final bar = xml.indexOf('@+id/wg_tc_bar');
+    expect(bar, greaterThanOrEqualTo(0), reason: '没有 wg_tc_bar');
+    final barBlock = xml.substring(bar, xml.indexOf('/>', bar));
+    expect(barBlock.contains('layout_width="6dp"'), true,
+        reason: '竖条不是 6dp 宽（App 里是 6dp）');
+    expect(barBlock.contains('layout_height="match_parent"'), true,
+        reason: '竖条不是 match_parent 高 —— 那它就不会通到内容底（旧实现是 24dp）');
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    expect(kt.contains('dpToPx(context, 6)'), true,
+        reason: '竖条位图不是 6dp 宽');
+    expect(kt.contains('dpToPx(context, 200)'), true,
+        reason: '竖条位图高度不是 200dp —— 改回 24dp 会被 fitXY 拉成长椭圆两端（半径 3dp → 25dp）');
+  });
 }

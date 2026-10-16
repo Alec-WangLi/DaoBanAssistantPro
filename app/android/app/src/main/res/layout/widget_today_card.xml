@@ -29,28 +29,54 @@
     android:id="@+id/wg_tc_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="22dp">
+    android:orientation="horizontal"
+    android:paddingLeft="0dp"
+    android:paddingTop="22dp"
+    android:paddingRight="22dp"
+    android:paddingBottom="22dp">
 
-    <!-- 1. 日期行：色条 + 日期 + 今日徽章 + 待办徽章 -->
+    <!-- 0. 左边那条**通高**的主色竖条（2026-10-16 用户真机反馈：「最左边的竖条：现在
+         怎么只在最顶部那个日期那里？它不应该竖到下面吗？」）。
+         App 的信息卡里它是 `Positioned(left: 0, top: spaceLg, bottom: spaceLg, width: 6)`
+         —— 6dp 宽、通到内容底、圆头（`pillOf(6)` = 半径 3dp = 宽的一半）。
+         位图是 `WidgetChip.bar(color, 6dp, 200dp)`（就是圆头胶囊），`fitXY` 拉到真实高。
+
+         ⚠️ **根必须是横向 LinearLayout，不能改成 FrameLayout。** 这里要的几何是
+         「竖条高 == 内容列高」：`LinearLayout.measureHorizontal` 会在量完 `wrap_content`
+         的内容列之后，把 `match_parent` 高的竖条**重新量成 EXACTLY 这个高度**；而
+         `FrameLayout.onMeasure` 对每个子层只量一次、取 max —— 竖条会按它自己那张
+         200dp 位图解析成**固定 200dp**，与内容脱钩（内容 168dp 时竖条多出 32dp、还把
+         卡片撑高，而卡片尺寸按非目标是不许动的）。这一条由
+         `widget_today_card_guard_test.dart` 的「竖条通高」那条护栏盯着。
+
+         ⚠️ 四边内边距**逐个写**：左 0（竖条贴卡最左）、其余 22（与原来一致）。 -->
+    <ImageView
+        android:id="@+id/wg_tc_bar"
+        android:layout_width="6dp"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="@null" />
+
+    <!-- 内容列：占满竖条右边剩下的宽（`weight=1`），左边让 14dp（= 竖条 6 + 间隙 14
+         = App 的 `spaceXl` 20dp，与 App 里内容让开竖条的量同源）。 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginStart="14dp">
+
+    <!-- 1. 日期行：日期 + 今日徽章 + 待办徽章（色条已挪到根上做通高条） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <ImageView
-            android:id="@+id/wg_tc_bar"
-            android:layout_width="4dp"
-            android:layout_height="24dp"
-            android:scaleType="fitXY"
-            android:contentDescription="@null" />
-
         <TextView
             android:id="@+id/wg_tc_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
             android:textSize="22dp"
             android:textStyle="bold"
             android:maxLines="1"
@@ -256,4 +282,5 @@
         android:textSize="12dp"
         android:maxLines="1"
         android:ellipsize="end" />
+    </LinearLayout>
 </LinearLayout>
