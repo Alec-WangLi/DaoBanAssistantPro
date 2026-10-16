@@ -44,22 +44,27 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="3dp">
 
-            <!-- ⚠️ 位图这一层是**尺寸的驱动者**（`wrap_content`，ImageView 带着
-                 drawable 时按位图固有尺寸量），上面那层 `match_parent` 的 TextView
-                 只是填进去。反过来的话（FrameLayout 定尺 / ImageView match_parent）
-                 位图的尺寸在布局里写死，字放大之后就会**从胶囊里溢出来**。
-                 位图的宽高在渲染侧按格子缩放算（`cardScale`），基准 40×18dp。 -->
+            <!-- ⚠️ **文字的宽度才是驱动者，位图贴上去。**（2026-10-16 反过来的：
+                 上一版是位图驱动、宽度写死 40dp × 缩放，格子一小就把胶囊顶到格边 ——
+                 真机量到占格宽 95.5%，而 App 里只有 81%。）
+                 下面 TextView 的 `wrap_content` 决定盒子多宽（它就是简称 + 左右各 4dp），
+                 ImageView 两个方向都 match_parent、按 `fitXY` 贴满它。
+                 三个都不能少：`wrap_content` 让它驱动宽度、`layout_gravity="center"`
+                 让它在（可能略宽的）位图里居中、`paddingHorizontal="4dp"` 与 Kotlin 侧
+                 `chipWidthPx` 里那 4dp 对齐（**不乘缩放** —— 布局里它是固定 dp）。 -->
             <ImageView
                 android:id="@+id/wg_mc_pill"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:scaleType="fitXY"
                 android:contentDescription="@null" />
 
             <TextView
                 android:id="@+id/wg_mc_abbr"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:paddingHorizontal="4dp"
                 android:gravity="center"
                 android:textSize="12dp"
                 android:maxLines="1" />

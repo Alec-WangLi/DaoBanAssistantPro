@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Paint
 import android.util.TypedValue
 import android.widget.RemoteViews
 
@@ -64,6 +65,32 @@ object WidgetRenderer {
      */
     private fun dpToPx(context: Context, dp: Int): Int =
         (dp * context.resources.displayMetrics.density).toInt()
+
+    /**
+     * 班次胶囊位图的**宽度**：按简称在 [textSizeDp] 下的实际排版宽度现量，两侧各留 4dp。
+     *
+     * **为什么现量而不是定值。** v0.11.23 用的是「基准 40dp（周条 36dp）× 缩放」——
+     * 那在格子小的时候会把胶囊顶到格边：真机量到月历那格占格宽 **95.5%**，而 App 里
+     * 同一颗只有 **81%**（用户 2026-10-16：「跟里边班次的胶囊又重合了……APP 里边其实
+     * 不重合，有点间隙」）。App 走的是 `_shiftChip`：`padding: horizontal spaceXs(4) × s`
+     * 包着 `FittedBox(Text(cellShift))` —— 宽度**跟着文字走**，所以「白」窄、「大休」宽。
+     *
+     * **为什么是 `Paint.measureText`。** `RemoteViews` 在宿主进程渲染、量不到文字宽，
+     * 而能改容器尺寸的 `setViewLayoutWidth` 要 API 31（本仓 minSdk 26）。本函数跑在
+     * **我们自己的进程**里、用的是同一套系统字体，量出来的就是桌面上真正会画出来的
+     * 那个宽。布局那侧由 `TextView(wrap_content + paddingHorizontal 4dp)` 驱动同样的宽度，
+     * 两者差的那点零头由 `fitXY` 吸收。
+     *
+     * 那 4dp 与 App 的 `spaceXs` 同一个数，**有意不乘缩放** —— 布局里 `paddingHorizontal`
+     * 是固定 dp，两边取同一个值才不会一个宽一个窄。
+     */
+    private fun chipWidthPx(context: Context, abbr: String, textSizeDp: Float): Int {
+        val density = context.resources.displayMetrics.density
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = textSizeDp * density }
+        return (paint.measureText(abbr) + 8f * density)
+            .toInt()
+            .coerceAtLeast(dpToPx(context, 12))
+    }
 
     // ── 字号缩放（2026-10-15） ─────────────────────────────────────────────
     //
@@ -703,11 +730,11 @@ object WidgetRenderer {
         val cellDensity = context.resources.displayMetrics.density
         val cellScale = cardScale(cellH / cellDensity + 4f)
 
-        // 胶囊位图的尺寸。基准 40×18dp × 缩放 —— 布局里那两层是 `wrap_content`，
-        // **位图就是尺寸的驱动者**（见 `widget_month_cell.xml` 那段注释）。
-        // 同样 42 格共用一对：按格子造唯一尺寸会冲爆 `WidgetChip` 的 LruCache。
-        val pillW = (40f * cellScale * cellDensity).toInt().coerceAtLeast(1)
+        // 胶囊位图的**高度**：基准 18dp × 缩放，42 格共用一个。
+        // **宽度不在这里算** —— 它按各格的简称现量（`chipWidthPx`），见下面那段。
         val pillH = (18f * cellScale * cellDensity).toInt().coerceAtLeast(1)
+        // 简称的字号（= `design_tokens.cellShift` 的基准 12 × 缩放），量宽时要用它。
+        val chipTextDp = 12f * cellScale
 
         for (slot in 0 until 42) {
             // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
@@ -802,13 +829,17 @@ object WidgetRenderer {
             if (d.hasShift) {
                 c.setViewVisibility(R.id.wg_mc_pill, android.view.View.VISIBLE)
                 c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.VISIBLE)
-                // 尺寸恒定（循环外算好的 pillW × pillH）：一格一尺寸会让
-                // `WidgetChip` 的位图缓存失效（key 含尺寸），42 格就把缓存冲爆。
+                // **高度**恒定（循环外算好的 pillH）；**宽度按这一格的简称现量** ——
+                // 与 App 的 `_shiftChip` 同一条（「白」窄、「大休」宽）。
+                // LruCache 不会炸：宽度只由 (字号 × 文字宽) 决定，同宽的简称自然共用
+                // 同一张位图，一屏仍是屈指可数的几张。**别按格子造唯一尺寸**（那才会冲爆）。
                 // **今天那格也走淡染**：以前它转实心是因为淡染压在实心主色块上会糊成
                 // 一片 —— 块改成半透明浅底之后那条理由没了，与 App 的普通格一致。
                 c.setImageViewBitmap(
                     R.id.wg_mc_pill,
-                    WidgetChip.tintedChip(d.color, pillW, pillH),
+                    WidgetChip.tintedChip(
+                        d.color, chipWidthPx(context, d.shiftAbbr, chipTextDp), pillH,
+                    ),
                 )
                 c.setTextViewText(R.id.wg_mc_abbr, d.shiftAbbr)
                 // 字色走中性 `ink`（淡染底 + 近不透明的卡底，两者都够对比度）

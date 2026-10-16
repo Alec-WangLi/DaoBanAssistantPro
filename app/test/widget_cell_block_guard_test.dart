@@ -213,24 +213,52 @@ void main() {
     }
   });
 
-  test('月历胶囊的尺寸由**位图**驱动，不是布局里写死的 40×18dp', () {
-    // 写死盒子的话，字号按格子放大之后文字会从胶囊里溢出来（2026-10-15 那一轮把
-    // 字号改成按格子缩放，盒子必须跟着走）。做法：外面那两层 wrap_content，
-    // 带着 drawable 的 ImageView 按位图固有尺寸量 —— 位图尺寸在渲染侧算。
+  test('月历胶囊：**文字**驱动宽度、位图贴上去（不是位图驱动尺寸）', () {
+    // 2026-10-16 反转。上一版（v0.11.23）是「位图驱动尺寸、宽度写死 40dp × 缩放」——
+    // 那在格子小的时候会把胶囊顶到格边：真机量到占格宽 **95.5%**，而 App 里同一颗
+    // 只有 **81%**（用户原话：「跟里边班次的胶囊又重合了……APP 里边其实不重合，有点间隙」）。
+    // 现在反过来：**TextView 按简称现量**决定宽度，位图贴满它。
     final xml = _read('android/app/src/main/res/layout/widget_month_cell.xml');
     expect(xml.contains('android:layout_width="40dp"'), false,
-        reason: '胶囊盒子还写着 40dp —— 字放大之后会溢出来');
-    expect(xml.contains('android:id="@+id/wg_mc_pill"'), true);
-    // ImageView 必须是 wrap_content 且排在 TextView 之前（层序见上一条）
+        reason: '胶囊盒子还写着 40dp —— 那是个定值，格子一小就顶满格宽');
     final pill = xml.indexOf('android:id="@+id/wg_mc_pill"');
     final abbr = xml.indexOf('android:id="@+id/wg_mc_abbr"');
+    expect(pill, greaterThanOrEqualTo(0), reason: '没有 wg_mc_pill');
+    expect(abbr, greaterThanOrEqualTo(0), reason: '没有 wg_mc_abbr');
     expect(pill, lessThan(abbr), reason: '胶囊底要排在简称之前（后画的在上面）');
-    final pillBlock = xml.substring(pill, abbr);
-    expect(pillBlock.contains('wrap_content'), true,
-        reason: 'ImageView 不是 wrap_content —— 它就驱动不了盒子的尺寸');
 
+    // 位图那层只负责贴满：两个方向都 match_parent
+    final pillBlock = xml.substring(pill, abbr);
+    expect(pillBlock.contains('layout_width="match_parent"'), true,
+        reason: 'wg_mc_pill 不是 match_parent —— 它贴不满 TextView 量出来的宽度');
+    expect(pillBlock.contains('layout_height="match_parent"'), true);
+
+    // 简称那层是**宽度驱动者**：wrap_content + 居中 + 左右内边距（与 Kotlin 侧那 4dp 对齐）
+    // ⚠️ 拿 `/>` 当右界 —— 这个文件里的 TextView 都是自闭合的，找 `</TextView>` 会返回 -1。
+    final abbrBlock = xml.substring(abbr, xml.indexOf('/>', abbr));
+    expect(abbrBlock.contains('layout_width="wrap_content"'), true,
+        reason: 'wg_mc_abbr 不是 wrap_content —— 那它就不是宽度的驱动者');
+    expect(abbrBlock.contains('layout_gravity="center"'), true,
+        reason: '简称没有在（可能比它宽的）位图里居中');
+    expect(abbrBlock.contains('paddingHorizontal="4dp"'), true,
+        reason: '简称没有左右内边距 —— 文字会贴着胶囊边');
+  });
+
+  test('胶囊位图宽度来自**文字现量**，不是写死的比例', () {
     final kt = _read(
         'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
-    expect(kt.contains('pillW'), true, reason: '渲染侧没按缩放算胶囊位图尺寸');
+    expect(kt.contains('measureText'), true,
+        reason: '胶囊宽度没按简称现量 —— 定值宽度在格子小的时候会顶满格宽，'
+            '与格子重合（实测占 95.5%，App 只有 81%）');
+
+    final monthCard = kt.substring(
+      kt.indexOf('private fun monthCard('),
+      kt.indexOf('private fun stripCellPx('),
+    );
+    expect(monthCard.length, greaterThan(500), reason: '没截出 monthCard');
+    expect(monthCard.contains('chipWidthPx'), true,
+        reason: 'monthCard 还在用写死的胶囊宽度');
+    expect(monthCard.contains('40f * cellScale'), false,
+        reason: '月历胶囊宽度还是「40dp × 缩放」那个定值');
   });
 }
