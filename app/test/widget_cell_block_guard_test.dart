@@ -89,10 +89,10 @@ void main() {
     }
   });
 
-  test('月历「今天」那格的字**不许**走 onSolidInk（块是半透明的浅底）', () {
-    // 2026-10-15 反转：那枚块从实心改回**半透明**之后，块上字走 `onSolidInk` 就会
-    // 在 teal / orange 上给白字 —— 白压浅底读不出来，而且是**静默**的（默认那颗蓝
-    // 选出来是对的，只有换到浅主色才现形）。
+  test('「今天」那格/那列的字**不许**走 onSolidInk（块是半透明的浅底）', () {
+    // 2026-10-15 月历先反转、2026-10-16 周条跟上：那枚块从实心改回**半透明**之后，
+    // 块上字走 `onSolidInk` 就会在 teal / orange 上给白字 —— 白压浅底读不出来，
+    // 而且是**静默**的（默认那颗蓝选出来是对的，只有换到浅主色才现形）。
     final kt = _read(
         'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
     final monthCard = kt.substring(
@@ -104,11 +104,26 @@ void main() {
         reason: 'monthCard 里还有 onSolidInk 的调用 —— 半透明块是浅底，那会给白字');
     expect(monthCard.contains('glassBlock'), true, reason: '块没换成半透明那一支');
 
-    // 而周条那一列与今日卡的「今天」药丸**仍然**要它（那两处还是实心块，
-    // 药丸更是白字压主色）。这是一个**下界**：4 处 = 周条三处 + 今日卡药丸一处。
+    // 周条那一列同一条规矩（2026-10-16 同步）。
+    final weekStrip = kt.substring(
+      kt.indexOf('private fun weekStrip('),
+      kt.indexOf('internal fun monthCovered('),
+    );
+    expect(weekStrip.length, greaterThan(500), reason: '没截出 weekStrip —— 护栏自己跟源码对不上了');
+    expect(weekStrip.contains('onSolidInk(context,'), false,
+        reason: '周条今天那列的块也改半透明了，块上字不能走 onSolidInk（浅底上会白字）');
+    expect(weekStrip.contains('glassBlock'), true,
+        reason: '周条今天那列还是实心块 —— 与月历不一致（两张卡并排看会露馅）');
+    expect(weekStrip.contains('snap.weekdays'), true,
+        reason: '周标题没换成单字 —— 快照顶层 weekdays 已是单字（与月历表头同一份）');
+    expect(weekStrip.contains('chipWidthPx'), true,
+        reason: '周条胶囊还是定值宽度（会像月历那样顶满列宽）');
+
+    // 整个渲染侧现在只剩今日卡的「今天」药丸那一处要它 —— 那勾是**白字压实心主色**，
+    // 与半透明块不是一回事。
     final uses = RegExp(r'onSolidInk\(context, ').allMatches(kt).length;
-    expect(uses, greaterThanOrEqualTo(4),
-        reason: 'onSolidInk 的调用点只剩 $uses 处 —— 周条三处 + 今日卡药丸一处应当凑齐 4 处');
+    expect(uses, greaterThanOrEqualTo(1),
+        reason: 'onSolidInk 一处都不剩了？今日卡的「今天」药丸仍然要它（白字压主色）');
   });
 
   test('半透明块上的字：五种主色下 ink 都过 AA，而白字都过不了', () {
@@ -242,6 +257,23 @@ void main() {
         reason: '简称没有在（可能比它宽的）位图里居中');
     expect(abbrBlock.contains('paddingHorizontal="4dp"'), true,
         reason: '简称没有左右内边距 —— 文字会贴着胶囊边');
+  });
+
+  test('周条胶囊那层的高度**写死**，没班次时不许塌（一周七列高度恒定）', () {
+    // 空白表方案下「没班次」那两行会被渲染侧设成 GONE（不画胶囊）。外层那个
+    // FrameLayout 若跟着塌，一周七列的高度就会随有班/没班跳动 —— 那份布局开头
+    // 那条注释刻意守住的就是这件事。宽度塌成 0 无所谓（那一维没这个不变量）。
+    final xml = _read('android/app/src/main/res/layout/widget_strip_cell.xml');
+    final pill = xml.indexOf('android:id="@+id/wg_sc_pill"');
+    expect(pill, greaterThanOrEqualTo(0), reason: '没有 wg_sc_pill');
+    final frame = xml.lastIndexOf('<FrameLayout', pill);
+    expect(frame, greaterThanOrEqualTo(0));
+    final block = xml.substring(frame, pill);
+    expect(block.contains('layout_height="wrap_content"'), false,
+        reason: '胶囊外层的高度是 wrap_content —— 没班次那两行一 GONE 它就塌成 0，'
+            '一周七列的高度会随有班/没班跳动');
+    expect(RegExp(r'layout_height="[0-9]+dp"').hasMatch(block), true,
+        reason: '胶囊外层的高度不是固定 dp');
   });
 
   test('胶囊位图宽度来自**文字现量**，不是写死的比例', () {

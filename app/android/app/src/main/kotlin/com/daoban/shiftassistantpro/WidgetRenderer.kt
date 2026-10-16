@@ -515,7 +515,13 @@ object WidgetRenderer {
                 c.setViewVisibility(R.id.wg_sc_block, android.view.View.VISIBLE)
                 c.setImageViewBitmap(
                     R.id.wg_sc_block,
-                    WidgetChip.block(snap.accent, colW, colH, dpToPx(context, 12).toFloat()),
+                    // 与月历那格**同一支、同参数**（2026-10-16 同步）：半透明玻璃块。
+                    // 周条这一列底下没有独立白卡（七列都在同一张卡里），块直接压在
+                    // 卡自己的近白底上 —— 与月历「白卡上压块」同一个观感。
+                    WidgetChip.glassBlock(
+                        snap.accent, colW, colH,
+                        dpToPx(context, 12).toFloat(), dpToPx(context, 2).toFloat(),
+                    ),
                 )
             } else {
                 c.setViewVisibility(R.id.wg_sc_block, android.view.View.GONE)
@@ -525,18 +531,16 @@ object WidgetRenderer {
             c.setViewVisibility(R.id.wg_sc_weekday, android.view.View.VISIBLE)
             c.setViewVisibility(R.id.wg_sc_day, android.view.View.VISIBLE)
 
-            // 块上的字走 `onSolidInk`（黑或白里更清楚的那个）—— 与月历格同一套。
-            c.setTextViewText(R.id.wg_sc_weekday, d.weekday)
-            c.setTextColor(
-                R.id.wg_sc_weekday,
-                if (isToday) onSolidInk(context, snap.accent) else muted,
-            )
+            // 周标题：**单字**，与月历表头同一份（快照顶层 `weekdays`，按周一起算）。
+            // 周条 7 列恰好是「本周一..本周日」，所以下标直接对得上。
+            // ⚠️ 今日卡那边读的是 `days[].weekday`（完整「周几」），那是另一条路。
+            c.setTextViewText(R.id.wg_sc_weekday, snap.weekdays.getOrNull(col) ?: d.weekday)
+            // 字色一律走中性 —— 块是半透明的**浅底**，`onSolidInk` 在 teal / orange 上
+            // 会给白字、读不出来（与月历 `monthCard` 同一条，2026-10-15 踩过）。
+            c.setTextColor(R.id.wg_sc_weekday, muted)
             // 日数字：与 App 的格子一样只印「日」，整串「9月19日」在 46dp 宽的列里排不下。
             c.setTextViewText(R.id.wg_sc_day, LocalDate.ofEpochDay(epoch).dayOfMonth.toString())
-            c.setTextColor(
-                R.id.wg_sc_day,
-                if (isToday) onSolidInk(context, snap.accent) else ink,
-            )
+            c.setTextColor(R.id.wg_sc_day, ink)
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块不画）。
             // 不能拿 `wg_empty_*` 顶：`tintedChip` 的 `Paint.setAlpha` 会覆盖颜色字节自带的
@@ -546,27 +550,20 @@ object WidgetRenderer {
             if (d.hasShift) {
                 c.setViewVisibility(R.id.wg_sc_pill, android.view.View.VISIBLE)
                 c.setViewVisibility(R.id.wg_sc_abbr, android.view.View.VISIBLE)
-                // 今天那列的胶囊跟月历格一样转**实心**（淡染压在实心主色块上会糊成一片）。
+                // 宽度按简称现量（与月历同一支）。**周条没有缩放** —— 字号就是布局里
+                // 那个 10dp（v0.11.23 加 `cardScale` 的是月历，4×1 的周条从头到尾没接它）。
+                // 今天那列也走淡染：以前转实心是因为淡染压在实心主色块上会糊，
+                // 块改半透明浅底之后那条理由没了。
                 c.setImageViewBitmap(
                     R.id.wg_sc_pill,
-                    if (isToday) {
-                        WidgetChip.block(
-                            d.color,
-                            dpToPx(context, 36),
-                            dpToPx(context, 18),
-                            dpToPx(context, 9).toFloat(),
-                        )
-                    } else {
-                        WidgetChip.tintedChip(
-                            d.color, dpToPx(context, 36), dpToPx(context, 18),
-                        )
-                    },
+                    WidgetChip.tintedChip(
+                        d.color,
+                        chipWidthPx(context, d.shiftAbbr, 10f),
+                        dpToPx(context, 18),
+                    ),
                 )
                 c.setTextViewText(R.id.wg_sc_abbr, d.shiftAbbr)
-                c.setTextColor(
-                    R.id.wg_sc_abbr,
-                    if (isToday) onSolidInk(context, d.color) else ink,
-                )
+                c.setTextColor(R.id.wg_sc_abbr, ink)
             } else {
                 c.setViewVisibility(R.id.wg_sc_pill, android.view.View.GONE)
                 c.setViewVisibility(R.id.wg_sc_abbr, android.view.View.GONE)
