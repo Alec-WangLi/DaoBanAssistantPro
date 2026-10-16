@@ -220,12 +220,14 @@
          的胶囊串，不是等分列宽。槽位从 `0dp + weight=1` 改成 `wrap_content`、每个给
          `layout_marginStart="8dp"`，`widget_crew_chip.xml` 那边换成整套胶囊。
 
-         ⚠️ **放不下时是「硬裁」，不是省略号**：`RemoteViews` 里没有换行布局，一排
-         `wrap_content` 的胶囊超出这一行宽度时会被 `LinearLayout` 默认的 `clipChildren`
-         在**内容列右缘**（= 卡片视觉右缘往里 22dp，正好与其他行的右端对齐）切掉，
-         第 4 颗只露半截。`wrap_content` 的 TextView 没有边界，`ellipsize` 也不会触发。
+         ⚠️ **放不下时是「被挤窄」，不是硬裁**（真机实测，2026-10-16）：一排 `wrap_content`
+         的胶囊超出这一行宽度时，`LinearLayout` 把**最后一颗**按「剩余多宽」用 `AT_MOST`
+         去量 —— 小溢出时那颗的 TextView 打省略号（真机上第一次跑出来正是「四班…」），
+         溢出再多就被挤到 **0 宽、整颗看不见**（4 个「其他班组」是这一档）。两条都**静默**
+         （不报错、不崩）。别按「`clipChildren` 硬裁」去理解它 —— 那会找错修法。
          这是**用户 2026-10-16 拍板接受**的降级（原话「接受省略」），别再为它把卡片加高。
-         三个班组（当前正是 3 个）总宽约 286dp、卡内可用约 296dp，装得下。 -->
+         三个班组（当前正是 3 个）：胶囊 77.3 / 77.3 / 65.3dp + 三个 8dp 间距，在内容列
+         299.7dp 里刚好放得下、末颗仍余 8.0dp。 -->
     <LinearLayout
         android:id="@+id/wg_tc_crew_row"
         android:layout_width="match_parent"

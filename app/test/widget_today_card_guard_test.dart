@@ -29,6 +29,14 @@ double? _textSizeDp(String xml, String id) {
   return m == null ? null : double.parse(m.group(1)!);
 }
 
+/// XML 注释**剥成等长空格** —— 本文件几条断言都是 `contains('layout_height="…"')`
+/// 这类字面量，而布局头注里常常为了解释而把这些属性名写进注释；不剥就会「注释里提
+/// 一句就算通过」。与 `widget_cell_block_guard_test.dart` 同一套做法。
+String _stripXmlComments(String s) => s.replaceAllMapped(
+      RegExp(r'<!--.*?-->', dotAll: true),
+      (m) => m.group(0)!.replaceAll(RegExp(r'[^\n]'), ' '),
+    );
+
 /// 把注释**剥成等长空格**（保留行号、不改变索引），字符串字面量原样留着。
 ///
 /// 必须剥：注释里提到一句「其他班组」不是违规，而注释是解释规则的地方 ——
@@ -149,7 +157,8 @@ void main() {
   });
 
   test('竖条通高：根是横向 LinearLayout，竖条 6dp 宽、match_parent 高', () {
-    final xml = _read('android/app/src/main/res/layout/widget_today_card.xml');
+    final xml = _stripXmlComments(
+        _read('android/app/src/main/res/layout/widget_today_card.xml'));
     // 根是**横向** LinearLayout —— 竖条贴左、内容列占满剩余宽，竖条 match_parent 高才能
     // 被二次测量成内容列高（FrameLayout 只量一次、match_parent 会解析成位图自己的高，
     // 于是竖条固定 200dp、与内容脱钩，还把卡片撑高）。
@@ -166,8 +175,8 @@ void main() {
         reason: '竖条不是 6dp 宽（App 里是 6dp）');
     expect(barBlock.contains('layout_height="match_parent"'), true,
         reason: '竖条不是 match_parent 高 —— 那它就不会通到内容底（旧实现是 24dp）');
-    final kt = _read(
-        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    final kt = _stripComments(_read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt'));
     expect(kt.contains('dpToPx(context, 6)'), true,
         reason: '竖条位图不是 6dp 宽');
     expect(kt.contains('dpToPx(context, 200)'), true,
@@ -188,8 +197,13 @@ void main() {
     expect(today.length, greaterThan(500), reason: '没截出 renderTodayCard');
     expect(today.contains('crewChipWidthPx(context,'), true,
         reason: '胶囊宽度没按「组名+简称」现量 —— 写死的宽要么比文字窄被裁、要么空出一大块');
-    expect(RegExp(r'WidgetChip\.tintedChip\(\s*crew\.color').hasMatch(today), true,
-        reason: '胶囊没走 tintedChip（14% 淡染 + 45% 描边，与 App 同一配方）');
+    // 判据里带上 `crewChipWidthPx` —— 只写 `tintedChip(crew.color` 的话，**旧实现
+    // 也是这么写的**（定值 14×14），改回去照样绿：它证明不了这一版做了什么。
+    expect(
+        RegExp(r'WidgetChip\.tintedChip\(\s*crew\.color,\s*crewChipWidthPx\(')
+            .hasMatch(today),
+        true,
+        reason: '胶囊没走 tintedChip + 现量宽（14% 淡染 + 45% 描边，与 App 同一配方）');
     expect(today.contains('dpToPx(context, 22)'), true,
         reason: '胶囊高度不是 22dp（与「其他班组」那行同高）');
     // 现量必须是真量：函数体里有 measureText（只「调了 crewChipWidthPx」还不够，
@@ -201,7 +215,8 @@ void main() {
   });
 
   test('其他班组：槽位自然宽左排，不再四个等宽', () {
-    final xml = _read('android/app/src/main/res/layout/widget_today_card.xml');
+    final xml = _stripXmlComments(
+        _read('android/app/src/main/res/layout/widget_today_card.xml'));
     for (final id in [
       'wg_tc_crew_slot1',
       'wg_tc_crew_slot2',
