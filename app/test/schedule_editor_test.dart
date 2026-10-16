@@ -7,6 +7,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPicker;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -130,10 +131,14 @@ ShiftSchedule _domain({
   Map<int, int>? dayOverrides,
   int teamCount = 4,
   List<String>? teamNames,
+  bool monthly = false,
+  List<MonthlySegment> monthSegments = const [],
 }) {
   return ShiftSchedule(
     dayOverrides: dayOverrides ?? const {},
     name: '测试排班',
+    monthly: monthly,
+    monthlySegments: monthSegments,
     anchorDate: anchor ?? DateTime.utc(2025, 6, 1),
     classes: classes ??
         const [
@@ -1210,25 +1215,63 @@ void main() {
     // 挤成半个，看起来像坏了而不是像能滑。时间在上一张「班次设置」卡里
     // 逐条列着，隐藏不丢信息。
     const names = ['白班', '中班', '夜班'];
+    // 周期行的标签列是那个写死的 `SizedBox(width: _dayLabelWidth)` = 56
+    // （`schedule_editor_screen.dart` 里是私有常量，这里照抄数值）。
+    const cycleLabelWidth = 56.0;
 
     expect(
       cycleRowFitsTime(
-          rowWidth: 356, classNames: names, timeText: '20:30 – 次日08:00'),
+          rowWidth: 356,
+          classNames: names,
+          timeText: '20:30 – 次日08:00',
+          dayLabelWidth: cycleLabelWidth),
       isFalse,
       reason: '手机宽度（420 视口下卡片内约 356）放不下三张 chip 加长时间串',
     );
     expect(
       cycleRowFitsTime(
-          rowWidth: 900, classNames: names, timeText: '20:30 – 次日08:00'),
+          rowWidth: 900,
+          classNames: names,
+          timeText: '20:30 – 次日08:00',
+          dayLabelWidth: cycleLabelWidth),
       isTrue,
       reason: '宽屏应当放得下',
     );
     expect(
       cycleRowFitsTime(
-          rowWidth: 356, classNames: const ['白班'], timeText: '08:00 – 18:00'),
+          rowWidth: 356,
+          classNames: const ['白班'],
+          timeText: '08:00 – 18:00',
+          dayLabelWidth: cycleLabelWidth),
       isTrue,
       reason: '只有一个班次定义时，窄屏也该放得下',
     );
+  });
+
+  test('标签列越宽，越早隐藏只读时间（按月行那条路用真实标签宽）', () {
+    // 2026-10-16 新增 `dayLabelWidth` 入参的**理由**：按月行的标签是自然宽度
+    // （「每月第 31 天起」+ 编辑图标 ≈ 144dp，不是 56），用它去判才准。
+    //
+    // ⚠️ 下面这两个数是**探针扫出来的**（不是拍的）：标签 56 从 **485** 起放得下、
+    // 标签 144 要到 **573** —— 差 88，正好等于标签宽之差，说明这个入参**线性地**
+    // 传到了判据里。取两者之间那一段断言，只换标签宽、结论就要反过来。
+    const names = ['白班', '中班', '夜班'];
+    const time = '20:30 – 次日08:00';
+    for (final w in [485.0, 500.0, 572.0]) {
+      expect(
+        cycleRowFitsTime(
+            rowWidth: w, classNames: names, timeText: time, dayLabelWidth: 56),
+        isTrue,
+        reason: 'w=$w 标签 56 应当放得下（实测它的起点是 485）',
+      );
+      expect(
+        cycleRowFitsTime(
+            rowWidth: w, classNames: names, timeText: time, dayLabelWidth: 144),
+        isFalse,
+        reason: 'w=$w 标签 144 应当放不下（实测它的起点是 573）—— '
+            '结论没反过来，说明 dayLabelWidth 这个入参没起作用',
+      );
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -1713,5 +1756,57 @@ void main() {
     // 自带 `GlassBlur`）—— 它正是本测试注释说的「浮在滚动正文之上的控件」，允许保留。
     // 改之前是 **6**（六张卡各一层）；这一层是那颗悬浮胶囊的，不是卡片的。
     expect(layers, 1, reason: '实测 $layers 层');
+  });
+
+  testWidgets('按月：「每月第 N 天起」完整显示，不省略', (tester) async {
+    // 用户 2026-10-16：「编辑排班的时候，按月切法下面，『每月从第几天起』那里出现了
+    // 省略号。不要出现这个省略号吧，明明位置空间都还有。」
+    //
+    // 根因：标签列被 `Expanded(flex: 3)` 硬压到约 3/8 宽，而右侧那列班次胶囊是
+    // **横向滚动列表**、根本不缺那点宽度。取 31 是**最长的那一档**（两字简称同理：
+    // 拿最短的样本量会误判通过）。
+    await _pumpEditor(
+      tester,
+      _domain(
+        monthly: true,
+        monthSegments: const [
+          MonthlySegment(startDay: 1, classIndex: 0),
+          MonthlySegment(startDay: 31, classIndex: 1),
+        ],
+      ),
+      size: const Size(360, 4600), // 真机竖屏宽度
+    );
+
+    final label = find.text(L10n.monthlyFromDay(31));
+    expect(label, findsOneWidget);
+    expect(tester.renderObject<RenderParagraph>(label).didExceedMaxLines, false,
+        reason: '「每月第 31 天起」被截断了 —— 这一条量的就是用户看到的那处省略号');
+  });
+
+  testWidgets('按月：小窗宽度下那一行横向不溢出', (tester) async {
+    // Review Focus 第 4 条：标签放回自然宽度之后，`cycleRowFitsTime` 要拿到**真实的
+    // 标签宽**，否则会误判「放得下时间」，而右侧那个 `Text(timeText)` 不带 Flexible。
+    //
+    // ⚠️ 视口取 **200 × 4600**（窄宽 + 足高），不是「小窗档」那个 200 × 400：
+    // `_pumpEditor` 的注释写着「默认给足高度，让每一行都真的被构建出来（`find` 才
+    // 找得到）」—— 400 高时按月那几行**根本没被构建**，`takeException()` 必然为
+    // null，那是句永远为真的空话（本仓 v0.9.18 在待办留白上踩过同一条）。
+    // 这一条要验的是**宽度**，高度与它无关，所以把高度放开、只压宽度。
+    await _pumpEditor(
+      tester,
+      _domain(
+        monthly: true,
+        monthSegments: const [
+          MonthlySegment(startDay: 1, classIndex: 0),
+          MonthlySegment(startDay: 31, classIndex: 1),
+        ],
+      ),
+      size: const Size(200, 4600),
+    );
+
+    // 先证「这一行真的被构建出来了」——不先证的话下面那条断言是句空话。
+    expect(find.text(L10n.monthlyFromDay(31)), findsOneWidget,
+        reason: '按月那一行没被构建 —— 下面那条不溢出断言等于没测');
+    expect(tester.takeException(), isNull, reason: '这一行横向溢出了');
   });
 }

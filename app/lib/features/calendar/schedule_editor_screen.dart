@@ -1325,17 +1325,45 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          // 标签列现在是**自然宽度**（2026-10-16 之前被 `Expanded(flex: 3)` 硬压到
+          // 约 3/8 宽，「每月第 31 天起」放不下就省略号 —— 而右侧那列班次胶囊是
+          // 横向滚动列表，根本不缺那点宽度）。
+          //
+          // ⚠️ 因此 `cycleRowFitsTime` 里的 `_dayLabelWidth(56)` 对**这一行**不再成立
+          // （56 是**周期行**那个 `SizedBox` 的宽，精确；两天前这一行不是 56 就已是
+          // 近似，现在更不准）。按真实排版量给它 —— 估窄了 `showTime` 会误判成
+          // 「放得下时间」，而右侧那个 `Text(timeText)` 不带 Flexible，宽了就是横向溢出。
+          final dayLabelWidth = _textWidth(
+                L10n.monthlyFromDay(seg.startDay), AppTokens.labelSecondary) +
+              (index > 0 ? AppTokens.spaceXs + AppTokens.iconSm : 0);
           final showTime = classIndex >= 0 &&
               cycleRowFitsTime(
                 rowWidth: constraints.maxWidth,
                 classNames: [for (final c in _classes) c.name],
                 timeText: timeText,
+                dayLabelWidth: dayLabelWidth,
               );
+          // 标签列**按内容自然宽**，但要有个上限 —— 让不出上限的话它会自己把整行
+          // 顶溢出。2026-10-16 第一版写成「裸的自然宽」时在 200dp 小窗下当场溢出
+          // **41px**（实测：标签自己 139.3dp > 整行 142.3dp − 8dp 间距 − 36dp 删除键）。
+          //
+          // 上限就是「把这一行里其余固定件都让掉之后剩下的」：
+          // · `showTime` 为真 ⟹ 按 `cycleRowFitsTime` 的定义，自然宽 + 胶囊 + 时间
+          //   全都放得下，所以这里直接用自然宽当上限（不会裁、也不会溢出）；
+          // · 为假 ⟹ 右边没有时间那一段，让掉 8dp 间距与删除键即可。
+          // 剩下的无论多少都归中间那列可横滑的班次胶囊（`Expanded`）——
+          // 它天然可以缩到 0，不缺宽度。
+          final labelMax = showTime
+              ? dayLabelWidth
+              : (constraints.maxWidth -
+                      AppTokens.spaceSm -
+                      (index > 0 ? _monthRowDeleteWidth : 0))
+                  .clamp(0.0, double.infinity);
           return Row(
             children: [
               // 第一段固定从 1 日起，不给点（点开也只有 1 这一个选项）。
-              Expanded(
-                flex: 3,
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: labelMax),
                 child: GlassPressable(
                   key: monthRowDayKey(index),
                   child: GestureDetector(
@@ -1346,7 +1374,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       padding: const EdgeInsets.symmetric(
                           vertical: AppTokens.spaceXs),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
+                          // 这一层 `Flexible` 与 `overflow: ellipsis` 必须**成对**
+                          // 留着：上面那层 `ConstrainedBox` 给的宽不够时，它俩一起
+                          // 把结果降级成省略号；只留 `Flexible` 去掉 `overflow`
+                          // 就是直接裁字（比省略号更糟），两个都去掉则整行溢出。
                           Flexible(
                             child: Text(L10n.monthlyFromDay(seg.startDay),
                                 maxLines: 1,
@@ -1365,8 +1398,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 ),
               ),
               const SizedBox(width: AppTokens.spaceSm),
+              // 标签列不 flex 之后它就是**唯一的**弹性子件，`flex: 5` 是句误导
+              // （只有一个弹性子件时它恒等于「吃掉剩下的全部」）。
               Expanded(
-                flex: 5,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -1560,6 +1594,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             rowWidth: constraints.maxWidth,
             classNames: [for (final c in _classes) c.name],
             timeText: timeText,
+            // 这一行的标签列就是这个写死的宽度（下面的 `SizedBox`）—— 精确值。
+            dayLabelWidth: _dayLabelWidth,
           );
           return Row(
             children: [
@@ -2331,13 +2367,18 @@ bool cycleRowFitsTime({
   required double rowWidth,
   required List<String> classNames,
   required String timeText,
+  // 标签列的实际宽度。**两个调用点各传自己的**：周期行是那个写死的 `SizedBox`
+  // （`_dayLabelWidth` = 56，精确），按月行是自然宽度、要用 `_textWidth` 量
+  // （2026-10-16 起它不再等于 56 —— 估计窄了会让这条判据误判「放得下时间」，
+  // 而右侧那个 `Text(timeText)` 不带 Flexible，宽了就是横向溢出）。
+  required double dayLabelWidth,
 }) {
   final chips = classNames.fold<double>(
         0,
         (sum, name) => sum + _chipWidth(name),
       ) +
       AppTokens.spaceSm * (classNames.length - 1).clamp(0, 1 << 30);
-  final needed = _dayLabelWidth +
+  final needed = dayLabelWidth +
       AppTokens.spaceSm +
       chips +
       AppTokens.spaceMd +
@@ -2347,6 +2388,14 @@ bool cycleRowFitsTime({
 
 /// 「第 N 天」标签的固定宽度。
 const double _dayLabelWidth = 56;
+
+/// 按月行末尾那个紧凑删除键的宽度。
+///
+/// 与 `core/widgets/glass_delete_button.dart` 里 `_CompactDeleteButton` 那个
+/// `SizedBox(width: 36)` **同一个数** —— 那边是几何事实、不是一个设计令牌，
+/// 所以只能在这儿写一份并在注释里指名出处。它只用来算「按月行的标签最多能占多宽」
+/// （让不出它就会溢出），**改那边这个数时要记得回来改这里**。
+const double _monthRowDeleteWidth = 36;
 
 /// 这条闹钟落在班次当天的哪一边 —— 只管**读法**：前一天 / 次日给一个带日前缀的
 /// 整串（`前一天 23:00` / `次日 00:15`），落在当天返回 null（不标）。
