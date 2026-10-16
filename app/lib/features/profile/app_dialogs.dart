@@ -41,6 +41,10 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.11.26\n'
+    '· 今日卡最左边那条主色竖条通到卡片底了 —— 以前它只有「日期」那一行那么高\n'
+    '· 今日卡「其他班组」换成了 App 里那种半透明胶囊（之前是圆点加光秃秃的文字），几颗紧挨着排左边\n'
+    '\n'
 'v0.11.25\n'
     '· 周条上「今天」那一块玻璃长高了：以前格子里那三行（周几 / 日期 / 班次）离块的上下边只剩一点点，看着像贴着边画的；现在上下多留出跟左右一样多的空隙\n'
     '· 今日卡的「其他班组」那一行字大了一档 —— 它原来比 App 里同一行、也比这张卡自己的「本月统计」小一号，是搬过来时掉了一级，不是没位置\n'
@@ -93,15 +97,13 @@ const String _changelogZh =
     '· 补上四个此前在帮助里一个字都没提过的功能：重复待办、字体大小、按月排班、待办自动归档\n'
     '· 「我的 → 桌面」那一行改成跳进使用帮助的「桌面小组件」那一节，全 app 只剩一份说明\n'
     '\n'
-    'v0.11.16\n'
-    '· 新建排班时，「按月排班」和「我自己排」有了自己的分组「从零开始」—— 以前它们头上没有组名，看起来像是归在「常白」那一类里的\n'
-    '· 「按月排班」那张卡片不再写「每天在岗 2 个班组」：按月的段长短随月份变，这个数没有单一答案\n'
-    '· 长按某天弹出的调班界面补上了标题「调整班次」—— 以前只有一行日期，看不出这一屏是干嘛的\n'
-    '· 日历上长按拖选一段日子时，那条选中带子不再上下鼓起：以前它比一格还高，跨周时相邻两行的带子会叠在一起\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.11.26\n'
+    '· The accent bar on the left of the today card now runs the full height of the card - before it was only as tall as the date row\n'
+    '· The Other crews row on the today card uses the same translucent capsules as the app, packed together on the left; it used to be bare dots with plain text\n'
+    '\n'
 'v0.11.25\n'
     '· The today block in the week strip is taller. The three rows inside it (weekday, date, shift) used to sit right against its top and bottom edges; they now keep the same breathing room all round as they do left and right\n'
     '· The Other crews row on the today card is one size larger. It had come over a step smaller than the same row in the app, and smaller than the month tally line on the same card - that was a slip when porting, not a lack of room\n'
@@ -153,12 +155,6 @@ const String _changelogEn =
     '· Fixed wording in the guide that had gone stale: it claimed a shift carries at most 6 alarms, when the limit has been 10 for a while; which day a midnight shift\'s alarm falls on is spelled out too\n'
     '· Added four features the guide had never mentioned: repeating todos, text size, monthly rosters and todo auto-archiving\n'
     '· The "Me → Home screen" row now jumps into the guide\'s widget section, so there is only one copy of that explanation\n'
-    '\n'
-    'v0.11.16\n'
-    '· "Monthly roster" and "Build my own" now sit under their own heading, "Start from scratch" - before, they had no heading and looked like part of "Day shift only"\n'
-    '· The "Monthly roster" card no longer says "2 crews on duty": a monthly roster\'s segments vary in length, so that number has no single answer\n'
-    '· The sheet that opens when you long-press a day now has a title, "Adjust shift" - it used to show only a date\n'
-    '· The band drawn while you drag-select days no longer bulges up and down: it used to be taller than one cell, so bands in neighbouring weeks overlapped\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
