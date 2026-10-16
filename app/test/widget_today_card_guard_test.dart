@@ -173,4 +173,48 @@ void main() {
     expect(kt.contains('dpToPx(context, 200)'), true,
         reason: '竖条位图高度不是 200dp —— 改回 24dp 会被 fitXY 拉成长椭圆两端（半径 3dp → 25dp）');
   });
+
+  test('其他班组：胶囊位图宽来自文字现量（不是写死的比例）', () {
+    final kt = _read(
+        'android/app/src/main/kotlin/com/daoban/shiftassistantpro/WidgetRenderer.kt');
+    // ⚠️ **必须先剥注释再断言**：这几条都是 `contains`，而注释里正好写着
+    // `crewChipWidthPx` / `tintedChip` 这些名字 —— 不剥的话「把调用换成写死的数」
+    // 这类改动照样绿（反向验证时当场抓到：把 `crewChipWidthPx(context, …)` 换成
+    // `dpToPx(context, 60)` 而注释还在，护栏没有变红）。
+    final ktCode = _stripComments(kt);
+    final today = ktCode.substring(
+        ktCode.indexOf('private fun renderTodayCard('),
+        ktCode.indexOf('private fun todayStandalone('));
+    expect(today.length, greaterThan(500), reason: '没截出 renderTodayCard');
+    expect(today.contains('crewChipWidthPx(context,'), true,
+        reason: '胶囊宽度没按「组名+简称」现量 —— 写死的宽要么比文字窄被裁、要么空出一大块');
+    expect(RegExp(r'WidgetChip\.tintedChip\(\s*crew\.color').hasMatch(today), true,
+        reason: '胶囊没走 tintedChip（14% 淡染 + 45% 描边，与 App 同一配方）');
+    expect(today.contains('dpToPx(context, 22)'), true,
+        reason: '胶囊高度不是 22dp（与「其他班组」那行同高）');
+    // 现量必须是真量：函数体里有 measureText（只「调了 crewChipWidthPx」还不够，
+    // 里面写死一个数也能过前一条）。
+    final fn = ktCode.substring(ktCode.indexOf('fun crewChipWidthPx('));
+    expect(fn.length, greaterThan(100), reason: '没截出 crewChipWidthPx');
+    expect(fn.substring(0, fn.indexOf('\n    }')).contains('measureText'), true,
+        reason: 'crewChipWidthPx 函数体里没有 measureText —— 宽度不是真按文字量的');
+  });
+
+  test('其他班组：槽位自然宽左排，不再四个等宽', () {
+    final xml = _read('android/app/src/main/res/layout/widget_today_card.xml');
+    for (final id in [
+      'wg_tc_crew_slot1',
+      'wg_tc_crew_slot2',
+      'wg_tc_crew_slot3',
+      'wg_tc_crew_slot4',
+    ]) {
+      final i = xml.indexOf('@+id/$id');
+      expect(i, greaterThanOrEqualTo(0), reason: '没有 $id');
+      final block = xml.substring(xml.lastIndexOf('<FrameLayout', i), xml.indexOf('/>', i));
+      expect(block.contains('layout_width="wrap_content"'), true,
+          reason: '$id 不是 wrap_content —— 还是等宽槽，胶囊会摊成方盒而不是紧挨左排');
+      expect(block.contains('layout_weight="1"'), false,
+          reason: '$id 还带着 weight=1 等宽');
+    }
+  });
 }

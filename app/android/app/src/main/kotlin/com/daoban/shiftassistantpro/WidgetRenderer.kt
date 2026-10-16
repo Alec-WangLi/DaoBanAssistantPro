@@ -92,6 +92,28 @@ object WidgetRenderer {
             .coerceAtLeast(dpToPx(context, 12))
     }
 
+    /**
+     * 今日卡「其他班组」那颗**胶囊**的位图宽度：按「组名 + 空格 + 简称」现量，
+     * 再加布局里那四段固定宽 —— 左内边距 6 + 圆点 8 + 间距 6 + 右内边距 6 = **26dp**
+     * （逐项见 `widget_crew_chip.xml`）。**改那边的内边距或圆点尺寸就要回来改这个 26。**
+     *
+     * ⚠️ 内边距取 **6 而不是 App 的 8**（2026-10-16 真机量出来的）：桌面这张卡宽
+     * **341.7dp**，而 App 的信息卡是 **368dp** —— 同样的内容在桌面这边就少 26dp。
+     * App 那套（标签 47.7 + 三颗胶囊 81.3/81.3/69 + 三个 8dp 间距 = 303.3dp）在
+     * 桌面只有 299.3dp 可用，最后那颗会被 `LinearLayout` 挤成「四班…」。每颗少 2dp×2
+     * 内边距正好让出 12dp、留 8dp 余量，三颗都完整；胶囊之间的 8dp 间距仍是 App 的值。
+     *
+     * 与 [chipWidthPx] 同一条路子：位图宽必须与布局真正量出来的一致，否则要么比文字窄
+     * 被裁、要么空出一块。字号固定 **12dp = App 的 `microLabel`**（与那行的文字同档，
+     * 由 `applyScale(v, R.id.wg_tc_crew_label, 12f, s)` 那条护栏一并盯着）；这里不吃
+     * `fitScale` 的缩放 —— 与 `wg_cc_text` 在布局里被写死 12dp 的待遇一致。
+     */
+    private fun crewChipWidthPx(context: Context, text: String): Int {
+        val density = context.resources.displayMetrics.density
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 12f * density }
+        return (paint.measureText(text) + 26f * density).toInt()
+    }
+
     // ── 字号缩放（2026-10-15） ─────────────────────────────────────────────
     //
     // 用户 2026-10-15：「桌面小组件仍按系统 sp 排版 —— 系统字号调到 200% 时桌面那张
@@ -1092,9 +1114,16 @@ object WidgetRenderer {
                 v.setViewVisibility(crewSlots[slot], android.view.View.VISIBLE)
                 val crew = crews[slot]
                 val chip = RemoteViews(context.packageName, R.layout.widget_crew_chip)
+                // 胶囊底：App `_otherCrewChips` 的同款（14% 淡染 + 45% 描边），
+                // 宽度按「组名 + 简称」现量 —— 见 `crewChipWidthPx` 的 KDoc。
+                // 高 22dp 与 `wg_tc_crew_row` 同高（`tintedChip` 的圆角取高的一半）。
                 chip.setImageViewBitmap(
                     R.id.wg_cc_bg,
-                    WidgetChip.tintedChip(crew.color, dpToPx(context, 14), dpToPx(context, 14)),
+                    WidgetChip.tintedChip(
+                        crew.color,
+                        crewChipWidthPx(context, "${crew.name} ${crew.abbr}"),
+                        dpToPx(context, 22),
+                    ),
                 )
                 chip.setImageViewBitmap(
                     R.id.wg_cc_dot,
