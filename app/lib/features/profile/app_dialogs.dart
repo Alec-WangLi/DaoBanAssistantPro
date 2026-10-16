@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.11.24\n'
+    '· 桌面小组件的班次胶囊改成跟着文字宽窄走：以前是个一刀切的定值，格子一小它就顶满格子、跟格子边贴在一起；现在「白」是窄的、「大休」是宽的，左右都留出跟 App 里一样的间隙\n'
+    '· 周条跟月历对齐了：今天那一列也换成半透明块（不再是实心一块），周标题改成「一 二 三 …日」\n'
+    '· 编辑排班的「每月第 N 天起」不再出现省略号 —— 明明旁边还有位置，却被挤成了「每月第 3…」\n'
+    '\n'
 'v0.11.23\n'
     '· 底部导航滑块滑动时那圈彩色光晕，右边不再有「一刀切」的硬边：以前那圈颜色绕一圈到右边时接不上、差了 60 度，看着像被切开。分段器、开关、日历那枚块共用同一份，一处修全都好\n'
     '· 桌面小组件不再跟着系统字体大小变：系统字号调到 200% 时，今日卡的时间行与「其他班组」那一行会被切掉、周条的星期几挤成一团；现在三张卡的尺寸和字都不随系统字号动\n'
@@ -99,16 +104,14 @@ const String _changelogZh =
     '· 新建排班时多一张「按月排班」的卡片；老的周期排班一点没变，两种规则在编辑器顶上切换，来回切都不会丢\n'
     '\n'
 
-    'v0.11.14\n'
-    '· 横屏（平板 / 车机）重新适配：日历页在横屏下改成左右两栏 —— 顶栏收进左栏不再横跨整屏、今日信息卡贴到右下角、日期网格不再被底部胶囊压住\n'
-    '· 格子里的字在宽屏上放大一档：车机上格子本来就大，而字一直卡在手机那一档的上限，屏幕再大也不会变大\n'
-    '· 底部导航胶囊在宽屏上不再铺满整屏（限到 440、居中）；待办那颗「＋」与闹钟页底部那两颗按钮也跟着内容栏对齐了\n'
-    '· 手机竖屏与小窗的版式一个像素都没动\n'
-    '\n'
-
     ;
 
 const String _changelogEn =
+'v0.11.24\n'
+    '· The widget shift chips now follow how wide their text is: they used to be a fixed size, so in a small cell the chip filled it and touched both edges. A one-character shift is narrow and a two-character one is wide, each keeping the same gap the app leaves\n'
+    '· The week strip now matches the month widget: its today column is a translucent block instead of a solid one, and the weekday header uses the single-character form\n'
+    '· The editor no longer truncates “from day N of each month” — there was room beside it, and it still came out as “from day 3…”\n'
+    '\n'
 'v0.11.23\n'
     '· The coloured rim on the bottom-nav slider no longer has a hard edge on the right: the hues went 300 degrees around and did not meet, leaving a 60-degree step that read as a cut. The segment control, the switch and the calendar block share the same gradient, so all of them are fixed at once\n'
     '· Desktop widgets no longer scale with the system font size. At 200% the today card had its time row and the other-crews row clipped, and the week strip squeezed its weekday labels together; all three cards now keep their layout and their type whatever the system font size is\n'
@@ -165,13 +168,6 @@ const String _changelogEn =
     '· Split the month into as many segments as you like: add one, remove one, or change the day it starts on. A removed segment merges into the previous one, so no day is ever left out\n'
     '· Crews offset by segment (crew A enters at segment 1, crew B at segment 2, ...), so every crew changes shift on the same day — just onto a different shift\n'
     '· A new "Monthly roster" card when you create a schedule. Existing cycle schedules are untouched, and the editor switches between the two rules without losing either\n'
-    '\n'
-
-    'v0.11.14\n'
-    '· Landscape adapted for tablets and car head units: the calendar page goes two-column — the toolbar moves into the left column instead of spanning the whole screen, the today card pins to the bottom right, and the date grid is no longer covered by the floating capsule\n'
-    '· The text inside the day cells steps up a size on wide screens: the cells are bigger there, but the text was pinned to the phone cap and never grew\n'
-    '· The bottom navigation capsule no longer stretches across the whole screen on wide displays (capped at 440, centred); the todo "+" button and the two buttons at the bottom of the alarm page line up with the content column too\n'
-    '· Phone portrait and small-window layouts are unchanged, pixel for pixel\n'
     '\n'
 
     ;
