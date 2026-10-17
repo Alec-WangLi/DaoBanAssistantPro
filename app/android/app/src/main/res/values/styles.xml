@@ -5,6 +5,12 @@
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
+        <!-- 状态栏图标：浅色底 ⇒ 深图标。**只覆盖首帧之前那一小段窗口** —— Flutter
+             一画出第一帧，就由 Dart 侧那层声明（`core/theme/app_theme.dart` 的
+             `statusBarStyleFor` + `app.dart` 根部那层 `AnnotatedRegion`）接管。
+             写在这里是因为那段窗口由系统按主题属性决定、Dart 够不着；不写的话
+             各家 ROM 的默认值不一样（荣耀那条状态栏 bug 的同源问题）。 -->
+        <item name="android:windowLightStatusBar">true</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your
@@ -14,5 +20,6 @@
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

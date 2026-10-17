@@ -13,6 +13,7 @@
 //    只有 `from` = 一直持续。
 library;
 
+import 'monthly_pattern.dart';
 import 'shift_rotation.dart';
 
 /// 时间线上的一段（**闭区间**，两端都可留空）。
@@ -180,8 +181,9 @@ class ScheduleChain implements ShiftSource {
   ///
   /// [cacheKey] 是**信息卡高度**的指纹：它只管组名 / 简称 / 空白表 / 时段，也就是
   /// 「会影响卡片高度」的那些。而 `shiftOn` 还会看**基准日、周期、班组错位、按天
-  /// 改班的覆盖** —— 那四样都不在里面。任何拿 [cacheKey] 当「排班指纹」用的地方，
-  /// 都会在「调一次班」或「改一次周期」之后**静默拿到旧值**。
+  /// 改班的覆盖**，以及（按月模式下）**`monthly` 标志、段表、班组的段偏移** ——
+  /// 那些都不在里面。任何拿 [cacheKey] 当「排班指纹」用的地方，都会在「调一次班」
+  /// 或「改一次周期」或「改一次按月切法」之后**静默拿到旧值**。
   ///
   /// v0.10.20 就是这么栽过一次（两处一起）：信息卡那行「本月统计」的缓存键、
   /// 以及桌面小组件「内容变没变、要不要重推」的判定 —— 都用了 [cacheKey]，于是
@@ -210,6 +212,11 @@ String _sourceKey(ShiftSchedule? s) => s == null
         '${s.teamNames.join("/")}|${s.classes.map((c) => c.shortLabel).join("/")}';
 
 /// 一套方案里**会影响「某天上什么班」**的那些（见 [ScheduleChain.rotationKey]）。
+///
+/// **两种锚定方式都要覆盖**：周期那半边是基准日 / 周期 / 班组错位；按月那半边是
+/// `monthly` 这个标志 / 段表 / 班组的**段**偏移。少了按月那半边，症状与 v0.10.21
+/// 那两处一模一样 —— 换一次按月切法而桌面小组件不重推、信息卡「本月统计」还是
+/// 旧数字，而且完全静默。
 String _rotationOf(ShiftSchedule? s) {
   if (s == null) return '-';
   final List<MapEntry<int, int>> overrides = s.dayOverrides.entries.toList()
@@ -217,6 +224,9 @@ String _rotationOf(ShiftSchedule? s) {
   return '${s.anchorDate.millisecondsSinceEpoch}|'
       '${s.cycle.join(",")}|'
       '${s.teamOffsets.join(",")}|'
+      '${s.monthly}|'
+      '${s.monthlySegments.map((MonthlySegment m) => '${m.startDay}:${m.classIndex}').join(",")}|'
+      '${s.teamSegOffsets.join(",")}|'
       '${s.teamCount}|${s.ourTeamIndex}|'
       '${overrides.map((MapEntry<int, int> e) => '${e.key}:${e.value}').join(",")}';
 }

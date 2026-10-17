@@ -2,9 +2,13 @@
 <!--
   4×5 整月的外壳：卡底 + 月份标题行 + 周几行 + 7×6 格。
 
-  ⚠️ **格子不带白卡**（spec §4.2）：App 里每格是一张白卡，那是因为底下垫着中性底
-  #F5F6FA；桌面上卡底是 96% 不透明、42 张叠起来会糊成一片，而且正是本轮要拆掉的套娃。
-  分区靠间距与明度。
+  ⚠️ **格子带白卡**（2026-10-11 **反转**，见
+  `docs/superpowers/specs/2026-10-11-widget-app-parity-design.md`）。
+  这里原来写着「格子不带白卡 —— App 里每格是白卡是因为底下垫着 #F5F6FA，而桌面上
+  卡底 96% 不透明、42 张叠起来会糊成一片，正是上一轮要拆掉的套娃」。**那条推理的前提
+  是卡底半透明**；用户在两版真机对照图里选了「每格白卡」，于是**面板底改成了不透明的
+  「页面色」**（`widget_page_*`，spec §5 有那组对比度算式），白卡垫在它上面 ——
+  这正是 App 里那层关系。**别再照旧注释把它拆回去。**
 
   ⚠️ 月份标题**查不到就隐藏**（原生从快照的 months 里按「年-月」查）：
   绝不借相邻月份的标题顶上 —— 那是「不让卡片理直气壮地写错」这条纪律的又一入口。
@@ -40,7 +44,7 @@
             android:layout_width="32dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="16sp"
+            android:textSize="16dp"
             android:maxLines="1"
             android:text="&#8249;" />
 
@@ -50,7 +54,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:textSize="13sp"
+            android:textSize="13dp"
             android:maxLines="1"
             android:ellipsize="end" />
 
@@ -59,7 +63,7 @@
             android:layout_width="32dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="16sp"
+            android:textSize="16dp"
             android:maxLines="1"
             android:text="&#8250;" />
     </LinearLayout>
@@ -76,7 +80,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -85,7 +89,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -94,7 +98,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -103,7 +107,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -112,7 +116,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -121,7 +125,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
 
     <TextView
@@ -130,7 +134,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:gravity="center"
-        android:textSize="11sp"
+        android:textSize="13dp"
         android:maxLines="1" />
     </LinearLayout>
 

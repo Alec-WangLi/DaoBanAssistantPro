@@ -12,44 +12,72 @@
   `widget_today_standalone` 的槽位里，外壳根已经铺了一层同一张卡片底
   （`renderTodayCard` 也不再设）。两层同图叠放会多出一圈圆角描边、悬在外壳边框内侧。
 
-  ⚠️ 这是 **4×3 独立卡**的排版（根 padding 22dp、日期 22sp、班次 18sp、行距 16dp、
-  农历两行）—— 不再跟着网格装配壳走。字号与间距在 2026-09-20 的真机反馈后整体提了一档：
-  原先 18dp padding / 20sp / 12dp 时上下会各留一截空白（用户原话「上下留了好大的空白」），
-  提一档把内容从约 202dp 撑到 **实测约 232dp**。**行高与结构没动**（仍只有一个日期行 +
-  农历两行 + 班次行 + 时间行 + 班组行），改的只有字号、间距与徽章/色条这几处尺子上的一档。
+  ⚠️ **上一版头注里那组数（外壳 266dp / 内容 232dp / 余量 34dp）是错的，2026-10-15
+  已按真机实测订正。** 那是 2026-09-20 按一张「各处 +Δ 加起来」的估算表推的，不是量的；
+  而外壳高度由启动器给，换台机器就不是一个数。
 
-  ⚠️ **没到裁决时定的「余量 ≤ 25dp」**：4×3 外壳实测 266dp，232dp 内容留出约 34dp 余量
-  （改前约 65dp，确实收了一半）。短的那 9dp 出在这一档自己身上 —— 表里各处的 +Δ 加起来
-  约 +29dp，而「245dp」这个目标数隐含的是 +43dp。要么再提一档字号，要么承认这版就到这里。
+  **2026-10-15 实测**（Redmi K90 Pro Max · 1200×2608 @480dpi = 3× · 系统字号 1.0 ·
+  逐行取墨迹、x 取 160~1040 避开卡边）：
+    · 外壳 256.3dp、内容约 168dp、**上下各空 43.0 / 44.7dp**。
+  —— 也就是说「提一档字号」并没有把它撑满，只是把空白从 65dp 收到 88dp 里的一半。
+  这一版的处理是**补内容**（下面第 3b / 5 / 6 三处：班次备注、其他班组标签、本月统计，
+  与 App 的信息卡对齐），再靠渲染侧按卡内可用高度缩放去吃掉剩下的余量。
+  **改这个文件时别再凭估算往头注里写数** —— 量一次，把设备与量法一起写下来。
 -->
 
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_tc_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="22dp">
+    android:orientation="horizontal"
+    android:paddingLeft="0dp"
+    android:paddingTop="22dp"
+    android:paddingRight="22dp"
+    android:paddingBottom="22dp">
 
-    <!-- 1. 日期行：色条 + 日期 + 今日徽章 + 待办徽章 -->
+    <!-- 0. 左边那条**通高**的主色竖条（2026-10-16 用户真机反馈：「最左边的竖条：现在
+         怎么只在最顶部那个日期那里？它不应该竖到下面吗？」）。
+         App 的信息卡里它是 `Positioned(left: 0, top: spaceLg, bottom: spaceLg, width: 6)`
+         —— 6dp 宽、通到内容底、圆头（`pillOf(6)` = 半径 3dp = 宽的一半）。
+         位图是 `WidgetChip.bar(color, 6dp, 200dp)`（就是圆头胶囊），`fitXY` 拉到真实高。
+
+         ⚠️ **根必须是横向 LinearLayout，不能改成 FrameLayout。** 这里要的几何是
+         「竖条高 == 内容列高」：`LinearLayout.measureHorizontal` 会在量完 `wrap_content`
+         的内容列之后，把 `match_parent` 高的竖条**重新量成 EXACTLY 这个高度**；而
+         `FrameLayout.onMeasure` 对每个子层只量一次、取 max —— 竖条会按它自己那张
+         200dp 位图解析成**固定 200dp**，与内容脱钩（内容 168dp 时竖条多出 32dp、还把
+         卡片撑高，而卡片尺寸按非目标是不许动的）。这一条由
+         `widget_today_card_guard_test.dart` 的「竖条通高」那条护栏盯着。
+
+         ⚠️ 四边内边距**逐个写**：左 0（竖条贴卡最左）、其余 22（与原来一致）。 -->
+    <ImageView
+        android:id="@+id/wg_tc_bar"
+        android:layout_width="6dp"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="@null" />
+
+    <!-- 内容列：占满竖条右边剩下的宽（`weight=1`），左边让 14dp（= 竖条 6 + 间隙 14
+         = App 的 `spaceXl` 20dp，与 App 里内容让开竖条的量同源）。 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginStart="14dp">
+
+    <!-- 1. 日期行：日期 + 今日徽章 + 待办徽章（色条已挪到根上做通高条） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <ImageView
-            android:id="@+id/wg_tc_bar"
-            android:layout_width="4dp"
-            android:layout_height="24dp"
-            android:scaleType="fitXY"
-            android:contentDescription="@null" />
-
         <TextView
             android:id="@+id/wg_tc_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:textSize="22sp"
+            android:textSize="22dp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -72,7 +100,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:gravity="center"
-                android:textSize="11sp"
+                android:textSize="11dp"
                 android:maxLines="1"
                 android:ellipsize="end" />
         </FrameLayout>
@@ -95,7 +123,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:gravity="center"
-                android:textSize="11sp"
+                android:textSize="11dp"
                 android:maxLines="1"
                 android:ellipsize="end" />
         </FrameLayout>
@@ -108,7 +136,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:textSize="14sp"
+        android:textSize="14dp"
         android:maxLines="2"
         android:ellipsize="end" />
 
@@ -132,8 +160,21 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
-            android:textSize="18sp"
+            android:textSize="18dp"
             android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- 3b. 班次备注（「休息日 · 不响闹钟」/「闹钟 07:00」/「闹钟 07:00 等 2 个」）。
+             位置照 App 的信息卡：在**班次名之后、已调班徽章之前**。文案与判据都来自
+             Dart 侧快照（`days[].shiftNote`）—— 原生不写文案、更不重算闹钟规则。
+             整串也可能为空 / 缺失（没有排班的那些天），那时由渲染侧设 GONE。 -->
+        <TextView
+            android:id="@+id/wg_tc_note"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textSize="13dp"
             android:maxLines="1"
             android:ellipsize="end" />
 
@@ -155,7 +196,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:gravity="center"
-                android:textSize="11sp"
+                android:textSize="11dp"
                 android:maxLines="1"
                 android:ellipsize="end" />
         </FrameLayout>
@@ -169,15 +210,24 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:layout_marginStart="18dp"
-        android:textSize="13sp"
+        android:textSize="13dp"
         android:maxLines="1"
         android:ellipsize="end" />
 
-    <!-- 5. 其他班组：固定 4 个槽位（多于 4 个的丢掉，spec §7 已记这个上限）。
-         槽位是 FrameLayout + 等分权重。**chip 填满槽位靠的是嵌套根自己显式声明的
-         match_parent 被槽位尊重** —— 不是槽位用默认 LayoutParams 补齐（spec §5.4
-         真机实测更正过这条口径）。所以 widget_crew_chip.xml 根上那行显式 match_parent
-         **不能删**：删掉它会缩成一小团且不报错。 -->
+    <!-- 5. 其他班组：最多 4 个槽位（多于 4 个的丢掉，spec §7 已记这个上限）。
+         **2026-10-16 改成「自然宽、紧挨着左排」**（用户真机反馈：「其他班组：怎么没有
+         那种半透明的胶囊？你看 APP 里边是有的。」）—— App 那边是 `Wrap(spacing: 8)`
+         的胶囊串，不是等分列宽。槽位从 `0dp + weight=1` 改成 `wrap_content`、每个给
+         `layout_marginStart="8dp"`，`widget_crew_chip.xml` 那边换成整套胶囊。
+
+         ⚠️ **放不下时是「被挤窄」，不是硬裁**（真机实测，2026-10-16）：一排 `wrap_content`
+         的胶囊超出这一行宽度时，`LinearLayout` 把**最后一颗**按「剩余多宽」用 `AT_MOST`
+         去量 —— 小溢出时那颗的 TextView 打省略号（真机上第一次跑出来正是「四班…」），
+         溢出再多就被挤到 **0 宽、整颗看不见**（4 个「其他班组」是这一档）。两条都**静默**
+         （不报错、不崩）。别按「`clipChildren` 硬裁」去理解它 —— 那会找错修法。
+         这是**用户 2026-10-16 拍板接受**的降级（原话「接受省略」），别再为它把卡片加高。
+         三个班组（当前正是 3 个）：胶囊 77.3 / 77.3 / 65.3dp + 三个 8dp 间距，在内容列
+         299.7dp 里刚好放得下、末颗仍余 8.0dp。 -->
     <LinearLayout
         android:id="@+id/wg_tc_crew_row"
         android:layout_width="match_parent"
@@ -185,28 +235,62 @@
         android:layout_marginTop="16dp"
         android:orientation="horizontal">
 
+        <!-- 零号槽位：「其他班组」四个字。用 `wrap_content` 而不是写死列宽 ——
+             它是文案，中英长度差得多，写死必然把英文挤掉。
+             它**不再自带右边距**：与第一颗胶囊的间距由下面每个槽位自己的
+             `layout_marginStart="8dp"` 给（App 那边是 `SizedBox(width: spaceSm=8)`）。
+
+             ⚠️ 字号 **12dp = App 的 `AppTokens.microText`**（2026-10-16 用户真机反馈：
+             「『其他班组』那里的字体有点小……可以整体再放大一些」）。它原来是 11dp，
+             比 App 同一行、也比这张卡自己的「本月统计」（12dp）**小一档** —— App 里
+             「其他班组 / 色块 / 本月统计」本来就是同一档，是搬到桌面时这行掉了一级。
+             不是没位置：卡内上下各还剩约 13dp 富余，纯粹是写小了。
+             字号由渲染侧 `applyScale(..., 12f, s)` 设，这里这个值只在没走到那段时生效
+             —— 两处要一起改，由 `widget_cell_block_guard_test.dart` 对着 Dart 的令牌盯。 -->
+        <TextView
+            android:id="@+id/wg_tc_crew_label"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:textSize="12dp"
+            android:maxLines="1" />
+
         <FrameLayout
             android:id="@+id/wg_tc_crew_slot1"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:layout_weight="1" />
+            android:layout_marginStart="8dp" />
 
         <FrameLayout
             android:id="@+id/wg_tc_crew_slot2"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:layout_weight="1" />
+            android:layout_marginStart="8dp" />
 
         <FrameLayout
             android:id="@+id/wg_tc_crew_slot3"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:layout_weight="1" />
+            android:layout_marginStart="8dp" />
 
         <FrameLayout
             android:id="@+id/wg_tc_crew_slot4"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:layout_weight="1" />
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <!-- 6. 「本月 大休13 · 白7 · 上夜6 · 下夜5」（App 的信息卡 v0.9.7 就有了）。
+         整串由 Dart 侧算好挂在快照的 `months[].tally` 上 —— 原生拿当天的 day
+         反算年月再查。查不到（窗口外 / 没有排班）时由渲染侧设 GONE，
+         **不画一句空话、也不留一行空白**。 -->
+    <TextView
+        android:id="@+id/wg_tc_tally"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:textSize="12dp"
+        android:maxLines="1"
+        android:ellipsize="end" />
     </LinearLayout>
 </LinearLayout>

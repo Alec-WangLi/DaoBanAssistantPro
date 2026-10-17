@@ -4,12 +4,13 @@ import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
-import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../alarm/alarm_service.dart';
+import 'help_entry.dart';
 
-/// 统一风格的应用弹窗（版本更新 / 使用帮助），配色跟随主题主色。
+/// 统一风格的应用弹窗（版本更新），配色跟随主题主色。
 void showAppInfoDialog(
   BuildContext context, {
   required String title,
@@ -39,145 +40,129 @@ void showAppInfoDialog(
   );
 }
 
-const String _changelogZh = 'v0.11.0\n'
-    '· 液态玻璃铺满全 app：底栏重做成一枚真的、会动的玻璃滴 —— 按住它吸附到手指上、放大并凸出胶囊，拖动时形状沿运动方向拉伸，松手带过冲地落回，边缘一圈彩色的折射光。随后分段器、开关、日历上那枚选中的块也换成同一套玻璃：按住时四面鼓出来、底下浮起一层影子，边上那圈彩色折射光一动就亮、停下就没了\n'
-    '· 日历上多了两处「水」的动作：点别的日期再点「今天」，那枚选中的块是飞回去的（途中彩边亮起、形状按飞行方向拉长压扁、飞过哪几格哪几格的字被轻轻挤一下）；长按拖选一段日子时，逐格的淡色方块换成一条连着的水带，同一周里是一整条、格子之间的缝也盖住\n'
-    '· 弹窗与底部弹层出现时从模糊里凝出来、关掉时化开散掉；响铃页的「上滑关闭」从圆钮换成一枚玻璃药丸\n'
-    '· 明显更顺、也更省电（两轮动画与流畅性优化）：先把「每一帧重建整页」收掉 —— 液态档一帧重建的界面元素从 436 个降到 42 个、光晕每走一步重绘的画面节点从 139 个降到 1 个；再量出真正的瓶颈在「画面合成」那一侧，把其中最贵的一道工序省掉 —— 编辑排班页每帧的合成开销 13.1ms → 6.0ms、日历 10.4ms → 2.3ms、闹钟 9.8ms → 2.3ms、待办 6.5ms → 2.5ms\n'
-    '· 那层缓缓流动的光晕不再牵着整页一起重画：你按住拖动、换月的时候它会先停一下，松手接着走（观感上几乎看不出来）\n'
-    '· 响铃 15 分钟没人管会自己停 —— 之前它会一直响、一直震，手机扔在包里也停不下来\n'
-    '· 桌面小组件的刷新改用非精确闹钟，少占一份系统唤醒额度；排闹钟时也不再反复解析整份清单\n'
-    '· 修好一串「改完之后界面没跟上」的毛病：调整某一天的班次、或者换语言之后，桌面小组件现在会跟着变；改周期之后，信息卡那行「本月统计」也会跟着变 —— 此前它们都停着旧的\n'
-    '· 顺手收掉两处白付的活：拨一下触觉开关不再把整个界面重建一遍；待办 / 闹钟 / 排班上的日期文案不再每次重算\n'
-    '· 修好一串只在特定操作下才现形的问题：弹窗顶进状态栏 / 手势条（21 个弹窗都受影响）、底部弹层往下拖着要关掉时被压暗发糊、拖着日历上的块跨月换页会当场报错、拖完那枚块再点一下日期它会自己抽一下\n'
-    '· 液态玻璃关着的时候，底栏、分段器与日历都和之前一模一样\n'
+const String _changelogZh =
+'v0.12.0\n'
+    '· 桌面小组件贴齐 App：今日卡补齐班次备注 / 其他班组 / 本月统计，主色竖条通到卡底；月历「今天」换成半透明块、周标题改单字、班次胶囊按文字宽现量；三张卡的字号不再跟系统字号走\n'
+    '· 按月排班：每月 1 号重新开始的一套切法，编辑排班顶上在「周期 / 按月」之间切换，段可加可删\n'
+    '· 班次颜色扩到 16 种，并能自己调：色相条 + 饱和度/明度方盘 + 十六进制，两颗日历小样当场变色\n'
+    '· 待办自动归档：做完的收进「已完成 N 条」，主列表只留没做的；一次性待办能从归档里点回来\n'
+    '· 字号四档，App 自己管、不跟系统字号走；日历顶栏与信息卡跟着重排，不省略\n'
+    '· 横屏 / 平板 / 车机上日历改成左右两栏；底部弹层统一头部、按住往下一拉就关；全 app 的小节标题、空态、加载态与按压反馈收成一套\n'
+    '· 闹钟落点扩到前一天 / 当天 / 次日三档，每个班次上限 6 → 10 条；贪睡时长可选 1 / 5 / 10 / 15 / 20 / 30 分钟\n'
+    '· 修：浅色档下状态栏图标跟着主题走、输入框标签在真机字体下不再被压扁、实心主色面上改白字、底部导航彩边接缝、编辑排班的「每月第 N 天起」不再省略\n'
     '\n'
-
-    'v0.10.22\n'
-    '· 滑动更跟手了：真正的开销一直在「画面合成」那一侧，这一版把其中最贵的一道工序省掉了 —— 编辑排班、日历、闹钟、待办这几页每帧的合成开销降到原来的三分之一上下（编辑排班 13.1ms → 6.0ms、日历 10.4ms → 2.3ms）\n'
-    '· 手指按住不动时，背景那层光晕不再冻住（之前是按着就停）\n'
-    '· 顺手把「换月」也算进光晕该停的那一刻\n'
-    '· 拨一下触觉开关不再把整个界面重建一遍\n'
-    '· 待办 / 闹钟 / 排班上的日期文案不再每次重算\n'
-    '· 响铃 15 分钟没人管会自己停（之前会一直响、一直震）\n'
-    '· 排闹钟时不再反复解析整份清单（那一步是白付的）\n'
-    '· 桌面小组件的刷新改用非精确闹钟，少占一份系统唤醒额度\n'
-
-    'v0.10.21\n'
-    '· 修好上一版带进来的三处「改完之后界面没跟上」：调整某一天的班次、或者换语言之后，桌面小组件现在会跟着变（之前会一直停着旧的）\n'
-    '· 调整班次、改周期之后，信息卡那行「本月统计」现在会跟着变（之前还是旧数字）\n'
-    '· 长按拖选一段日子时，日历不再每一帧重算整页 —— 上一版的更新说明里写了这一条，当时其实还没做到\n\n'
-
-    'v0.10.20\n'
-    '· 更顺了：点日期、「今天」飞回去、按住拖动那枚选中的块、长按拖选一段日子时，日历不再每帧重算整页\n'
-    '· 更省电了：那层缓缓流动的光晕不再牵着整页一起重画（你按住拖动的时候它会停一下、松手接着走 —— 观感上几乎看不出来）\n'
-    '· 打开 App 快了一点；翻月、勾待办、改排班之后的卡顿也少了\n'
-    '· 桌面小组件：内容没变时不再重复推一遍（从后台切回来不再白算一次整月数据）\n\n'
-
-    'v0.10.19\n'
-    '· 修好一处崩溃：长按拖选当中用另一根手指点 ‹ / › 换月，日历会当场报错（那一段的日子不在新月里，落点算不出来却还在硬画那条带子）\n'
-    '· 上一版那枚水带「按住四面鼓起来」的判据补严了一格：它本来就画得出来，但一直靠同层里阴影顺带重画 —— 现在把它算进「该不该重画」\n\n'
-
-    'v0.10.18\n'
-    '· 长按拖选一段日子时，那层逐格的淡色小方块换成了一条连着的水带：同一周内是一整条，格子之间的缝也盖住了\n'
-    '· 按住那一下它会四面鼓起来、像水一样漫上来；拖动时末端淌到新的一格，它探进哪一格、那一格的字就被轻轻挤一下\n'
-    '· 水带的两端是圆的；跨周时那两头切平（月历里跨周不是相邻的格子，是从最右列跳到下一行的最左列）\n'
-    '· 液态玻璃关着的时候，拖选与之前一模一样（逐格淡色方块，一个像素都没动）\n\n'
-
-    'v0.10.17\n'
-    '· 日历上那枚选中的块，点别的日期、再点「今天」时，现在是飞回去的：飞的时候一圈彩色折射光亮起来，形状按飞行的方向拉长、变扁\n'
-    '· 它飞过哪几格，那几格的字就被轻轻挤一下（之前被挤的是终点那一格 —— 块还在半路上，终点就已经先动了）\n'
-    '· 落定之后这些自己收回去，静止时与之前一样\n'
-    '· 拖动那枚块时，形状是「开」出来的，不再一下拉满（与底栏滑块同一套手感）\n\n'
-
-    'v0.10.16\n'
-    '· 修好上一版带进来的一处问题：拖完日历上那枚选中的块、再点一下日期，它会自己抽一下（陈旧的速度被反复灌回来）\n'
-    '· 按住那枚块不动时，它的形变现在会自己收回去（之前会一直挂着）\n\n'
-
-    'v0.10.15\n'
-    '· 日历上那枚选中的方块，在「液态玻璃」档下变成一枚真的玻璃透镜：按住时四面鼓出来、底下浮起一层影子\n'
-    '· 拖动时它跟着手指的方向拉长、变扁，边上带一圈彩色折射光（停下就没了）\n'
-    '· 它扫过哪一天，那一天的字（日期 / 班次 / 农历）就被它的边缘轻轻挤一下\n'
-    '· 液态玻璃关着的时候，日历与之前一模一样（一个像素都没动）\n\n'
-
-    'v0.10.14\n'
-    '· 修好上一版带进来的一处问题：弹窗会顶到状态栏 / 手势条里（21 个弹窗都受影响）\n'
-    '· 底部弹层往下拖着要关掉时，不再被压暗、发糊\n'
-    '· 响铃页那枚「上滑关闭」的形变在高刷新率屏幕上不再只有一半（同一个拖动速度应当有同一个形状）\n'
-    '· 四个弹窗的遮罩浓度统一成与其余弹窗一样（模板管理 / 改名 / 删除、存为模板）\n\n'
-
-        '\n'
-;
-
-const String _changelogEn = 'v0.11.0\n'
-    '· Liquid Glass across the whole app: the tab bar is now a real, moving glass drop — hold it and it sticks to your finger, growing and swelling out past the capsule; drag and it stretches along the direction of travel, then overshoots back on release, with a prismatic rim around it. The segmented control, the switch and the calendar selection block then got the same glass: it swells on all four sides while held, lifts a shadow, and the prismatic rim lights up only while it is moving\n'
-    '· Two new "water" motions on the calendar: tapping another date and then Today flies the selected block back (the rim lights up on the way, the shape stretches along its direction of travel, and every day it sweeps over gets a slight squeeze); long-press selecting a run of days draws one continuous water band that covers the gaps between cells\n'
-    '· Dialogs and bottom sheets condense out of blur and dissolve away; the ringing screen\'s "swipe up to dismiss" knob became a glass pill\n'
-    '· Noticeably smoother and lighter on the battery (two rounds of animation and smoothness work): first the "rebuild the whole page every frame" was removed — in the Liquid Glass tier one frame rebuilt 436 interface elements, now 42, and one step of the glow repainted 139 paint nodes, now 1; then the real bottleneck turned out to be compositing, and the most expensive step of it is gone — the editor went from 13.1ms of compositing per frame to 6.0ms, the calendar 10.4ms to 2.3ms, alarms 9.8ms to 2.3ms and to-dos 6.5ms to 2.5ms\n'
-    '· The slowly drifting glow no longer repaints the page along with it: while you drag or switch months it pauses, then carries on afterwards (you will not notice)\n'
-    '· A ringing alarm now stops itself after 15 minutes if nobody attends to it — it used to ring and buzz forever, even from inside a bag\n'
-    '· Home-screen widget refreshes now use an inexact alarm, spending less of the system wake-up budget, and scheduling alarms no longer re-parses the whole list every time\n'
-    '· Fixed a run of "the screen did not keep up" cases: after adjusting a single day, or switching language, the home-screen widget now updates, and after editing the cycle the info card\'s monthly tally does too — both used to stay on the old values\n'
-    '· Also removed two pieces of work that bought nothing: toggling the haptics switch rebuilt the whole interface, and date strings on the todo, alarm and schedule screens were recomputed every time\n'
-    '· Fixed a run of problems that only showed up in specific operations: dialogs sitting under the status bar or gesture bar (21 of them were affected), a bottom sheet dimming and blurring while dragged down to dismiss, a crash when switching months mid range-drag, and the selection block twitching when tapped right after a drag\n'
-    '· With Liquid Glass off, the tab bar, the segmented control and the calendar are pixel-for-pixel what they were\n'
+'v0.11.26\n'
+    '· 今日卡最左边那条主色竖条通到卡片底了 —— 以前它只有「日期」那一行那么高\n'
+    '· 今日卡「其他班组」换成了 App 里那种半透明胶囊（之前是圆点加光秃秃的文字），几颗紧挨着排左边\n'
     '\n'
+'v0.11.25\n'
+    '· 周条上「今天」那一块玻璃长高了：以前格子里那三行（周几 / 日期 / 班次）离块的上下边只剩一点点，看着像贴着边画的；现在上下多留出跟左右一样多的空隙\n'
+    '· 今日卡的「其他班组」那一行字大了一档 —— 它原来比 App 里同一行、也比这张卡自己的「本月统计」小一号，是搬过来时掉了一级，不是没位置\n'
+    '\n'
+'v0.11.24\n'
+    '· 桌面小组件的班次胶囊改成跟着文字宽窄走：以前是个一刀切的定值，格子一小它就顶满格子、跟格子边贴在一起；现在「白」是窄的、「大休」是宽的，左右都留出跟 App 里一样的间隙\n'
+    '· 周条跟月历对齐了：今天那一列也换成半透明块（不再是实心一块），周标题改成「一 二 三 …日」\n'
+    '· 编辑排班的「每月第 N 天起」不再出现省略号 —— 明明旁边还有位置，却被挤成了「每月第 3…」\n'
+    '\n'
+'v0.11.23\n'
+    '· 底部导航滑块滑动时那圈彩色光晕，右边不再有「一刀切」的硬边：以前那圈颜色绕一圈到右边时接不上、差了 60 度，看着像被切开。分段器、开关、日历那枚块共用同一份，一处修全都好\n'
+    '· 桌面小组件不再跟着系统字体大小变：系统字号调到 200% 时，今日卡的时间行与「其他班组」那一行会被切掉、周条的星期几挤成一团；现在三张卡的尺寸和字都不随系统字号动\n'
+    '· 月历小组件的周标题改成「一 二 三 四 五 六 日」（与 App 日历页同一份），以前是「周一 周二 …」，宽度差一倍、那一行比 App 抢眼得多\n'
+    '· 月历里「今天」那一格改成 App 同款的半透明块（主色淡染 + 主色描边），不再是实心一块；那天要是法定节假日，农历的红色也回来了\n'
+    '· 今日卡补齐了 App 信息卡上有的三行：班次后面那句备注（「休息日 · 不响闹钟」/「闹钟 07:00」）、「其他班组」四个字、以及「本月 大休13 · 白7 · 上夜6 · 下夜5」\n'
+    '· 顺带：那三行补上之后今日卡上下的空白小了一半；月历格子里的班次胶囊也跟着格子大小缩放了，不再是一成不变的小号\n'
+    '\n'
+'v0.11.22\n'
+    '· 修上一版带出来的一处：浅色模式下，压在实心主色上的字是黑的 —— 底部导航选中的那两个字、「我的」页那几条分段器（主题模式 / 语言 / 字体大小）都读不清，现在一律白字\n'
+    '· 压深改成「够用就好」：以前不管原来多浅都再压掉四成，默认那颗蓝明明够亮也被压成近黑；现在只有真不够的（青、橙）才压，而且压到刚读得清就停\n'
+    '· 于是胶囊、按钮、导航、开关这几处的颜色都回到了接近「我的 → 外观」里那颗主色 —— 上一版说的「实心面比主色深一档」那个代价，现在只在青和橙上还看得到\n'
+    '\n'
+'v0.11.21\n'
+    '· 实心主色面换成深一档的主色：主按钮、弹窗按钮、导航选中、开关、勾选、待办那颗悬浮按钮、顶栏的实心胶囊 —— 以前白字压在原主色上，teal 只有 2.6:1、orange 2.6:1，等于读不清；现在五种主色都在 5.9:1 以上\n'
+    '· 顺带修掉一件更早就有的毛病：那层实心填充原来是半透明的（85% 到 50%），压在白底上连默认蓝的渐变尽头都只有 2.1:1\n'
+    '· 代价：实心面比「我的 → 外观」里那颗主色深一档（大致是同一个色更暗一截），字保持白\n'
+    '\n'
+'v0.11.20\n'
+    '· 输入框的名字改成写在框的上方 —— 你截图里那两个字被压成半截，是 Android 上 Material「浮动标签」在系统字体（MiSans）下的毛病，这边复现不出、也没法从参数上调平，就干脆不用它了\n'
+    '· 日历格子上那个「有闹钟」的小圆点去掉了 —— 挂过闹钟的日子接近一半，半个网格都顶着一个小点，是不好看；「这天调过班」那个点还在（右上角那个）\n'
+    '· 顺带：所有输入框会比以前高一点点（名字从压在框线上，变成框上面单独一行）\n'
+    '\n'
+'v0.11.19\n'
+    '· 「调整班次」弹层里，标题左边那根主色竖条往下挪了一点：以前它比标题的字高半行，看着有点歪\n'
+    '· 排班管理页的「新增排班」按钮落到了屏幕底部：上一版把它抬高了 76，而那一抬是给主界面底部的导航胶囊让位的，这一页底下没有胶囊\n'
+    '· 日历格子上能看出哪天有闹钟了：班次挂过闹钟的那天，胶囊左上角有个小圆点（右上角那个仍然是「这天调过班」）\n'
+    '· 自定义班次颜色时，色值前面带 0x 的写法也认了（以前只认 #）\n'
+    '· 小窗（分屏）下帮助界面的正文不再被左边的圆图标挤成四五个字一行：一窄，图标就自己站一行\n'
+    '\n'
+'v0.11.18\n'
+    '· 「同一个东西长得不一样」的地方收了一批：底部弹层的标题现在跟弹窗一样带主色竖条，还能往下拉关闭；小节标题全 App 统一成一档（「我的」页那几个会比以前大一点、黑一点）；空态与加载中各自收成一个样子；卡片和列表行按下的反馈也统一了\n'
+    '· 两颗最显眼的主操作按钮换回自家的玻璃件：编辑排班页的「保存并重排闹钟」和排班管理页的「新增排班」，以前用的是系统按钮（按下是水波纹，跟别处不一致）\n'
+    '· 排班管理页的「新增排班」从列表末尾挪到了屏幕底部，跟另外两页一个位置，不再悬在页面中间\n'
+    '· 「管理模板」与权限卡里的「去开启」从裸文字换成胶囊 —— 全 App 的入口都是胶囊，裸文字读起来像正文\n'
+    '\n'
+    ;
 
-    'v0.10.22\n'
-    '· Smoother scrolling: the real cost was on the compositing side, and this version drops the most expensive step of it — per-frame compositing on the editor, calendar, alarm and todo screens is now about a third of what it was (editor 13.1ms → 6.0ms, calendar 10.4ms → 2.3ms)\n'
-    '· The background glow no longer freezes while you simply hold your finger down\n'
-    '· Month switching is now part of when the glow pauses, too\n'
-    '· Toggling the haptics switch no longer rebuilds the whole interface\n'
-    '· Date strings on the todo, alarm and schedule screens are no longer rebuilt every time\n'
-    '· A ringing alarm stops itself after 15 minutes if nobody attends to it (it used to ring and buzz forever)\n'
-    '· Scheduling alarms no longer re-parses the whole alarm list on every entry\n'
-    '· The home-screen widget refresh now uses an inexact alarm, spending less of the system wake-up budget\n'
-
-    'v0.10.21\n'
-    '· Fixed three "the screen did not keep up" cases from the previous version: after adjusting a single day or switching language the home-screen widget now updates (it used to stay on the old shifts)\n'
-    '· After adjusting a day or editing the cycle, the info card\'s monthly tally now updates (it used to keep the old numbers)\n'
-    '· Long-press selecting a run of days no longer rebuilds the whole calendar every frame — the previous release notes claimed this, but it was not actually done yet\n\n'
-
-    'v0.10.20\n'
-    '· Smoother: tapping a date, flying back to Today, dragging the selection block and long-press selecting a run of days no longer rebuild the whole calendar every frame\n'
-    '· Lighter on the battery: the slowly drifting glow no longer repaints the page along with it (it pauses while you drag and carries on after — you will not notice)\n'
-    '· Faster start-up, and less stutter after switching months, ticking a to-do or saving a schedule\n'
-    '· Home-screen widgets: an unchanged snapshot is no longer pushed again (returning to the app no longer recomputes the whole month for nothing)\n\n'
-
-    'v0.10.19\n'
-    '· Fixed a crash: with a range drag in progress, using a second finger to tap the month arrows left the calendar throwing errors (those days are not in the new month, so the band had nothing to anchor to yet was still drawn)\n'
-    '· Tightened one repaint criterion for the previous version water band: the press swell did render, but only because the shadow in the same layer happened to repaint alongside it — it is now part of the check\n\n'
-
-    'v0.10.18\n'
-    '· Long-pressing to select a run of days now draws one continuous water band instead of a pale block per cell — within a week it is a single strip that covers the gaps between cells\n'
-    '· Pressing swells it on all four sides, like water rising; dragging lets the tip flow into the next cell, and the day it reaches gets a slight squeeze\n'
-    '· The band ends are round; where it wraps to the next week the two ends are cut flat (in a month grid a week wrap is not an adjacent cell)\n'
-    '· With Liquid Glass off, selection is exactly as before (a pale block per cell, pixel for pixel)\n\n'
-
-    'v0.10.17\n'
-    '· The calendar selection block now flies back when you tap another date and then Today: a prismatic rim lights up on the way, and the shape stretches along its direction of travel\n'
-    '· The days it sweeps over get a slight squeeze (before, the squeeze sat on the destination while the block was still in mid-air)\n'
-    '· All of it settles back once it lands — at rest it looks exactly as before\n'
-    '· While dragging, the shape blooms instead of snapping to full (the same feel as the tab bar pill)\n\n'
-
-    'v0.10.16\n'
-    '· Fixed a regression from the previous version: after dragging the calendar selection block, tapping a day made it stretch and flash once (a stale drag velocity was re-applied)\n'
-    '· Holding the block still now lets its stretch relax (it used to stay stretched)\n\n'
-
-    'v0.10.15\n'
-    '· The selected day block on the calendar becomes a real glass lens in the Liquid Glass tier: it bulges out on all four sides while held, with a lifted shadow\n'
-    '· While you drag it stretches along the direction of travel and flattens, with a prismatic rim that only shows while it is moving\n'
-    '· As it sweeps over a day, that day text (date / shift / lunar) gets a slight squeeze at its edge\n'
-    '· With Liquid Glass off the calendar is pixel-for-pixel what it was\n\n'
-
-    'v0.10.14\n'
-    '· Fixed a regression from the previous version: dialogs could sit under the status bar or gesture bar (21 of them were affected)\n'
-    '· A bottom sheet no longer dims and blurs while you drag it down to dismiss it\n'
-    '· The ringing screen pill deforms correctly on high-refresh-rate screens (the same drag speed now gives the same shape)\n'
-    '· Four dialogs\' backdrop dim now matches the rest (template manage / rename / delete, save as template)\n\n'
-
-        '\n'
-;
+const String _changelogEn =
+'v0.12.0\n'
+    '· Home-screen widgets now match the app: the today card gained the shift note, other crews and month tally, and the accent bar runs the full height; the month view marks today with the translucent block, uses single-character weekday headers and sizes shift chips to their text; none of the three cards follow the system font size any more\n'
+    '· Monthly rosters: a schedule that starts over on the 1st of every month, switchable at the top of the editor, with addable and removable segments\n'
+    '· Shift colours expanded to 16, plus a custom picker: hue bar, saturation/value square and hex input, with two live calendar samples\n'
+    '· Todo auto-archive: completed items collect under "N completed" and the main list keeps only open ones; one-off items can be ticked back out of the archive\n'
+    '· Four text sizes managed by the app rather than the system; the calendar header and info card reflow without ellipsis\n'
+    '· The calendar becomes two columns in landscape, on tablets and car screens; bottom sheets share one header and can be pulled down to close; section headings, empty and loading states and press feedback are unified across the app\n'
+    '· Alarm anchors now cover the day before, the same day and the next day; up to 10 alarms per shift; snooze length selectable from 1 to 30 minutes\n'
+    '· Fixes: status-bar icons follow the theme in light mode, field labels are no longer squashed under the device font, white text on solid accent surfaces, the coloured rim seam on the nav bar, and the editor no longer truncates "from day N of each month"\n'
+    '\n'
+'v0.11.26\n'
+    '· The accent bar on the left of the today card now runs the full height of the card - before it was only as tall as the date row\n'
+    '· The Other crews row on the today card uses the same translucent capsules as the app, packed together on the left; it used to be bare dots with plain text\n'
+    '\n'
+'v0.11.25\n'
+    '· The today block in the week strip is taller. The three rows inside it (weekday, date, shift) used to sit right against its top and bottom edges; they now keep the same breathing room all round as they do left and right\n'
+    '· The Other crews row on the today card is one size larger. It had come over a step smaller than the same row in the app, and smaller than the month tally line on the same card - that was a slip when porting, not a lack of room\n'
+    '\n'
+'v0.11.24\n'
+    '· The widget shift chips now follow how wide their text is: they used to be a fixed size, so in a small cell the chip filled it and touched both edges. A one-character shift is narrow and a two-character one is wide, each keeping the same gap the app leaves\n'
+    '· The week strip now matches the month widget: its today column is a translucent block instead of a solid one, and the weekday header uses the single-character form\n'
+    '· The editor no longer truncates “from day N of each month” — there was room beside it, and it still came out as “from day 3…”\n'
+    '\n'
+'v0.11.23\n'
+    '· The coloured rim on the bottom-nav slider no longer has a hard edge on the right: the hues went 300 degrees around and did not meet, leaving a 60-degree step that read as a cut. The segment control, the switch and the calendar block share the same gradient, so all of them are fixed at once\n'
+    '· Desktop widgets no longer scale with the system font size. At 200% the today card had its time row and the other-crews row clipped, and the week strip squeezed its weekday labels together; all three cards now keep their layout and their type whatever the system font size is\n'
+    '· The month widget header now reads the single-character 一 二 三 form, the same one the app calendar page uses, instead of 周一 周二 … — twice as wide and far more prominent than the app row\n'
+    '· The month widget marks today with the same translucent block the app uses (accent wash plus accent outline) instead of a solid fill; and if that day is a public holiday, the lunar date is red again\n'
+    '· The today card gained the three rows the app info card has: the note after the shift name (Rest day · no alarm / Alarm 07:00), the Other crews label, and the month tally (This month · 13 off · 7 day · …)\n'
+    '· Along the way: with those three rows the card top and bottom gaps are about half what they were, and the shift chips in the month grid now scale with the cell instead of staying one small size\n'
+    '\n'
+'v0.11.22\n'
+    '· Fixed what the previous release brought in: in light mode the text on solid accent surfaces was dark, so the selected bottom-nav item and the segments on Me (theme mode / language / font size) were hard to read. They are white now\n'
+    '· Darkening is now "just enough". It used to take 40% off the accent no matter how dark it already was, which crushed the default blue into near-black; now only the accents that genuinely need it (teal, orange) are darkened, and only until white text just passes\n'
+    '· So pills, buttons, the nav item and switches are back near the accent you picked under Me, Appearance. The "one step darker" trade-off from the last release only shows on teal and orange now\n'
+    '\n'
+'v0.11.21\n'
+    '· Solid accent surfaces now use a one-step darker accent: primary buttons, dialog buttons, the selected nav item, switches, checkboxes, the todo floating button and the top-bar accent pills. White text on the original accent was only 2.6:1 for teal and orange — effectively unreadable; all five accents are now 5.9:1 or better\n'
+    '· Fixed a longer-standing problem on the way: that fill used to be semi-transparent (85% to 50%), which left even the default blue at 2.1:1 at the far end against a white card\n'
+    '· The trade-off: solid surfaces are one step darker than the accent shown under Me > Appearance; the text stays white\n'
+    '\n'
+'v0.11.20\n'
+    '· Field labels are now drawn above the box instead of floating on its border. The two squashed characters in your screenshot come from Android\'s Material floating label under the system font (MiSans): it does not reproduce here and cannot be tuned away from our side, so the app no longer uses it\n'
+    '· Removed the little "has an alarm" dot from the calendar cells — nearly half the days carry alarms, so half the grid was speckled. The "shift was adjusted" dot (top-right) stays\n'
+    '· Side effect: every input box is a little taller, because the label now takes its own line above the box\n'
+    '\n'
+'v0.11.19\n'
+    '· In the "Adjust shift" sheet the accent bar left of the title moved down a little: it used to sit half a line above the title text\n'
+    '· "Add schedule" on the Schedule management page dropped to the bottom of the screen: the previous release lifted it by 76, which is what the main screen\'s nav capsule needs — this page has no capsule\n'
+    '· The calendar grid now shows which days carry alarms: a dot at the top-left of the shift chip (the top-right one still means the day was adjusted)\n'
+    '· Custom shift colours now accept a 0x prefix as well as #\n'
+    '· In a small window the round icon no longer squeezes help text into four or five characters a line — it moves onto its own line\n'
+    '\n'
+'v0.11.18\n'
+    '· A sweep of the places where the same thing looked different: bottom sheets now carry the same accent-barred title as dialogs (and can be pulled down to close), section headings use one size everywhere (the ones on the Me page are a little larger and darker than before), empty states and loading spinners each have a single look, and pressing a card or a row now feels the same everywhere\n'
+    '· The two most prominent primary buttons went back to the app\'s own glass button: the editor\'s "Save and reschedule" and the management page\'s "Add schedule" used to be plain system buttons with a water-ripple press\n'
+    '· The management page\'s "Add schedule" moved from the end of its list to the bottom of the screen — the same place as on the other two pages, instead of floating in the middle of a short page\n'
+    '· "Manage templates" and the permission card\'s "Go enable" went from bare text to pills: every entry point in the app is a pill, because bare text reads like body copy\n'
+    '\n'
+    ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
 void showChangelogDialog(BuildContext context) {
@@ -270,8 +255,11 @@ Widget _updateChannelRow(
 
 /// 帮助类弹窗的公共外壳：同一个 [GlassDialog]、同样的滚动上限与「知道了」。
 ///
-/// 「开始使用」与「使用帮助」只有内容不同，壳子必须一模一样 —— 各写一套的话
-/// 两个弹窗的圆角、滚动上限、按钮措辞会慢慢漂开。
+/// **《使用帮助》自 v0.11.17 起不再是弹窗**（它是整页了，见
+/// `help_center_screen.dart`），「桌面小组件」那份说明也并进了它 ——
+/// 于是这个壳子只剩「开始使用」一个用户。**留着它**：那是全 app 唯一一个
+/// 「内容是一份短条目清单」的弹窗，下一个要弹类似东西的人照它办，
+/// 而不是又造一套圆角 / 滚动上限 / 按钮措辞。
 void _showHelpDialog(
   BuildContext context, {
   required String title,
@@ -316,19 +304,19 @@ void showGettingStartedDialog(BuildContext context) {
         Text(L10n.gettingStartedLead,
             style: AppTokens.rowSecondary.copyWith(height: 1.45, color: muted)),
         const SizedBox(height: 16),
-        _GuideEntry(
+        HelpEntry(
             icon: Icons.edit_calendar_outlined,
             title: L10n.gettingStartedSchedTitle,
             lines: [L10n.gettingStartedSchedBody],
             bulleted: false),
         const SizedBox(height: 16),
-        _GuideEntry(
+        HelpEntry(
             icon: Icons.shield_outlined,
             title: L10n.gettingStartedPermTitle,
             lines: [L10n.gettingStartedPermBody],
             bulleted: false),
         const SizedBox(height: 16),
-        _GuideEntry(
+        HelpEntry(
             icon: Icons.touch_app_outlined,
             title: L10n.gettingStartedOverrideTitle,
             lines: [L10n.gettingStartedOverrideBody],
@@ -341,144 +329,6 @@ void showGettingStartedDialog(BuildContext context) {
       ],
     ),
   );
-}
-
-/// 「我的 → 桌面小组件」那一行的说明弹层。
-///
-/// 正文与《使用帮助》里的同一条目**共用一份文案**（`L10n.guideWidgetDesc`）——
-/// 各写一份的话，改了这边忘了那边，就成了「说明书和 App 说的不一样」。
-/// 弹窗标题已经把「是什么」说了，条目里不再顶一行标题（`title: null`）。
-void showWidgetGuideDialog(BuildContext context) {
-  _showHelpDialog(
-    context,
-    title: L10n.guideWidgetTitle,
-    content: _GuideEntry(
-      icon: Icons.widgets_outlined,
-      title: null,
-      lines: L10n.guideWidgetDesc,
-    ),
-  );
-}
-
-void showUsageGuideDialog(BuildContext context) {
-  final items = <(IconData, String, List<String>)>[
-    (Icons.calendar_month_outlined, L10n.guideCalTitle, L10n.guideCalDesc),
-    (Icons.tune_outlined, L10n.guideSchedTitle, L10n.guideSchedDesc),
-    (Icons.alarm_outlined, L10n.guideAlarmTitle, L10n.guideAlarmDesc),
-    (Icons.event_note_outlined, L10n.guideTodoTitle, L10n.guideTodoDesc),
-    (Icons.widgets_outlined, L10n.guideWidgetTitle, L10n.guideWidgetDesc),
-    (Icons.palette_outlined, L10n.guideAppearanceTitle,
-        L10n.guideAppearanceDesc),
-    (Icons.aspect_ratio_outlined, L10n.guideLayoutTitle, L10n.guideLayoutDesc),
-    (Icons.shield_outlined, L10n.guidePermTitle, L10n.guidePermDesc),
-    (Icons.system_update_outlined, L10n.guideUpdateTitle,
-        L10n.guideUpdateDesc),
-  ];
-
-  _showHelpDialog(
-    context,
-    title: L10n.usageGuide,
-    content: Column(
-      children: [
-        for (final it in items) ...[
-          _GuideEntry(icon: it.$1, title: it.$2, lines: it.$3),
-          const SizedBox(height: 16),
-        ],
-      ],
-    ),
-  );
-}
-
-/// 帮助弹窗里的一条：图标 + 标题 + 正文行。
-///
-/// [lines] 多于一行时每行前面加一个小圆点（参考条目是多项并列，得能扫）；
-/// 只有一行、且是引导语时把 [bulleted] 关掉 —— 单条正文顶个圆点像没写完的列表。
-class _GuideEntry extends StatelessWidget {
-  const _GuideEntry({
-    required this.icon,
-    required this.title,
-    required this.lines,
-    this.bulleted = true,
-  });
-
-  final IconData icon;
-
-  /// 条目标题。**为空时整行标题不画**（连那 8dp 间距一起）—— 「我的 → 桌面小组件」
-  /// 那个说明弹层只有一份并列的短句，弹窗标题已经说了是什么，条目再顶一行标题
-  /// 就是同一句话说两遍。
-  final String? title;
-  final List<String> lines;
-  final bool bulleted;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
-    final muted = AppTokens.inkMuted(context);
-    final body =
-        AppTokens.rowSecondary.copyWith(height: 1.45, color: muted);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accent.withValues(alpha: 0.28),
-                accent.withValues(alpha: 0.10),
-              ],
-            ),
-            border: Border.all(color: accent.withValues(alpha: 0.35)),
-          ),
-          child: AppIcon(icon, size: AppTokens.iconMd, color: accent),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (title != null) ...[
-                Text(title!, style: AppTokens.labelStrong),
-                const SizedBox(height: AppTokens.padChipV),
-              ],
-              for (var i = 0; i < lines.length; i++) ...[
-                if (i > 0) const SizedBox(height: AppTokens.spaceXs),
-                if (!bulleted)
-                  Text(lines[i], style: body)
-                else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 圆点用固定 4dp（设计语言里「被改过的那天」也是这个尺寸），
-                      // 不跟字号缩放 —— 小窗下缩到 1~2px 就等于没有。
-                      // 上边距是把它压到首行文字中线上（spaceSm = 8），
-                      // 7 那种值不上 4px 栅格，会打红 design_tokens_test。
-                      Container(
-                        width: 4,
-                        height: 4,
-                        margin: const EdgeInsets.only(top: AppTokens.spaceSm),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: muted.withValues(alpha: 0.75),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // 走 Expanded 而不是给整段加「· 」前缀：英文条目会折行，
-                      // 前缀写法的第二行会顶到最左边、看不出是同一条。
-                      Expanded(child: Text(lines[i], style: body)),
-                    ],
-                  ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 /// 关闭更新弹窗后，弹出下载进度弹窗（内部完成下载并自动拉起系统安装器）。
@@ -559,7 +409,7 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
             const SizedBox(
               width: 28,
               height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.6),
+              child: GlassLoading(size: 24),
             ),
             const SizedBox(height: AppTokens.gapIconTextLg),
             Text(L10n.downloadingUpdate,

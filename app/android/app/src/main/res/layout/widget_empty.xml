@@ -19,7 +19,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:textSize="13sp"
+        android:textSize="13dp"
         android:maxLines="3"
         android:ellipsize="end" />
 </LinearLayout>

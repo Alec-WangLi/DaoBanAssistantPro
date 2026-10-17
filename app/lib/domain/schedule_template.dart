@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'monthly_pattern.dart';
 import 'shift_rotation.dart';
 
 /// 一套「我的模板」：把某套方案的**结构**存下来，新建排班时可以再选它。
@@ -19,6 +20,9 @@ class ScheduleTemplate {
     required this.cycle,
     required this.teamCount,
     required this.teamOffsets,
+    this.monthly = false,
+    this.monthlySegments = const [],
+    this.teamSegOffsets = const [],
   });
 
   /// 库里的行 id；null = 还没落库。
@@ -28,13 +32,47 @@ class ScheduleTemplate {
   final List<ShiftClass> classes;
   final List<int> cycle;
   final int teamCount;
+
+  /// 班组的**天数**偏移（周期模式用）。
   final List<int> teamOffsets;
+
+  /// 这套模板走按月锚定吗（与 `ShiftSchedule.monthly` 同一条约定：**唯一的模式
+  /// 判据**，别用「段表空不空」去猜）。
+  final bool monthly;
+
+  /// 按月切法。**存下标**（与 [cycle] 同一条：模板里的班次没有稳定身份）。
+  final List<MonthlySegment> monthlySegments;
+
+  /// 班组的**段**偏移（按月模式用）。与 [teamOffsets] 分开，单位不同。
+  final List<int> teamSegOffsets;
 
   int get cycleLength => cycle.length;
 
   /// 每天同时在上班的班组数（与 `ShiftTemplate.workingTeamsPerDay` 同一口径，
   /// 供选择页卡片上那行「每天在岗 N 个班组」用）。
+  ///
+  /// ⚠️ **按月那一档自 2026-10-13 起不再画到卡片上**（用户真机反馈「每天在岗两个
+  /// 班组，这是啥意思啊？」）—— 选择页两处调用点都改成 `t.monthly ? null : …` 了。
+  /// 这个分支留着是因为它本身是个有意义的领域问题、用例也钉着（`schedule_template_
+  /// test.dart` 的「按月模式数『每月 1 日那一档』上非休班的班组」），只是不再当展示文案。
   int get workingTeamsPerDay {
+    if (monthly) {
+      // 按月模式：段的长短随月份变，所以取一个**代表性的一天**（每月 1 日）
+      // 数一遍就够了 —— 它问的是「这套排法每天大概有几个人在岗」，不是逐日明细。
+      if (monthlySegments.isEmpty) return 0;
+      var count = 0;
+      for (var t = 0; t < teamCount; t++) {
+        final offset = t < teamSegOffsets.length ? teamSegOffsets[t] : t;
+        final classIndex = monthlyClassIndexOn(monthlySegments, 1, offset);
+        if (classIndex == null ||
+            classIndex < 0 ||
+            classIndex >= classes.length) {
+          continue;
+        }
+        if (!classes[classIndex].isRest) count++;
+      }
+      return count;
+    }
     if (cycle.isEmpty) return 0;
     var count = 0;
     for (var t = 0; t < teamCount; t++) {
@@ -53,6 +91,10 @@ class ScheduleTemplate {
   /// 把「我们班组」转到第 0 位并让它的错位变成 0（整组一起平移，班组之间的
   /// 相对错位一个像素都不动）。错位表短于班组数时按 `teamShift` 的回退规则补
   /// （`i - ourTeamIndex`），与域里算出来的结果保持一致。
+  ///
+  /// **按月那一边同待遇**：段偏移也要整体平移、并相对我们班组归零 —— 只是
+  /// 取模的单位是**段数**（段偏移的单位是段，不是天）。不归一化的话，用模板建
+  /// 出来的方案里「我们班组」会指到别人身上（周期那条是同一个坑）。
   static ScheduleTemplate fromSchedule(ShiftSchedule s,
       {required String name}) {
     final n = s.teamCount;
@@ -66,12 +108,31 @@ class ScheduleTemplate {
     final rotated = <int>[
       for (var i = 0; i < n; i++) offsets[(i + ours) % n],
     ];
+
+    final segCount = s.monthlySegments.length;
+    final segOffsets = <int>[
+      for (var i = 0; i < n; i++)
+        i < s.teamSegOffsets.length ? s.teamSegOffsets[i] : i - ours,
+    ];
+    final segBase = segOffsets.isEmpty ? 0 : segOffsets[ours];
+    final segRotated = <int>[
+      for (var i = 0; i < n; i++) segOffsets[(i + ours) % n],
+    ];
+    // `%` 对正除数恒非负（Dart 的语义），所以负的差值直接取模就对 —— 平移之后
+    // 「我们班组」恒为 0，其余落在 0..段数-1。
+    final normalizedSegOffsets = segCount == 0
+        ? const <int>[]
+        : <int>[for (final o in segRotated) (o - segBase) % segCount];
+
     return ScheduleTemplate(
       name: name,
       classes: s.classes,
       cycle: s.cycle,
       teamCount: n,
       teamOffsets: [for (final o in rotated) o - base],
+      monthly: s.monthly,
+      monthlySegments: s.monthlySegments,
+      teamSegOffsets: normalizedSegOffsets,
     );
   }
 }
@@ -96,6 +157,31 @@ List<int> decodeTemplateCycle(String raw) => decodeTemplateInts(raw);
 String encodeTemplateOffsets(List<int> offsets) => offsets.join(',');
 
 List<int> decodeTemplateOffsets(String raw) => decodeTemplateInts(raw);
+
+/// 按月段表 → `startDay:classIndex` 逗号分隔的一串。
+///
+/// 与 [encodeTemplateCycle] 同一个理由：模板整块存一列、没有跨表引用。
+/// 段表要多带一个数（起始日），所以不是纯数字串 —— 冒号分隔。
+String encodeTemplateMonthSegments(List<MonthlySegment> segments) =>
+    segments.map((s) => '${s.startDay}:${s.classIndex}').join(',');
+
+/// 反向解码。**容错**：解析不出来的那一项**丢掉**（空段、缺冒号、不是数字），
+/// 与 [decodeTemplateInts] 同一条口径 —— 一列坏数据不该把整个模板库废掉。
+List<MonthlySegment> decodeTemplateMonthSegments(String raw) {
+  if (raw.trim().isEmpty) return const [];
+  final out = <MonthlySegment>[];
+  for (final piece in raw.split(',')) {
+    final p = piece.trim();
+    if (p.isEmpty) continue;
+    final parts = p.split(':');
+    if (parts.length != 2) continue;
+    final day = int.tryParse(parts[0].trim());
+    final classIndex = int.tryParse(parts[1].trim());
+    if (day == null || classIndex == null) continue;
+    out.add(MonthlySegment(startDay: day, classIndex: classIndex));
+  }
+  return out;
+}
 
 /// 逗号分隔的整数串；空串返回空表，解析不出来的那一段按 0 处理
 /// （与 `parseTeamOffsets` 同一条容错口径）。

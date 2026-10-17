@@ -71,6 +71,24 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant(''));
+  static const VerificationMeta _monthlyMeta =
+      const VerificationMeta('monthly');
+  @override
+  late final GeneratedColumn<bool> monthly = GeneratedColumn<bool>(
+      'monthly', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("monthly" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _teamSegOffsetsMeta =
+      const VerificationMeta('teamSegOffsets');
+  @override
+  late final GeneratedColumn<String> teamSegOffsets = GeneratedColumn<String>(
+      'team_seg_offsets', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -80,7 +98,9 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
         teamCount,
         teamNames,
         ourTeamIndex,
-        teamOffsets
+        teamOffsets,
+        monthly,
+        teamSegOffsets
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -133,6 +153,16 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
           teamOffsets.isAcceptableOrUnknown(
               data['team_offsets']!, _teamOffsetsMeta));
     }
+    if (data.containsKey('monthly')) {
+      context.handle(_monthlyMeta,
+          monthly.isAcceptableOrUnknown(data['monthly']!, _monthlyMeta));
+    }
+    if (data.containsKey('team_seg_offsets')) {
+      context.handle(
+          _teamSegOffsetsMeta,
+          teamSegOffsets.isAcceptableOrUnknown(
+              data['team_seg_offsets']!, _teamSegOffsetsMeta));
+    }
     return context;
   }
 
@@ -158,6 +188,10 @@ class $ShiftScheduleRowsTable extends ShiftScheduleRows
           .read(DriftSqlType.int, data['${effectivePrefix}our_team_index'])!,
       teamOffsets: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}team_offsets'])!,
+      monthly: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}monthly'])!,
+      teamSegOffsets: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}team_seg_offsets'])!,
     );
   }
 
@@ -177,6 +211,18 @@ class ShiftScheduleRow extends DataClass
   final String teamNames;
   final int ourTeamIndex;
   final String teamOffsets;
+
+  /// 这套方案走**按月锚定**吗（每月 1 号归零，见 `domain/monthly_pattern.dart`）。
+  ///
+  /// **它是模式唯一的判据** —— 别用「段表空不空」或「周期空不空」去猜：切换模式
+  /// 不丢数据，所以两边可以同时非空。老库升上来时恒为 0，行为与升级前逐字相同。
+  final bool monthly;
+
+  /// 各班组在**按月切法里的段偏移**（逗号分隔，长度与 [teamCount] 一致）。
+  ///
+  /// **单位是「段」，不是天** —— 因此与 [teamOffsets] 分开成两列，而不是让同一列
+  /// 的含义随 [monthly] 变（那会逼着读代码的人先去别处查标志位）。
+  final String teamSegOffsets;
   const ShiftScheduleRow(
       {required this.id,
       required this.name,
@@ -185,7 +231,9 @@ class ShiftScheduleRow extends DataClass
       required this.teamCount,
       required this.teamNames,
       required this.ourTeamIndex,
-      required this.teamOffsets});
+      required this.teamOffsets,
+      required this.monthly,
+      required this.teamSegOffsets});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -197,6 +245,8 @@ class ShiftScheduleRow extends DataClass
     map['team_names'] = Variable<String>(teamNames);
     map['our_team_index'] = Variable<int>(ourTeamIndex);
     map['team_offsets'] = Variable<String>(teamOffsets);
+    map['monthly'] = Variable<bool>(monthly);
+    map['team_seg_offsets'] = Variable<String>(teamSegOffsets);
     return map;
   }
 
@@ -210,6 +260,8 @@ class ShiftScheduleRow extends DataClass
       teamNames: Value(teamNames),
       ourTeamIndex: Value(ourTeamIndex),
       teamOffsets: Value(teamOffsets),
+      monthly: Value(monthly),
+      teamSegOffsets: Value(teamSegOffsets),
     );
   }
 
@@ -225,6 +277,8 @@ class ShiftScheduleRow extends DataClass
       teamNames: serializer.fromJson<String>(json['teamNames']),
       ourTeamIndex: serializer.fromJson<int>(json['ourTeamIndex']),
       teamOffsets: serializer.fromJson<String>(json['teamOffsets']),
+      monthly: serializer.fromJson<bool>(json['monthly']),
+      teamSegOffsets: serializer.fromJson<String>(json['teamSegOffsets']),
     );
   }
   @override
@@ -239,6 +293,8 @@ class ShiftScheduleRow extends DataClass
       'teamNames': serializer.toJson<String>(teamNames),
       'ourTeamIndex': serializer.toJson<int>(ourTeamIndex),
       'teamOffsets': serializer.toJson<String>(teamOffsets),
+      'monthly': serializer.toJson<bool>(monthly),
+      'teamSegOffsets': serializer.toJson<String>(teamSegOffsets),
     };
   }
 
@@ -250,7 +306,9 @@ class ShiftScheduleRow extends DataClass
           int? teamCount,
           String? teamNames,
           int? ourTeamIndex,
-          String? teamOffsets}) =>
+          String? teamOffsets,
+          bool? monthly,
+          String? teamSegOffsets}) =>
       ShiftScheduleRow(
         id: id ?? this.id,
         name: name ?? this.name,
@@ -260,6 +318,8 @@ class ShiftScheduleRow extends DataClass
         teamNames: teamNames ?? this.teamNames,
         ourTeamIndex: ourTeamIndex ?? this.ourTeamIndex,
         teamOffsets: teamOffsets ?? this.teamOffsets,
+        monthly: monthly ?? this.monthly,
+        teamSegOffsets: teamSegOffsets ?? this.teamSegOffsets,
       );
   ShiftScheduleRow copyWithCompanion(ShiftScheduleRowsCompanion data) {
     return ShiftScheduleRow(
@@ -275,6 +335,10 @@ class ShiftScheduleRow extends DataClass
           : this.ourTeamIndex,
       teamOffsets:
           data.teamOffsets.present ? data.teamOffsets.value : this.teamOffsets,
+      monthly: data.monthly.present ? data.monthly.value : this.monthly,
+      teamSegOffsets: data.teamSegOffsets.present
+          ? data.teamSegOffsets.value
+          : this.teamSegOffsets,
     );
   }
 
@@ -288,14 +352,16 @@ class ShiftScheduleRow extends DataClass
           ..write('teamCount: $teamCount, ')
           ..write('teamNames: $teamNames, ')
           ..write('ourTeamIndex: $ourTeamIndex, ')
-          ..write('teamOffsets: $teamOffsets')
+          ..write('teamOffsets: $teamOffsets, ')
+          ..write('monthly: $monthly, ')
+          ..write('teamSegOffsets: $teamSegOffsets')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, name, anchorDate, isCurrent, teamCount,
-      teamNames, ourTeamIndex, teamOffsets);
+      teamNames, ourTeamIndex, teamOffsets, monthly, teamSegOffsets);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -307,7 +373,9 @@ class ShiftScheduleRow extends DataClass
           other.teamCount == this.teamCount &&
           other.teamNames == this.teamNames &&
           other.ourTeamIndex == this.ourTeamIndex &&
-          other.teamOffsets == this.teamOffsets);
+          other.teamOffsets == this.teamOffsets &&
+          other.monthly == this.monthly &&
+          other.teamSegOffsets == this.teamSegOffsets);
 }
 
 class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
@@ -319,6 +387,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
   final Value<String> teamNames;
   final Value<int> ourTeamIndex;
   final Value<String> teamOffsets;
+  final Value<bool> monthly;
+  final Value<String> teamSegOffsets;
   const ShiftScheduleRowsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -328,6 +398,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     this.teamNames = const Value.absent(),
     this.ourTeamIndex = const Value.absent(),
     this.teamOffsets = const Value.absent(),
+    this.monthly = const Value.absent(),
+    this.teamSegOffsets = const Value.absent(),
   });
   ShiftScheduleRowsCompanion.insert({
     this.id = const Value.absent(),
@@ -338,6 +410,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     this.teamNames = const Value.absent(),
     this.ourTeamIndex = const Value.absent(),
     this.teamOffsets = const Value.absent(),
+    this.monthly = const Value.absent(),
+    this.teamSegOffsets = const Value.absent(),
   })  : name = Value(name),
         anchorDate = Value(anchorDate);
   static Insertable<ShiftScheduleRow> custom({
@@ -349,6 +423,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     Expression<String>? teamNames,
     Expression<int>? ourTeamIndex,
     Expression<String>? teamOffsets,
+    Expression<bool>? monthly,
+    Expression<String>? teamSegOffsets,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -359,6 +435,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       if (teamNames != null) 'team_names': teamNames,
       if (ourTeamIndex != null) 'our_team_index': ourTeamIndex,
       if (teamOffsets != null) 'team_offsets': teamOffsets,
+      if (monthly != null) 'monthly': monthly,
+      if (teamSegOffsets != null) 'team_seg_offsets': teamSegOffsets,
     });
   }
 
@@ -370,7 +448,9 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       Value<int>? teamCount,
       Value<String>? teamNames,
       Value<int>? ourTeamIndex,
-      Value<String>? teamOffsets}) {
+      Value<String>? teamOffsets,
+      Value<bool>? monthly,
+      Value<String>? teamSegOffsets}) {
     return ShiftScheduleRowsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -380,6 +460,8 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
       teamNames: teamNames ?? this.teamNames,
       ourTeamIndex: ourTeamIndex ?? this.ourTeamIndex,
       teamOffsets: teamOffsets ?? this.teamOffsets,
+      monthly: monthly ?? this.monthly,
+      teamSegOffsets: teamSegOffsets ?? this.teamSegOffsets,
     );
   }
 
@@ -410,6 +492,12 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
     if (teamOffsets.present) {
       map['team_offsets'] = Variable<String>(teamOffsets.value);
     }
+    if (monthly.present) {
+      map['monthly'] = Variable<bool>(monthly.value);
+    }
+    if (teamSegOffsets.present) {
+      map['team_seg_offsets'] = Variable<String>(teamSegOffsets.value);
+    }
     return map;
   }
 
@@ -423,7 +511,9 @@ class ShiftScheduleRowsCompanion extends UpdateCompanion<ShiftScheduleRow> {
           ..write('teamCount: $teamCount, ')
           ..write('teamNames: $teamNames, ')
           ..write('ourTeamIndex: $ourTeamIndex, ')
-          ..write('teamOffsets: $teamOffsets')
+          ..write('teamOffsets: $teamOffsets, ')
+          ..write('monthly: $monthly, ')
+          ..write('teamSegOffsets: $teamSegOffsets')
           ..write(')'))
         .toString();
   }
@@ -1459,6 +1549,316 @@ class ShiftCycleRowsCompanion extends UpdateCompanion<ShiftCycleRow> {
           ..write('id: $id, ')
           ..write('scheduleId: $scheduleId, ')
           ..write('order: $order, ')
+          ..write('classId: $classId')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ScheduleMonthSegmentRowsTable extends ScheduleMonthSegmentRows
+    with TableInfo<$ScheduleMonthSegmentRowsTable, ScheduleMonthSegmentRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScheduleMonthSegmentRowsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _scheduleIdMeta =
+      const VerificationMeta('scheduleId');
+  @override
+  late final GeneratedColumn<int> scheduleId = GeneratedColumn<int>(
+      'schedule_id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _orderMeta = const VerificationMeta('order');
+  @override
+  late final GeneratedColumn<int> order = GeneratedColumn<int>(
+      'order', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _startDayMeta =
+      const VerificationMeta('startDay');
+  @override
+  late final GeneratedColumn<int> startDay = GeneratedColumn<int>(
+      'start_day', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _classIdMeta =
+      const VerificationMeta('classId');
+  @override
+  late final GeneratedColumn<int> classId = GeneratedColumn<int>(
+      'class_id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, scheduleId, order, startDay, classId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'schedule_month_segment_rows';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<ScheduleMonthSegmentRow> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('schedule_id')) {
+      context.handle(
+          _scheduleIdMeta,
+          scheduleId.isAcceptableOrUnknown(
+              data['schedule_id']!, _scheduleIdMeta));
+    } else if (isInserting) {
+      context.missing(_scheduleIdMeta);
+    }
+    if (data.containsKey('order')) {
+      context.handle(
+          _orderMeta, order.isAcceptableOrUnknown(data['order']!, _orderMeta));
+    } else if (isInserting) {
+      context.missing(_orderMeta);
+    }
+    if (data.containsKey('start_day')) {
+      context.handle(_startDayMeta,
+          startDay.isAcceptableOrUnknown(data['start_day']!, _startDayMeta));
+    } else if (isInserting) {
+      context.missing(_startDayMeta);
+    }
+    if (data.containsKey('class_id')) {
+      context.handle(_classIdMeta,
+          classId.isAcceptableOrUnknown(data['class_id']!, _classIdMeta));
+    } else if (isInserting) {
+      context.missing(_classIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ScheduleMonthSegmentRow map(Map<String, dynamic> data,
+      {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ScheduleMonthSegmentRow(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      scheduleId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}schedule_id'])!,
+      order: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}order'])!,
+      startDay: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}start_day'])!,
+      classId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}class_id'])!,
+    );
+  }
+
+  @override
+  $ScheduleMonthSegmentRowsTable createAlias(String alias) {
+    return $ScheduleMonthSegmentRowsTable(attachedDatabase, alias);
+  }
+}
+
+class ScheduleMonthSegmentRow extends DataClass
+    implements Insertable<ScheduleMonthSegmentRow> {
+  final int id;
+  final int scheduleId;
+  final int order;
+
+  /// 每月的第几天起（1..31）。第一段恒为 1。
+  final int startDay;
+
+  /// 指到 `shift_class_rows.id`。
+  final int classId;
+  const ScheduleMonthSegmentRow(
+      {required this.id,
+      required this.scheduleId,
+      required this.order,
+      required this.startDay,
+      required this.classId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['schedule_id'] = Variable<int>(scheduleId);
+    map['order'] = Variable<int>(order);
+    map['start_day'] = Variable<int>(startDay);
+    map['class_id'] = Variable<int>(classId);
+    return map;
+  }
+
+  ScheduleMonthSegmentRowsCompanion toCompanion(bool nullToAbsent) {
+    return ScheduleMonthSegmentRowsCompanion(
+      id: Value(id),
+      scheduleId: Value(scheduleId),
+      order: Value(order),
+      startDay: Value(startDay),
+      classId: Value(classId),
+    );
+  }
+
+  factory ScheduleMonthSegmentRow.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ScheduleMonthSegmentRow(
+      id: serializer.fromJson<int>(json['id']),
+      scheduleId: serializer.fromJson<int>(json['scheduleId']),
+      order: serializer.fromJson<int>(json['order']),
+      startDay: serializer.fromJson<int>(json['startDay']),
+      classId: serializer.fromJson<int>(json['classId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'scheduleId': serializer.toJson<int>(scheduleId),
+      'order': serializer.toJson<int>(order),
+      'startDay': serializer.toJson<int>(startDay),
+      'classId': serializer.toJson<int>(classId),
+    };
+  }
+
+  ScheduleMonthSegmentRow copyWith(
+          {int? id,
+          int? scheduleId,
+          int? order,
+          int? startDay,
+          int? classId}) =>
+      ScheduleMonthSegmentRow(
+        id: id ?? this.id,
+        scheduleId: scheduleId ?? this.scheduleId,
+        order: order ?? this.order,
+        startDay: startDay ?? this.startDay,
+        classId: classId ?? this.classId,
+      );
+  ScheduleMonthSegmentRow copyWithCompanion(
+      ScheduleMonthSegmentRowsCompanion data) {
+    return ScheduleMonthSegmentRow(
+      id: data.id.present ? data.id.value : this.id,
+      scheduleId:
+          data.scheduleId.present ? data.scheduleId.value : this.scheduleId,
+      order: data.order.present ? data.order.value : this.order,
+      startDay: data.startDay.present ? data.startDay.value : this.startDay,
+      classId: data.classId.present ? data.classId.value : this.classId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScheduleMonthSegmentRow(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('order: $order, ')
+          ..write('startDay: $startDay, ')
+          ..write('classId: $classId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, scheduleId, order, startDay, classId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleMonthSegmentRow &&
+          other.id == this.id &&
+          other.scheduleId == this.scheduleId &&
+          other.order == this.order &&
+          other.startDay == this.startDay &&
+          other.classId == this.classId);
+}
+
+class ScheduleMonthSegmentRowsCompanion
+    extends UpdateCompanion<ScheduleMonthSegmentRow> {
+  final Value<int> id;
+  final Value<int> scheduleId;
+  final Value<int> order;
+  final Value<int> startDay;
+  final Value<int> classId;
+  const ScheduleMonthSegmentRowsCompanion({
+    this.id = const Value.absent(),
+    this.scheduleId = const Value.absent(),
+    this.order = const Value.absent(),
+    this.startDay = const Value.absent(),
+    this.classId = const Value.absent(),
+  });
+  ScheduleMonthSegmentRowsCompanion.insert({
+    this.id = const Value.absent(),
+    required int scheduleId,
+    required int order,
+    required int startDay,
+    required int classId,
+  })  : scheduleId = Value(scheduleId),
+        order = Value(order),
+        startDay = Value(startDay),
+        classId = Value(classId);
+  static Insertable<ScheduleMonthSegmentRow> custom({
+    Expression<int>? id,
+    Expression<int>? scheduleId,
+    Expression<int>? order,
+    Expression<int>? startDay,
+    Expression<int>? classId,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (scheduleId != null) 'schedule_id': scheduleId,
+      if (order != null) 'order': order,
+      if (startDay != null) 'start_day': startDay,
+      if (classId != null) 'class_id': classId,
+    });
+  }
+
+  ScheduleMonthSegmentRowsCompanion copyWith(
+      {Value<int>? id,
+      Value<int>? scheduleId,
+      Value<int>? order,
+      Value<int>? startDay,
+      Value<int>? classId}) {
+    return ScheduleMonthSegmentRowsCompanion(
+      id: id ?? this.id,
+      scheduleId: scheduleId ?? this.scheduleId,
+      order: order ?? this.order,
+      startDay: startDay ?? this.startDay,
+      classId: classId ?? this.classId,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (scheduleId.present) {
+      map['schedule_id'] = Variable<int>(scheduleId.value);
+    }
+    if (order.present) {
+      map['order'] = Variable<int>(order.value);
+    }
+    if (startDay.present) {
+      map['start_day'] = Variable<int>(startDay.value);
+    }
+    if (classId.present) {
+      map['class_id'] = Variable<int>(classId.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScheduleMonthSegmentRowsCompanion(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('order: $order, ')
+          ..write('startDay: $startDay, ')
           ..write('classId: $classId')
           ..write(')'))
         .toString();
@@ -3068,6 +3468,32 @@ class $CustomTemplatesTable extends CustomTemplates
   late final GeneratedColumn<String> teamOffsets = GeneratedColumn<String>(
       'team_offsets', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _monthlyMeta =
+      const VerificationMeta('monthly');
+  @override
+  late final GeneratedColumn<bool> monthly = GeneratedColumn<bool>(
+      'monthly', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("monthly" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _monthSegmentsMeta =
+      const VerificationMeta('monthSegments');
+  @override
+  late final GeneratedColumn<String> monthSegments = GeneratedColumn<String>(
+      'month_segments', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
+  static const VerificationMeta _teamSegOffsetsMeta =
+      const VerificationMeta('teamSegOffsets');
+  @override
+  late final GeneratedColumn<String> teamSegOffsets = GeneratedColumn<String>(
+      'team_seg_offsets', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -3075,8 +3501,18 @@ class $CustomTemplatesTable extends CustomTemplates
       'created_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
   @override
-  List<GeneratedColumn> get $columns =>
-      [id, name, classes, cycle, teamCount, teamOffsets, createdAt];
+  List<GeneratedColumn> get $columns => [
+        id,
+        name,
+        classes,
+        cycle,
+        teamCount,
+        teamOffsets,
+        monthly,
+        monthSegments,
+        teamSegOffsets,
+        createdAt
+      ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3122,6 +3558,22 @@ class $CustomTemplatesTable extends CustomTemplates
     } else if (isInserting) {
       context.missing(_teamOffsetsMeta);
     }
+    if (data.containsKey('monthly')) {
+      context.handle(_monthlyMeta,
+          monthly.isAcceptableOrUnknown(data['monthly']!, _monthlyMeta));
+    }
+    if (data.containsKey('month_segments')) {
+      context.handle(
+          _monthSegmentsMeta,
+          monthSegments.isAcceptableOrUnknown(
+              data['month_segments']!, _monthSegmentsMeta));
+    }
+    if (data.containsKey('team_seg_offsets')) {
+      context.handle(
+          _teamSegOffsetsMeta,
+          teamSegOffsets.isAcceptableOrUnknown(
+              data['team_seg_offsets']!, _teamSegOffsetsMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -3149,6 +3601,12 @@ class $CustomTemplatesTable extends CustomTemplates
           .read(DriftSqlType.int, data['${effectivePrefix}team_count'])!,
       teamOffsets: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}team_offsets'])!,
+      monthly: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}monthly'])!,
+      monthSegments: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}month_segments'])!,
+      teamSegOffsets: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}team_seg_offsets'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -3173,6 +3631,16 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
 
   /// 班组错位（逗号分隔）。保存时已归一化成「我们班组在第 0 位、错位 0」。
   final String teamOffsets;
+
+  /// 这套模板走按月锚定吗。默认 0 —— 老模板读回来一律还是周期模板。
+  final bool monthly;
+
+  /// 按月切法（`startDay:classIndex` 逗号分隔）。**存的是下标**，与 [cycle] 同一
+  /// 条约定：模板里的班次没有稳定身份（见 [classes]）。
+  final String monthSegments;
+
+  /// 班组的**段**偏移（逗号分隔）。与 [teamOffsets] 一样已归一化。
+  final String teamSegOffsets;
   final DateTime createdAt;
   const CustomTemplate(
       {required this.id,
@@ -3181,6 +3649,9 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
       required this.cycle,
       required this.teamCount,
       required this.teamOffsets,
+      required this.monthly,
+      required this.monthSegments,
+      required this.teamSegOffsets,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3191,6 +3662,9 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
     map['cycle'] = Variable<String>(cycle);
     map['team_count'] = Variable<int>(teamCount);
     map['team_offsets'] = Variable<String>(teamOffsets);
+    map['monthly'] = Variable<bool>(monthly);
+    map['month_segments'] = Variable<String>(monthSegments);
+    map['team_seg_offsets'] = Variable<String>(teamSegOffsets);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -3203,6 +3677,9 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
       cycle: Value(cycle),
       teamCount: Value(teamCount),
       teamOffsets: Value(teamOffsets),
+      monthly: Value(monthly),
+      monthSegments: Value(monthSegments),
+      teamSegOffsets: Value(teamSegOffsets),
       createdAt: Value(createdAt),
     );
   }
@@ -3217,6 +3694,9 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
       cycle: serializer.fromJson<String>(json['cycle']),
       teamCount: serializer.fromJson<int>(json['teamCount']),
       teamOffsets: serializer.fromJson<String>(json['teamOffsets']),
+      monthly: serializer.fromJson<bool>(json['monthly']),
+      monthSegments: serializer.fromJson<String>(json['monthSegments']),
+      teamSegOffsets: serializer.fromJson<String>(json['teamSegOffsets']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -3230,6 +3710,9 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
       'cycle': serializer.toJson<String>(cycle),
       'teamCount': serializer.toJson<int>(teamCount),
       'teamOffsets': serializer.toJson<String>(teamOffsets),
+      'monthly': serializer.toJson<bool>(monthly),
+      'monthSegments': serializer.toJson<String>(monthSegments),
+      'teamSegOffsets': serializer.toJson<String>(teamSegOffsets),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -3241,6 +3724,9 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
           String? cycle,
           int? teamCount,
           String? teamOffsets,
+          bool? monthly,
+          String? monthSegments,
+          String? teamSegOffsets,
           DateTime? createdAt}) =>
       CustomTemplate(
         id: id ?? this.id,
@@ -3249,6 +3735,9 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
         cycle: cycle ?? this.cycle,
         teamCount: teamCount ?? this.teamCount,
         teamOffsets: teamOffsets ?? this.teamOffsets,
+        monthly: monthly ?? this.monthly,
+        monthSegments: monthSegments ?? this.monthSegments,
+        teamSegOffsets: teamSegOffsets ?? this.teamSegOffsets,
         createdAt: createdAt ?? this.createdAt,
       );
   CustomTemplate copyWithCompanion(CustomTemplatesCompanion data) {
@@ -3260,6 +3749,13 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
       teamCount: data.teamCount.present ? data.teamCount.value : this.teamCount,
       teamOffsets:
           data.teamOffsets.present ? data.teamOffsets.value : this.teamOffsets,
+      monthly: data.monthly.present ? data.monthly.value : this.monthly,
+      monthSegments: data.monthSegments.present
+          ? data.monthSegments.value
+          : this.monthSegments,
+      teamSegOffsets: data.teamSegOffsets.present
+          ? data.teamSegOffsets.value
+          : this.teamSegOffsets,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -3273,14 +3769,17 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
           ..write('cycle: $cycle, ')
           ..write('teamCount: $teamCount, ')
           ..write('teamOffsets: $teamOffsets, ')
+          ..write('monthly: $monthly, ')
+          ..write('monthSegments: $monthSegments, ')
+          ..write('teamSegOffsets: $teamSegOffsets, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, classes, cycle, teamCount, teamOffsets, createdAt);
+  int get hashCode => Object.hash(id, name, classes, cycle, teamCount,
+      teamOffsets, monthly, monthSegments, teamSegOffsets, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3291,6 +3790,9 @@ class CustomTemplate extends DataClass implements Insertable<CustomTemplate> {
           other.cycle == this.cycle &&
           other.teamCount == this.teamCount &&
           other.teamOffsets == this.teamOffsets &&
+          other.monthly == this.monthly &&
+          other.monthSegments == this.monthSegments &&
+          other.teamSegOffsets == this.teamSegOffsets &&
           other.createdAt == this.createdAt);
 }
 
@@ -3301,6 +3803,9 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
   final Value<String> cycle;
   final Value<int> teamCount;
   final Value<String> teamOffsets;
+  final Value<bool> monthly;
+  final Value<String> monthSegments;
+  final Value<String> teamSegOffsets;
   final Value<DateTime> createdAt;
   const CustomTemplatesCompanion({
     this.id = const Value.absent(),
@@ -3309,6 +3814,9 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
     this.cycle = const Value.absent(),
     this.teamCount = const Value.absent(),
     this.teamOffsets = const Value.absent(),
+    this.monthly = const Value.absent(),
+    this.monthSegments = const Value.absent(),
+    this.teamSegOffsets = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   CustomTemplatesCompanion.insert({
@@ -3318,6 +3826,9 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
     required String cycle,
     required int teamCount,
     required String teamOffsets,
+    this.monthly = const Value.absent(),
+    this.monthSegments = const Value.absent(),
+    this.teamSegOffsets = const Value.absent(),
     required DateTime createdAt,
   })  : name = Value(name),
         classes = Value(classes),
@@ -3332,6 +3843,9 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
     Expression<String>? cycle,
     Expression<int>? teamCount,
     Expression<String>? teamOffsets,
+    Expression<bool>? monthly,
+    Expression<String>? monthSegments,
+    Expression<String>? teamSegOffsets,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -3341,6 +3855,9 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
       if (cycle != null) 'cycle': cycle,
       if (teamCount != null) 'team_count': teamCount,
       if (teamOffsets != null) 'team_offsets': teamOffsets,
+      if (monthly != null) 'monthly': monthly,
+      if (monthSegments != null) 'month_segments': monthSegments,
+      if (teamSegOffsets != null) 'team_seg_offsets': teamSegOffsets,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -3352,6 +3869,9 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
       Value<String>? cycle,
       Value<int>? teamCount,
       Value<String>? teamOffsets,
+      Value<bool>? monthly,
+      Value<String>? monthSegments,
+      Value<String>? teamSegOffsets,
       Value<DateTime>? createdAt}) {
     return CustomTemplatesCompanion(
       id: id ?? this.id,
@@ -3360,6 +3880,9 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
       cycle: cycle ?? this.cycle,
       teamCount: teamCount ?? this.teamCount,
       teamOffsets: teamOffsets ?? this.teamOffsets,
+      monthly: monthly ?? this.monthly,
+      monthSegments: monthSegments ?? this.monthSegments,
+      teamSegOffsets: teamSegOffsets ?? this.teamSegOffsets,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -3385,6 +3908,15 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
     if (teamOffsets.present) {
       map['team_offsets'] = Variable<String>(teamOffsets.value);
     }
+    if (monthly.present) {
+      map['monthly'] = Variable<bool>(monthly.value);
+    }
+    if (monthSegments.present) {
+      map['month_segments'] = Variable<String>(monthSegments.value);
+    }
+    if (teamSegOffsets.present) {
+      map['team_seg_offsets'] = Variable<String>(teamSegOffsets.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -3400,6 +3932,9 @@ class CustomTemplatesCompanion extends UpdateCompanion<CustomTemplate> {
           ..write('cycle: $cycle, ')
           ..write('teamCount: $teamCount, ')
           ..write('teamOffsets: $teamOffsets, ')
+          ..write('monthly: $monthly, ')
+          ..write('monthSegments: $monthSegments, ')
+          ..write('teamSegOffsets: $teamSegOffsets, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -4040,6 +4575,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ScheduleSpanRowsTable(this);
   late final $ShiftClassRowsTable shiftClassRows = $ShiftClassRowsTable(this);
   late final $ShiftCycleRowsTable shiftCycleRows = $ShiftCycleRowsTable(this);
+  late final $ScheduleMonthSegmentRowsTable scheduleMonthSegmentRows =
+      $ScheduleMonthSegmentRowsTable(this);
   late final $ShiftClassAlarmsTable shiftClassAlarms =
       $ShiftClassAlarmsTable(this);
   late final $ScheduleEventsTable scheduleEvents = $ScheduleEventsTable(this);
@@ -4061,6 +4598,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         scheduleSpanRows,
         shiftClassRows,
         shiftCycleRows,
+        scheduleMonthSegmentRows,
         shiftClassAlarms,
         scheduleEvents,
         customAlarms,
@@ -4081,6 +4619,8 @@ typedef $$ShiftScheduleRowsTableCreateCompanionBuilder
   Value<String> teamNames,
   Value<int> ourTeamIndex,
   Value<String> teamOffsets,
+  Value<bool> monthly,
+  Value<String> teamSegOffsets,
 });
 typedef $$ShiftScheduleRowsTableUpdateCompanionBuilder
     = ShiftScheduleRowsCompanion Function({
@@ -4092,6 +4632,8 @@ typedef $$ShiftScheduleRowsTableUpdateCompanionBuilder
   Value<String> teamNames,
   Value<int> ourTeamIndex,
   Value<String> teamOffsets,
+  Value<bool> monthly,
+  Value<String> teamSegOffsets,
 });
 
 class $$ShiftScheduleRowsTableFilterComposer
@@ -4126,6 +4668,13 @@ class $$ShiftScheduleRowsTableFilterComposer
 
   ColumnFilters<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get monthly => $composableBuilder(
+      column: $table.monthly, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get teamSegOffsets => $composableBuilder(
+      column: $table.teamSegOffsets,
+      builder: (column) => ColumnFilters(column));
 }
 
 class $$ShiftScheduleRowsTableOrderingComposer
@@ -4161,6 +4710,13 @@ class $$ShiftScheduleRowsTableOrderingComposer
 
   ColumnOrderings<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get monthly => $composableBuilder(
+      column: $table.monthly, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get teamSegOffsets => $composableBuilder(
+      column: $table.teamSegOffsets,
+      builder: (column) => ColumnOrderings(column));
 }
 
 class $$ShiftScheduleRowsTableAnnotationComposer
@@ -4195,6 +4751,12 @@ class $$ShiftScheduleRowsTableAnnotationComposer
 
   GeneratedColumn<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => column);
+
+  GeneratedColumn<bool> get monthly =>
+      $composableBuilder(column: $table.monthly, builder: (column) => column);
+
+  GeneratedColumn<String> get teamSegOffsets => $composableBuilder(
+      column: $table.teamSegOffsets, builder: (column) => column);
 }
 
 class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
@@ -4233,6 +4795,8 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             Value<String> teamNames = const Value.absent(),
             Value<int> ourTeamIndex = const Value.absent(),
             Value<String> teamOffsets = const Value.absent(),
+            Value<bool> monthly = const Value.absent(),
+            Value<String> teamSegOffsets = const Value.absent(),
           }) =>
               ShiftScheduleRowsCompanion(
             id: id,
@@ -4243,6 +4807,8 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             teamNames: teamNames,
             ourTeamIndex: ourTeamIndex,
             teamOffsets: teamOffsets,
+            monthly: monthly,
+            teamSegOffsets: teamSegOffsets,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -4253,6 +4819,8 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             Value<String> teamNames = const Value.absent(),
             Value<int> ourTeamIndex = const Value.absent(),
             Value<String> teamOffsets = const Value.absent(),
+            Value<bool> monthly = const Value.absent(),
+            Value<String> teamSegOffsets = const Value.absent(),
           }) =>
               ShiftScheduleRowsCompanion.insert(
             id: id,
@@ -4263,6 +4831,8 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             teamNames: teamNames,
             ourTeamIndex: ourTeamIndex,
             teamOffsets: teamOffsets,
+            monthly: monthly,
+            teamSegOffsets: teamSegOffsets,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4836,6 +5406,180 @@ typedef $$ShiftCycleRowsTableProcessedTableManager = ProcessedTableManager<
     ),
     ShiftCycleRow,
     PrefetchHooks Function()>;
+typedef $$ScheduleMonthSegmentRowsTableCreateCompanionBuilder
+    = ScheduleMonthSegmentRowsCompanion Function({
+  Value<int> id,
+  required int scheduleId,
+  required int order,
+  required int startDay,
+  required int classId,
+});
+typedef $$ScheduleMonthSegmentRowsTableUpdateCompanionBuilder
+    = ScheduleMonthSegmentRowsCompanion Function({
+  Value<int> id,
+  Value<int> scheduleId,
+  Value<int> order,
+  Value<int> startDay,
+  Value<int> classId,
+});
+
+class $$ScheduleMonthSegmentRowsTableFilterComposer
+    extends Composer<_$AppDatabase, $ScheduleMonthSegmentRowsTable> {
+  $$ScheduleMonthSegmentRowsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get order => $composableBuilder(
+      column: $table.order, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get startDay => $composableBuilder(
+      column: $table.startDay, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get classId => $composableBuilder(
+      column: $table.classId, builder: (column) => ColumnFilters(column));
+}
+
+class $$ScheduleMonthSegmentRowsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ScheduleMonthSegmentRowsTable> {
+  $$ScheduleMonthSegmentRowsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get order => $composableBuilder(
+      column: $table.order, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get startDay => $composableBuilder(
+      column: $table.startDay, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get classId => $composableBuilder(
+      column: $table.classId, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ScheduleMonthSegmentRowsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ScheduleMonthSegmentRowsTable> {
+  $$ScheduleMonthSegmentRowsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get scheduleId => $composableBuilder(
+      column: $table.scheduleId, builder: (column) => column);
+
+  GeneratedColumn<int> get order =>
+      $composableBuilder(column: $table.order, builder: (column) => column);
+
+  GeneratedColumn<int> get startDay =>
+      $composableBuilder(column: $table.startDay, builder: (column) => column);
+
+  GeneratedColumn<int> get classId =>
+      $composableBuilder(column: $table.classId, builder: (column) => column);
+}
+
+class $$ScheduleMonthSegmentRowsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ScheduleMonthSegmentRowsTable,
+    ScheduleMonthSegmentRow,
+    $$ScheduleMonthSegmentRowsTableFilterComposer,
+    $$ScheduleMonthSegmentRowsTableOrderingComposer,
+    $$ScheduleMonthSegmentRowsTableAnnotationComposer,
+    $$ScheduleMonthSegmentRowsTableCreateCompanionBuilder,
+    $$ScheduleMonthSegmentRowsTableUpdateCompanionBuilder,
+    (
+      ScheduleMonthSegmentRow,
+      BaseReferences<_$AppDatabase, $ScheduleMonthSegmentRowsTable,
+          ScheduleMonthSegmentRow>
+    ),
+    ScheduleMonthSegmentRow,
+    PrefetchHooks Function()> {
+  $$ScheduleMonthSegmentRowsTableTableManager(
+      _$AppDatabase db, $ScheduleMonthSegmentRowsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScheduleMonthSegmentRowsTableFilterComposer(
+                  $db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ScheduleMonthSegmentRowsTableOrderingComposer(
+                  $db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ScheduleMonthSegmentRowsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int> scheduleId = const Value.absent(),
+            Value<int> order = const Value.absent(),
+            Value<int> startDay = const Value.absent(),
+            Value<int> classId = const Value.absent(),
+          }) =>
+              ScheduleMonthSegmentRowsCompanion(
+            id: id,
+            scheduleId: scheduleId,
+            order: order,
+            startDay: startDay,
+            classId: classId,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required int scheduleId,
+            required int order,
+            required int startDay,
+            required int classId,
+          }) =>
+              ScheduleMonthSegmentRowsCompanion.insert(
+            id: id,
+            scheduleId: scheduleId,
+            order: order,
+            startDay: startDay,
+            classId: classId,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ScheduleMonthSegmentRowsTableProcessedTableManager
+    = ProcessedTableManager<
+        _$AppDatabase,
+        $ScheduleMonthSegmentRowsTable,
+        ScheduleMonthSegmentRow,
+        $$ScheduleMonthSegmentRowsTableFilterComposer,
+        $$ScheduleMonthSegmentRowsTableOrderingComposer,
+        $$ScheduleMonthSegmentRowsTableAnnotationComposer,
+        $$ScheduleMonthSegmentRowsTableCreateCompanionBuilder,
+        $$ScheduleMonthSegmentRowsTableUpdateCompanionBuilder,
+        (
+          ScheduleMonthSegmentRow,
+          BaseReferences<_$AppDatabase, $ScheduleMonthSegmentRowsTable,
+              ScheduleMonthSegmentRow>
+        ),
+        ScheduleMonthSegmentRow,
+        PrefetchHooks Function()>;
 typedef $$ShiftClassAlarmsTableCreateCompanionBuilder
     = ShiftClassAlarmsCompanion Function({
   required int classId,
@@ -5703,6 +6447,9 @@ typedef $$CustomTemplatesTableCreateCompanionBuilder = CustomTemplatesCompanion
   required String cycle,
   required int teamCount,
   required String teamOffsets,
+  Value<bool> monthly,
+  Value<String> monthSegments,
+  Value<String> teamSegOffsets,
   required DateTime createdAt,
 });
 typedef $$CustomTemplatesTableUpdateCompanionBuilder = CustomTemplatesCompanion
@@ -5713,6 +6460,9 @@ typedef $$CustomTemplatesTableUpdateCompanionBuilder = CustomTemplatesCompanion
   Value<String> cycle,
   Value<int> teamCount,
   Value<String> teamOffsets,
+  Value<bool> monthly,
+  Value<String> monthSegments,
+  Value<String> teamSegOffsets,
   Value<DateTime> createdAt,
 });
 
@@ -5742,6 +6492,16 @@ class $$CustomTemplatesTableFilterComposer
 
   ColumnFilters<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get monthly => $composableBuilder(
+      column: $table.monthly, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get monthSegments => $composableBuilder(
+      column: $table.monthSegments, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get teamSegOffsets => $composableBuilder(
+      column: $table.teamSegOffsets,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -5774,6 +6534,17 @@ class $$CustomTemplatesTableOrderingComposer
   ColumnOrderings<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get monthly => $composableBuilder(
+      column: $table.monthly, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get monthSegments => $composableBuilder(
+      column: $table.monthSegments,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get teamSegOffsets => $composableBuilder(
+      column: $table.teamSegOffsets,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -5804,6 +6575,15 @@ class $$CustomTemplatesTableAnnotationComposer
 
   GeneratedColumn<String> get teamOffsets => $composableBuilder(
       column: $table.teamOffsets, builder: (column) => column);
+
+  GeneratedColumn<bool> get monthly =>
+      $composableBuilder(column: $table.monthly, builder: (column) => column);
+
+  GeneratedColumn<String> get monthSegments => $composableBuilder(
+      column: $table.monthSegments, builder: (column) => column);
+
+  GeneratedColumn<String> get teamSegOffsets => $composableBuilder(
+      column: $table.teamSegOffsets, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5842,6 +6622,9 @@ class $$CustomTemplatesTableTableManager extends RootTableManager<
             Value<String> cycle = const Value.absent(),
             Value<int> teamCount = const Value.absent(),
             Value<String> teamOffsets = const Value.absent(),
+            Value<bool> monthly = const Value.absent(),
+            Value<String> monthSegments = const Value.absent(),
+            Value<String> teamSegOffsets = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               CustomTemplatesCompanion(
@@ -5851,6 +6634,9 @@ class $$CustomTemplatesTableTableManager extends RootTableManager<
             cycle: cycle,
             teamCount: teamCount,
             teamOffsets: teamOffsets,
+            monthly: monthly,
+            monthSegments: monthSegments,
+            teamSegOffsets: teamSegOffsets,
             createdAt: createdAt,
           ),
           createCompanionCallback: ({
@@ -5860,6 +6646,9 @@ class $$CustomTemplatesTableTableManager extends RootTableManager<
             required String cycle,
             required int teamCount,
             required String teamOffsets,
+            Value<bool> monthly = const Value.absent(),
+            Value<String> monthSegments = const Value.absent(),
+            Value<String> teamSegOffsets = const Value.absent(),
             required DateTime createdAt,
           }) =>
               CustomTemplatesCompanion.insert(
@@ -5869,6 +6658,9 @@ class $$CustomTemplatesTableTableManager extends RootTableManager<
             cycle: cycle,
             teamCount: teamCount,
             teamOffsets: teamOffsets,
+            monthly: monthly,
+            monthSegments: monthSegments,
+            teamSegOffsets: teamSegOffsets,
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0
@@ -6185,6 +6977,9 @@ class $AppDatabaseManager {
       $$ShiftClassRowsTableTableManager(_db, _db.shiftClassRows);
   $$ShiftCycleRowsTableTableManager get shiftCycleRows =>
       $$ShiftCycleRowsTableTableManager(_db, _db.shiftCycleRows);
+  $$ScheduleMonthSegmentRowsTableTableManager get scheduleMonthSegmentRows =>
+      $$ScheduleMonthSegmentRowsTableTableManager(
+          _db, _db.scheduleMonthSegmentRows);
   $$ShiftClassAlarmsTableTableManager get shiftClassAlarms =>
       $$ShiftClassAlarmsTableTableManager(_db, _db.shiftClassAlarms);
   $$ScheduleEventsTableTableManager get scheduleEvents =>

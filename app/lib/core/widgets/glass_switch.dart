@@ -170,7 +170,10 @@ class _GlassSwitchState extends State<GlassSwitch>
           color: !widget.enabled
               ? AppTokens.glassBorder(isDark).withValues(alpha: 0.25)
               : widget.value
-                  ? accent
+                  // 开的那一档是**实心主色面**，上面压着白钮 —— 与按钮/导航选中
+                  // 同一条规矩，用 `solidAccent`（原主色下 teal / orange 的白钮
+                  // 只有 2.6:1，见 `AppTokens.solidAccent`）。
+                  ? AppTokens.solidAccent(accent)
                   : AppTokens.glassBorder(isDark).withValues(alpha: 0.6),
           border: Border.all(
             color: !widget.enabled

@@ -292,6 +292,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
     // **先生成、再重排**：重复待办的提醒要按「今天该有的那一条」来排，顺序反了
     // 会拿上一轮的日期去算。
     await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    // 归档（已完成的待办）裁到上限 —— **放在这里、不放在勾选那一刻**：用户完全
+    // 可能勾一条去年完成过的待办，在那一刻裁会让它当场消失，连「先划掉再收走」
+    // 的那一眼反馈都没有（spec §4 与 `pruneArchivedTodos` 的注释）。
+    await repo.pruneArchivedTodos();
     final overrides = await repo.listShiftAlarmOverrides();
     // 待办**重新读一次**：上面那个 `events` 是生成**之前**的快照，直接用它排会漏掉
     // 刚建出来的那几条（重复待办的提醒走另一条链路，但一次性待办的那几条不能少）。

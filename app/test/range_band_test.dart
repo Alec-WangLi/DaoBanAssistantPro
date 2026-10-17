@@ -154,7 +154,7 @@ void main() {
     expect(p.getBounds().right, closeTo(rect(0, 4, 6).right, 0.01));
   });
 
-  test('按住那一圈：inflate 把每一段四面各推出去，**端头半径不跟着放大**', () {
+  test('按住那一圈：inflate **只把两端左右推出去**，高度一像素不涨', () {
     final r = runs(DateTime(2026, 10, 2), DateTime(2026, 10, 4));
     final Path flat = rangeBandPath(
         runs: r,
@@ -176,11 +176,34 @@ void main() {
         movingEnd: true,
         inflate: 6);
     expect(lifted.getBounds().width, closeTo(flat.getBounds().width + 12, 0.01));
-    expect(lifted.getBounds().height, closeTo(flat.getBounds().height + 12, 0.01));
+    // **纵向不鼓。** 2026-10-13 改：上下各鼓 6 会让满升程时带子高 `cellH + 8`，
+    // 跨周拖选时两行的带子同时鼓、叠在一起顶进对方（用户真机反馈）。
+    expect(lifted.getBounds().height, closeTo(flat.getBounds().height, 0.01));
     // 端头半径仍是 endR：角上那点仍在轮廓外（放大半径的话它会被吞进去）。
     final Rect b = flat.getBounds();
     expect(lifted.contains(Offset(b.left - 5, b.top - 5)), isFalse,
         reason: '端头半径跟着放大了 —— 长出来的该是体积，不是圆角');
+  });
+
+  test('带子在任何升程下都不超过一格高', () {
+    // 行的间距**就是** `cellH`，所以「一段带子的高 ≤ cellH」正是「不与相邻行重叠」
+    // 的充要条件 —— 跨周拖选时两段的带子同时存在，这一条就是那时不叠的前提。
+    // 外面那圈 2px 描边以路径为中心描、还要各占 1px，所以再留一点余量：断言 ≤ cellH − 2。
+    final r = runs(DateTime(2026, 10, 2), DateTime(2026, 10, 4)); // 同一行内的一段
+    for (final double inflate in <double>[0, 1, 3, 6, 12, 40]) {
+      final Path p = rangeBandPath(
+          runs: r,
+          cellW: cellW,
+          cellH: cellH,
+          hPad: hPad,
+          weekdayH: weekdayH,
+          inset: inset,
+          endRadius: endR,
+          movingEnd: true,
+          inflate: inflate);
+      expect(p.getBounds().height, lessThanOrEqualTo(cellH - 2),
+          reason: '升程 $inflate 时带子高 ${p.getBounds().height} —— 越界就会顶进相邻行');
+    }
   });
 
   test('两段之间不会漏出天窗（跨行处上下两段严丝合缝）', () {

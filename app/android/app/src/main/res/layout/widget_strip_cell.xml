@@ -11,51 +11,96 @@
   退到「周几与日期同行」的两行备选（`一 19`），不要靠缩字号硬塞。
 
   没班次（空白表方案）时渲染侧把 `wg_sc_pill` 与 `wg_sc_abbr` 都设 GONE（不画胶囊，
-  与 App 日历格一致）。外层那个 36×18dp 的 FrameLayout **没有 id**，因此塌不掉、
-  那 18dp + 3dp 仍然占着 —— 这是有意的：一周七列高度因此恒定，不随有班/没班跳动。
+  与 App 日历格一致）。外层那个 FrameLayout **没有 id**（渲染侧不会动它）、
+  高度写死 **18dp**，因此塌不掉、那 18dp + 3dp 仍然占着 —— 这是有意的：
+  一周七列高度因此恒定，不随有班/没班跳动。（宽度 2026-10-16 改成 `wrap_content`：
+  没班次时它塌成 0 宽无所谓，高度那一维才是这条不变量守的东西。）
+
+  2026-10-16（与月历同步）：`wg_sc_block` 从**实心主色块**换成**半透明玻璃块**
+  （`WidgetChip.glassBlock`，与月历那格同参数）；周标题改单字；块上字改中性色。
+  两张卡摆在同一屏上，这三处不一致就会露馅。
+
+  ⚠️ **2026-10-16 更晚（用户真机反馈）：块的外边距从四面 2dp 改成「只留左右」。**
+  块原来四边各让 2dp，而卡那侧纵向也让 8dp —— 加起来块离卡上下沿 8.7dp，可块
+  **里面**周几离上沿只剩 3.7dp、下夜胶囊离下沿 5.3dp（左右反倒有 6.7dp）。纵向这
+  2dp 让出来、`widget_week_strip.xml` 那边的纵向内边距从 8dp 收到 3dp，块就从
+  59dp 长到约 70dp，上下各松到约 6.8dp。
+  **横向那 2dp 一个字不许动** —— 七列的胶囊与格子边距全靠它。三处数（这里的
+  margin、那边的上下内边距、`stripCellPx` 的 `hDp - 6`）是一组，改一个要
+  改三个，由 `widget_cell_block_guard_test.dart` 盯着。
+  四个方向同样**分开写** `layout_marginLeft/Right/Top/Bottom`（合并写法能用，
+  分开写只为一眼看出纵向那两份是 0）；另外**这份布局改了立刻就能看到** ——
+  每格这份子 `RemoteViews` 每次渲染都重新 inflate，与外层那份不同
+  （理由见 `widget_week_strip.xml` 头注里那条 reapply 的说明）。
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_sc_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/wg_sc_weekday"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="11sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
+    <ImageView
+        android:id="@+id/wg_sc_block"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginLeft="2dp"
+        android:layout_marginRight="2dp"
+        android:layout_marginTop="0dp"
+        android:layout_marginBottom="0dp"
+        android:scaleType="fitXY"
+        android:contentDescription="@null" />
 
-    <TextView
-        android:id="@+id/wg_sc_day"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textSize="15sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
-
-    <FrameLayout
-        android:layout_width="36dp"
-        android:layout_height="18dp"
-        android:layout_marginTop="3dp">
-
-        <ImageView
-            android:id="@+id/wg_sc_pill"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="fitXY"
-            android:contentDescription="@null" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center">
 
         <TextView
-            android:id="@+id/wg_sc_abbr"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:textSize="10sp"
-            android:maxLines="1" />
-    </FrameLayout>
-</LinearLayout>
+            android:id="@+id/wg_sc_weekday"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11dp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/wg_sc_day"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textSize="15dp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="18dp"
+            android:layout_marginTop="3dp">
+
+            <!-- ⚠️ **文字的宽度才是驱动者，位图贴上去**（与 `widget_month_cell.xml`
+                 同一条，2026-10-16）。位图宽度由渲染侧 `chipWidthPx` 按简称现量。
+                 **高度留 18dp 固定**（不是 wrap_content）：没班次那两行会被设成 GONE，
+                 高度若跟着塌掉，一周七列的高度就会随有班/没班跳动 —— 那是这份布局
+                 开头那条注释刻意守住的。
+                 三个属性缺一不可：`wrap_content` 让 TextView 驱动宽度、
+                 `layout_gravity="center"` 让它在（可能略宽的）位图里居中、
+                 `paddingHorizontal="4dp"` 与 Kotlin 侧那 4dp 对齐。 -->
+            <ImageView
+                android:id="@+id/wg_sc_pill"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/wg_sc_abbr"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
+                android:paddingHorizontal="4dp"
+                android:gravity="center"
+                android:textSize="10dp"
+                android:maxLines="1" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

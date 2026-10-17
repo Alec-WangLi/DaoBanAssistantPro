@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
+import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
@@ -24,6 +26,10 @@ class _RecordingRepository extends AppRepository {
   List<String> lastTeamNames = const [];
   String lastScheduleName = '';
   List<ShiftClass> lastClasses = const [];
+  bool lastMonthly = false;
+  List<MonthlySegment> lastMonthSegments = const [];
+  List<int> lastTeamSegOffsets = const [];
+  List<int> lastCycle = const [];
 
   @override
   Future<int> saveSchedule({
@@ -37,12 +43,19 @@ class _RecordingRepository extends AppRepository {
     List<String> teamNames = const ['一班', '二班', '三班', '四班'],
     int ourTeamIndex = 0,
     List<int> teamOffsets = const [],
+    bool monthly = false,
+    List<MonthlySegment> monthSegments = const [],
+    List<int> teamSegOffsets = const [],
   }) async {
     saveCalls++;
     lastTeamCount = teamCount;
     lastTeamNames = List.of(teamNames);
     lastScheduleName = name;
     lastClasses = List.of(classes);
+    lastMonthly = monthly;
+    lastMonthSegments = List.of(monthSegments);
+    lastTeamSegOffsets = List.of(teamSegOffsets);
+    lastCycle = List.of(cycle);
     return 1;
   }
 }
@@ -439,5 +452,164 @@ void main() {
 
     L10n.locale = 'zh';
     expect(L10n.crewsOnDutyCount(2), '每天在岗 2 个班组');
+  });
+
+  testWidgets('「按月排班」与「我自己排」有自己的组名，不再挂在「常白」下面', (tester) async {
+    // 视口放高，让整份列表一次全在屏内 —— `ListView` 是懒构建的，屏外的卡片
+    // 根本不在树上，那样 `find.text` 会静默找不到。
+    tester.view.physicalSize = const Size(1200, 6000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final results = <Object?>[];
+    await _openPicker(tester, results);
+
+    // 这两张卡原来裸挂在分组循环后面、头上什么都不写 —— 而最后一个分组是「常白」，
+    // 于是看起来就归在常白里（用户 2026-10-13 真机反馈：「它把倒班方式归类到了
+    // 长白班那里，这是不对的吧？」）。旧代码上这一条是 findsNothing。
+    expect(find.text(L10n.fromScratchGroup), findsOneWidget);
+    final headerY = tester.getTopLeft(find.text(L10n.fromScratchGroup)).dy;
+    expect(headerY,
+        lessThan(tester.getTopLeft(find.text(L10n.monthlyPattern)).dy),
+        reason: '组名要压在「按月排班」上面');
+    expect(
+        headerY, lessThan(tester.getTopLeft(find.text(L10n.customPattern)).dy),
+        reason: '组名要压在「我自己排」上面');
+  });
+
+  testWidgets('按月排班那张卡片不写「每天在岗 N 个班组」', (tester) async {
+    tester.view.physicalSize = const Size(1200, 6000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final results = <Object?>[];
+    await _openPicker(tester, results);
+
+    // 先证这一行**本身还在**（内置轮转模板照旧写着它）—— 少了这半条，下面那半条
+    // 会因为「整页都没有」而恒真，那就是一句空话。
+    final crew = find.textContaining('每天在岗');
+    expect(crew.evaluate().length, greaterThan(0),
+        reason: '内置模板应当照旧写着「每天在岗 N 个班组」');
+
+    // 两张卡各自的纵向区间内都不许出现这一行。取「按月排班」标题到「我自己排」
+    // 标题之间那一段 —— 那正是按月那张卡占的位置。
+    final monthlyY = tester.getTopLeft(find.text(L10n.monthlyPattern)).dy;
+    final customY = tester.getTopLeft(find.text(L10n.customPattern)).dy;
+    for (var i = 0; i < crew.evaluate().length; i++) {
+      final y = tester.getTopLeft(crew.at(i)).dy;
+      expect(y < monthlyY || y > customY, isTrue,
+          reason: '「每天在岗」落在了「按月排班」那张卡片里 —— '
+              '按月的段长短随月份变，这个数没有单一答案');
+    }
+  });
+
+  testWidgets('「按月排班」卡片在「我自己排」旁边，点它建出来的是一套按月方案', (tester) async {
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final repo = _RecordingRepository(db);
+
+    // 直接驱动入口函数（日历「切换排班 → 新增排班」与「我的 → 排班管理 → 新增」
+    // 两条路共用的就是它），省掉一层宿主页。
+    late BuildContext ctx;
+    late WidgetRef ref;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appRepositoryProvider.overrideWithValue(repo)],
+      child: MaterialApp(
+        home: Consumer(builder: (context, r, _) {
+          ctx = context;
+          ref = r;
+          return const Scaffold();
+        }),
+      ),
+    ));
+
+    final fut = createScheduleFromTemplatePicker(ctx, ref, makeCurrent: true);
+    await tester.pumpAndSettle();
+    // 先过滤：两张卡都在列表最底下，不过滤就还在屏外（ListView 是懒构建的）。
+    await tester.enterText(find.byType(TextField), 'zzzzzz');
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.monthlyPattern), findsOneWidget);
+    expect(find.text(L10n.customPattern), findsOneWidget, reason: '两张卡并排');
+
+    await tester.tap(find.text(L10n.monthlyPattern));
+    await tester.pumpAndSettle();
+    await fut;
+
+    expect(repo.saveCalls, 1);
+    expect(repo.lastMonthly, isTrue);
+    expect(repo.lastCycle, isEmpty);
+    // 三段、1/11/22 起（`defaultMonthlySegments(3)` 把 31 天均分）
+    expect(repo.lastMonthSegments.map((s) => s.startDay), [1, 11, 22]);
+    expect(repo.lastMonthSegments.map((s) => s.classIndex), [0, 1, 2]);
+    // **班组数取 3、段偏移 0/1/2**：默认的 4 组配 3 段必然撞班
+    // （`round(i×3÷4)` = 0/1/2/2），选完卡片当场弹撞班提示。
+    expect(repo.lastTeamCount, 3);
+    expect(repo.lastTeamSegOffsets, [0, 1, 2]);
+    expect(repo.lastScheduleName, L10n.monthlyPattern);
+    // 班次定义借默认四班两倒那四个
+    expect(repo.lastClasses.length, 4);
+  });
+
+  // 独立审查抓出来的 Critical：**用「我的模板」里那套按月模板建方案**那条路
+  // 原先只把 `cycle` 传了过去，于是建出来的是一张**空白表**
+  // （monthly=false、cycle 又是空的）—— 日历上什么都不画、小组件写「还没有排班」。
+  testWidgets('按月模板：用它建出来的必须还是按月方案，不是空白表', (tester) async {
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    // 真仓库：要读回建出来的那套方案，看它到底是不是空白表。
+    final repo = AppRepository(db);
+
+    final monthly = ShiftSchedule(
+      name: '按月三班倒',
+      anchorDate: DateTime.utc(2026, 1, 1),
+      classes: const [
+        ShiftClass(name: '中班', abbr: '中'),
+        ShiftClass(name: '白班', abbr: '白'),
+        ShiftClass(name: '夜班', abbr: '夜'),
+      ],
+      cycle: const [],
+      monthly: true,
+      monthlySegments: const [
+        MonthlySegment(startDay: 1, classIndex: 0),
+        MonthlySegment(startDay: 11, classIndex: 1),
+        MonthlySegment(startDay: 21, classIndex: 2),
+      ],
+      teamCount: 3,
+      ourTeamIndex: 0,
+      teamSegOffsets: const [0, 1, 2],
+    );
+    await repo.saveTemplate(
+        ScheduleTemplate.fromSchedule(monthly, name: '我的按月'));
+
+    late BuildContext ctx;
+    late WidgetRef ref;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appRepositoryProvider.overrideWithValue(repo)],
+      child: MaterialApp(
+        home: Consumer(builder: (context, r, _) {
+          ctx = context;
+          ref = r;
+          return const Scaffold();
+        }),
+      ),
+    ));
+
+    final fut = createScheduleFromTemplatePicker(ctx, ref, makeCurrent: true);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我的按月'));
+    await tester.pumpAndSettle();
+    final id = (await fut)!;
+
+    final built = (await repo.getScheduleDomain(id))!;
+    expect(built.monthly, isTrue, reason: '按月模板建出来的必须还是按月方案');
+    expect(built.isBlank, isFalse,
+        reason: '空白表的话日历整月不画东西、小组件写「还没有排班」');
+    expect(built.monthlySegments.map((s) => s.startDay), [1, 11, 21]);
+    expect(built.teamSegOffsets, [0, 1, 2]);
+    // 端到端：那天真的算得出班次（不是空白表才有的 null）
+    expect(built.shiftOn(DateTime(2026, 12, 1))!.name, '中班');
+    expect(built.shiftOn(DateTime(2026, 12, 21))!.name, '夜班');
   });
 }

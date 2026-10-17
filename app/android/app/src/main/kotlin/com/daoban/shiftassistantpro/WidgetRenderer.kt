@@ -1,9 +1,12 @@
 package com.daoban.shiftassistantpro
 
 import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Paint
+import android.util.TypedValue
 import android.widget.RemoteViews
 
 import java.time.LocalDate
@@ -64,6 +67,207 @@ object WidgetRenderer {
         (dp * context.resources.displayMetrics.density).toInt()
 
     /**
+     * 班次胶囊位图的**宽度**：按简称在 [textSizeDp] 下的实际排版宽度现量，两侧各留 4dp。
+     *
+     * **为什么现量而不是定值。** v0.11.23 用的是「基准 40dp（周条 36dp）× 缩放」——
+     * 那在格子小的时候会把胶囊顶到格边：真机量到月历那格占格宽 **95.5%**，而 App 里
+     * 同一颗只有 **81%**（用户 2026-10-16：「跟里边班次的胶囊又重合了……APP 里边其实
+     * 不重合，有点间隙」）。App 走的是 `_shiftChip`：`padding: horizontal spaceXs(4) × s`
+     * 包着 `FittedBox(Text(cellShift))` —— 宽度**跟着文字走**，所以「白」窄、「大休」宽。
+     *
+     * **为什么是 `Paint.measureText`。** `RemoteViews` 在宿主进程渲染、量不到文字宽，
+     * 而能改容器尺寸的 `setViewLayoutWidth` 要 API 31（本仓 minSdk 26）。本函数跑在
+     * **我们自己的进程**里、用的是同一套系统字体，量出来的就是桌面上真正会画出来的
+     * 那个宽。布局那侧由 `TextView(wrap_content + paddingHorizontal 4dp)` 驱动同样的宽度，
+     * 两者差的那点零头由 `fitXY` 吸收。
+     *
+     * 那 4dp 与 App 的 `spaceXs` 同一个数，**有意不乘缩放** —— 布局里 `paddingHorizontal`
+     * 是固定 dp，两边取同一个值才不会一个宽一个窄。
+     */
+    private fun chipWidthPx(context: Context, abbr: String, textSizeDp: Float): Int {
+        val density = context.resources.displayMetrics.density
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = textSizeDp * density }
+        return (paint.measureText(abbr) + 8f * density)
+            .toInt()
+            .coerceAtLeast(dpToPx(context, 12))
+    }
+
+    /**
+     * 今日卡「其他班组」那颗**胶囊**的位图宽度：按「组名 + 空格 + 简称」现量，
+     * 再加布局里那四段固定宽 —— 左内边距 6 + 圆点 8 + 间距 6 + 右内边距 6 = **26dp**
+     * （逐项见 `widget_crew_chip.xml`）。**改那边的内边距或圆点尺寸就要回来改这个 26。**
+     *
+     * ⚠️ 内边距取 **6 而不是 App 的 8**（2026-10-16 真机量出来的）：桌面这张卡宽
+     * **341.7dp**，而 App 的信息卡是 **368dp** —— 同样的内容在桌面这边就少 26dp。
+     * App 那套（标签 47.7 + 三颗胶囊 81.3/81.3/69 + 三个 8dp 间距 = 303.3dp）在
+     * 桌面只有 299.3dp 可用，最后那颗会被 `LinearLayout` 挤成「四班…」。每颗少 2dp×2
+     * 内边距正好让出 12dp、留 8dp 余量，三颗都完整；胶囊之间的 8dp 间距仍是 App 的值。
+     *
+     * 与 [chipWidthPx] 同一条路子：位图宽必须与布局真正量出来的一致，否则要么比文字窄
+     * 被裁、要么空出一块。字号固定 **12dp = App 的 `microLabel`**（与那行的文字同档，
+     * 由 `applyScale(v, R.id.wg_tc_crew_label, 12f, s)` 那条护栏一并盯着）；这里不吃
+     * `fitScale` 的缩放 —— 与 `wg_cc_text` 在布局里被写死 12dp 的待遇一致。
+     */
+    private fun crewChipWidthPx(context: Context, text: String): Int {
+        val density = context.resources.displayMetrics.density
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 12f * density }
+        return (paint.measureText(text) + 26f * density).toInt()
+    }
+
+    // ── 字号缩放（2026-10-15） ─────────────────────────────────────────────
+    //
+    // 用户 2026-10-15：「桌面小组件仍按系统 sp 排版 —— 系统字号调到 200% 时桌面那张
+    // 卡还会跟着变大」。真机实测（font_scale=2.0）今日卡的时间行被切、班组整行不见；
+    // 根因是**卡片尺寸编译期定死（resizeMode="none"）而字号写 `sp`**。
+    //
+    // 两件事一起做：① 布局里全部改用 `dp`（不乘 fontScale）；② 这里按**真实格子
+    // 尺寸**算一个缩放系数再 set 回去 —— 与 App 日历格同一条规则
+    // （`app/lib/features/calendar/calendar_screen.dart:1893` 的
+    // `s = (cellH - _cellInset*2) / _cellDesignH`）。
+    //
+    // 基准数与 App 的 `app/lib/core/design_tokens.dart` 同源：
+    //   `cellDateSm` 13 / `cellShift` 12 / `tinyLabel` 11，
+    //   以及 `calendar_screen.dart:3015` 的 `_cellDesignH = 55`、`_cellInset = gapHair = 2`。
+    // **改那边要回来改这里。**
+
+    /** 与 `_cellDesignH` 同一个数。 */
+    private const val CARD_DESIGN_H = 55f
+
+    /**
+     * 下限 0.85（App 是 1.0）：App 的格子永远 ≥ 设计尺寸，而桌面的格高**由启动器给**，
+     * 可能更矮 —— 那时宁可字小一档，也不要溢出（桌面外壳没有滚动，溢出就是切字）。
+     * 上限 1.25 与 App 同档。
+     */
+    private const val MIN_CARD_SCALE = 0.85f
+    private const val MAX_CARD_SCALE = 1.25f
+
+    /**
+     * 今日卡的**设计高度**（dp）：按基准字号排布时，**去掉根内边距之后**内容占多高。
+     *
+     * 与 App 的 `_cellDesignH = 55` 同一种做法 —— 而且同样是量出来的，不是推的。
+     * 推法（真机实测反推，Redmi K90 Pro Max · 3× · 2026-10-15）：
+     *   卡片 256.3dp，上下余量 27.3 / 37.0dp ⟹ 居中项 = 44（根内边距）+ C
+     *   ⟹ C = 256.3 − 27.3 − 37.0 − 44 = **148**。
+     *
+     * ⚠️ **别拿「内容墨迹高度」当它**：墨迹量到的是 192dp，那里面**含**了上下那
+     * 44dp 内边距，而且不含行盒的行距。第一版按 192 写，s 算成 1.16、内容溢出，
+     * 真机上「本月统计」那一行直接被切掉（真机出图才看见）。
+     *
+     * **改布局里的字号或间距就要重新量一次。**
+     */
+    private const val TODAY_CARD_DESIGN_H = 148f
+
+    /**
+     * 月历格的缩放系数。[slotDp] 是**行槽**的高度（含格子卡两侧各 2dp 的外边距）——
+     * 与 App 那个 `cellH` 同一个口径。
+     */
+    private fun cardScale(slotDp: Float): Float =
+        ((slotDp - 4f) / CARD_DESIGN_H).coerceIn(MIN_CARD_SCALE, MAX_CARD_SCALE)
+
+    /**
+     * 按内容可用高算的缩放系数（今日卡用）。[availDp] 是**去掉根内边距之后**能放内容
+     * 的那一段，[designDp] 是「按基准字号自然排布时内容占多高」—— 那个数要**在真机上量**，
+     * 与 App 的 `_cellDesignH = 55` 同一种做法。
+     *
+     * ⚠️ [maxScale] 默认 1.0 —— **今日卡只缩不放**。原因是量出来的：那三样补上之后
+     * 内容自然高 148dp，而 4×3 的格子给它 212dp，`fitScale` 会一路顶到 1.25；但
+     * **行距（16/14/8dp）与徽章盒（24dp）是写死的、不跟着缩放**，字一放大，农历那行
+     * 就折成两行、整体高过可用高 —— 真机出图时「本月统计」那一行**被整行切掉**。
+     *
+     * 桌面外壳是定尺寸、**没有滚动**，溢出就是静默丢内容。所以宁可留着那点余量。
+     * 想真正填满它得改卡片的尺寸（4×2），或再补内容 —— 两件都不在这一轮里。
+     */
+    private fun fitScale(availDp: Float, designDp: Float, maxScale: Float = 1f): Float =
+        (availDp / designDp).coerceIn(MIN_CARD_SCALE, maxScale)
+
+    /**
+     * 把字号设成「基准 × 缩放」。
+     *
+     * ⚠️ **必须 `COMPLEX_UNIT_DIP`**：`COMPLEX_UNIT_SP` 会乘 `fontScale`，那正是这一轮
+     * 要脱开的东西。`dp` 只乘 density。
+     */
+    private fun applyScale(v: RemoteViews, id: Int, baseDp: Float, s: Float) {
+        v.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_DIP, baseDp * s)
+    }
+
+    /** WCAG 相对亮度（sRGB 线性化）—— 与 App 的 `AppTokens.contrastRatio` 同一套算式。 */
+    private fun relLuminance(color: Int): Double {
+        fun lin(c: Int): Double {
+            val s = c / 255.0
+            return if (s <= 0.03928) s / 12.92 else Math.pow((s + 0.055) / 1.055, 2.4)
+        }
+
+        return 0.2126 * lin((color shr 16) and 0xFF) +
+            0.7152 * lin((color shr 8) and 0xFF) +
+            0.0722 * lin(color and 0xFF)
+    }
+
+    /** WCAG 对比度。 */
+    private fun contrastRatio(fg: Int, bg: Int): Double {
+        val a = relLuminance(fg)
+        val b = relLuminance(bg)
+        return (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05)
+    }
+
+    /**
+     * 实心块上的字色：**黑或白里对比更高的那一个**。
+     *
+     * ⚠️ **按对比度二选一，不是拿相对亮度卡一个阈值。** 这是与 App 的
+     * `AppTokens.onSolid` 逐字同一条判据 —— 那条判据之所以能保证「恒 ≥ 4.58:1」，
+     * 靠的正是「两个极值里取更大的那个」，与阈值无关。
+     *
+     * 第一版这里写成了 `亮度 > 0.55 ? 黑 : 白`，于是 **teal（`#00B3A6`，亮度 0.549）
+     * 选了白字：实测 2.63:1** —— 而 `AGENTS.md` 记着「用户自己用的就是 teal」，
+     * 这一格又正是本轮唯一「字压在用户自选的颜色上」的地方。判据错在这里是**静默**的：
+     * 默认的蓝选出来是对的，只有换到 teal / 橙 / 粉那几档才现形。
+     *
+     * ⚠️ 两个候选必须是**纯白与纯黑**：那条 ≥ 4.58 的保证是按两个极值推的，
+     * 换成近黑（第一版用的是 `#111818`）最坏一档会掉到约 4.1。
+     */
+    private fun onSolidInk(context: Context, color: Int): Int {
+        val white = context.getColor(R.color.wg_on_solid_light)
+        val black = context.getColor(R.color.wg_on_solid_dark)
+        return if (contrastRatio(white, color) >= contrastRatio(black, color)) white else black
+    }
+
+    /**
+     * 月历一格的**真实像素尺寸**，用来烤「今天」那块实心块。
+     *
+     * 为什么非要贴近真实尺寸：宿主是 `fitXY` 拉伸位图的，宽高比对不上时圆角会被
+     * 拉成椭圆。格子的尺寸是 `GridLayout` 的 `rowWeight` 在布局期算出来的，渲染这侧
+     * 拿不到 —— 所以按 `AppWidgetOptions` 给的实际 dp 反推（卡 padding 8dp×2、
+     * 标题行 28dp、周几行约 20dp、格缝 2dp×2）。
+     *
+     * ⚠️ **行数必须按当月真实可见行数传进来**：5 行月每行约 77dp、6 行月约 65dp
+     * （差约 18%），拿固定值去反推会让其中一档明显偏矮、四角露出白卡的角尖。
+     */
+    private fun monthCellPx(context: Context, widgetId: Int, rows: Int): Pair<Int, Int> {
+        val opt = AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId)
+        val wDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+        val hDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 320)
+        val density = context.resources.displayMetrics.density
+        val cellW = (((wDp - 16) / 7f) - 4f) * density
+        val cellH = (((hDp - 16 - 28 - 20) / rows.toFloat()) - 4f) * density
+        return cellW.toInt().coerceAtLeast(1) to cellH.toInt().coerceAtLeast(1)
+    }
+
+    /**
+     * 网格里**真正会被布局的行数**：槽位按周一开头排 42 个，行数 = ceil(可见槽位 / 7)。
+     *
+     * 「可见」= 这一天在快照窗口里（`widget_month_card.xml` 顶部那两行注释讲了
+     * `rowWeight` 是按可见行数均分的）。窗口到头那几格会被设成 GONE、不参与布局。
+     */
+    private fun monthGridRows(snap: WidgetStore.Snapshot, gridStart: LocalDate): Int {
+        val epochs = HashSet<Long>(snap.days.size * 2)
+        for (d in snap.days) epochs.add(d.day)
+        var visible = 0
+        for (slot in 0 until 42) {
+            if (epochs.contains(gridStart.plusDays(slot.toLong()).toEpochDay())) visible++
+        }
+        return ((visible + 6) / 7).coerceAtLeast(1)
+    }
+
+    /**
      * 小组件点击用的 requestCode 基址。
      *
      * **必须远离项目里所有既有的 requestCode 区间。** 理由：这些 PendingIntent 的意图
@@ -74,7 +278,7 @@ object WidgetRenderer {
      * 互相覆盖 extras。
      *
      * 既有区间（`AlarmScheduler` / `TodoReminderReceiver` 都用 `requestCode = 各自的 id`）：
-     * 班次闹钟 0..400、自定义闹钟 10000..11000、待办行提醒 20000..39999、重复待办
+     * 班次闹钟 0..600、自定义闹钟 10000..11000、待办行提醒 20000..39999、重复待办
      * 提醒 40000..41999，另有 `AlarmRingService` 的通知点击 0 / 1（同样带着
      * `alarm_label` 打向 `MainActivity`）与 `MainActivity.REQ_PICK_RINGTONE = 40071`。
      * 取 100000 起，全部避开。
@@ -122,7 +326,7 @@ object WidgetRenderer {
      * 翻月那两枚箭头的 requestCode 基数。**广播池**，与上面 `WIDGET_REQ_BASE`
      * （活动池，点格开 App 用 `getActivity`）**是两回事**。
      *
-     * 900_000 离既有占用都够远：班次闹钟 0..400、自定义闹钟 10000..11000、待办提醒
+     * 900_000 离既有占用都够远：班次闹钟 0..600、自定义闹钟 10000..11000、待办提醒
      * 20000..39999、重复待办 40000..41999、选铃声 40071、刷新闹钟 40081。
      *
      * 编号 = `BASE + widgetId * 4 + dir`（dir：0 = 上月、1 = 下月、2 = 回今天，第 4 档
@@ -296,6 +500,8 @@ object WidgetRenderer {
             R.id.wg_ws_col1, R.id.wg_ws_col2, R.id.wg_ws_col3, R.id.wg_ws_col4,
             R.id.wg_ws_col5, R.id.wg_ws_col6, R.id.wg_ws_col7,
         )
+        // 「今天」那一列那块位图的尺寸（见 `stripCellPx` 的 KDoc）。一周只算一次。
+        val (colW, colH) = stripCellPx(context, widgetId)
 
         for (col in columns.indices) {
             // **先清空再填** —— 这一句是「内容变了之后小组件重影」的修复，见本文件顶部
@@ -323,15 +529,40 @@ object WidgetRenderer {
             )
 
             val c = RemoteViews(context.packageName, R.layout.widget_strip_cell)
+
+            // ── 「今天」那一列铺一块**实心主色** ──
+            // 与月历卡那张是同一件事（两张卡在桌面同一屏上，不能一个有一个没有）。
+            // 主色是用户选的，静态 drawable 做不到，只能烤位图；一周只有一张。
+            if (isToday) {
+                c.setViewVisibility(R.id.wg_sc_block, android.view.View.VISIBLE)
+                c.setImageViewBitmap(
+                    R.id.wg_sc_block,
+                    // 与月历那格**同一支、同参数**（2026-10-16 同步）：半透明玻璃块。
+                    // 周条这一列底下没有独立白卡（七列都在同一张卡里），块直接压在
+                    // 卡自己的近白底上 —— 与月历「白卡上压块」同一个观感。
+                    WidgetChip.glassBlock(
+                        snap.accent, colW, colH,
+                        dpToPx(context, 12).toFloat(), dpToPx(context, 2).toFloat(),
+                    ),
+                )
+            } else {
+                c.setViewVisibility(R.id.wg_sc_block, android.view.View.GONE)
+            }
+
             // 可见性无条件设满：宿主 reapply 时只重放新动作，漏设会保持上一次的状态。
             c.setViewVisibility(R.id.wg_sc_weekday, android.view.View.VISIBLE)
             c.setViewVisibility(R.id.wg_sc_day, android.view.View.VISIBLE)
 
-            c.setTextViewText(R.id.wg_sc_weekday, d.weekday)
-            c.setTextColor(R.id.wg_sc_weekday, if (isToday) snap.accent else muted)
+            // 周标题：**单字**，与月历表头同一份（快照顶层 `weekdays`，按周一起算）。
+            // 周条 7 列恰好是「本周一..本周日」，所以下标直接对得上。
+            // ⚠️ 今日卡那边读的是 `days[].weekday`（完整「周几」），那是另一条路。
+            c.setTextViewText(R.id.wg_sc_weekday, snap.weekdays.getOrNull(col) ?: d.weekday)
+            // 字色一律走中性 —— 块是半透明的**浅底**，`onSolidInk` 在 teal / orange 上
+            // 会给白字、读不出来（与月历 `monthCard` 同一条，2026-10-15 踩过）。
+            c.setTextColor(R.id.wg_sc_weekday, muted)
             // 日数字：与 App 的格子一样只印「日」，整串「9月19日」在 46dp 宽的列里排不下。
             c.setTextViewText(R.id.wg_sc_day, LocalDate.ofEpochDay(epoch).dayOfMonth.toString())
-            c.setTextColor(R.id.wg_sc_day, if (isToday) snap.accent else ink)
+            c.setTextColor(R.id.wg_sc_day, ink)
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块不画）。
             // 不能拿 `wg_empty_*` 顶：`tintedChip` 的 `Paint.setAlpha` 会覆盖颜色字节自带的
@@ -341,9 +572,17 @@ object WidgetRenderer {
             if (d.hasShift) {
                 c.setViewVisibility(R.id.wg_sc_pill, android.view.View.VISIBLE)
                 c.setViewVisibility(R.id.wg_sc_abbr, android.view.View.VISIBLE)
+                // 宽度按简称现量（与月历同一支）。**周条没有缩放** —— 字号就是布局里
+                // 那个 10dp（v0.11.23 加 `cardScale` 的是月历，4×1 的周条从头到尾没接它）。
+                // 今天那列也走淡染：以前转实心是因为淡染压在实心主色块上会糊，
+                // 块改半透明浅底之后那条理由没了。
                 c.setImageViewBitmap(
                     R.id.wg_sc_pill,
-                    WidgetChip.tintedChip(d.color, dpToPx(context, 36), dpToPx(context, 18)),
+                    WidgetChip.tintedChip(
+                        d.color,
+                        chipWidthPx(context, d.shiftAbbr, 10f),
+                        dpToPx(context, 18),
+                    ),
                 )
                 c.setTextViewText(R.id.wg_sc_abbr, d.shiftAbbr)
                 c.setTextColor(R.id.wg_sc_abbr, ink)
@@ -424,10 +663,13 @@ object WidgetRenderer {
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_month_card)
         val dark = isDark(context, snap.themeMode)
+        // 面板底**扮 App 的「日历页」**（浅灰 / 深底），42 张白格垫在它上面 ——
+        // App 里就是这层关系（白卡垫在 `bgLight #F5F6FA` 上），桌面上没有「页面」
+        // 这一层，得让面板去扮，白卡才显出来。见 `widget_page_*.xml`。
         v.setInt(
             R.id.wg_m_root,
             "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+            if (dark) R.drawable.widget_page_dark else R.drawable.widget_page_light,
         )
         v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, rootRequestCode(widgetId)))
 
@@ -495,6 +737,23 @@ object WidgetRenderer {
         val slotIds = IntArray(42) { i ->
             context.resources.getIdentifier("wg_m_slot${i + 1}", "id", context.packageName)
         }
+        // 「今天」那块块的位图尺寸要按**当月真实可见行数**反推（5 行月与 6 行月的
+        // 格子高差约 18%）。整月只算一次 —— 它里面那次 `getAppWidgetOptions` 是
+        // 一次 binder IPC，放进 42 格的循环里就是每次渲染 42 次。
+        val cellRows = monthGridRows(snap, gridStart)
+        val (cellW, cellH) = monthCellPx(context, widgetId, cellRows)
+
+        // 字号按格子尺寸缩放（见 `cardScale`）。`monthCellPx` 给的是**格子卡**的高
+        // （行槽减去上下各 2dp 的外边距），加回那 4dp 才是 App 那个 `cellH` 的口径。
+        // 42 格共用同一个 s —— 尺寸在循环外算一次，别按格子算（那会把位图缓存冲爆）。
+        val cellDensity = context.resources.displayMetrics.density
+        val cellScale = cardScale(cellH / cellDensity + 4f)
+
+        // 胶囊位图的**高度**：基准 18dp × 缩放，42 格共用一个。
+        // **宽度不在这里算** —— 它按各格的简称现量（`chipWidthPx`），见下面那段。
+        val pillH = (18f * cellScale * cellDensity).toInt().coerceAtLeast(1)
+        // 简称的字号（= `design_tokens.cellShift` 的基准 12 × 缩放），量宽时要用它。
+        val chipTextDp = 12f * cellScale
 
         for (slot in 0 until 42) {
             // 先清空再填，理由与 `weekStrip` 那处逐字相同（含放在循环开头而非 addView
@@ -524,21 +783,61 @@ object WidgetRenderer {
             val isToday = epoch == todayEpoch
             val c = RemoteViews(context.packageName, R.layout.widget_month_cell)
 
+            // ── 格子卡底（贴齐 App：白卡垫在「页面」上）──
+            // 用**静态 `<shape>`**：圆角随控件尺寸走，天然不会被 `fitXY` 拉成椭圆。
+            //
+            // 2026-10-15：**今天那一格不再置 0 了**。原先置 0 是因为块是实心位图、
+            // 卡底是静态 drawable，两者圆角在宽高比不一致时会错开、四角露出白卡的尖。
+            // 现在块改回**半透明**（见下面那段），它本来就该压在白卡上 —— 与 App 里
+            // 「页面底 → 白卡 → 主色块」三层同构。
+            c.setInt(
+                R.id.wg_mc_root,
+                "setBackgroundResource",
+                if (dark) R.drawable.widget_cell_dark else R.drawable.widget_cell_light,
+            )
+
+            // ── 「今天」那块**半透明玻璃块**（2026-10-15 从实心改回来）──
+            // 用户原话：「问题就出在这格子的外观跟 App 里的差别太多了，尤其是那个
+            // 半透明块，如果你能实现的话，那基本上就很好了」。
+            //
+            // 当初（v0.11.9）做诚实的理由已经不成立了：那条写的是「半透明块压在任意
+            // 壁纸上会消失」，而**同一轮**已经把月历的面板底换成了不透明的页面色、
+            // 格子换回了白卡 —— 块压在白卡上，跟 App 里是同一个结构。App 那枚块自己
+            // 也**不带模糊**（模糊在页面背景那一层）。详见规格 §5。
+            //
+            // 尺寸在循环外算好了（`cellW` / `cellH`），这里只贴。
+            if (isToday) {
+                c.setViewVisibility(R.id.wg_mc_block, android.view.View.VISIBLE)
+                c.setImageViewBitmap(
+                    R.id.wg_mc_block,
+                    WidgetChip.glassBlock(
+                        snap.accent,
+                        cellW,
+                        cellH,
+                        dpToPx(context, 12).toFloat(),
+                        dpToPx(context, 2).toFloat(),
+                    ),
+                )
+            } else {
+                c.setViewVisibility(R.id.wg_mc_block, android.view.View.GONE)
+            }
+
             // 可见性两个方向都要设满：宿主 `reapply` 只重放新动作，漏设的一边会留着
             // 上一次的状态。
             c.setViewVisibility(R.id.wg_mc_day, android.view.View.VISIBLE)
             c.setTextViewText(R.id.wg_mc_day, date.dayOfMonth.toString())
-            // 「今天」只走主色，**不许加粗**（`TextView` 没有 `setTypeface(int)`，
-            // 反射会在宿主进程抛 `ActionException`）。相邻月的日数字走 muted ——
-            // 那是这张卡上唯一表达「这个月从哪天开始」的地方。
-            c.setTextColor(
-                R.id.wg_mc_day,
-                when {
-                    isToday -> snap.accent
-                    inMonth -> ink
-                    else -> muted
-                },
-            )
+            // 三个字号一起按格子缩放。基准数与 `widget_month_cell.xml` 里的初值、
+            // 以及 `design_tokens.dart` 的三个令牌**三处同源**：
+            //   日数字 = cellDateSm 13 / 胶囊字 = cellShift 12 / 农历 = tinyLabel 11
+            applyScale(c, R.id.wg_mc_day, 13f, cellScale)
+            applyScale(c, R.id.wg_mc_abbr, 12f, cellScale)
+            applyScale(c, R.id.wg_mc_lunar, 11f, cellScale)
+            // 三种字色：今天**不再**走 `onSolidInk` —— 半透明块是**浅底**，
+            // 而 `onSolidInk` 对 teal / orange 会给白字，白压浅底读不出来
+            // （静默：默认那颗蓝是对的，只有换到浅主色才现形）。
+            // 字重仍然只能靠布局里的 `textStyle`：`TextView` 没有 `setTypeface(int)`，
+            // 反射会在宿主进程抛 `ActionException`。
+            c.setTextColor(R.id.wg_mc_day, if (inMonth) ink else muted)
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块根本不画）。
             // **相邻月的格照样画**（用户 2026-09-30 选的「日数变灰、胶囊照画」）。
@@ -549,13 +848,20 @@ object WidgetRenderer {
             if (d.hasShift) {
                 c.setViewVisibility(R.id.wg_mc_pill, android.view.View.VISIBLE)
                 c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.VISIBLE)
-                // 尺寸恒定 40×18dp：一格一尺寸会让 `WidgetChip` 的位图缓存失效
-                // （key 含尺寸），42 格就把缓存冲爆。见本函数的 KDoc。
+                // **高度**恒定（循环外算好的 pillH）；**宽度按这一格的简称现量** ——
+                // 与 App 的 `_shiftChip` 同一条（「白」窄、「大休」宽）。
+                // LruCache 不会炸：宽度只由 (字号 × 文字宽) 决定，同宽的简称自然共用
+                // 同一张位图，一屏仍是屈指可数的几张。**别按格子造唯一尺寸**（那才会冲爆）。
+                // **今天那格也走淡染**：以前它转实心是因为淡染压在实心主色块上会糊成
+                // 一片 —— 块改成半透明浅底之后那条理由没了，与 App 的普通格一致。
                 c.setImageViewBitmap(
                     R.id.wg_mc_pill,
-                    WidgetChip.tintedChip(d.color, dpToPx(context, 40), dpToPx(context, 18)),
+                    WidgetChip.tintedChip(
+                        d.color, chipWidthPx(context, d.shiftAbbr, chipTextDp), pillH,
+                    ),
                 )
                 c.setTextViewText(R.id.wg_mc_abbr, d.shiftAbbr)
+                // 字色走中性 `ink`（淡染底 + 近不透明的卡底，两者都够对比度）
                 c.setTextColor(R.id.wg_mc_abbr, ink)
             } else {
                 c.setViewVisibility(R.id.wg_mc_pill, android.view.View.GONE)
@@ -564,11 +870,47 @@ object WidgetRenderer {
 
             c.setViewVisibility(R.id.wg_mc_lunar, android.view.View.VISIBLE)
             c.setTextViewText(R.id.wg_mc_lunar, d.lunarShort)
-            c.setTextColor(R.id.wg_mc_lunar, if (d.lunarIsHoliday) holiday else muted)
+            // ⚠️ **今天那格走块上字，不走 `holiday` 的红字** —— 红字压在实心主色块上
+            // 读不出来。代价是**这一天看不出「是节假日」**（一个月至多一次），
+            // 可读性优先。这一条在规格的「Review Focus」里点了名。
+            // 农历的字色：**今天那格不再吃掉节假日红字**。
+            // 原先 `isToday -> onSolidInk(...)` 是为了压在实心块上读得出来，代价是
+            // 「这一天看不出是节假日」。块改回半透明（浅底）之后那条理由没有了，
+            // 红字自然回来。
+            c.setTextColor(
+                R.id.wg_mc_lunar,
+                if (d.lunarIsHoliday) holiday else muted,
+            )
 
             v.addView(slotIds[slot], c)
         }
         return v
+    }
+
+    /**
+     * 本周条一列的真实像素尺寸（同 `monthCellPx` 的理由：位图被 `fitXY` 拉伸，
+     * 宽高比对不上时圆角会被拉成椭圆）。周条**没有标题行与周几行** ——
+     * 只有卡 padding 与块自己的外边距，所以比月历那格矮得多。
+     *
+     * ⚠️ **那两个减数是「布局里让掉了多少」，三个地方是一组，改一个要改三个**
+     * （2026-10-16 用户真机反馈那轮改过一次，由 `widget_cell_block_guard_test.dart`
+     * 逐个数对账）：
+     *   · 宽：`- 16` 是 `widget_week_strip.xml` 的横向内边距 8dp × 2，
+     *         `- 4` 是 `widget_strip_cell.xml` 里块自己的 2dp × 2。
+     *   · 高：`- 6` 是那边的**纵向**内边距 3dp × 2 + 块纵向外边距 0。
+     *
+     * 纵向那两个数为什么与横向不同：块在纵向要长到「周几离上沿、下夜胶囊离下沿」
+     * 与横向那 6.7dp 同一个量级 —— 原来横向 8dp + 块 2dp 时，块离卡上下沿 8.7dp，
+     * 可块**里面**只剩 3.7dp / 5.3dp。真机量出来的数写在两份布局的头注里。
+     */
+    private fun stripCellPx(context: Context, widgetId: Int): Pair<Int, Int> {
+        val opt = AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId)
+        val wDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+        val hDp = opt.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 40)
+        val density = context.resources.displayMetrics.density
+        val cellW = (((wDp - 16) / 7f) - 4f) * density
+        val cellH = (hDp - 6) * density
+        return cellW.toInt().coerceAtLeast(1) to cellH.toInt().coerceAtLeast(1)
     }
 
     /**
@@ -605,35 +947,60 @@ object WidgetRenderer {
         val muted =
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
 
+        // 字号按**卡内可用高**缩放（今日卡没有「格子」，用的是整张卡能放内容的那一段）。
+        // 可用高 = 宿主给的卡高 − 布局根那 22dp 内边距 × 2。
+        // ⚠️ **徽章那三个文字不参与缩放**（今天 / N 项待办 / 已调班）：它们的盒子是
+        // 写死的 52/84/96dp，而改容器尺寸的 `setViewLayoutWidth` 要 API 31（本仓
+        // minSdk 26）—— 字放大了盒子不动就会挤。见规格 §8。
+        val cardH = AppWidgetManager.getInstance(context)
+            .getAppWidgetOptions(widgetId)
+            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 180)
+        val s = fitScale(cardH - 44f, TODAY_CARD_DESIGN_H)
+
         // 日期/班次/时间/色点一律取 `days[todayIndex]` 而**不是** `todayCard` ——
         // `days[]` 会被原生对表右移、永远是对的；`todayCard` 不会。
         val d = snap.days[todayIndex]
         val tc = snap.todayCard
         val stale = tc == null || tc.day != LocalDate.now().toEpochDay()
 
-        // ── 1. 日期行 ──
-        // 位图高**必须等于布局里视图的高**（色条 24dp）：ImageView 是 `fitXY`，
-        // 两者不等就是非等比拉伸，而 `bar()` 的圆头半径是按位图宽/高算的。
+        // ── 0. 左边那条通高的主色竖条 ──
+        // 与 App 的信息卡对齐（`Positioned(left: 0, top/bottom: spaceLg, width: 6)`）：
+        // **6dp 宽、通到内容底、圆头**。颜色跟当天班次色走、没班次退回主色（与 App
+        // `accent = shift != null ? shift.color : primary` 同一条）。
+        //
+        // ⚠️ 位图高给 **200dp 这个「够长的常量」**，由 `fitXY` 拉到真实内容高
+        // （约 168~192dp）：`bar()` 的圆头半径是 `w/2 = 3dp`，200 → 168~192 这一步
+        // 缩放让两端半圆半径浮动在 2.5~3.4dp，肉眼看不出。**别去精算内容高** ——
+        // 它随农历折行与「本月统计」有无而变化。
+        // ⚠️ 布局那一侧必须能让它拉到内容高：根是**横向 LinearLayout**（`match_parent`
+        // 高的子层会被二次测量成邻列高）；换成 FrameLayout 就会解析成固定 200dp。
         v.setImageViewBitmap(
             R.id.wg_tc_bar,
             WidgetChip.bar(
                 if (d.hasShift) d.color else snap.accent,
-                dpToPx(context, 4),
-                dpToPx(context, 24),
+                dpToPx(context, 6),
+                dpToPx(context, 200),
             ),
         )
         v.setTextViewText(R.id.wg_tc_date, d.dateShort)
         v.setTextColor(R.id.wg_tc_date, ink)
 
         // 「今天」徽章。宽度写死在布局里 —— RemoteViews 量不到文字宽度。
-        // 高同样要与布局的 `wg_tc_today_wrap`（24dp）一致：`tintedChip` 的 radius 与
-        // strokeWidth 都按**位图**高算，拉了 fitXY 会让两端的半圆变椭圆、上下描边偏重。
+        // 高同样要与布局的 `wg_tc_today_wrap`（24dp）一致：`block` 的 radius 也按
+        // **位图**高算，拉了 fitXY 会让两端的半圆变椭圆、上下描边偏重。
+        // **实心主色 + 块上字**（贴齐 App 那枚药丸：App 里它就是实心主色 + 白字；
+        // 桌面上原来是 14% 淡染，读起来是被冲淡的）。
         v.setImageViewBitmap(
             R.id.wg_tc_today_bg,
-            WidgetChip.tintedChip(snap.accent, dpToPx(context, 52), dpToPx(context, 24)),
+            WidgetChip.block(
+                snap.accent,
+                dpToPx(context, 52),
+                dpToPx(context, 24),
+                dpToPx(context, 12).toFloat(),
+            ),
         )
         v.setTextViewText(R.id.wg_tc_today_text, snap.today)
-        v.setTextColor(R.id.wg_tc_today_text, snap.accent)
+        v.setTextColor(R.id.wg_tc_today_text, onSolidInk(context, snap.accent))
 
         // 「N 项待办」徽章。`todoBadge` 为空（没有待办）或快照跨天 → 整块隐藏。
         val todoText = if (stale) null else tc.todoBadge
@@ -683,6 +1050,18 @@ object WidgetRenderer {
         v.setTextViewText(R.id.wg_tc_shift, if (d.hasShift) d.shiftName else d.weekday)
         v.setTextColor(R.id.wg_tc_shift, ink)
 
+        // ── 3b. 班次备注（「休息日 · 不响闹钟」/「闹钟 07:00」） ──
+        // 位置与 App 的信息卡一致：**班次名之后、已调班徽章之前**。
+        // ⚠️ 取值走 `d.shiftNote`（按日烘焙）而不是 `tc.*` —— 跨天之后 `tc` 整块
+        // 过期，而这一行不该跟着消失（它描述的是**今天那个班次**，`d` 永远是对的）。
+        if (d.shiftNote.isNullOrEmpty()) {
+            v.setViewVisibility(R.id.wg_tc_note, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_note, android.view.View.VISIBLE)
+            v.setTextViewText(R.id.wg_tc_note, d.shiftNote)
+            v.setTextColor(R.id.wg_tc_note, muted)
+        }
+
         // 「已调班」徽章：底色跟当天班次色走（与 App 信息卡的 `_adjustedBadge` 同源）。
         // 与色条/色点一致地**回落**：休班日 `d.color` 是 Dart 侧的 `shift?.color ?? 0`
         // = 0（全透明），直接用会得到一个占 96dp 却什么也看不见的徽章。
@@ -721,6 +1100,10 @@ object WidgetRenderer {
             v.setViewVisibility(R.id.wg_tc_crew_row, android.view.View.GONE)
         } else {
             v.setViewVisibility(R.id.wg_tc_crew_row, android.view.View.VISIBLE)
+            // 行首那个「其他班组」标签。它是一行里的**零号槽位**，所以只设一次，
+            // 不参与下面按槽位循环（循环只清 4 个 crew_slot）。
+            v.setTextViewText(R.id.wg_tc_crew_label, snap.otherCrews)
+            v.setTextColor(R.id.wg_tc_crew_label, muted)
             for (slot in crewSlots.indices) {
                 // 先清空再填，理由与 `weekStrip` 那处逐字相同。
                 v.removeAllViews(crewSlots[slot])
@@ -731,9 +1114,16 @@ object WidgetRenderer {
                 v.setViewVisibility(crewSlots[slot], android.view.View.VISIBLE)
                 val crew = crews[slot]
                 val chip = RemoteViews(context.packageName, R.layout.widget_crew_chip)
+                // 胶囊底：App `_otherCrewChips` 的同款（14% 淡染 + 45% 描边），
+                // 宽度按「组名 + 简称」现量 —— 见 `crewChipWidthPx` 的 KDoc。
+                // 高 22dp 与 `wg_tc_crew_row` 同高（`tintedChip` 的圆角取高的一半）。
                 chip.setImageViewBitmap(
                     R.id.wg_cc_bg,
-                    WidgetChip.tintedChip(crew.color, dpToPx(context, 14), dpToPx(context, 14)),
+                    WidgetChip.tintedChip(
+                        crew.color,
+                        crewChipWidthPx(context, "${crew.name} ${crew.abbr}"),
+                        dpToPx(context, 22),
+                    ),
                 )
                 chip.setImageViewBitmap(
                     R.id.wg_cc_dot,
@@ -748,6 +1138,42 @@ object WidgetRenderer {
                 v.addView(crewSlots[slot], chip)
             }
         }
+
+        // ── 6. 本月统计 ──
+        // 「本月 大休13 · 白7 · 上夜6 · 下夜5」（App 的信息卡 v0.9.7 就有）。
+        //
+        // 取值链路：当天那条 `days[todayIndex]` 的 `day`（epochDay）→ 年月 → 在
+        // `months[]` 里查那个月的 `tally`。**这样跨天与翻月都自动是对的** ——
+        // `d` 永远指向"今天"，而 `months[]` 是按月存的（不是逐日烘）。
+        // 查不到（窗口外、或没有排班）就 GONE：不画一句空话，也不留一行空白。
+        val tally = run {
+            val todayDate = LocalDate.ofEpochDay(d.day)
+            snap.months
+                .firstOrNull { it.y == todayDate.year && it.m == todayDate.monthValue }
+                ?.tally
+        }
+        if (tally.isNullOrEmpty()) {
+            v.setViewVisibility(R.id.wg_tc_tally, android.view.View.GONE)
+        } else {
+            v.setViewVisibility(R.id.wg_tc_tally, android.view.View.VISIBLE)
+            v.setTextViewText(R.id.wg_tc_tally, tally)
+            v.setTextColor(R.id.wg_tc_tally, muted)
+        }
+
+        // ── 字号：一律按卡内可用高缩放（`s` 在函数开头算好了） ──
+        // 数值与 `widget_today_card.xml` 里的 dp 初值一一对应。
+        // **徽章那三个不在里面**（见开头那段说明）。
+        // 「其他班组」那两处（这里与 `widget_crew_chip.xml`）的 12 = App 的
+        // `AppTokens.microText` / `microLabel` —— 原来是 11，比 App 与这张卡自己的
+        // 「本月统计」都小一档（2026-10-16 用户真机反馈），由
+        // `widget_today_card_guard_test.dart` 对着 Dart 令牌盯住两边不跑偏。
+        applyScale(v, R.id.wg_tc_date, 22f, s)
+        applyScale(v, R.id.wg_tc_lunar, 14f, s)
+        applyScale(v, R.id.wg_tc_shift, 18f, s)
+        applyScale(v, R.id.wg_tc_note, 13f, s)
+        applyScale(v, R.id.wg_tc_time, 13f, s)
+        applyScale(v, R.id.wg_tc_crew_label, 12f, s)
+        applyScale(v, R.id.wg_tc_tally, 12f, s)
 
         return v
     }

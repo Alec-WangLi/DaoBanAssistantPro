@@ -5,6 +5,9 @@
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
+        <!-- 深色底 ⇒ 浅（白）图标。与 `values/styles.xml` 那条同源：只管首帧之前
+             那一小段，之后交给 Dart 侧（见 `core/theme/app_theme.dart`）。 -->
+        <item name="android:windowLightStatusBar">false</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your
@@ -14,5 +17,6 @@
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

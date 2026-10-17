@@ -12,6 +12,7 @@ import 'package:characters/characters.dart';
 // `defaultSchedule()` 的文案要按当前语言生成。`l10n.dart` 只依赖 intl
 // （纯 Dart），所以本文件「无 Flutter 依赖、可直接 dart test」的性质不变。
 import '../core/l10n.dart';
+import 'monthly_pattern.dart';
 
 /// 小时+分钟 → 分钟自午夜（0..1439）。
 int toMinutes(int hour, int minute) => hour * 60 + minute;
@@ -25,6 +26,13 @@ int daysBetween(DateTime a, DateTime b) {
 
 /// 取 UTC 的"纯日期"（时间归零）。
 DateTime dateOnly(DateTime d) => DateTime.utc(d.year, d.month, d.day);
+
+/// 某天是当月的第几天（1..31）—— 按月切法的入参。
+///
+/// 走 [dateOnly] 而不是裸的 `date.day`：与全仓「日期比较一律走 dayNumber /
+/// dateOnly」同一条纪律。透进来的日子可能是 UTC 纯日期、也可能带本地时分，
+/// 统一归零之后取日号，两种都对。
+int dayOfMonth(DateTime date) => dateOnly(date).day;
 
 /// 两个 DateTime 是不是同一天。
 ///
@@ -77,43 +85,68 @@ class ShiftAlarm {
 ///
 /// **不是产品口味，是原生 id 空间的硬上限**：原生 id 是
 /// `序号 × 天数窗口 + 天数偏移`（见 `alarm_service.dart` 的 `_shiftDaysHorizon`），
-/// Kotlin 侧 `cancelAllNativeAlarms` 扫的是 `0..400`（`MainActivity.kt:550`）。
-/// 6 × 60 = 360 ≤ 400 刚好放得下。**改这个数或改天数窗口，必须同时改另一边。**
-const int maxAlarmsPerShift = 6;
+/// Kotlin 侧 `cancelAllNativeAlarms` / `cancelAllNotificationAlarms` 扫的是
+/// `0..600`（`MainActivity.kt:604` 与 `:620`）。
+/// 10 × 60 = 600 ≤ 600 刚好放得下。**改这个数或改天数窗口，必须同时改另一边。**
+const int maxAlarmsPerShift = 10;
 
-/// 某条闹钟的钟点落在上班的**前一天**还是**班次当天**。
+/// 一条闹钟的钟点落在**班次当天那一圈钟点**的哪一边。
+enum AlarmDayAnchor {
+  /// 班次**前一天**的那个钟点。
+  prev,
+
+  /// **班次当天**。
+  same,
+
+  /// 班次**次日**的那个钟点。
+  next,
+}
+
+/// 某条闹钟落在**前一天 / 班次当天 / 次日**的哪一档。
 ///
-/// 规则（spec §4.2）：
-///   ① 钟点落在**值班窗口内**（`[start, end)`，按班次相对时刻算 —— 跨午夜与
-///      24 小时班都成立）→ **当天**。班中间的闹钟（白班的午休 12:30、零点班的
-///      班中 03:00）要的就是这一档。
+/// 规则（spec `2026-10-11-shift-alarm-anchor-and-cap-design.md` §3）：
+///   ① 钟点落在**值班窗口内** → 窗口里那一次**出现**所在的那一天。窗口跨过午夜
+///      时，落在午夜之后那一段的出现在**次日** —— 16:30–次日 00:30 的 00:15
+///      就是它（从前被静默排到班次当天凌晨，比上班早 16 小时）。
 ///   ② 否则钟点**晚于上班钟点** → **前一天**。00:00 上班、23:00 响铃排前一天的
-///      23:00 —— 排在班次当天就已经是班后 15 小时（v0.8.9 修好的那条）。
-///   ③ 否则 → **当天**。
+///      23:00 —— 排在班次当天就已经是班后 15 小时。**这是 v0.8.9 立起来的既有
+///      约定，这一版不动它。**
+///   ③ 否则 → **当天与次日里离窗口更近的那一个**。这就是「下班之后的闹钟」：
+///      16:30–次日 00:30 的 01:00 落在**次日** 01:00（从前落在上班前 15 个半小时）。
+///      两边一样近时取**当天**。
 ///
-/// 与旧规则（`alarm.minute > start` 一条判据）的差异**只有第 ① 档**：旧规则会把
-/// 班中间的闹钟搬到 20 多小时前。其余钟点逐条相同，包括两个边界 ——
-/// 正好等于下班时刻 / 下班之后的钟点走第 ② ③ 档，落哪天取决于它相对上班钟点的
-/// 大小（00:00 班的 08:00 → 前一天；20:00 班的 08:00 → 当天），两种形状都与旧规则
-/// 逐字相同。这两类钟点用户真想要的是「次日」，两档模型表达不了，见 spec §9。
+/// **窗口长到一整天时（24 小时值班，`span == 1440`）一律算当天**：那时候任何钟点
+/// 都落在窗口内，「上班之前」与「班次之中」在模型上已经合并（既有行为就是「全天
+/// 都算当天」，内置的 `duty_24_24/48/72` 三个模板靠它维持原样）。没有这一条，
+/// 那些模板配的 07:00 上班提醒会被第 ① 档判成次日 —— 从「上班前 1 小时」变成
+/// 「下班前 1 小时」。护栏是 `shift_rotation_test` 的「24 小时值班：全天都算当天」
+/// 与 `shift_templates_test` 的模板差集用例。
 ///
 /// 时间没填：上班没填 → 判不了，按当天（不瞎挪一天）；下班没填 → 窗口算不出，
-/// 退回旧规则（只按上班钟点判）。
-bool alarmFallsOnPreviousDay(ShiftClass shift, ShiftAlarm alarm) {
+/// 退回两档（只按上班钟点判），**永远不会是次日**。
+AlarmDayAnchor alarmDayAnchor(ShiftClass shift, ShiftAlarm alarm) {
   final s = shift.startMinute;
-  if (s == null) return false;
+  if (s == null) return AlarmDayAnchor.same;
+  final t = alarm.minute;
   final e = shift.endMinute;
-  if (e != null) {
-    // 值班时长。**班次有两种存法**：累计式（24 小时值班 480 → 1920）与回绕式
-    // （夜班 20:30 → 08:30 存成 510 < 1230 —— 内置 12 小时制模板与编辑器产出的
-    // 都是这一种）。所以要补一天再减：直接 `e - s` 在回绕式下**是负的**，窗口
-    // 判据会静默失效、班中闹钟又回到前一天（独立审查抓出来的；`shift_rotation_test`
-    // 里「回绕式存法的跨午夜班」与「两种存法同解」两条是它的护栏）。
-    final span = e > s ? e - s : e - s + _dayMinutes;
-    final rel = ((alarm.minute - s) % _dayMinutes + _dayMinutes) % _dayMinutes;
-    if (rel < span) return false;
+  if (e == null) return t > s ? AlarmDayAnchor.prev : AlarmDayAnchor.same;
+  // 值班时长。**班次有两种存法**：累计式（24 小时值班 480 → 1920）与回绕式
+  // （夜班 20:30 → 08:30 存成 510 < 1230 —— 内置 12 小时制模板与编辑器产出的
+  // 都是这一种）。所以要补一天再减：直接 `e - s` 在回绕式下**是负的**，窗口
+  // 判据会静默失效、班中闹钟又回到前一天（独立审查抓出来的；`shift_rotation_test`
+  // 里「回绕式存法的跨午夜班」与「两种存法同解」两条是它的护栏）。
+  final span = e > s ? e - s : e - s + _dayMinutes;
+  if (span >= _dayMinutes) return AlarmDayAnchor.same; // 24 小时值班：见上
+  // `rel` = 钟点 t 在上班之后**最近那一次**出现距上班多少分钟。
+  final rel = ((t - s) % _dayMinutes + _dayMinutes) % _dayMinutes;
+  if (rel < span) {
+    // 窗口内：那一次出现在 `s + rel`。跨过午夜就是次日。
+    return s + rel >= _dayMinutes ? AlarmDayAnchor.next : AlarmDayAnchor.same;
   }
-  return alarm.minute > s;
+  if (t > s) return AlarmDayAnchor.prev;
+  final before = s - t; // 当天那一次落在窗口**之前**多远
+  final after = t + _dayMinutes - (s + span); // 次日那一次落在窗口**之后**多远
+  return after < before ? AlarmDayAnchor.next : AlarmDayAnchor.same;
 }
 
 const int _dayMinutes = 1440;
@@ -268,7 +301,19 @@ abstract class ShiftSource {
   String get label;
 }
 
-/// 一套排班方案（班次定义 + 轮换周期 + 多班组）。
+/// 一套排班方案（班次定义 + 轮换规则 + 多班组）。
+///
+/// **两种锚定方式，由 [monthly] 二选一**（spec §3.5）：
+///   · `monthly == false`（默认）—— **连续周期**：离 [anchorDate] 多少天 mod [cycle]
+///     长度。`cycle` 是唯一的规则来源。
+///   · `monthly == true` —— **按月归零**：[monthlySegments] 是「每月的第 N 天起换成
+///     哪个班次」，每月 1 号必然落在第一段。`cycle` 在这条路上**不被读取**。
+///
+/// ⚠️ **[monthly] 是这个模式唯一的判据。** 别用 `monthlySegments.isEmpty` 或
+/// `cycle.isEmpty` 去猜当前是哪种模式 —— 因为「切换模式不丢数据」这条约定决定了
+/// **两边可以同时非空**（用户切到按月、又切回按周期之后，段表还留在库里而
+/// `monthly == false`）。拿数据去猜的后果是日历**无视用户的选择**继续按月算，
+/// 不报错、只在月份边界上错一天。
 class ShiftSchedule implements ShiftSource {
   const ShiftSchedule({
     required this.name,
@@ -280,21 +325,51 @@ class ShiftSchedule implements ShiftSource {
     this.ourTeamIndex = 0,
     this.teamOffsets = const [],
     this.dayOverrides = const {},
+    this.monthly = false,
+    this.monthlySegments = const [],
+    this.teamSegOffsets = const [],
   });
 
-  /// 空白表（跟随法定节假日）：周期为空。
-  bool get isBlank => cycle.isEmpty;
+  /// 空白表（跟随法定节假日）：**当前这一边**没有内容。
+  ///
+  /// 不能写成「两边都空」也不能只看 `cycle`：按月模式下周期本来就是空的，那样
+  /// 每一套按月方案都会被当成空白表 —— 日历整月不画胶囊、桌面小组件写「还没有排班」。
+  bool get isBlank => monthly ? monthlySegments.isEmpty : cycle.isEmpty;
 
   final String name;
 
   /// 基准日：各班组在此日期的周期位置由 [teamOffsets] 显式指定。
+  ///
+  /// **按月模式不读它**（按月不用基准日，1 号恒等于第一段）。它仍在，因为库里
+  /// 那一列不是可空的 —— 那套方案的基准日原样留着，切回周期模式就用得上。
   final DateTime anchorDate;
 
   /// 班次定义。
   final List<ShiftClass> classes;
 
   /// 周期序列：长度即周期，元素是 [classes] 的下标。
+  ///
+  /// **按月模式下不读它**（见 [monthly]）。切换模式时两边各存各的，所以它不会
+  /// 因为切到按月就被清掉。
   final List<int> cycle;
+
+  /// 按月切法：一段 = 「每月的第 N 天起 → 某个班次」，第一段恒从 1 起。
+  ///
+  /// 只在 [monthly] 为真时生效。设了它的方案**同时**可以留着 [cycle] —— 那是
+  /// 「切回去不丢数据」这条约定的代价，判据一律看 [monthly]。
+  final List<MonthlySegment> monthlySegments;
+
+  /// 各班组在**按月切法里的段偏移**（长度与 [teamCount] 一致）。
+  ///
+  /// **单位是「段」，不是天** —— 这正是它与 [teamOffsets] 分开成两个字段的原因：
+  /// 同一个列里让单位的含义随模式变，是读代码的人要先去别处查标志位才知道自己
+  /// 读到什么的那类静默错误。按月模式下组 i 在某天的班次 = 段序列**旋转**
+  /// `teamSegOffsets[i]` 格，于是所有班组都在同一天换班、只是换到不同的班次上
+  /// （spec §3.3）。
+  final List<int> teamSegOffsets;
+
+  /// 这套方案走按月锚定吗。**唯一的模式判据**（见类文档）。
+  final bool monthly;
 
   /// 班组数。
   final int teamCount;
@@ -338,8 +413,27 @@ class ShiftSchedule implements ShiftSource {
     return teamShift(ourTeamIndex, date);
   }
 
-  /// 指定班组在某天的班次；空白表（无周期）返回 null。
+  /// 指定班组在某天的班次；那天没有班次（空白表 / 无方案）返回 null。
+  ///
+  /// **判据是 [monthly] 这个标志，不是「段表空不空」**（见类文档）。
   ShiftClass? teamShift(int teamIndex, DateTime date) {
+    if (monthly) {
+      final n = monthlySegments.length;
+      if (n == 0) return null; // 半配置 / 空白表：与「周期为空」同一条路
+      final off = (teamIndex >= 0 && teamIndex < teamSegOffsets.length)
+          ? teamSegOffsets[teamIndex]
+          : teamIndex - ourTeamIndex; // 回退：与 teamOffsets 那条同一条纪律
+      final classIndex =
+          monthlyClassIndexOn(monthlySegments, dayOfMonth(date), off);
+      // 越界只有一条出路：返回 null。按月模式下**没有周期可以退**，所以这里
+      // 不能写成「回退到轮转」—— 那句话在周期模式里成立、写在这里是句空话。
+      if (classIndex == null ||
+          classIndex < 0 ||
+          classIndex >= classes.length) {
+        return null;
+      }
+      return classes[classIndex];
+    }
     if (cycle.isEmpty) return null;
     final base = (teamIndex >= 0 && teamIndex < teamOffsets.length)
         ? teamOffsets[teamIndex]
@@ -367,6 +461,8 @@ class CrewClash {
   });
 
   /// 周期内第几天（**1 起**，与界面上的「第 N 天」同一口径）。
+  ///
+  /// **按月模式下装的是当日号数（1..31）** —— 含义由模式决定，见 [crewClashes]。
   final int cycleDay;
 
   /// 相撞的两个班组下标，[teamA] 恒小于 [teamB]。
@@ -384,8 +480,14 @@ class CrewClash {
 /// `classes` 里同一个实例，用 `==` 会把内容相同的两个**不同班次定义**也认成撞班。
 ///
 /// 休息班次不算撞（两个班组同时休是正常的），空白表（无周期 / 无班次定义）返回空表。
+///
+/// **按月模式走另一条路**（[_monthlyCrewClashes]）：那句话在那边不成立 —— 一个月的
+/// 长度在 28~31 之间变，没有「一个周期」可扫。两条分支的判据都是 [CrewClash.cycleDay]
+/// 之外的那一套（非休班 + `identical`），所以「什么算撞班」两边是同一个定义。
 List<CrewClash> crewClashes(ShiftSchedule s) {
-  if (s.cycle.isEmpty || s.classes.isEmpty) return const [];
+  if (s.classes.isEmpty) return const [];
+  if (s.monthly) return _monthlyCrewClashes(s);
+  if (s.cycle.isEmpty) return const [];
   final out = <CrewClash>[];
   for (var k = 0; k < s.cycleLength; k++) {
     final date = s.anchorDate.add(Duration(days: k));
@@ -412,6 +514,46 @@ List<CrewClash> crewClashes(ShiftSchedule s) {
   return out;
 }
 
+/// 按月模式的撞班扫描。
+///
+/// **它没有「一个周期」可扫**：一个月的长度在 28~31 之间变，要盖住全部形状得扫
+/// 满**四年**（含闰年 2 月 29）。从 2020-01-01 起逐日扫 1461 天，按**当日号数**
+/// 去重后报出来 —— 一个「班组数比段数还多」的配置在这四年里天天撞，去重之后
+/// 每个号数只报一条。
+///
+/// ⚠️ [CrewClash.cycleDay] 装的是**当日号数**（不是「周期内第几天」）。它是各种
+/// 月长的**并集**，所以界面上**不能拿它的条数当天数说**（spec §5.2）——
+/// 编辑器的按月提示因此是一句不带数字的话。
+List<CrewClash> _monthlyCrewClashes(ShiftSchedule s) {
+  final out = <CrewClash>[];
+  final seen = <(int, int, int)>{}; // (当日号数, 班A, 班B)
+  var day = DateTime.utc(2020, 1, 1); // 闰年，保证 2/29 会出现
+  for (var i = 0; i < 1461; i++) {
+    final dom = day.day;
+    final working = <int, ShiftClass>{};
+    for (var t = 0; t < s.teamCount; t++) {
+      final sc = s.teamShift(t, day);
+      if (sc == null || sc.isRest) continue;
+      working[t] = sc;
+    }
+    final teams = working.keys.toList()..sort();
+    for (var a = 0; a < teams.length; a++) {
+      for (var b = a + 1; b < teams.length; b++) {
+        if (!identical(working[teams[a]], working[teams[b]])) continue;
+        if (!seen.add((dom, teams[a], teams[b]))) continue;
+        out.add(CrewClash(
+          cycleDay: dom,
+          teamA: teams[a],
+          teamB: teams[b],
+          shift: working[teams[a]]!,
+        ));
+      }
+    }
+    day = DateTime.utc(day.year, day.month, day.day + 1);
+  }
+  return out;
+}
+
 /// 班组错位的**均分**规则：第 i 个班组落在周期的 `i × 周期长度 ÷ 班组数` 天处
 /// （四舍五入）。
 ///
@@ -422,6 +564,10 @@ List<CrewClash> crewClashes(ShiftSchedule s) {
 ///
 /// [keepIndex] / [keepOffset] 指定一个**保持不动**的班组（通常是「我们班组」）：
 /// 均分是为了让别人不再和自己撞班，不该顺手把用户自己的周期起始日挪走。
+///
+/// **按月模式也用它，只是把 [cycleLength] 传成「段数」** —— 那条路上班组的错位
+/// 单位是段（`ShiftSchedule.teamSegOffsets`，spec §3.3），而「第 i 组落在
+/// `i × n ÷ 班组数` 处」这条规则两边同形。别为它另写一份。
 ///
 /// 班组数多于周期天数时，整数错位必然有重复（抽屉原理）—— 那是配置本身的问题，
 /// 不是这条规则能救的。

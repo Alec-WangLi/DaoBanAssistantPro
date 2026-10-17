@@ -5,6 +5,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_pickers.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
@@ -12,10 +14,13 @@ import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
+import 'package:shiftassistantpro/features/calendar/shift_color_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
+import 'package:shiftassistantpro/features/profile/help_center_screen.dart';
+import 'package:shiftassistantpro/features/profile/help_faq_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
@@ -61,6 +66,17 @@ final List<VisualScreen> visualScreens = [
     slug: '01_calendar',
     title: '日历',
     build: (db) async => const CalendarScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // **新加的那几颗色落到日历格子上**（v0.11.6）。单测只量得出「描边对卡底的
+    // 对比度」，量不出「一整张日历排在一起好不好认」—— 那件事只有出图看得见。
+    slug: '56_calendar_new_colors',
+    title: '日历 · 新配色',
+    build: (db) async {
+      await makeNewPaletteShiftCurrent(db);
+      return const CalendarScreen();
+    },
     needsOnboardingPrefs: false,
   ),
   (
@@ -250,7 +266,7 @@ final List<VisualScreen> visualScreens = [
   ),
   (
     slug: '22_editor_alarm_max',
-    title: '排班编辑器 · 闹钟到上限（6 个）',
+    title: '排班编辑器 · 闹钟到上限（$maxAlarmsPerShift 个）',
     build: (db) async {
       await makeAlarmShowcase(db, count: maxAlarmsPerShift);
       return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
@@ -267,6 +283,17 @@ final List<VisualScreen> visualScreens = [
     needsOnboardingPrefs: false,
   ),
   (
+    // 三档落点在编辑页的读法：**前一天 / 次日 / 不标**三种同屏。v0.11.1 新加的
+    // 界面状态，令牌守门看不出「那一行会不会被日前缀挤掉」——只有出图能看。
+    slug: '53_editor_alarm_tri_tier',
+    title: '排班编辑器 · 闹钟三档落点（前一天 / 当天 / 次日）',
+    build: (db) async {
+      await makeTriTierAlarmShowcase(db);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
     // 首启弹的那份（三条），与「我的 → 使用帮助」那份完整说明是**两套内容** ——
     // 2026-09-23 之前首启弹的是后者，等于把说明书当欢迎页。
     slug: '17_getting_started',
@@ -275,11 +302,23 @@ final List<VisualScreen> visualScreens = [
     needsOnboardingPrefs: false,
   ),
   (
-    // 完整说明。正文从「一整段」改成了「短句 + 圆点」，是最容易在版式上跑偏的
-    // 一处 —— 圆点的对齐、英文条目折行后的缩进，只有看图才知道对不对。
-    slug: '18_usage_guide',
+    // 《使用帮助》自 v0.11.17 起是**整页**（从前是弹窗）：一段整体简介 + 九条
+    // 功能简介 + 一个进第二层的入口。它是全 app 最长的一屏之一，窄屏上滚起来
+    // 才对 —— 弹窗那个形态早该换了。
+    slug: '18_help_center',
     title: '使用帮助',
-    build: (db) async => const _DialogHost(showUsageGuideDialog),
+    build: (db) async => const HelpCenterScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 第二层「遇到问题怎么解决」：31 条按用户的诉求排。
+    //
+    // 这一屏的风险全在长文案上 —— 答案句子比第一级那九条任何一句都长，
+    // 窄屏 + 大字号下会不会被吃掉、英文折行后问题与答案还分不分得开，
+    // 单测只量得出「两个 Text 的 top 不同」，看不出「读起来乱不乱」。
+    slug: '59_help_faq',
+    title: '使用帮助 · 遇到问题',
+    build: (db) async => const HelpFaqScreen(),
     needsOnboardingPrefs: false,
   ),
   (
@@ -290,14 +329,6 @@ final List<VisualScreen> visualScreens = [
     slug: '34_app_info',
     title: '版本更新（更新日志）',
     build: (db) async => const _DialogHost(showChangelogDialog),
-    needsOnboardingPrefs: false,
-  ),
-  (
-    // 「我的 → 桌面」那一行的说明弹层（v0.9.20 新增）。与《使用帮助》里那条
-    // **共用同一份文案**，但它单独有个入口，所以也要单独看一眼。
-    slug: '35_widget_guide',
-    title: '桌面小组件说明',
-    build: (db) async => const _DialogHost(showWidgetGuideDialog),
     needsOnboardingPrefs: false,
   ),
   (
@@ -407,6 +438,99 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const CalendarScreen(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 按月排班（v0.11.15）：编辑器那一屏拍的是**按月那一支**——顶上的二选一分段器、
+    // 「每月第 N 天起」的段列表、以及下面几张卡。段列表在班次卡之下，所以它同时
+    // 进了 `visualScrollDown`（不滚只看得到预览条与名称卡）。
+    slug: '57_editor_monthly',
+    title: '排班编辑器 · 按月',
+    build: (db) async {
+      await makeMonthlyScheduleCurrent(db);
+      return ScheduleEditorScreen(scheduleId: await currentScheduleId(db));
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 选择页最底下那两张「从零开始」的卡（按月排班 / 我自己排）。它们在 20 来个
+    // 模板卡之后，首屏拍不到 —— 所以这一屏也是靠 `visualScrollDown` 滚到底。
+    slug: '58_template_picker_monthly',
+    title: '倒班方式选择 · 按月排班',
+    build: (db) async => const ShiftTemplatePickerScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 选项弹层（`showGlassOptionPicker`）——**一个件带六个调用点**：贪睡时长、
+    // 待办提醒档位（新建 / 编辑各一处）、编辑器两处、待办两处，所以它的头部一改
+    // 六处一起变。而它此前**从没有过可看的图**：命令式弹层（静止帧拍不到），
+    // 六个调用点又都藏在「点某一行下拉」之后。按「新界面一律补进屏单」那条规矩
+    // 补上这只眼睛（v0.12.0 统一了它内部那份头部）。
+    slug: '60_option_picker',
+    title: '选项弹层（贪睡时长那种）',
+    build: (db) async => const _OptionPickerHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 取色层（`showShiftColorPicker`）。
+    //
+    // `render_screens_test.dart` 里有**两条手写的** `visualTest` 渲它（浅色 / 深色，
+    // 点班次行末那颗色点弹出来、**背后是编辑器现场**），但它们是临时用例、**不在本
+    // 清单里** —— 而**对比度审计只扫这份清单**。于是取色层**至今没进过对比度审计**，
+    // 正是 AGENTS.md 里 v0.11.7 记下的那句「取色层那两屏没进对比度审计的屏单」。
+    // 这一条把它并进共享清单（背后是空棚架，形态与手写那两条不同 —— 那两条要留着，
+    // 它们带 `beforeCapture` 交互，替代不了）。
+    //
+    // ⚠️ **slug 不能取 `57_shift_color_picker`。** 共享清单出的文件名是
+    // `'${slug}_${variant.suffix}'`，而手写那条正好也会写出 `57_shift_color_picker_dark.png`
+    // —— 两条同屏但现场不同，谁后跑谁覆盖，图会随机变成另一个样子。所以另起一号。
+    slug: '61_shift_color_picker',
+    title: '取色层（对比度审计）',
+    build: (db) async => const _ColorPickerHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // **空态此前从没进过屏单**（41 屏里零覆盖）—— 而它正是 AGENTS.md 记的
+    // v0.8.1 那类：「没进屏单 = 没人真正看过」。收了共享件（`EmptyState`）之后
+    // 必须补上这只眼睛，否则「那一句话摆在页面里是什么观感」还是只有断言、没有图。
+    //
+    // 这一屏是闹钟页在**有班表在管、但未来 30 天没有班次闹钟**时的样子（空白表：
+    // `hasScheduleOn` 为真、`shiftOn` 为假）—— 库里**不能**是真空的，理由见
+    // `seedEmptyStates`。
+    slug: '62_alarm_empty',
+    title: '闹钟 · 空态',
+    build: (db) async {
+      await seedEmptyStates(db);
+      return const AlarmScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 待办页在**一条待办都没有**时的空态：那句话**垂直居中**（四处里唯一一处）、
+    // 横向留白走共享件。这屏同时是 `05_todos`（有内容）的反面证据。
+    slug: '63_todos_empty',
+    title: '待办 · 空态',
+    build: (db) async {
+      await seedEmptyStates(db);
+      return const ScheduleScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // **加载态此前从没进过屏单** —— 而把加载态收成共享件（`GlassLoading`）的
+    // 那一轮，整整七处调用点**全**长在加载态上，却一张图都没有。这正是上一个任务
+    // 刚立的规矩：没进屏单的界面等于没人看过。
+    //
+    // 工装是**等状态落定之后**才取像的（见 `settleVisual`），正常挂一个页面根本
+    // 拍不到加载态 —— 所以要一层「永远不落定」的宿主（`_LoadingHost`）：把这一页
+    // 依赖的流 provider 覆写成一条**永不发出、也永不结束**的流，`AsyncValue` 就
+    // 永远停在 `isLoading`，那颗圈（`GlassLoading`）被钉在屏幕正中。
+    //
+    // 取排班管理页是因为它的加载分支**整个 body 就是那颗圈**（外加一条标题栏）——
+    // 最干净、最不会与别的正在加载的区块混在一起，一眼就认得出「这是加载态」。
+    slug: '64_management_loading',
+    title: '排班管理 · 加载态',
+    build: (db) async => const _LoadingHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -483,6 +607,68 @@ class _OverridePickerHostState extends State<_OverridePickerHost> {
   Widget build(BuildContext context) => const Scaffold();
 }
 
+/// 「选项弹层」的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// `showGlassOptionPicker` 与别处一样是命令式的：调一下就弹、返回一个 Future，
+/// 没有可以直接放进 `home:` 的 widget。这一层薄壳在首帧后把它弹出来，`build` 只交
+/// 一个空 `Scaffold` 让弹层浮在它上面（与 `_OverridePickerHost` 同一套路）。
+/// 取贪睡时长那一档当样本：标题 + 六个选项 + 当前项打勾，正是那六个调用点的形态。
+class _OptionPickerHost extends StatefulWidget {
+  const _OptionPickerHost();
+
+  @override
+  State<_OptionPickerHost> createState() => _OptionPickerHostState();
+}
+
+class _OptionPickerHostState extends State<_OptionPickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showModalBottomSheet` 要用 `context` 的 `Overlay`，而
+    // `initState` 里 context 还没挂进树。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showGlassOptionPicker<int>(
+        context,
+        title: L10n.snoozeDuration,
+        options: L10n.snoozeOptions,
+        labelOf: L10n.snoozeOptionLabel,
+        selected: L10n.snoozeOptions[1],
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 取色层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 与 `_OptionPickerHost` 同一套路：`showShiftColorPicker` 是命令式的，没有可以
+/// 直接放进 `home:` 的 widget。首帧后把它弹出来，`build` 只交一个空 `Scaffold`。
+class _ColorPickerHost extends StatefulWidget {
+  const _ColorPickerHost();
+
+  @override
+  State<_ColorPickerHost> createState() => _ColorPickerHostState();
+}
+
+class _ColorPickerHostState extends State<_ColorPickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    // 必须等首帧：`showModalBottomSheet` 要用 `context` 的 `Overlay`，而
+    // `initState` 里 context 还没挂进树。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showShiftColorPicker(context, current: 0xFF4C8DFF, sampleLabel: '早');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
 /// 命令式弹窗的宿主 —— **只为工装存在，不进 `lib/`**。
 ///
 /// 「开始使用」「使用帮助」都是 `showXxxDialog(context)` 这种命令式 API：调一下
@@ -512,6 +698,36 @@ class _DialogHostState extends State<_DialogHost> {
 
   @override
   Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 「加载态」的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 工装是**等状态落定之后**才取像的（`settleVisual` 逐帧推进到稳定），正常挂一个
+/// 页面根本拍不到加载态。所以这层薄壳用一层**内嵌的 `ProviderScope`** 把这一页
+/// 依赖的那条流覆写成**永不发出、也永不结束**的流（`Stream.multi` 的回调什么都不做）
+/// —— `StreamProvider` 的 `AsyncValue` 因此永远停在 `AsyncLoading`，页面的 loading
+/// 分支（`GlassLoading`）被钉在屏幕上。
+///
+/// 内嵌 `ProviderScope` 会**遮蔽**外层那个（`renderScreen` 传进来的
+/// `databaseProvider` 覆盖）—— 只影响这棵子树，别的 provider 照旧走真库。与
+/// `_ColorPickerHost` 那种「只为弹层而生的薄壳」同一路子。
+class _LoadingHost extends StatelessWidget {
+  const _LoadingHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return ProviderScope(
+      overrides: <Override>[
+        // `Stream.multi` 的建流回调什么都不做 ⇒ 既不 emit、也不 close ⇒
+        // 订阅者永远收不到事件，`AsyncValue` 停在 `AsyncLoading`。不用
+        // `Stream.empty()`：那条**会立刻结束**，落不进 loading 分支。
+        schedulesProvider.overrideWith(
+          (ref) => Stream<List<ShiftScheduleRow>>.multi((_) {}),
+        ),
+      ],
+      child: const ScheduleManagementScreen(),
+    );
+  }
 }
 
 /// 每个界面要出的变体。
@@ -587,6 +803,9 @@ final List<
 /// 只列**确实有下半屏内容**的屏：没列的屏拖了也是同一张图，白出一份；
 /// 顺带逼着加新屏的人想一下「这屏下面还有东西吗」。
 const Map<String, double> visualScrollDown = {
+  // 《使用帮助》整页：九条功能简介之后才是那颗进第二层的入口，而首屏只露得出
+  // 前三条。**这一条不加的话，本轮新加的那个入口在任何一张图上都看不到。**
+  '18_help_center': 3000,
   '07_profile': 620, // 权限卡 + 关于
   '06_alarm': 360, // 自定义闹钟那一段
   '03_management': 280, // 排班列表
@@ -596,7 +815,14 @@ const Map<String, double> visualScrollDown = {
   '20_editor_alarm_one': 420,
   '21_editor_alarm_three': 520,
   '22_editor_alarm_max': 620,
+  // 三档那张的「前一天」那一档在**第二个班次卡**（夜班）上，首屏只露得出中班
+  // 那张卡 —— 不滚就看不到三档里的第一档。
+  '53_editor_alarm_tri_tier': 760,
   // 撞班提示挂在「周期设置」卡的末尾，10 行周期表的下面；给足量让它滚到底，
   // 靠到底后的钳位保证那张卡的下半段（提示 + 均分按钮）在画面里。
   '15_editor_crew_clash': 2400,
+  // 按月那一支：班次卡下面才是段列表（顶上两张卡占掉一屏），再往下是班组卡。
+  '57_editor_monthly': 1500,
+  // 选择页那两张「从零开始」的卡在 20 来个模板之后，滚到底才看得到。
+  '58_template_picker_monthly': 4000,
 };

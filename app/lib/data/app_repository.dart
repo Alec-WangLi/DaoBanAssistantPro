@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/monthly_pattern.dart';
 import '../domain/recurring_todo.dart';
 import '../domain/schedule_chain.dart';
 import '../domain/schedule_template.dart';
 import '../domain/shift_rotation.dart';
 import 'app_database.dart';
 import 'seed.dart';
+import 'todo_archive.dart';
 
 export 'app_database.dart';
 
@@ -26,12 +28,13 @@ List<int> parseTeamOffsets(String s) {
 
 String joinTeamOffsets(List<int> offsets) => offsets.join(',');
 
-/// 活跃排班方案（当前方案行 + 班次定义 + 周期序列 + 按天改班覆盖）。
+/// 活跃排班方案（当前方案行 + 班次定义 + 周期序列 + 按月段表 + 按天改班覆盖）。
 class ActiveSchedule {
   const ActiveSchedule({
     required this.schedule,
     required this.classes,
     required this.cycle,
+    this.monthSegments = const [],
     this.overrideRows = const [],
     this.classAlarms = const {},
   });
@@ -39,6 +42,12 @@ class ActiveSchedule {
   final ShiftScheduleRow schedule;
   final List<ShiftClassRow> classes;
   final List<ShiftCycleRow> cycle;
+
+  /// 本方案的按月段表（存的是 classId，按 `order` 升序）。
+  ///
+  /// 与 [cycle] 并存而不是二选一：切换模式不丢数据，所以一套方案可以**两边都非空**，
+  /// 当前走哪边由 `schedule.monthly` 决定（`domain/shift_rotation.dart` 的类文档）。
+  final List<ScheduleMonthSegmentRow> monthSegments;
 
   /// 本方案的按天改班覆盖行（存的是 classId）。
   final List<ShiftDayOverride> overrideRows;
@@ -58,6 +67,13 @@ class ActiveSchedule {
         .map((r) => indexById[r.classId] ?? -1)
         .where((i) => i >= 0)
         .toList();
+    // 段表同一个口径：classId → 下标，查不到的（班次被删、历史脏数据）跳过。
+    final domainSegments = <MonthlySegment>[
+      for (final r in monthSegments)
+        if (indexById[r.classId] != null)
+          MonthlySegment(
+              startDay: r.startDay, classIndex: indexById[r.classId]!),
+    ];
     // 同口径：覆盖行的 classId 也换算成 classes 下标。
     final dayOverrides = <int, int>{};
     for (final r in overrideRows) {
@@ -68,6 +84,7 @@ class ActiveSchedule {
     final n = schedule.teamCount;
     final names = parseTeamNames(schedule.teamNames);
     final offsets = parseTeamOffsets(schedule.teamOffsets);
+    final segOffsets = parseTeamOffsets(schedule.teamSegOffsets);
     return ShiftSchedule(
       name: schedule.name,
       anchorDate: schedule.anchorDate,
@@ -87,6 +104,13 @@ class ActiveSchedule {
         (i) => i < offsets.length ? offsets[i] : (i - schedule.ourTeamIndex),
       ),
       dayOverrides: dayOverrides,
+      // 模式判据**只有这一个**：`monthly`。段表与周期各读各的，谁当前生效由它定。
+      monthly: schedule.monthly,
+      monthlySegments: domainSegments,
+      teamSegOffsets: List.generate(
+        n,
+        (i) => i < segOffsets.length ? segOffsets[i] : (i - schedule.ourTeamIndex),
+      ),
     );
   }
 }
@@ -263,6 +287,13 @@ extension AppDatabaseQueries on AppDatabase {
           ..where((t) => t.scheduleId.equals(sched.id))
           ..orderBy([(t) => OrderingTerm.asc(t.order)]))
         .get();
+    // 段表与周期表**都查**、都装进领域模型：切换模式不丢数据，所以两边可以同时
+    // 非空，当前走哪边由 `schedule.monthly` 决定。只装一边的后果是「切回去那套
+    // 没了」—— 不报错，只是用户切回周期模式之后发现周期还在（或反过来不在）。
+    final monthSegments = await (select(scheduleMonthSegmentRows)
+          ..where((t) => t.scheduleId.equals(sched.id))
+          ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+        .get();
     final overrideRows = await (select(shiftDayOverrides)
           ..where((t) => t.scheduleId.equals(sched.id)))
         .get();
@@ -284,6 +315,7 @@ extension AppDatabaseQueries on AppDatabase {
       schedule: sched,
       classes: classes,
       cycle: cycle,
+      monthSegments: monthSegments,
       overrideRows: overrideRows,
       classAlarms: alarmsByClass,
     );
@@ -345,8 +377,9 @@ class AppRepository {
       await db.delete(db.shiftDayOverrides).go();
       // 班次闹钟同理：+`class_id` 指着班次定义。
       await db.delete(db.shiftClassAlarms).go();
-      // 先删子表（周期）再删父表（班次定义）。
+      // 先删子表（周期、按月段表）再删父表（班次定义）。
       await db.delete(db.shiftCycleRows).go();
+      await db.delete(db.scheduleMonthSegmentRows).go();
       // 时间线上的段指着方案行，也是子表。
       await db.delete(db.scheduleSpanRows).go();
       await db.delete(db.shiftClassRows).go();
@@ -499,6 +532,9 @@ class AppRepository {
       await (db.delete(db.shiftCycleRows)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
+      await (db.delete(db.scheduleMonthSegmentRows)
+            ..where((t) => t.scheduleId.equals(id)))
+          .go();
       await (db.delete(db.shiftDayOverrides)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
@@ -554,6 +590,9 @@ class AppRepository {
             cycle: encodeTemplateCycle(t.cycle),
             teamCount: t.teamCount,
             teamOffsets: encodeTemplateOffsets(t.teamOffsets),
+            monthly: Value(t.monthly),
+            monthSegments: Value(encodeTemplateMonthSegments(t.monthlySegments)),
+            teamSegOffsets: Value(encodeTemplateOffsets(t.teamSegOffsets)),
             createdAt: DateTime.now(),
           ),
         );
@@ -582,6 +621,11 @@ class AppRepository {
         cycle: decodeTemplateCycle(r.cycle),
         teamCount: r.teamCount,
         teamOffsets: decodeTemplateOffsets(r.teamOffsets),
+        // 老模板（v13 及更早存的）这三列是默认值：monthly = false、
+        // monthSegments = '' —— 解出来就是「一套周期模板」，与升级前一字不差。
+        monthly: r.monthly,
+        monthlySegments: decodeTemplateMonthSegments(r.monthSegments),
+        teamSegOffsets: decodeTemplateOffsets(r.teamSegOffsets),
       ));
     }
     return out;
@@ -599,6 +643,9 @@ class AppRepository {
     List<String> teamNames = const ['一班', '二班', '三班', '四班'],
     int ourTeamIndex = 0,
     List<int> teamOffsets = const [],
+    bool monthly = false,
+    List<MonthlySegment> monthSegments = const [],
+    List<int> teamSegOffsets = const [],
   }) {
     return db.transaction(() async {
       late int id;
@@ -615,6 +662,8 @@ class AppRepository {
                 teamNames: Value(joinTeamNames(teamNames)),
                 ourTeamIndex: Value(ourTeamIndex),
                 teamOffsets: Value(joinTeamOffsets(teamOffsets)),
+                monthly: Value(monthly),
+                teamSegOffsets: Value(joinTeamOffsets(teamSegOffsets)),
               ),
             );
       } else {
@@ -628,6 +677,8 @@ class AppRepository {
           teamNames: Value(joinTeamNames(teamNames)),
           ourTeamIndex: Value(ourTeamIndex),
           teamOffsets: Value(joinTeamOffsets(teamOffsets)),
+          monthly: Value(monthly),
+          teamSegOffsets: Value(joinTeamOffsets(teamSegOffsets)),
         ));
       }
 
@@ -640,8 +691,11 @@ class AppRepository {
             .write(const ShiftScheduleRowsCompanion(isCurrent: Value(true)));
       }
 
-      // 重建班次定义与周期序列
+      // 重建班次定义与周期序列（段表与它同一条：都是方案的子表、都整组重写）
       await (db.delete(db.shiftCycleRows)
+            ..where((t) => t.scheduleId.equals(id)))
+          .go();
+      await (db.delete(db.scheduleMonthSegmentRows)
             ..where((t) => t.scheduleId.equals(id)))
           .go();
 
@@ -723,6 +777,13 @@ class AppRepository {
         await (db.delete(db.shiftClassAlarms)
               ..where((t) => t.classId.equals(row.id)))
             .go();
+        // 段行与周期行一样是**整组重写**的（上面已经按 scheduleId 删过一遍），
+        // 所以这一句在当前的语句顺序下是**防御性**的 —— 留着它，是为了让
+        // 「没有任何段行指向不在这套方案里的班次」这条不变式不依赖上面那句的
+        // 位置（谁哪天把插入挪到清理前面，这里就变成唯一的把关）。
+        await (db.delete(db.scheduleMonthSegmentRows)
+              ..where((t) => t.classId.equals(row.id)))
+            .go();
         await (db.delete(db.shiftClassRows)..where((t) => t.id.equals(row.id)))
             .go();
       }
@@ -734,6 +795,20 @@ class AppRepository {
               ShiftCycleRowsCompanion.insert(
                 scheduleId: id,
                 order: i,
+                classId: classIds[ci],
+              ),
+            );
+      }
+
+      // 按月段表：同一个口径（`classIndex` → classId），越界跳过。
+      for (var i = 0; i < monthSegments.length; i++) {
+        final ci = monthSegments[i].classIndex;
+        if (ci < 0 || ci >= classIds.length) continue;
+        await db.into(db.scheduleMonthSegmentRows).insert(
+              ScheduleMonthSegmentRowsCompanion.insert(
+                scheduleId: id,
+                order: i,
+                startDay: monthSegments[i].startDay,
                 classId: classIds[ci],
               ),
             );
@@ -852,6 +927,29 @@ class AppRepository {
         .go();
   }
 
+  /// 把归档（已完成的待办）裁到最多 [keep] 条 —— 丢**日期最旧**的那几条。
+  ///
+  /// ⚠️ **只许碰 `isCompleted == true` 的行。** 这是硬约束：按总数截断的话，
+  /// 一条「很旧但一直没做」的待办会先被删掉 —— 那是数据丢失，不是归档。
+  ///
+  /// 为什么按 `date` 而不是「完成时间」：表里没有完成时间，也不为它加一列 ——
+  /// 归档不需要那么准，少一列就少一处要维护的迁移（spec §2 明说不改表）。
+  ///
+  /// 什么时候跑：`home_shell` 的启动就绪闸，**不在** `setEventCompleted` 里 ——
+  /// 用户完全可能勾一条去年完成过的待办，在那一刻裁会让它当场消失，连「先划掉
+  /// 再收走」的那一眼反馈都没有（spec §4）。
+  Future<int> pruneArchivedTodos({int keep = kArchivedTodoLimit}) async {
+    final done = await (db.select(db.scheduleEvents)
+          ..where((r) => r.isCompleted.equals(true))
+          ..orderBy([(r) => OrderingTerm.asc(r.date)]))
+        .get();
+    if (done.length <= keep) return 0;
+    final doomed =
+        done.sublist(0, done.length - keep).map((e) => e.id).toList();
+    await (db.delete(db.scheduleEvents)..where((r) => r.id.isIn(doomed))).go();
+    return doomed.length;
+  }
+
   // ---------------------------------------------------------------------------
   // 重复待办（系列定义）
   //
@@ -919,9 +1017,22 @@ class AppRepository {
   ///
   /// 不写这个标记的话，在列表里删掉当前那条之后，下一次打开 App 生成器又会把它
   /// 补出来 —— 用户看到的就是「删不掉」。
-  Future<void> skipRecurringOccurrence(int seriesId, DateTime occ) {
-    return (db.update(db.recurringSeriesRows)..where((t) => t.id.equals(seriesId)))
-        .write(RecurringSeriesRowsCompanion(skipThrough: Value(dayNumber(occ))));
+  ///
+  /// ⚠️ **它是单调的**（只进不退）。主列表里被删的那条永远是最新的 occurrence，
+  /// 所以这个标记从前只会往前走；而**归档区里有更旧的 occurrence** —— 删它会
+  /// 把这个标记**往回写**，生成器随后发现「下一次 occurrence 还在标记之后」，
+  /// 就把用户刚删掉的那一条又补出来（又一个「删了又回来」）。水位线本来就不该倒流。
+  Future<void> skipRecurringOccurrence(int seriesId, DateTime occ) async {
+    final row = await (db.select(db.recurringSeriesRows)
+          ..where((t) => t.id.equals(seriesId)))
+        .getSingleOrNull();
+    if (row == null) return;
+    final next = dayNumber(occ);
+    final current = row.skipThrough;
+    if (current != null && current >= next) return;
+    await (db.update(db.recurringSeriesRows)
+          ..where((t) => t.id.equals(seriesId)))
+        .write(RecurringSeriesRowsCompanion(skipThrough: Value(next)));
   }
 
   /// 删一个系列，**连带删它的行**（当前那条与已完成的历史都算它的）。

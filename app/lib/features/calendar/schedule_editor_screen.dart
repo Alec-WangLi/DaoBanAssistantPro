@@ -5,21 +5,27 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
+import '../../core/shift_palette.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_action_button.dart';
+import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_field.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
+import '../../domain/monthly_pattern.dart';
 import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
+import 'shift_color_picker.dart';
 
 /// 排班方案编辑器。
 ///
@@ -39,10 +45,6 @@ class ScheduleEditorScreen extends ConsumerStatefulWidget {
 }
 
 class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
-  static const _palette = [
-    0xFF4C8DFF, 0xFF7A5CFF, 0xFF9AA0B4, 0xFF5A5F73,
-    0xFF34C759, 0xFFFF9F0A, 0xFFFF375F, 0xFF00C7BE,
-  ];
 
   /// 简称输入框宽度：放得下 2 个汉字（`maxLength: 2`）再加边框内边距。
   ///
@@ -57,10 +59,24 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// （它是 Expanded），名字框与删除钮要保持可点 —— 这条由视觉工装出图核对。
   static const double _alarmLabelFieldWidth = 120;
 
+  /// 班次卡的**身份行**在卡片内宽小于这个值时把「简称」折到第二行。
+  ///
+  /// 非折叠那一行需要的固定宽度约 148（色点 20 + 两个间距 + 简称框 68 + 删除钮），
+  /// 取 160 留一点余量给名称框 —— 名称框是 `Expanded`，能缩到 0，但缩到十几个
+  /// 像素等于没法用。200dp 小窗里卡片内宽只有 116，所以那一档必然折行。
+  /// 见 [_classIdentityRow]。
+  static const double _classRowStackBelow = 160;
+
+  /// **闹钟那一行**折行阈值：名字框（`_alarmLabelFieldWidth` 120）+ 时间块 +
+  /// 删除钮，非折叠那一行要两百出头才排得开。见 [_alarmRow]。
+  static const double _alarmRowStackBelow = 200;
+
   /// 底部那颗「保存并重排闹钟」胶囊的高度：M3 的 `FilledButton` 默认值，
-  /// 探针在 420×900 与 200×400 两档下量到的都是它。**只用来算投影的圆角**
-  /// （胶囊的圆角恒为高度的一半），所以系统字号把它撑得更高时投影会小一圈 ——
-  /// 2~4px 的差在 blur 14 的投影里看不出来，不值得为它去量一次布局。
+  /// 探针在 420×900 与 200×400 两档下量到的都是它。v0.12.0 换成自家的
+  /// `GlassButton` 之后**这颗胶囊不再由字体撑高**（`GlassButton` 是定高），
+  /// 圆角取它的一半（= `AppTokens.pillOf(_saveButtonHeight)` 的半径）。
+  /// **`kFloatingSaveInset = 92` 是按这个 48 推出来的**（16 + 48 + 16 + 12），
+  /// 改它必须一并重算那条常量。
   static const double _saveButtonHeight = 48;
 
   bool _loaded = false;
@@ -90,6 +106,18 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 周期序列：长度即周期，元素是 [_classes] 的下标。
   List<int> _cycle = [];
+
+  /// 这套方案走**按月锚定**吗（每月 1 号归零）。**模式唯一的判据**。
+  ///
+  /// 与 [_cycle] **各存各的、切换不丢数据**：切到按月再切回来，周期还在；反之
+  /// 亦然。所以别拿「哪一边是空的」去猜模式（详见 `ShiftSchedule` 的类文档）。
+  bool _monthly = false;
+
+  /// 按月切法：一段 = 「每月的第 N 天起 → 某个班次」，第一段恒从 1 起。
+  List<MonthlySegment> _monthlySegments = [];
+
+  /// 各班组的**段**偏移（单位是段，不是天）。
+  List<int> _teamSegOffsets = [];
 
   int _teamCount = 4;
   List<String> _teamNames = ['一班', '二班', '三班', '四班'];
@@ -146,6 +174,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         _overrideDays = dd.dayOverrides.length;
         _overridesByClassId = _countOverridesByClassId(dd);
         _cycle = List.of(dd.cycle);
+        _monthly = dd.monthly;
+        _monthlySegments = List.of(dd.monthlySegments);
         _teamCount = dd.teamCount;
         _teamNames = List.of(dd.teamNames);
         _ourTeamIndex = dd.ourTeamIndex;
@@ -157,6 +187,15 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     ((i - dd.ourTeamIndex) % dd.teamCount + dd.teamCount) %
                     dd.teamCount,
               );
+        // 段偏移与天偏移同一个补位口径（长度不够就按「相对我们班组」补），
+        // 只是取模的单位是**段数**；没有段表时补 0（那时它本来就不参与计算）。
+        final segCount = dd.monthlySegments.length;
+        _teamSegOffsets = dd.teamSegOffsets.length == dd.teamCount
+            ? List.of(dd.teamSegOffsets)
+            : [
+                for (var i = 0; i < dd.teamCount; i++)
+                  segCount == 0 ? 0 : (i - dd.ourTeamIndex) % segCount,
+              ];
         _followHoliday = dd.isBlank;
         _syncClassCtrls();
         _syncTeamNameCtrls();
@@ -276,7 +315,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       // 正文到那里就没了；`extendBody` 让它继续铺下去，而浮动层照旧画在上面。
       extendBody: true,
       appBar: AppBar(
-        title: Text(L10n.editSchedule),
+        // 标题按宽度缩小而不是省略（与另外两张整页同一个配方）。
+        title: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(L10n.editSchedule)),
         actions: [
           IconButton(
             tooltip: L10n.saveAsTemplate,
@@ -300,7 +343,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               ),
             )
           : !_loaded
-              ? const Center(child: CircularProgressIndicator())
+              ? const GlassLoading()
               : CenteredContent(
                 child: ListView(
                   padding: EdgeInsets.fromLTRB(
@@ -348,26 +391,32 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                   maxWidth: AppLayout.maxContentWidth),
-              // 胶囊是**浮在正文上**的，给它一层投影 —— 不然正文从它底下穿过去时，
-              // 实心胶囊看着像贴上去的一张纸。配方取自 `GlassButton` 的 primary
-              // 那一档（全 app「悬浮的主操作」用的是同一套），圆角与按钮同形
-              // （M3 的 `FilledButton` 是胶囊，圆角恒为高度的一半）。
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: AppTokens.pillOf(_saveButtonHeight),
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.30),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: FilledButton.icon(
+              // 胶囊是**浮在正文上**的 —— 它现在是自家的 `GlassButton`（primary
+              // 那一档），自带全 app「悬浮的主操作」同一套投影（主色 @0.30、
+              // blur 14、offset (0,4)），所以这里**不再自己叠一层**（两层会叠成
+              // 两重影）。高度与圆角仍按 48 的胶囊来（`kFloatingSaveInset` 就是
+              // 按这个 48 推的），圆角取高度的一半。
+              //
+              // 外面套的 `IntrinsicWidth` **是必须的**：`GlassButton` 没有内在宽度
+              // （里面那个 `Center` 会一路撑到 `maxWidth`），而这里的约束是**松的**
+              // —— 直接放进去它会变成通栏长条（换件后出图量到 388 宽）。套一层
+              // `IntrinsicWidth` 让它收缩到内容宽度，仍是「按内容定宽、靠 `Align`
+              // 居中悬浮」的一颗胶囊（换件前那颗 `FilledButton` 约 180 宽）。
+              // 同一招在 `schedule_screen` 的归档胶囊上也用过。
+              //
+              // 左右的 `padding` 只有**定宽**的按钮才需要：`GlassButton` 没有内边距
+              // （另外三个调用点都是通栏、内容居中，不加也看不出来），而这里收窄成
+              // 胶囊之后，文字会贴到两端的圆头上（出图看出来的）。
+              child: IntrinsicWidth(
+                child: GlassButton(
+                  primary: true,
+                  height: _saveButtonHeight,
+                  radius: _saveButtonHeight / 2,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.spaceXl),
                   onPressed: _saving ? null : _save,
                   icon: const Icon(Icons.check_outlined),
-                  label: Text(L10n.saveAndReschedule),
+                  child: Text(L10n.saveAndReschedule),
                 ),
               ),
             ),
@@ -391,6 +440,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         teamNames: _teamNames,
         ourTeamIndex: _ourTeamIndex,
         teamOffsets: _teamOffsets,
+        monthly: _monthly,
+        monthlySegments: _monthlySegments,
+        teamSegOffsets: _teamSegOffsets,
       );
 
   /// 0) 未来 14 天预览：改任何设置都能立刻看出对不对。
@@ -451,11 +503,15 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final color = s == null ? muted : Color(s.color);
     return Column(
       children: [
-        // 单行：窄格子里 `12/25` 这种 5 字符日期换行会把两行的高度撑破
-        // （大字号系统字体下同理）。
-        Text('${date.month}/${date.day}',
-            maxLines: 1,
-            style: AppTokens.microText.copyWith(color: muted)),
+        // 单行：窄格子里 `12/25` 这种 5 字符日期换行会把两行的高度撑破。
+        // **按可用宽度等比缩小而不是省略**（设计 §6.5）：它是定尺的点阵，
+        // 与日历格子同一条规矩 —— 折行会撑破，省略会吃掉字。
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text('${date.month}/${date.day}',
+              maxLines: 1,
+              style: AppTokens.microText.copyWith(color: muted)),
+        ),
         const SizedBox(height: AppTokens.spaceXs),
         Container(
           padding: const EdgeInsets.symmetric(
@@ -465,18 +521,19 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             borderRadius: BorderRadius.circular(AppTokens.radiusS),
             border: Border.all(color: color.withValues(alpha: 0.5)),
           ),
-          child: Text(
-            s?.shortLabel ?? '—',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTokens.microStrong.copyWith(
-                // 底色是班次色 16% 的淡染，字得按它算可读版本，不能直接用班次色
-                // （橙 `#FF9F0A` 这类浅色压上去几乎看不见）。
-                color: AppTokens.inkFor(
-                    color,
-                    Color.alphaBlend(
-                        color.withValues(alpha: 0.16),
-                        Theme.of(context).colorScheme.surface))),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              s?.shortLabel ?? '—',
+              maxLines: 1,
+              style: AppTokens.microStrong.copyWith(
+                  // 底色是班次色 16% 的淡染，字得按它算可读版本，不能直接用班次色
+                  // （橙 `#FF9F0A` 这类浅色压上去几乎看不见）。
+                  color: AppTokens.inkFor(
+                      color,
+                      Color.alphaBlend(color.withValues(alpha: 0.16),
+                          Theme.of(context).colorScheme.surface))),
+            ),
           ),
         ),
       ],
@@ -496,14 +553,30 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            controller: _scheduleNameCtrl,
-            onChanged: (v) => _name = v,
-            decoration: glassInputDecoration(context, L10n.scheduleName),
+          GlassField(
+            label: L10n.scheduleName,
+            child: TextField(
+              controller: _scheduleNameCtrl,
+              onChanged: (v) => _name = v,
+              decoration: glassInputDecoration(context),
+            ),
           ),
-          const SizedBox(height: AppTokens.spaceSm),
-          InkWell(
-            borderRadius: BorderRadius.circular(AppTokens.radiusM),
+          // 按月模式**不显示**这一行：按月不读基准日（每月 1 号恒等于第一段），
+          // 摆一个改不动结果的日期在那儿，就是让用户在界面上操作一个不生效的值。
+          if (!_monthly) ..._myCycleStartRow(context, muted),
+        ],
+      ),
+    );
+  }
+
+  /// 顶部那张卡的第二行：「我这组从这个周期开始」。**只有周期模式用得上。**
+  List<Widget> _myCycleStartRow(BuildContext context, Color muted) => [
+        const SizedBox(height: AppTokens.spaceSm),
+        // 按压反馈 = 玻璃的 Q 弹缩放（`GlassPressable` 没有 `onTap`，点击交给
+        // `GestureDetector`）；这条行套 `InkWell` 会凭空多一圈水波纹（spec §7）。
+        GlassPressable(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () async {
               final picked = await showGlassDatePicker(
                 context,
@@ -526,13 +599,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(L10n.myCycleStart,
-                            style: AppTokens.titleStrong),
+                        Text(L10n.myCycleStart, style: AppTokens.titleStrong),
                         const SizedBox(height: AppTokens.spaceXs),
                         Text(
                           L10n.yearMonthDay(_myCrewStart),
-                          style:
-                              AppTokens.rowSecondary.copyWith(color: muted),
+                          style: AppTokens.rowSecondary.copyWith(color: muted),
                         ),
                       ],
                     ),
@@ -543,10 +614,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ];
 
   /// 3) 班次设置：每个班次定义一次，周期里直接引用。
   Widget _classesCard(BuildContext context) {
@@ -588,7 +657,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final outline = Theme.of(context).colorScheme.outlineVariant;
     final muted = AppTokens.inkMuted(context);
     // 响铃落在哪天是「算」出来的、看不出来（00:00 上班 + 23:00 响铃 = **前一天**
-    // 晚上，见 `alarmFallsOnPreviousDay`），所以下面既改钟点的写法、又补一行
+    // 晚上；16:30–次日 00:30 的 00:15 = **次日**，见 `alarmDayAnchor`），
+    // 所以下面既改钟点的写法、又补一行
     // 小字：用户反馈里问的正是「这 23:00 到底是哪天」。
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
@@ -601,41 +671,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 身份行：色点（点一下改色）· 名称 · 简称 · 删除
-          Row(
-            children: [
-              _colorDot(context, index, c),
-              const SizedBox(width: AppTokens.spaceSm),
-              Expanded(
-                child: TextField(
-                  controller: _nameCtrls[index],
-                  onChanged: (v) => setState(() =>
-                      _classes[index] = _editClass(_classes[index], name: v)),
-                  decoration: glassInputDecoration(context, L10n.shiftName,
-                      isDense: true),
-                ),
-              ),
-              const SizedBox(width: AppTokens.spaceSm),
-              SizedBox(
-                width: _abbrFieldWidth,
-                child: TextField(
-                  controller: _abbrCtrls[index],
-                  maxLength: 2,
-                  textAlign: TextAlign.center,
-                  onChanged: (v) => setState(() =>
-                      _classes[index] = _editClass(_classes[index], abbr: v)),
-                  decoration: glassInputDecoration(context, L10n.abbrLabel,
-                          isDense: true)
-                      .copyWith(counterText: ''),
-                ),
-              ),
-              const SizedBox(width: AppTokens.spaceXs),
-              GlassDeleteButton(
-                compact: true,
-                onPressed: () => _deleteClass(index),
-              ),
-            ],
-          ),
+          // 身份行：色点（点一下改色）· 名称 · 简称 · 删除。
+          // 窄到放不下时把「简称」折到第二行 —— 见 [_classIdentityRow]。
+          _classIdentityRow(context, index, c),
           const SizedBox(height: AppTokens.spaceMd),
           // 工作 / 休息用分段器：两个标签都在，不会像裸开关那样让人猜
           // 「拨过去是休息还是启用」。与闹钟页、我的页的选择器同款手感。
@@ -650,9 +688,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 // 13 档最重的角色是 w600，分段器标签原本就是 w700：选中态只改
                 // 色不改重，字重是控件自己的标签强调，按 spec 走 copyWith。
                 style: AppTokens.labelSecondary.copyWith(
-                  color: selected
-                      ? Theme.of(context).colorScheme.onSurface
-                      : muted,
+                  // ⚠️ **选中的那一格压在实心主色滑块上 ⇒ 必须白字。**
+                  // 这里取的是 `onSurface`（浅色档下就是近黑），在滑块还是半透明的
+                  // 年代读得出来，换成不透明 + 压深之后就是「深底压深字」
+                  // （`GlassSegment` 也会给选中格一层白 `DefaultTextStyle`，
+                  // 但这里显式写了颜色，以调用点为准 —— 所以这一处必须自己改）。
+                  color: selected ? Colors.white : muted,
                 ).copyWith(fontWeight: FontWeight.w700),
               ),
             ),
@@ -708,78 +749,20 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               for (var k = 0; k < c.alarms.length; k++)
                 Padding(
                   padding: const EdgeInsets.only(top: AppTokens.spaceXs),
-                  child: Row(
-                    key: Key('shift-alarm-row-$index-$k'),
-                    children: [
-                      Expanded(
-                        child: _timeChip(
-                          context,
-                          label: L10n.alarmTime,
-                          minutes: c.alarms[k].minute,
-                          // 落在上班前一天的写成「前一天 23:00」：只写钟点会让人
-                          // 读成班次当天，而那正是用户反馈里说的「看不到有这个选项」。
-                          valueText: alarmFallsOnPreviousDay(c, c.alarms[k])
-                              ? L10n.clockPrevDay(
-                                  formatClock(c.alarms[k].minute))
-                              : null,
-                          onPick: (m) {
-                            // `_timeChip` 的 onPick 类型是可空 int（没选就调不到
-                            // 这里），但闹钟必须有个钟点，所以空值直接忽略。
-                            if (m == null) return;
-                            setState(() => _classes[index] =
-                                _editClass(_classes[index], alarms: [
-                                  for (var j = 0; j < c.alarms.length; j++)
-                                    j == k
-                                        ? ShiftAlarm(
-                                            minute: m,
-                                            label: c.alarms[j].label)
-                                        : c.alarms[j],
-                                ]));
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: AppTokens.spaceSm),
-                      SizedBox(
-                        width: _alarmLabelFieldWidth,
-                        child: _AlarmLabelField(
-                          key: Key('shift-alarm-label-$index-$k'),
-                          label: c.alarms[k].label,
-                          onChanged: (v) => setState(
-                              () => _classes[index] =
-                                  _editClass(_classes[index], alarms: [
-                                    for (var j = 0; j < c.alarms.length; j++)
-                                      j == k
-                                          ? ShiftAlarm(
-                                              minute: c.alarms[j].minute,
-                                              label: v)
-                                          : c.alarms[j],
-                                  ])),
-                        ),
-                      ),
-                      const SizedBox(width: AppTokens.spaceXs),
-                      GlassDeleteButton(
-                        compact: true,
-                        onPressed: () => setState(() =>
-                            _classes[index] =
-                                _editClass(_classes[index], alarms: [
-                              for (var j = 0; j < c.alarms.length; j++)
-                                if (j != k) c.alarms[j],
-                            ])),
-                      ),
-                    ],
-                  ),
+                  child: _alarmRow(context, index, c, k),
                 ),
-              // 「前一天」的小字：整组给一句就够 —— 它讲的是**规则**（上班 HH:MM、
-              // 闹钟排在前一天 HH:MM），不是某一条的正文；多条各给一句会重复成一片。
-              if (c.alarms.any((a) => alarmFallsOnPreviousDay(c, a)))
+              // 不落在班次当天的小字：整组给一句就够 —— 它点的是**哪一条不在当天**，
+              // 不是某一条的正文；多条各给一句会重复成一片。
+              if (c.alarms.any((a) => _alarmDayLabel(c, a) != null))
                 Padding(
                   padding: const EdgeInsets.only(top: AppTokens.spaceXs),
                   child: Text(
-                    L10n.alarmPrevDayHint(
+                    L10n.alarmDayHint(
                         formatClock(c.startMinute!),
-                        formatClock(c.alarms
-                            .firstWhere((a) => alarmFallsOnPreviousDay(c, a))
-                            .minute)),
+                        _alarmDayLabel(
+                            c,
+                            c.alarms.firstWhere(
+                                (a) => _alarmDayLabel(c, a) != null))!),
                     style: AppTokens.microText.copyWith(color: muted),
                   ),
                 )
@@ -829,11 +812,162 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   /// 可点的颜色圆点：外面加一圈描边，让它看起来是能点的。
+  /// 班次卡的身份行：色点 · 名称 · 简称 · 删除。
+  ///
+  /// **窄到放不下时把「简称」折到第二行。** 色点(20) + 名称 + 简称框(68) + 删除钮
+  /// 那三样固定宽度加起来约 148，而 200 宽的小窗里卡片内宽只有 116 —— 不折行就是
+  /// 一条溢出的横条（工装在小窗那一档当场报 32px）。
+  ///
+  /// 降级顺序照 v0.11.12 那条「折行 > 按宽缩小 > 换短串」：**折行优先**。收缩简称
+  /// 框到放不下两个汉字，等于把用户自己输的字吃掉，比折行糟。
+  ///
+  /// 这一处是 v0.11.15 加「按月」那一屏时**工装抓出来的既有缺陷**：之前没有任何
+  /// 一屏在 400 高的窗口里构建到这张卡（上面两张卡正好占满），所以它从没现形过。
+  Widget _classIdentityRow(BuildContext context, int index, ShiftClass c) {
+    final nameField = GlassField(
+      label: L10n.shiftName,
+      isDense: true,
+      child: TextField(
+        controller: _nameCtrls[index],
+        onChanged: (v) => setState(
+            () => _classes[index] = _editClass(_classes[index], name: v)),
+        decoration: glassInputDecoration(context, isDense: true),
+      ),
+    );
+    final abbrField = SizedBox(
+      width: _abbrFieldWidth,
+      child: GlassField(
+        label: L10n.abbrLabel,
+        isDense: true,
+        child: TextField(
+          controller: _abbrCtrls[index],
+          maxLength: 2,
+          textAlign: TextAlign.center,
+          onChanged: (v) => setState(
+              () => _classes[index] = _editClass(_classes[index], abbr: v)),
+          decoration: glassInputDecoration(context, isDense: true)
+              .copyWith(counterText: ''),
+        ),
+      ),
+    );
+    final dot = _colorDot(context, index, c);
+    final del = GlassDeleteButton(
+      compact: true,
+      onPressed: () => _deleteClass(index),
+    );
+
+    return LayoutBuilder(builder: (context, cons) {
+      if (cons.maxWidth >= _classRowStackBelow) {
+        return Row(
+          children: [
+            dot,
+            const SizedBox(width: AppTokens.spaceSm),
+            Expanded(child: nameField),
+            const SizedBox(width: AppTokens.spaceSm),
+            abbrField,
+            const SizedBox(width: AppTokens.spaceXs),
+            del,
+          ],
+        );
+      }
+      return Column(
+        children: [
+          Row(
+            children: [
+              dot,
+              const SizedBox(width: AppTokens.spaceSm),
+              Expanded(child: nameField),
+              const SizedBox(width: AppTokens.spaceXs),
+              del,
+            ],
+          ),
+          const SizedBox(height: AppTokens.spaceXs),
+          Align(alignment: Alignment.centerRight, child: abbrField),
+        ],
+      );
+    });
+  }
+
+  /// 一条联动闹钟那一行：时间块 · 名字框 · 删除。
+  ///
+  /// **窄到放不下时把名字框折到第二行** —— 与 [_classIdentityRow] 同一条降级顺序
+  /// （折行优先）。名字框写死 [_alarmLabelFieldWidth]、删除钮又不能压，200 宽的小窗
+  /// 里卡片内宽只有 116，这一行不折就是一条溢出的横条（工装报 52px）。
+  Widget _alarmRow(BuildContext context, int index, ShiftClass c, int k) {
+    final chip = Expanded(
+      child: _timeChip(
+        context,
+        label: L10n.alarmTime,
+        minutes: c.alarms[k].minute,
+        // 不落在班次当天的那两档都带日前缀（「前一天 23:00」/
+        // 「次日 00:15」）—— 只写钟点会被读成班次当天。
+        valueText: _alarmDayLabel(c, c.alarms[k]),
+        onPick: (m) {
+          // `_timeChip` 的 onPick 类型是可空 int（没选就调不到
+          // 这里），但闹钟必须有个钟点，所以空值直接忽略。
+          if (m == null) return;
+          setState(() => _classes[index] =
+              _editClass(_classes[index], alarms: [
+                for (var j = 0; j < c.alarms.length; j++)
+                  j == k
+                      ? ShiftAlarm(minute: m, label: c.alarms[j].label)
+                      : c.alarms[j],
+              ]));
+        },
+      ),
+    );
+    final labelField = SizedBox(
+      width: _alarmLabelFieldWidth,
+      child: _AlarmLabelField(
+        key: Key('shift-alarm-label-$index-$k'),
+        label: c.alarms[k].label,
+        onChanged: (v) => setState(
+            () => _classes[index] = _editClass(_classes[index], alarms: [
+                  for (var j = 0; j < c.alarms.length; j++)
+                    j == k
+                        ? ShiftAlarm(minute: c.alarms[j].minute, label: v)
+                        : c.alarms[j],
+                ])),
+      ),
+    );
+    final del = GlassDeleteButton(
+      compact: true,
+      onPressed: () => setState(() => _classes[index] =
+          _editClass(_classes[index], alarms: [
+            for (var j = 0; j < c.alarms.length; j++)
+              if (j != k) c.alarms[j],
+          ])),
+    );
+
+    return LayoutBuilder(builder: (context, cons) {
+      final rowKey = Key('shift-alarm-row-$index-$k');
+      if (cons.maxWidth >= _alarmRowStackBelow) {
+        return Row(key: rowKey, children: [
+          chip,
+          const SizedBox(width: AppTokens.spaceSm),
+          labelField,
+          const SizedBox(width: AppTokens.spaceXs),
+          del,
+        ]);
+      }
+      return Column(children: [
+        Row(key: rowKey, children: [
+          chip,
+          const SizedBox(width: AppTokens.spaceXs),
+          del,
+        ]),
+        const SizedBox(height: AppTokens.spaceXs),
+        Align(alignment: Alignment.centerRight, child: labelField),
+      ]);
+    });
+  }
+
   Widget _colorDot(BuildContext context, int index, ShiftClass c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () => _pickColor(index),
       child: Container(
+        key: ValueKey('shift-color-dot-$index'),
         width: 24,
         height: 24,
         decoration: BoxDecoration(
@@ -930,8 +1064,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
 
   /// 时间块的统一外观：可点的圆角玻璃块，标签小字在上、值在下方。
   ///
-  /// 外面垫一层透明 [Material]：班次行本身是带底色的 `Container`，
-  /// 而水波纹要画在最近的 `Material` 上，否则会被底色盖住。
+  /// 按压反馈 = 玻璃的 Q 弹缩放（`GlassPressable`，它自带垫在玻璃上的透明
+  /// `Material`），点击交给 `GestureDetector` —— 不再需要自己垫 `Material`
+  /// 承载水波纹，也不再叠一层 `InkWell`（原先两个反馈叠着来，spec §7）。
   Widget _chipBody(
     BuildContext context, {
     required String label,
@@ -940,44 +1075,50 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }) {
     final primary = Theme.of(context).colorScheme.primary;
     final muted = AppTokens.inkMuted(context);
-    return Material(
-      color: Colors.transparent,
-      child: GlassPressable(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppTokens.radiusM),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceSm),
-            decoration: BoxDecoration(
-              color: primary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(AppTokens.radiusM),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(label,
+    return GlassPressable(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceSm),
+          decoration: BoxDecoration(
+            color: primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(AppTokens.radiusM),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 标签**单行、按宽缩小**。
+                    //
+                    // ⚠️ 这里**不要**写 `maxLines: 2` 假装「先折两行」：`FittedBox`
+                    // 给子件的是无界宽约束，段落永远只排一行，那句「折行」是死代码
+                    // （独立审查指出）。走这个件的标签本来就是单字词
+                    // （开始 / 结束 / 响铃），缩才是对的那一档。
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(label,
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style:
                               AppTokens.rowSecondary.copyWith(color: muted)),
-                      const SizedBox(height: AppTokens.spaceXs),
-                      Text(value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          // 基线是 14/w600（值要比上面 w400 的「开始/结束」重）。
-                          // 14 档没有 w600，取最接近的 labelStrong —— +100 而非精确。
-                          style: AppTokens.labelStrong),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: AppTokens.spaceXs),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(value,
+                          maxLines: 1, style: AppTokens.labelStrong),
+                    ),
+                  ],
                 ),
-                AppIcon(Icons.access_time_outlined,
-                    size: AppTokens.iconMd, color: muted),
-              ],
-            ),
+              ),
+              AppIcon(Icons.access_time_outlined,
+                  size: AppTokens.iconMd, color: muted),
+            ],
           ),
         ),
       ),
@@ -1007,11 +1148,301 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _cycleStepper(context),
+          // 「日子怎么数」的二选一：连续周期，还是每月 1 号归零。
+          //
+          // **不把「跟随法定节假日」并进这个分段器**：那一条是破坏性的（切过去
+          // 会清空班次定义与全部按天覆盖，所以现在才要弹确认框 + 单独一张卡 +
+          // 一个开关）。把破坏性选项混进日常切换里，等于把「问一次」的机会抹掉。
+          GlassSegment(
+            count: 2,
+            selectedIndex: _monthly ? 1 : 0,
+            onSelected: (i) => _setMonthly(i == 1),
+            itemBuilder: (i, selected) => Text(
+              i == 0 ? L10n.scheduleModeCycle : L10n.scheduleModeMonthly,
+              // 与「我的」页那个主题分段器同一套写法：未选中 w500、选中 w700。
+              style: AppTokens.labelSecondary.copyWith(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
           const SizedBox(height: AppTokens.spaceSm),
-          ...List.generate(_cycle.length, (i) => _cycleRow(context, i)),
-          ..._crewClashNotice(context),
+          if (_monthly) ..._monthlyBody(context) else ..._cycleBody(context),
         ],
+      ),
+    );
+  }
+
+  /// 按周期那一支（原本就是这张卡的全部内容）。
+  List<Widget> _cycleBody(BuildContext context) => [
+        _cycleStepper(context),
+        const SizedBox(height: AppTokens.spaceSm),
+        ...List.generate(_cycle.length, (i) => _cycleRow(context, i)),
+        ..._crewClashNotice(context),
+      ];
+
+  /// 按月那一支：一个小标题 + 段列表 + 「添加一段」。
+  List<Widget> _monthlyBody(BuildContext context) {
+    return [
+      Row(
+        children: [
+          Text(L10n.monthlySection, style: AppTokens.titleStrong),
+          const Spacer(),
+          Text(L10n.monthlySegmentCount(_monthlySegments.length),
+              style: AppTokens.labelStrong),
+        ],
+      ),
+      const SizedBox(height: AppTokens.spaceXs),
+      ...List.generate(_monthlySegments.length, (i) => _monthRow(context, i)),
+      GlassPressable(
+        child: ListTile(
+          key: const Key('month-add-segment'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          horizontalTitleGap: AppTokens.gapIconText,
+          leading: AppIcon(Icons.add_circle_outline_outlined,
+              size: AppTokens.iconMd, color: Theme.of(context).colorScheme.primary),
+          title: Text(L10n.monthlyAddSegment, style: AppTokens.rowPrimary),
+          // 最后一段已经能开到 31 号时，再加一段就只能挤在 31 号那天 —— 收掉按钮
+          // 比加出一段「从 31 号起、到月底」的摆设好。
+          onTap: _monthlySegments.isEmpty ||
+                  _monthlySegments.last.startDay >= 31
+              ? null
+              : _addMonthSegment,
+        ),
+      ),
+      ..._crewClashNotice(context),
+    ];
+  }
+
+  /// 切「按周期 / 按月」。**两边各存各的，切换不丢数据**，只是换一个生效。
+  void _setMonthly(bool v) {
+    setState(() {
+      _monthly = v;
+      if (v) _seedMonthlyIfEmpty();
+    });
+  }
+
+  /// 段表为空时种一套起步切法：**按班组数种段**、均分 31 天，第 i 段指向第 i 个
+  /// 班次定义，并把各组的段偏移设成 0..n-1。
+  ///
+  /// 为什么不只种一段：班组数 > 1 时「N 个班组抢一段」必然撞班，用户一进来就看到
+  /// 撞班提示 —— 一个刚切过来就报错的初体验。按班组数种则天然不撞，而且班组数 = 1
+  /// 时正好退化成 `[(1, 0)]`（一整月一个班次），与 spec §6.2 写的是同一个意图。
+  ///
+  /// **只在空的时候种**：否则会把用户上一次切过来时排好的段表冲掉（那也是「切换
+  /// 不丢数据」这条约定的一部分）。
+  void _seedMonthlyIfEmpty() {
+    if (_monthlySegments.isNotEmpty || _classes.isEmpty) return;
+    _monthlySegments = [
+      for (final s in defaultMonthlySegments(_teamCount))
+        MonthlySegment(
+          startDay: s.startDay,
+          // 班次定义比班组还少时绕回来用 —— 那种配置本来就排不开（同一天
+          // 必有两个班组上同一个班），界面上会当场报撞班，比留一段「没有班次」
+          // 的空段好：空段是不报错的。
+          classIndex: s.classIndex % _classes.length,
+        ),
+    ];
+    _teamSegOffsets = [for (var i = 0; i < _teamCount; i++) i];
+  }
+
+  /// 加一段：接在最后一段之后，班次沿用最后一段的（与周期「变长时沿用最后一天」
+  /// 同一条手感）。
+  void _addMonthSegment() {
+    if (_monthlySegments.isEmpty) return;
+    setState(() {
+      final last = _monthlySegments.last;
+      final next = last.startDay + 1;
+      if (next > 31) return;
+      _monthlySegments.add(
+          MonthlySegment(startDay: next, classIndex: last.classIndex));
+    });
+  }
+
+  /// 删一段 = **把它并进上一段**。
+  ///
+  /// 这是唯一能保持「不覆盖出现空档」的删法：段只带起始日、结束日由下一段的起始日
+  /// 决定，所以删掉中间那一段之后，它的日子自然归上一段。第一段删不了 —— 它恒从
+  /// 1 日起，删了就没有「每月 1 号」这个锚了（所以第一行不给删除键）。
+  Future<void> _deleteMonthSegment(int index) async {
+    if (index <= 0 || index >= _monthlySegments.length) return;
+    final day = _monthlySegments[index].startDay;
+    final ok = await showGlassDialog<bool>(
+      context: context,
+      builder: (dialogContext) => GlassDialog(
+        title: L10n.monthlyDeleteSegmentTitle,
+        content: Text(L10n.monthlyDeleteSegmentContent(day)),
+        actions: [
+          GlassActionButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            label: L10n.cancel,
+          ),
+          const SizedBox(width: AppTokens.spaceSm),
+          GlassActionButton(
+            variant: GlassActionVariant.danger,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            label: L10n.delete,
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _monthlySegments.removeAt(index));
+  }
+
+  /// 改某一段的起始日。**只列合法的日号**：要比上一段大、又要给后面的段留位置。
+  Future<void> _pickMonthStartDay(int index) async {
+    if (index <= 0 || index >= _monthlySegments.length) return;
+    final min = _monthlySegments[index - 1].startDay + 1;
+    // 后面还有 `n - 1 - index` 段，每段至少要占一天，所以这一段最大到
+    // `31 - 后面几段`。
+    final max = 31 - (_monthlySegments.length - 1 - index);
+    if (min > max) return;
+    final picked = await showGlassOptionPicker<int>(
+      context,
+      title: L10n.monthlySection,
+      options: [for (var d = min; d <= max; d++) d],
+      labelOf: L10n.monthlyFromDay,
+      selected: _monthlySegments[index].startDay,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _monthlySegments[index] = MonthlySegment(
+        startDay: picked,
+        classIndex: _monthlySegments[index].classIndex,
+      );
+    });
+  }
+
+  /// 按月段列表的一行：左边是可点的「每月第 N 天起」，中间是班次胶囊，右边删除。
+  Widget _monthRow(BuildContext context, int index) {
+    final muted = AppTokens.inkMuted(context);
+    final seg = _monthlySegments[index];
+    final classIndex =
+        seg.classIndex >= 0 && seg.classIndex < _classes.length ? seg.classIndex : -1;
+    final timeText = classIndex < 0 ? '' : _rangeText(_classes[classIndex]);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 标签列现在是**自然宽度**（2026-10-16 之前被 `Expanded(flex: 3)` 硬压到
+          // 约 3/8 宽，「每月第 31 天起」放不下就省略号 —— 而右侧那列班次胶囊是
+          // 横向滚动列表，根本不缺那点宽度）。
+          //
+          // ⚠️ 因此 `cycleRowFitsTime` 里的 `_dayLabelWidth(56)` 对**这一行**不再成立
+          // （56 是**周期行**那个 `SizedBox` 的宽，精确；两天前这一行不是 56 就已是
+          // 近似，现在更不准）。按真实排版量给它 —— 估窄了 `showTime` 会误判成
+          // 「放得下时间」，而右侧那个 `Text(timeText)` 不带 Flexible，宽了就是横向溢出。
+          final dayLabelWidth = _textWidth(
+                L10n.monthlyFromDay(seg.startDay), AppTokens.labelSecondary) +
+              (index > 0 ? AppTokens.spaceXs + AppTokens.iconSm : 0);
+          final showTime = classIndex >= 0 &&
+              cycleRowFitsTime(
+                rowWidth: constraints.maxWidth,
+                classNames: [for (final c in _classes) c.name],
+                timeText: timeText,
+                dayLabelWidth: dayLabelWidth,
+              );
+          // 标签列**按内容自然宽**，但要有个上限 —— 让不出上限的话它会自己把整行
+          // 顶溢出。2026-10-16 第一版写成「裸的自然宽」时在 200dp 小窗下当场溢出
+          // **41px**（实测：标签自己 139.3dp > 整行 142.3dp − 8dp 间距 − 36dp 删除键）。
+          //
+          // 上限就是「把这一行里其余固定件都让掉之后剩下的」：
+          // · `showTime` 为真 ⟹ 按 `cycleRowFitsTime` 的定义，自然宽 + 胶囊 + 时间
+          //   全都放得下，所以这里直接用自然宽当上限（不会裁、也不会溢出）；
+          // · 为假 ⟹ 右边没有时间那一段，让掉 8dp 间距与删除键即可。
+          // 剩下的无论多少都归中间那列可横滑的班次胶囊（`Expanded`）——
+          // 它天然可以缩到 0，不缺宽度。
+          final labelMax = showTime
+              ? dayLabelWidth
+              : (constraints.maxWidth -
+                      AppTokens.spaceSm -
+                      (index > 0 ? _monthRowDeleteWidth : 0))
+                  .clamp(0.0, double.infinity);
+          return Row(
+            children: [
+              // 第一段固定从 1 日起，不给点（点开也只有 1 这一个选项）。
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: labelMax),
+                child: GlassPressable(
+                  key: monthRowDayKey(index),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap:
+                        index == 0 ? null : () => _pickMonthStartDay(index),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: AppTokens.spaceXs),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 这一层 `Flexible` 与 `overflow: ellipsis` 必须**成对**
+                          // 留着：上面那层 `ConstrainedBox` 给的宽不够时，它俩一起
+                          // 把结果降级成省略号；只留 `Flexible` 去掉 `overflow`
+                          // 就是直接裁字（比省略号更糟），两个都去掉则整行溢出。
+                          Flexible(
+                            child: Text(L10n.monthlyFromDay(seg.startDay),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTokens.labelSecondary),
+                          ),
+                          if (index > 0) ...[
+                            const SizedBox(width: AppTokens.spaceXs),
+                            AppIcon(Icons.edit_outlined,
+                                size: AppTokens.iconSm, color: muted),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppTokens.spaceSm),
+              // 标签列不 flex 之后它就是**唯一的**弹性子件，`flex: 5` 是句误导
+              // （只有一个弹性子件时它恒等于「吃掉剩下的全部」）。
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < _classes.length; i++)
+                        Padding(
+                          padding: EdgeInsets.only(
+                              right: i == _classes.length - 1
+                                  ? 0
+                                  : AppTokens.spaceSm),
+                          child: GlassChoiceChip(
+                            key: cycleChipKey(index, i),
+                            label: _classes[i].name,
+                            color: Color(_classes[i].color),
+                            selected: i == seg.classIndex,
+                            onTap: () => setState(() {
+                              _monthlySegments[index] = MonthlySegment(
+                                startDay: seg.startDay,
+                                classIndex: i,
+                              );
+                            }),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (classIndex >= 0 && showTime) ...[
+                const SizedBox(width: AppTokens.spaceMd),
+                Text(timeText,
+                    style: AppTokens.rowSecondary.copyWith(color: muted)),
+              ],
+              // 第一行不给删除键 —— 第一段恒从 1 日起，删了就没有「1 号」了。
+              if (index > 0)
+                GlassDeleteButton(
+                  key: monthRowDeleteKey(index),
+                  compact: true,
+                  onPressed: () => _deleteMonthSegment(index),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1065,7 +1496,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     final clashes = crewClashes(_draftSchedule());
     if (clashes.isEmpty) return const [];
 
-    final days = clashes.map((c) => c.cycleDay).toSet().length;
+    // 按月那一支**连 `days` 都不算**：四年扫描按当日号数去重得到的是「各种月长的
+    // 并集」，那个数字说不清是哪个月里的几天（spec §5.2）—— 报出来是个偏大的假数。
+    final days = _monthly ? 0 : clashes.map((c) => c.cycleDay).toSet().length;
     final perPair = <(int, int), int>{};
     for (final c in clashes) {
       perPair[(c.teamA, c.teamB)] = (perPair[(c.teamA, c.teamB)] ?? 0) + 1;
@@ -1081,7 +1514,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     return [
       const SizedBox(height: AppTokens.spaceSm),
       Text(
-        L10n.crewClashHint(days, _teamNames[top.$1], _teamNames[top.$2]),
+        _monthly
+            ? L10n.crewClashHintMonthly(_teamNames[top.$1], _teamNames[top.$2])
+            : L10n.crewClashHint(days, _teamNames[top.$1], _teamNames[top.$2]),
         key: const Key('editor-crew-clash-hint'),
         style: AppTokens.rowSecondary.copyWith(color: muted),
       ),
@@ -1095,7 +1530,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           leading: AppIcon(Icons.restart_alt,
               size: AppTokens.iconMd, color: action),
           title: Text(
-            L10n.evenCrewStarts,
+            _monthly ? L10n.evenCrewSegments : L10n.evenCrewStarts,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTokens.rowSecondary.copyWith(color: action),
@@ -1106,11 +1541,35 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     ];
   }
 
-  /// 把各组的错位按周期长度均分 —— **我们班组原地不动**。
+  /// 把各组按**当前模式的单位**均分 —— **我们班组原地不动**。
   ///
-  /// 均分是为了让别人不再和自己撞班，顺手把用户自己的周期起始日挪走是不可接受的
+  /// 均分是为了让别人不再和自己撞班，顺手把用户自己的错位挪走是不可接受的
   /// （他的班次会跟着整体平移）。所以整组一起平移，保持「我」那一项不变。
+  ///
+  /// 按月模式把 `n` 传**段数**、写回 `_teamSegOffsets` —— `evenTeamOffsets` 的算式
+  /// 两边同形（第 i 组落在 `i × n ÷ 班组数` 处），只是单位换成了段。
   void _evenCrewStarts() {
+    if (_monthly) {
+      final n = _monthlySegments.length;
+      if (n == 0) return;
+      final ours = _ourTeamIndex < _teamSegOffsets.length
+          ? _teamSegOffsets[_ourTeamIndex]
+          : 0;
+      final even = evenTeamOffsets(n, _teamCount,
+          keepIndex: _ourTeamIndex, keepOffset: ours);
+      if (even.length != _teamSegOffsets.length) return; // 理论上不会发生
+      setState(() {
+        for (var i = 0; i < even.length; i++) {
+          // **要取模**：`evenTeamOffsets` 是「保住我们班组那一格、整组一起平移」，
+          // 平移量一为负（我们的偏移比均分给它的那一格小）就会算出负数或 ≥ 段数
+          // 的值。段偏移的单位是段，落回 0..段数-1 才是同一个旋转 —— 不取模的话
+          // 班组行会显示「从第 -1 段开始」/「从第 4 段开始」而总共只有 3 段
+          // （班次算出来是对的，只有数字是废话）。Dart 的 `%` 对正除数恒非负。
+          _teamSegOffsets[i] = even[i] % n;
+        }
+      });
+      return;
+    }
     final ours = _ourTeamIndex < _teamOffsets.length
         ? _teamOffsets[_ourTeamIndex]
         : 0;
@@ -1135,6 +1594,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             rowWidth: constraints.maxWidth,
             classNames: [for (final c in _classes) c.name],
             timeText: timeText,
+            // 这一行的标签列就是这个写死的宽度（下面的 `SizedBox`）—— 精确值。
+            dayLabelWidth: _dayLabelWidth,
           );
           return Row(
             children: [
@@ -1206,23 +1667,26 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(AppTokens.radiusS),
-            onTap: () => setState(() => _crewExpanded = !_crewExpanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      L10n.crewSettingsOptional,
-                      style: AppTokens.titleStrong,
+          GlassPressable(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _crewExpanded = !_crewExpanded),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        L10n.crewSettingsOptional,
+                        style: AppTokens.titleStrong,
+                      ),
                     ),
-                  ),
-                  Icon(_crewExpanded
-                      ? Icons.expand_less_outlined
-                      : Icons.expand_more_outlined),
-                ],
+                    Icon(_crewExpanded
+                        ? Icons.expand_less_outlined
+                        : Icons.expand_more_outlined),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1250,7 +1714,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             ),
             const SizedBox(height: AppTokens.spaceXs),
             ...List.generate(_teamCount, (i) => _crewRow(context, i)),
-            Text(L10n.teamHint,
+            Text(_monthly ? L10n.monthlyCrewHint : L10n.teamHint,
                 style: AppTokens.rowSecondary.copyWith(color: muted)),
           ],
         ],
@@ -1295,53 +1759,90 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                 ),
               ),
               const SizedBox(width: AppTokens.spaceSm),
-              InkWell(
-                borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                onTap: () => setState(() => _ourTeamIndex = i),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceXs),
-                  decoration: BoxDecoration(
-                    color:
-                        isOurs ? primary : primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                  ),
-                  child: Text(
-                    isOurs ? L10n.myTeam : L10n.setAsMine,
-                    // 可点的 chip 按钮标签，原本就是 w700（比同行的说明文字重），
-                    // 13 档最重只到 w600，按 spec 的「角色内个别变化」走 copyWith。
-                    style: AppTokens.labelSecondary.copyWith(
-                      color: isOurs
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : primary,
-                    ).copyWith(fontWeight: FontWeight.w700),
+              GlassPressable(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _ourTeamIndex = i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppTokens.spaceMd,
+                        vertical: AppTokens.spaceXs),
+                    decoration: BoxDecoration(
+                      color:
+                          isOurs ? primary : primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(AppTokens.radiusS),
+                    ),
+                    child: Text(
+                      isOurs ? L10n.myTeam : L10n.setAsMine,
+                      // 可点的 chip 按钮标签，原本就是 w700（比同行的说明文字重），
+                      // 13 档最重只到 w600，按 spec 的「角色内个别变化」走 copyWith。
+                      style: AppTokens.labelSecondary.copyWith(
+                        color: isOurs
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : primary,
+                      ).copyWith(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-          InkWell(
-            borderRadius: BorderRadius.circular(AppTokens.radiusS),
-            onTap: () => _pickCrewStartDate(i),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.gapHair, vertical: AppTokens.spaceXs),
-              child: Row(
-                children: [
-                  AppIcon(Icons.event_outlined,
-                      size: AppTokens.iconSm, color: muted),
-                  const SizedBox(width: AppTokens.spaceSm),
-                  Text(L10n.crewCycleStart,
-                      style: AppTokens.rowSecondary.copyWith(color: muted)),
-                  const SizedBox(width: AppTokens.spaceSm),
-                  Text(
-                    L10n.yearMonthDay(_crewStartDate(i)),
-                    style: AppTokens.labelSecondary,
+          // 第二行：周期模式给「周期起始日」，按月模式给「从第几段入场」——
+          // 按月不读基准日，摆一个日期在那儿就是让用户操作一个不生效的值。
+          if (_monthly)
+            GlassPressable(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _pickCrewSegmentStart(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.gapHair,
+                      vertical: AppTokens.spaceXs),
+                  child: Row(
+                    children: [
+                      AppIcon(Icons.format_list_numbered,
+                          size: AppTokens.iconSm, color: muted),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      Text(
+                        L10n.crewSegmentStart(
+                            (i < _teamSegOffsets.length
+                                    ? _teamSegOffsets[i]
+                                    : 0) +
+                                1),
+                        style: AppTokens.labelSecondary,
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ),
+            )
+          else
+            GlassPressable(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _pickCrewStartDate(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.gapHair,
+                      vertical: AppTokens.spaceXs),
+                  child: Row(
+                    children: [
+                      AppIcon(Icons.event_outlined,
+                          size: AppTokens.iconSm, color: muted),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      Text(L10n.crewCycleStart,
+                          style:
+                              AppTokens.rowSecondary.copyWith(color: muted)),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      Text(
+                        L10n.yearMonthDay(_crewStartDate(i)),
+                        style: AppTokens.labelSecondary,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -1355,6 +1856,28 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       lastDate: DateTime(2100),
     );
     if (picked != null) _setCrewStartDate(i, picked);
+  }
+
+  /// 按月模式：改某个班组**从第几段入场**（段序 1 起，界面上写给人看）。
+  ///
+  /// 存的是 0 起的下标（`teamSegOffsets`），选项里 +1 显示。
+  Future<void> _pickCrewSegmentStart(int i) async {
+    final n = _monthlySegments.length;
+    if (n == 0) return;
+    final picked = await showGlassOptionPicker<int>(
+      context,
+      title: L10n.monthlySection,
+      options: [for (var k = 0; k < n; k++) k],
+      labelOf: (k) => L10n.crewSegmentStart(k + 1),
+      selected: i < _teamSegOffsets.length ? _teamSegOffsets[i] : 0,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      while (_teamSegOffsets.length <= i) {
+        _teamSegOffsets.add(0);
+      }
+      _teamSegOffsets[i] = picked;
+    });
   }
 
   void _setTeamCount(int n) {
@@ -1372,6 +1895,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       }
       if (_teamOffsets.length > n) {
         _teamOffsets.removeRange(n, _teamOffsets.length);
+      }
+      // 段偏移跟着班组数一起长/缩（它与 `_teamOffsets` 长度恒等于 teamCount）。
+      while (_teamSegOffsets.length < n) {
+        _teamSegOffsets.add(_teamSegOffsets.length);
+      }
+      if (_teamSegOffsets.length > n) {
+        _teamSegOffsets.removeRange(n, _teamSegOffsets.length);
       }
       _syncTeamNameCtrls();
     });
@@ -1448,9 +1978,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     setState(() {
       _followHoliday = v;
       if (v) {
-        // 切到空白表：清空班次与周期，班组收敛为「我」
+        // 切到空白表：清空班次与周期，班组收敛为「我」。
+        //
+        // **按月那一套也要一起清**：空白表没有班次定义，段表指着不存在的下标
+        // 就是一堆悬空引用（保存时会被 `saveSchedule` 的悬空清理连带删掉，
+        // 但留着它在编辑器里也只会让预览算出一堆 null）。
         _classes = [];
         _cycle = [];
+        _monthly = false;
+        _monthlySegments = [];
+        _teamSegOffsets = [];
         _syncClassCtrls();
         _teamCount = 1;
         _teamNames = [L10n.isEn ? 'Me' : '我'];
@@ -1462,10 +1999,16 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           _scheduleNameCtrl.text = _name;
         }
       } else if (_classes.isEmpty) {
-        // 从空白表切回普通表：恢复默认四班两倒
+        // 从空白表切回普通表：恢复默认四班两倒（因为空白表把两边都清空了）
         final d = defaultSchedule();
         _classes = List.of(d.classes);
         _cycle = List.of(d.cycle);
+        _monthly = false;
+        _monthlySegments = [];
+        // 空表而不是 [0,1,2,3]：那时它本来就不参与计算，而塞一份**天偏移**进去
+        // 只会让「这个字段存的是段」这条约定在库里看起来是假的。
+        // （落库是 ''，`toDomain` 会按「相对我们班组」补回来。）
+        _teamSegOffsets = [];
         _teamCount = d.teamCount;
         _teamNames = List.of(d.teamNames);
         _ourTeamIndex = d.ourTeamIndex;
@@ -1480,58 +2023,23 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   // 编辑动作
   // ---------------------------------------------------------------------------
 
+  /// 点行末那颗色点 → 弹取色层 → 把结果写回这一条班次。
+  ///
+  /// 取色那三百行搬到 `shift_color_picker.dart` 了（16 颗预设、色相条、饱和度/明度
+  /// 方盘、十六进制输入）。这里只剩「传当前色进去、把结果写回」两件事。
+  ///
+  /// ⚠️ **`_editClass` 那套别动** —— 它有意的**不走 `copyWith`**（`copyWith` 把可空
+  /// 字段写成 `xx ?? this.xx`，没有「把可空字段清成 null」的通道；切休班时时间就
+  /// 永远清不掉）。这一版只是换了颜色的来源。
   Future<void> _pickColor(int index) async {
-    final picked = await showGlassSheet<int>(
-      context: context,
-      builder: (context) => GlassPanel(
-        solid: true,
-        margin: const EdgeInsets.all(AppTokens.spaceMd),
-        borderRadius:
-            const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
-                AppTokens.spaceLg, AppTokens.spaceLg, AppTokens.spaceXl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  L10n.shiftColor,
-                  style: AppTokens.titleStrong,
-                ),
-                const SizedBox(height: AppTokens.spaceLg),
-                Wrap(
-                  spacing: AppTokens.spaceLg,
-                  runSpacing: AppTokens.spaceLg,
-                  children: _palette.map((c) {
-                    final selected = _classes[index].color == c;
-                    return GestureDetector(
-                      onTap: () => Navigator.pop(context, c),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Color(c),
-                          shape: BoxShape.circle,
-                          border: selected
-                              ? Border.all(
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  width: 3)
-                              : null,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    final picked = await showShiftColorPicker(
+      context,
+      current: _classes[index].color,
+      sampleLabel: _classes[index].abbr ?? _classes[index].name,
     );
-    if (picked != null) {
-      setState(() => _classes[index] = _editClass(_classes[index], color: picked));
-    }
+    if (picked == null || !mounted) return;
+    setState(
+        () => _classes[index] = _editClass(_classes[index], color: picked));
   }
 
   /// 把当前这套存成「我的模板」（新建排班时可以再选它）。
@@ -1539,8 +2047,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   /// 取的是 [_draftSchedule] —— 也就是**编辑器眼下的草稿状态**，与预览条同一个
   /// 来源：用户可以把一套还没保存的改动直接存成模板，不必先保存成方案。
   Future<void> _saveAsTemplate() async {
-    if (_followHoliday || _classes.isEmpty || _cycle.isEmpty) {
-      // 空白表（跟随法定节假日）没有班次与周期，存下来是一张空卡
+    // **周期与按月段表，有一边有内容就存得下来**：只判周期的话，按月方案会被
+    // 当成「没有排班规则」拦下（而它明明有一套切法）。
+    if (_followHoliday ||
+        _classes.isEmpty ||
+        (_cycle.isEmpty && _monthlySegments.isEmpty)) {
+      // 空白表（跟随法定节假日）没有班次与规则，存下来是一张空卡
       // （读回时也会被跳过），不如当场说清楚。
       showGlassSnack(context, L10n.templateNeedsPattern,
           icon: Icons.info_outline);
@@ -1554,10 +2066,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       context: context,
       builder: (dialogContext) => GlassDialog(
         title: L10n.saveAsTemplate,
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: glassInputDecoration(context, L10n.templateName),
+        content: GlassField(
+          label: L10n.templateName,
+          child: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: glassInputDecoration(context),
+          ),
         ),
         actions: [
           GlassActionButton(
@@ -1589,11 +2104,12 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         icon: Icons.bookmark_added_outlined);
   }
 
-  void _addClass() {    setState(() {
+  void _addClass() {
+    setState(() {
       final idx = _classes.length;
       final c = ShiftClass(
         name: L10n.newShiftName,
-        color: _palette[idx % _palette.length],
+        color: kShiftPalette[idx % kShiftPalette.length],
         startMinute: toMinutes(8, 0),
         endMinute: toMinutes(20, 0),
       );
@@ -1604,9 +2120,13 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   }
 
   Future<void> _deleteClass(int index) async {
-    final used = _cycle.where((c) => c == index).length;
+    // **周期与按月段表都要数**：只数周期的话，按月方案里被「段」引用的班次会被
+    // 放行 —— 删掉之后段的下标整体前移、指向别的班次，不报错、只是那几天显示成
+    // 别的班（与「覆盖指飞」是同一类静默错）。
+    final used = _cycle.where((c) => c == index).length +
+        _monthlySegments.where((s) => s.classIndex == index).length;
     if (used > 0) {
-      // 仍被周期引用：直接拦下，不弹确认 —— 这条路本来就删不掉。
+      // 仍被引用：直接拦下，不弹确认 —— 这条路本来就删不掉。
       showGlassSnack(
         context,
         L10n.deleteShiftClassInUse.replaceAll('{n}', '$used'),
@@ -1662,6 +2182,14 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       for (var i = 0; i < _cycle.length; i++) {
         if (_cycle[i] > index) _cycle[i]--;
       }
+      // 段表**同待遇**：引用检查与下标重映射都要做，否则段会静默指到别的班次。
+      for (var i = 0; i < _monthlySegments.length; i++) {
+        final s = _monthlySegments[i];
+        if (s.classIndex > index) {
+          _monthlySegments[i] = MonthlySegment(
+              startDay: s.startDay, classIndex: s.classIndex - 1);
+        }
+      }
     });
   }
 
@@ -1683,6 +2211,9 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             teamNames: _teamNames,
             ourTeamIndex: _ourTeamIndex,
             teamOffsets: _teamOffsets,
+            monthly: _monthly,
+            monthSegments: _monthlySegments,
+            teamSegOffsets: _teamSegOffsets,
           );
       // 重排读的是**整条链**（`rescheduleAll` → `getActiveSchedules`），链上既有
       // 刚编辑的这套、也有「其余时间」那套 —— 所以「编辑的是一套非当前方案」
@@ -1777,22 +2308,35 @@ class _AlarmLabelFieldState extends State<_AlarmLabelField> {
   }
 
   @override
-  Widget build(BuildContext context) => TextField(
-        controller: _ctrl,
+  Widget build(BuildContext context) => GlassField(
+        label: L10n.alarmNameOptional,
+        isDense: true,
+        child: TextField(
+          controller: _ctrl,
         // 名字有长度上限：不封顶的话，闹钟页那一行会被超长名字顶到溢出
         // （独立审查提的）。12 个字对「起床 / 午休 / 交接班提醒」这类名字绰绰有余，
         // 与旁边的简称框一样**不显示计数器**（120 宽的框里那是噪音）。
         maxLength: _alarmNameMaxLength,
         onChanged: (v) => widget.onChanged(v.trim().isEmpty ? null : v.trim()),
-        decoration: glassInputDecoration(context, L10n.alarmNameOptional,
-                isDense: true)
+        decoration: glassInputDecoration(context, isDense: true)
             .copyWith(hintText: L10n.alarmNameHint, counterText: ''),
+        ),
       );
 }
 
 /// 周期行里某个 chip 的 Key —— 让测试能精确点到「第几天选哪个班次」。
 Key cycleChipKey(int dayIndex, int classIndex) =>
     ValueKey('cycle-chip-$dayIndex-$classIndex');
+
+/// 按月段列表里第 [i] 行那一整块「每月第 N 天起」的 Key —— 点它就是改这一段的
+/// 起始日（第一行不给点）。与 [cycleChipKey] 同一套：让测试能按行定位。
+Key monthRowDayKey(int i) => ValueKey('month-row-day-$i');
+
+/// 按月段列表第 [i] 行的删除键（第一行没有）。
+///
+/// 单独给 Key 是因为页面上还有**班次定义那一排**的紧凑删除钮 ——
+/// `find.byType(GlassDeleteButton)` 会一起数进来，按行定位只能靠 Key。
+Key monthRowDeleteKey(int i) => ValueKey('month-row-del-$i');
 
 /// 量一段文字在给定样式下的宽度（不依赖 BuildContext，便于单测）。
 double _textWidth(String text, TextStyle style) {
@@ -1823,13 +2367,18 @@ bool cycleRowFitsTime({
   required double rowWidth,
   required List<String> classNames,
   required String timeText,
+  // 标签列的实际宽度。**两个调用点各传自己的**：周期行是那个写死的 `SizedBox`
+  // （`_dayLabelWidth` = 56，精确），按月行是自然宽度、要用 `_textWidth` 量
+  // （2026-10-16 起它不再等于 56 —— 估计窄了会让这条判据误判「放得下时间」，
+  // 而右侧那个 `Text(timeText)` 不带 Flexible，宽了就是横向溢出）。
+  required double dayLabelWidth,
 }) {
   final chips = classNames.fold<double>(
         0,
         (sum, name) => sum + _chipWidth(name),
       ) +
       AppTokens.spaceSm * (classNames.length - 1).clamp(0, 1 << 30);
-  final needed = _dayLabelWidth +
+  final needed = dayLabelWidth +
       AppTokens.spaceSm +
       chips +
       AppTokens.spaceMd +
@@ -1839,3 +2388,26 @@ bool cycleRowFitsTime({
 
 /// 「第 N 天」标签的固定宽度。
 const double _dayLabelWidth = 56;
+
+/// 按月行末尾那个紧凑删除键的宽度。
+///
+/// 与 `core/widgets/glass_delete_button.dart` 里 `_CompactDeleteButton` 那个
+/// `SizedBox(width: 36)` **同一个数** —— 那边是几何事实、不是一个设计令牌，
+/// 所以只能在这儿写一份并在注释里指名出处。它只用来算「按月行的标签最多能占多宽」
+/// （让不出它就会溢出），**改那边这个数时要记得回来改这里**。
+const double _monthRowDeleteWidth = 36;
+
+/// 这条闹钟落在班次当天的哪一边 —— 只管**读法**：前一天 / 次日给一个带日前缀的
+/// 整串（`前一天 23:00` / `次日 00:15`），落在当天返回 null（不标）。
+///
+/// 为什么非标不可：只写钟点会被读成班次当天 —— 16:30–次日 00:30 的 00:15 只写
+/// 「00:15」，看着就像上班前的那个凌晨（比上班早 16 小时），而那正是用户报的
+/// 「看不到有这个选项」。
+String? _alarmDayLabel(ShiftClass c, ShiftAlarm a) {
+  final clock = formatClock(a.minute);
+  return switch (alarmDayAnchor(c, a)) {
+    AlarmDayAnchor.prev => L10n.clockPrevDay(clock),
+    AlarmDayAnchor.next => L10n.clockNextDay(clock),
+    AlarmDayAnchor.same => null,
+  };
+}

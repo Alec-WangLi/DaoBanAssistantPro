@@ -14,6 +14,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
@@ -84,6 +85,9 @@ class _FakeRepo extends AppRepository {
     List<String> teamNames = const ['一班', '二班', '三班', '四班'],
     int ourTeamIndex = 0,
     List<int> teamOffsets = const [],
+    bool monthly = false,
+    List<MonthlySegment> monthSegments = const [],
+    List<int> teamSegOffsets = const [],
   }) async {
     createdName = name;
     createdClasses = List.of(classes);
@@ -291,5 +295,50 @@ void main() {
     expect(find.text(L10n.myTemplates), findsOneWidget,
         reason: '回到选择页必须重新读，不能拿上一次的缓存');
     expect(find.text('刚存的模板'), findsOneWidget);
+  });
+
+  testWidgets('按月模板：存下来之后选择页读得到，monthly 与段表都过得去', (tester) async {
+    final raw = sqlite3.sqlite3.openInMemory();
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+    final repo = _FakeRepo(db, domain: _domain());
+
+    final monthly = ShiftSchedule(
+      name: '按月三班倒',
+      anchorDate: DateTime.utc(2026, 1, 1),
+      classes: const [
+        ShiftClass(name: '中班', abbr: '中'),
+        ShiftClass(name: '白班', abbr: '白'),
+        ShiftClass(name: '夜班', abbr: '夜'),
+      ],
+      cycle: const [],
+      monthly: true,
+      monthlySegments: const [
+        MonthlySegment(startDay: 1, classIndex: 0),
+        MonthlySegment(startDay: 11, classIndex: 1),
+        MonthlySegment(startDay: 21, classIndex: 2),
+      ],
+      teamCount: 3,
+      ourTeamIndex: 0,
+      teamSegOffsets: const [0, 1, 2],
+    );
+
+    await repo.saveTemplate(ScheduleTemplate.fromSchedule(monthly, name: '我的按月'));
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [appRepositoryProvider.overrideWithValue(repo)],
+      child: const MaterialApp(home: ShiftTemplatePickerScreen()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('我的按月'), findsOneWidget);
+
+    // 库里那一份：monthly 标志与段表都在（周期那一半是空的）
+    final back = (await repo.listTemplates()).single;
+    expect(back.monthly, isTrue);
+    expect(back.cycle, isEmpty);
+    expect(back.monthlySegments.map((s) => s.startDay), [1, 11, 21]);
+    expect(back.monthlySegments.map((s) => s.classIndex), [0, 1, 2]);
+    expect(back.teamSegOffsets, [0, 1, 2]);
+    expect(back.workingTeamsPerDay, 3);
   });
 }

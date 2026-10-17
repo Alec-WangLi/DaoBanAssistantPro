@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/widgets/glass_check.dart';
@@ -22,6 +23,8 @@ import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
+import 'package:shiftassistantpro/features/calendar/shift_color_picker.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
 import 'visual_harness.dart';
@@ -77,6 +80,92 @@ void main() {
           brightness: variant.brightness,
           language: variant.language,
           size: variant.size,
+          extraPrefs: extraPrefs,
+        );
+      });
+    }
+  }
+
+  // 「窄屏 × 大字号」这两档（v0.11.12 新增）。
+  //
+  // 字号自管（设计 §3）之后，「大字号下长什么样」**只由我们自己那一档决定**，
+  // 而此前屏单里一屏都没有 —— 那一维在图上结构性地看不见，v0.9.9 那个农历截断
+  // 与 v0.11.12 这一整轮都是这么漏出去的。
+  //
+  // **只铺常用的那几屏**：全部 39 屏 × 多档会把图数翻几倍，而
+  // `text_fit_guard_test.dart` 已经在**每一档 × 两个保证宽度 × 中英**下盯着
+  // 「有没有字被吃掉」了 —— 这里要的是「还读不读得出来」，只需要看那几屏。
+  for (final cfg in const <({String suffix, Size size})>[
+    (suffix: 'xl360', size: Size(360, 780)),
+    (suffix: 'xl320', size: Size(320, 640)),
+  ]) {
+    for (final slug in const <String>[
+      '00_home_shell',
+      '01_calendar',
+      '05_todos',
+      '02_editor',
+      '03_management',
+      '07_profile',
+    ]) {
+      final screen = visualScreens.firstWhere((s) => s.slug == slug,
+          orElse: () => throw StateError('屏单里没有 $slug —— 屏改名了？'));
+      visualTest('${screen.title} · ${cfg.suffix}', (tester) async {
+        failOnOverflow(tester);
+        final db = await freshDb();
+        final extraPrefs = <String, Object>{
+          ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
+          ...screenExtraPrefs(screen.slug),
+        };
+        if (extraPrefs['liquidGlass'] == true) useLiquidGlassTier();
+        await renderScreen(
+          tester,
+          name: '${screen.slug}_${cfg.suffix}',
+          home: await screen.build(db),
+          overrides: <Override>[databaseProvider.overrideWithValue(db)],
+          size: cfg.size,
+          fontSize: AppFontSize.extraLarge,
+          extraPrefs: extraPrefs,
+        );
+      });
+    }
+  }
+
+  // 「宽横屏」（平板 / 车机）这两档（v0.11.14 新增）。
+  //
+  // 在此之前屏单里**从来没有过「宽且不矮」这一档**（只有 900×420 那个「宽且矮」的
+  // 手机横屏），于是日历页的宽屏版式在图上**结构性地看不见**——用户 2026-10-13 从
+  // 车机上拍回来的五条反馈，全都是这一档的事。这条循环就是那双眼睛。
+  //
+  // **不做成 `visualVariants` 的新变体**：那会给 39 屏各加两档（+78 张），
+  // 而真正需要人眼的只有这六屏。
+  for (final cfg in const <({String suffix, Size size})>[
+    (suffix: 'wide', size: Size(1280, 800)),
+    (suffix: 'car', size: Size(1920, 720)),
+  ]) {
+    for (final slug in const <String>[
+      '00_home_shell',
+      '01_calendar',
+      '05_todos',
+      '06_alarm',
+      '07_profile',
+      '02_editor',
+    ]) {
+      final screen = visualScreens.firstWhere((s) => s.slug == slug,
+          orElse: () => throw StateError('屏单里没有 $slug —— 屏改名了？'));
+      visualTest('${screen.title} · ${cfg.suffix}', (tester) async {
+        failOnOverflow(tester);
+        final db = await freshDb();
+        final extraPrefs = <String, Object>{
+          ...(screen.needsOnboardingPrefs ? onboardingPrefs : const {}),
+          ...screenExtraPrefs(screen.slug),
+        };
+        if (extraPrefs['liquidGlass'] == true) useLiquidGlassTier();
+        await renderScreen(
+          tester,
+          name: '${screen.slug}_${cfg.suffix}',
+          home: await screen.build(db),
+          overrides: <Override>[databaseProvider.overrideWithValue(db)],
+          size: cfg.size,
           extraPrefs: extraPrefs,
         );
       });
@@ -264,20 +353,18 @@ void main() {
     );
   });
 
-  // 「大字号」的日历：系统字号 1.8×（Android 字体大小设置里那一档）。
+  // 「大字号」的日历：**我们自己的最大档**（`AppFontSize.extraLarge`）。
   //
-  // 单出一张的理由与上面「两字简称」同源，而且更硬：**全 app 都没有钳制
-  // `textScaler`，而工装此前每一屏都只在 1.0× 下出图** —— 于是「系统字号放大之后
-  // 文字被截」这一类问题在图上结构性地看不见。2026-09-29 用户反馈的那张截图
-  // （农历被截成「财…」「地…」、周标题那行挤进格子）就是这么漏掉的。
+  // v0.11.12 起字号只由 App 决定（系统那一维被根部那层 `MediaQuery` 整个换掉了），
+  // 于是「大字号下长什么样」这件事**只由我们这一档决定** —— 它必须有一张图看着。
   //
-  // 1.8 这个值是按「能把两条都压出来」挑的：周标题 13×1.8×1.15 ≈ 26.9 > `_weekdayH`
-  // 的 26（原来会压进第一行格子），农历 11×1.25×1.8 ≈ 24.8、两个字就要 49.6 > 格
-  // 内容宽的 44（原来会省略成「财…」）。
+  // ⚠️ 它原来传的是 `textScale: 1.8`（平台字号）。那个参数在 v0.11.12 之后是
+  // **空操作**：根部会把平台报上来的 scaler 整个换掉，继续传它只会拍出一张与标准档
+  // 逐像素相同的图 —— 看着像在测，其实什么也没测。工装的字号入口现在是 `AppFontSize`。
   //
   // 与「搜索落空」那张同理，它没有进 `visualScreens`（记录类型加可选字段要改全部
   // 24 条），所以对比度审计不覆盖它 —— 这一屏用的也全是既有令牌与既有配色。
-  visualTest('日历 · 大字号', (tester) async {
+  visualTest('日历 · 大字号（最大档）', (tester) async {
     failOnOverflow(tester);
     final db = await freshDb();
     await renderScreen(
@@ -285,7 +372,7 @@ void main() {
       name: '20_calendar_large_font',
       home: const CalendarScreen(),
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
-      textScale: 1.8,
+      fontSize: AppFontSize.extraLarge,
     );
   });
 
@@ -306,6 +393,99 @@ void main() {
         await t.tap(find.byIcon(Icons.add_outlined));
         await settleVisual(t);
         await t.tap(find.text(L10n.repeatWeekly));
+        await settleVisual(t);
+      },
+    );
+  });
+
+  // 「折叠区展开后」：归档那几行的长相只有展开才看得到，而展开是一次**点击** ——
+  // 静止帧拍不到。跟 `26_todo_dialog_weekly` 同一条路：首帧之后真点一下。
+  //
+  // **库里要同时有「一次性」与「重复待办的历史行」两种已完成**（v0.11.4）：
+  // 前者在归档里有勾选框（取消就回主列表）、后者没有（那个系列可能已经走到下一次，
+  // 放回来会同时有两条没做完的，生成器随后又把旧的收回去）—— 两种形态同框才看得出来，
+  // 而这是这一版最要紧的一处判据。基础种子里只有一次性的，所以这里再补一条重复的。
+  visualTest('待办 · 归档折叠区展开', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await seedRecurringTodo(db);
+    await renderScreen(
+      tester,
+      name: '54_todos_archive_open',
+      home: const ScheduleScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      beforeCapture: (t) async {
+        await t.tap(find.byIcon(Icons.keyboard_arrow_down));
+        await settleVisual(t);
+      },
+    );
+  });
+
+  // 勾完那一条「已划掉 · 撤销」的提示条（v0.11.4）。提示条是命令式的（挂在
+  // `ScaffoldMessenger` 的覆盖层上），静止帧拍不到 —— 首帧之后真点一下那个勾才会出现。
+  // 「撤销」那颗动作的配色与触摸大小只有看图才知道对不对。
+  visualTest('待办 · 勾完出现的「撤销」', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '55_todos_undo_snack',
+      home: const ScheduleScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      beforeCapture: (t) async {
+        await t.tap(find.byType(GlassCheck).first);
+        await settleVisual(t);
+      },
+    );
+  });
+
+  // 取色层（v0.11.6）：16 颗预设 + 色相条 + 饱和度/明度方盘 + 两颗真的日历小样
+  // 同框。它是**命令式弹层**，静止帧拍不到 —— 首帧之后真点一下班次行末那颗色点，
+  // 走的正是用户那条路。深浅两档各出一张：方盘与游标在深色下的边界靠什么读出来，
+  // 只有出图才知道。
+  for (final (String suffix, Brightness b) in <(String, Brightness)>[
+    ('', Brightness.light),
+    ('_dark', Brightness.dark),
+  ]) {
+    visualTest('取色层${suffix.isEmpty ? " · 浅色" : " · 深色"}', (tester) async {
+      failOnOverflow(tester);
+      final db = await freshDb();
+      await renderScreen(
+        tester,
+        name: '57_shift_color_picker$suffix',
+        home: ScheduleEditorScreen(scheduleId: await currentScheduleId(db)),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        brightness: b,
+        beforeCapture: (t) async {
+          await t.tap(find.byKey(const ValueKey('shift-color-dot-0')));
+          await settleVisual(t);
+        },
+      );
+    });
+  }
+
+  // 颜色值敲错时输入框的样子：警示色是界面层的配色，单测只能断言 `errorText` 在不在，
+  // 「看着像不像一句提示」只有出图知道。
+  visualTest('取色层 · 颜色值非法', (tester) async {
+    failOnOverflow(tester);
+    final db = await freshDb();
+    await renderScreen(
+      tester,
+      name: '58_shift_color_bad_hex',
+      home: ScheduleEditorScreen(scheduleId: await currentScheduleId(db)),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      beforeCapture: (t) async {
+        await t.tap(find.byKey(const ValueKey('shift-color-dot-0')));
+        await settleVisual(t);
+        // ⚠️ **必须限定在取色层里**：后面那一页编辑器自己也有输入框
+        // （班次名称 / 简称），不加限定 `enterText` 会报 "Too many elements"。
+        await t.enterText(
+          find.descendant(
+            of: find.byType(ShiftColorPickerBody),
+            matching: find.byType(TextField),
+          ),
+          '#zzz',
+        );
         await settleVisual(t);
       },
     );

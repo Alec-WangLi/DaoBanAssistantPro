@@ -22,6 +22,18 @@ class ShiftScheduleRows extends Table {
   // 每个班组相对基准日的**天数偏移**（逗号分隔，如 "0,1,2,3"）。
   // 第 i 组在某天的周期下标 = (目标日 − 基准日 + offsets[i]) mod 周期长度。
   TextColumn get teamOffsets => text().withDefault(const Constant(''))();
+
+  /// 这套方案走**按月锚定**吗（每月 1 号归零，见 `domain/monthly_pattern.dart`）。
+  ///
+  /// **它是模式唯一的判据** —— 别用「段表空不空」或「周期空不空」去猜：切换模式
+  /// 不丢数据，所以两边可以同时非空。老库升上来时恒为 0，行为与升级前逐字相同。
+  BoolColumn get monthly => boolean().withDefault(const Constant(false))();
+
+  /// 各班组在**按月切法里的段偏移**（逗号分隔，长度与 [teamCount] 一致）。
+  ///
+  /// **单位是「段」，不是天** —— 因此与 [teamOffsets] 分开成两列，而不是让同一列
+  /// 的含义随 [monthly] 变（那会逼着读代码的人先去别处查标志位）。
+  TextColumn get teamSegOffsets => text().withDefault(const Constant(''))();
 }
 
 /// 时间线上的一段：**这套方案从哪天到哪天生效**（多排班表按日期衔接）。
@@ -73,6 +85,31 @@ class ShiftCycleRows extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get scheduleId => integer()();
   IntColumn get order => integer()();
+  IntColumn get classId => integer()();
+}
+
+/// 按月切法表：**每月的第 [startDay] 天起**改用 [classId] 那个班次定义。
+///
+/// 与 [ShiftCycleRows] 同形（有序 + 指到班次定义），差别只在 [startDay] 的含义：
+/// 周期表那一列是「周期内第几天」，这里的是「每月的第几天」。**两列都存 `classId`
+/// 而不是 `classes` 下标** —— 下标会随编辑器里增删班次而挪，而库里的行不能跟着挪。
+///
+/// 只有起始日、没有结束日：一段一直管到下一段的起始日，最后一段管到月底。于是
+/// 「空档」与「重叠」在结构上不可能出现。
+///
+/// **表名带 `Rows` 后缀**：drift 按表名生成行类，表叫 `ScheduleMonthSegments` 就会
+/// 生成 `ScheduleMonthSegment` —— 那正好是 `domain/monthly_pattern.dart` 里的
+/// 值类型名（`ShiftClassRows` → `ShiftClassRow` 是同一回事）。带后缀之后生成的
+/// 行类叫 `ScheduleMonthSegmentRow`，两个名字不撞。
+class ScheduleMonthSegmentRows extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get scheduleId => integer()();
+  IntColumn get order => integer()();
+
+  /// 每月的第几天起（1..31）。第一段恒为 1。
+  IntColumn get startDay => integer()();
+
+  /// 指到 `shift_class_rows.id`。
   IntColumn get classId => integer()();
 }
 
@@ -197,6 +234,16 @@ class CustomTemplates extends Table {
   /// 班组错位（逗号分隔）。保存时已归一化成「我们班组在第 0 位、错位 0」。
   TextColumn get teamOffsets => text()();
 
+  /// 这套模板走按月锚定吗。默认 0 —— 老模板读回来一律还是周期模板。
+  BoolColumn get monthly => boolean().withDefault(const Constant(false))();
+
+  /// 按月切法（`startDay:classIndex` 逗号分隔）。**存的是下标**，与 [cycle] 同一
+  /// 条约定：模板里的班次没有稳定身份（见 [classes]）。
+  TextColumn get monthSegments => text().withDefault(const Constant(''))();
+
+  /// 班组的**段**偏移（逗号分隔）。与 [teamOffsets] 一样已归一化。
+  TextColumn get teamSegOffsets => text().withDefault(const Constant(''))();
+
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -254,6 +301,7 @@ class RecurringSeriesRows extends Table {
   ScheduleSpanRows,
   ShiftClassRows,
   ShiftCycleRows,
+  ScheduleMonthSegmentRows,
   ShiftClassAlarms,
   ScheduleEvents,
   CustomAlarms,
@@ -269,12 +317,40 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 14) {
+            // 按月排班：**纯新增**，一行既有数据都不碰。
+            //
+            // ⚠️ **必须排在 `from < 13` 之前**（分支按倒序跑、最新的一版先跑）。
+            // 那一段会用 `TableMigration(shiftScheduleRows)` 重建方案表，而
+            // `TableMigration` 是按**当前 schema** 重建、按列名拷数据的 —— 先加列，
+            // 新列就会带着默认值一起过去；反过来则要面对「刚重建完又 ALTER」的
+            // 组合。
+            await m.createTable(scheduleMonthSegmentRows);
+            await m.addColumn(shiftScheduleRows, shiftScheduleRows.monthly);
+            await m.addColumn(
+                shiftScheduleRows, shiftScheduleRows.teamSegOffsets);
+            // ⚠️ **`custom_templates` 只有 v9 及以后才有**（它是 `from < 9` 那段
+            // 建的，而那段排在**后面**跑）。从 v8 及更早升上来时这里它还不存在，
+            // 硬加会抛 `no such table: custom_templates` —— 那种老库由 `from < 9`
+            // 直接按**当前 schema** 建表，新列自带。所以先判版本再动手（照
+            // v9→v10「只有 v6 及以后才有 shift_class_rows」、v12→v13「只有 v12 才
+            // 有时段两列」两次先例）。真机上不会现形，只有这个仓库的 v5~v8
+            // fixture 会 —— 而它们正是为此存在的。
+            //
+            // 模板是**三**列（不是两列）。
+            if (from >= 9) {
+              await m.addColumn(customTemplates, customTemplates.monthly);
+              await m.addColumn(customTemplates, customTemplates.monthSegments);
+              await m.addColumn(
+                  customTemplates, customTemplates.teamSegOffsets);
+            }
+          }
           if (from < 13) {
             // 排班时段重做：段从「方案行上的两列」搬进**自己的表**，并改成
             // **不许重叠**（v0.9.12 允许重叠、按「起点最晚的赢」解析）。

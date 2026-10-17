@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 月历一格的卡（深色档）：比面板亮一档，好让「一张张卡」读得出来。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <solid android:color="@color/wg_cell_fill_dark" />
+    <stroke android:width="1dp" android:color="@color/wg_cell_border_dark" />
+</shape>

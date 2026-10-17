@@ -20,6 +20,9 @@ ShiftScheduleRow _row({bool isCurrent = false}) => ShiftScheduleRow(
       teamNames: '一班,二班,三班,四班',
       ourTeamIndex: 0,
       teamOffsets: '0,1,2,3',
+      // 数据类的匿名构造器要求**全部**列都给值 —— 加了新列就得回来补上默认值。
+      monthly: false,
+      teamSegOffsets: '',
     );
 
 DateTime _d(int y, int m, int d) => DateTime.utc(y, m, d);

@@ -1,15 +1,21 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
+import '../../core/layout.dart';
 import '../../core/widgets/glass_action_button.dart';
+import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
+import '../../core/widgets/section_heading.dart';
 import '../../data/app_repository.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -30,26 +36,57 @@ class ScheduleManagementScreen extends ConsumerWidget {
     final spans =
         ref.watch(scheduleSpansProvider).valueOrNull ?? const <ScheduleSpanRow>[];
 
+    // 按月方案那一行要印「每月几段」—— 段表在装配好的那一份里（`ActiveSchedules.all`），
+    // 方案行上没有。就地做一次 id → 段数的映射，不为它再查一次库。
+    final monthSegCounts = <int, int>{
+      for (final a in current?.all ?? const <ActiveSchedule>[])
+        a.schedule.id: a.monthSegments.length,
+    };
+
     return Scaffold(
-      appBar: AppBar(title: Text(L10n.scheduleManagement)),
+      // 标题按宽度缩小而不是省略（设计 §2）：AppBar 的工具条高度是定死的，
+      // 折不了行 —— 窄屏 + 大字号 + 英文下「Schedule management」会超出去。
+      appBar: AppBar(
+          title: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(L10n.scheduleManagement))),
       body: async.isLoading && schedules.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+          ? const GlassLoading()
           : CenteredContent(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              // 底部让位：主操作改成**贴屏幕底部**的悬浮按钮条之后（见
+              // `_bottomActionBar`），不留白的话列表最后一行会被它压住、
+              // 删除键点不到。常量是 `kFloatingBarInset`（= 16 边距 + 56 条高
+              // + 12 呼吸）—— **不是** `kFloatingActionInset`（160）：那一档多
+              // 出来的 76 是给**底部导航胶囊**让位的，而这一页底下没有胶囊
+              // （2026-10-15 用户报的「按钮偏高」就是按那一档摆的后果）。
+              //
+              // **要叠系统栏**：按钮条跟着手势条一起上移，测试视口都没有系统栏，
+              // 这类错只能靠算式堵（叠 `MediaQuery.paddingOf` 而不是写死一个数）。
+              //
+              // **不给短屏/窄屏再叠一层 156**（闹钟页在那边叠了）：那一页是
+              // **不滚动**的 Column（两段列表各自 Expanded），不留白正文就会被
+              // 压住；这一页是**单一可滚列表**，`kFloatingBarInset` 已经够让
+              // 最后一行滑到按钮条之上 —— 再叠 156 反而把最后一行顶出屏幕：实测
+              // 200×400 下（一行 249 高、视口 344）叠完之后滑到底时最后一行只剩
+              // 顶上 28px 露在屏里、它的删除键整个跑到视口上方去了，
+              // `schedule_management_test.dart` 那条几何用例当场照出来。
+              padding: EdgeInsets.fromLTRB(16, 8, 16,
+                  MediaQuery.paddingOf(context).bottom + kFloatingBarInset),
               children: [
                 // 两节各带一个标题（2026-09-30 用户反馈：「排班管理页面有点乱，
                 // 应该分成两个功能区……现在它们连在一起，感觉有点混乱」）。
                 // 标题在卡片**外面**、两节同一种写法 —— 一节有标题、另一节没有
                 // 正是「连在一起」的来源。
-                _sectionHeading(context, L10n.scheduleTimeline),
+                SectionHeading(L10n.scheduleTimeline),
                 _TimelineSection(
                   schedules: schedules,
                   current: current,
                   spans: spans,
                 ),
                 const SizedBox(height: AppTokens.spaceMd),
-                _sectionHeading(context, L10n.schedulesSection),
+                SectionHeading(L10n.schedulesSection),
                 ...schedules.map((s) {
                   final isCurrent = s.id == current?.currentScheduleId;
                   return GlassTile(
@@ -70,7 +107,9 @@ class ScheduleManagementScreen extends ConsumerWidget {
                         subtitle: Text(
                             '${scheduleRoleLabel(s, spanCount: spanCountOf(spans, s.id), isCurrent: isCurrent, hasPeriods: spans.isNotEmpty)} · '
                             '${L10n.teamCountN(parseTeamNames(s.teamNames).length)} · '
-                            '${L10n.monthDay(s.anchorDate)}'
+                            // 按月那套印切法摘要，**不印基准日** —— 按月不用它
+                            // （每月 1 号恒等于第一段），印出来是个不生效的值。
+                            '${s.monthly ? L10n.scheduleMonthlySummary(monthSegCounts[s.id] ?? 0) : L10n.monthDay(s.anchorDate)}'
                             // 一个段都没有时左边的标签已经写着「正在使用」了，
                             // 尾巴上再挂一个「当前」是同一件事说两遍。
                             '${isCurrent && spans.isNotEmpty ? ' · ${L10n.current}' : ''}'),
@@ -83,15 +122,43 @@ class ScheduleManagementScreen extends ConsumerWidget {
                     ),
                   );
                 }),
-                const SizedBox(height: 8),
-                FilledButton.icon(
-                  onPressed: () => _addSchedule(context, ref),
-                  icon: const Icon(Icons.add_outlined),
-                  label: Text(L10n.addSchedule),
-                ),
               ],
             ),
             ),
+      // 主操作与闹钟页同一套：底部悬浮按钮条 + 共用的落点。**但这一页底下没有
+      // 底部导航胶囊**（它是 push 出来的整页），所以传 `aboveCapsule: false` ——
+      // 按钮条贴屏幕底部，不再往上抬那 76。
+      // **不是** `bottomNavigationBar` + `extendBody` —— 那是编辑器那颗
+      // 「保存并重排闹钟」胶囊的路子（那边要正文铺到屏幕底）。这一页要的是
+      // 「新建」在三个列表页里是同一个东西：待办页的 FAB、闹钟页的按钮条、
+      // 这一页的按钮条。
+      floatingActionButtonLocation:
+          const AboveCapsuleLocation.bar(aboveCapsule: false),
+      floatingActionButton: _bottomActionBar(context, ref),
+    );
+  }
+
+  /// 底部按钮条：一颗通栏的「新增排班」。
+  ///
+  /// 从前它是 ListView 的**最后一个孩子** —— 只有一两套方案时它会悬在页面中间、
+  /// 下面留一大片空白（用户看到的正是这个）。改成悬浮按钮条之后，页面再短、
+  /// 主操作也稳稳贴在底部。
+  Widget _bottomActionBar(BuildContext context, WidgetRef ref) {
+    // 宽屏下正文被 `CenteredContent` 限宽 720 并居中，这条按钮条也要跟着那个栏宽
+    // —— 不然它在 1280 的车机上从左边缘铺到右边缘（与闹钟页逐字同一条）。
+    final contentW = math.min(
+        MediaQuery.sizeOf(context).width, AppLayout.maxContentWidth.toDouble());
+    return SizedBox(
+      // 工装 / 用例量它落点的抓手。
+      key: const Key('management-action-bar'),
+      width: contentW - 32,
+      height: 56,
+      child: GlassButton(
+        primary: true,
+        icon: const Icon(Icons.add_outlined),
+        onPressed: () => _addSchedule(context, ref),
+        child: Text(L10n.addSchedule),
+      ),
     );
   }
 
@@ -139,17 +206,6 @@ class ScheduleManagementScreen extends ConsumerWidget {
     }
   }
 }
-
-/// 页面级小节标题 —— 两节共用一份写法。
-///
-/// 与「我的」页、闹钟页那两处的 `_sectionTitle` 同形（`fromLTRB(4, 0, 4, 8)` +
-/// 小节标题角色）：三页各写一份迟早有一页走样，但**没有**抽成共享件 —— 这已经是
-/// 页面级标题的第三种复制，等第四种出现时再抽（现在抽要一次改三页，收益只有几行）。
-Widget _sectionHeading(BuildContext context, String title) => Padding(
-      padding: const EdgeInsets.fromLTRB(
-          AppTokens.spaceXs, 0, AppTokens.spaceXs, AppTokens.spaceSm),
-      child: Text(title, style: AppTokens.sectionTitle),
-    );
 
 /// 排班管理页顶部那一节「排班时段」。
 ///
@@ -526,21 +582,25 @@ Widget _labelValueRow(
         child: Row(
           children: [
             Expanded(
+              // 标签允许折两行（设计 §6.4）：这一行**不允许**出现省略号。
               child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTokens.rowPrimary),
+                  maxLines: 2, style: AppTokens.rowPrimary),
             ),
             const SizedBox(width: AppTokens.spaceSm),
             Flexible(
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: mutedValue
-                    ? AppTokens.rowSecondary.copyWith(color: muted)
-                    : AppTokens.labelStrong,
+              // 值按可用宽度**等比缩小**，不省略 —— 它短、且是这一行的主角。
+              // `FittedBox(scaleDown)` 只在装不下时才动手，装得下逐像素不变。
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  textAlign: TextAlign.right,
+                  style: mutedValue
+                      ? AppTokens.rowSecondary.copyWith(color: muted)
+                      : AppTokens.labelStrong,
+                ),
               ),
             ),
             const SizedBox(width: AppTokens.gapIconText),

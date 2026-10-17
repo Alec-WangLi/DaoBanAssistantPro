@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/layout.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
@@ -62,8 +63,9 @@ void main() {
   });
   tearDown(() => db.close());
 
-  Future<void> mount(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(420, 1200);
+  Future<void> mount(WidgetTester tester,
+      {Size size = const Size(420, 1200)}) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -182,6 +184,28 @@ void main() {
     expect(hit.path.any((e) => e.target == tester.renderObject(buttons.last)), isTrue,
         reason: '删除键的中心得真的打得中 —— 被 FAB 盖住时命中的是 FAB');
 
+    await _dispose(tester);
+  });
+
+  testWidgets('宽屏下「＋」按钮跟着内容栏走，手机上位置不变', (tester) async {
+    await repo.addEvent(title: '甲', date: dateOnly(DateTime.now()));
+
+    // ① 手机：与 `endFloat` 一模一样（右缘 = 屏宽 − 标准边距 16）。
+    await mount(tester);
+    final phone = tester.getRect(find.byKey(const Key('todo-fab')));
+    expect(phone.right, closeTo(420 - 16, 0.5));
+    await _dispose(tester);
+
+    // ② 1280 车机：正文被 `CenteredContent` 限宽 720 居中，
+    //    内容栏的右缘 = (1280 + 720) / 2 = 1000，按钮右缘再往里 16。
+    //    ⚠️ **不能写成「两次的 center.dx 相差 280」** —— 那是两个不同宽度的屏，
+    //    差值没有意义（第一版就是这么写的，实测读到 −580）。
+    await mount(tester, size: const Size(1280, 800));
+    final wide = tester.getRect(find.byKey(const Key('todo-fab')));
+    expect(
+        wide.right,
+        closeTo((1280 + AppLayout.maxContentWidth) / 2 - 16, 0.5),
+        reason: '「＋」在 ${wide.right}，没跟着 720 的内容栏走（该在 984）');
     await _dispose(tester);
   });
 }

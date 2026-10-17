@@ -3,6 +3,39 @@
   4×1 本周条的外壳：卡底 + 七列等宽槽位。
   槽位一律 FrameLayout（默认 LayoutParams 是 MATCH_PARENT×MATCH_PARENT，
   addView 塞进去的内容才会填满 —— 换 LinearLayout 会缩成一小团且不报错）。
+
+  ⚠️ **横向 8dp / 纵向 3dp，两个数分开写**（2026-10-16 用户真机反馈）。
+  用户原话：「它上边的周几和下边的班次，离遮罩的边缘太近了，跟之前一样的问题，
+  要留点空隙。要么你就把这个遮罩上下拉长，反正它还有空间。」
+
+  真机量到（Redmi K90 Pro Max · 3×）：卡高 76.3dp、今天那块 **59dp**，块离卡上下沿
+  各 8.7dp（= 这里的 8dp + `widget_strip_cell.xml` 里块自己的 2dp 外边距），
+  可块**里面**周几离上沿只剩 **3.7dp**、下夜胶囊离下沿 **5.3dp** —— 左右却有 6.7dp。
+
+  也就是说「拉长遮罩」这条路的空间**全在这 8dp 纵向内边距里**（块本身已经顶到自己
+  那一格的两端了）。纵向收到 3dp、块的外边距纵向归零之后，块从 59dp 长到约 70dp，
+  上下各让出约 6.8dp，与左右那 6.7dp 同一个量级。
+
+  **横向一个字不许动**（仍是 8dp）：七列的宽度、以及七列的内容位置都按它算，
+  动了就是另外六列一起位移。纵向那一维只有今天这一列有块，改它不影响别人。
+
+  ⚠️ **这个 3 与 `widget_strip_cell.xml` 里块的外边距、以及 `WidgetRenderer.stripCellPx`
+  里那个 `hDp - 6` 是一组数，改一个要改三个**。块是 `fitXY` 拉伸的，三者对不上时
+  圆角会被拉成椭圆、而且是静默的。由 `widget_cell_block_guard_test.dart` 盯着。
+
+  ⚠️ **四个方向分开写 `paddingLeft` / `paddingRight` / `paddingTop` / `paddingBottom`，
+  不用 `paddingHorizontal` / `paddingVertical` 那种两两合并的写法。** 合并写法本身
+  是好用的（实测 aapt2 会照常编进 APK），分开写只是为了**一眼看出横向与纵向是故意
+  不同的**；`android:padding="8dp"` 那种四个方向一起定的写法才真的不能用。
+
+  ⚠️ **改了这个文件之后，验证前必须让宿主重新 inflate —— 光重推一遍 RemoteViews
+  不够。** 2026-10-16 实测踩过一次：改完内边距、重装、重开 App、重推快照，块纹丝
+  不动（只按块自己那层 `widget_strip_cell.xml` 的改动长高了 4dp，因为**每格那份
+  子 RemoteViews 每次渲染都会 `removeAllViews` + `addView` 重新 inflate**）。
+  外层这份布局**只在宿主建立视图时被 inflate 一次**，之后每次更新都是把动作串在
+  已有视图树上 reapply —— 所以外层布局（padding / 结构 / 层级）的改动不重启桌面
+  就看不到。要看到：`adb shell am force-stop com.miui.home`（或把卡片删掉重加）。
+  **别把「重启后才生效」读成「这次改动没生效」。**
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_ws_root"
@@ -10,7 +43,10 @@
     android:layout_height="match_parent"
     android:orientation="horizontal"
     android:background="@drawable/widget_card_light"
-    android:padding="8dp">
+    android:paddingLeft="8dp"
+    android:paddingRight="8dp"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp">
 
     <FrameLayout
         android:id="@+id/wg_ws_col1"

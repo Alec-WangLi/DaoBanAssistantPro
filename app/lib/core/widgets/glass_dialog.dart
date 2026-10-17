@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
 import 'app_icon.dart';
+import 'glass_title_row.dart';
 
 /// 抓一个「关掉本弹窗」的回调，给弹窗里的动作在 `await` 之后用。
 ///
@@ -97,25 +98,10 @@ class _GlassDialogState extends State<GlassDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 4,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(AppTokens.radiusS),
-                  ),
-                ),
-                const SizedBox(width: AppTokens.gapIconTextLg),
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: AppTokens.dialogTitle,
-                  ),
-                ),
-                if (widget.showClose) const _GlassCloseButton(),
-              ],
+            GlassTitleRow(
+              title: widget.title,
+              titleStyle: AppTokens.dialogTitle,
+              trailing: widget.showClose ? const _GlassCloseButton() : null,
             ),
             const SizedBox(height: _gap),
             // 内容过长时**卡内滚动**，而不是把弹窗撑到屏幕外。
@@ -405,6 +391,13 @@ Future<T?> showGlassDialog<T>({
 ///
 /// 遮罩色与「底色透明」写在一处（原来是 9 处各写一遍 `backgroundColor: Colors.transparent`
 /// 与 `barrierColor: Colors.black26`）。
+///
+/// ⚠️ **这个入口不看键盘。** 它底下那层布局（SDK 的 `_ModalBottomSheetLayout`）把面板
+/// 钉在**屏幕底边**（`size.height - child.height`），`viewInsets` 一次都没读 —— 所以
+/// 弹层里一旦长出输入框，软键盘会直接盖住贴底的那一行（通常是动作行）。**只给内容夹
+/// 一个 `maxHeight - viewInsets.bottom` 是没用的**：面板是变矮了，底边还在屏幕底。
+/// 得自己按 `viewInsets.bottom` 把整块顶上去，见 `shift_color_picker.dart` 那处
+/// （它是全 app 唯一一个带输入框的弹层）。
 Future<T?> showGlassSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,

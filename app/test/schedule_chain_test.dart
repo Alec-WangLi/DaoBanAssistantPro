@@ -6,6 +6,7 @@
 // 那一天才看得见。所以边界要逐条钉住：闭区间的两端、起点为空、终点为空、
 // 重叠时的胜负、以及没有一套覆盖时的兜底。
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 
@@ -319,6 +320,118 @@ void main() {
     test('自己与自己不算冲突（同一个 id）', () {
       final a = _span('A', id: 1, from: _d(2026, 1, 1));
       expect(conflictingSpans([a], a), isEmpty);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 按月模式
+  //
+  // 两件事：① 指纹（`rotationKey`）要覆盖到按月切法 —— 漏了就是 v0.10.21 那个
+  // 「改完之后界面没跟上」的静默病（桌面小组件不重推、本月统计显示旧数字）；
+  // ② 按月那套接进「按日期衔接」之后，跨边界那天用的确实是按月切法。
+  // ---------------------------------------------------------------------------
+  group('按月模式', () {
+    ShiftSchedule monthSched(String name, List<MonthlySegment> segs) =>
+        ShiftSchedule(
+          name: name,
+          anchorDate: DateTime.utc(2026, 1, 1),
+          classes: [
+            ShiftClass(name: '$name-中', abbr: '中'),
+            ShiftClass(name: '$name-白', abbr: '白'),
+            ShiftClass(name: '$name-夜', abbr: '夜'),
+          ],
+          cycle: const [],
+          monthly: true,
+          monthlySegments: segs,
+        );
+
+    const three = [
+      MonthlySegment(startDay: 1, classIndex: 0),
+      MonthlySegment(startDay: 11, classIndex: 1),
+      MonthlySegment(startDay: 21, classIndex: 2),
+    ];
+
+    String keyOf(ShiftSchedule s) =>
+        ScheduleChain(fallback: s, fallbackId: 1).rotationKey;
+
+    test('rotationKey：改一次按月切法之后必须变', () {
+      final base = keyOf(monthSched('按月', three));
+      // 同一份内容两次算出来必须一样（缓存键的基本要求）
+      expect(base, keyOf(monthSched('按月', three)));
+
+      // 只把第二段的起始日从 11 挪到 12
+      expect(
+          base,
+          isNot(keyOf(monthSched('按月', const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 12, classIndex: 1),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ]))));
+
+      // 只换第二段指向的班次
+      expect(
+          base,
+          isNot(keyOf(monthSched('按月', const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 11, classIndex: 2),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ]))));
+
+      // 只改班组的段偏移
+      expect(
+          base,
+          isNot(keyOf(ShiftSchedule(
+            name: '按月',
+            anchorDate: DateTime.utc(2026, 1, 1),
+            classes: const [ShiftClass(name: '按月-中', abbr: '中')],
+            cycle: const [],
+            monthly: true,
+            monthlySegments: three,
+            teamCount: 2,
+            teamSegOffsets: const [0, 1],
+          ))));
+
+      // 同一个基准日、同样的段表，只把模式切回周期 —— 也算变了
+      expect(
+          base,
+          isNot(keyOf(ShiftSchedule(
+            name: '按月',
+            anchorDate: DateTime.utc(2026, 1, 1),
+            classes: const [ShiftClass(name: '按月-中', abbr: '中')],
+            cycle: const [0],
+            monthly: false,
+            monthlySegments: three,
+          ))));
+    });
+
+    test('hasCycle：按月方案算「有班次可挑」（它从 isBlank 推出来，不该另写一份判据）', () {
+      expect(ScheduleChain(fallback: monthSched('按月', three)).hasCycle, isTrue);
+      // 空白表（monthly = true 而段表空）仍然算「没有」
+      expect(ScheduleChain(fallback: monthSched('按月', const [])).hasCycle,
+          isFalse);
+    });
+
+    test('衔接：跨边界那天归按月那套，且用的是按月切法算出来的班次', () {
+      final chain = ScheduleChain(spans: [
+        _span('周期', id: 1, from: _d(2026, 1, 1), to: _d(2026, 9, 30)),
+        ScheduleSpan(
+            id: 2,
+            scheduleId: 2,
+            schedule: monthSched('按月', three),
+            from: _d(2026, 10, 1)),
+      ]);
+
+      // 边界落在该落的地方
+      expect(chain.scheduleOn(_d(2026, 9, 30))!.name, '周期');
+      expect(chain.scheduleOn(_d(2026, 10, 1))!.name, '按月');
+      expect(chain.hasScheduleOn(_d(2026, 10, 15)), isTrue);
+
+      // 那几天算出来的班次，确实是**按月切法**给的（10/1 恒第一段）
+      expect(chain.shiftOn(_d(2026, 10, 1))!.name, '按月-中');
+      expect(chain.shiftOn(_d(2026, 10, 10))!.name, '按月-中');
+      expect(chain.shiftOn(_d(2026, 10, 11))!.name, '按月-白');
+      expect(chain.shiftOn(_d(2026, 10, 21))!.name, '按月-夜');
+      expect(chain.shiftOn(_d(2026, 10, 31))!.name, '按月-夜');
     });
   });
 }

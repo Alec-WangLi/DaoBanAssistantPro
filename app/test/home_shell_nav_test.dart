@@ -19,6 +19,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -45,18 +46,21 @@ Future<void> _disposeShell(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 20));
 }
 
-Future<void> _pumpShell(WidgetTester tester) async {
+Future<void> _pumpShell(WidgetTester tester, {AppDatabase? db}) async {
   tester.view.physicalSize = const Size(420, 900);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  final raw = sqlite3.sqlite3.openInMemory();
-  final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
-  addTearDown(db.close);
+  // 调用方可以先把库建好、往里种东西，再传进来挂壳 —— 启动就绪闸只在三个流
+  // 第一次到齐时跑一次，挂完壳再种就赶不上了。
+  final database = db ??
+      AppDatabase.forTesting(
+          NativeDatabase.opened(sqlite3.sqlite3.openInMemory()));
+  addTearDown(database.close);
 
   await tester.pumpWidget(ProviderScope(
-    overrides: [databaseProvider.overrideWithValue(db)],
+    overrides: [databaseProvider.overrideWithValue(database)],
     child: const MaterialApp(home: HomeShell()),
   ));
   await _pumpFrames(tester);
@@ -210,6 +214,53 @@ void main() {
 
     expect(calls.where((m) => m == 'widgetPushSnapshot'), isNotEmpty,
         reason: '换了主色没重推 —— 桌面小组件还停在旧配色上，而 App 里已经变了');
+
+    await _disposeShell(tester);
+  });
+
+  testWidgets('启动就绪闸顺手裁一次归档：老库里积了 105 条已完成 → 只剩 100',
+      (tester) async {
+    // 老库（升级上来、或者长期用下来）里早积了一堆已完成的待办 —— 截断放在启动闸
+    // 里就是为了兜住它。勾选那一刻**不**裁：那会让「勾一条去年的待办」当场消失，
+    // 「先划掉再收走」那一趟反馈就没了。
+    final db = AppDatabase.forTesting(
+        NativeDatabase.opened(sqlite3.sqlite3.openInMemory()));
+    final repo = AppRepository(db);
+    await repo.ensureSeeded();
+    for (var i = 0; i < 105; i++) {
+      await repo.addEvent(title: 'd$i', date: DateTime.utc(2026, 1, 1 + i));
+    }
+    // `addEvent` 回的是行 id，不是行 —— 勾选要一个 `ScheduleEvent`，读回来再勾。
+    for (final e in await repo.listEvents()) {
+      await repo.setEventCompleted(e, true);
+    }
+
+    await _pumpShell(tester, db: db);
+
+    expect(
+        (await repo.listEvents()).where((e) => e.isCompleted), hasLength(100),
+        reason: '启动闸没裁 —— 归档会无限长下去');
+    await _disposeShell(tester);
+  });
+
+  // 「勾完先划掉、下次进来才收走」这条**唯一**靠的就是：切走之后待办页那个 State
+  // 被销毁（`_sessionRows` 跟着清空）。它不是任何一处代码显式写的，而是
+  // `PageView` 把离屏页 dispose 这个既有性质带来的 —— 所以这条用例钉的是那个性质。
+  testWidgets('切走之后待办页会被销毁（「下次进来才收走」靠的就是这个）', (tester) async {
+    await _pumpShell(tester);
+
+    // 切到待办页（走通知那条入口，与上面那条用例同一条路）。
+    AlarmService.openTodoRequested.value = true;
+    await _pumpFrames(tester);
+    expect(find.byType(ScheduleScreen), findsOneWidget, reason: '先确认它真的在树上');
+
+    // 切回日历页。
+    tester.widget<PageView>(find.byType(PageView)).controller!.jumpToPage(0);
+    await _pumpFrames(tester);
+    expect(find.byType(ScheduleScreen), findsNothing,
+        reason: 'PageView 会把离屏那一页销毁 —— 待办页的 State（含「本次刚勾」）'
+            '因此清空，刚勾的那条才会「下次进来」收进折叠区。'
+            '谁把 tab 保活加回来，这条会红。');
 
     await _disposeShell(tester);
   });

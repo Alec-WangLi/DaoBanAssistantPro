@@ -160,6 +160,11 @@ class L10n {
   static String get dark => t('深色', 'Dark');
   static String get accentColor => t('主色调', 'Accent color');
   static String get language => t('语言', 'Language');
+  static String get fontSize => t('字体大小', 'Text size');
+  static String get fontSmall => t('小', 'Small');
+  static String get fontStandard => t('标准', 'Standard');
+  static String get fontLarge => t('大', 'Large');
+  static String get fontExtraLarge => t('特大', 'XL');
 
   // 「我的」页其他
   static String get scheduleManagement => t('排班管理', 'Schedule management');
@@ -169,10 +174,14 @@ class L10n {
 
   /// 「我的 → 桌面」那一行（打开的是小组件说明弹层）。
   static String get widgetEntrySubtitle => t(
-      '三张卡怎么加到桌面（小米机型在二级分类里）',
-      'How to add the three cards (Xiaomi hides them in a sub-menu)');
+      '说明在《使用帮助》里，小米机型在二级分类里',
+      'Explained in the usage guide; Xiaomi hides them in a sub-menu');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
   static String get ringtoneSubtitle => t('选择内置、系统、你的铃声，或「仅震动」', 'Choose a built-in, system, or your own ringtone, or vibrate only');
+  static String get snoozeDuration => t('贪睡时长', 'Snooze length');
+  static String snoozeDurationSubtitle(int minutes) => t(
+      '「再睡一会」之后隔 $minutes 分钟重新响铃',
+      'A snooze rings again $minutes min later');
   static String get clearReset => t('清空重置', 'Clear & reset');
   static String get clearResetSubtitle => t(
       '排班、日程、闹钟与模板全清掉，回到刚安装的样子',
@@ -207,8 +216,9 @@ class L10n {
       'Download failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
   static String get jumpToMonth => t('跳转月份', 'Jump to month');
   static String get usageGuide => t('使用帮助', 'Usage guide');
-  static String get usageGuideSubtitle =>
-      t('每个功能在哪、怎么用', 'Where each feature lives and how to use it');
+  static String get usageGuideSubtitle => t(
+      '每个功能在哪、怎么用；遇到问题也能进来查',
+      'Where each feature lives, how to use it — and what to do when something looks wrong');
   static String get viewLog => t('查看日志', 'View log');
   static String get viewLogSubtitle => t('排错时把这里的内容复制给我', 'Copy the log here for debugging');
   static String get confirmResetTitle => t('确认清空重置？', 'Clear & reset?');
@@ -258,6 +268,20 @@ class L10n {
 
   // 待办（日程）
   static String get noEvents => t('还没有待办事项，点右下角添加', 'No todos yet, tap + to add');
+
+  /// 待办页底部那个折叠区的标题：「已完成 N 条」。
+  ///
+  /// 中英语序不同（中文把数字夹在中间、英文是「N completed」），整串交给 [t]，
+  /// 别拼前缀 —— 直接拼会在英文界面下露出中文语序。
+  static String archivedTodos(int n) => t('已完成 $n 条', '$n completed');
+
+  /// 勾掉一条待办之后那条提示条上的话，以及它的动作。
+  ///
+  /// 为什么要有这一条：用户 2026-10-11 的原话是「刚勾错想马上改回来」。那条待办
+  /// 确实还留在主列表里、再点一下勾也能取消，但它**淡到 35% 不透明度、还带删除线**，
+  /// 读起来是「已经处理完、别碰了」—— 一个写着「撤销」的提示条才看得出来。
+  static String get todoCheckedOff => t('已划掉', 'Marked done');
+  static String get undo => t('撤销', 'Undo');
   static String get addEvent => t('添加待办事项', 'Add todo');
   static String get editEvent => t('编辑待办事项', 'Edit todo');
   static String get title => t('标题', 'Title');
@@ -398,6 +422,29 @@ class L10n {
   /// 撞班提示下面那个动作：按「均分」规则重排各组的周期起始日。
   static String get evenCrewStarts =>
       t('按周期长度均分各组起始日', 'Spread team start dates evenly');
+
+  /// 按月模式下的撞班提示：**不带天数**。
+  ///
+  /// 四年扫描按当日号数去重得到的是**各种月长的并集**，那个数字说不清是「哪个月
+  /// 里的几天」（spec §5.2）—— 报出来会是个偏大的假数。按月模式的撞班本来就是
+  /// 「班组数比段数还多」这类配置错误，说清**是谁撞谁**就够了。
+  static String crewClashHintMonthly(String teamA, String teamB) => t(
+      '有班组会在同一天上同一个班（$teamA与$teamB）—— 班组数与切法的段数对不上',
+      'Two teams share the same shift on the same day — $teamA and $teamB');
+
+  /// 按月模式下的均分动作：按段数把各组「入场的那一段」摊开。
+  static String get evenCrewSegments =>
+      t('按段数均分各组入场', 'Spread team entry segments evenly');
+
+  /// 按月模式下班组那一行：「从第 N 段开始」（N 是段序，1 起）。
+  static String crewSegmentStart(int n) =>
+      t('从第 $n 段开始', 'Starts at segment $n');
+
+  /// 按月模式下的班组说明（换掉了讲「周期起始日」的那一句）。
+  static String get monthlyCrewHint => t(
+      '各班组按段错开 —— 都在每月同一天换班，只是换到不同的班次上。',
+      'Teams offset by segment — all swap shifts on the same day of the month, just to different shifts.');
+
   static String get rest => t('休息', 'Rest');
   static String get work => t('工作', 'Work');
   static String get workday => t('上班', 'Workday');
@@ -490,12 +537,12 @@ class L10n {
   static String followHolidayDropsOverrides(int n) => t(
       '本方案有 $n 天单独调整过。切到「跟随法定节假日」会清空班次定义，保存后这些天的调整会一并消失，且无法恢复。',
       'This schedule has $n individually adjusted day(s). Switching to "follow legal holidays" clears every shift definition, so after saving those adjustments are gone for good.');
-  static String get shiftName => t('班次名称', 'Shift name');
+  static String get shiftName => t('名称', 'Name');
   static String get start => t('开始', 'Start');
   static String get end => t('结束', 'End');
   static String get crossesMidnight => t('（结束早于开始，或晚于 24:00 = 跨午夜）', '(ends before start, or past 24:00 = crosses midnight)');
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
-  static String get alarmTime => t('响铃时间', 'Alarm time');
+  static String get alarmTime => t('响铃', 'Alarm');
 
   static String get addAlarm => t('添加闹钟', 'Add alarm');
 
@@ -506,7 +553,7 @@ class L10n {
   /// —— 那里最长的值是「前一天 22:00」（v0.8.9 专门做出来的一档），被截更糟。
   /// 「可选」那半句挪进 hint：点进去（或填了字）就看得见。
   static String get alarmNameOptional => t('名称', 'Name');
-  static String get alarmNameHint => t('可选，如「午休」', 'Optional, e.g. "Nap"');
+  static String get alarmNameHint => t('如「午休」', 'e.g. "Nap"');
 
   /// 每个班次几个闹钟的上限。
   ///
@@ -514,7 +561,7 @@ class L10n {
   /// 权威定义）。本文件**有意不 import 它**：`l10n.dart` 只依赖 intl 这件性质
   /// （纯 Dart、能被 `dart test` 直接跑）比少写一个数字值钱。
   static String get alarmLimitReached =>
-      t('每个班次最多 6 个闹钟', 'Up to 6 alarms per shift');
+      t('每个班次最多 10 个闹钟', 'Up to 10 alarms per shift');
 
   /// 联动闹钟的响铃标题。[label] 是这条闹钟自己的名字（可空）。
   ///
@@ -538,10 +585,25 @@ class L10n {
   /// 响铃落在上班前一天时的标记（闹钟列表行的时间下面那行小字）。
   static String get prevDay => t('前一天', 'day before');
 
-  /// 班次编辑里响铃时间下面那行小字：为什么闹钟排在前一天、落在哪个钟点。
-  static String alarmPrevDayHint(String start, String alarm) => t(
-      '上班 $start，闹钟排在前一天 $alarm',
-      'Shift starts $start — the alarm rings the day before at $alarm');
+  /// 响铃时间落在班次**次日**时的钟点写法（16:30–次日 00:30 的班中 / 下班后闹钟）。
+  ///
+  /// 与 [clockPrevDay] 同一条语序理由：整串交给 [t]，不拼前缀。
+  static String clockNextDay(String time) => t('次日 $time', '$time (next day)');
+
+  /// 响铃落在班次次日时的标记（闹钟列表行的时间下面那行小字）。
+  ///
+  /// **与 [nextDay] 是两个键，别合并**：那个是「结束时间落在次日」的**前缀**
+  /// （英文带尾空格、直接接钟点，见 `timeRange` 与结束时间那块 chip）。
+  static String get nextDayMarker => t('次日', 'next day');
+
+  /// 班次编辑里响铃时间下面那行小字（三档通用）：有闹钟不落在班次当天时，
+  /// 拿**第一条非当天**的举例说清它落在哪天。
+  ///
+  /// [labeledTime] 已经是带日前缀的整串（`前一天 23:00` / `次日 00:15`），
+  /// 所以这里不再自己拼 —— 拼了中英语序会打架（同 [clockPrevDay] 那条）。
+  static String alarmDayHint(String start, String labeledTime) => t(
+      '上班 $start，有一条闹钟排在$labeledTime',
+      'Shift starts $start — one alarm rings $labeledTime');
 
   /// 没填上班时间时的那行小字：判断不了，闹钟按当天算。
   static String get alarmNoStartHint =>
@@ -599,6 +661,35 @@ class L10n {
   static String get crewSettingsOptional =>
       t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
 
+  // ── 按月排班 ────────────────────────────────────────────────────────────
+  //
+  // 「一套方案二选一：按周期轮换（连续周期）还是按月（每月 1 号归零）」。
+  // 措辞上**不用「排班方式」那类大词**：这一处切换的只是「日子怎么数」。
+  static String get scheduleModeCycle => t('按周期', 'By cycle');
+  static String get scheduleModeMonthly => t('按月', 'By month');
+
+  /// 按月那张卡的小标题（周期那张卡对应的是 [cycleSection]）。
+  static String get monthlySection => t('按月切法', 'Monthly split');
+
+  /// 按月切法有几段。
+  ///
+  /// **单位是「段」，不是 [cycleLengthUnit] 那个「天」** —— 用「天」会写出
+  /// 「3 天」这种说不通的数（独立审查抓的：那是这个功能的**主面板**上的数字）。
+  static String monthlySegmentCount(int n) =>
+      t('$n 段', n == 1 ? '1 segment' : '$n segments');
+
+  /// 段列表左边那一列：「每月第 N 天起」。
+  static String monthlyFromDay(int n) => t('每月第 $n 天起', 'From day $n');
+
+  static String get monthlyAddSegment => t('添加一段', 'Add a segment');
+
+  static String get monthlyDeleteSegmentTitle => t('删掉这一段', 'Remove this segment');
+
+  /// 删一段 = **并进上一段**（唯一能保持「不空档」的删法），所以要把这件事说出来。
+  static String monthlyDeleteSegmentContent(int day) => t(
+      '从每月第 $day 天起的这一段会并进上一段 —— 那些天改用上一段的班次。',
+      'From day $day on will be merged into the previous segment and take its shift.');
+
   /// 「结束时间落在次日」的前缀（中文直接接钟点，英文要留空格）。
   ///
   /// 只作前缀用；成串的「开始 – 结束」走 [timeRange]，那里中英语序不同。
@@ -614,6 +705,16 @@ class L10n {
           : '$start – $end';
   static String get newShiftName => t('新班次', 'New shift');
   static String get shiftColor => t('班次颜色', 'Shift color');
+
+  /// 自我取色那一层里的三句。
+  ///
+  /// `shiftColorHex` 是那个输入框的标签；`shiftColorPreview` 标在那两颗真的日历小样
+  /// 上面；`shiftColorCustomHint` 只在敲进去的值解析不出来时出现 —— 它**举一个例子**
+  /// 而不是只说「格式不对」，因为「十六进制」这个词对多数人不构成提示。
+  static String get shiftColorHex => t('颜色值', 'Hex');
+  static String get shiftColorPreview => t('在日历上的样子', 'On a calendar cell');
+  static String get shiftColorCustomHint =>
+      t('颜色值格式不对，例如 #4C8DFF', 'Not a color — try #4C8DFF');
   static String get previewNext14 => t('未来 14 天', 'Next 14 days');
 
   // 排班管理
@@ -630,7 +731,7 @@ class L10n {
   static String get pickShiftPattern => t('选择你的倒班方式', 'Pick your shift pattern');
   static String get pickShiftPatternHint =>
       t('选一个和你班表最像的，建好之后还能随时改', 'Pick the closest one — you can tweak it anytime');
-  static String get searchPattern => t('搜索，如「四班三倒」「上24休48」', 'Search, e.g. "4-crew 3-shift"');
+  static String get searchPattern => t('搜索倒班方式', 'Search shifts');
   // 英文原标题是 `Start from scratch`，但这条路并不给空白 —— 它塞一套默认
   // 四班两倒进去（见 `createScheduleFromTemplatePicker` 里 `?? d.cycle` 那一串），
   // 中文副标题「从默认四班两倒开始」才是实情。标题跟副标题不能自相矛盾。
@@ -653,6 +754,20 @@ class L10n {
         _ => key,
       };
   static String get customPatternHint => t('从默认四班两倒开始，边看边改', 'Start from the default and edit as you go');
+
+  /// 选择页那张「按月排班」的卡 —— 与「我自己排」平级，都是「从零开始」那一类。
+  static String get monthlyPattern => t('按月排班', 'Monthly roster');
+  static String get monthlyPatternHint =>
+      t('每个月重复一套切法', 'The same split repeats every month');
+
+  /// 选择页最后那一组的组名，装「按月排班」与「我自己排」两张卡。
+  ///
+  /// **这两张卡原来没有组名**，是裸挂在分组循环后面的 —— 而最后一个分组是
+  /// 「常白」，于是它们看起来就归在常白里（用户 2026-10-13 真机反馈：「它把倒班
+  /// 方式归类到了长白班那里，这是不对的吧？」）。它们本来也不是内置的轮转方式，
+  /// 而是两条**从零开始**的路。
+  static String get fromScratchGroup => t('从零开始', 'Start from scratch');
+
   static String get noPatternMatch => t('没找到匹配的倒班方式', 'No matching pattern');
 
   /// 搜索落空时的下一句。
@@ -695,6 +810,18 @@ class L10n {
   /// 没有这句文案，只能按结构现算 —— 所以中英语序同样整串交给 [t]。
   static String savedTemplateSubtitle(int days, int teams) => t(
       '$days 天一轮 · $teams 个班组', '$days-day cycle · $teams teams');
+
+  /// 按月模板的副标题 —— 它的「轮换长度」不是一个天数，而是**每月切几段**。
+  /// 沿用 [savedTemplateSubtitle] 会写出「0 天一轮」（月方案的周期本来就是空的）。
+  static String savedTemplateSubtitleMonthly(int segments, int teams) => t(
+      '每月 $segments 段 · $teams 个班组',
+      '$segments segments a month · $teams teams');
+
+  /// 排班管理页里按月方案那一行的尾巴。
+  ///
+  /// **替掉基准日**：按月不用它（每月 1 号恒等于第一段），印出来就是个不生效的值。
+  static String scheduleMonthlySummary(int segments) =>
+      t('每月 $segments 段', '$segments segments a month');
 
   // 日历
   static String get prevMonth => t('上个月', 'Previous month');
@@ -747,6 +874,25 @@ class L10n {
   static String get gettingStartedMore => t('完整说明在「我的 → 使用帮助」，随时能看',
       'The full guide lives under Me → Usage guide, whenever you need it');
 
+  // 使用帮助 · 第一级（整页：简介 + 九条功能简介 + 进第二层的入口）
+  //
+  // **简介只讲「这是什么、由哪几块组成」**，不是目录 —— 目录是下面那九条的事。
+  static String get helpIntro => t(
+      '倒班助手Pro 是一个纯离线的排班助手：班表设一次，它替你算好每天什么班、什么时候响闹钟，还能放到手机桌面上随时看。底部四个页面各管一件事——日历看班、闹钟管响铃、待办记事情、我的做设置。',
+      'Shift Assistant Pro is an offline scheduling helper. Set your shift pattern once and it works out every day for you, rings when it should, and keeps a card on your home screen. The four tabs each do one job — Calendar for shifts, Alarm for ringing, Todo for notes, Me for settings.');
+
+  /// 第一级那颗进第二层的入口。
+  ///
+  /// 标题写「遇到问题？」而不是「点我」；副标题说清**里面是什么**（两组各是什么），
+  /// 因为用户点之前得先知道自己那件事归哪边。
+  static String get faqEntryTitle => t('遇到问题？', 'Stuck?');
+  static String get faqEntrySubtitle => t(
+      '「我想办一件事」与「它不对劲」——进来找怎么解决',
+      'Things you want to do, and things that look wrong — find the answer here');
+
+  // 使用帮助 · 第二层（「遇到问题怎么解决」）的页标题。
+  static String get faqTitle => t('遇到问题怎么解决', 'How to get things done');
+
   // 使用帮助（图标化条目）
   //
   // 每条正文是一**串短句**而不是一整段：这份说明出现在「我的 → 使用帮助」，
@@ -775,6 +921,10 @@ class L10n {
             'Nothing matches exactly? Edit the closest one, or choose "Build my own"'),
         t('班次时间、几天一轮、各班组周期起始日都能改；各组起始日与几天一轮对不上会提示「撞班」，可一键均分',
             'Shift times, cycle length and each team\'s cycle start date are all editable; if start dates stop matching the cycle length the app flags it and can spread them evenly in one tap'),
+        t('班次卡上的色点能改颜色：16 颗现成色，也可以自己调（色相条 / 方盘 / 十六进制）',
+            'The colour dot on a shift card opens the palette: 16 ready-made colours, or mix your own (hue bar / square / hex)'),
+        t('不是固定循环的（比如每个月都不一样），可以切到「按月」，每月 1 号重新开始排',
+            'For patterns that are not a fixed cycle — a different rota each month, say — switch to "By month" and set each month up from the 1st'),
         t('调好之后「存为模板」，下次新建时直接选',
             'Once it looks right, "Save as template" and pick it next time you create one'),
         t('要换哪套上场：在「排班时段」加一段，或改「其余时间」那一行；想只跟着法定节假日休班，开「跟随法定节假日（无班次）」',
@@ -784,14 +934,14 @@ class L10n {
   static List<String> get guideAlarmDesc => [
         t('白班、夜班到点自动响铃，时间在排班编辑器里改',
             'Day and night shifts ring automatically; the times are set in the schedule editor'),
-        t('一个班次最多挂 6 条闹钟，每条可以起名字（「起床」「午休」）',
-            'Each shift can carry up to 6 alarms, each with an optional name ("Wake up", "Nap")'),
+        t('一个班次最多挂 10 条闹钟，每条可以起名字（「起床」「午休」）',
+            'Each shift can carry up to 10 alarms, each with an optional name ("Wake up", "Nap")'),
         t('闹钟页列出未来 30 天，每天能单独关',
             'The alarm page lists the next 30 days, each with its own toggle'),
         t('也能加自定义闹钟：一次性 / 每天 / 每周',
             'Add custom alarms too: once / daily / weekly'),
-        t('零点班（00:00 上班）的响铃排在上班前 1 小时，也就是前一天晚上，列表里写明「前一天」',
-            'A midnight shift (00:00 start) rings an hour before work starts — the evening before, marked "day before" in the list'),
+        t('响铃落在前一天、当天还是次日，是按上班时间算出来的，班次列表里会标出来',
+            'Whether an alarm lands the day before, the same day or the next day is worked out from the shift times, and the list marks which'),
         t('铃声可用内置、系统铃声、从手机里自选，或选「仅震动」只震不响',
             'Pick a built-in, system or your own ringtone — or "Vibrate only" to ring silently'),
       ];
@@ -802,6 +952,10 @@ class L10n {
         t('到点弹通知；给某条开「联动闹钟」会像班次闹钟一样全屏响铃',
             'A notification appears at that moment; a todo can also ring as a full-screen alarm like a shift does'),
         t('完成后勾一下（变暗 + 删除线）', 'Tick an item when done (dims + strikethrough)'),
+        t('可以设成每天 / 每周几 / 每月某日自动出现，不用每次手填',
+            'A todo can repeat daily, on chosen weekdays or on a day of the month, so you do not type it in again'),
+        t('做完的会收进列表底部「已完成 N 条」里，主列表只留没做的',
+            'Completed items drop into a "completed" section at the bottom, leaving only the open ones in the list'),
         t('选中的那天有待办时，日历底栏信息卡会显示「N 项待办」',
             'When the selected day has todos, the calendar\'s info card shows "N todos"'),
       ];
@@ -813,6 +967,8 @@ class L10n {
             '"Liquid glass" lights up the glass rim, and the slider and switch swell into a lens while you press them — turn it off to save battery'),
         t('「触觉反馈」控制开关、选中、拖选与改班时的轻微震动，默认开',
             'Haptic feedback (a light buzz when you flip a switch, pick an option, drag-select or apply a day change) is on by default and lives here too'),
+        t('「字体大小」四档，App 自己管，不跟系统字号走',
+            '"Text size" has four steps, managed by the app rather than by the system font setting'),
       ];
   static String get guideLayoutTitle =>
       t('横屏 · 宽屏 · 小窗', 'Landscape · wide screens · small windows');
@@ -858,6 +1014,21 @@ class L10n {
   // 响铃界面
   static String get snooze => t('再睡一会', 'Snooze');
   static String get swipeUpToDismiss => t('上滑关闭', 'Swipe up to dismiss');
+
+  /// 「再睡一会」的档位（分钟）。默认 5 = 这一项出现之前写死的那个值，
+  /// 所以升级上来的人行为一个字节不变。
+  ///
+  /// 档位是**封闭列表**而不是 1–60 的连续值：设成 1 分钟那种极端值要一次点到，
+  /// 而 30 分钟之后再长的「贪睡」其实是「今天先不上了」，那件事该去关闹钟。
+  static const int snoozeDefaultMinutes = 5;
+  static const List<int> snoozeOptions = [1, 5, 10, 15, 20, 30];
+  static String snoozeOptionLabel(int minutes) =>
+      isEn ? '$minutes min' : '$minutes 分钟';
+
+  /// 响铃界面那颗按钮：「再睡一会 · 10 分钟」。**时长要写在按钮上** —— 设成
+  /// 30 分钟而按钮纹丝不动的话，用户没法确认自己那一下改到底生效没有。
+  static String snoozeWithDuration(int minutes) =>
+      '$snooze · ${snoozeOptionLabel(minutes)}';
 
   // 外观设置
   static String get liquidGlass => t('液态玻璃', 'Liquid glass');

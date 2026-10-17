@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  月历卡的**面板底** —— 它扮的是 App 的「日历页」，42 张白格垫在它上面。
+  今日卡与周条仍走 `widget_card_*`（它们扮的是 App 的「信息卡」，是白的）。
+
+  ⚠️ **两端都必须不透明**（alpha FF）。97% 时叠黑壁纸，面板只有约 238，
+  落在它上面的 `wg_muted_light`（周几行、标题行）只有 4.33:1 —— 跌破 AA 4.5；
+  不透明是 4.61:1。这个数在 spec §5 里算过，`widget_cell_block_guard_test.dart`
+  有一条钉子盯着它。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="22dp" />
+    <gradient
+        android:angle="315"
+        android:startColor="#FFF5F6FA"
+        android:endColor="#FFF2F4F9" />
+    <stroke android:width="1dp" android:color="@color/wg_border_light" />
+</shape>

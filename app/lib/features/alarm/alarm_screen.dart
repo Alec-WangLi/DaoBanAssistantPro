@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,15 +8,18 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
+import '../../core/widgets/section_heading.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
@@ -110,13 +114,13 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ),
             ),
             const SizedBox(height: 12),
-            _sectionTitleRow(context, L10n.upcoming30),
+            _sectionTitleRow(L10n.upcoming30),
             Expanded(child: _shiftAlarmSection(context, chain, shiftAlarms)),
             const SizedBox(height: 8),
-            _sectionTitleRow(context, L10n.customAlarms),
+            _sectionTitleRow(L10n.customAlarms),
             Expanded(child: _customAlarmSection(context, alarms)),
             // 底部按钮条是 floatingActionButton、**悬浮在内容之上**
-            // （见 _AboveCapsuleBarLocation），正文不给自己留位置就会被压住：
+            // （见 `AboveCapsuleLocation.bar`），正文不给自己留位置就会被压住：
             // 小窗里「自定义闹钟」的空状态提示正好落在它下面。
             // 竖屏内容本来就够短、轮不到压，所以只在小窗/横屏补这块留白。
             if (AppLayout.of(context).isShort ||
@@ -125,17 +129,19 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           ],
         ),
       )),
-      floatingActionButtonLocation: const _AboveCapsuleBarLocation(),
+      floatingActionButtonLocation: const AboveCapsuleLocation.bar(),
       floatingActionButton: _bottomActionBar(context),
     );
   }
 
-  Widget _sectionTitleRow(BuildContext context, String title) {
+  /// 小节标题 + 整行水平 16 的留白（本节的行也走同一档水平内缩）。
+  /// 标题本体是共享件 [SectionHeading]（v0.12.0 收口）。
+  Widget _sectionTitleRow(String title) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: _sectionTitle(context, title),
+        child: SectionHeading(title),
       ),
     );
   }
@@ -143,20 +149,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   Widget _shiftAlarmSection(BuildContext context, ShiftSource? chain,
       List<_ShiftAlarmEntry> shiftAlarms) {
     if (chain == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const GlassLoading();
     }
     if (shiftAlarms.isEmpty) {
-      return Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-          child: Text(
-            L10n.noUpcoming30,
-            style: AppTokens.rowSecondary
-                .copyWith(color: AppTokens.inkMuted(context)),
-          ),
-        ),
-      );
+      return EmptyState(L10n.noUpcoming30);
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -168,17 +164,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
 
   Widget _customAlarmSection(BuildContext context, List<CustomAlarm> alarms) {
     if (alarms.isEmpty) {
-      return Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            L10n.noCustomAlarms,
-            style: AppTokens.rowSecondary
-                .copyWith(color: AppTokens.inkMuted(context)),
-          ),
-        ),
-      );
+      // 与上面「班次闹钟」那处同一个角色、同一种形状 —— 收进同一个共享件，
+      // 两处同时为空时留白一致（原先这里是 `fromLTRB(16,16,16,8)`、上面是
+      // `fromLTRB(16,24,16,24)`，同屏两种空态留白）。
+      return EmptyState(L10n.noCustomAlarms);
     }
     return ListView.builder(
       // 这是页面上最下面那段列表，而底部按钮条**悬浮**在它上面：不留底部空白
@@ -191,8 +180,15 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   }
 
   Widget _bottomActionBar(BuildContext context) {
-    final width = MediaQuery.of(context).size.width - 32;
+    // 宽屏下正文被 `CenteredContent` 限宽 720 并居中，这条按钮条也要跟着那个栏宽 ——
+    // 不然它在 1280 的车机上从左边缘铺到右边缘，两台按钮孤零零挂在屏幕两端
+    // （与待办页那颗「＋」是同一处毛病，2026-10-13 一起收）。
+    final contentW = math.min(
+        MediaQuery.sizeOf(context).width, AppLayout.maxContentWidth.toDouble());
+    final width = contentW - 32;
     return SizedBox(
+      // 工装 / 用例量它落点的抓手。
+      key: const Key('alarm-action-bar'),
       width: width,
       height: 56,
       child: Row(
@@ -214,16 +210,6 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _sectionTitle(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        title,
-        style: AppTokens.titleStrong,
       ),
     );
   }
@@ -293,10 +279,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                         overflow: TextOverflow.ellipsis,
                         style: AppTokens.titleStrong,
                       ),
-                      if (alarmFallsOnPreviousDay(
-                          e.shift, e.shift.alarms[k]))
+                      // 不落在班次当天时标一下：只写钟点会被读成班次当天
+                      // （16:30–次日 00:30 的 00:15 就是这一类）。
+                      if (_dayMarkerOf(e.shift, e.shift.alarms[k])
+                          case final marker?)
                         Text(
-                          L10n.prevDay,
+                          marker,
                           style: AppTokens.microText.copyWith(color: muted),
                         ),
                     ],
@@ -552,13 +540,13 @@ String _fmt(int minutes) {
   return '$h:$m';
 }
 
-/// 底部按钮条上移，避开悬浮玻璃胶囊（与待办页 FAB 的 `_AboveCapsuleFabLocation` 同一 76px 偏移，底边对齐）。
-class _AboveCapsuleBarLocation extends FloatingActionButtonLocation {
-  const _AboveCapsuleBarLocation();
-
-  @override
-  Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
-    final base = FloatingActionButtonLocation.endFloat.getOffset(geometry);
-    return Offset(16, base.dy - 76);
-  }
-}
+/// 这条闹钟不落在班次当天时的标记（`前一天` / `次日`）；落在当天返回 null。
+///
+/// 只写钟点会被读成班次当天 —— 16:30–次日 00:30 的 00:15 一旦只写「00:15」，
+/// 看着就像上班前的那个凌晨（比上班早 16 小时）。
+String? _dayMarkerOf(ShiftClass shift, ShiftAlarm alarm) =>
+    switch (alarmDayAnchor(shift, alarm)) {
+      AlarmDayAnchor.prev => L10n.prevDay,
+      AlarmDayAnchor.next => L10n.nextDayMarker,
+      AlarmDayAnchor.same => null,
+    };

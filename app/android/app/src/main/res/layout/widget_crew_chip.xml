@@ -1,37 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  今日卡「其他班组」那一行里的**一个班组胶囊**：淡染胶囊 + 8dp 实心圆点 + 文字。
+
+  ⚠️ **这是 App `_otherCrewChips` 的同款**（2026-10-16 用户真机反馈：「其他班组：怎么
+  没有那种半透明的胶囊？你看 APP 里边是有的。」）。App 那边是
+  `Container(padding: 8/3, decoration: 14% 淡染底 + 45% 描边, radius radiusS=12)`
+  包着「8dp 色点 + `gapIconText` 间距 + 组名简称」。桌面这边：
+
+  · 胶囊底由**渲染侧的位图**铺（`WidgetChip.tintedChip` 就是同一套 14% / 45% 配方，
+    颜色是用户选的、静态 `<shape>` 做不到），位图宽按「组名 + 空格 + 简称」现量。
+  · **宽度由 TextView 驱动、位图贴上去**（`wg_cc_bg` 两层都 `match_parent`、TextView
+    `wrap_content`）—— 与班次胶囊 `widget_strip_cell.xml` 同一条路子。位图宽里那
+    26dp = 左内边距 6 + 圆点 8 + 间距 6 + 右内边距 6，与这个布局逐项对齐。
+  · ⚠️ **内边距是 6dp、不是 App 的 8dp**（2026-10-16 真机量出来的）：桌面这张卡宽
+    **341.7dp**，App 的信息卡 **368dp** —— 同样的内容在桌面少 26dp。App 那套在桌面
+    只剩 299.3dp 可用而需要 303.3dp，最后那颗会被挤成「四班…」；每颗省 2dp×2 正好让出
+    12dp。**改这个内边距就要同时改 `crewChipWidthPx` 里的 26。**
+  · **内层那个 LinearLayout 必须 `match_parent` 高**：它的 `gravity="center_vertical"`
+    只居中**它自己的子层**（圆点 + 文字）；若它缩成内容高，整块会顶到胶囊上沿，
+    圆点与文字就不在 22dp 胶囊里垂直居中了。
+  · 圆点**只有 8dp 的实心圆、外面没有圈** —— 旧版是「14dp 淡色圆环 + 8dp 圆点」
+    （App 里没有那圈环），2026-10-16 已删。
+
+  ⚠️ 这一份是**嵌套 RemoteViews**（渲染侧 `removeAllViews` + `addView`），所以改动
+  立刻生效、**不需要重启桌面** —— 与外层壳 `widget_today_standalone.xml` 不同。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_cc_root"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="horizontal"
-    android:gravity="center_vertical">
+    android:layout_width="wrap_content"
+    android:layout_height="22dp">
 
-    <FrameLayout
-        android:layout_width="14dp"
-        android:layout_height="14dp">
+    <ImageView
+        android:id="@+id/wg_cc_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="@null" />
 
-        <ImageView
-            android:id="@+id/wg_cc_bg"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="fitXY"
-            android:contentDescription="@null" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingLeft="6dp"
+        android:paddingRight="6dp">
 
         <ImageView
             android:id="@+id/wg_cc_dot"
             android:layout_width="8dp"
             android:layout_height="8dp"
-            android:layout_gravity="center"
             android:scaleType="fitXY"
             android:contentDescription="@null" />
-    </FrameLayout>
 
-    <TextView
-        android:id="@+id/wg_cc_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="6dp"
-        android:textSize="11sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
-</LinearLayout>
+        <TextView
+            android:id="@+id/wg_cc_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textSize="12dp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+</FrameLayout>

@@ -35,9 +35,11 @@ import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/app_theme.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 // 插件通道的桩搬到了 `test/support/plugin_channels.dart`（`test/` 下的用例也要
@@ -230,20 +232,23 @@ class VisualApp extends StatelessWidget {
     required this.home,
     this.brightness = Brightness.light,
     this.language = 'zh',
-    this.textScale = 1.0,
+    this.fontSize = AppFontSize.standard,
   });
 
   final Widget home;
   final Brightness brightness;
   final String language;
 
-  /// 系统字号。默认 1.0（与真机「设置 → 显示 → 字体大小」的默认档一致）。
+  /// 字号档位 —— **走 App 自己那一套**（`AppFontSize`），不是平台字号。
   ///
-  /// **这一档必须能改**：全 app 都没有钳制 `textScaler`，而工装此前每一屏都只在
-  /// 1.0× 下出图 —— 于是「系统字号放大之后文字被截」这一类问题在图上**结构性地
-  /// 看不见**（v0.9.9 修的那个日历农历截断就是这么漏掉的）。屏单里有一屏专门
-  /// 跑大字号（见 `render_screens_test.dart`）。
-  final double textScale;
+  /// v0.11.12 起字号只由 App 决定（设计 §3）：根部的 `MediaQuery` 会把平台报上来的
+  /// `textScaler` 整个换掉。工装是**另一个根**（`VisualApp` 是它自己的 `MaterialApp`），
+  /// 所以这里也得自己套一层，否则拍出来的图会跟着测试环境的平台字号走。
+  ///
+  /// **必须能改**：以前只有 1.0× 那一档出图，于是「字号一大就被截」这类问题在图上
+  /// **结构性地看不见**（v0.9.9 修的那个日历农历截断就是这么漏掉的，v0.11.12 那次
+  /// 静默省略也是一样）。
+  final AppFontSize fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -262,13 +267,14 @@ class VisualApp extends StatelessWidget {
       // 在 `builder` 里套：这个 context 在 App 自己的 `MediaQuery` **之下**，
       // 在这里 `of(context)` 拿到的是真实那一份，改文字缩放不会顺带把
       // `size` / `padding` 一起改掉。
-      builder: textScale == 1.0
-          ? null
-          : (context, child) => MediaQuery(
-                data: MediaQuery.of(context)
-                    .copyWith(textScaler: TextScaler.linear(textScale)),
-                child: child!,
-              ),
+      //
+      // **「标准」档也要套**（不再像从前那样 1.0 就返回 null）：套上才等于
+      // 「无论平台报什么，都以我们这一档为准」—— 与真机上的行为一致。
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(fontSize.scale)),
+        child: child!,
+      ),
       home: home,
     );
   }
@@ -348,6 +354,16 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
     timeMinute: 9 * 60,
     advanceRemindMinutes: 1440,
   );
+
+  // 两条**已完成**的：待办页底部那个「已完成 N 条」折叠区要有东西可画。
+  // 已完成的**不**计入日历的「N 项待办」与桌面小组件的待办数，所以加这两条
+  // 只影响待办那几屏。
+  for (final (title, daysAgo) in [('做完的：交体检报告', 3), ('做完的：还备用钥匙', 1)]) {
+    final id = await repo.addEvent(
+        title: title, date: today.subtract(Duration(days: daysAgo)));
+    final row = (await repo.listEvents()).firstWhere((e) => e.id == id);
+    await repo.setEventCompleted(row, true);
+  }
   await db.into(db.scheduleEvents).insert(ScheduleEventsCompanion.insert(
         title: '领劳保用品',
         date: today,
@@ -441,6 +457,40 @@ Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
   );
 }
 
+/// 把当前方案换成「新加的那几颗色」—— 用来出「新色落到日历格子上」那一屏。
+///
+/// 为什么单单为它加一个种子：`shift_palette_test.dart` 量的是**描边对卡底的
+/// 对比度**，量不出「整张日历上好不好认」。新色能不能读出来，是这一版算得出来
+/// 但**没看过**的那件事（v0.11.6 的 Review Focus 5）。四个班次刻意挑了四处不同的
+/// 色相、深浅各半，而且**不留休班** —— 每天都有胶囊才看得出排在一起的观感。
+Future<void> makeNewPaletteShiftCurrent(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final today = dateOnly(DateTime.now());
+  await repo.saveSchedule(
+    name: '新配色 · 四班',
+    anchorDate: today.subtract(const Duration(days: 3)),
+    classes: const [
+      ShiftClass(
+          name: '早班', abbr: '早', startMinute: 480, endMinute: 960,
+          color: 0xFF2E7D32), // 深绿
+      ShiftClass(
+          name: '中班', abbr: '中', startMinute: 960, endMinute: 1440,
+          color: 0xFFB8860B), // 琥珀
+      ShiftClass(
+          name: '夜班', abbr: '夜', startMinute: 0, endMinute: 480,
+          color: 0xFF795548), // 棕
+      ShiftClass(
+          name: '培训', abbr: '训', startMinute: 540, endMinute: 660,
+          color: 0xFFF06292), // 粉
+    ],
+    cycle: const [0, 1, 2, 3],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: L10n.defaultTeamNames(1),
+    ourTeamIndex: 0,
+    teamOffsets: const [0],
+  );
+}
 /// 把当前方案里那个班次改成带 [count] 个闹钟，其中一个带名字。
 ///
 /// [nightShift] 为真时改用「零点班」形状（00:00–08:00、起床 23:00 + 班中 03:00）：
@@ -487,6 +537,51 @@ Future<void> makeAlarmShowcase(
       const ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
     ],
     // 让今天必落在上班那个班次上 —— 闹钟页才有行可看。
+    cycle: const [0, 0, 1],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: L10n.defaultTeamNames(1),
+    ourTeamIndex: 0,
+    teamOffsets: const [0],
+  );
+}
+
+/// 三档落点同屏：中班（16:30–次日 00:30）的 `00:15` 是**次日**、夜班（00:00–08:00）
+/// 的 `23:00` 是**前一天**，`19:00` 落在当天（不标）。
+///
+/// 三档标记是 v0.11.1 新加的读法，而它只在**不落在当天**时才画 —— 一张静止帧上
+/// 三种都要出现，才看得出它们长得一样不一样（尤其是中英两种长度不同的前缀
+/// 会不会把那一行挤掉）。编辑页会把方案里每个班次都画出来，所以一套方案装三个
+/// 班次就够。
+Future<void> makeTriTierAlarmShowcase(AppDatabase db) async {
+  final today = dateOnly(DateTime.now());
+  await AppRepository(db).saveSchedule(
+    name: '三档落点',
+    anchorDate: today,
+    classes: const [
+      ShiftClass(
+        name: '中班',
+        abbr: '中',
+        startMinute: 16 * 60 + 30,
+        endMinute: 30, // 回绕式：次日 00:30
+        color: 0xFFFF9F0A,
+        alarmEnabled: true,
+        alarms: [
+          ShiftAlarm(minute: 0 * 60 + 15, label: '准备下班'), // 次日 00:15
+          ShiftAlarm(minute: 19 * 60), // 当天 19:00（不标）
+        ],
+      ),
+      ShiftClass(
+        name: '夜班',
+        abbr: '夜',
+        startMinute: 0,
+        endMinute: 8 * 60,
+        color: 0xFF7A5CFF,
+        alarmEnabled: true,
+        alarms: [ShiftAlarm(minute: 23 * 60, label: '起床')], // 前一天 23:00
+      ),
+      ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+    ],
     cycle: const [0, 0, 1],
     makeCurrent: true,
     teamCount: 1,
@@ -547,6 +642,59 @@ Future<void> makeCrewClashCurrent(AppDatabase db) async {
 /// 而它正好是本轮唯一新增的界面元素（分组标题旁边的「管理」、卡片上的
 /// 「N 天一轮 · N 个班组」副标题）。两条故意不同长：一条 4 天、一条 10 天，
 /// 好看出副标题与色条不是写死的。
+/// 按月排班：每月的 1–10 中班、11–20 白班、21 号到月底夜班，三个班组按**段**错开
+/// （0/1/2）—— 就是 2026-10-13 那位用户报上来的形状。
+///
+/// 时钟正是**回绕式**的写法（夜班 23:30 → 07:30 存成 450 < 1410），与内置模板和
+/// 编辑器产出的同一种 —— 顺手让「跨午夜班次的时段文案」也在这张图里过一次。
+Future<void> makeMonthlyScheduleCurrent(AppDatabase db) async {
+  final repo = AppRepository(db);
+  await repo.saveSchedule(
+    name: '按月三班倒',
+    // 按月不读基准日（每月 1 号恒等于第一段），给今天就行。
+    anchorDate: dateOnly(DateTime.now()),
+    classes: const [
+      ShiftClass(
+          name: '中班',
+          abbr: '中',
+          startMinute: 15 * 60 + 30,
+          endMinute: 23 * 60 + 30,
+          color: 0xFF7A5CFF,
+          alarmEnabled: true,
+          alarms: [ShiftAlarm(minute: 14 * 60 + 30)]),
+      ShiftClass(
+          name: '白班',
+          abbr: '白',
+          startMinute: 7 * 60 + 30,
+          endMinute: 15 * 60 + 30,
+          color: 0xFF4C8DFF,
+          alarmEnabled: true,
+          alarms: [ShiftAlarm(minute: 6 * 60 + 30)]),
+      ShiftClass(
+          name: '夜班',
+          abbr: '夜',
+          startMinute: 23 * 60 + 30,
+          endMinute: 7 * 60 + 30,
+          color: 0xFFFF9F0A,
+          alarmEnabled: true,
+          alarms: [ShiftAlarm(minute: 22 * 60 + 30)]),
+    ],
+    cycle: const [],
+    monthly: true,
+    monthSegments: const [
+      MonthlySegment(startDay: 1, classIndex: 0),
+      MonthlySegment(startDay: 11, classIndex: 1),
+      MonthlySegment(startDay: 21, classIndex: 2),
+    ],
+    makeCurrent: true,
+    teamCount: 3,
+    teamNames: L10n.defaultTeamNames(3),
+    ourTeamIndex: 0,
+    teamOffsets: const [],
+    teamSegOffsets: const [0, 1, 2],
+  );
+}
+
 Future<void> seedMyTemplates(AppDatabase db) async {
   final repo = AppRepository(db);
   final domain = await repo.getActiveSchedule();
@@ -720,6 +868,24 @@ Future<void> seedBlankSchedule(AppDatabase db) async {
   );
 }
 
+/// 空态屏（`62_alarm_empty` / `63_todos_empty`）用的库。
+///
+/// **空态此前从没进过屏单**（41 屏里零覆盖）—— 而它正是 v0.8.1 那类「没进屏单 =
+/// 没人真正看过」的界面。两条空态各要一份**真的空**的库，否则拍出来的是一张排满
+/// 内容的页、那一条等于没拍：
+///   · 闹钟页那句「近 30 天无班次闹钟」只在**有班表在管、而未来 30 天一个班次闹钟
+///     都没有**时出现（`chain == null` 时走的是转圈，不是空态）。所以**不能**给一份
+///     「一张排班都没有」的空库 —— 那样 `seedIfEmpty` 会补回默认的四班两倒、反而画
+///     满闹钟。要的是 `seedBlankSchedule` 那张**没有班次**的空白表。
+///   · 待办页那句「还没有待办事项」只在**一条待办都没有**时出现。
+Future<void> seedEmptyStates(AppDatabase db) async {
+  await seedBlankSchedule(db);
+  final repo = AppRepository(db);
+  for (final e in await repo.listEvents()) {
+    await repo.deleteEvent(e);
+  }
+}
+
 /// 所有屏都可能读 SharedPreferences（设置、引导、更新检查），给一份空的。
 void setUpVisualPrefs() {
   SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -769,7 +935,7 @@ Future<GlobalKey> pumpScreen(
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
   Size size = kVisualSize,
-  double textScale = 1.0,
+  AppFontSize fontSize = AppFontSize.standard,
   Future<void> Function(WidgetTester tester)? beforeCapture,
   bool settleAfterCapture = true,
 }) async {
@@ -784,7 +950,7 @@ Future<GlobalKey> pumpScreen(
   // 重建，而那个 notifier 会从 SharedPreferences 读语言、反过来把 L10n.locale 覆盖
   // 回默认值——不写进 prefs 的话，「英文界面」渲染出来的其实还是中文。
   SharedPreferences.setMockInitialValues(
-      <String, Object>{'language': language, ...extraPrefs});
+      <String, Object>{'language': language, 'fontSize': fontSize.name, ...extraPrefs});
   stubPluginChannels();
 
   tester.view.physicalSize = Size(
@@ -810,7 +976,7 @@ Future<GlobalKey> pumpScreen(
           home: home,
           brightness: brightness,
           language: language,
-          textScale: textScale,
+          fontSize: fontSize,
         ),
       ),
     ),
@@ -857,7 +1023,7 @@ Future<void> renderScreen(
   String language = 'zh',
   Map<String, Object> extraPrefs = const {},
   Size size = kVisualSize,
-  double textScale = 1.0,
+  AppFontSize fontSize = AppFontSize.standard,
   Future<void> Function(WidgetTester tester)? beforeCapture,
   bool settleAfterCapture = true,
 }) async {
@@ -869,7 +1035,7 @@ Future<void> renderScreen(
     language: language,
     extraPrefs: extraPrefs,
     size: size,
-    textScale: textScale,
+    fontSize: fontSize,
     beforeCapture: beforeCapture,
     settleAfterCapture: settleAfterCapture,
   );
@@ -924,6 +1090,52 @@ void failOnOverflow(WidgetTester tester) {
       fail('布局溢出（${overflows.length} 处）：\n${overflows.join('\n')}');
     }
   });
+}
+
+/// **具名白名单：本来就该缩写的展示。**
+///
+/// 每条都要写清「为什么这里缩写是对的」—— 与 `design_tokens_test.dart` 的豁免
+/// 同一套规矩：**故意不查的东西要看得见**（命中会打日志）。
+const Map<String, String> kDeliberateEllipsis = <String, String>{};
+
+/// 这一段文本是不是「本来就该被截」的。
+bool _isDeliberate(String text) {
+  if (kDeliberateEllipsis.containsKey(text)) {
+    debugPrint('[text-fit] 白名单命中：「$text」 —— ${kDeliberateEllipsis[text]}');
+    return true;
+  }
+  // 字符串自己就以 `…` 结尾 ⟹ 那个省略号是**我们烘进去的**（`LunarInfo.cellLabel`
+  // 一类），不是 `TextOverflow.ellipsis` 画上去的。
+  return text.endsWith('…') || text.endsWith('...');
+}
+
+/// 抓出这一帧里**所有被吃掉了字的段落**。
+///
+/// 两条判据，缺一不可：
+///   ① 段落自己按 `maxLines` 截了（`didExceedMaxLines`）；
+///   ② **容器把段落裁短了** —— 这一种 `didExceedMaxLines` 是 false，只查①会瞎。
+///      判据是「在它自己的宽度下本来需要的高度 > 实际拿到的高度」，容差 2px
+///      （0.5 会把 1px 的亚像素差当成裁切）。
+///
+/// 常设护栏在 `tool/visual/text_fit_guard_test.dart`；单屏的用例也用它。
+List<String> truncatedParagraphs(WidgetTester tester) {
+  final hits = <String>[];
+  for (final ro in tester.allRenderObjects.whereType<RenderParagraph>()) {
+    final text = ro.text.toPlainText().replaceAll('\n', ' ').trim();
+    if (text.isEmpty) continue;
+    if (_isDeliberate(text)) continue;
+    if (ro.didExceedMaxLines) {
+      hits.add('方式 1（段落自己截）▸ 「$text」');
+      continue;
+    }
+    if (ro.size.width > 0 &&
+        ro.getMaxIntrinsicHeight(ro.size.width) > ro.size.height + 2.0) {
+      hits.add('方式 2（容器裁短）▸ 「$text」'
+          '（本来需要 ${ro.getMaxIntrinsicHeight(ro.size.width).toStringAsFixed(1)}，'
+          '只拿到 ${ro.size.height.toStringAsFixed(1)}）');
+    }
+  }
+  return hits;
 }
 
 /// 当前生效方案的 id，给「打开编辑器」一类需要显式 id 的屏用。

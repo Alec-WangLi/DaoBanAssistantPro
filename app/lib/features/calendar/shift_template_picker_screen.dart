@@ -8,8 +8,11 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_field.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../data/app_repository.dart';
+import '../../domain/monthly_pattern.dart';
 import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../../domain/shift_templates.dart';
@@ -21,14 +24,27 @@ import '../../domain/shift_templates.dart';
 class ShiftTemplateChoice {
   const ShiftTemplateChoice.template(ShiftTemplate this.template)
       : savedTemplate = null,
-        custom = false;
+        custom = false,
+        monthly = false;
   const ShiftTemplateChoice.saved(ScheduleTemplate this.savedTemplate)
       : template = null,
-        custom = false;
+        custom = false,
+        monthly = false;
   const ShiftTemplateChoice.custom()
       : template = null,
         savedTemplate = null,
-        custom = true;
+        custom = true,
+        monthly = false;
+
+  /// 用户选了「按月排班」：从零开一套**按月切法**（不是周期）。
+  ///
+  /// 与 [custom] 平级 —— 两者都是「从零开始」，只是起步的规则不同
+  /// （连续周期 vs 每月 1 号归零）。
+  const ShiftTemplateChoice.monthly()
+      : template = null,
+        savedTemplate = null,
+        custom = false,
+        monthly = true;
 
   /// 选中的内置模板；其余两种情形为 null。
   final ShiftTemplate? template;
@@ -38,6 +54,9 @@ class ShiftTemplateChoice {
 
   /// 用户选了「我自己排」。
   final bool custom;
+
+  /// 用户选了「按月排班」。
+  final bool monthly;
 }
 
 /// 「选择你的倒班方式」：卡片网格 + 搜索，选中后返回该模板。
@@ -88,7 +107,12 @@ class _ShiftTemplatePickerScreenState
         ref.watch(savedTemplatesProvider).valueOrNull ?? const <ScheduleTemplate>[];
 
     return Scaffold(
-      appBar: AppBar(title: Text(L10n.pickShiftPattern)),
+      // 同上：标题按宽度缩小，不省略。
+      appBar: AppBar(
+          title: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(L10n.pickShiftPattern))),
       body: CenteredContent(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -99,9 +123,12 @@ class _ShiftTemplatePickerScreenState
                   .copyWith(color: AppTokens.inkMuted(context)),
             ),
             const SizedBox(height: 12),
-            TextField(
-              onChanged: (v) => setState(() => _query = v),
-              decoration: glassInputDecoration(context, L10n.searchPattern),
+            GlassField(
+              label: L10n.searchPattern,
+              child: TextField(
+                onChanged: (v) => setState(() => _query = v),
+                decoration: glassInputDecoration(context),
+              ),
             ),
             const SizedBox(height: 16),
             ..._buildGrouped(context, matched, saved),
@@ -160,6 +187,12 @@ class _ShiftTemplatePickerScreenState
         ),
       ));
     }
+    // ⚠️ **「按月排班」与「我自己排」要有自己的组名。** 这两张卡此前是裸挂在
+    // 分组循环后面的，头上什么都不写 —— 而最后一个分组是「常白」，于是它们看起来
+    // 就归在常白里（用户 2026-10-13 真机反馈：「它把倒班方式归类到了长白班那里，
+    // 这是不对的吧？」）。它们本来也不是内置的轮转方式，而是两条**从零开始**的路。
+    out.add(_groupHeader(context, L10n.fromScratchGroup));
+    out.add(_monthlyCard(context));
     out.add(_customCard(context));
     return out;
   }
@@ -178,10 +211,22 @@ class _ShiftTemplatePickerScreenState
                 style: AppTokens.labelSecondary
                     .copyWith(fontWeight: FontWeight.w700)),
           ),
+          // 「管理」入口：**玻璃胶囊**，与全 app 的入口同款（「今天」「重复待办」
+          // 「已完成 N 条」）。原来是一颗裸 `TextButton`，读起来像正文、不像能点的
+          // 东西（v0.9.13 / v0.11.4 收过同类两处，v0.12.0 收掉最后这处）。
+          // **非 accent 那一档**：实心主色会跟这一页的主操作（新建）抢眼睛。
+          // `height: 36` 是「紧凑入口」那一档（见 `GlassPill` 文档注释）—— 别退回
+          // 32：它是**唯一入口**，命中区缩水要两头（观感 + 手感）一起付代价。
           if (onManage != null)
-            TextButton(
-              onPressed: onManage,
-              child: Text(L10n.manageTemplates),
+            GlassPill(
+              onTap: onManage,
+              height: 36,
+              child: Text(
+                L10n.manageTemplates,
+                style: AppTokens.labelSecondary.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
             ),
         ],
       ),
@@ -198,7 +243,11 @@ class _ShiftTemplatePickerScreenState
     required String subtitle,
     required List<ShiftClass> classes,
     required List<int> cycle,
-    required int workingTeamsPerDay,
+    // null = 这一档对**这套排法**不适用，整行不出现。按月排班就是这种：
+    // 它的段长短随月份变，「每天在岗几个班组」没有单一答案（而且那张起步卡片
+    // 的班次是借四班两倒的，算出来的数本身就是借来的副产物 —— 用户 2026-10-13
+    // 真机反馈「每天在岗两个班组，这是啥意思啊？」）。
+    required int? workingTeamsPerDay,
     required VoidCallback onTap,
   }) {
     final muted = AppTokens.inkMuted(context);
@@ -209,7 +258,7 @@ class _ShiftTemplatePickerScreenState
         const SizedBox(height: 4),
         Text(subtitle,
             style: AppTokens.rowSecondary.copyWith(color: muted)),
-        if (workingTeamsPerDay > 1) ...[
+        if (workingTeamsPerDay != null && workingTeamsPerDay > 1) ...[
           const SizedBox(height: 4),
           Text(
             L10n.crewsOnDutyCount(workingTeamsPerDay),
@@ -226,7 +275,8 @@ class _ShiftTemplatePickerScreenState
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: EdgeInsets.zero,
       child: GlassPressable(
-        child: InkWell(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(AppTokens.spaceMd),
@@ -286,12 +336,54 @@ class _ShiftTemplatePickerScreenState
   Widget _savedCard(BuildContext context, ScheduleTemplate t) => _patternCard(
         context,
         title: t.name,
-        subtitle: L10n.savedTemplateSubtitle(t.cycleLength, t.teamCount),
+        subtitle: _savedSubtitle(t),
         classes: t.classes,
-        cycle: t.cycle,
-        workingTeamsPerDay: t.workingTeamsPerDay,
+        // 色条画的是「一段一个色块」/「一天一个色块」—— 两种模式各画各的。
+        // 按月模板的 `cycle` 是空的，照搬会画出一条空色条。
+        cycle: t.monthly
+            ? [for (final s in t.monthlySegments) s.classIndex]
+            : t.cycle,
+        // 按月模板同样不写「每天在岗几个班组」—— 理由与 `_monthlyCard` 同一处。
+        workingTeamsPerDay: t.monthly ? null : t.workingTeamsPerDay,
         onTap: () => Navigator.of(context).pop(ShiftTemplateChoice.saved(t)),
       );
+
+  /// 「我的模板」的副标题：按月那份要说「每月几段」而不是「几天一轮」
+  /// （它周期本来就是空的，照搬会写出「0 天一轮」）。
+  String _savedSubtitle(ScheduleTemplate t) => t.monthly
+      ? L10n.savedTemplateSubtitleMonthly(t.monthlySegments.length, t.teamCount)
+      : L10n.savedTemplateSubtitle(t.cycleLength, t.teamCount);
+
+  /// 「按月排班」：与「我自己排」并排，同属「从零开始」那一类。
+  ///
+  /// 起步切法 = 三段、1/11/22 起（`defaultMonthlySegments(3)` 把 31 天均分）。
+  /// **班组数取 3**：默认的 4 组配 3 段必然撞班（`round(i×3÷4)` = 0/1/2/2），
+  /// 选完卡片当场弹撞班提示；而三班倒正是这个功能的来处。
+  Widget _monthlyCard(BuildContext context) {
+    final d = defaultSchedule();
+    final starter = ScheduleTemplate(
+      name: L10n.monthlyPattern,
+      classes: d.classes,
+      cycle: const [],
+      teamCount: 3,
+      teamOffsets: const [],
+      monthly: true,
+      monthlySegments: defaultMonthlySegments(3),
+      teamSegOffsets: const [0, 1, 2],
+    );
+    return _patternCard(
+      context,
+      title: L10n.monthlyPattern,
+      subtitle: L10n.monthlyPatternHint,
+      classes: starter.classes,
+      cycle: [for (final s in starter.monthlySegments) s.classIndex],
+      // 不写「每天在岗几个班组」：段的长短随月份变，这个数没有单一答案；
+      // 而这张起步卡片的班次是借四班两倒的，算出来那个「2」只是借来的副产物。
+      workingTeamsPerDay: null,
+      onTap: () =>
+          Navigator.of(context).pop(const ShiftTemplateChoice.monthly()),
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // 「我的模板」的管理：改名 / 删除
@@ -323,9 +415,7 @@ class _ShiftTemplatePickerScreenState
                   child: ListTile(
                     title: Text(t.name,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(
-                      L10n.savedTemplateSubtitle(t.cycleLength, t.teamCount),
-                    ),
+                    subtitle: Text(_savedSubtitle(t)),
                     trailing: GlassDeleteButton(
                       compact: true,
                       onPressed: () {
@@ -365,10 +455,13 @@ class _ShiftTemplatePickerScreenState
       context: context,
       builder: (dialogContext) => GlassDialog(
         title: L10n.renameTemplate,
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: glassInputDecoration(context, L10n.templateName),
+        content: GlassField(
+          label: L10n.templateName,
+          child: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: glassInputDecoration(context),
+          ),
         ),
         actions: [
           GlassActionButton(
@@ -426,8 +519,10 @@ class _ShiftTemplatePickerScreenState
       translucentFill: false,
       padding: EdgeInsets.zero,
       child: GlassPressable(
-        child: InkWell(
-          onTap: () => Navigator.of(context).pop(const ShiftTemplateChoice.custom()),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () =>
+              Navigator.of(context).pop(const ShiftTemplateChoice.custom()),
           child: Padding(
             padding: const EdgeInsets.all(AppTokens.spaceMd),
             child: Row(
@@ -560,6 +655,33 @@ Future<int?> createScheduleFromTemplatePicker(
   if (choice == null || !context.mounted) return null;
 
   final d = defaultSchedule();
+
+  // 「按月排班」：从零开一套**按月切法**。
+  //
+  // 与下面那条（周期）分开写而不是塞进同一串 `??`：它要传的是另一组参数
+  // （`monthly` / `monthSegments` / `teamSegOffsets`），而 `cycle` 必须是空的。
+  //
+  // **班组数取 3**：默认的 4 组配 3 段必然撞班（`round(i×3÷4)` = 0/1/2/2），
+  // 选完卡片当场就是一个撞班提示。三班倒正是这个功能的来处，3 段 3 组天然不撞。
+  if (choice.monthly) {
+    return ref.read(appRepositoryProvider).saveSchedule(
+          name: L10n.monthlyPattern,
+          anchorDate: dateOnly(DateTime.now()),
+          classes: d.classes,
+          cycle: const [],
+          monthly: true,
+          monthSegments: defaultMonthlySegments(3),
+          teamCount: 3,
+          // 必须给满 teamCount 个名字：数据库出口那套兜底是语言中性的，
+          // 漏了就会在中文界面上冒出 `Team 3`。
+          teamNames: L10n.defaultTeamNames(3),
+          ourTeamIndex: 0,
+          teamOffsets: const [],
+          teamSegOffsets: const [0, 1, 2],
+          makeCurrent: makeCurrent,
+        );
+  }
+
   // 三选一：内置模板 / 我的模板 / 我自己排（后者缺省到默认四班两倒）。
   final picked = choice.template;
   final mine = choice.savedTemplate;
@@ -580,5 +702,13 @@ Future<int?> createScheduleFromTemplatePicker(
         // 「我这组从这个周期开始」即可。
         ourTeamIndex: 0,
         teamOffsets: picked?.teamOffsets ?? mine?.teamOffsets ?? d.teamOffsets,
+        // ⚠️ **按月模板那三个字段要一起带过去**（`ShiftTemplate` 那一边恒为空，
+        // 内置模板全是周期方案）。漏了它们的后果不是「少点东西」而是**整套空掉**：
+        // 按月模板的 `cycle` 本来就是空的，于是建出来的方案 `monthly = false`
+        // 且 `cycle = []` —— `isBlank` 为真，日历整月什么都不画、桌面小组件写
+        // 「还没有排班」，而且**不报错**。（独立审查抓的 Critical。）
+        monthly: mine?.monthly ?? false,
+        monthSegments: mine?.monthlySegments ?? const [],
+        teamSegOffsets: mine?.teamSegOffsets ?? const [],
       );
 }

@@ -166,4 +166,34 @@ void main() {
     await repo.clearAll();
     expect(await repo.listRecurringTodos(), isEmpty);
   });
+
+  // 归档（把已完成的行收进折叠区）让「删一条比当前那一次更旧的 occurrence」第一次
+  // 变得可达 —— 而 `skipRecurringOccurrence` 从前是无条件写，水位线会被往回写，
+  // 生成器于是把用户刚删掉的那条又补出来。
+  test('跳过一次：水位线不倒流（删归档里更旧的那条，不会把新的那条补回来）', () async {
+    final sid = await repo.addRecurringTodo(
+      title: '每天交班',
+      repeat: RecurRepeat.daily,
+      startDate: DateTime.utc(2026, 10, 12),
+    );
+    // 造出两行：10/12 那条（会被勾掉 ⇒ 归档里那一条）与 10/13 那条（当前那一条）。
+    await repo.advanceRecurringTodos(today: DateTime.utc(2026, 10, 12));
+    final older =
+        (await repo.listEvents()).where((e) => e.seriesId == sid).single;
+    await repo.setEventCompleted(older, true); // skipThrough = 10/12
+    await repo.advanceRecurringTodos(today: DateTime.utc(2026, 10, 13));
+    final newer = (await repo.listEvents())
+        .firstWhere((e) => e.seriesId == sid && !e.isCompleted);
+
+    // 先删新的那条（= 主列表里「只删这一次」），再删归档里旧的那条。
+    await repo.skipRecurringOccurrence(sid, newer.date);
+    await repo.deleteEvent(newer);
+    await repo.skipRecurringOccurrence(sid, older.date);
+    await repo.deleteEvent(older);
+
+    // 生成器再跑一次：不该把刚删掉的那条补回来。
+    await repo.advanceRecurringTodos(today: DateTime.utc(2026, 10, 13));
+    expect((await repo.listEvents()).where((e) => e.seriesId == sid), isEmpty,
+        reason: '水位线往回写会让刚删掉的那条又被补出来（「删了又回来」）');
+  });
 }

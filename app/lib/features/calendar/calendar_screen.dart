@@ -12,12 +12,16 @@ import '../../core/layout.dart';
 import '../../core/l10n.dart';
 import '../../core/theme/animated_background.dart';
 import '../../core/widgets/app_icon.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
+import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
+import '../../domain/day_summary.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -34,6 +38,44 @@ import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
+/// 一行文字在给定样式与缩放下的**自然行高**。
+///
+/// 信息卡那行班次用它把行高钉死：外面套的那层 `FittedBox` 会连高度一起缩，
+/// 于是「三条闹钟」那天的一行会比「一条」那天矮几 dp —— 而卡片高度**不许**
+/// 跟着当天内容变（`calendar_screen_test.dart` 那条用例盯着）。
+///
+/// 与 `info_card_metrics.dart` 量同一行用的是同一个办法（同一个样式、同一串
+/// 占位文字），两处必须同源。
+double _oneLineHeight(BuildContext context, TextStyle style) {
+  // **必须 `merge` 环境样式，不能只抄字体族。**
+  //
+  // `info_card_metrics.dart` 的 `_Measure.text` 用的是 `def.style.merge(style)` ——
+  // 于是行高里带着环境那层的 `height`（Material 的 1.43）。只抄 family 的话量出来
+  // 会矮 7dp，而卡片高度正是拿它钉的：卡片比内容高出 7dp，白占网格，
+  // `calendar_screen_test.dart` 那条用例当场就红（v0.11.12 栽过一次）。
+  final def = DefaultTextStyle.of(context);
+  final painter = TextPainter(
+    text: TextSpan(text: '班次', style: def.style.merge(style)),
+    textDirection: TextDirection.ltr,
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  return painter.height;
+}
+
+/// 量一段文字在给定样式与缩放下的宽度。
+///
+/// 顶栏那个「一行放不放得下」的判据用它（见 `_oneRowFits`）—— 与
+/// `schedule_editor_screen.dart` 里那个私有的同款；两边各自私有，不为一个十行的
+/// 小函数开一个共享件。
+double _textWidth(String text, TextStyle style, TextScaler scaler) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+    textScaler: scaler,
+  )..layout();
+  return painter.width;
+}
+
 /// 与**这个月**有关、且只跟**方案本身**有关的那两样（见 `_factsFor`）。
 ///
 /// 它们原来每次重建都要重算（各是整月 × 一次链查询 + 拼字符串），而输入只跟
@@ -223,7 +265,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 与**这个月**有关、且**只跟方案本身**有关的那两样 —— 一次算好，键变了才重量。
   ///
   /// 为什么是这两样、而不是全部五样：它们才是每次重建都要重算的大头
-  /// （`_computeMonthTally` 是整月 × `shiftOn` + 拼字符串，`_computeMonthHasNoSchedule`
+  /// （`monthTallyFor` 是整月 × `shiftOn` + 拼字符串，`_computeMonthHasNoSchedule`
   /// 是整月 × `hasScheduleOn`），而它们的输入**恰好就是** `chain.cacheKey` 覆盖的
   /// 那些（组名 / 简称 / 空白表 / 时段）。
   ///
@@ -232,7 +274,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 「调整了一次班次」之后拿到旧值（`已调班` 胶囊的高度再也不留）。那两样本来
   /// 也便宜（一次扫待办 / 整月 `scheduleOn`），现算即可。
   ///
-  /// ⚠️ 键里**必须有语言**：`_computeMonthTally` 那一行是本地化的（`L10n.monthTally`
+  /// ⚠️ 键里**必须有语言**：`monthTallyFor` 那一行是本地化的（`L10n.monthTally`
   /// 与班次简称都可能随语言变）。
   _MonthFacts _factsFor(ScheduleChain? chain) {
     final String key = <String>[
@@ -246,7 +288,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     ].join('|');
     if (key == _factsKey && _facts != null) return _facts!;
     final _MonthFacts f = _MonthFacts(
-      tally: _computeMonthTally(chain),
+      tally: monthTallyFor(chain, _month),
       hasNoSchedule: _computeMonthHasNoSchedule(chain),
     );
     _factsKey = key;
@@ -386,24 +428,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 一到两个字的简称：早 / 午 / 夜 / 休，英文是 M / A / N / O），一行放得下；
   /// 班次多的排班会折到第二行，折行的高度也照量（见 `measureInfoCardLine`）。
   ///
-  /// **按简称累加、不按 `classes` 下标计数**：跨时段的一个月里两套方案的班次定义
-  /// 不同，按下标数会把 A 的第 0 个班次和 B 的第 0 个班次算成同一个 —— 数字会错得
-  /// 看不出来（spec §7.1）。跨方案时同名的「休」合并成一个数，本来就该合。
-  ///
-  /// 没有排班、或整月都没有班次（空白表跟随法定节假日）时返回 null。
-  String? _computeMonthTally(ScheduleChain? chain) {
-    if (chain == null) return null;
-    final counts = <String, int>{};
-    final days = DateTime(_month.year, _month.month + 1, 0).day;
-    for (var d = 1; d <= days; d++) {
-      final shift = chain.shiftOn(DateTime(_month.year, _month.month, d));
-      if (shift == null) continue;
-      counts.update(shift.shortLabel, (n) => n + 1, ifAbsent: () => 1);
-    }
-    if (counts.isEmpty) return null;
-    final parts = [for (final e in counts.entries) '${e.key}${e.value}'];
-    return '${L10n.monthTally} ${parts.join(' · ')}';
-  }
+  /// 实现在 `domain/day_summary.dart` 的 [monthTallyFor] —— 桌面小组件的今日卡
+  /// 要用**同一份**（那边按月查，见 `widget_snapshot.dart`）。
 
   @override
   void initState() {
@@ -753,11 +779,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         freezeWhenBlurDisabled: true,
         child: SafeArea(child: Builder(builder: (context) {
           final layout = AppLayout.of(context);
-          final gridArea = Expanded(
+          final grid = Expanded(
+            // 给下面两支宽屏的几何用例一个抓手。
+            key: const Key('calendar-grid'),
             // 网格区高度要先量出来，才能决定格子长多高（见 _buildGrid）。
             child: LayoutBuilder(
               builder: (context, c) => scheduleAsync.isLoading && chain == null
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const GlassLoading()
                   // 网格可滚动：格子保持全尺寸，小屏 6 行放不下时滚动而非被裁切，
                   // 避免底部行与信息卡重叠。
                   : SingleChildScrollView(
@@ -770,37 +798,90 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             ),
           );
 
+          // 宽屏两支共用的右栏。
+          Widget rail() => SizedBox(
+                key: const Key('info-rail'),
+                width: _railWidth(layout),
+                child: _sideRail(context, chain),
+              );
+
+          // **三支，不是两支。**
+          //   · 宽横屏（平板 / 车机）→ 新版式：顶栏进左栏、今日卡贴右下；
+          //   · 宽且矮（手机横屏）  → **今天的版式原样保留**，只多一层让位；
+          //   · 其余                → 竖屏版式，一个像素不动。
+          // ⚠️ 第二支存在的唯一理由：分栏判据换成 `isWideLandscape` 之后，900×420
+          // 会掉进竖屏那一支、被 `if (!layout.isShort)` 把网格整块删掉 ——
+          // 界面上只会少一块，**不报任何错**。
+          if (layout.isWideLandscape) {
+            // 顶栏在**左栏里面**（与网格一起），所以这一支不套外层 Column。
+            return Padding(
+              padding: const EdgeInsets.only(bottom: kNavCapsuleInset),
+              child: Row(
+                // **`stretch` 是这一支的核心**：右栏必须**占满整列高**，
+                // 「今日卡贴右下角」才有意义。用 `start` 的话右栏会收缩到卡片高度
+                // （实测 1280×800 下只有 308），于是「贴底」与「顶对齐」看起来一样 ——
+                // Task 4 的用例第一版就是这么变成一句空话的。
+                // 左栏不受影响：它本来就有 `Expanded` 的子件，高度恒被拉满。
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
+                      // **必须 `start`**：顶栏在宽横屏下会收缩到内容宽度，而 `Column`
+                      // 默认的 `crossAxisAlignment: center` 会把它摆到左栏正中
+                      // （实测 1280 下左缘落在 270.75）—— 设计要的是贴着左缘。
+                      // 网格那一支不受影响：`Expanded` 里的 `LayoutBuilder` 拿到的
+                      // 松约束 `maxWidth` 仍是整栏宽，它按 `constraints.biggest` 铺满。
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [_header(context), grid],
+                    ),
+                  ),
+                  const SizedBox(width: AppTokens.spaceMd),
+                  rail(),
+                ],
+              ),
+            );
+          }
+
+          // ⚠️ **判据是 `isWide && isShort`，不能只写 `isWide`。**
+          // 只写 `isWide` 的话，**竖着的平板**（800×1280）也落进这一支、被拆成左右
+          // 两栏 —— 而 spec §4.1 要修的恰恰是这处怪相（七列格子要的是宽度，
+          // 不是分栏）。加上 `isShort` 之后，这一支就只剩「宽且矮」的手机横屏。
+          // 独立审查抓出来的（`calendar_screen_test.dart` 的「竖着的平板」钉着）。
+          if (layout.isWide && layout.isShort) {
+            // 宽屏左右分栏：网格与信息卡并排，网格拿到的可用高度从
+            // 「减去底部信息卡」变成「整屏高度」，格子不用再被压扁。
+            // 底下那 96 是给悬浮导航胶囊让位（从前没有它，最后一行被压在胶囊下）。
+            return Column(
+              children: [
+                _header(context),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: kNavCapsuleInset),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        grid,
+                        const SizedBox(width: AppTokens.spaceMd),
+                        rail(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
           return Column(
             children: [
               _header(context),
-              // 宽屏左右分栏：网格与信息卡并排，网格拿到的可用高度从
-              // 「减去底部信息卡」变成「整屏高度」，格子不用再被压扁。
-              if (layout.isWide)
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      gridArea,
-                      const SizedBox(width: AppTokens.spaceMd),
-                      SizedBox(
-                        width: 300,
-                        child: SingleChildScrollView(
-                          child: _infoCard(context, chain, inSidePane: true),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else ...[
-                // **小窗（高 < 480dp）不画网格，只留今日信息卡。**
-                //
-                // 这个尺寸下两者都想要的结果是两者都看不清：200×400 的窗口里
-                // 网格只塞得下两三行格子、还被压扁，而「哪天被调过」这个标记
-                // 本来就在信息卡上 —— 卡留下、信息就齐了。
-                // 各机型小窗的默认尺寸 400×640 高 640 > 480，**不受影响**。
-                if (!layout.isShort) gridArea,
-                _infoCard(context, chain, compact: layout.isShort),
-              ],
+              // **小窗（高 < 480dp）不画网格，只留今日信息卡。**
+              //
+              // 这个尺寸下两者都想要的结果是两者都看不清：200×400 的窗口里
+              // 网格只塞得下两三行格子、还被压扁，而「哪天被调过」这个标记
+              // 本来就在信息卡上 —— 卡留下、信息就齐了。
+              // 各机型小窗的默认尺寸 400×640 高 640 > 480，**不受影响**。
+              if (!layout.isShort) grid,
+              _infoCard(context, chain, compact: layout.isShort),
             ],
           );
         })),
@@ -808,20 +889,79 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     );
   }
 
+  /// 宽屏右栏的宽度：按屏宽取比例，再夹在 280~340。
+  ///
+  /// 为什么不是写死 300（本版之前的做法）：720/800 这种刚过线的宽度上，
+  /// 写死 300 会把左栏挤到 360（格子 48dp）；比例 + 上下限在小屏上收窄右栏、
+  /// 把宽度让给日历。
+  double _railWidth(AppLayout layout) =>
+      (layout.availableWidth * 0.27).clamp(280.0, 340.0);
+
+  /// 宽屏右栏里的今日信息卡。
+  ///
+  /// 用的是 `inSidePane: true` 那条路（卡片高度交给内容，见 `_infoCard`）。
+  ///
+  /// **卡片推到底**（用户 2026-10-13：「就算是一小块，也得放在右下角吧」）：
+  /// `ConstrainedBox(minHeight: 视口高)` 撑满这一栏，`Column(end)` 再把卡片压到底边。
+  /// 有富余时这一层什么都不做（列高 = 视口高，卡片贴底）；**没富余时**（车机上开着
+  /// 特大字号、六班组那种最满的卡片）列会长过视口，于是**这一栏自己滚** ——
+  /// 外层的 `SingleChildScrollView` 就是这个兜底，别把它写成
+  /// `NeverScrollableScrollPhysics`，那样会直接溢出成黄黑条纹。
+  ///
+  /// ⚠️ 这一栏**不是「面板套滚动」**（AGENTS.md 禁的是面板里再套一层滚动）：它是一个
+  /// 布局列，卡片本身在 `inSidePane` 那条路上仍然是「高度交给内容」的。
+  Widget _sideRail(BuildContext context, ScheduleChain? chain) => LayoutBuilder(
+        builder: (context, c) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: c.maxHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [_infoCard(context, chain, inSidePane: true)],
+            ),
+          ),
+        ),
+      );
+
+  /// 顶栏那一行装不装得下 —— **按排版实测**，不拿宽度阈值猜（理由见 `_header`）。
+  ///
+  /// 固定件全是量得出来的：左右留白、三个圆形钮、四个 `gapIconText`、两个胶囊的
+  /// 内边距、「今天」胶囊里的图标与文字；可变件只有年月那一串。
+  bool _oneRowFits(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    // 量宽必须**带上当时那一套字体**：`Text` 会从环境继承 family（工装里中英双字体
+    // 就是这么挂上去的），而裸的 `TextPainter` 只会用兜底字体 —— 两者的中文宽度
+    // 差得很远（实测同一个「2026年10月」：兜底 128、真字体 86）。
+    final ambient = DefaultTextStyle.of(context);
+    TextStyle styled(TextStyle t) =>
+        ambient.style.merge(t); // 与 `info_card_metrics` 的 `_Measure` 同一配方
+    final need = 24.0 + // 左右留白 12×2
+        40.0 * 3 + // 三个圆形钮
+        AppTokens.gapIconText * 4 +
+        8.0 * 2 * 2 + // 两个 GlassPill 的内边距（各两侧 8）
+        AppTokens.iconMd +
+        4 + // 「今天」胶囊里图标与文字之间的间距
+        _textWidth(L10n.today, styled(AppTokens.labelStrong), scaler) +
+        _textWidth(L10n.yearMonth(_month), styled(AppTokens.titleStrong), scaler);
+    return need <= MediaQuery.sizeOf(context).width;
+  }
+
   Widget _header(BuildContext context) {
     // 上下留白归到节奏档：10 → spaceMd(12)、6 → spaceSm(8)。
     const pad =
         EdgeInsets.fromLTRB(12, AppTokens.spaceMd, 12, AppTokens.spaceSm);
-    // 窄档（小窗实测 200 逻辑像素宽）一行放不下 —— 四个圆形钮加年月胶囊的
-    // **固定**宽度是 184，而 200 宽的屏扣掉左右留白只剩 176：年月那个
-    // Expanded 会被挤成 0 宽，整行溢出。
-    // 拆成两行：上行只放「‹ 年月 ›」（年月能拿到 104），下行放「切换排班 / 今天」。
-    // 控件收到 32 见方：一是给年月腾出完整显示「2026年9月」的宽度（36 见方时
-    // 真机上只剩 76 可用，MiSans 下会被省略成「2026年…」），二是省下 10px 高度。
-    if (AppLayout.of(context).isNarrow) {
+    // 一行放不下就拆两行：上行只放「‹ 年月 ›」，下行放「时段总览 / 今天」。
+    // 控件收到 32 见方：一是给年月腾出完整显示「2026年10月」的宽度，二是省下 10px 高度。
+    //
+    // **判据是排版实测，不是宽度阈值**（v0.11.12 改）。从前判的是
+    // `AppLayout.isNarrow`（宽 < 360），于是「2026年10月」比「2026年9月」多一个字
+    // 就悄悄溢出了 —— 用户 2026-10-13 报的正是它（真我 GT7 Pro）。
+    // 固定件全是量得出来的：三个圆形钮 + 四个间距 + 「今天」胶囊，年月那串用
+    // `TextPainter` 量。**大 / 特大档下走两行是常态版式**，不是应急。
+    if (!_oneRowFits(context)) {
       const narrowSide = 32.0;
       const narrowGap = 4.0;
       return Padding(
+        key: const Key('header-two-row'),
         padding: pad,
         child: Column(
           children: [
@@ -838,11 +978,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     child: _monthSlide(
                       month: _month,
                       tag: 'pill',
-                      child: Text(
-                        L10n.yearMonth(_month),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTokens.titleStrong,
+                      // `FittedBox(scaleDown)` 是**兜底**：上面那个「一行放不放得下」
+                      // 是预估（差几个 dp 就可能误判 —— 实测英文特大档差约 1dp），
+                      // 而这里要的是「绝不省略」。设计 §2 的第 2 档降级：缩，不省略。
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          L10n.yearMonth(_month),
+                          maxLines: 1,
+                          style: AppTokens.titleStrong,
+                        ),
                       ),
                     ),
                   ),
@@ -876,29 +1021,40 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       );
     }
 
+    // 年月这几个字跟着网格一起滑（见 `_monthSlide`），方向才一致。
+    final monthPill = GlassPill(
+      onTap: _showMonthPicker,
+      child: _monthSlide(
+        month: _month,
+        tag: 'pill',
+        // 兜底同两行档：预估差几个 dp 时缩一点，而不是省略。
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            L10n.yearMonth(_month),
+            maxLines: 1,
+            style: AppTokens.titleStrong,
+          ),
+        ),
+      ),
+    );
+
+    // 宽横屏下**不套 `Expanded`**：套着它就会拿到多宽撑多宽，1280 的屏上那是
+    // 一条 1600px 的长条（用户 2026-10-13 报的「顶栏太长」）。整行也一起收缩到
+    // 内容宽度 → 靠左。其余档位照旧撑满整行（`Expanded` 保证年月完整显示）。
+    final wide = AppLayout.of(context).isWideLandscape;
+
     return Padding(
+      // 宽横屏沿用同一个 key：它仍然是「一行档」，只是排布不同。
+      key: const Key('header-single-row'),
       padding: pad,
       child: Row(
+        mainAxisSize: wide ? MainAxisSize.min : MainAxisSize.max,
         children: [
           _circleIcon(
               context, Icons.chevron_left_outlined, L10n.prevMonth, _prev),
           const SizedBox(width: AppTokens.gapIconText),
-          Expanded(
-            child: GlassPill(
-              onTap: _showMonthPicker,
-              // 年月这几个字跟着网格一起滑（见 `_monthSlide`），方向才一致。
-              child: _monthSlide(
-                month: _month,
-                tag: 'pill',
-                child: Text(
-                  L10n.yearMonth(_month),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTokens.titleStrong,
-                ),
-              ),
-            ),
-          ),
+          if (wide) monthPill else Expanded(child: monthPill),
           const SizedBox(width: AppTokens.gapIconText),
           _circleIcon(
               context, Icons.chevron_right_outlined, L10n.nextMonth, _next),
@@ -945,10 +1101,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
+      // 按压反馈 = 玻璃的 Q 弹缩放（`GlassPressable` 没有 `onTap`，点击由
+      // `GestureDetector` 承载）。水波纹只该出现在弹层的 `ListTile` 里 ——
+      // 这颗手搓的圆钮套 `InkWell` 会在圆外凭空多一圈波纹（spec §7）。
+      // `opaque`：让整颗 40dp 都吃点击，不只在图标那点面积上。
+      child: GlassPressable(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Container(
             width: size,
@@ -1105,27 +1264,40 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         borderRadius:
             const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 底部弹层标题走 `dialogTitle`，与其它弹层同角色。
-                Text(L10n.scheduleTimeline, style: AppTokens.dialogTitle),
-                const SizedBox(height: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            // **`stretch` 而不是 `start`。** 头部下面那块内容自带一圈
+            // `Padding(all: 16)`，而 `start` 给子件的是**松宽度约束** —— ListView
+            // （视口）会一路撑到 `maxWidth`、Padding 再给它加出左右各 16，直接横向
+            // 溢出。`stretch` 给的是紧宽度，Padding 减掉 32 之后才是 ListView 该有的宽。
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 头部走共享件（把手 + 主色竖条 + 标题 + 分隔线）。
+              //
+              // ⚠️ **那圈 16 的 padding 只能包住头部以下的内容，不能包住整个
+              // Column**（本轮修的就是它）。原来它包在最外层，于是 `GlassSheetHeader`
+              // 被**二次内缩**：分隔线比另外四个弹层窄 16dp、把手低 16dp、标题也跟着
+              // 与下面的行错开 —— 「五处统一头部」只成四成不算成。
+              //
+              // 标题是 `titleStrong`（16）—— 与另外四个弹层同角色。
+              // ⚠️ 这行注释此前写着「底部弹层标题走 `dialogTitle`，与其它弹层同
+              // 角色」，那是**错的**：另外四个弹层一直走 `titleStrong`，只有这里
+              // 用了 `dialogTitle`（20）。v0.12.0 统一到 16。
+              GlassSheetHeader(
+                title: L10n.scheduleTimeline,
                 // 说法与排班管理页那条时间线**同源**：一个段都没有时不说「其余
                 // 时间」（没有「这一段」，「其余」就没有着落），整行写「全部
                 // 日子」。两处各写一份的话，同一个状态会有两种解释。
-                Text(hasPeriods
+                subtitle: hasPeriods
                     ? L10n.remainingHint
                     : (remaining == null
                         ? L10n.allDatesNoneHint
                         : L10n.allDatesHint),
-                    style: AppTokens.rowSecondary
-                        .copyWith(color: AppTokens.inkMuted(sheetContext))),
-                const SizedBox(height: 8),
-                Flexible(
+              ),
+              const SizedBox(height: AppTokens.spaceSm),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppTokens.spaceLg),
                   child: ListView(
                     shrinkWrap: true,
                     children: [
@@ -1161,8 +1333,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1226,7 +1398,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       BuildContext context, ScheduleChain? chain, double availHeight) {
     final body = _gridBody(context, chain, availHeight);
     if (!_factsFor(chain).hasNoSchedule) return body;
-    final muted = AppTokens.inkMuted(context);
     return Stack(
       children: [
         body,
@@ -1238,22 +1409,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     horizontal: AppTokens.spaceXl),
                 // **必须是一张（近）不透明的面板**：直接铺两行字会压在格子的
                 // 日期与农历上，两边都看不清（出图当场看出来的）。
+                //
+                // 面板**只留左右 + 顶部**：下面那句是共享空态件
+                // （`EmptyState`，v0.12.0 收口），它自带 `all(spaceLg)` 留白 ——
+                // 面板再留一份纵向就会叠成 `12 + 16`。标题自己留顶部那 12。
                 child: GlassPanel(
                   solid: true,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.spaceLg,
-                      vertical: AppTokens.spaceMd),
+                  padding: const EdgeInsets.fromLTRB(
+                      AppTokens.spaceLg, AppTokens.spaceMd, AppTokens.spaceLg, 0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(L10n.noScheduleHere,
                           textAlign: TextAlign.center,
                           style: AppTokens.sectionTitle),
-                      const SizedBox(height: AppTokens.spaceXs),
-                      Text(L10n.noScheduleHereHint,
-                          textAlign: TextAlign.center,
-                          style:
-                              AppTokens.rowSecondary.copyWith(color: muted)),
+                      EmptyState(L10n.noScheduleHereHint),
                     ],
                   ),
                 ),
@@ -1705,8 +1875,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 缩放系数按**去掉格子内缩后的可用高**算：内容排在被 `_cellInset` 收窄的
     // 盒子里，用 cellH 直接算会让内容恒比盒子高一点点，外层的 FittedBox 每次
     // 都缩回去一档，等于缩放没生效。
-    final s =
-        ((cellH - _cellInset * 2) / _cellDesignH).clamp(1.0, _cellMaxScale);
+    final s = ((cellH - _cellInset * 2) / _cellDesignH)
+        .clamp(1.0, cellMaxScale(AppLayout.of(context)));
     final contentW = cellW - _cellInset * 2;
     // 太窄就画不出胶囊（小窗里格宽只有 25），退回彩色文字。
     final chip = shift != null && contentW >= _chipMinContentW;
@@ -1783,25 +1953,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 children: [
                   _shiftChip(context, shift, s, solid,
                       ValueKey('day-chip-${date.day}')),
+                  // 右上角那个点 = 这天被单独调过班（`day-adjusted-N`）。
+                  //
+                  // **左上角那个「有闹钟」的点 v0.11.20 又去掉了**：用户装上
+                  // v0.11.19 看了一眼就说「不美观」—— 挂了闹钟的日子接近一半，
+                  // 半个网格都顶着一个小点，看着像脏东西。判据 `shiftHasAlarms`
+                  // 与 `_cornerDot` 都留着（信息卡那行还在用它；下一个想标什么
+                  // 的人也能直接复用），只是不在格子上画了。
                   if (adjusted)
                     Positioned(
                       right: -2,
                       top: -2,
-                      child: Container(
-                        key: ValueKey('day-adjusted-${date.day}'),
-                        // spec §7.4：**固定在 3–4dp、不跟格子高度缩放** ——
-                        // 格子里的字是按格子高等比缩放的，小窗里缩到 1–2px 就
-                        // 等于没有。这里借间距刻度上的 4dp 一档（`spaceXs`）：
-                        // 光学刻度（`gapHair` / `padChipV` …）最高的 3dp 也在
-                        // 区间内，但它们表达的是"控件内部两个元素贴合的微距"，
-                        // 用在标记的**尺寸**上语义不对。
-                        width: AppTokens.spaceXs,
-                        height: AppTokens.spaceXs,
-                        decoration: BoxDecoration(
-                          color: Color(shift.color),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
+                      child: _cornerDot(
+                          key: ValueKey('day-adjusted-${date.day}'),
+                          color: Color(shift.color)),
                     ),
                 ],
               ),
@@ -2263,10 +2428,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           daySchedule?.dayOverrides.containsKey(dayNumber(_selected)) ?? false;
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 76),
-        // 与完整信息卡那行班次同源：套 `GlassPressable` 承载点击（它自己没
-        // `onTap`），内层 `InkWell` 负责手势 —— 见上面完整卡那段的说明。
+        // 与完整信息卡那行班次**同一条规则**：`GlassPressable` 承载按压缩放
+        // （它自己没 `onTap`），点击由 `GestureDetector` 拿 —— 这条玻璃卡套
+        // `InkWell` 会凭空多一圈水波纹，最扎眼（完整卡那段说明了同一条；spec §7）。
         child: GlassPressable(
-          child: InkWell(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: (daySchedule == null || daySchedule.classes.isEmpty)
                 ? null
                 : () => adjustDays(_selected, _selected),
@@ -2302,8 +2469,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                           // 「9月18…」，读不出日期；今天与否由旁边的徽章说。
                           // 完整卡仍然带星期。
                           L10n.monthDay(_selected),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          // 折两行、不省略（v0.11.12 的规矩）：这一行旁边还有
+                          // 今天徽章与「已调班」徽章，窄窗 + 大字号下一个月日
+                          // 都可能放不下 —— 高度这里有的是。
+                          maxLines: 2,
                           style: AppTokens.sectionTitle,
                         ),
                       ),
@@ -2472,9 +2641,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         ],
         Text(
           lunar.fullDescription,
-          // 两行封顶：整行宽度下通常一行就够，窄屏最多两行，再长就省略号。
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+          // 三行封顶（v0.11.12 从 2 提上来）：宽屏一行就够，窄屏 + 大字号下
+          // 两行装不完最长的那些农历串 —— 而**不许省略**（设计 §6.2）。
+          maxLines: 3,
           style: AppTokens.rowSecondary.copyWith(
             color: lunar.isLegalHoliday ? AppTokens.holiday : muted,
           ),
@@ -2524,7 +2693,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text.rich(
+                    // 班次名 + 时间 + 闹钟是**一段**富文本，折行会把「闹钟」那段
+                    // 甩到第二行、把定高模型的账算歪（见 `info_card_metrics.dart`
+                    // 里按 1 行量那一处）。所以这里走设计 §2 的第 2 档：**缩，不省略**。
+                    //
+                    // ⚠️ **外面那层 `SizedBox` 不能省**：`FittedBox` 的高度会跟着
+                    // 缩放比例一起缩 —— 于是「三条闹钟」那天的这一行反而比「一条」
+                    // 那天矮 3dp，卡片内容高度跟着变，`calendar_screen_test.dart`
+                    // 那条「多条闹钟不该把卡片顶高」当场就红。高度按**一行的自然
+                    // 行高**钉死（与 `info_card_metrics` 量的是同一个数）。
+                    child: SizedBox(
+                      height: _oneLineHeight(context, AppTokens.titleStrong),
+                      child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text.rich(
                       key: const Key('info-card-shift-line'),
                       TextSpan(
                         children: [
@@ -2542,15 +2722,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                               style: AppTokens.rowPrimary,
                             ),
                           TextSpan(
-                            text: '   ${_alarmText(shift)}',
+                            text: '   ${alarmNote(shift)}',
                             style:
                                 AppTokens.rowSecondary.copyWith(color: muted),
                           ),
                         ],
                       ),
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    ))),
                   ),
                   // 这天被单独调动过：形状抄同一行的邻居，理由见 `_adjustedBadge`。
                   // （外层 `if (shift != null && daySchedule != null)` 已经把它收窄了。）
@@ -2753,23 +2932,23 @@ String _timeRange(ShiftClass t) {
   return L10n.timeRange(formatClock(t.startMinute!), formatClock(e), nextDay);
 }
 
-String _alarmText(ShiftClass t) {
-  if (t.isRest) return L10n.restNoAlarm;
-  if (!t.alarmEnabled || t.alarms.isEmpty) return L10n.alarmOff;
-  final alarm = t.alarms.first;
-  final clock = formatClock(alarm.minute);
-  // 落在上班**前一天**的（00:00 上班的夜班）必须标出来：不标的话，这一行会跟
-  // 前面的「00:00 – 08:00」读成同一天的两件事。
-  final shown =
-      alarmFallsOnPreviousDay(t, alarm) ? L10n.clockPrevDay(clock) : clock;
-  // 多条的只写首条 + 「等 N 个」：这一行本来就是 `maxLines: 1` + 省略号，把每条
-  // 时刻都铺开会把后面的内容挤掉 —— 而卡片是**定高**的，多一行就顶高卡片、
-  // 连带把日历网格挤矮（`info_card_metrics.dart` 那边的前提）。
-  return t.alarms.length == 1
-      ? L10n.alarmAt(shown)
-      : L10n.alarmFirstOfMany(shown, t.alarms.length);
-}
+/// 格子角上那个小圆点（右上 = 这天调过班，左上 = 这个班挂了闹钟）。
+///
+/// spec §7.4：**固定在 3–4dp、不跟格子高度缩放** —— 格子里的字是按格子高等比
+/// 缩放的，小窗里缩到 1–2px 就等于没有。这里借间距刻度上的 4dp 一档
+/// （`spaceXs`）：光学刻度（`gapHair` / `padChipV` …）最高的 3dp 也在区间内，
+/// 但它们表达的是「控件内部两个元素贴合的微距」，用在标记的**尺寸**上语义不对。
+Widget _cornerDot({required Key key, required Color color}) => Container(
+      key: key,
+      width: AppTokens.spaceXs,
+      height: AppTokens.spaceXs,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
 
+/// 「这个班次挂没挂联动闹钟」与「那一行怎么写」已经搬到 `domain/day_summary.dart`
+/// （`shiftHasAlarms` / `alarmNote`）—— 桌面小组件的今日卡要用**同一份**，
+/// 两处各写一遍必然分岔，而分岔时不报错。
+///
 /// 信息卡（完整版）在**底栏**时的高度不再是写死的常数，改成按当前月最满的
 /// 一天算出来 —— 实现在 `info_card_metrics.dart`，那里写了为什么。
 ///
@@ -2801,7 +2980,30 @@ const double _cellDesignH = 55;
 /// 格子字号的缩放上限。再大就喧宾夺主：格子被字填满、格子之间的呼吸感没了。
 /// 1.25 是 v0.7.2 从 1.35 调下来的（配合 `cellShift` 15→13），单字胶囊的字号
 /// 上限从 20.25 降到 16.25。
+///
+/// **这条判断只在手机上成立** —— 宽屏档另有一档，见 [_cellMaxScaleWide]。
 const double _cellMaxScale = 1.25;
+
+/// 宽屏档（`AppLayout.isWide`）的格子字号上限。
+///
+/// **为什么宽屏要放开**：格子内容按 `(cellH − 内缩) / _cellDesignH(55)` 等比缩放、
+/// 再夹上限。车机上 cellH ≈ 90~120，`(104 − 12) / 55 ≈ 1.67` —— 1.25 那道天花板
+/// 早就顶到了，于是「调大字号 / 屏幕更大」都不再让字变大（用户 2026-10-13 报的
+/// 第 5 条：字号调到特大，日历界面看着还是小）。1.7 让内容占到格子的约 78%，
+/// 仍有呼吸。
+///
+/// **判据取 `isWide` 而不是 `isWideLandscape`**：宽且矮那一支格子只有 41dp 高，
+/// 上限根本不生效，多一个分支只是多一处要维护的东西。
+///
+/// ⚠️ **这是起手值**（照 1920×720 上 cellH≈90 反推的），出图之后可能还要回来调。
+const double _cellMaxScaleWide = 1.7;
+
+/// 格子内容的缩放上限，按档位取（见上面两个常量的说明）。
+///
+/// 抽成顶层纯函数（公开）是为了能直接断言「按档位分叉」——
+/// 与 [calendarCellHeight] 同一个理由。
+double cellMaxScale(AppLayout layout) =>
+    layout.isWide ? _cellMaxScaleWide : _cellMaxScale;
 
 /// 班次胶囊的左右内边距。用最小的一档栅格（4）：这里装的是 1–2 个字的简称，
 /// 信息卡色块那 8 会让单字胶囊的宽度接近文字的两倍，手机上（格内容宽约 52）

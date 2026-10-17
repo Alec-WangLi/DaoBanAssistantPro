@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/lunar_info.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
@@ -158,7 +159,9 @@ void main() {
       expect(d.containsKey('abbrInk'), false, reason: 'abbrInk 已删 —— 胶囊文字改走 wg_ink_*');
     }
     expect((s['weekdays']! as List).length, 7);
-    expect((s['weekdays']! as List).first, L10n.weekday(0));
+    // 2026-10-15 起这里是**单字**（`L10n.weekdays`，与 App 日历页同一份文案），
+    // 不再是「周一」那套 —— 那套仍给 `days[].weekday` 用（周条与今日卡）。
+    expect((s['weekdays']! as List).first, L10n.weekdays.first);
 
     // 2026-10-01 → 窗口从 6/29（−3 月的 1 日 7/1 是周三 → 所在周的周一）起、到
     // 2027-02-07（+3 月的 1 日 2027/1/1 是周五 → 周一 12/28 + 41 天）止，覆盖
@@ -662,5 +665,106 @@ void main() {
     final crews = ((s['todayCard']! as Map)['crews']! as List).cast<Map>();
     expect(crews, isNotEmpty);
     expect(crews.first['name'], startsWith('A'));
+  });
+
+  // RF-2：按月方案**跨月**那两天各归各的。
+  //
+  // 这条是「快照不需要为按月模式做任何改动」的证据 —— 它逐天问 `shiftOn`，
+  // 与日历 / 闹钟走同一条路。绿着进仓库，是为了以后谁动了这条路它立刻红。
+  test('按月方案：窗口跨月，12/31 与次年 1/1 各归各的', () {
+    final monthly = ShiftSchedule(
+      name: '按月',
+      anchorDate: DateTime.utc(2026, 1, 1),
+      classes: const [
+        ShiftClass(id: 21, name: '中班', abbr: '中', color: 0xFF00AA00),
+        ShiftClass(id: 22, name: '白班', abbr: '白', color: 0xFF0055FF),
+        ShiftClass(id: 23, name: '夜班', abbr: '夜', color: 0xFFFF8800),
+      ],
+      cycle: const [],
+      monthly: true,
+      monthlySegments: const [
+        MonthlySegment(startDay: 1, classIndex: 0),
+        MonthlySegment(startDay: 11, classIndex: 1),
+        MonthlySegment(startDay: 21, classIndex: 2),
+      ],
+    );
+    final s = buildWidgetSnapshot(
+      chain: _chain(monthly),
+      now: DateTime(2026, 12, 20, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+
+    expect(s['hasSchedule'], true, reason: '按月方案不是空白表');
+    expect(_rowOf(s, DateTime(2026, 12, 31))['shiftAbbr'], '夜');
+    // **跨过月界就归零** —— 这正是固定周期做不到的那件事
+    expect(_rowOf(s, DateTime(2027, 1, 1))['shiftAbbr'], '中');
+    expect(_rowOf(s, DateTime(2027, 1, 10))['shiftAbbr'], '中');
+    expect(_rowOf(s, DateTime(2027, 1, 11))['shiftAbbr'], '白');
+    expect(_rowOf(s, DateTime(2027, 1, 21))['shiftAbbr'], '夜');
+  });
+
+  test('周标题是**单字**（与 App 日历页同源），而 days[].weekday 仍是「周一」', () {
+    // 用户 2026-10-15：月视图「跟 App 里的界面差别挺大」，第一条就是周标题 ——
+    // App 的日历页是「一 二 三 四 五 六 日」，桌面写的是「周一 周二 …」，
+    // 宽度差一倍，桌面那一行因此比 App 抢眼得多。
+    //
+    // ⚠️ 只有**月历卡**的标题行读 `weekdays`；周条那一列与今日卡读的是
+    // `days[].weekday`（`WidgetRenderer.kt:425 / 888`），两条路互不相干 ——
+    // 所以这条用例两头都要断言，免得哪天有人「顺手统一」把周条也改掉。
+    final s = buildWidgetSnapshot(
+      chain: _chain(_schedule()),
+      now: DateTime(2026, 10, 15, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+
+    expect(s['weekdays'], ['一', '二', '三', '四', '五', '六', '日']);
+    expect(_rowOf(s, DateTime(2026, 10, 15))['weekday'], '周四',
+        reason: '周条那一列要的是「周几」这个词，不是单字');
+    expect(s['otherCrews'], '其他班组',
+        reason: '今日卡的「其他班组」标签 —— Kotlin 里不许有中文，只能由快照下发');
+  });
+
+  test('days[] 带 shiftNote；months[] 每条带 tally（同月只有一条）', () {
+    final s = buildWidgetSnapshot(
+      chain: _chain(_schedule()),
+      now: DateTime(2026, 10, 15, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+
+    // 班次备注按日烘 —— 跨天刷新时原生只重渲染旧快照，挂 todayCard 的话
+    // 每天过零点它就消失了。
+    expect(_rowOf(s, DateTime(2026, 10, 15))['shiftNote'], isNotNull);
+    expect(_rowOf(s, DateTime(2026, 10, 15))['shiftNote'], isA<String>());
+
+    // 本月统计按月给一份。**同一个月的两天必须查到同一个串** —— 原生是拿当天的
+    // `day` 反算年月再查 months[]，这条把「一个月只有一条」钉住。
+    final months = (s['months']! as List).cast<Map>();
+    final oct = months.where((m) => m['y'] == 2026 && m['m'] == 10).toList();
+    expect(oct, hasLength(1));
+    expect(oct.first['tally'], startsWith('${L10n.monthTally} '));
+    // 窗口里的每一条都得有 tally 这个键（值可以是 null，但不能没有）
+    for (final m in months) {
+      expect(m.containsKey('tally'), true);
+    }
+  });
+
+  test('降级：没有链时 shiftNote 与 tally 都是 null（卡上不画那两行）', () {
+    final s = buildWidgetSnapshot(
+      chain: null,
+      now: DateTime(2026, 10, 15, 9),
+      themeMode: 'system',
+      accent: 0xFF4F5BE8,
+      todayTodoCount: 0,
+    );
+    expect(_rowOf(s, DateTime(2026, 10, 15))['shiftNote'], isNull);
+    for (final m in (s['months']! as List).cast<Map>()) {
+      expect(m['tally'], isNull, reason: '没有排班就不该有本月统计');
+    }
   });
 }

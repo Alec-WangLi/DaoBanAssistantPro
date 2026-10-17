@@ -16,6 +16,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/shift_palette.dart';
 import 'package:shiftassistantpro/core/theme/app_colors.dart';
 
 import 'support/source_scan.dart';
@@ -28,12 +29,28 @@ double _wcagContrast(Color a, Color b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/// 把半透明的 [fg] 压到 [bg] 上（对比度要按**真正画出来**的那层算）。
+Color _over(Color fg, Color bg) => Color.fromARGB(
+      255,
+      (fg.r * 255 * fg.a + bg.r * 255 * (1 - fg.a)).round(),
+      (fg.g * 255 * fg.a + bg.g * 255 * (1 - fg.a)).round(),
+      (fg.b * 255 * fg.a + bg.b * 255 * (1 - fg.a)).round(),
+    );
+
 const List<String> _scanDirs = [
   'lib/features',
   'lib/core/widgets',
   'lib/core/glass',
   'lib/core/theme',
 ];
+
+/// 白字压在**实心主色面**上过不过 AA —— 按渐变**最浅**的那一端（0.92 不透明度）
+/// 压在页面底上算，那是最坏的一点。
+bool _whiteFitsOnSolid(Color surface) => _wcagContrast(
+      Colors.white,
+      _over(surface.withValues(alpha: 0.92), const Color(0xFFF5F6FA)),
+    ) >=
+    4.5;
 
 /// 文件级豁免：**配色层本身**。
 ///
@@ -944,10 +961,58 @@ Text('x', style: TextStyle(
     expect(AppTokens.danger, const Color(0xFFE53935));
   });
 
-  test('accentGradient 用 accent 色：顶 0.85 底 0.50', () {
-    final g = AppTokens.accentGradient(const Color(0xFF00C7BE));
-    expect(g.colors.first, const Color(0xFF00C7BE).withValues(alpha: 0.85));
-    expect(g.colors.last, const Color(0xFF00C7BE).withValues(alpha: 0.50));
+  test('实心面：白字在渐变两端、两档底色上都过 AA（5 个主题色）', () {
+    // 2026-10-15 用户从三条对照路里选了 ②「字白 + 压深收手」：实心面（主按钮 /
+    // 弹窗动作钮 / 导航选中 / 分段器滑块 / 悬浮按钮 / 开关 / 勾选块 / 液态档玻璃滴）
+    // 走 `solidAccent` 压深，字一律白。
+    //
+    // **这条钉的就是那件事**：原主色配白字，teal 2.63 / orange 2.55 / rose 4.09，
+    // 三颗都到不了 AA（而用户自己用的就是 teal）；而且旧渐变是半透明的
+    // （0.85 → 0.50），压在白卡上连 primary 的尽头都只有 2.1:1。
+    const bgLight = Color(0xFFF5F6FA);
+    const bgDark = Color(0xFF16161E);
+    for (final accent in AppColors.accentPalette) {
+      final g = AppTokens.accentGradient(accent);
+      for (final stop in g.colors) {
+        expect(stop.a, greaterThanOrEqualTo(0.9),
+            reason: '$accent：实心面不能是半透明的 —— 白字会在浅底色上读不出来');
+        for (final bg in <Color>[bgLight, bgDark]) {
+          expect(_wcagContrast(Colors.white, _over(stop, bg)),
+              greaterThanOrEqualTo(4.5),
+              reason: '$accent 的白字在 ${stop.a} 这一端（底色 $bg）不达 AA');
+        }
+      }
+    }
+  });
+
+  test('压深「刚好够」：过 AA 就停，本来就够的主色一个像素都不许动', () {
+    // v0.11.22 的收口。旧规则是**一律**把主色明度 ×0.62 —— 不问原来多深。
+    // 默认那颗蓝配白字本来就有 5.26:1，被砍成 11.35:1，浅色档下那块面看着就是
+    // 一块黑（用户 2026-10-15 真机：「太暗了」「胶囊的颜色之前浅一点挺好看的」）。
+    // 真正需要压的只有 teal（2.63）与 orange（2.55）。
+    for (final accent in AppColors.accentPalette) {
+      final solid = AppTokens.solidAccent(accent);
+      final before = HSLColor.fromColor(accent);
+      final after = HSLColor.fromColor(solid);
+
+      expect(after.hue, closeTo(before.hue, 1), reason: '$accent 的色相不该被改掉');
+      expect(after.lightness, lessThanOrEqualTo(before.lightness + 1e-9),
+          reason: '$accent 只该压深、不该变亮');
+
+      if (_whiteFitsOnSolid(accent)) {
+        // 本来就够 —— 不许再压。
+        expect(solid, accent, reason: '$accent 本来就过 AA，不该再压一档');
+      } else {
+        expect(_whiteFitsOnSolid(solid), isTrue, reason: '$accent 压完必须过 AA');
+        // **「刚好够」的鉴别力全在这一条**：再亮 2% 就不该过。
+        // 仍然过 ⇒ 压过头了（旧的 ×0.62 就是压过头的极端情形）。
+        expect(
+            _whiteFitsOnSolid(
+                after.withLightness(after.lightness + 0.02).toColor()),
+            isFalse,
+            reason: '$accent 压过头了：再亮 2% 白字照样过线');
+      }
+    }
   });
 
   test('玻璃配方随明暗变化（暗色更淡）', () {
@@ -964,40 +1029,42 @@ Text('x', style: TextStyle(
     expect(light.a, greaterThan(0.08));
   });
 
-  test('5 个主题色在胶囊滑块上文字对比度 ≥ 4.5', () {
-    // 模拟滑块：主题色渐变与玻璃底按 60% 混合（文字所在区域的近似比例）
+  test('导航选中项的字色：压在那块实心面上必须过 AA（5 个主题色 × 两档主题）', () {
+    // ⚠️ **这条以前是「假的绿」**：它把滑块模拟成「主色与底色按 60% 混合」的
+    // **半透明**面，于是 `navForeground` 在浅色档返回近黑字一直是"对"的。
+    // v0.11.21 把滑块换成不透明 + 压深，谁也没回来改这里 —— 浅色档下实测
+    // `#111118` 压在 `#1925AC` 上 = **1.66:1**（用户 2026-10-15 一眼看出来）。
+    //
+    // 判据改成按**真正画出来的那一层**算：底就是 `solidAccent`（与那个常量同源），
+    // 两档主题都得过 —— 因为这块底在两档下是同一个颜色。
     const bgLight = Color(0xFFF5F6FA);
     const bgDark = Color(0xFF16161E);
     for (final accent in AppColors.accentPalette) {
-      final sliderLight = Color.lerp(bgLight, accent, 0.6)!;
-      expect(
-        _wcagContrast(AppTokens.navForeground(false, accent), sliderLight),
-        greaterThanOrEqualTo(4.5),
-        reason: '亮色模式 $accent',
-      );
-      final sliderDark = Color.lerp(bgDark, accent, 0.6)!;
-      expect(
-        _wcagContrast(AppTokens.navForeground(true, accent), sliderDark),
-        greaterThanOrEqualTo(4.5),
-        reason: '暗色模式 $accent',
-      );
+      final surface = AppTokens.solidAccent(accent);
+      final ink = AppTokens.navForeground(accent);
+      for (final stop in <Color>[
+        surface,
+        surface.withValues(alpha: 0.92),
+      ]) {
+        for (final bg in <Color>[bgLight, bgDark]) {
+          expect(_wcagContrast(ink, _over(stop, bg)), greaterThanOrEqualTo(4.5),
+              reason: '$accent：导航选中项的字压在实心块上（底色 $bg）不达 AA');
+        }
+      }
     }
   });
 
   test('onSolid：任何底色上的文字对比度都 ≥ 4.5', () {
     // 白/黑两条对比度曲线在亮度 0.179 处交叉，交叉点上各是 4.58:1 ——
     // 所以「取对比度高的一侧」对**任何**底色都能过 AA。
-    const samples = <Color>[
-      Color(0xFF4C8DFF),
-      Color(0xFF7A5CFF),
-      Color(0xFF9AA0B4),
-      Color(0xFF5A5F73),
-      Color(0xFF34C759),
-      Color(0xFFFF9F0A),
-      Color(0xFFFF375F),
-      Color(0xFF00C7BE),
-      Color(0xFFFFFFFF),
-      Color(0xFF000000),
+    // **盘的 16 颗直接引用 `kShiftPalette`，别手抄一遍** —— 手抄的那份迟早与盘
+    // 走岔（这一版从 8 颗扩到 16 颗就是这么发现的：原来这里写着 8 个字面量）。
+    // 这一条**不会**给新预设添负担：`max(对白, 对黑)` 的最小值落在亮度 0.179 处、
+    // 恒 ≥ 4.58:1，任何底色都过（见上面那两行注释）。
+    final samples = <Color>[
+      for (final c in kShiftPalette) Color(c),
+      const Color(0xFFFFFFFF),
+      const Color(0xFF000000),
     ];
     for (final bg in samples) {
       expect(_wcagContrast(AppTokens.onSolid(bg), bg), greaterThanOrEqualTo(4.5),

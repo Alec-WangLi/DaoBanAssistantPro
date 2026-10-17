@@ -3,6 +3,7 @@
 // 「我的模板」：从一套方案取模板（含把「我们班组」归一化到第 0 位）与编解码。
 // 都是纯函数，直接 dart test。
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 
@@ -202,6 +203,105 @@ void main() {
   test('老模板里 alarmEnabled 开、钟点为 null：空表（不是一条 0 点的闹钟）', () {
     const legacy = '[{"name":"白班","alarmEnabled":true,"alarmMinute":null}]';
     expect(decodeTemplateClasses(legacy).single.alarms, isEmpty);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 按月（v0.11.15）
+  // ---------------------------------------------------------------------------
+  group('按月模板', () {
+    /// 三班倒按月：1–10 中、11–20 白、21–月底 夜。
+    ShiftSchedule monthly({
+      int ourTeamIndex = 0,
+      List<int> segOffsets = const [0, 1, 2],
+      int teamCount = 3,
+      bool lastIsRest = false,
+    }) =>
+        ShiftSchedule(
+          name: '按月三班倒',
+          anchorDate: DateTime.utc(2026, 1, 1),
+          classes: [
+            const ShiftClass(name: '中班', abbr: '中'),
+            const ShiftClass(name: '白班', abbr: '白'),
+            ShiftClass(name: '夜班', abbr: '夜', isRest: lastIsRest),
+          ],
+          cycle: const [],
+          monthly: true,
+          monthlySegments: const [
+            MonthlySegment(startDay: 1, classIndex: 0),
+            MonthlySegment(startDay: 11, classIndex: 1),
+            MonthlySegment(startDay: 21, classIndex: 2),
+          ],
+          teamCount: teamCount,
+          ourTeamIndex: ourTeamIndex,
+          teamSegOffsets: segOffsets,
+        );
+
+    test('往返同构：monthly 标志、段表、段偏移都过得去', () {
+      final t = ScheduleTemplate.fromSchedule(monthly(), name: '我的按月');
+      expect(t.monthly, isTrue);
+      expect(t.monthlySegments, const [
+        MonthlySegment(startDay: 1, classIndex: 0),
+        MonthlySegment(startDay: 11, classIndex: 1),
+        MonthlySegment(startDay: 21, classIndex: 2),
+      ]);
+      expect(t.teamSegOffsets, [0, 1, 2]);
+      // 编码 —— 解码
+      expect(
+        decodeTemplateMonthSegments(
+            encodeTemplateMonthSegments(t.monthlySegments)),
+        t.monthlySegments,
+      );
+      // 周期模板那一半不受影响
+      final c = ScheduleTemplate.fromSchedule(_tenDay(), name: '周期');
+      expect(c.monthly, isFalse);
+      expect(c.monthlySegments, isEmpty);
+    });
+
+    test('归一化：我们班组转到第 0 位，段偏移相对它归零（模段数取正）', () {
+      // 我 = 第 3 组（下标 2），各组段偏移 0/1/2
+      final t = ScheduleTemplate.fromSchedule(
+          monthly(ourTeamIndex: 2, segOffsets: const [0, 1, 2]),
+          name: 'x');
+      // 旋转之后：老的第 2 组（我）在第 0 位、偏移 0；其余保持相对关系
+      expect(t.teamSegOffsets, [0, 1, 2]);
+      // 换个相位再验一遍：我 = 第 2 组（下标 1）、它自己的偏移是 2
+      final t2 = ScheduleTemplate.fromSchedule(
+          monthly(ourTeamIndex: 1, segOffsets: const [1, 2, 0]),
+          name: 'y');
+      expect(t2.teamSegOffsets, [0, 1, 2]);
+    });
+
+    test('段串的坏数据不炸：解析不出来的那一项丢掉', () {
+      expect(decodeTemplateMonthSegments('1:0,11:bogus,21:2').length, 2);
+      expect(decodeTemplateMonthSegments('1:0,11:bogus,21:2').first.startDay, 1);
+      expect(decodeTemplateMonthSegments('1:0,11:bogus,21:2').last.startDay, 21);
+      expect(decodeTemplateMonthSegments(''), isEmpty);
+      expect(decodeTemplateMonthSegments('  '), isEmpty);
+      // 空串字段（老库升上来的模板）也走同一条路
+      expect(decodeTemplateMonthSegments('1:0,,2:1').length, 2);
+    });
+
+    test('没有段表时（老模板）：段偏移解析成空表，不炸', () {
+      final t = ScheduleTemplate.fromSchedule(_tenDay(), name: '周期');
+      expect(t.teamSegOffsets, isEmpty);
+      expect(t.workingTeamsPerDay, greaterThan(0));
+    });
+
+    test('workingTeamsPerDay：按月模式数「每月 1 日那一档」上非休班的班组', () {
+      expect(
+          ScheduleTemplate.fromSchedule(monthly(), name: 'x').workingTeamsPerDay,
+          3);
+      expect(
+          ScheduleTemplate.fromSchedule(monthly(lastIsRest: true), name: 'x')
+              .workingTeamsPerDay,
+          2,
+          reason: '第三段是休班 → 那天只有两组在岗');
+      expect(
+          ScheduleTemplate.fromSchedule(
+                  monthly(teamCount: 1, segOffsets: const [0]), name: 'x')
+              .workingTeamsPerDay,
+          1);
+    });
   });
 }
 

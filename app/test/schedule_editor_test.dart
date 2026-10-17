@@ -7,6 +7,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPicker;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,12 +15,16 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_field.dart';
+import 'package:shiftassistantpro/core/shift_palette.dart';
+import 'package:shiftassistantpro/core/widgets/glass_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_choice_chip.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pressable.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
@@ -36,6 +41,9 @@ class _Saved {
     required this.teamNames,
     required this.ourTeamIndex,
     required this.teamOffsets,
+    required this.monthly,
+    required this.monthSegments,
+    required this.teamSegOffsets,
   });
 
   final String name;
@@ -46,6 +54,9 @@ class _Saved {
   final List<String> teamNames;
   final int ourTeamIndex;
   final List<int> teamOffsets;
+  final bool monthly;
+  final List<MonthlySegment> monthSegments;
+  final List<int> teamSegOffsets;
 }
 
 class _FakeRepository extends AppRepository {
@@ -85,6 +96,9 @@ class _FakeRepository extends AppRepository {
     List<String> teamNames = const ['一班', '二班', '三班', '四班'],
     int ourTeamIndex = 0,
     List<int> teamOffsets = const [],
+    bool monthly = false,
+    List<MonthlySegment> monthSegments = const [],
+    List<int> teamSegOffsets = const [],
   }) async {
     saved = _Saved(
       name: name,
@@ -95,6 +109,9 @@ class _FakeRepository extends AppRepository {
       teamNames: List.of(teamNames),
       ourTeamIndex: ourTeamIndex,
       teamOffsets: List.of(teamOffsets),
+      monthly: monthly,
+      monthSegments: List.of(monthSegments),
+      teamSegOffsets: List.of(teamSegOffsets),
     );
     return 7;
   }
@@ -114,10 +131,14 @@ ShiftSchedule _domain({
   Map<int, int>? dayOverrides,
   int teamCount = 4,
   List<String>? teamNames,
+  bool monthly = false,
+  List<MonthlySegment> monthSegments = const [],
 }) {
   return ShiftSchedule(
     dayOverrides: dayOverrides ?? const {},
     name: '测试排班',
+    monthly: monthly,
+    monthlySegments: monthSegments,
     anchorDate: anchor ?? DateTime.utc(2025, 6, 1),
     classes: classes ??
         const [
@@ -245,7 +266,7 @@ String _chipValueOf(WidgetTester tester, String label) {
 String _myCrewStartText(WidgetTester tester) {
   final texts = tester.widgetList<Text>(find.descendant(
     of: find.ancestor(
-        of: find.text(L10n.myCycleStart), matching: find.byType(InkWell)),
+        of: find.text(L10n.myCycleStart), matching: find.byType(GlassPressable)),
     matching: find.byType(Text),
   ));
   return texts.last.data!;
@@ -254,7 +275,7 @@ String _myCrewStartText(WidgetTester tester) {
 /// 点开顶部「我这组从这个周期开始」的日期选择器。
 Future<void> _tapMyCrewStart(WidgetTester tester) async {
   await tester.tap(find.ancestor(
-      of: find.text(L10n.myCycleStart), matching: find.byType(InkWell)));
+      of: find.text(L10n.myCycleStart), matching: find.byType(GlassPressable)));
   await tester.pumpAndSettle();
 }
 
@@ -488,6 +509,55 @@ void main() {
     expect(repo.saved!.teamOffsets, [0, 1, 2, 3]);
   });
 
+  // ── 按压反馈（v0.12.0：行从 InkWell 换成 GlassPressable + GestureDetector）────
+  //
+  // 换件最容易被忽略的是**手势归属**：`InkWell` 参与手势竞技场，`GestureDetector`
+  // 也参与 —— 但层数与 hit 行为一旦写错，行就会把拖拽当成点击。这两条用例把
+  // 「拖拽不算点击、点击照旧、长按与从前一致、全程不抛异常」钉在真手势上。
+
+  testWidgets('换成玻璃按压缩放的行：拖拽不算点击，点击照旧', (tester) async {
+    await _pumpEditor(tester, _domain(anchor: DateTime.utc(2025, 6, 1)));
+    final row = find.ancestor(
+        of: find.text(L10n.myCycleStart),
+        matching: find.byType(GlassPressable));
+    expect(row, findsOneWidget);
+    // 这一行换件之后不再是自己写的水波纹（`InkWell` 只属于共享件）。
+    expect(
+      find.ancestor(
+          of: find.text(L10n.myCycleStart), matching: find.byType(InkWell)),
+      findsNothing,
+    );
+
+    // ① 拖拽（这是一次滚动，不是点击）→ 不该弹出日期选择器。
+    await tester.drag(row, const Offset(0, -80));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing, reason: '拖拽不该被当成点击');
+    expect(tester.takeException(), isNull);
+
+    // ② 拖完这一行还活着 —— 普通点击照旧弹出日期选择器。
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('换成玻璃按压缩放的行：长按（无位移）算一次点击 —— 与从前的 InkWell 一致',
+      (tester) async {
+    // 「按住不动再松开」在 Flutter 的 tap 手势里就是一次合法点击（没有
+    // `onLongPress` 竞争时 tap 会赢下竞技场）。`InkWell` 从前也是这样
+    // （一次性探针量过：两者都是 1 次），换件不许改这一条。
+    await _pumpEditor(tester, _domain(anchor: DateTime.utc(2025, 6, 1)));
+    final row = find.ancestor(
+        of: find.text(L10n.myCycleStart),
+        matching: find.byType(GlassPressable));
+
+    await tester.longPress(row);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget,
+        reason: '长按（无位移）是一次点击，与 InkWell 的旧行为一致');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('添加班次：新增一条定义，周期里没引用所以可以删掉', (tester) async {
     await _pumpEditor(tester, _domain(cycle: const [0, 0, 1, 1, 2, 2]));
     expect(find.byType(GlassDeleteButton), findsNWidgets(3));
@@ -500,6 +570,50 @@ void main() {
     await _tapDeleteAndConfirm(
         tester, find.byType(GlassDeleteButton).at(3));
     expect(find.byType(GlassDeleteButton), findsNWidgets(3));
+  });
+
+  testWidgets('新建班次：循环取色走的是那 16 颗的盘，顺序没漂', (tester) async {
+    // ⚠️ **这条是这一版新加的护栏。** 原来那条「chip 带上班次色与名称」看着像在钉
+    // 这件事，其实它自己造了一个带指定颜色的班次、压根没走 `_addClass` 里那句
+    // `kShiftPalette[idx % length]`（builder check 查出来的）。
+    //
+    // 夹具里已经有 3 条班次，所以第 4 条取下标 3、第 9 条取下标 8 —— **下标 8 那一条
+    // 才是有鉴别力的**：老的 8 颗盘在 8 % 8 = 0 处会给回第一颗，而 16 颗的盘给的是
+    // 新加的「红」。
+    final repo = await _pumpEditor(tester, _domain(cycle: const [0, 0, 1, 1, 2, 2]));
+
+    for (var i = 0; i < 6; i++) {
+      await tester.tap(find.text(L10n.addShiftClass));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    final colors = repo.saved!.classes.map((c) => c.color).toList();
+    expect(colors[3], kShiftPalette[3], reason: '第 4 条：走下标 3');
+    expect(colors[8], kShiftPalette[8],
+        reason: '第 9 条走下标 8 —— 老盘在这里会绕回第一颗（8 % 8 = 0），红是新加的');
+    expect(colors[8], isNot(kShiftPalette.first));
+  });
+
+  testWidgets('点班次行末的色点 → 取色层 → 挑一颗 → 确定 → 那颗班次换了色',
+      (tester) async {
+    final repo = await _pumpEditor(tester, _domain(cycle: const [0, 0, 1, 1, 2, 2]));
+
+    await tester.tap(find.byKey(const ValueKey('shift-color-dot-0')));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.shiftColor), findsOneWidget, reason: '取色层要弹出来');
+
+    await tester.tap(find.byKey(const ValueKey('shift-preset-8')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.classes.first.color, kShiftPalette[8],
+        reason: '挑的那颗要真的落到班次上，而不只是改了预览');
   });
 
   testWidgets('把班次切成休息：时间被清空，周期里引用它的行显示「休息」',
@@ -1101,25 +1215,63 @@ void main() {
     // 挤成半个，看起来像坏了而不是像能滑。时间在上一张「班次设置」卡里
     // 逐条列着，隐藏不丢信息。
     const names = ['白班', '中班', '夜班'];
+    // 周期行的标签列是那个写死的 `SizedBox(width: _dayLabelWidth)` = 56
+    // （`schedule_editor_screen.dart` 里是私有常量，这里照抄数值）。
+    const cycleLabelWidth = 56.0;
 
     expect(
       cycleRowFitsTime(
-          rowWidth: 356, classNames: names, timeText: '20:30 – 次日08:00'),
+          rowWidth: 356,
+          classNames: names,
+          timeText: '20:30 – 次日08:00',
+          dayLabelWidth: cycleLabelWidth),
       isFalse,
       reason: '手机宽度（420 视口下卡片内约 356）放不下三张 chip 加长时间串',
     );
     expect(
       cycleRowFitsTime(
-          rowWidth: 900, classNames: names, timeText: '20:30 – 次日08:00'),
+          rowWidth: 900,
+          classNames: names,
+          timeText: '20:30 – 次日08:00',
+          dayLabelWidth: cycleLabelWidth),
       isTrue,
       reason: '宽屏应当放得下',
     );
     expect(
       cycleRowFitsTime(
-          rowWidth: 356, classNames: const ['白班'], timeText: '08:00 – 18:00'),
+          rowWidth: 356,
+          classNames: const ['白班'],
+          timeText: '08:00 – 18:00',
+          dayLabelWidth: cycleLabelWidth),
       isTrue,
       reason: '只有一个班次定义时，窄屏也该放得下',
     );
+  });
+
+  test('标签列越宽，越早隐藏只读时间（按月行那条路用真实标签宽）', () {
+    // 2026-10-16 新增 `dayLabelWidth` 入参的**理由**：按月行的标签是自然宽度
+    // （「每月第 31 天起」+ 编辑图标 ≈ 144dp，不是 56），用它去判才准。
+    //
+    // ⚠️ 下面这两个数是**探针扫出来的**（不是拍的）：标签 56 从 **485** 起放得下、
+    // 标签 144 要到 **573** —— 差 88，正好等于标签宽之差，说明这个入参**线性地**
+    // 传到了判据里。取两者之间那一段断言，只换标签宽、结论就要反过来。
+    const names = ['白班', '中班', '夜班'];
+    const time = '20:30 – 次日08:00';
+    for (final w in [485.0, 500.0, 572.0]) {
+      expect(
+        cycleRowFitsTime(
+            rowWidth: w, classNames: names, timeText: time, dayLabelWidth: 56),
+        isTrue,
+        reason: 'w=$w 标签 56 应当放得下（实测它的起点是 485）',
+      );
+      expect(
+        cycleRowFitsTime(
+            rowWidth: w, classNames: names, timeText: time, dayLabelWidth: 144),
+        isFalse,
+        reason: 'w=$w 标签 144 应当放不下（实测它的起点是 573）—— '
+            '结论没反过来，说明 dayLabelWidth 这个入参没起作用',
+      );
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -1156,8 +1308,16 @@ void main() {
     final before = domain.classes.map((c) => c.id).toList();
 
     // 只改第一个班次的简称：这正是「改一个字段就丢 id」的最小复现。
+    // 简称那个框现在由 `GlassField` 包着（标签画在框**上方**，不再挂在
+    // TextField 自己的 decoration 上），所以按「GlassField 里带这个标签的那个
+    // TextField」去找。
     await tester.enterText(
-        find.widgetWithText(TextField, L10n.abbrLabel).first, 'X');
+        find
+            .descendant(
+                of: find.widgetWithText(GlassField, L10n.abbrLabel).first,
+                matching: find.byType(TextField))
+            .first,
+        'X');
     await tester.pumpAndSettle();
 
     await tester.tap(find.text(L10n.saveAndReschedule));
@@ -1427,6 +1587,67 @@ void main() {
     expect(repo.saved!.classes.first.alarms, hasLength(maxAlarmsPerShift));
   });
 
+  // 三档落点在编辑页上的读法：只写钟点会被读成班次当天，所以不落在当天的那几条
+  // 必须各自带前缀。16:30–次日 00:30 的中班配 00:15 与 01:00 —— 两条都落**次日**
+  // （00:15 是班中、下班前 15 分钟；01:00 是下班之后）。
+  testWidgets('次日那两类闹钟在编辑页都带「次日」标记', (tester) async {
+    await _pumpEditor(
+      tester,
+      _oneShift(const ShiftClass(
+        name: '中班',
+        abbr: '中',
+        startMinute: 16 * 60 + 30,
+        endMinute: 30, // 回绕式：次日 00:30
+        color: 0xFFFF9F0A,
+        alarmEnabled: true,
+        alarms: [
+          ShiftAlarm(minute: 15), // 00:15 班中、下班前 15 分钟
+          ShiftAlarm(minute: 60), // 01:00 下班之后
+        ],
+      )),
+    );
+
+    expect(
+      find.descendant(
+          of: find.byKey(const Key('shift-alarm-row-0-0')),
+          matching: find.text(L10n.clockNextDay('00:15'))),
+      findsOneWidget,
+      reason: '不标「次日」会被读成班次当天凌晨 —— 那比上班早 16 小时',
+    );
+    expect(
+      find.descendant(
+          of: find.byKey(const Key('shift-alarm-row-0-1')),
+          matching: find.text(L10n.clockNextDay('01:00'))),
+      findsOneWidget,
+    );
+    expect(find.text(L10n.alarmDayHint('16:30', L10n.clockNextDay('00:15'))),
+        findsOneWidget,
+        reason: '整组那行小字要拿第一条非当天的举例');
+  });
+
+  testWidgets('晚于上班钟点的闹钟仍带「前一天」标记（既有约定不受三档影响）',
+      (tester) async {
+    await _pumpEditor(
+      tester,
+      _oneShift(const ShiftClass(
+        name: '夜班',
+        abbr: '夜',
+        startMinute: 0,
+        endMinute: 8 * 60,
+        color: 0xFF7A5CFF,
+        alarmEnabled: true,
+        alarms: [ShiftAlarm(minute: 23 * 60)],
+      )),
+    );
+
+    expect(
+      find.descendant(
+          of: find.byKey(const Key('shift-alarm-row-0-0')),
+          matching: find.text(L10n.clockPrevDay('23:00'))),
+      findsOneWidget,
+    );
+  });
+
   // ---------------------------------------------------------------------------
   // 底部那颗悬浮的「保存并重排闹钟」胶囊
   // ---------------------------------------------------------------------------
@@ -1445,8 +1666,11 @@ void main() {
   //   ② 滑到底最后一张卡整个抬到胶囊之上、那块地方真的点得到 —— 少了它，
   //      `extendBody` 一开就会把最后一行塞到胶囊底下。
   group('底部悬浮胶囊', () {
+    // v0.12.0：这颗胶囊从 Material 的 `FilledButton` 换成了自家的 `GlassButton`
+    // （几何不变：仍是 48 高、圆角恒为高度一半）。两条用例的断言一字未改，
+    // 只有这个类型查找器跟着换件走。
     Finder saveButton() =>
-        find.widgetWithText(FilledButton, L10n.saveAndReschedule);
+        find.widgetWithText(GlassButton, L10n.saveAndReschedule);
 
     testWidgets('正文铺到屏幕底：内容从胶囊下面穿过去，不再被一块板子硬切',
         (tester) async {
@@ -1497,6 +1721,21 @@ void main() {
             reason: '卡片底边那一点要落在列表内容上（命中路径里不该只有胶囊）');
       });
     }
+
+    // v0.12.0 换件带出来的一条新几何：`GlassButton` 没有内在宽度（里面那个
+    // `Center` 会撑到 `maxWidth`），而这一页给它的约束是**松的** —— 不套
+    // `IntrinsicWidth` 它会变成通栏长条（出图量到 388 = 屏宽−32、整幅内容宽）。
+    // 套上之后收缩到内容宽度，再补 `padding`（`GlassButton` 本身没有内边距）
+    // 免得文字贴到两端的圆头上：实测 **181.75**（换件前那颗 `FilledButton` 约 180）。
+    testWidgets('保存胶囊按内容定宽，不是通栏', (tester) async {
+      await _pumpEditor(tester, _domain(), size: const Size(420, 900));
+      final save = tester.getRect(saveButton());
+      expect(save.width, lessThan(300),
+          reason: '通栏（≈388 = 屏宽−32）说明 `GlassButton` 撑满了松约束 —— '
+              '要套 `IntrinsicWidth` 才是按内容定宽（实测约 182）');
+      expect(save.width, greaterThan(150),
+          reason: '内容宽那一档约 182；明显更窄说明内边距没了、文字贴到了圆头上');
+    });
   });
 
   // ── 这一轮的性能护栏 ─────────────────────────────────────────────────
@@ -1513,8 +1752,61 @@ void main() {
     final int layers =
         tester.widgetList<BackdropFilter>(find.byType(BackdropFilter)).length;
     // 夹具是**标准档**（`liquidGlass` 默认关）：分段器与开关只在液态档下才带模糊，
-    // 所以这里应当是 **0**（改之前是 **6** —— 六张卡各一层）。
-    // 液态档下那两族会各带一层，那是浮在正文上的控件、有意保留。
-    expect(layers, 0, reason: '实测 $layers 层');
+    // 所以这里只该剩**底部那颗保存胶囊**自己的那一层（v0.12.0 起它是 `GlassButton`，
+    // 自带 `GlassBlur`）—— 它正是本测试注释说的「浮在滚动正文之上的控件」，允许保留。
+    // 改之前是 **6**（六张卡各一层）；这一层是那颗悬浮胶囊的，不是卡片的。
+    expect(layers, 1, reason: '实测 $layers 层');
+  });
+
+  testWidgets('按月：「每月第 N 天起」完整显示，不省略', (tester) async {
+    // 用户 2026-10-16：「编辑排班的时候，按月切法下面，『每月从第几天起』那里出现了
+    // 省略号。不要出现这个省略号吧，明明位置空间都还有。」
+    //
+    // 根因：标签列被 `Expanded(flex: 3)` 硬压到约 3/8 宽，而右侧那列班次胶囊是
+    // **横向滚动列表**、根本不缺那点宽度。取 31 是**最长的那一档**（两字简称同理：
+    // 拿最短的样本量会误判通过）。
+    await _pumpEditor(
+      tester,
+      _domain(
+        monthly: true,
+        monthSegments: const [
+          MonthlySegment(startDay: 1, classIndex: 0),
+          MonthlySegment(startDay: 31, classIndex: 1),
+        ],
+      ),
+      size: const Size(360, 4600), // 真机竖屏宽度
+    );
+
+    final label = find.text(L10n.monthlyFromDay(31));
+    expect(label, findsOneWidget);
+    expect(tester.renderObject<RenderParagraph>(label).didExceedMaxLines, false,
+        reason: '「每月第 31 天起」被截断了 —— 这一条量的就是用户看到的那处省略号');
+  });
+
+  testWidgets('按月：小窗宽度下那一行横向不溢出', (tester) async {
+    // Review Focus 第 4 条：标签放回自然宽度之后，`cycleRowFitsTime` 要拿到**真实的
+    // 标签宽**，否则会误判「放得下时间」，而右侧那个 `Text(timeText)` 不带 Flexible。
+    //
+    // ⚠️ 视口取 **200 × 4600**（窄宽 + 足高），不是「小窗档」那个 200 × 400：
+    // `_pumpEditor` 的注释写着「默认给足高度，让每一行都真的被构建出来（`find` 才
+    // 找得到）」—— 400 高时按月那几行**根本没被构建**，`takeException()` 必然为
+    // null，那是句永远为真的空话（本仓 v0.9.18 在待办留白上踩过同一条）。
+    // 这一条要验的是**宽度**，高度与它无关，所以把高度放开、只压宽度。
+    await _pumpEditor(
+      tester,
+      _domain(
+        monthly: true,
+        monthSegments: const [
+          MonthlySegment(startDay: 1, classIndex: 0),
+          MonthlySegment(startDay: 31, classIndex: 1),
+        ],
+      ),
+      size: const Size(200, 4600),
+    );
+
+    // 先证「这一行真的被构建出来了」——不先证的话下面那条断言是句空话。
+    expect(find.text(L10n.monthlyFromDay(31)), findsOneWidget,
+        reason: '按月那一行没被构建 —— 下面那条不溢出断言等于没测');
+    expect(tester.takeException(), isNull, reason: '这一行横向溢出了');
   });
 }

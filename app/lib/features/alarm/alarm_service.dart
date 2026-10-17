@@ -74,22 +74,24 @@ class ShiftAlarmPlan {
 
 /// 某天某个班次的**某一条**闹钟的响铃时刻。
 ///
-/// 钟点取 [alarm] 的钟面值；[alarmFallsOnPreviousDay] 为真时整体前移一天 ——
-/// 规则是「**不晚于上班时刻的最近一次该钟点**」，所以 00:00 上班、23:00 响铃排的是
-/// 前一天 23:00（排在班次当天就已经是班后 15 小时了）。
+/// 钟点取 [alarm] 的钟面值；落在**哪一天**由 [alarmDayAnchor] 定（前一天 / 班次
+/// 当天 / 次日三档）：00:00 上班、23:00 响铃排的是**前一天** 23:00（排在班次当天
+/// 就已经是班后 15 小时了）；16:30–次日 00:30 的 00:15 与 01:00 排的是**次日**；
+/// 20:00 上班、08:00 响铃排的是**班次当天**（正好下班那一刻）。
 ///
-/// 日期用 `DateTime(y, m, d - 1)` 重建而不是 `subtract(Duration(days: 1))`：
-/// 后者减的是绝对 24 小时，碰上夏令时切换会把钟点也挪掉一小时。
+/// 日期用 `DateTime(y, m, d + delta)` 重建而不是 `add(Duration(days: delta))`：
+/// 后者加的是绝对 24 小时，碰上夏令时切换会把钟点也挪掉一小时。
 DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
-  final clock = alarm.minute;
-  return alarmFallsOnPreviousDay(shift, alarm)
-      ? DateTime(date.year, date.month, date.day - 1)
-          .add(Duration(minutes: clock))
-      : DateTime(date.year, date.month, date.day)
-          .add(Duration(minutes: clock));
+  final delta = switch (alarmDayAnchor(shift, alarm)) {
+    AlarmDayAnchor.prev => -1,
+    AlarmDayAnchor.same => 0,
+    AlarmDayAnchor.next => 1,
+  };
+  return DateTime(date.year, date.month, date.day + delta)
+      .add(Duration(minutes: alarm.minute));
 }
 
-/// 决定「未来 [days] 天里哪些天要排班次联动闹钟、各排在几点」。
+/// 决定「从**昨天**起的 [days] 天里，哪些天要排班次联动闹钟、各排在几点」。
 ///
 /// 从 [AlarmService.reschedule] 的排定循环里抽出来的**纯**决策：不碰通知插件、
 /// 不读 `DateTime.now()`（当前时刻由 [from] 传入）。抽出来是因为那段逻辑原本
@@ -104,7 +106,8 @@ DateTime shiftAlarmFireAt(DateTime date, ShiftClass shift, ShiftAlarm alarm) {
 ///
 /// **一个班次挂了几个闹钟就出几条 plan**，各自算各自的触发时刻与落点。
 ///
-/// 触发时刻由 [shiftAlarmFireAt] 算（可能是**前一天**晚上），但 `offset` 与原生
+/// 触发时刻由 [shiftAlarmFireAt] 算（可能是**前一天**晚上，也可能是**次日**），
+/// 但 `offset` 与原生
 /// id 始终按**班次那一天**算 —— id 是 `序号 × 天数窗口 + 天数偏移`，跟着触发时刻走
 /// 的话，每个午夜班的闹钟都会换号。**「序号」是闹钟在 `shift.alarms` 里的下标**：
 /// 用户在编辑页里调整顺序会让闹钟换号（可接受 —— 编辑之后必然重排、`cancelAll`
@@ -125,10 +128,18 @@ List<ShiftAlarmPlan> planShiftAlarms(
   required int days,
   Map<int, bool> overrides = const {},
 }) {
-  final today = dateOnly(from);
+  // ⚠️ 从**昨天**起算，不是今天。次日档的闹钟（16:30–次日 00:30 的 00:15、夜班的
+  // 上午时段）属于**昨天那个班次**、却在今天响 —— 而 `reschedule` 开头会把
+  // `0..600` 全部取消再照这份计划重排，窗口里没有「昨天」就等于**取消之后再也没
+  // 排回去**，静默不响（冷启动 / 回前台 / 开机重排都走这条路）。
+  //
+  // 往前挪一天的代价只是前向窗口少一天（今天 +58 而不是 +59）；`offset` 的含义随之
+  // 变成「距昨天几天」，但它只负责让 id 在同一次重排里唯一、且跳过的天照样占号，
+  // 绝对值不参与任何判据。**别把这一行改回 `dateOnly(from)`。**
+  final anchor = dateOnly(from).subtract(const Duration(days: 1));
   final plans = <ShiftAlarmPlan>[];
   for (var d = 0; d < days; d++) {
-    final date = today.add(Duration(days: d));
+    final date = anchor.add(Duration(days: d));
     final t = source.shiftOn(date);
     if (t == null || t.isRest || !t.alarmEnabled || t.alarms.isEmpty) {
       continue;
@@ -271,12 +282,13 @@ class AlarmService {
   /// 班次闹钟排定的天数窗口（`reschedule` 的 [days] 缺省值）。
   ///
   /// **它就是原生 id 里的那个 60**：id = `序号 × 本值 + 天数偏移`。所以它与
-  /// `maxAlarmsPerShift`（6，见 `domain/shift_rotation.dart`）是一对：
-  /// 6 × 60 = 360 ≤ 400，而 Kotlin 侧 `cancelAllNativeAlarms` 扫的是 0..400
-  /// （`MainActivity.kt:550`）。**改这个值必须同时改那个上限与 Kotlin 的扫描范围。**
+  /// `maxAlarmsPerShift`（10，见 `domain/shift_rotation.dart`）是一对：
+  /// 10 × 60 = 600 ≤ 600，而 Kotlin 侧 `cancelAllNativeAlarms` / `cancelAllNotificationAlarms`
+  /// 扫的是 0..600（`MainActivity.kt:604` 与 `:620`）。
+  /// **改这个值必须同时改那个上限与 Kotlin 的扫描范围。**
   static const int _shiftDaysHorizon = 60;
 
-  /// 测试用只读出口：id 算式是「上限 6」的由来，得能在纯测试里断言。
+  /// 测试用只读出口：id 算式是「上限 10」的由来，得能在纯测试里断言。
   static int get shiftDaysHorizonForTesting => _shiftDaysHorizon;
 
   static const _customBaseId = 10000;
@@ -284,7 +296,7 @@ class AlarmService {
   /// 待办提醒的原生 id 基址。
   ///
   /// **四段互不重叠**，原生侧按区间扫着取消（见 `MainActivity` 的几个 cancel 分支）：
-  /// 班次 `0..400`、自定义闹钟 `10000..11000`、待办行 `20000..`（留到 39999）、
+  /// 班次 `0..600`、自定义闹钟 `10000..11000`、待办行 `20000..`（留到 39999）、
   /// 重复待办系列 `40000..41999`。
   ///
   /// 为什么把重复待办单列一段：它的号按**系列 id** 算，而待办行的号按**行 id** 算，
@@ -795,10 +807,41 @@ class AlarmService {
     } catch (_) {}
   }
 
-  /// 再睡一会：5 分钟后重新响铃（原生闹钟），标题与说明原样带过去。
+  /// 贪睡时长在 SharedPreferences 里的键（分钟）。
+  static const String snoozeMinutesKey = 'snoozeMinutes';
+
+  /// 当前贪睡时长（分钟）。
+  ///
+  /// ⚠️ **直接读 prefs，不走 `appSettingsProvider`。** 响铃界面是原生闹钟的
+  /// intent 拉起来的，它**不 watch** 那个 provider，而设置要等 `_load()` 才落到
+  /// 模块级标志上 —— 走那条路就多一处会静默失灵的依赖（v0.10.13 的
+  /// `47_ringing_liquid` 出图与真机逐字节相同，正是这个坑的现场）。prefs 是唯一
+  /// 真源，铃声那条路也是这么读的。
+  ///
+  /// 读到坏值（键被改成不在档位里的数）**退回默认**而不是照排：照排的话 `0`
+  /// 会变成「按下就再响」、负数会排到过去，都比不给这一项更糟。
+  static Future<int> snoozeMinutes() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final v = sp.getInt(snoozeMinutesKey);
+      if (v != null && L10n.snoozeOptions.contains(v)) return v;
+    } catch (_) {
+      // 读不到（极少见）就当没设过 —— 这一条不该把响铃动作带崩。
+    }
+    return L10n.snoozeDefaultMinutes;
+  }
+
+  static Future<void> setSnoozeMinutes(int minutes) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setInt(snoozeMinutesKey, minutes);
+    } catch (_) {}
+  }
+
+  /// 再睡一会：按设置里的时长重新响铃（原生闹钟），标题与说明原样带过去。
   static Future<void> snoozeAlarm(AlarmRing ring) async {
     try {
-      final fire = DateTime.now().add(const Duration(minutes: 5));
+      final fire = DateTime.now().add(Duration(minutes: await snoozeMinutes()));
       await scheduleNativeAlarm(99998, fire, ring.title, detail: ring.detail);
     } catch (e) {
       await appendLog('snoozeAlarm 排定失败: $e');

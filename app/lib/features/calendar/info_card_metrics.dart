@@ -218,7 +218,9 @@ InfoCardMetrics measureBottomInfoCardHeight({
     final lunarH = measure.text(
       lunar.fullDescription,
       AppTokens.rowSecondary,
-      maxLines: 2,
+      // 与渲染侧的 `maxLines: 3` 一致（v0.11.12 从 2 提上来）—— 两处不同步的
+      // 表现是「卡片高度算矮了、内容被底边裁掉」。
+      maxLines: 3,
       maxWidth: contentW,
     ).height;
 

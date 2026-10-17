@@ -19,15 +19,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/glass/liquid_lens.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_check.dart';
 import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
+import 'package:shiftassistantpro/core/widgets/glass_sheet_header.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 
 import '../visual/visual_harness.dart';
 
@@ -509,7 +514,241 @@ void main() {
       );
     });
   }
+
+  // ⑩ 自定义班次颜色（v0.11.6）：编辑器班次卡上的色点 → 取色层 →
+  //    拖色相条 → 拖饱和度/明度方盘 → 两颗日历小样跟着变 → 确定。
+  //
+  //    这一条要看的是「选颜色这件事有一整个面」：16 颗预设只是入口，
+  //    真正的工作面是色相条 + 方盘 + 十六进制，而且下面两颗**真的**日历小样
+  //    当场告诉你这个颜色在浅色卡与深色卡上长什么样。
+  testWidgets('班次颜色 · 取色层 · light', (WidgetTester tester) async {
+    final db = await freshDb();
+    late TestGesture drag;
+    bool held = false;
+    await renderFrames(
+      tester,
+      prefix: 'color_pick_',
+      home: const ScheduleEditorScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      count: 124,
+      step: const Duration(milliseconds: 16),
+      onFrame: (WidgetTester t, int i) async {
+        if (i == 0) {
+          await t.tap(find.byKey(const ValueKey('shift-color-dot-0')));
+        } else if (i == 22) {
+          final Rect hue = t.getRect(find.byKey(const ValueKey('shift-hue')));
+          drag = await t.startGesture(
+              Offset(hue.left + hue.width * 0.10, hue.center.dy));
+          held = true;
+          addTearDown(() {
+            if (!held) return Future<void>.value();
+            return drag.up();
+          });
+        } else if (i > 22 && i <= 34) {
+          // 只拖 12 帧：终点落在绿黄一带（初始色是蓝，差距一眼看得见）。
+          await drag.moveBy(const Offset(7, 0));
+        } else if (i == 35) {
+          await drag.up();
+          held = false;
+          final Rect sv = t.getRect(find.byKey(const ValueKey('shift-sv')));
+          drag = await t.startGesture(sv.center);
+          held = true;
+          addTearDown(() {
+            if (!held) return Future<void>.value();
+            return drag.up();
+          });
+        } else if (i > 35 && i <= 56) {
+          await drag.moveBy(const Offset(5, -4)); // 往右上：更饱和、更亮
+        } else if (i == 57) {
+          await drag.up();
+          held = false;
+        } else if (i == 90) {
+          await t.tap(find.text(L10n.confirm));
+        }
+      },
+    );
+  });
+
+  // ⑪ 按月排班（v0.11.15）：从编辑器顶部往下滚到「周期设置」那张卡 →
+  //    在「按周期 / 按月」之间切到「按月」→ 加上一段。
+  //
+  //    滚动用一根真的手指（每帧 24px），不靠 `scrollUntilVisible` ——
+  //    后者会一次性把时间推过去，拍出来是「瞬移」，而这一条要看到页面在走。
+  testWidgets('按月排班 · light', (WidgetTester tester) async {
+    final db = await freshDb();
+    late TestGesture scroll;
+    bool held = false;
+    bool found = false;
+    await renderFrames(
+      tester,
+      prefix: 'monthly_',
+      home: const ScheduleEditorScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      count: 150,
+      step: const Duration(milliseconds: 16),
+      onFrame: (WidgetTester t, int i) async {
+        if (i == 0) {
+          final Rect list = t.getRect(find.byType(ListView));
+          scroll = await t.startGesture(Offset(list.left + 8, list.center.dy));
+          held = true;
+          addTearDown(() {
+            if (!held) return Future<void>.value();
+            return scroll.up();
+          });
+        } else if (i <= 55 && !found) {
+          await scroll.moveBy(const Offset(0, -36));
+          final Finder monthly = find.text(L10n.scheduleModeMonthly);
+          if (monthly.evaluate().isNotEmpty) {
+            // **真的滚到它露出来为止**：ListView 会提前把屏外的卡建出来，
+            // 只判 `evaluate().isNotEmpty` 会在卡还在屏幕下方时就停下 ——
+            // 第一版就是这么滚过头的，那一段被底部那颗保存胶囊压住一半。
+            final Rect r = t.getRect(monthly);
+            found = r.top > 120 && r.bottom < 800;
+          }
+        } else if (i == 56) {
+          await scroll.up();
+          held = false;
+        } else if (i == 66 && found) {
+          await t.tap(find.text(L10n.scheduleModeMonthly));
+        } else if (i == 112) {
+          final Finder add = find.byKey(const Key('month-add-segment'));
+          if (add.evaluate().isNotEmpty) {
+            final Rect r = t.getRect(add);
+            if (r.bottom < 890) await t.tap(add);
+          }
+        }
+      },
+    );
+  });
+
+  // ⑫ 待办自动归档（v0.11.3）：勾掉一条 → 它收进「已完成 N 条」→
+  //    展开折叠区 → 点提示条上的「撤销」，那一条又回来。
+  //
+  //    ⚠️ 「撤销」只在 5 秒的提示条里；出帧全程 130×16ms ≈ 2.1 秒，
+  //    拍到它的时候一定还在。
+  testWidgets('待办归档 · light', (WidgetTester tester) async {
+    final db = await freshDb();
+    await renderFrames(
+      tester,
+      prefix: 'archive_',
+      home: const HomeShell(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      // 不跳过首启的话「开始使用」弹窗会盖在导航上，点不到 tab。
+      extraPrefs: onboardingPrefs,
+      count: 150,
+      step: const Duration(milliseconds: 16),
+      onFrame: (WidgetTester t, int i) async {
+        if (i == 0) {
+          await t.tapAt(_navAt(t, 0.62)); // 待办
+        } else if (i == 24) {
+          await t.tap(find.byType(GlassCheck).first);
+        } else if (i == 56) {
+          // 提示条到这儿当作已经等它自己消失（5 秒），后面不再叠在画面上。
+          t.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+              .hideCurrentSnackBar();
+        } else if (i == 60) {
+          await t.tapAt(_navAt(t, 0.12)); // 切走：待办页被销毁
+        } else if (i == 76) {
+          await t.tapAt(_navAt(t, 0.62)); // 切回来：那一条已经归档
+        } else if (i == 100) {
+          await t.tap(find.text(L10n.archivedTodos(4)));
+        } else if (i == 124) {
+          // 归档里的一次性待办可以再点一下那个勾，让它回到主列表
+          // （用这一下收尾，而不是点提示条上的「撤销」—— 那条提示条挂在
+          // 切页之前那个已经销毁的页面上，这一版不为 GIF 改它，见交接说明）。
+          final Finder row = find.ancestor(
+              of: find.text('还备用钥匙'), matching: find.byType(GlassTile));
+          await t.tap(find.descendant(
+              of: row.first, matching: find.byType(GlassCheck)));
+        }
+      },
+    );
+  });
+
+  // ⑬ 字号四档（v0.11.12）：我的 → 外观 → 拨到「特大」→ 回日历看顶栏
+  //    年月与底栏信息卡当场重排。**四个档位都是 App 自己管**，不跟系统走。
+  //
+  //    宿主 `_FontSizeGifHost` 读 `appSettingsProvider` 再套一层 MediaQuery ——
+  //    与 `app.dart` 根部那条是同一件事（工装是另一个根，得自己套）。
+  testWidgets('字号四档 · light', (WidgetTester tester) async {
+    final db = await freshDb();
+    await renderFrames(
+      tester,
+      prefix: 'font_size_',
+      home: const _FontSizeGifHost(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      extraPrefs: onboardingPrefs,
+      count: 130,
+      step: const Duration(milliseconds: 16),
+      onFrame: (WidgetTester t, int i) async {
+        if (i == 0) {
+          await t.tapAt(_navAt(t, 0.85)); // 我的
+        } else if (i == 32) {
+          await t.tap(find.text(L10n.fontExtraLarge));
+        } else if (i == 72) {
+          await t.tapAt(_navAt(t, 0.12)); // 回日历
+        }
+      },
+    );
+  });
+
+  // ⑭ 底部弹层的统一头部（v0.11.18）：把手 + 主色竖条标题 + 分隔线，
+  //    按住往下一拉就关掉。取「调整班次」那一层 —— 它有标题也有副标题
+  //    （日期区间），正好把共享头部的两个槽都拍到。
+  testWidgets('弹层 · 下拉关闭 · light', (WidgetTester tester) async {
+    final db = await freshDb();
+    late TestGesture drag;
+    bool held = false;
+    await renderFrames(
+      tester,
+      prefix: 'sheet_close_',
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      count: 100,
+      step: const Duration(milliseconds: 16),
+      onFrame: (WidgetTester t, int i) async {
+        if (i == 0) {
+          await t.tap(find.byKey(const Key('info-card-shift-entry')));
+        } else if (i == 26) {
+          drag = await t.startGesture(
+              t.getRect(find.byType(GlassSheetHeader)).center);
+          held = true;
+          addTearDown(() {
+            if (!held) return Future<void>.value();
+            return drag.up();
+          });
+        } else if (i == 27) {
+          // 一步走掉 200：弹层路由按这一发的 primaryDelta 把面板压下去。
+          await drag.moveBy(const Offset(0, 200));
+        } else if (i == 57) {
+          await drag.up();
+          held = false;
+        }
+      },
+    );
+  });
 }
+
+/// 字号 GIF 的宿主：**真的**读 `appSettingsProvider`，再按它套一层
+/// `MediaQuery.textScaler` —— 与 `app.dart` 根部那条同一件事。
+///
+/// 工装是另一个根（`VisualApp` 自己建 `MaterialApp`），不套这一层的话，
+/// 在「我的」页拨字号只会改设置值、日历不会重排，拍出来是句空话。
+class _FontSizeGifHost extends ConsumerWidget {
+  const _FontSizeGifHost();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppFontSize size =
+        ref.watch(appSettingsProvider.select((s) => s.fontSize));
+    return MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: TextScaler.linear(size.scale)),
+      child: const HomeShell(),
+    );
+  }
+}
+
 /// 开关特写用的板子：一行「开」一行「关」，落在中性的页面底色上 ——
 /// 单看开关本身，不被整页其它玻璃面干扰。
 class _SwitchBoard extends StatelessWidget {

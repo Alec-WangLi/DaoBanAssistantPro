@@ -1,50 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  月历的**一格**：日数字 / 班次胶囊 / 农历。42 格共用这一张。
-  根 match_parent：它被塞进 FrameLayout 槽位，自己声明 match_parent 才与外层一致。
-  内容约 59dp，槽位 56dp —— 靠 gravity="center" 吸收，真机图核对有没有被裁（Task 7 Step 4）。
+  月历的**一格**：白卡底 / 「今天」的实心主色块 / 日数字 / 班次胶囊 / 农历。
+  42 格共用这一张。根 `match_parent`：它被塞进 FrameLayout 槽位，自己声明
+  match_parent 才与外层一致。内容约 59dp，槽位 56dp —— 靠 gravity="center" 吸收。
+
+  2026-10-11（贴齐 App）：
+  · 根从 LinearLayout 换成 **FrameLayout**，多了 `wg_mc_block` 那一层 —— 「今天」
+    那块**实心主色块**。它的颜色是用户选的主色，静态 drawable 做不到，只能烤位图；
+    压在内容**下面**（FrameLayout 里后加的在上，所以它必须排在最前）。
+  · 根上的**格子卡底**由渲染侧按深浅档 `setBackgroundResource` 设（见
+    `widget_cell_light/dark.xml`），所以这里不写死 —— 而**今天那一格会被置 0**，
+    让块自己充当那张卡（两块圆角来源不同，叠着会在四角露出白卡的角尖）。
+  · `layout_margin="2dp"` 让相邻的卡之间有缝 —— App 里就是这么一条条分开的。
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_mc_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center">
+    android:layout_margin="2dp">
 
-    <TextView
-        android:id="@+id/wg_mc_day"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:maxLines="1" />
+    <ImageView
+        android:id="@+id/wg_mc_block"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="@null" />
 
-    <FrameLayout
-        android:layout_width="40dp"
-        android:layout_height="18dp"
-        android:layout_marginTop="3dp">
-
-        <ImageView
-            android:id="@+id/wg_mc_pill"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="fitXY"
-            android:contentDescription="@null" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center">
 
         <TextView
-            android:id="@+id/wg_mc_abbr"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:textSize="11sp"
+            android:id="@+id/wg_mc_day"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13dp"
             android:maxLines="1" />
-    </FrameLayout>
 
-    <TextView
-        android:id="@+id/wg_mc_lunar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textSize="11sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
-</LinearLayout>
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp">
+
+            <!-- ⚠️ **文字的宽度才是驱动者，位图贴上去。**（2026-10-16 反过来的：
+                 上一版是位图驱动、宽度写死 40dp × 缩放，格子一小就把胶囊顶到格边 ——
+                 真机量到占格宽 95.5%，而 App 里只有 81%。）
+                 下面 TextView 的 `wrap_content` 决定盒子多宽（它就是简称 + 左右各 4dp），
+                 ImageView 两个方向都 match_parent、按 `fitXY` 贴满它。
+                 三个都不能少：`wrap_content` 让它驱动宽度、`layout_gravity="center"`
+                 让它在（可能略宽的）位图里居中、`paddingHorizontal="4dp"` 与 Kotlin 侧
+                 `chipWidthPx` 里那 4dp 对齐（**不乘缩放** —— 布局里它是固定 dp）。 -->
+            <ImageView
+                android:id="@+id/wg_mc_pill"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/wg_mc_abbr"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:paddingHorizontal="4dp"
+                android:gravity="center"
+                android:textSize="12dp"
+                android:maxLines="1" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/wg_mc_lunar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textSize="11dp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+</FrameLayout>

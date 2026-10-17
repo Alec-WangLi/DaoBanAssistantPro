@@ -189,7 +189,7 @@ void main() {
         reason: '渲染器必须引用接收端那个常量，不许把 action 字符串再手抄一遍');
 
     // requestCode：新基数必须落在既有广播池占用**之上**。已知占用（AGENTS 的
-    // 「requestCode 池」那条）：班次闹钟 0..400、自定义闹钟 10000..11000、
+    // 「requestCode 池」那条）：班次闹钟 0..600、自定义闹钟 10000..11000、
     // 待办提醒 20000..39999、重复待办 40000..41999、选铃声 40071、刷新闹钟 40081。
     final m = RegExp(r'WIDGET_MONTH_REQ_BASE\s*=\s*([\d_]+)').firstMatch(kt);
     expect(m, isNotNull, reason: 'WidgetRenderer.kt 里找不到 WIDGET_MONTH_REQ_BASE');

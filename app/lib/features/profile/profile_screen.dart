@@ -12,16 +12,22 @@ import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_loading.dart';
+import '../../core/widgets/glass_pickers.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
+import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/section_heading.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_repository.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import '../calendar/schedule_management_screen.dart';
 import 'app_dialogs.dart';
+import 'help_center_screen.dart';
 
 /// 「我的」页：外观（主题/主色调）、数据（清空重置）、关于。
 class ProfileScreen extends ConsumerWidget {
@@ -39,6 +45,7 @@ class ProfileScreen extends ConsumerWidget {
           language: s.language,
           liquidGlass: s.liquidGlass,
           hapticsEnabled: s.hapticsEnabled,
+          fontSize: s.fontSize,
         )));
 
     return Scaffold(
@@ -49,7 +56,7 @@ class ProfileScreen extends ConsumerWidget {
           children: [
             Text(L10n.titleProfile, style: AppTokens.pageTitle),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionAppearance),
+            SectionHeading(L10n.sectionAppearance),
             GlassTile(
               translucentFill: false,
               padding: const EdgeInsets.all(16),
@@ -123,6 +130,42 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // 字号四档（设计 §3）：**这是全 app 唯一的字号来源** ——
+                  // 根部那层 `MediaQuery` 已经把系统报上来的 `textScaler` 整个换掉了。
+                  Text(L10n.fontSize, style: AppTokens.labelStrong),
+                  const SizedBox(height: 8),
+                  GlassSegment(
+                    count: AppFontSize.values.length,
+                    selectedIndex: settings.fontSize.index,
+                    onSelected: (i) => ref
+                        .read(appSettingsProvider.notifier)
+                        .setFontSize(AppFontSize.values[i]),
+                    itemBuilder: (i, selected) => FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        // 英文那几档**特意取短**（`XL` 而不是 `Extra large`）：
+                        // 320dp 上四格每格只有约 48dp 可用。
+                        //
+                        // 外面那层 `FittedBox(scaleDown)` 是护栏逼出来的：`Standard`
+                        // 在 320dp@英文下比格子宽 4px，`GlassSegment` 会**静默裁掉**
+                        // 那 4px —— 而那正是「字被吃掉」的一种，段落自己（`maxLines`）
+                        // 一点都不知道。按设计 §2 的第 2 档降级：缩，不省略。
+                        [
+                          L10n.fontSmall,
+                          L10n.fontStandard,
+                          L10n.fontLarge,
+                          L10n.fontExtraLarge,
+                        ][i],
+                        // 基线 13px：未选中 w500、选中 w700。13 档最重的角色是 w600 的
+                        // labelSecondary，两个分支都由这里显式给字重，按 spec 走 copyWith。
+                        style: AppTokens.labelSecondary.copyWith(
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
@@ -182,7 +225,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionSchedule),
+            SectionHeading(L10n.sectionSchedule),
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
@@ -200,7 +243,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionDesktop),
+            SectionHeading(L10n.sectionDesktop),
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
@@ -210,15 +253,34 @@ class ProfileScreen extends ConsumerWidget {
                   title: Text(L10n.guideWidgetTitle),
                   subtitle: Text(L10n.widgetEntrySubtitle),
                   trailing: const Icon(Icons.chevron_right_outlined),
-                  onTap: () => showWidgetGuideDialog(context),
+                  // 从前这里弹自己那一份小组件说明；v0.11.17 起**跳进《使用帮助》
+                  // 并翻到「桌面小组件」那一节** —— 全 app 只剩一份文案。
+                  // 这一行本身留着：它也是「原来还有桌面小组件」的发现点。
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            const HelpCenterScreen(scrollToWidgets: true)),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionAlarm),
-            _RingtoneTile(onPick: () => _showRingtonePicker(context, ref)),
+            SectionHeading(L10n.sectionAlarm),
+            // 铃声与贪睡时长是同一类东西（都是「响了之后怎么响」），摆在一张卡里，
+            // 中间用全 app 那条 `Divider(height: 1)` 配方（同「关于」那一节）。
+            GlassTile(
+              translucentFill: false,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _RingtoneRow(onPick: () => _showRingtonePicker(context, ref)),
+                  const Divider(height: 1),
+                  const _SnoozeRow(),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionData),
+            SectionHeading(L10n.sectionData),
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
@@ -233,10 +295,10 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionPermission),
+            SectionHeading(L10n.sectionPermission),
             const _PermissionCheck(),
             const SizedBox(height: 16),
-            _sectionTitle(context, L10n.sectionAbout),
+            SectionHeading(L10n.sectionAbout),
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
@@ -268,7 +330,10 @@ class ProfileScreen extends ConsumerWidget {
                       leading: const Icon(Icons.help_outlined),
                       title: Text(L10n.usageGuide),
                       subtitle: Text(L10n.usageGuideSubtitle),
-                      onTap: () => showUsageGuideDialog(context),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const HelpCenterScreen()),
+                      ),
                     ),
                   ),
                   GlassPressable(
@@ -285,17 +350,6 @@ class ProfileScreen extends ConsumerWidget {
           ],
         ),
       )),
-    );
-  }
-
-  Widget _sectionTitle(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        title,
-        style: AppTokens.labelSecondary
-            .copyWith(color: AppTokens.inkMuted(context)),
-      ),
     );
   }
 
@@ -417,10 +471,8 @@ class ProfileScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(L10n.ringtone, style: AppTokens.titleStrong),
-              ),
+              // 头部走共享件（把手 + 主色竖条 + 标题 + 分隔线）。
+              GlassSheetHeader(title: L10n.ringtone),
               Flexible(
                 child: ListView(
                   shrinkWrap: true,
@@ -650,17 +702,17 @@ class ProfileScreen extends ConsumerWidget {
 /// 副标题只区分**模式**，不显示系统铃声的具体名字：那要先过 `listRingtones()` 拿
 /// uri→名字的对应（列表里才有），为一行副标题多付一次原生通道调用不值当。自选铃声
 /// 的名字是选的时候顺手存下来的（`ringtoneTitle`），直接读就有。
-class _RingtoneTile extends ConsumerStatefulWidget {
-  const _RingtoneTile({required this.onPick});
+class _RingtoneRow extends ConsumerStatefulWidget {
+  const _RingtoneRow({required this.onPick});
 
   /// 弹出选择层；返回后本组件重读一次设置。
   final Future<void> Function() onPick;
 
   @override
-  ConsumerState<_RingtoneTile> createState() => _RingtoneTileState();
+  ConsumerState<_RingtoneRow> createState() => _RingtoneRowState();
 }
 
-class _RingtoneTileState extends ConsumerState<_RingtoneTile> {
+class _RingtoneRowState extends ConsumerState<_RingtoneRow> {
   String? _uri;
   String? _title;
 
@@ -709,21 +761,77 @@ class _RingtoneTileState extends ConsumerState<_RingtoneTile> {
   }
 
   @override
-  Widget build(BuildContext context) => GlassTile(
-        translucentFill: false,
-        padding: EdgeInsets.zero,
-        child: GlassPressable(
-          child: ListTile(
-            leading: const Icon(Icons.music_note_outlined),
-            title: Text(L10n.ringtone),
-            subtitle:
-                Text(_subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-            trailing: const Icon(Icons.chevron_right_outlined),
-            onTap: () async {
-              await widget.onPick();
-              if (mounted) await _load();
-            },
+  Widget build(BuildContext context) => GlassPressable(
+        child: ListTile(
+          leading: const Icon(Icons.music_note_outlined),
+          title: Text(L10n.ringtone),
+          subtitle:
+              Text(_subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: const Icon(Icons.chevron_right_outlined),
+          onTap: () async {
+            await widget.onPick();
+            if (mounted) await _load();
+          },
+        ),
+      );
+}
+
+/// 「贪睡时长」那一行。摆法照 `_RingtoneRow`：**自读自写 prefs、选完自己重读一次**。
+///
+/// 为什么不进 `appSettings`：响铃界面要读它，而那个界面是原生 intent 拉起来的、
+/// **不 watch** 任何 provider（见 `AlarmService.snoozeMinutes` 的注释）。prefs 是
+/// 两边的共同真源，铃声也是这么办的。
+class _SnoozeRow extends StatefulWidget {
+  const _SnoozeRow();
+
+  @override
+  State<_SnoozeRow> createState() => _SnoozeRowState();
+}
+
+class _SnoozeRowState extends State<_SnoozeRow> {
+  int _minutes = L10n.snoozeDefaultMinutes;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final m = await AlarmService.snoozeMinutes();
+    if (!mounted) return;
+    setState(() => _minutes = m);
+  }
+
+  Future<void> _pick() async {
+    final picked = await showGlassOptionPicker<int>(
+      context,
+      title: L10n.snoozeDuration,
+      options: L10n.snoozeOptions,
+      labelOf: L10n.snoozeOptionLabel,
+      selected: _minutes,
+    );
+    // null = 点外面关掉了，保持原值不动（与待办提醒那一处同一句判据）。
+    if (picked == null) return;
+    await AlarmService.setSnoozeMinutes(picked);
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) => GlassPressable(
+        child: ListTile(
+          leading: const Icon(Icons.snooze_outlined),
+          title: Text(L10n.snoozeDuration),
+          // 副标题把**现在是多少**写出来 —— 铃声那一行也是这个规矩：这一档设没设
+          // 成功，光看是看不出来的。
+          // 折两行、不省略（设计 §6.3）：`「再睡一会」之后隔 5 分钟重新响铃`
+          // 在 360dp 标准档下就已经超出一行 —— 那是**最常见**的配置，不是极端。
+          subtitle: Text(
+            L10n.snoozeDurationSubtitle(_minutes),
+            maxLines: 2,
           ),
+          trailing: const Icon(Icons.chevron_right_outlined),
+          onTap: _pick,
         ),
       );
 }
@@ -837,7 +945,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
                   const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: GlassLoading(size: 24),
                   ),
                   const SizedBox(width: 12),
                   Text(L10n.permChecking),
@@ -952,9 +1060,26 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
       subtitle: Text(subtitle),
       trailing: enabled == true
           ? null
-          : TextButton(
-              onPressed: onOpen,
-              child: Text(actionLabel ?? L10n.goEnable),
+          // 「去开启」：**玻璃胶囊**（与全 app 的入口同款）。原来是一颗裸
+          // `TextButton`，读起来像正文、不像能点的东西。**外面套 `IntrinsicWidth`
+          // 是必须的**：`ListTile.trailing` 给的是**有限宽度**，而 `GlassPill` 里那个
+          // `Container` 带了 `alignment`、拿到有限宽度就会**铺满整行**
+          // （同 v0.11.4「已完成 N 条」那个坑：不套的话它长得跟一条行一样宽）。
+          // `height: 36` 是「紧凑入口」那一档（见 `GlassPill` 文档注释）—— 别退回
+          // 32：这几项权限只有这一处入口，命中区缩水不值当。
+          : IntrinsicWidth(
+              child: GlassPill(
+                onTap: onOpen,
+                height: 36,
+                child: Text(
+                  actionLabel ?? L10n.goEnable,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTokens.labelSecondary.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
             ),
     );
   }

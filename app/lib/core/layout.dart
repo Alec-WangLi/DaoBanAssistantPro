@@ -69,12 +69,36 @@ MediaQueryData sanitizeSystemInsets(MediaQueryData mq) {
 /// 按钮挡住了删除键）。**别凭感觉调小**：探针实测 96 那一档下，最后一颗删除键
 /// 的最低点在距底 115，而按钮占 92~148 —— 整整压住 33px。
 ///
-/// 只对「页面底部**且**有悬浮控件压着」的列表用它；push 出来的整页里，
-/// **排班编辑器**的底部那颗「保存并重排闹钟」胶囊用的是下面那条
-/// [kFloatingSaveInset]（它的位置不是 FAB 那一套），排班管理 / 模板选择把按钮
-/// 放在列表末尾、跟着内容滚，不需要留白。
+/// 只对「页面底部**且**有悬浮控件压着」的列表用它；push 出来的整页里：
+///   · **排班编辑器**的底部那颗「保存并重排闹钟」胶囊用的是 [kFloatingSaveInset]；
+///   · **排班管理**页的「新增排班」是一条**贴屏幕底部**的悬浮按钮条（那一页底下
+///     没有导航胶囊），用的是 [kFloatingBarInset]；
+///   · **只有模板选择**把按钮留在列表末尾、跟着内容滚，不需要留白。
 const double kNavCapsuleInset = 96;
 const double kFloatingActionInset = 160;
+
+/// **push 出来的整页**底部那条悬浮按钮条（排班管理页的「新增排班」）：正文要留的空白。
+///
+/// = 按钮条底边距屏底 16（`endFloat` 的标准边距）+ 条高 56 + 12 的呼吸 = 84。
+///
+/// 与 [kFloatingActionInset]（160）的差别就是那 76：160 那档是给**底部导航胶囊**
+/// 让位的，而这一页底下没有胶囊 —— 2026-10-15 用户报的「新增排班按钮偏高」就是
+/// 把它按 160 那一档摆的（按钮浮在半空、底下空一条）。**两者别互相顶替。**
+///
+/// 与 [kFloatingSaveInset] 一样**不含系统栏**：按钮条跟着手势条一起上移，调用点
+/// 要自己叠 `MediaQuery.paddingOf(context).bottom`。
+const double kFloatingBarInset = 84;
+
+/// 底部导航胶囊的**宽度上限**。
+///
+/// 胶囊原来只有左右各 `outerPad` 的外边距、没有上限，于是 1920 的车机上四个 tab
+/// 摊开 1900px（用户 2026-10-13 报的「被拉太长」）。440 ≈ **手机那一条的宽度**
+/// （420 宽的屏上是 372），四个 tab 各 110dp，比手机上的 93dp 还宽一点。
+///
+/// **窄屏上它必须是不生效的**：约束取 `kNavCapsuleMaxWidth + outerPad × 2` 与可用宽
+/// 的较小值，420 / 320 / 200 各档都拿不到更小的数 —— 那几档逐像素不变
+/// （`glass_tier_test.dart` 的「底栏胶囊有宽度上限」四条断言钉着）。
+const double kNavCapsuleMaxWidth = 440;
 
 /// 整页编辑器底部那颗悬浮「保存并重排闹钟」胶囊：正文要留的底部空白。
 ///
@@ -99,6 +123,7 @@ class AppLayout {
     required this.isNarrow,
     required this.isShort,
     required this.isWide,
+    required this.isWideLandscape,
     required this.availableWidth,
     required this.availableHeight,
   });
@@ -111,6 +136,19 @@ class AppLayout {
 
   /// 可用宽 >= 720：平板、车机、手机横屏。
   final bool isWide;
+
+  /// 平板 / 车机的**横屏**：**够宽、够高、而且是横着的**。三个条件缺一不可。
+  ///
+  ///   · [isWide]     —— 宽 ≥ 720，有横向余量才谈得上分栏；
+  ///   · `!isShort`   —— 高 ≥ 480，手机横屏只有 420 高，分栏之后网格每行只剩 41dp
+  ///                     （日历格子那道可读下限 `_minCellH` 是 58），比不分栏还差；
+  ///   · 宽 > 高      —— **竖着的平板**（800×1280）也是 [isWide]，但它该走竖屏那套：
+  ///                     七列格子要的是宽度，不是分栏。
+  ///
+  /// ⚠️ **[isWide] 本身不许跟着改**：`CenteredContent`（另外三个 tab 与三个编辑页）
+  /// 靠它把内容限宽到 720。把方向条件并进 `isWide`，竖屏平板会从「居中 720」
+  /// 变成「拉满整屏」—— 那是另一个 bug。
+  final bool isWideLandscape;
 
   /// 扣掉键盘与系统栏之后的可用区域。
   final double availableWidth;
@@ -135,8 +173,57 @@ class AppLayout {
       isNarrow: w < _narrowWidth,
       isShort: h < _shortHeight,
       isWide: w >= _wideWidth,
+      isWideLandscape: w >= _wideWidth && h >= _shortHeight && w > h,
       availableWidth: w,
       availableHeight: h,
     );
+  }
+}
+
+/// 把底部悬浮控件（待办页那颗「＋」FAB、闹钟页与排班管理页的底部按钮条）抬到
+/// **底部导航玻璃胶囊之上**，并在宽屏下跟着 720 的内容栏走。
+///
+/// **三个页面共用这一份**：从前每页各写一个私有类（`_AboveCapsuleFabLocation` /
+/// `_AboveCapsuleBarLocation`），抄到第三处的时候就抽到这里 —— 抄第二份，下次
+/// 改一个数（比如胶囊长高了 4dp）就会漂开，而漂开**不会报错**，只是两页错开
+/// 几像素，那正是这套设计语言收口要治的病。
+///
+/// 两条共用的规则：
+///   · **纵向恒为 `endFloat` 再上移 76** —— 底部导航胶囊约 76 高，控件底边贴它
+///     上沿（探针实测 FAB 与按钮条的**顶边都落在距屏底 148**，见 [kFloatingActionInset]）；
+///   · **横向跟着 720 的内容栏**：宽屏下正文被 `CenteredContent` 限宽 720 居中，
+///     控件不跟的话会孤零零挂在屏幕两端。两种形态的横向落点不同（都是「内容栏
+///     内再各留 16」的不同侧面）：
+///       - [AboveCapsuleLocation.fab]：右对齐的**圆形浮钮**，贴内容栏**右缘**；
+///       - [AboveCapsuleLocation.bar]：通栏的**底部按钮条**，从内容栏**左缘**起铺满。
+class AboveCapsuleLocation extends FloatingActionButtonLocation {
+  /// 右对齐的圆形浮钮（待办页那颗「＋」）。
+  const AboveCapsuleLocation.fab() : _alignRight = true, _aboveCapsule = true;
+
+  /// 通栏的底部按钮条（闹钟页、排班管理页）。
+  ///
+  /// [aboveCapsule] 默认 true = **页面底下真有底部导航胶囊**（闹钟页在 tab 里），
+  /// 按钮条抬到胶囊上沿。**push 出来的整页要传 false**：那一页底下什么都没有，
+  /// 再抬 76 就是浮在半空（2026-10-15 用户报的「新增排班按钮位置偏高」正是它 ——
+  /// 按钮照旧能点，只是底下空出一条，界面上看不出哪里错）。
+  const AboveCapsuleLocation.bar({bool aboveCapsule = true})
+      : _alignRight = false,
+        _aboveCapsule = aboveCapsule;
+
+  final bool _alignRight;
+  final bool _aboveCapsule;
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
+    final base = FloatingActionButtonLocation.endFloat.getOffset(geometry);
+    // 宽屏下内容栏两侧各让出来的那一段（手机上是 0，逐像素不变）。
+    final contentW =
+        math.min(geometry.scaffoldSize.width, AppLayout.maxContentWidth);
+    final extra = (geometry.scaffoldSize.width - contentW) / 2;
+    // FAB 用**平移**：`base.dx` 已经是「屏宽 − 按钮宽 − 标准边距」，减掉 extra
+    // 就等价于「内容栏右缘 − 按钮宽 − 标准边距」，于是不必知道 Flutter 那个边距
+    // 常量是多少。按钮条从左缘起算，直接写「内容栏左缘 + 16」。
+    return Offset(_alignRight ? base.dx - extra : extra + 16,
+        base.dy - (_aboveCapsule ? 76 : 0));
   }
 }
