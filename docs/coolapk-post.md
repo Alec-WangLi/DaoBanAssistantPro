@@ -1,8 +1,10 @@
 # 酷安发帖稿 · 倒班助手Pro v0.12.0
 
 > 这份是**直接拿去发帖的草稿**：正文按酷安编辑器能接受的纯文本写，图片按顺序插在
-> 标注的位置。配套图在 `work/promo-out/`（大图，不入库），由
-> `python scripts/make_promo_images.py` 生成。
+> 标注的位置。配套图在 **`work/promo-out/`**（大图，不入库；完整路径如
+> `work/promo-out/cover.png`），由 `python scripts/make_promo_images.py` 生成。
+> `docs/images/shot-*.png` 是同一批界面的**带机身外框版**（README 用），发帖用
+> `work/promo-out/` 里的大图。
 >
 > 图序（与正文里的【图 N】一一对应）：
 > 1. `cover.png` —— 封面

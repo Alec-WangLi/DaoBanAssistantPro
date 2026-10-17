@@ -303,10 +303,31 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     // 勾错了要能一眼改回来：那一条虽然还在主列表里、再点一下那个勾也能取消，但它
     // 淡到 35% 不透明度、还带删除线，读起来是「已经处理完、别碰了」—— 一个写着
     // 「撤销」的提示条才看得出来（2026-10-11 用户：「刚勾错想马上改回来」）。
+    //
+    // **提示条活得比这一页久**：它挂在根 `ScaffoldMessenger` 上，用户切到别的
+    // tab、再切回来之后它可能还挂着。而回调里的 `context` / `ref` 属于**切走前
+    // 那个已经销毁的 State** —— 只判 `context.mounted` 就早退的话，点了「撤销」
+    // 只会收掉提示条、待办不恢复（v0.12.0 做归档动图时发现，v0.11.4 起就有）。
+    // 所以这里先把仓库实例捕获下来：页面还在时走原来那条路（带乐观写），页面
+    // 已经销毁时直接写库并重排提醒。
+    final AppRepository repo = ref.read(appRepositoryProvider);
     showGlassSnack(context, L10n.todoCheckedOff,
         icon: Icons.check_circle_outline,
         actionLabel: L10n.undo,
-        onAction: () => _toggleDone(context, ref, e, false));
+        onAction: () {
+          if (mounted) {
+            _toggleDone(context, ref, e, false);
+          } else {
+            _restoreCompleted(repo, e);
+          }
+        });
+  }
+
+  /// 「撤销」时这一页已经被切走了：只用捕获下来的仓库实例，不碰任何 State。
+  static Future<void> _restoreCompleted(
+      AppRepository repo, ScheduleEvent e) async {
+    await repo.setEventCompleted(e, false);
+    await AlarmService.rescheduleEventReminders(await repo.listEvents());
   }
 
   Widget _eventTile(BuildContext context, WidgetRef ref, ScheduleEvent e,

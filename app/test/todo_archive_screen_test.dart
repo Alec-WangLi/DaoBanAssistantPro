@@ -11,12 +11,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/app_info.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_check.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -364,6 +367,52 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(ScheduleScreen), findsOneWidget, reason: '页面还在');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('切走再切回来：提示条上的「撤销」仍然把那条待办恢复', (tester) async {
+    await add('第一条', DateTime(2026, 1, 1));
+    // 「开始使用」与「版本更新」弹窗都不弹 —— 它们会盖住底栏。
+    SharedPreferences.setMockInitialValues({
+      'onboarded': true,
+      'lastSeenVersion': appVersion,
+    });
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [databaseProvider.overrideWithValue(db)],
+      child: const MaterialApp(home: HomeShell()),
+    ));
+    await _settle(tester, frames: 30);
+
+    final Rect nav = tester.getRect(find.byKey(const Key('glass-nav-bar')));
+    Future<void> tapTab(double f) async {
+      await tester.tapAt(Offset(nav.left + nav.width * f, nav.center.dy));
+      await _settle(tester);
+    }
+
+    await tapTab(0.62); // 待办
+    await tester.tap(find.byType(GlassCheck).first);
+    await _settle(tester);
+    expect(find.text(L10n.undo), findsOneWidget);
+
+    await tapTab(0.12); // 切走：待办页被销毁
+    await tapTab(0.62); // 切回来：那一条已经归档，提示条还挂着
+
+    await tester.tap(find.text(L10n.undo));
+    await _settle(tester);
+
+    expect(find.text(L10n.undo), findsNothing);
+    expect(
+        (await repo.listEvents())
+            .firstWhere((e) => e.title == '第一条')
+            .isCompleted,
+        isFalse,
+        reason: '页面已经销毁，撤销仍然要写库（v0.12.0 前这里只收提示条、不恢复）');
+    expect(find.text('第一条'), findsOneWidget, reason: '它回到主列表');
 
     await _dispose(tester);
   });
