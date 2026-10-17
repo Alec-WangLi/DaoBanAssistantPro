@@ -58,6 +58,13 @@ const List<HelpFaqGroup> helpFaqGroups = [
             ),
           ),
           (
+            question: L10nText('想给班次换个颜色', 'I want a different colour for a shift'),
+            answer: L10nText(
+              '编辑排班页上，班次卡里那个色点点一下就是颜色盘：16 颗现成的颜色，也可以自己调 —— 拖色相条和方盘，或者直接填十六进制，下面两颗日历小样会跟着变；选好点「确定」。',
+              'On a shift card in the schedule editor, tap the colour dot to open the palette: 16 ready-made colours, or mix your own by dragging the hue bar and the square, or typing a hex value. The two little calendar samples update as you go — tap Done when it looks right.',
+            ),
+          ),
+          (
             question: L10nText('我们班组从哪天开始、怎么跟别的班组错开',
                 'When does my crew start, and how do the crews offset each other'),
             answer: L10nText(
@@ -146,8 +153,8 @@ const List<HelpFaqGroup> helpFaqGroups = [
           (
             question: L10nText('早上想多躺十分钟', 'I want ten more minutes in the morning'),
             answer: L10nText(
-              '「我的 → 闹钟 → 贪睡时长」，1 到 30 分钟。',
-              'Me → Alarm → Snooze length, from 1 to 30 minutes.',
+              '「我的 → 闹钟 → 贪睡时长」，1 / 5 / 10 / 15 / 20 / 30 分钟。',
+              'Me → Alarm → Snooze length — 1, 5, 10, 15, 20 or 30 minutes.',
             ),
           ),
           (

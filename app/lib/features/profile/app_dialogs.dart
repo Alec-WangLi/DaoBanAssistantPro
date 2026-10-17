@@ -41,6 +41,16 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.0\n'
+    '· 桌面小组件贴齐 App：今日卡补齐班次备注 / 其他班组 / 本月统计，主色竖条通到卡底；月历「今天」换成半透明块、周标题改单字、班次胶囊按文字宽现量；三张卡的字号不再跟系统字号走\n'
+    '· 按月排班：每月 1 号重新开始的一套切法，编辑排班顶上在「周期 / 按月」之间切换，段可加可删\n'
+    '· 班次颜色扩到 16 种，并能自己调：色相条 + 饱和度/明度方盘 + 十六进制，两颗日历小样当场变色\n'
+    '· 待办自动归档：做完的收进「已完成 N 条」，主列表只留没做的；一次性待办能从归档里点回来\n'
+    '· 字号四档，App 自己管、不跟系统字号走；日历顶栏与信息卡跟着重排，不省略\n'
+    '· 横屏 / 平板 / 车机上日历改成左右两栏；底部弹层统一头部、按住往下一拉就关；全 app 的小节标题、空态、加载态与按压反馈收成一套\n'
+    '· 闹钟落点扩到前一天 / 当天 / 次日三档，每个班次上限 6 → 10 条；贪睡时长可选 1 / 5 / 10 / 15 / 20 / 30 分钟\n'
+    '· 修：浅色档下状态栏图标跟着主题走、输入框标签在真机字体下不再被压扁、实心主色面上改白字、底部导航彩边接缝、编辑排班的「每月第 N 天起」不再省略\n'
+    '\n'
 'v0.11.26\n'
     '· 今日卡最左边那条主色竖条通到卡片底了 —— 以前它只有「日期」那一行那么高\n'
     '· 今日卡「其他班组」换成了 App 里那种半透明胶囊（之前是圆点加光秃秃的文字），几颗紧挨着排左边\n'
@@ -90,16 +100,19 @@ const String _changelogZh =
     '· 排班管理页的「新增排班」从列表末尾挪到了屏幕底部，跟另外两页一个位置，不再悬在页面中间\n'
     '· 「管理模板」与权限卡里的「去开启」从裸文字换成胶囊 —— 全 App 的入口都是胶囊，裸文字读起来像正文\n'
     '\n'
-    'v0.11.17\n'
-    '· 「使用帮助」从弹窗改成整页：开头一段整体简介，下面每个功能块一句简介，再往下是一个入口\n'
-    '· 新的下一层「遇到问题怎么解决」：按你想干的事分两组（「我想办一件事」/「它不对劲」），三十来条，每条说清去哪一页、点什么\n'
-    '· 修好帮助里已经过时的说法：「一个班次最多挂 6 条闹钟」其实早就放到 10 条了；零点班的响铃到底落在哪一天也讲清楚了\n'
-    '· 补上四个此前在帮助里一个字都没提过的功能：重复待办、字体大小、按月排班、待办自动归档\n'
-    '· 「我的 → 桌面」那一行改成跳进使用帮助的「桌面小组件」那一节，全 app 只剩一份说明\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.0\n'
+    '· Home-screen widgets now match the app: the today card gained the shift note, other crews and month tally, and the accent bar runs the full height; the month view marks today with the translucent block, uses single-character weekday headers and sizes shift chips to their text; none of the three cards follow the system font size any more\n'
+    '· Monthly rosters: a schedule that starts over on the 1st of every month, switchable at the top of the editor, with addable and removable segments\n'
+    '· Shift colours expanded to 16, plus a custom picker: hue bar, saturation/value square and hex input, with two live calendar samples\n'
+    '· Todo auto-archive: completed items collect under "N completed" and the main list keeps only open ones; one-off items can be ticked back out of the archive\n'
+    '· Four text sizes managed by the app rather than the system; the calendar header and info card reflow without ellipsis\n'
+    '· The calendar becomes two columns in landscape, on tablets and car screens; bottom sheets share one header and can be pulled down to close; section headings, empty and loading states and press feedback are unified across the app\n'
+    '· Alarm anchors now cover the day before, the same day and the next day; up to 10 alarms per shift; snooze length selectable from 1 to 30 minutes\n'
+    '· Fixes: status-bar icons follow the theme in light mode, field labels are no longer squashed under the device font, white text on solid accent surfaces, the coloured rim seam on the nav bar, and the editor no longer truncates "from day N of each month"\n'
+    '\n'
 'v0.11.26\n'
     '· The accent bar on the left of the today card now runs the full height of the card - before it was only as tall as the date row\n'
     '· The Other crews row on the today card uses the same translucent capsules as the app, packed together on the left; it used to be bare dots with plain text\n'
@@ -148,13 +161,6 @@ const String _changelogEn =
     '· The two most prominent primary buttons went back to the app\'s own glass button: the editor\'s "Save and reschedule" and the management page\'s "Add schedule" used to be plain system buttons with a water-ripple press\n'
     '· The management page\'s "Add schedule" moved from the end of its list to the bottom of the screen — the same place as on the other two pages, instead of floating in the middle of a short page\n'
     '· "Manage templates" and the permission card\'s "Go enable" went from bare text to pills: every entry point in the app is a pill, because bare text reads like body copy\n'
-    '\n'
-    'v0.11.17\n'
-    '· The usage guide is now a full page instead of a dialog: a short intro, a line for each feature, and one way in\n'
-    '· A new level under it, "How to get things done", sorted by what you are trying to do ("I want to…" / "Something looks wrong") — thirty-odd entries, each saying which page to open and what to tap\n'
-    '· Fixed wording in the guide that had gone stale: it claimed a shift carries at most 6 alarms, when the limit has been 10 for a while; which day a midnight shift\'s alarm falls on is spelled out too\n'
-    '· Added four features the guide had never mentioned: repeating todos, text size, monthly rosters and todo auto-archiving\n'
-    '· The "Me → Home screen" row now jumps into the guide\'s widget section, so there is only one copy of that explanation\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

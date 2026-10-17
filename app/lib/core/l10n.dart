@@ -921,6 +921,8 @@ class L10n {
             'Nothing matches exactly? Edit the closest one, or choose "Build my own"'),
         t('班次时间、几天一轮、各班组周期起始日都能改；各组起始日与几天一轮对不上会提示「撞班」，可一键均分',
             'Shift times, cycle length and each team\'s cycle start date are all editable; if start dates stop matching the cycle length the app flags it and can spread them evenly in one tap'),
+        t('班次卡上的色点能改颜色：16 颗现成色，也可以自己调（色相条 / 方盘 / 十六进制）',
+            'The colour dot on a shift card opens the palette: 16 ready-made colours, or mix your own (hue bar / square / hex)'),
         t('不是固定循环的（比如每个月都不一样），可以切到「按月」，每月 1 号重新开始排',
             'For patterns that are not a fixed cycle — a different rota each month, say — switch to "By month" and set each month up from the 1st'),
         t('调好之后「存为模板」，下次新建时直接选',
