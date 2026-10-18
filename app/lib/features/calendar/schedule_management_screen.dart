@@ -19,6 +19,7 @@ import '../../core/widgets/section_heading.dart';
 import '../../data/app_repository.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
+import '../alarm/alarm_service.dart';
 import 'schedule_editor_screen.dart';
 import 'schedule_span_label.dart';
 import 'shift_template_picker_screen.dart';
@@ -203,9 +204,23 @@ class ScheduleManagementScreen extends ConsumerWidget {
     );
     if (confirmed == true) {
       await ref.read(appRepositoryProvider).deleteSchedule(s.id);
+      await _replanAlarms(ref);
     }
   }
 }
+
+/// 排班结构一变，「今天归哪套」跟着变 —— 日历立刻跟上，**原生闹钟不会**。
+///
+/// 换「其余时间」归属、增删改排班时段、删掉一套方案，都会让未来几十天里某些天的
+/// 班次换成另一套（甚至换成「无」）。不重排闹钟的话，**旧计划里的班次闹钟照旧
+/// 在原定时刻响**：用户 2026-10-18 真机反馈「今天是白班，晚上 19:30 却响了上夜班
+/// 的闹钟」—— 就是切回本套方案时没重排，而旧方案（按月排班）里今天正是上夜班，
+/// 那一条 19:30 的上夜班闹钟是更早一次重排留下的。
+///
+/// 与「编辑排班页保存」「日历调整班次」两条路保持一致：写库之后立刻整链重排。
+/// 调用点都在**关窗之后**——那串原生调用真机上要几百毫秒，别让弹层陪着卡。
+Future<void> _replanAlarms(WidgetRef ref) =>
+    AlarmService.rescheduleAll(ref.read(appRepositoryProvider));
 
 /// 排班管理页顶部那一节「排班时段」。
 ///
@@ -335,6 +350,7 @@ Future<void> showRemainingPicker(
                 // `dialogCloser` **返回**闭包（用法是 `onPressed: dialogCloser(ctx)`）——
                 // 这里在 await 之后调，所以要再 () 一下才真的关窗。
                 if (dialogContext.mounted) dialogCloser(dialogContext)();
+                await _replanAlarms(ref);
               },
             ),
           ListTile(
@@ -353,6 +369,7 @@ Future<void> showRemainingPicker(
               // `dialogCloser` **返回**闭包（用法是 `onPressed: dialogCloser(ctx)`）——
                 // 这里在 await 之后调，所以要再 () 一下才真的关窗。
                 if (dialogContext.mounted) dialogCloser(dialogContext)();
+              await _replanAlarms(ref);
             },
           ),
         ],
@@ -461,6 +478,7 @@ Future<void> showSpanEditor(
                 // `dialogCloser` **返回**闭包（用法是 `onPressed: dialogCloser(ctx)`）——
                 // 这里在 await 之后调，所以要再 () 一下才真的关窗。
                 if (dialogContext.mounted) dialogCloser(dialogContext)();
+                await _replanAlarms(ref);
               },
             ),
             const SizedBox(width: 8),
@@ -501,6 +519,7 @@ Future<void> showSpanEditor(
               // `dialogCloser` **返回**闭包（用法是 `onPressed: dialogCloser(ctx)`）——
                 // 这里在 await 之后调，所以要再 () 一下才真的关窗。
                 if (dialogContext.mounted) dialogCloser(dialogContext)();
+              await _replanAlarms(ref);
             },
           ),
         ],

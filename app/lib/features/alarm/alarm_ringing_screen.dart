@@ -17,6 +17,15 @@ import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/lens_warped_cell.dart';
 import 'alarm_service.dart';
 
+/// 响铃界面正中那台「时钟」显示的时刻。
+///
+/// **一律 24 小时制**，与全 app 其余所有钟点（闹钟列表、编辑页、日历信息卡）同一
+/// 套写法。这里曾经用的是 `TimeOfDay.hourOfPeriod`（12 小时制的 0..11）却不带
+/// AM/PM —— 晚上 20:10 的闹钟响起来，屏幕上写的是「08:10」（用户 2026-10-18
+/// 真机反馈）。纯函数，方便把边界（午夜、正午）逐条钉住。
+String ringClockText(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:'
+    '${t.minute.toString().padLeft(2, '0')}';
+
 /// 全屏响铃界面：深色流动光晕 + 液态玻璃元素 + Q弹入场。
 /// 底部「上滑关闭」滑块跟随手指；整屏上滑也可关闭；「再睡一会」玻璃按钮。
 /// 铃声由原生前台服务 AlarmRingService 统一播放。
@@ -184,9 +193,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     final thumbH = layout.isShort ? _thumbHShort : _thumbH;
     final gapBelow = layout.isShort ? _gapBelowShort : _gapBelow;
 
-    final now = TimeOfDay.now();
-    final timeStr = '${now.hourOfPeriod.toString().padLeft(2, '0')}:'
-        '${now.minute.toString().padLeft(2, '0')}';
+    final timeStr = ringClockText(TimeOfDay.now());
 
     // 屏蔽系统返回手势：响铃界面是压在 App 主界面之上的一层路由，而这一层可能正
     // 盖在锁屏上（见 MainActivity 的 setShowWhenLocked）。一次返回就退回主界面 =

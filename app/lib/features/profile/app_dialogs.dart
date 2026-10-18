@@ -41,6 +41,10 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.1\n'
+    '· 修：在「排班管理」里换「其余时间 / 全部日子」、增删改排班时段、或者删掉一套排班表之后，日历立刻变了，但系统里已经排好的闹钟没跟着变 —— 旧方案里的班次闹钟还按旧日子响。10 月 18 日晚上就是它：当天明明是白班，19:30 却响了旧方案里上夜班的闹钟。现在这三处一改就立刻重排全部闹钟\n'
+    '· 修：全屏响铃界面上的时刻是 12 小时制却不写上午 / 下午 —— 20:10 的闹钟响起来，屏幕上写的是「08:10」。现在跟全 app 其余地方一样走 24 小时制\n'
+    '\n'
 'v0.12.0\n'
     '· 桌面小组件贴齐 App：今日卡补齐班次备注 / 其他班组 / 本月统计，主色竖条通到卡底；月历「今天」换成半透明块、周标题改单字、班次胶囊按文字宽现量；三张卡的字号不再跟系统字号走\n'
     '· 按月排班：每月 1 号重新开始的一套切法，编辑排班顶上在「周期 / 按月」之间切换，段可加可删\n'
@@ -94,15 +98,13 @@ const String _changelogZh =
     '· 自定义班次颜色时，色值前面带 0x 的写法也认了（以前只认 #）\n'
     '· 小窗（分屏）下帮助界面的正文不再被左边的圆图标挤成四五个字一行：一窄，图标就自己站一行\n'
     '\n'
-'v0.11.18\n'
-    '· 「同一个东西长得不一样」的地方收了一批：底部弹层的标题现在跟弹窗一样带主色竖条，还能往下拉关闭；小节标题全 App 统一成一档（「我的」页那几个会比以前大一点、黑一点）；空态与加载中各自收成一个样子；卡片和列表行按下的反馈也统一了\n'
-    '· 两颗最显眼的主操作按钮换回自家的玻璃件：编辑排班页的「保存并重排闹钟」和排班管理页的「新增排班」，以前用的是系统按钮（按下是水波纹，跟别处不一致）\n'
-    '· 排班管理页的「新增排班」从列表末尾挪到了屏幕底部，跟另外两页一个位置，不再悬在页面中间\n'
-    '· 「管理模板」与权限卡里的「去开启」从裸文字换成胶囊 —— 全 App 的入口都是胶囊，裸文字读起来像正文\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.1\n'
+    '· Fix: changing the fallback schedule (All days), adding, editing or deleting a schedule period, or deleting a schedule in Schedule management updated the calendar immediately, but alarms already set on the system did not follow - alarms from the old schedule still rang on their old days. That is what happened on the evening of 18 Oct: the day was a day shift, yet a night-shift alarm rang at 19:30. All three now re-plan every alarm immediately\n'
+    '· Fix: the clock on the full-screen ringing page used a 12-hour hour without AM/PM - a 20:10 alarm showed "08:10". It now uses the same 24-hour format as the rest of the app\n'
+    '\n'
 'v0.12.0\n'
     '· Home-screen widgets now match the app: the today card gained the shift note, other crews and month tally, and the accent bar runs the full height; the month view marks today with the translucent block, uses single-character weekday headers and sizes shift chips to their text; none of the three cards follow the system font size any more\n'
     '· Monthly rosters: a schedule that starts over on the 1st of every month, switchable at the top of the editor, with addable and removable segments\n'
@@ -155,12 +157,6 @@ const String _changelogEn =
     '· The calendar grid now shows which days carry alarms: a dot at the top-left of the shift chip (the top-right one still means the day was adjusted)\n'
     '· Custom shift colours now accept a 0x prefix as well as #\n'
     '· In a small window the round icon no longer squeezes help text into four or five characters a line — it moves onto its own line\n'
-    '\n'
-'v0.11.18\n'
-    '· A sweep of the places where the same thing looked different: bottom sheets now carry the same accent-barred title as dialogs (and can be pulled down to close), section headings use one size everywhere (the ones on the Me page are a little larger and darker than before), empty states and loading spinners each have a single look, and pressing a card or a row now feels the same everywhere\n'
-    '· The two most prominent primary buttons went back to the app\'s own glass button: the editor\'s "Save and reschedule" and the management page\'s "Add schedule" used to be plain system buttons with a water-ripple press\n'
-    '· The management page\'s "Add schedule" moved from the end of its list to the bottom of the screen — the same place as on the other two pages, instead of floating in the middle of a short page\n'
-    '· "Manage templates" and the permission card\'s "Go enable" went from bare text to pills: every entry point in the app is a pill, because bare text reads like body copy\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
