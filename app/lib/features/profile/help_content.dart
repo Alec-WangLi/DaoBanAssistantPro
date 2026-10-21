@@ -188,8 +188,8 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('每周三开会，不想每周手填一遍',
                 'A meeting every Wednesday — I do not want to type it in each week'),
             answer: L10nText(
-              '新建待办时把「重复」选上，可以按天、按星期几、或按每月几号。',
-              'When you create the todo, turn on "Repeating" — it can repeat daily, on chosen weekdays, or on a day of the month.',
+              '新建待办时把「重复」选上，可以按天、按星期几（能多选，比如周一三五）、或按每月几号。建好之后想改：待办页右上角的「重复待办」，点那一条就能改标题和规则。',
+              'When you create the todo, turn on "Repeating" — it can repeat daily, on any chosen weekdays, or on a day of the month. To change one later: open "Repeating" at the top right of the todo page and tap it.',
             ),
           ),
           (

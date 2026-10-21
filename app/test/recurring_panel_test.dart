@@ -145,7 +145,7 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('库里短时间有两条未完成时，点开编辑不许崩', (tester) async {
+  testWidgets('库里短时间有两条未完成时，点开系列编辑器不许崩', (tester) async {
     final sid = await seedSeries();
     await mount(tester);
     await openPanel(tester);
@@ -176,9 +176,120 @@ void main() {
     await _settle(tester);
 
     expect(tester.takeException(), isNull,
-        reason: '两条未完成时 `live.single` 会当场抛 StateError');
-    expect(find.text(L10n.editEvent), findsOneWidget, reason: '编辑弹窗照常打开');
+        reason: '两条未完成时旧实现的 `live.single` 会当场抛 StateError');
+    expect(find.text(L10n.editRecurring), findsOneWidget,
+        reason: '面板点进去开的是**系列编辑器**（不再依赖「当前这一次」）');
 
+    await _dispose(tester);
+  });
+
+  // ── 2026-10-21 用户真机：「已添加的重复待办，它不能修改，也找不到编辑」 ──
+  //
+  // 根因：编辑入口绑在「当前这一次」上。每月 1 号的系列，在 1 号之前列表里
+  // 没有那一条，面板点它只弹一句「没有下一次」。现在面板点任何一条都开系列
+  // 编辑器，不依赖行在不在。
+  testWidgets('没有「当前这一次」也能改：起始日在将来时面板照样点得开',
+      (tester) async {
+    final t = DateTime.now();
+    // 起始日放在**下个月 1 号**：今天之后，生成器一条都不生成 —— 正是用户那条
+    // 「每月 1 号」在月初之前的真实状态。
+    final id = await repo.addRecurringTodo(
+      title: '灭火器检查',
+      repeat: RecurRepeat.monthly,
+      startDate: dateOnly(DateTime(t.year, t.month + 1, 1)),
+      monthDay: 1,
+    );
+    await repo.advanceRecurringTodos(today: dateOnly(t));
+    expect(
+        (await repo.listEvents()).where((e) => e.seriesId == id), isEmpty,
+        reason: '起始日在将来时不该有当前这一次（夹具前提）');
+
+    await mount(tester);
+    await openPanel(tester);
+    await tester.tap(find.descendant(
+        of: find.byType(GlassDialog), matching: find.text('灭火器检查')));
+    await _settle(tester);
+
+    expect(find.text(L10n.editRecurring), findsOneWidget,
+        reason: '没有当前这一次，也要能打开系列编辑器');
+    expect(find.text(L10n.save), findsOneWidget);
+
+    // 改标题 + 把规则改成每周（勾周一），保存后系列真的落库。
+    await tester.enterText(find.byType(TextField), '灭火器月检');
+    await tester.tap(find.text(L10n.repeatWeekly));
+    await _settle(tester, frames: 6);
+    await tester.tap(find.text(L10n.weekday(0)));
+    await _settle(tester, frames: 6);
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    // 编辑器关掉了，系列写进去了。
+    expect(find.text(L10n.editRecurring), findsNothing);
+    final s = (await repo.listRecurringTodos()).single;
+    expect(s.title, '灭火器月检');
+    expect(s.repeat, RecurRepeat.weekly);
+    expect(s.weekdays & (1 << 0), isNot(0),
+        reason: '勾了周一 —— 掩码里至少得有这一天');
+    await _dispose(tester);
+  });
+
+  testWidgets('面板里改周期：当前这一次对齐到新规则（生成器不会替我们回退）',
+      (tester) async {
+    final sid = await seedSeries();
+    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    final before = (await repo.listEvents()).single;
+    expect(before.date.weekday, DateTime.wednesday);
+
+    await mount(tester);
+    await openPanel(tester);
+    await tester.tap(find.descendant(
+        of: find.byType(GlassDialog), matching: find.text('周三例会')));
+    await _settle(tester);
+
+    // 去掉周三、加上周五
+    await tester.ensureVisible(find.text(L10n.weekday(2)));
+    await tester.tap(find.text(L10n.weekday(2)));
+    await _settle(tester, frames: 6);
+    await tester.ensureVisible(find.text(L10n.weekday(4)));
+    await tester.tap(find.text(L10n.weekday(4)));
+    await _settle(tester, frames: 6);
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    final s = (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
+    expect(s.weekdays, 1 << 4);
+    final live = (await repo.listEvents())
+        .where((e) => e.seriesId == sid && !e.isCompleted)
+        .single;
+    expect(live.date.weekday, DateTime.friday,
+        reason: '当前这一次要对齐到新规则 —— 生成器只往前、不回退');
+    await _dispose(tester);
+  });
+
+  testWidgets('只改标题时，不把用户手工挪过的那一次拽回规则日', (tester) async {
+    await seedSeries();
+    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    final live = (await repo.listEvents()).single;
+    // 用户把这一次会挪到了周四（规则仍是每周三）。
+    await repo.setEventDate(
+        live.id, dateOnly(live.date.add(const Duration(days: 1))));
+    final moved =
+        (await repo.listEvents()).firstWhere((e) => e.id == live.id);
+
+    await mount(tester);
+    await openPanel(tester);
+    await tester.tap(find.descendant(
+        of: find.byType(GlassDialog), matching: find.text('周三例会')));
+    await _settle(tester);
+    await tester.enterText(find.byType(TextField), '周三例会（改标题）');
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    final after =
+        (await repo.listEvents()).firstWhere((e) => e.id == live.id);
+    expect(after.title, '周三例会（改标题）');
+    expect(dayNumber(after.date), dayNumber(moved.date),
+        reason: '规则没动，用户手工挪过的日子不许被对齐逻辑拽回去');
     await _dispose(tester);
   });
 

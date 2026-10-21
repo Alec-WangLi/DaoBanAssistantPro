@@ -15,11 +15,8 @@ import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
-import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_check.dart';
-import '../../core/widgets/glass_switch.dart';
-import '../../core/widgets/glass_weekday_picker.dart';
 import '../../data/app_repository.dart';
 import '../../data/todo_archive.dart';
 import '../../domain/recurring_todo.dart';
@@ -27,6 +24,7 @@ import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import 'recurring_panel.dart';
+import 'recurring_fields.dart';
 
 /// 归档行左侧那个空位的边长 —— 必须与 `GlassCheck` 的默认尺寸（28）一致，否则
 /// 归档区的文字缩进会比主列表差一档。
@@ -487,6 +485,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                     child: TextField(
                       controller: titleCtrl,
                       autofocus: true,
+                      // **标题可以写好几行**（用户 2026-10-21：「想修改前面的内容
+                      // 比较费劲」）：一行时后半段被滚出视野，光标一落在末尾，
+                      // 前面写了什么就看不见了。1~3 行自动长高，长标题整段可读；
+                      // 超过 3 行在框内滚动（弹窗本身还装得下其余字段）。
+                      minLines: 1,
+                      maxLines: 3,
+                      keyboardType: TextInputType.multiline,
                       decoration: glassInputDecoration(context),
                     ),
                   ),
@@ -564,58 +569,19 @@ class _EventFields {
 
   List<Widget> build(BuildContext context, StateSetter setState) {
     return [
-      // 重复：四档胶囊。与闹钟弹窗的「一次性 / 每天 / 每周」同一个控件、同一套
-      // 字重规则（选中 w700、未选中 w500）—— 那是最靠近的同类件。
-      GlassSegment(
-        count: 4,
-        selectedIndex: repeat == null ? 0 : repeat!.index + 1,
-        onSelected: (i) => setState(() {
-          repeat = i == 0 ? null : RecurRepeat.values[i - 1];
-          // **「每周」至少得有一天**：掩码为空时 `occurrenceOnOrBefore` 返回 null，
-          // 生成器会当它是脏数据、一条都不生成 —— 而界面上完全看不出来，
-          // 用户只会觉得「选了每周却什么都没发生」。默认勾上今天那一天，他再改。
-          if (repeat == RecurRepeat.weekly && weekdays == 0) {
-            weekdays = 1 << (date.weekday - 1);
-          }
+      // 重复规则那一组（四档 + 星期多选 + 每月几号）走共享件：系列编辑器用的是
+      // 同一份，两处各写一遍必然走样。
+      RecurringRulePicker(
+        repeat: repeat,
+        weekdays: weekdays,
+        monthDay: monthDay,
+        fallbackWeekday: date.weekday,
+        onChanged: (r, w, m) => setState(() {
+          repeat = r;
+          weekdays = w;
+          monthDay = m;
         }),
-        itemBuilder: (i, selected) => Text(
-          [
-            L10n.repeatNone,
-            L10n.repeatDaily,
-            L10n.repeatWeekly,
-            L10n.repeatMonthly,
-          ][i],
-          style: AppTokens.labelSecondary.copyWith(
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
       ),
-      if (repeat == RecurRepeat.weekly)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
-          child: GlassWeekdayPicker(
-            value: weekdays,
-            // **这里不补触觉**：控件自己已经发了一记（`Haptics.select()`），
-            // 调用点再补就是一次操作震两下 —— 两下比一下信息量更少。
-            onChanged: (v) => setState(() => weekdays = v),
-          ),
-        ),
-      if (repeat == RecurRepeat.monthly)
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(L10n.repeatMonthly),
-          trailing: Text('$monthDay'),
-          onTap: () async {
-            final picked = await showGlassOptionPicker<int>(
-              context,
-              title: L10n.repeatMonthly,
-              options: [for (var d = 1; d <= 31; d++) d],
-              labelOf: (d) => '$d',
-              selected: monthDay,
-            );
-            if (picked != null) setState(() => monthDay = picked);
-          },
-        ),
       ListTile(
         contentPadding: EdgeInsets.zero,
         // 重复项那一行不叫「日期」：它的意思是「从哪天开始生效」，之后的日期由
@@ -632,54 +598,17 @@ class _EventFields {
           if (p != null) setState(() => date = dateOnly(p));
         },
       ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(L10n.timeOptional),
-        trailing: Text(timeMinute == null ? L10n.none : _fmt(timeMinute!)),
-        onTap: () async {
-          final p = await showGlassTimePicker(
-            context,
-            initialTime: timeMinute == null
-                ? TimeOfDay.now()
-                : TimeOfDay(hour: timeMinute! ~/ 60, minute: timeMinute! % 60),
-          );
-          if (p != null) setState(() => timeMinute = p.hour * 60 + p.minute);
-        },
-      ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(L10n.advanceRemindOptional),
-        trailing: Text(L10n.remindOptionLabel(advance ?? L10n.remindNone)),
-        onTap: () async {
-          final picked = await showGlassOptionPicker<int>(
-            context,
-            title: L10n.advanceRemindOptional,
-            options: L10n.remindOptions,
-            labelOf: L10n.remindOptionLabel,
-            selected: advance ?? L10n.remindNone,
-          );
-          // null = 点外面关掉了，保持原值不动。
-          if (picked == null) return;
-          setState(() {
-            advance = picked < 0 ? null : picked;
-            // 「不设」的意思就是别提醒我 —— 联动闹钟跟着关掉。不然开关开着、
-            // 却没有可响的时刻，用户会以为它会响（而它永远不会）。
-            if (advance == null) alarm = false;
-          });
-        },
-      ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(L10n.linkAlarm),
-        subtitle: Text(L10n.linkAlarmHint),
-        trailing: GlassSwitch(
-          value: alarm,
-          onChanged: (v) => setState(() {
-            alarm = v;
-            // 开着闹钟就得有个可响的时点：提醒是「不设」时自动补成「准时」。
-            if (v) advance ??= 0;
-          }),
-        ),
+      // 时间 / 提醒 / 联动闹钟这三行同样走共享件（系列编辑器用同一份）——
+      // 「不设提醒就关掉联动闹钟」那条耦合只在那边写了一次。
+      EventTimingPicker(
+        timeMinute: timeMinute,
+        advance: advance,
+        alarm: alarm,
+        onChanged: (t, a, link) => setState(() {
+          timeMinute = t;
+          advance = a;
+          alarm = link;
+        }),
       ),
     ];
   }
@@ -838,6 +767,10 @@ Future<void> showEditEventDialog(
                   child: TextField(
                     controller: titleCtrl,
                     autofocus: true,
+                    // 与「添加」弹窗同一档：标题 1~3 行自动长高（理由见那边）。
+                    minLines: 1,
+                    maxLines: 3,
+                    keyboardType: TextInputType.multiline,
                     decoration: glassInputDecoration(context),
                   ),
                 ),

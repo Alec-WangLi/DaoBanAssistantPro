@@ -19,13 +19,13 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_loading.dart';
-import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/app_icon.dart';
 import '../../data/app_repository.dart';
 import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
-import 'schedule_screen.dart';
+import 'recurring_series_editor.dart';
 
 /// 弹出「重复待办」管理面板。
 ///
@@ -124,11 +124,17 @@ class _RecurringList extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceXs),
-      onTap: () => _edit(context, ref, s),
+      // 点整行 = 打开**系列编辑器**（不依赖「当前这一次」是否存在）。
+      // 2026-10-21 用户真机：「已添加的重复待办，它不能修改，也找不到编辑」——
+      // 从前这里编的是当前那一条，没有那一条就只弹一句提示。
+      onTap: () => showRecurringSeriesEditor(context, s),
       child: tight
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 窄窗这一行**不放那颗铅笔**：开关 56 + 删除钮已经把这行占满，
+                // 再加一颗就横向溢出（200×400 实测溢 22px）。整行本来就可点，
+                // 提示在宽松版式里给就够了。
                 Row(children: [switchTile, const Spacer(), deleteTile]),
                 const SizedBox(height: AppTokens.spaceXs),
                 texts,
@@ -139,11 +145,24 @@ class _RecurringList extends ConsumerWidget {
                 switchTile,
                 const SizedBox(width: AppTokens.gapIconText),
                 Expanded(child: texts),
+                // 行本身可点（打开系列编辑器），这颗小铅笔只是把「这里能点」
+                // 说出来 —— 在这一版之前，整行可点却没有任何暗示。
+                editHint,
+                const SizedBox(width: AppTokens.gapIconText),
                 deleteTile,
               ],
             ),
     );
   }
+
+  /// 行尾那颗小铅笔：把「点进去能改」说出来。
+  ///
+  /// **不是独立按钮** —— 它躺在整行可点的 `GlassTile` 里，点它等于点行
+  /// （再叠一个 `onTap` 会在手势竞技场里和父层抢，反而可能两边都不触发）。
+  Widget get editHint => const AppIcon(
+        Icons.edit_outlined,
+        size: AppTokens.iconSm,
+      );
 
   /// 停用 / 启用。
   ///
@@ -154,34 +173,6 @@ class _RecurringList extends ConsumerWidget {
     await repo.setRecurringEnabled(s.id!, v);
     await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
     await AlarmService.rescheduleAll(repo);
-    ref.invalidate(recurringTodosProvider);
-  }
-
-  Future<void> _edit(
-      BuildContext context, WidgetRef ref, RecurringTodo s) async {
-    final repo = ref.read(appRepositoryProvider);
-    final live = (await repo.listEvents())
-        .where((e) => e.seriesId == s.id && !e.isCompleted)
-        .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
-    if (!context.mounted) return;
-    if (live.isEmpty) {
-      // 没有「当前这一次」就没地方挂那个编辑弹窗（它编的是**行**，顺带写回系列）。
-      // 不另做一个只编系列的界面：那种情况很少（起始日在将来 / 刚跳过），明说
-      // 一句比多一套界面划算。
-      showGlassSnack(context, L10n.recurringNoCurrent,
-          icon: Icons.info_outline);
-      return;
-    }
-    // **不写 `live.single`。** 库里短时间可能出现两条未完成（把当前那一条勾回来、
-    // 而生成器还没跑），`.single` 当场抛 `StateError`（「Bad state: Too many
-    // elements」）—— 这个系列点一下就崩。
-    //
-    // 取**日期最新的那条**，与 `advanceRecurringTodos` 收脏数据那条口径**一模一样**
-    // （`app_repository.dart` 里那句 `keep = live.last`，它也是先把 live 按日期升序
-    // 排过再取最后一条）。两处对「当前那一条」的定义必须一致 —— 不然面板编的是
-    // 这一条、生成器留的是那一条，用户改完看不出为什么没生效。
-    await showEditEventDialog(context, ref, live.last);
     ref.invalidate(recurringTodosProvider);
   }
 

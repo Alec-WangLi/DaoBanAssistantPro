@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pickers.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
@@ -23,6 +24,7 @@ import 'package:shiftassistantpro/features/profile/help_center_screen.dart';
 import 'package:shiftassistantpro/features/profile/help_faq_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
+import 'package:shiftassistantpro/features/schedule/recurring_series_editor.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
 import 'visual_harness.dart';
@@ -531,6 +533,26 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const _LoadingHost(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 系列编辑器（v0.12.2）：从「重复待办」面板点进任何一条都开它，不依赖
+    // 「当前这一次」在不在。这屏里有三件这一轮新做的东西：可折行的标题框、
+    // 每周多选的星期、以及时间 / 提醒 / 联动闹钟那三行。
+    slug: '65_recurring_series_editor',
+    title: '重复待办 · 系列编辑器',
+    build: (db) async {
+      final repo = AppRepository(db);
+      await repo.addRecurringTodo(
+        title: '每周一三五巡检',
+        repeat: RecurRepeat.weekly,
+        startDate: dateOnly(DateTime.now()),
+        weekdays: (1 << 0) | (1 << 2) | (1 << 4),
+        timeMinute: 9 * 60,
+        advanceRemindMinutes: 0,
+      );
+      return const _SeriesEditorHost();
+    },
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -552,6 +574,33 @@ class _SpanEditorHostState extends ConsumerState<_SpanEditorHost> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       showSpanEditor(context, ref);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 系列编辑器的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// `showRecurringSeriesEditor` 收的是一个 `RecurringTodo`（面板里本来就有那一行），
+/// 工装这边先从库里读一条出来。
+class _SeriesEditorHost extends ConsumerStatefulWidget {
+  const _SeriesEditorHost();
+
+  @override
+  ConsumerState<_SeriesEditorHost> createState() => _SeriesEditorHostState();
+}
+
+class _SeriesEditorHostState extends ConsumerState<_SeriesEditorHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final series = await ref.read(appRepositoryProvider).listRecurringTodos();
+      if (!mounted || series.isEmpty) return;
+      await showRecurringSeriesEditor(context, series.first);
     });
   }
 

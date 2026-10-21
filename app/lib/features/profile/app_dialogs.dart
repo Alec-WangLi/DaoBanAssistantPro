@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.2\n'
+    '· 待办标题框改成 1~3 行自动长高（添加与编辑都有）：长标题以前只看得见尾巴，想改前面的内容得先把字滚回去\n'
+    '· 已添加的重复待办现在能直接改规则了：在「重复待办」面板点任何一条，就能改标题、每天 / 每周 / 每月（每周可勾任意几天）、时间与提醒。就算它这一轮还没有「当前这一次」也改得动 —— 以前每月 1 号的系列在 1 号之前列表里没有那一条，点面板只会弹一句「没有下一次」\n'
+    '· 面板每一行加了小铅笔、点整行都能进；只改标题时不会把你手工挪过的那一次拽回规则日\n'
+    '\n'
 'v0.12.1\n'
     '· 修：在「排班管理」里换「其余时间 / 全部日子」、增删改排班时段、或者删掉一套排班表之后，日历立刻变了，但系统里已经排好的闹钟没跟着变 —— 旧方案里的班次闹钟还按旧日子响。10 月 18 日晚上就是它：当天明明是白班，19:30 却响了旧方案里上夜班的闹钟。现在这三处一改就立刻重排全部闹钟\n'
     '· 修：全屏响铃界面上的时刻是 12 小时制却不写上午 / 下午 —— 20:10 的闹钟响起来，屏幕上写的是「08:10」。现在跟全 app 其余地方一样走 24 小时制\n'
@@ -91,16 +96,14 @@ const String _changelogZh =
     '· 日历格子上那个「有闹钟」的小圆点去掉了 —— 挂过闹钟的日子接近一半，半个网格都顶着一个小点，是不好看；「这天调过班」那个点还在（右上角那个）\n'
     '· 顺带：所有输入框会比以前高一点点（名字从压在框线上，变成框上面单独一行）\n'
     '\n'
-'v0.11.19\n'
-    '· 「调整班次」弹层里，标题左边那根主色竖条往下挪了一点：以前它比标题的字高半行，看着有点歪\n'
-    '· 排班管理页的「新增排班」按钮落到了屏幕底部：上一版把它抬高了 76，而那一抬是给主界面底部的导航胶囊让位的，这一页底下没有胶囊\n'
-    '· 日历格子上能看出哪天有闹钟了：班次挂过闹钟的那天，胶囊左上角有个小圆点（右上角那个仍然是「这天调过班」）\n'
-    '· 自定义班次颜色时，色值前面带 0x 的写法也认了（以前只认 #）\n'
-    '· 小窗（分屏）下帮助界面的正文不再被左边的圆图标挤成四五个字一行：一窄，图标就自己站一行\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.2\n'
+    '· The todo title field now grows from one to three lines (both adding and editing): long titles used to show only their tail, so fixing the beginning meant scrolling back first\n'
+    '· Added recurring todos can now be edited directly: tap any row in the "Repeating" panel to change its title, daily / weekly / monthly rule (pick any weekdays), time and reminder. It works even when the series has no current occurrence right now — before, a monthly series due on the 1st had no row before that day, and tapping the panel only said "no current occurrence"\n'
+    '· Each panel row now shows a small pencil and the whole row opens the editor; changing only the title no longer pulls an occurrence you moved by hand back to the rule date\n'
+    '\n'
 'v0.12.1\n'
     '· Fix: changing the fallback schedule (All days), adding, editing or deleting a schedule period, or deleting a schedule in Schedule management updated the calendar immediately, but alarms already set on the system did not follow - alarms from the old schedule still rang on their old days. That is what happened on the evening of 18 Oct: the day was a day shift, yet a night-shift alarm rang at 19:30. All three now re-plan every alarm immediately\n'
     '· Fix: the clock on the full-screen ringing page used a 12-hour hour without AM/PM - a 20:10 alarm showed "08:10". It now uses the same 24-hour format as the rest of the app\n'
@@ -150,13 +153,6 @@ const String _changelogEn =
     '· Field labels are now drawn above the box instead of floating on its border. The two squashed characters in your screenshot come from Android\'s Material floating label under the system font (MiSans): it does not reproduce here and cannot be tuned away from our side, so the app no longer uses it\n'
     '· Removed the little "has an alarm" dot from the calendar cells — nearly half the days carry alarms, so half the grid was speckled. The "shift was adjusted" dot (top-right) stays\n'
     '· Side effect: every input box is a little taller, because the label now takes its own line above the box\n'
-    '\n'
-'v0.11.19\n'
-    '· In the "Adjust shift" sheet the accent bar left of the title moved down a little: it used to sit half a line above the title text\n'
-    '· "Add schedule" on the Schedule management page dropped to the bottom of the screen: the previous release lifted it by 76, which is what the main screen\'s nav capsule needs — this page has no capsule\n'
-    '· The calendar grid now shows which days carry alarms: a dot at the top-left of the shift chip (the top-right one still means the day was adjusted)\n'
-    '· Custom shift colours now accept a 0x prefix as well as #\n'
-    '· In a small window the round icon no longer squeezes help text into four or five characters a line — it moves onto its own line\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

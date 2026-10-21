@@ -325,9 +325,9 @@ class L10n {
       '还没有重复待办。新建待办时把「重复」选上，它就会自己按期出现。',
       'No repeating todos yet. Pick a repeat when adding one and it comes back on its own.');
   static String nextTime(String d) => t('下次 $d', 'Next $d');
-  static String get recurringNoCurrent => t(
-      '这个重复现在没有「下一次」（起始日在将来，或这一次刚被你跳过）',
-      'This repeat has no current occurrence right now (it starts later, or you just skipped this one)');
+
+  /// 系列编辑器的标题（从管理面板点进来，编的是规则本身，不是某一次）。
+  static String get editRecurring => t('编辑重复待办', 'Edit repeating todo');
   static String deleteSeriesContent(String name, int n) => n == 0
       ? t('「$name」以后不会再自己出现了。', '"$name" will no longer come back on its own.')
       : t('「$name」以后不会再自己出现了，已经出现的 $n 条（含已完成的历史）也会一起删掉。',
