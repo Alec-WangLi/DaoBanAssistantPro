@@ -1219,7 +1219,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 「应用改班 / 恢复轮转」落在写库之后 ——「改班」是词汇表里点名的 commit
     // 语义（`haptics.dart` 的 `commit()` 文档）。写失败就走不到这一步。
     Haptics.commit();
-    await AlarmService.rescheduleAll(repo);
+    await AlarmService.replanAfterScheduleChange(repo);
     if (!mounted) return;
     showGlassSnack(
       context,

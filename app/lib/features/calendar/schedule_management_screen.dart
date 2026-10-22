@@ -220,7 +220,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
 /// 与「编辑排班页保存」「日历调整班次」两条路保持一致：写库之后立刻整链重排。
 /// 调用点都在**关窗之后**——那串原生调用真机上要几百毫秒，别让弹层陪着卡。
 Future<void> _replanAlarms(WidgetRef ref) =>
-    AlarmService.rescheduleAll(ref.read(appRepositoryProvider));
+    AlarmService.replanAfterScheduleChange(ref.read(appRepositoryProvider));
 
 /// 排班管理页顶部那一节「排班时段」。
 ///

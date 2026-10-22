@@ -2218,7 +2218,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       // 重排读的是**整条链**（`rescheduleAll` → `getActiveSchedules`），链上既有
       // 刚编辑的这套、也有「其余时间」那套 —— 所以「编辑的是一套非当前方案」
       // 这条路径本来就对，不必再特别处理。
-      await AlarmService.rescheduleAll(repo);
+      await AlarmService.replanAfterScheduleChange(repo);
       // 返回 true 告知上层「已保存」，由上层弹提示（避免 SnackBar 随页面一起销毁）
       if (mounted) Navigator.of(context).pop(true);
     } finally {

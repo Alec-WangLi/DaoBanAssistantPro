@@ -17,6 +17,7 @@ import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/monthly_pattern.dart';
+import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -290,6 +291,48 @@ void main() {
       expect(reschedules(), greaterThanOrEqualTo(1),
           reason: '换完其余时间不重排的话，旧方案里的班次闹钟照旧会在错的晚上响'
               '（正是用户 2026-10-18 报的那条）');
+      await _dispose(tester);
+    });
+
+
+    testWidgets('换「其余时间」到另一套：按班次的待办也跟着重算', (tester) async {
+      installChannelSpy();
+      final db = await _pump(tester);
+      final repo = AppRepository(db);
+
+      // 加一套「每天都是夜班」的方案，并建一条「每次夜班带工牌」的待办。
+      await repo.saveSchedule(
+        name: '每天夜班',
+        anchorDate: dateOnly(DateTime.now()),
+        classes: const [ShiftClass(name: '夜班', abbr: '夜')],
+        cycle: const [0],
+        makeCurrent: false,
+        teamCount: 1,
+        teamNames: const ['我'],
+        teamOffsets: const [0],
+      );
+      final sid = await repo.addRecurringTodo(
+        title: '带工牌',
+        repeat: RecurRepeat.shift,
+        startDate: dateOnly(DateTime.now()),
+        shiftNames: const ['夜班'],
+      );
+      // 当前是「四班两倒」（每天白班）→ 夜班规则今天没有发生日。
+      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      expect((await repo.listEvents()).where((e) => e.seriesId == sid),
+          isEmpty);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(L10n.allDates));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+          of: find.byType(GlassDialog), matching: find.text('每天夜班')));
+      await tester.pumpAndSettle();
+
+      final rows = (await repo.listEvents()).where((e) => e.seriesId == sid);
+      expect(rows.length, 1,
+          reason: '换完其余时间，按班次的当前这一次要立刻跟上 —— '
+              '只重排闹钟的话列表里什么都不会变');
       await _dispose(tester);
     });
 
