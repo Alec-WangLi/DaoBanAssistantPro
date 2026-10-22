@@ -35,7 +35,7 @@ class RecurRuleValue {
   const RecurRuleValue({
     required this.repeat,
     this.weekdays = 0,
-    this.monthDays = 1,
+    this.monthDays = 0,
     this.shiftNames = const [],
   });
 

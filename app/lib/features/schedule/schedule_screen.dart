@@ -460,12 +460,24 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   /// 只重排待办提醒，不动班次闹钟：勾一个复选框不该把上千条班次闹钟全扫一遍。
   Future<void> _rescheduleReminders(WidgetRef ref) async {
     final repo = ref.read(appRepositoryProvider);
-    await AlarmService.rescheduleEventReminders(await repo.listEvents());
+    // 一次性与重复待办的提醒一起排 —— 只排前者的话，新建的重复待办要等到
+    // 下一次 `rescheduleAll`（冷启动等）才排得上，当天可能该响而不响。
+    await AlarmService.rescheduleTodoReminders(repo);
   }
 
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
+  Future<void> _showAddDialog(BuildContext context, WidgetRef ref) async {
     final titleCtrl = TextEditingController();
-    final fields = _EventFields(date: dateOnly(DateTime.now()));
+    final today = dateOnly(DateTime.now());
+    // 「按班次」要列出当前排班表的班次 —— 读一次，别在弹窗里 watch 流
+    // （drift 流取消时的零时长定时器会让 widget 用例报 Timer still pending）。
+    final active = await ref.read(appRepositoryProvider).getActiveSchedules();
+    if (!context.mounted) return;
+    final choices = active?.chain.classChoicesFrom(today) ?? const <ShiftClass>[];
+    final fields = _EventFields(
+      date: today,
+      shiftChoices: choices,
+      fallbackShiftName: active?.chain.shiftOn(today)?.name,
+    );
 
     showGlassDialog(
       context: context,
@@ -512,7 +524,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                     // 标题为空 = 这一下什么也没做，按钮的锁当帧就放开（同步返回，
                     // 见 `GlassActionButton._fire`）。
                     if (title.isEmpty) return;
-                    await fields.commit(ref, title: title);
+                    final ok = await fields.commit(ref, title: title);
+                    if (!ok) {
+                      setState(() {});
+                      return;
+                    }
                     await _rescheduleReminders(ref);
                     close();
                   },
@@ -540,8 +556,11 @@ class _EventFields {
     this.alarm = false,
     this.repeat,
     this.weekdays = 0,
-    this.monthDays = 1,
+    this.monthDays = 0,
+    this.shiftNames = const [],
     this.seriesId,
+    this.shiftChoices = const [],
+    this.fallbackShiftName,
   });
 
   DateTime date;
@@ -564,6 +583,18 @@ class _EventFields {
   /// 每月选中的日子（1..31 的位掩码）。
   int monthDays;
 
+  /// 按班次选中的名字。
+  List<String> shiftNames;
+
+  /// 当前排班链上「从今天起可选」的班次。
+  final List<ShiftClass> shiftChoices;
+
+  /// 今天我们班组的班次名（切到「按班次」时默认勾它）。
+  final String? fallbackShiftName;
+
+  /// 保存被挡下时显示的一行提示。
+  String? validation;
+
   /// 这条行属于哪个系列；null = 一次性待办。编辑既有行时带进来。
   int? seriesId;
 
@@ -576,15 +607,18 @@ class _EventFields {
           repeat: repeat,
           weekdays: weekdays,
           monthDays: monthDays,
+          shiftNames: shiftNames,
         ),
-        // 班次选项与已选名字在待办弹窗那一轮接上；这里先给空表。
-        shiftChoices: const [],
+        shiftChoices: shiftChoices,
         fallbackDay: date,
-        fallbackShiftName: null,
+        fallbackShiftName: fallbackShiftName,
+        validationMessage: validation,
         onChanged: (v) => setState(() {
           repeat = v.repeat;
           weekdays = v.weekdays;
           monthDays = v.monthDays;
+          shiftNames = v.shiftNames;
+          validation = null;
         }),
       ),
       ListTile(
@@ -625,11 +659,20 @@ class _EventFields {
   /// 之后不生效」或者「解绑了系列还留着」。
   ///
   /// [existing] 为 null 表示新建。
-  Future<void> commit(
+  Future<bool> commit(
     WidgetRef ref, {
     required String title,
     ScheduleEvent? existing,
   }) async {
+    // 无效规则不落库：空班次 / 空月日的规则一条都不生成，而界面上看不出异常。
+    if (repeat == RecurRepeat.shift && shiftNames.isEmpty) {
+      validation = L10n.ruleNeedsShift;
+      return false;
+    }
+    if (repeat == RecurRepeat.monthly && monthDays == 0) {
+      validation = L10n.ruleNeedsMonthDay;
+      return false;
+    }
     final repo = ref.read(appRepositoryProvider);
     var sid = seriesId;
 
@@ -653,6 +696,7 @@ class _EventFields {
         alarmEnabled: alarm,
         weekdays: weekdays,
         monthDays: monthDays,
+        shiftNames: shiftNames,
       );
     } else {
       // 编辑既有系列：**显式全字段构造，不用 `copyWith`** —— 那是 `?? this.x`，
@@ -680,6 +724,7 @@ class _EventFields {
         alarmEnabled: alarm,
         weekdays: weekdays,
         monthDays: monthDays,
+        shiftNames: shiftNames,
         // 这两个不属于这个弹窗管的字段，原样带过去（不然会被清掉）。
         skipThrough: s.skipThrough,
         enabled: s.enabled,
@@ -714,7 +759,9 @@ class _EventFields {
     // 两条路径的分工写在这里，免得后人把哪一边当成 bug 去改。
     if (sid != null) {
       final s = (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
-      final occ = occurrenceOnOrBefore(s, dateOnly(DateTime.now()));
+      final chain = (await repo.getActiveSchedules())?.chain;
+      final occ = occurrenceOnOrBefore(s, dateOnly(DateTime.now()),
+          shiftNameOn: chain == null ? null : (d) => chain.shiftOn(d)?.name);
       if (occ != null) {
         for (final r in (await repo.listEvents())
             .where((e) => e.seriesId == sid && !e.isCompleted)) {
@@ -722,6 +769,7 @@ class _EventFields {
         }
       }
     }
+    return true;
   }
 }
 
@@ -741,6 +789,21 @@ Future<void> showEditEventDialog(
   }
   if (!context.mounted) return;
 
+  final active = await ref.read(appRepositoryProvider).getActiveSchedules();
+  final today = dateOnly(DateTime.now());
+  final choices = active?.chain.classChoicesFrom(today) ?? const <ShiftClass>[];
+  final todayShift = active?.chain.shiftOn(today)?.name;
+  var shiftNames = series?.shiftNames ?? const <String>[];
+  // 老数据兜底：空班次规则打开时补一个合法值（有可选项时）。
+  if (series?.repeat == RecurRepeat.shift && shiftNames.isEmpty) {
+    final names = {for (final c in choices) c.name};
+    if (todayShift != null && names.contains(todayShift)) {
+      shiftNames = [todayShift];
+    } else if (choices.isNotEmpty) {
+      shiftNames = [choices.first.name];
+    }
+  }
+
   final titleCtrl = TextEditingController(text: e.title);
   final fields = _EventFields(
     date: e.date,
@@ -749,8 +812,11 @@ Future<void> showEditEventDialog(
     alarm: e.alarmEnabled,
     repeat: series?.repeat,
     weekdays: series?.weekdays ?? 0,
-    monthDays: series?.monthDays ?? 1,
+    monthDays: series?.monthDays ?? 0,
+    shiftNames: shiftNames,
     seriesId: e.seriesId,
+    shiftChoices: choices,
+    fallbackShiftName: todayShift,
   );
 
   if (!context.mounted) return;
@@ -794,9 +860,14 @@ Future<void> showEditEventDialog(
                 onPressed: () async {
                   final title = titleCtrl.text.trim();
                   if (title.isEmpty) return;
-                  await fields.commit(ref, title: title, existing: e);
-                  await AlarmService.rescheduleEventReminders(
-        await ref.read(appRepositoryProvider).listEvents());
+                  final ok =
+                      await fields.commit(ref, title: title, existing: e);
+                  if (!ok) {
+                    setState(() {});
+                    return;
+                  }
+                  await AlarmService.rescheduleTodoReminders(
+                      ref.read(appRepositoryProvider));
                   close();
                 },
                 label: L10n.save,
