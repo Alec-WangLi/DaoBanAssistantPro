@@ -129,6 +129,30 @@ class ScheduleChain implements ShiftSource {
   @override
   ShiftClass? shiftOn(DateTime day) => scheduleOn(day)?.shiftOn(day);
 
+  /// 从 [day] 起**还可能生效**的方案里的班次（按名字去重、保持首次出现的顺序）。
+  ///
+  /// 顺序：那天归谁的方案 → 兜底（其余时间）方案 → 时段终点为 null 或 ≥ day 的
+  /// 各段方案。**已结束时段的方案不贡献选项** —— 选中那种班次等于造一条从今往后
+  /// 永不触发的规则，而界面上完全看不出来（重复待办的「按班次」用它）。
+  /// 休班类班次**不过滤**：「每个休息日提醒做某事」是合理用法。
+  List<ShiftClass> classChoicesFrom(DateTime day) {
+    final out = <ShiftClass>[];
+    final seen = <String>{};
+    void add(ShiftSchedule? s) {
+      if (s == null) return;
+      for (final c in s.classes) {
+        if (seen.add(c.name)) out.add(c);
+      }
+    }
+
+    add(scheduleOn(day));
+    add(fallback);
+    for (final s in spans) {
+      if (s.to == null || dayNumber(s.to!) >= dayNumber(day)) add(s.schedule);
+    }
+    return out;
+  }
+
   /// 链上有没有「有周期」的方案。
   ///
   /// 空白表（跟随法定节假日、`cycle` 为空）不算 —— 桌面小组件据此决定画不画

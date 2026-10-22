@@ -434,4 +434,31 @@ void main() {
       expect(chain.shiftOn(_d(2026, 10, 31))!.name, '按月-夜');
     });
   });
+
+  group('classChoicesFrom —— 从某天起可选的班次', () {
+    test('今天起的方案并集、按名字去重，已结束时段的方案不贡献选项', () {
+      final chain = ScheduleChain(
+        fallback: _sched('当前'),
+        spans: [
+          _span('旧',
+              id: 1, from: _d(2026, 1, 1), to: _d(2026, 8, 31)),
+          _span('新', id: 2, from: _d(2026, 10, 1)),
+        ],
+      );
+      final names = chain
+          .classChoicesFrom(_d(2026, 9, 15))
+          .map((c) => c.name)
+          .toList();
+      // 旧表的班次不再可选；当前表的两个各出现一次；新表（未来生效）也算。
+      expect(names, ['当前-白', '当前-休', '新-白', '新-休']);
+      // 休班类不排除 —— 「每个休息日提醒做某事」是合理用法。
+      expect(names, contains('当前-休'));
+    });
+
+    test('没有排班方案 → 空表', () {
+      expect(ScheduleChain().classChoicesFrom(_d(2026, 9, 15)), isEmpty);
+    });
+  });
+
+
 }
