@@ -233,6 +233,93 @@ void main() {
     await _dispose(tester);
   });
 
+
+  // ── v0.12.3：每月多选 + 按班次（系列编辑器接线） ──
+
+  testWidgets('系列编辑器：每月改多选并保存', (tester) async {
+    final t = DateTime.now();
+    await repo.addRecurringTodo(
+      title: '灭火器检查',
+      repeat: RecurRepeat.monthly,
+      startDate: dateOnly(DateTime(t.year, t.month - 1, 1)),
+      monthDays: 1,
+    );
+    await repo.advanceRecurringTodos(today: dateOnly(t));
+    await mount(tester);
+    await openPanel(tester);
+    Finder inDialog(Finder f) =>
+        find.descendant(of: find.byType(GlassDialog), matching: f);
+    await tester.tap(inDialog(find.text('灭火器检查')));
+    await _settle(tester);
+
+    await tester.tap(inDialog(find.text('15')));
+    await _settle(tester, frames: 6);
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    expect(find.text(L10n.editRecurring), findsNothing);
+    final s = (await repo.listRecurringTodos()).single;
+    expect(s.monthDays, (1 << 0) | (1 << 14));
+    await _dispose(tester);
+  });
+
+  testWidgets('系列编辑器：按班次没选名字、又没有可选班次时，保存被挡下并提示',
+      (tester) async {
+    final t = DateTime.now();
+    // 空白表（跟随法定节假日）没有班次定义 —— 一个可选项都没有。
+    await repo.saveSchedule(
+      name: '法定班次',
+      anchorDate: dateOnly(t),
+      classes: const [],
+      cycle: const [],
+    );
+    await repo.addRecurringTodo(
+      title: '带工牌',
+      repeat: RecurRepeat.shift,
+      startDate: dateOnly(t),
+      shiftNames: const [],
+    );
+    await mount(tester);
+    await openPanel(tester);
+    Finder inDialog(Finder f) =>
+        find.descendant(of: find.byType(GlassDialog), matching: f);
+    await tester.tap(inDialog(find.text('带工牌')));
+    await _settle(tester);
+    expect(inDialog(find.text(L10n.shiftRuleNoSchedule)), findsOneWidget);
+
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    expect(find.text(L10n.editRecurring), findsOneWidget, reason: '不许关窗');
+    expect(inDialog(find.text(L10n.ruleNeedsShift)), findsOneWidget);
+    expect((await repo.listRecurringTodos()).single.shiftNames, isEmpty,
+        reason: '无效规则不许落库');
+    await _dispose(tester);
+  });
+
+  testWidgets('系列编辑器：老数据的空班次规则打开时补上默认值', (tester) async {
+    final t = DateTime.now();
+    await repo.addRecurringTodo(
+      title: '带工牌',
+      repeat: RecurRepeat.shift,
+      startDate: dateOnly(t),
+      shiftNames: const [],
+    );
+    await mount(tester);
+    await openPanel(tester);
+    Finder inDialog(Finder f) =>
+        find.descendant(of: find.byType(GlassDialog), matching: f);
+    await tester.tap(inDialog(find.text('带工牌')));
+    await _settle(tester);
+
+    // 默认排班表有班次 → 打开时补成当天那一个，于是保存直接可用。
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+    expect(find.text(L10n.editRecurring), findsNothing);
+    expect((await repo.listRecurringTodos()).single.shiftNames, isNotEmpty);
+    await _dispose(tester);
+  });
+
   testWidgets('面板里改周期：当前这一次对齐到新规则（生成器不会替我们回退）',
       (tester) async {
     final sid = await seedSeries();

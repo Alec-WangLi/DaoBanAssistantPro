@@ -12,6 +12,7 @@
 //
 // 「开始日期」有意不放进这个弹窗：它只决定第一次出现的那道闸门，用户这一轮
 // 要改的是标题与规则；放进来反而会与「当前这一次」的日期混淆。
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,6 +23,7 @@ import '../../core/widgets/glass_input.dart';
 import '../../core/l10n.dart';
 import '../../data/app_repository.dart';
 import '../../domain/recurring_todo.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
 import 'recurring_fields.dart';
@@ -50,9 +52,54 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
   late RecurRepeat? _repeat = widget.series.repeat;
   late int _weekdays = widget.series.weekdays;
   late int _monthDays = widget.series.monthDays;
+  late List<String> _shiftNames = widget.series.shiftNames;
   late int? _timeMinute = widget.series.timeMinute;
   late int? _advance = widget.series.advanceRemindMinutes;
   late bool _alarm = widget.series.alarmEnabled;
+
+  /// 当前排班链与「从今天起可选」的班次 —— 按班次那一档要用。
+  ScheduleChain? _chain;
+  List<ShiftClass> _shiftChoices = const [];
+  String? _fallbackShiftName;
+
+  /// 保存被挡下时显示的那一行（下一次改动就清掉）。
+  String? _validation;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChoices();
+  }
+
+  /// 读一次排班链（**不 watch**：弹窗是短命的，流取消时的零时长定时器会让
+  /// widget 用例报「A Timer is still pending」）。
+  Future<void> _loadChoices() async {
+    final active = await ref.read(appRepositoryProvider).getActiveSchedules();
+    if (!mounted) return;
+    final today = dateOnly(DateTime.now());
+    final chain = active?.chain;
+    final choices = chain?.classChoicesFrom(today) ?? const <ShiftClass>[];
+    final todayShift = chain?.shiftOn(today)?.name;
+    setState(() {
+      _chain = chain;
+      _shiftChoices = choices;
+      _fallbackShiftName = todayShift;
+      // 老数据兜底：空月日 / 空班次在打开时就补一个合法值（有可选项时）。
+      // 补不了（一个班次都没有）就留给保存校验去挡 —— 那比造一条永不触发的
+      // 规则好。
+      if (_repeat == RecurRepeat.monthly && _monthDays == 0) {
+        _monthDays = 1 << (today.day - 1);
+      }
+      if (_repeat == RecurRepeat.shift && _shiftNames.isEmpty) {
+        final names = {for (final c in choices) c.name};
+        if (todayShift != null && names.contains(todayShift)) {
+          _shiftNames = [todayShift];
+        } else if (choices.isNotEmpty) {
+          _shiftNames = [choices.first.name];
+        }
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -65,9 +112,20 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
   /// 对齐这一步**生成器不会替我们做**：它只往前顺延、永不回退，而「每周三改成
   /// 每周五」要回退到本周之前的那个周五（与待办编辑弹窗的 `_EventFields.commit`
   /// 同一条理由、同一套做法）。
-  Future<void> _save() async {
+  /// 保存成功返回 true（调用点据此决定关不关窗）；校验挡下返回 false。
+  Future<bool> _save() async {
     final title = _title.text.trim();
-    if (title.isEmpty) return;
+    if (title.isEmpty) return false;
+    // **规则无效不许落库**：空班次 / 空月日的规则一条都不生成，界面上看不出
+    // 任何异常。挡在写库之前，并就地给一行提示。
+    if (_repeat == RecurRepeat.shift && _shiftNames.isEmpty) {
+      setState(() => _validation = L10n.ruleNeedsShift);
+      return false;
+    }
+    if (_repeat == RecurRepeat.monthly && _monthDays == 0) {
+      setState(() => _validation = L10n.ruleNeedsMonthDay);
+      return false;
+    }
     final repo = ref.read(appRepositoryProvider);
     final id = widget.series.id!;
 
@@ -81,7 +139,8 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
       // 拽回规则上的日子，而用户并没有要求改规则。
       final ruleChanged = _repeat != widget.series.repeat ||
           _weekdays != widget.series.weekdays ||
-          _monthDays != widget.series.monthDays;
+          _monthDays != widget.series.monthDays ||
+          !listEquals(_shiftNames, widget.series.shiftNames);
       await repo.updateRecurringTodo(RecurringTodo(
         id: id,
         title: title,
@@ -93,6 +152,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
         alarmEnabled: _alarm,
         weekdays: _weekdays,
         monthDays: _monthDays,
+        shiftNames: _shiftNames,
         skipThrough: widget.series.skipThrough,
         enabled: widget.series.enabled,
       ));
@@ -102,8 +162,11 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
       await repo.advanceRecurringTodos(today: today);
       final s =
           (await repo.listRecurringTodos()).firstWhere((x) => x.id == id);
-      final occ =
-          ruleChanged ? occurrenceOnOrBefore(s, today) : null;
+      final chain = _chain;
+      final occ = ruleChanged
+          ? occurrenceOnOrBefore(s, today,
+              shiftNameOn: chain == null ? null : (d) => chain.shiftOn(d)?.name)
+          : null;
       for (final r in (await repo.listEvents())
           .where((e) => e.seriesId == id && !e.isCompleted)) {
         await repo.updateEvent(
@@ -121,6 +184,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
 
     await AlarmService.rescheduleAll(repo);
     ref.invalidate(recurringTodosProvider);
+    return true;
   }
 
   @override
@@ -148,15 +212,18 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
               repeat: _repeat,
               weekdays: _weekdays,
               monthDays: _monthDays,
+              shiftNames: _shiftNames,
             ),
-            // 班次选项与已选名字在系列编辑器那一轮接上；这里先给空表。
-            shiftChoices: const [],
+            shiftChoices: _shiftChoices,
             fallbackDay: DateTime.now(),
-            fallbackShiftName: null,
+            fallbackShiftName: _fallbackShiftName,
+            validationMessage: _validation,
             onChanged: (v) => setState(() {
               _repeat = v.repeat;
               _weekdays = v.weekdays;
               _monthDays = v.monthDays;
+              _shiftNames = v.shiftNames;
+              _validation = null;
             }),
           ),
           EventTimingPicker(
@@ -180,8 +247,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
         GlassActionButton(
           variant: GlassActionVariant.primary,
           onPressed: () async {
-            await _save();
-            close();
+            if (await _save()) close();
           },
           label: L10n.save,
         ),
