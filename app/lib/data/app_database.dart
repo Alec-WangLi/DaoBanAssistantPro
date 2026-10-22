@@ -271,7 +271,8 @@ class RecurringSeriesRows extends Table {
 
   BoolColumn get alarmEnabled => boolean().withDefault(const Constant(false))();
 
-  /// 0 = 每天，1 = 每周（看 [weekdays]），2 = 每月（看 [monthDay]）。
+  /// 0 = 每天，1 = 每周（看 [weekdays]），2 = 每月（看 [monthDays]），
+  /// 3 = 按班次（看 [shiftNames]）。
   IntColumn get repeatType => integer().withDefault(const Constant(0))();
 
   /// 每周：`1 << (weekday - 1)`，周一 = 1。与 `CustomAlarms.weekdays` 同一约定。

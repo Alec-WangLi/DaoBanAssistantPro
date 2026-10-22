@@ -242,6 +242,43 @@ void main() {
         dayNumber(today), reason: '已有行留在原地，不被拽到更早的班次日');
   });
 
+
+  test('按天调班：把今天改成上夜班 → 按班次的待办出现', () async {
+    final today = dateOnly(DateTime.now());
+    await repo.saveSchedule(
+      name: '白班表',
+      anchorDate: today,
+      classes: const [
+        ShiftClass(name: '白班', abbr: '白'),
+        ShiftClass(name: '上夜班', abbr: '夜'),
+        ShiftClass(name: '休班', abbr: '休', isRest: true),
+      ],
+      cycle: const [0],
+    );
+    final id = await repo.addRecurringTodo(
+      title: '带工牌',
+      repeat: RecurRepeat.shift,
+      startDate: today,
+      shiftNames: const ['上夜班'],
+    );
+    await repo.advanceRecurringTodos(today: today);
+    expect((await repo.listEvents()).where((e) => e.seriesId == id), isEmpty,
+        reason: '每天白班 → 夜班规则今天没有发生日');
+
+    final active = await repo.getActiveSchedules();
+    final nightId = active!.chain
+        .scheduleOn(today)!
+        .classes
+        .firstWhere((c) => c.name == '上夜班')
+        .id!;
+    await repo.setDayOverrides([today], classId: nightId);
+    await repo.advanceRecurringTodos(today: today);
+
+    final rows = (await repo.listEvents()).where((e) => e.seriesId == id);
+    expect(rows.length, 1, reason: '调班之后那天就是「上夜班」，规则该命中');
+    expect(dayNumber(rows.single.date), dayNumber(today));
+  });
+
   test('recurringPanelProvider：系列与当前链都在', () async {
     await addSeries();
     final container = ProviderContainer(overrides: [

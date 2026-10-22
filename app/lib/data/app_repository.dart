@@ -1393,25 +1393,17 @@ final eventsProvider = StreamProvider<List<ScheduleEvent>>((ref) {
   return db.watchEvents();
 });
 
-/// 全部重复待办（系列定义）。管理面板用它。
+/// 重复待办面板一次性要的两样：全部系列 + 当前排班链。
 ///
 /// **一次性读 + `autoDispose`**，不是流 —— 与 `savedTemplatesProvider` 同一套
 /// 理由与坑：
 ///  - 用流的话，每条挂这个弹窗的 widget 用例都会在拆树时报
 ///    「A Timer is still pending」（drift 取消查询流时排的零时长定时器）；
-///  - 而 `autoDispose` 是**必需**的：面板里改完 / 删完之后由调用点
+///  - `autoDispose` 是**必需**的：面板里改完 / 删完之后由调用点
 ///    `ref.invalidate` 重读，不 autoDispose 的话第一次读到的结果会被缓存一整个
-///    会话（v0.8.11 那个「存完模板看不到」就是这么来的）。
-final recurringTodosProvider =
-    FutureProvider.autoDispose<List<RecurringTodo>>((ref) {
-  return ref.watch(appRepositoryProvider).listRecurringTodos();
-});
-
-/// 重复待办面板一次性要的两样：全部系列 + 当前排班链。
-///
-/// 面板要用链来算「按班次」系列的下一次与缺名提示；同样**不 watch
-/// `activeScheduleProvider`**（drift 查询流取消时的零时长定时器会让弹窗用例报
-/// 「A Timer is still pending」，见上面 [recurringTodosProvider] 的理由）。
+///    会话（v0.8.11 那个「存完模板看不到」就是这么来的）；
+///  - 也**不 watch `activeScheduleProvider`**：同上，流取消时的零时长定时器会
+///    让弹窗用例报错。
 class RecurringPanelData {
   const RecurringPanelData({required this.series, this.chain});
 

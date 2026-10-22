@@ -3,7 +3,7 @@
 // 形态是**弹窗**不是整页（照「我的模板」那个管理弹窗那套配方）：系列通常只有
 // 几个，为它单开一页反而要多一次进出。
 //
-// 数据走 `recurringTodosProvider`（一次性读 + autoDispose）—— **用流的话每条挂
+// 数据走 `recurringPanelProvider`（一次性读 + autoDispose）—— **用流的话每条挂
 // 这个弹窗的 widget 用例都会在拆树时报「A Timer is still pending」**
 // （drift 取消查询流时排的零时长定时器），而且面板是个短命弹层，没必要挂流。
 // 页内改 / 删之后由 `ref.invalidate` 重读。

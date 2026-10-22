@@ -5,9 +5,71 @@
 // `Wrap(spacing: 6)`，在弹窗里折成 5+2 两行、相邻只隔 6dp。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_weekday_picker.dart';
 
 void main() {
+
+  setUp(() => L10n.locale = 'zh');
+
+  testWidgets('点一下加一位，再点一下减一位；位序是「周一 = 1 << 0」',
+      (tester) async {
+    var value = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(
+          builder: (context, setState) => GlassWeekdayPicker(
+            value: value,
+            onChanged: (v) => setState(() => value = v),
+          ),
+        ),
+      ),
+    ));
+
+    // 周三 = 3 = 1 << 2
+    await tester.tap(find.text(L10n.weekday(2)));
+    await tester.pumpAndSettle();
+    expect(value, 1 << 2);
+
+    // 再加周一 = 1 << 0
+    await tester.tap(find.text(L10n.weekday(0)));
+    await tester.pumpAndSettle();
+    expect(value, (1 << 0) | (1 << 2));
+
+    // 再点周三 → 去掉它
+    await tester.tap(find.text(L10n.weekday(2)));
+    await tester.pumpAndSettle();
+    expect(value, 1 << 0);
+  });
+
+  testWidgets('七天都在，且顺序是周一到周日', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: GlassWeekdayPicker(value: 0, onChanged: (_) {}),
+      ),
+    ));
+    for (var i = 0; i < 7; i++) {
+      expect(find.text(L10n.weekday(i)), findsOneWidget);
+    }
+    final xs = [
+      for (var i = 0; i < 7; i++)
+        tester.getTopLeft(find.text(L10n.weekday(i))).dx,
+    ];
+    expect(xs, List.of(xs)..sort(), reason: '从左到右就是周一到周日');
+  });
+
+  testWidgets('选中态与未选中态用不同的字重（选中 w700）', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: GlassWeekdayPicker(value: 1 << 2, onChanged: (_) {}),
+      ),
+    ));
+    final selected = tester.widget<Text>(find.text(L10n.weekday(2)));
+    final plain = tester.widget<Text>(find.text(L10n.weekday(1)));
+    expect(selected.style?.fontWeight, FontWeight.w700);
+    expect(plain.style?.fontWeight, FontWeight.w500);
+  });
+
   testWidgets('七个星期格子在 320dp 宽里排成一行、等宽、间距 ≥ 4', (tester) async {
     tester.view.physicalSize = const Size(360, 780);
     tester.view.devicePixelRatio = 1;

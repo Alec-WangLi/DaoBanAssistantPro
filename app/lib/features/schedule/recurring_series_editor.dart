@@ -183,7 +183,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
     }
 
     await AlarmService.rescheduleAll(repo);
-    ref.invalidate(recurringTodosProvider);
+    ref.invalidate(recurringPanelProvider);
     return true;
   }
 

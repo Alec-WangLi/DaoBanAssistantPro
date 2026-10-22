@@ -118,22 +118,20 @@ void main() {
 
     Finder inDialog(Finder f) =>
         find.descendant(of: find.byType(GlassDialog), matching: f);
-    // 切到「每月」默认勾当天（所选日期那一天的号数）；勾上 1 与 15 之后再把
-    // 当天去掉（点掉最后一个不生效，所以要**先加后减**）。
+    // 切到「每月」默认勾当天（所选日期那一天的号数）。**只补勾还没有的那几天**
+    // —— 盲目点 15 的话，今天是 15 号时那一击会把默认勾的当天**取消掉**，
+    // 用例就按日期现形了（v0.9.14 那条「周三/周四必红」是同一类）。
     final today = DateTime.now().day;
-    await tester.tap(inDialog(find.text('1')));
-    await _settle(tester, frames: 4);
-    await tester.tap(inDialog(find.text('15')));
-    await _settle(tester, frames: 4);
-    if (today != 1 && today != 15) {
-      await tester.tap(inDialog(find.text('$today')));
+    for (final d in const [1, 15]) {
+      if (d == today) continue;
+      await tester.tap(inDialog(find.text('$d')));
       await _settle(tester, frames: 4);
     }
     await tester.tap(find.text(L10n.add));
     await _settle(tester);
 
     final s = (await repo.listRecurringTodos()).single;
-    expect(s.monthDays, (1 << 0) | (1 << 14));
+    expect(s.monthDays, (1 << (today - 1)) | (1 << 0) | (1 << 14));
     await _dispose(tester);
   });
 
@@ -196,6 +194,30 @@ void main() {
     // 重复待办的提醒号段是 40000 + 系列 id。
     expect(scheduled.any((id) => id >= 40000), isTrue,
         reason: '新建重复待办之后必须立刻排上它的提醒');
+    await _dispose(tester);
+  });
+
+
+  testWidgets('编辑弹窗：老数据的空月日打开时补当天', (tester) async {
+    final t = DateTime.now();
+    final sid = await repo.addRecurringTodo(
+      title: '老月检',
+      repeat: RecurRepeat.monthly,
+      startDate: dateOnly(t),
+      monthDays: 0,
+    );
+    await repo.addEvent(
+        title: '老月检', date: dateOnly(t), seriesId: sid);
+    await mount(tester);
+    await tester.tap(find.text('老月检'));
+    await _settle(tester);
+    expect(find.text(L10n.editEvent), findsOneWidget);
+
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+    expect(find.text(L10n.editEvent), findsNothing, reason: '补上默认值后应能保存');
+    final s = (await repo.listRecurringTodos()).single;
+    expect(s.monthDays, 1 << (t.day - 1));
     await _dispose(tester);
   });
 

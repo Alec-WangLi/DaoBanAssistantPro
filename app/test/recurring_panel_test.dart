@@ -235,6 +235,24 @@ void main() {
 
 
 
+
+  testWidgets('系列编辑器改标题后，面板那一行立刻更新', (tester) async {
+    await seedSeries();
+    await mount(tester);
+    await openPanel(tester);
+    Finder inDialog(Finder f) =>
+        find.descendant(of: find.byType(GlassDialog), matching: f);
+    await tester.tap(inDialog(find.text('周三例会')));
+    await _settle(tester);
+    await tester.enterText(find.byType(TextField), '周三例会改');
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    expect(inDialog(find.text('周三例会改')), findsOneWidget,
+        reason: '保存之后面板还显示旧标题的话，用户会以为没改成');
+    await _dispose(tester);
+  });
+
   // ── v0.12.3：面板去铅笔 + 按班次的下一次与缺名提示 ──
 
   testWidgets('行尾不再有编辑铅笔', (tester) async {

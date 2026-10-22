@@ -55,6 +55,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   /// 折叠区展开了没有。默认收起。
   bool _archiveOpen = false;
 
+  /// 「添加待办」弹窗正在开 / 正在等排班数据 —— 挡住悬浮按钮的连点
+  /// （`_showAddDialog` 现在要先 await 一次读库，双击会叠两层弹窗）。
+  bool _addDialogOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -466,6 +470,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   }
 
   Future<void> _showAddDialog(BuildContext context, WidgetRef ref) async {
+    if (_addDialogOpen) return;
+    _addDialogOpen = true;
+    try {
+      await _openAddDialog(context, ref);
+    } finally {
+      _addDialogOpen = false;
+    }
+  }
+
+  Future<void> _openAddDialog(BuildContext context, WidgetRef ref) async {
     final titleCtrl = TextEditingController();
     final today = dateOnly(DateTime.now());
     // 「按班次」要列出当前排班表的班次 —— 读一次，别在弹窗里 watch 流
@@ -479,7 +493,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
       fallbackShiftName: active?.chain.shiftOn(today)?.name,
     );
 
-    showGlassDialog(
+    await showGlassDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -794,7 +808,11 @@ Future<void> showEditEventDialog(
   final choices = active?.chain.classChoicesFrom(today) ?? const <ShiftClass>[];
   final todayShift = active?.chain.shiftOn(today)?.name;
   var shiftNames = series?.shiftNames ?? const <String>[];
-  // 老数据兜底：空班次规则打开时补一个合法值（有可选项时）。
+  var monthDays = series?.monthDays ?? 0;
+  // 老数据兜底：空月日 / 空班次规则打开时补一个合法值（有可选项时）。
+  if (series?.repeat == RecurRepeat.monthly && monthDays == 0) {
+    monthDays = 1 << (today.day - 1);
+  }
   if (series?.repeat == RecurRepeat.shift && shiftNames.isEmpty) {
     final names = {for (final c in choices) c.name};
     if (todayShift != null && names.contains(todayShift)) {
@@ -812,7 +830,7 @@ Future<void> showEditEventDialog(
     alarm: e.alarmEnabled,
     repeat: series?.repeat,
     weekdays: series?.weekdays ?? 0,
-    monthDays: series?.monthDays ?? 0,
+    monthDays: monthDays,
     shiftNames: shiftNames,
     seriesId: e.seriesId,
     shiftChoices: choices,
