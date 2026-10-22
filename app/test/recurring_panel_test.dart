@@ -234,6 +234,51 @@ void main() {
   });
 
 
+
+  // ── v0.12.3：面板去铅笔 + 按班次的下一次与缺名提示 ──
+
+  testWidgets('行尾不再有编辑铅笔', (tester) async {
+    await seedSeries();
+    await mount(tester);
+    await openPanel(tester);
+    Finder inDialog(Finder f) =>
+        find.descendant(of: find.byType(GlassDialog), matching: f);
+    expect(inDialog(find.byIcon(Icons.edit_outlined)), findsNothing,
+        reason: '整行点进去就是编辑，铅笔是多余的');
+    await _dispose(tester);
+  });
+
+  testWidgets('按班次系列：显示下一次；班次名字找不到时给提示', (tester) async {
+    final t = DateTime.now();
+    await repo.addRecurringTodo(
+      title: '带工牌',
+      repeat: RecurRepeat.shift,
+      startDate: dateOnly(DateTime(t.year, t.month, t.day - 7)),
+      shiftNames: const ['上夜班'],
+      timeMinute: 7 * 60,
+      advanceRemindMinutes: 0,
+    );
+    await repo.addRecurringTodo(
+      title: '写台账',
+      repeat: RecurRepeat.shift,
+      startDate: dateOnly(DateTime(t.year, t.month, t.day - 7)),
+      shiftNames: const ['不存在的班'],
+      timeMinute: 9 * 60,
+      advanceRemindMinutes: 0,
+    );
+    await mount(tester);
+    await openPanel(tester);
+    Finder inDialog(Finder f) =>
+        find.descendant(of: find.byType(GlassDialog), matching: f);
+
+    // 「上夜班」在默认排班表里 → 有「下次 X」；「不存在的班」→ 缺名提示。
+    expect(inDialog(find.textContaining(L10n.nextTime('').trim())),
+        findsWidgets);
+    expect(inDialog(find.text(L10n.shiftRuleMissing(['不存在的班']))),
+        findsOneWidget);
+    await _dispose(tester);
+  });
+
   // ── v0.12.3：每月多选 + 按班次（系列编辑器接线） ──
 
   testWidgets('系列编辑器：每月改多选并保存', (tester) async {

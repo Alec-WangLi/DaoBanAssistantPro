@@ -20,9 +20,9 @@ import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_switch.dart';
-import '../../core/widgets/app_icon.dart';
 import '../../data/app_repository.dart';
 import '../../domain/recurring_todo.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
 import 'recurring_series_editor.dart';
@@ -49,19 +49,19 @@ class _RecurringList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final series = ref.watch(recurringTodosProvider).valueOrNull;
-    if (series == null) {
+    final data = ref.watch(recurringPanelProvider).valueOrNull;
+    if (data == null) {
       return const Padding(
         padding: EdgeInsets.all(AppTokens.spaceLg),
         child: GlassLoading(),
       );
     }
-    if (series.isEmpty) {
+    if (data.series.isEmpty) {
       return EmptyState(L10n.recurringEmpty);
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [for (final s in series) _row(context, ref, s)],
+      children: [for (final s in data.series) _row(context, ref, s, data.chain)],
     );
   }
 
@@ -73,12 +73,25 @@ class _RecurringList extends ConsumerWidget {
   /// 五六十 dp，而这一行尾部要放一个开关加一个删除钮，200×400 小窗实测尾部
   /// 直接溢出（视觉工装的 `failOnOverflow` 抓的）。中间那一段用 `Expanded`
   /// 兜底：实在放不下时先牺牲标题与副标题的宽度（它们本来就是省略号结尾）。
-  Widget _row(BuildContext context, WidgetRef ref, RecurringTodo s) {
+  Widget _row(BuildContext context, WidgetRef ref, RecurringTodo s,
+      ScheduleChain? chain) {
     final today = dateOnly(DateTime.now());
+    // 按班次系列要问「那天我们班组上什么班」—— 与生成器 / 提醒同一条解析链。
+    final String? Function(DateTime day)? shiftNameOn = chain == null
+        ? null
+        : (DateTime d) => chain.shiftOn(d)?.name;
+    final knownNames = {
+      for (final c in (chain?.classChoicesFrom(today) ?? const <ShiftClass>[]))
+        c.name,
+    };
+    final missingShiftNames = [
+      for (final n in s.shiftNames)
+        if (!knownNames.contains(n)) n,
+    ];
     // 「下次」要的是**严格晚于今天**的那一次。用 `occurrenceOnOrBefore` 兜底是错的：
     // 那给出的是「已经过去的那一次」（比如今天是周二、系列是每周三，它给上周三），
     // 而那一行此刻就在列表里躺着 —— 面板上再把它写成「下次 9月23日」是在说反话。
-    final next = nextOccurrenceAfter(s, today);
+    final next = nextOccurrenceAfter(s, today, shiftNameOn: shiftNameOn);
     final parts = [
       s.ruleLabel,
       if (s.timeLabel.isNotEmpty) s.timeLabel,
@@ -116,6 +129,13 @@ class _RecurringList extends ConsumerWidget {
         Text(s.title, maxLines: 2, style: AppTokens.rowPrimary),
         Text(parts.join(' · '),
             maxLines: 2, style: AppTokens.microText.copyWith(color: muted)),
+        if (missingShiftNames.isNotEmpty)
+          Text(
+            L10n.shiftRuleMissing(missingShiftNames),
+            maxLines: 2,
+            style: AppTokens.microText
+                .copyWith(color: Theme.of(context).colorScheme.error),
+          ),
       ],
     );
 
@@ -132,9 +152,6 @@ class _RecurringList extends ConsumerWidget {
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 窄窗这一行**不放那颗铅笔**：开关 56 + 删除钮已经把这行占满，
-                // 再加一颗就横向溢出（200×400 实测溢 22px）。整行本来就可点，
-                // 提示在宽松版式里给就够了。
                 Row(children: [switchTile, const Spacer(), deleteTile]),
                 const SizedBox(height: AppTokens.spaceXs),
                 texts,
@@ -145,24 +162,12 @@ class _RecurringList extends ConsumerWidget {
                 switchTile,
                 const SizedBox(width: AppTokens.gapIconText),
                 Expanded(child: texts),
-                // 行本身可点（打开系列编辑器），这颗小铅笔只是把「这里能点」
-                // 说出来 —— 在这一版之前，整行可点却没有任何暗示。
-                editHint,
                 const SizedBox(width: AppTokens.gapIconText),
                 deleteTile,
               ],
             ),
     );
   }
-
-  /// 行尾那颗小铅笔：把「点进去能改」说出来。
-  ///
-  /// **不是独立按钮** —— 它躺在整行可点的 `GlassTile` 里，点它等于点行
-  /// （再叠一个 `onTap` 会在手势竞技场里和父层抢，反而可能两边都不触发）。
-  Widget get editHint => const AppIcon(
-        Icons.edit_outlined,
-        size: AppTokens.iconSm,
-      );
 
   /// 停用 / 启用。
   ///
@@ -173,7 +178,7 @@ class _RecurringList extends ConsumerWidget {
     await repo.setRecurringEnabled(s.id!, v);
     await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
     await AlarmService.rescheduleAll(repo);
-    ref.invalidate(recurringTodosProvider);
+    ref.invalidate(recurringPanelProvider);
   }
 
   Future<void> _delete(
@@ -205,6 +210,6 @@ class _RecurringList extends ConsumerWidget {
     final repo = ref.read(appRepositoryProvider);
     await repo.deleteRecurringTodo(s.id!);
     await AlarmService.rescheduleAll(repo);
-    ref.invalidate(recurringTodosProvider);
+    ref.invalidate(recurringPanelProvider);
   }
 }
