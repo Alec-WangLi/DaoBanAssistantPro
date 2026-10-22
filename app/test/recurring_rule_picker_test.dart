@@ -108,6 +108,48 @@ void main() {
     expect(out!.shiftNames, containsAll(<String>['白班', '上夜班']));
   });
 
+
+  testWidgets('每月多选 1 与 15；点掉最后一天不生效', (tester) async {
+    RecurRuleValue? out;
+    await _pump(
+      tester,
+      _Host(
+        initial: const RecurRuleValue(repeat: RecurRepeat.monthly, monthDays: 1),
+        choices: const [],
+        onValue: (v) => out = v,
+      ),
+    );
+    expect(find.text(L10n.monthDaysHint), findsOneWidget);
+
+    await tester.tap(find.text('15'));
+    await tester.pumpAndSettle();
+    expect(out!.monthDays, (1 << 0) | (1 << 14));
+
+    await tester.tap(find.text('1'));
+    await tester.pumpAndSettle();
+    expect(out!.monthDays, 1 << 14);
+
+    // 最后一个已选项不许被点掉（空月日 = 永不触发，而界面上看不出来）。
+    await tester.tap(find.text('15'));
+    await tester.pumpAndSettle();
+    expect(out!.monthDays, 1 << 14);
+  });
+
+  testWidgets('切到每月且一天都没选：默认勾当天', (tester) async {
+    RecurRuleValue? out;
+    await _pump(
+      tester,
+      _Host(
+        initial: const RecurRuleValue(repeat: RecurRepeat.daily, monthDays: 0),
+        choices: const [],
+        onValue: (v) => out = v,
+      ),
+    );
+    await tester.tap(find.text(L10n.repeatMonthly));
+    await tester.pumpAndSettle();
+    // fallbackDay 是 2026-09-23 → 第 23 天。
+    expect(out!.monthDays, 1 << 22);
+  });
   testWidgets('一个班次都没有：给指路；校验提示可见', (tester) async {
     await _pump(
       tester,

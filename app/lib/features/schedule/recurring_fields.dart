@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
+import '../../core/haptics.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_pickers.dart';
@@ -95,15 +96,6 @@ class RecurringRulePicker extends StatelessWidget {
   /// 保存被挡下时显示的一行提示（由调用点在点「保存」后传入）。
   final String? validationMessage;
 
-  /// 多选网格之前的过渡：旧版「每月」是单选，这里取掩码里最小的那一天显示。
-  /// 多选网格在下一轮替换掉这段 ListTile。
-  int get _monthDayShown {
-    for (var d = 1; d <= 31; d++) {
-      if ((value.monthDays & (1 << (d - 1))) != 0) return d;
-    }
-    return 1;
-  }
-
   void _select(int i) {
     final next = i == 0 ? null : RecurRepeat.values[i - 1];
     var w = value.weekdays;
@@ -181,22 +173,28 @@ class RecurringRulePicker extends StatelessWidget {
             ),
           ),
         if (value.repeat == RecurRepeat.monthly)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(L10n.repeatMonthly),
-            trailing: Text('$_monthDayShown'),
-            onTap: () async {
-              final picked = await showGlassOptionPicker<int>(
-                context,
-                title: L10n.repeatMonthly,
-                options: [for (var d = 1; d <= 31; d++) d],
-                labelOf: (d) => '$d',
-                selected: _monthDayShown,
-              );
-              if (picked != null) {
-                onChanged(value.copyWith(monthDays: 1 << (picked - 1)));
-              }
-            },
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _MonthDayGrid(
+                  value: value.monthDays,
+                  onChanged: (v) => onChanged(value.copyWith(monthDays: v)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      L10n.monthDaysHint,
+                      style: AppTokens.microText
+                          .copyWith(color: AppTokens.inkMuted(context)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         if (value.repeat == RecurRepeat.shift) _buildShift(context),
         if (validationMessage != null)
@@ -361,6 +359,95 @@ class EventTimingPicker extends StatelessWidget {
             },
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// 每月多选的 31 格网格（7 列 × 5 行）。
+///
+/// **点掉最后一个已选项不生效**：空月日的规则一条都不生成，而界面上完全看不出
+/// 异常（与「每周」那边遗留的允许清空不同，这一档从第一天就守住）。
+/// 交接给调用点之前自己做三维度判断 —— 触觉也只在这里发一记（`Haptics.select()`）。
+class _MonthDayGrid extends StatelessWidget {
+  const _MonthDayGrid({required this.value, required this.onChanged});
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  void _toggle(int day) {
+    final bit = 1 << (day - 1);
+    final isOn = (value & bit) != 0;
+    final next = isOn ? value & ~bit : value | bit;
+    if (isOn && next == 0) return;
+    Haptics.select();
+    onChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = Theme.of(context).colorScheme.primary;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var row = 0; row < 5; row++)
+          Padding(
+            padding: EdgeInsets.only(top: row == 0 ? 0 : AppTokens.spaceXs),
+            child: Row(
+              children: [
+                for (var col = 0; col < 7; col++) ...[
+                  if (col > 0) const SizedBox(width: 4),
+                  Expanded(
+                    child: Builder(builder: (context) {
+                      final day = row * 7 + col + 1;
+                      if (day > 31) return const SizedBox.shrink();
+                      final selected = (value & (1 << (day - 1))) != 0;
+                      return GestureDetector(
+                        onTap: () => _toggle(day),
+                        child: AnimatedContainer(
+                          duration: AppTokens.durMed,
+                          curve: Curves.easeOutBack,
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppTokens.spaceSm),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                BorderRadius.circular(AppTokens.radiusS),
+                            color: selected
+                                ? primary
+                                : (isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.white.withValues(alpha: 0.72)),
+                            border: Border.all(
+                              color: selected
+                                  ? primary
+                                  : Colors.white
+                                      .withValues(alpha: isDark ? 0.16 : 0.65),
+                            ),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '$day',
+                              style: AppTokens.labelSecondary.copyWith(
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: selected
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
