@@ -13,7 +13,7 @@ import '../core/l10n.dart';
 import 'shift_rotation.dart';
 
 /// 重复的周期。
-enum RecurRepeat { daily, weekly, monthly }
+enum RecurRepeat { daily, weekly, monthly, shift }
 
 /// 一个重复待办的**系列定义**（库里 `RecurringTodos` 一行的领域形态）。
 class RecurringTodo {
@@ -27,6 +27,7 @@ class RecurringTodo {
     this.alarmEnabled = false,
     this.weekdays = 0,
     this.monthDays = 1,
+    this.shiftNames = const [],
     this.skipThrough,
     this.enabled = true,
   });
@@ -54,6 +55,13 @@ class RecurringTodo {
   /// 该月没有这一天时取该月最后一天；多个选中日夹到月末后**按日期去重**
   /// （2 月同时选 30 与 31 只出现一天）。
   final int monthDays;
+
+  /// 按班次：选中的班次**名字**（`ShiftClass.name`，如「上夜班」）。多选。
+  ///
+  /// **按名字匹配是有意的**：班次 id 是每套方案各自的、换表就全变；而用户说的
+  /// 「每次上夜班」在换了一套排班表之后仍然指同一件事 —— 只要新表里同名的
+  /// 班次还在。也正因为如此，界面上要常驻说明与缺名提示。
+  final List<String> shiftNames;
 
   /// 首次生效日（纯日期）。这一天之前不产生任何发生日。
   final DateTime startDate;
@@ -87,6 +95,9 @@ class RecurringTodo {
         // 掩码为空同样是脏数据：退回不带日子的说法，别拼出「每月  号」。
         if (days.isEmpty) return L10n.repeatMonthly;
         return L10n.everyMonthOnDays(days);
+      case RecurRepeat.shift:
+        if (shiftNames.isEmpty) return L10n.repeatShift;
+        return L10n.everyShift(shiftNames);
     }
   }
 
@@ -113,6 +124,7 @@ class RecurringTodo {
     bool? alarmEnabled,
     int? weekdays,
     int? monthDays,
+    List<String>? shiftNames,
     DateTime? startDate,
     int? skipThrough,
     bool? enabled,
@@ -126,6 +138,7 @@ class RecurringTodo {
         alarmEnabled: alarmEnabled ?? this.alarmEnabled,
         weekdays: weekdays ?? this.weekdays,
         monthDays: monthDays ?? this.monthDays,
+        shiftNames: shiftNames ?? this.shiftNames,
         startDate: startDate ?? this.startDate,
         skipThrough: skipThrough ?? this.skipThrough,
         enabled: enabled ?? this.enabled,
@@ -160,8 +173,19 @@ List<DateTime> _monthlyCandidates(int year, int month, int mask) {
 bool _matchesWeekday(int weekdays, DateTime d) =>
     (weekdays & (1 << (d.weekday - 1))) != 0;
 
+/// 按班次规则向后 / 向前扫描的上界。周期最长 60 天；「其余时间 = 无」时可能出现
+/// 很长的空档，400 天足够覆盖一个完整轮转季（再长就当无解 —— 提醒窗口本身只有
+/// 180 天）。
+const int _shiftScanDays = 400;
+
+/// 这天是不是这条规则要的班次。没给 resolver / 名字为空都算「不是」。
+bool _matchesShift(
+        RecurringTodo s, DateTime day, String? Function(DateTime day)? on) =>
+    on != null && s.shiftNames.isNotEmpty && s.shiftNames.contains(on(day));
+
 /// 不早于 [from] 的**第一次**发生日；受 `startDate` 约束，无解返回 null。
-DateTime? firstOccurrenceOnOrAfter(RecurringTodo s, DateTime from) {
+DateTime? firstOccurrenceOnOrAfter(RecurringTodo s, DateTime from,
+    {String? Function(DateTime day)? shiftNameOn}) {
   final start = dateOnly(s.startDate);
   var base = dateOnly(from);
   if (daysBetween(start, base) < 0) base = start;
@@ -186,11 +210,19 @@ DateTime? firstOccurrenceOnOrAfter(RecurringTodo s, DateTime from) {
         }
       }
       return null;
+    case RecurRepeat.shift:
+      if (s.shiftNames.isEmpty) return null;
+      for (var i = 0; i <= _shiftScanDays; i++) {
+        final c = _addDays(base, i);
+        if (_matchesShift(s, c, shiftNameOn)) return c;
+      }
+      return null;
   }
 }
 
 /// 不晚于 [day] 的**最近一次**发生日；`startDate` 之前返回 null。
-DateTime? occurrenceOnOrBefore(RecurringTodo s, DateTime day) {
+DateTime? occurrenceOnOrBefore(RecurringTodo s, DateTime day,
+    {String? Function(DateTime day)? shiftNameOn}) {
   final start = dateOnly(s.startDate);
   final d = dateOnly(day);
   if (daysBetween(start, d) < 0) return null;
@@ -217,12 +249,22 @@ DateTime? occurrenceOnOrBefore(RecurringTodo s, DateTime day) {
         }
       }
       return null;
+    case RecurRepeat.shift:
+      if (s.shiftNames.isEmpty) return null;
+      for (var back = 0; back <= _shiftScanDays; back++) {
+        final c = _addDays(d, -back);
+        if (daysBetween(start, c) < 0) return null;
+        if (_matchesShift(s, c, shiftNameOn)) return c;
+      }
+      return null;
   }
 }
 
 /// **严格晚于** [day] 的下一次发生日。
-DateTime? nextOccurrenceAfter(RecurringTodo s, DateTime day) =>
-    firstOccurrenceOnOrAfter(s, _addDays(dateOnly(day), 1));
+DateTime? nextOccurrenceAfter(RecurringTodo s, DateTime day,
+        {String? Function(DateTime day)? shiftNameOn}) =>
+    firstOccurrenceOnOrAfter(s, _addDays(dateOnly(day), 1),
+        shiftNameOn: shiftNameOn);
 
 /// 某一次发生日的**触发时刻**（本地时间）。
 ///
@@ -248,19 +290,21 @@ List<DateTime> upcomingFireTimes(
   required int clockMinute,
   int days = 180,
   int cap = 200,
+  String? Function(DateTime day)? shiftNameOn,
 }) {
   final advance = s.advanceRemindMinutes;
   if (advance == null || !s.enabled) return const [];
   final horizon = from.add(Duration(days: days));
   final out = <DateTime>[];
-  var occ = occurrenceOnOrBefore(s, from) ?? firstOccurrenceOnOrAfter(s, from);
+  var occ = occurrenceOnOrBefore(s, from, shiftNameOn: shiftNameOn) ??
+      firstOccurrenceOnOrAfter(s, from, shiftNameOn: shiftNameOn);
   while (occ != null && out.length < cap) {
     final fire = _fireAt(occ, clockMinute, advance);
     if (!fire.isBefore(from)) {
       if (fire.isAfter(horizon)) break;
       out.add(fire);
     }
-    occ = nextOccurrenceAfter(s, occ);
+    occ = nextOccurrenceAfter(s, occ, shiftNameOn: shiftNameOn);
   }
   return out;
 }

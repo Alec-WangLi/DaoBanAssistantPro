@@ -14,6 +14,7 @@ RecurringTodo _s({
   DateTime? start,
   int weekdays = 0,
   int monthDays = 1,
+  List<String> shiftNames = const [],
   int? timeMinute,
   int? advance,
   int? skipThrough,
@@ -26,6 +27,7 @@ RecurringTodo _s({
       startDate: start ?? DateTime.utc(2026, 1, 1),
       weekdays: weekdays,
       monthDays: monthDays,
+      shiftNames: shiftNames,
       timeMinute: timeMinute,
       advanceRemindMinutes: advance,
       skipThrough: skipThrough,
@@ -255,6 +257,57 @@ void main() {
             .ruleLabel,
         L10n.everyMonthOnDays([1, 15]),
       );
+    });
+  });
+
+
+  group('按班次', () {
+    final shift = _s(repeat: RecurRepeat.shift, shiftNames: ['上夜班']);
+    String? night(DateTime d) =>
+        d.weekday == DateTime.wednesday ? '上夜班' : '白班';
+
+    test('发生日 = 班次名匹配的那天（前后都找）', () {
+      expect(
+          occurrenceOnOrBefore(shift, DateTime.utc(2026, 9, 25),
+              shiftNameOn: night),
+          DateTime.utc(2026, 9, 23));
+      expect(
+          nextOccurrenceAfter(shift, DateTime.utc(2026, 9, 20),
+              shiftNameOn: night),
+          DateTime.utc(2026, 9, 23));
+    });
+
+    test('没给 resolver / 名字为空：一律无发生日', () {
+      expect(occurrenceOnOrBefore(shift, DateTime.utc(2026, 9, 25)), isNull);
+      expect(
+          occurrenceOnOrBefore(
+              _s(repeat: RecurRepeat.shift, shiftNames: const []),
+              DateTime.utc(2026, 9, 25),
+              shiftNameOn: night),
+          isNull);
+    });
+
+    test('多选：任一班次名命中都算', () {
+      final s = _s(repeat: RecurRepeat.shift, shiftNames: ['上夜班', '白班']);
+      expect(
+          occurrenceOnOrBefore(s, DateTime.utc(2026, 9, 22),
+              shiftNameOn: night),
+          DateTime.utc(2026, 9, 22));
+    });
+
+    test('起始日之前的班次不算', () {
+      final s = _s(
+          repeat: RecurRepeat.shift,
+          shiftNames: ['上夜班'],
+          start: DateTime.utc(2026, 9, 24));
+      expect(
+          occurrenceOnOrBefore(s, DateTime.utc(2026, 9, 25),
+              shiftNameOn: night),
+          isNull);
+    });
+
+    test('ruleLabel 用班次名字拼，不带日期', () {
+      expect(shift.ruleLabel, L10n.everyShift(['上夜班']));
     });
   });
 
