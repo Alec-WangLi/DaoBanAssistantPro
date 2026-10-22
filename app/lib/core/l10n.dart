@@ -291,10 +291,11 @@ class L10n {
   static String get none => t('不设', 'None');
 
   // 重复待办
-  static String get repeatNone => t('不重复', 'Does not repeat');
+  static String get repeatNone => t('不重复', 'Never');
   static String get repeatDaily => t('每天', 'Every day');
   static String get repeatWeekly => t('每周', 'Every week');
   static String get repeatMonthly => t('每月', 'Every month');
+  static String get repeatShift => t('按班次', 'By shift');
   static String everyWeekOn(List<int> days) {
     final names = days.map(ruleWeekday).join(isEn ? ', ' : '、');
     return isEn ? 'Every $names' : '每周$names';
@@ -310,6 +311,39 @@ class L10n {
       ? const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]
       : const ['一', '二', '三', '四', '五', '六', '日'][i];
   static String everyMonthOnDay(int d) => t('每月 $d 号', 'Day $d of every month');
+
+  /// 每月多选几天（升序）。
+  static String everyMonthOnDays(List<int> days) {
+    final joined = days.join(isEn ? ', ' : '、');
+    return isEn
+        ? 'Day $joined of every month'
+        : '每月 $joined 号';
+  }
+
+  /// 每月多选网格下方那句口径说明。
+  static String get monthDaysHint => t(
+      '小月没有的日期会落在当月最后一天；同一天只出现一次',
+      'Days that do not exist in a month fall on its last day; never twice in a day');
+
+  /// 「按班次」一档的匹配口径 —— 用户 2026-10-22 点名要的提醒。
+  static String get shiftRuleHint => t(
+      '按班次名称匹配；换排班表后，新表里有同名班次就会继续生效',
+      'Matched by shift name — switching schedules keeps it working if the new one has the same name');
+
+  static String get shiftRuleNoSchedule => t(
+      '还没有排班表，先把班排上再来选班次',
+      'No schedule yet — set one up first');
+
+  static String shiftRuleMissing(List<String> names) => t(
+      '当前排班表里没有「${names.join('、')}」',
+      'Not in the current schedule: "${names.join(', ')}"');
+
+  static String everyShift(List<String> names) => t(
+      '每次${names.join('、')}',
+      'On ${names.join(', ')}');
+
+  static String get ruleNeedsShift => t('先选一个班次', 'Pick at least one shift');
+  static String get ruleNeedsMonthDay => t('先选一天', 'Pick at least one day');
   static String get repeats => t('重复', 'Repeats');
   static String get startsOn => t('从这天起', 'Starts on');
   static String get skipThisOccurrence => t('只这一次不要了', 'Skip this one');

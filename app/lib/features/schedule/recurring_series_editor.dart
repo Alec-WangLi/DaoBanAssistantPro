@@ -49,7 +49,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
       TextEditingController(text: widget.series.title);
   late RecurRepeat? _repeat = widget.series.repeat;
   late int _weekdays = widget.series.weekdays;
-  late int _monthDay = widget.series.monthDay;
+  late int _monthDays = widget.series.monthDays;
   late int? _timeMinute = widget.series.timeMinute;
   late int? _advance = widget.series.advanceRemindMinutes;
   late bool _alarm = widget.series.alarmEnabled;
@@ -81,7 +81,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
       // 拽回规则上的日子，而用户并没有要求改规则。
       final ruleChanged = _repeat != widget.series.repeat ||
           _weekdays != widget.series.weekdays ||
-          _monthDay != widget.series.monthDay;
+          _monthDays != widget.series.monthDays;
       await repo.updateRecurringTodo(RecurringTodo(
         id: id,
         title: title,
@@ -92,7 +92,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
         advanceRemindMinutes: _advance,
         alarmEnabled: _alarm,
         weekdays: _weekdays,
-        monthDay: _monthDay,
+        monthDays: _monthDays,
         skipThrough: widget.series.skipThrough,
         enabled: widget.series.enabled,
       ));
@@ -146,13 +146,13 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
           RecurringRulePicker(
             repeat: _repeat,
             weekdays: _weekdays,
-            monthDay: _monthDay,
+            monthDays: _monthDays,
             // 掩码为空时先勾今天（脏数据会让生成器一条都不生成）。
             fallbackWeekday: DateTime.now().weekday,
             onChanged: (r, w, m) => setState(() {
               _repeat = r;
               _weekdays = w;
-              _monthDay = m;
+              _monthDays = m;
             }),
           ),
           EventTimingPicker(

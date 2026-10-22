@@ -47,7 +47,7 @@ void main() {
     expect(s.enabled, isTrue);
     expect(s.skipThrough, isNull);
     expect(s.alarmEnabled, isFalse);
-    expect(s.monthDay, 1);
+    expect(s.monthDays, 1);
   });
 
   test('updateRecurringTodo 覆盖全部字段（含把提醒改回「不提醒」）', () async {
@@ -60,13 +60,13 @@ void main() {
       title: '周例会',
       repeat: RecurRepeat.monthly,
       startDate: s.startDate,
-      monthDay: 15,
+      monthDays: 1 << 14,
       advanceRemindMinutes: null,
     ));
     final after = (await repo.listRecurringTodos()).single;
     expect(after.title, '周例会');
     expect(after.repeat, RecurRepeat.monthly);
-    expect(after.monthDay, 15);
+    expect(after.monthDays, 1 << 14);
     expect(after.advanceRemindMinutes, isNull, reason: '要能真的清成 null');
   });
 

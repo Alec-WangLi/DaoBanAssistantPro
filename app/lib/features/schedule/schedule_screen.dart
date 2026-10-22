@@ -540,7 +540,7 @@ class _EventFields {
     this.alarm = false,
     this.repeat,
     this.weekdays = 0,
-    this.monthDay = 1,
+    this.monthDays = 1,
     this.seriesId,
   });
 
@@ -561,8 +561,8 @@ class _EventFields {
   /// 每周的位掩码（`1 << (weekday - 1)`）。
   int weekdays;
 
-  /// 每月的第几天（1..31）。
-  int monthDay;
+  /// 每月选中的日子（1..31 的位掩码）。
+  int monthDays;
 
   /// 这条行属于哪个系列；null = 一次性待办。编辑既有行时带进来。
   int? seriesId;
@@ -574,12 +574,12 @@ class _EventFields {
       RecurringRulePicker(
         repeat: repeat,
         weekdays: weekdays,
-        monthDay: monthDay,
+        monthDays: monthDays,
         fallbackWeekday: date.weekday,
         onChanged: (r, w, m) => setState(() {
           repeat = r;
           weekdays = w;
-          monthDay = m;
+          monthDays = m;
         }),
       ),
       ListTile(
@@ -647,7 +647,7 @@ class _EventFields {
         advanceRemindMinutes: advance,
         alarmEnabled: alarm,
         weekdays: weekdays,
-        monthDay: monthDay,
+        monthDays: monthDays,
       );
     } else {
       // 编辑既有系列：**显式全字段构造，不用 `copyWith`** —— 那是 `?? this.x`，
@@ -674,7 +674,7 @@ class _EventFields {
         advanceRemindMinutes: advance,
         alarmEnabled: alarm,
         weekdays: weekdays,
-        monthDay: monthDay,
+        monthDays: monthDays,
         // 这两个不属于这个弹窗管的字段，原样带过去（不然会被清掉）。
         skipThrough: s.skipThrough,
         enabled: s.enabled,
@@ -744,7 +744,7 @@ Future<void> showEditEventDialog(
     alarm: e.alarmEnabled,
     repeat: series?.repeat,
     weekdays: series?.weekdays ?? 0,
-    monthDay: series?.monthDay ?? 1,
+    monthDays: series?.monthDays ?? 1,
     seriesId: e.seriesId,
   );
 

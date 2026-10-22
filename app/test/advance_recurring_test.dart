@@ -152,7 +152,7 @@ void main() {
       title: '下个月开始',
       repeat: RecurRepeat.monthly,
       startDate: DateTime.utc(2026, 10, 1),
-      monthDay: 1,
+      monthDays: 1,
     );
     await repo.advanceRecurringTodos(today: _wed);
     expect(await repo.listEvents(), isEmpty);

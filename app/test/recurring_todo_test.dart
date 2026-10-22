@@ -13,7 +13,7 @@ RecurringTodo _s({
   RecurRepeat repeat = RecurRepeat.daily,
   DateTime? start,
   int weekdays = 0,
-  int monthDay = 1,
+  int monthDays = 1,
   int? timeMinute,
   int? advance,
   int? skipThrough,
@@ -25,7 +25,7 @@ RecurringTodo _s({
       repeat: repeat,
       startDate: start ?? DateTime.utc(2026, 1, 1),
       weekdays: weekdays,
-      monthDay: monthDay,
+      monthDays: monthDays,
       timeMinute: timeMinute,
       advanceRemindMinutes: advance,
       skipThrough: skipThrough,
@@ -76,13 +76,13 @@ void main() {
 
     test('每月 15 号：本月 15 号还没到 → 退回上个月 15 号', () {
       expect(
-          occurrenceOnOrBefore(_s(repeat: RecurRepeat.monthly, monthDay: 15),
+          occurrenceOnOrBefore(_s(repeat: RecurRepeat.monthly, monthDays: 1 << 14),
               DateTime.utc(2026, 9, 10)),
           DateTime.utc(2026, 8, 15));
     });
 
     test('每月 31 号：**2 月落在 28 号**，3 月回到 31 号', () {
-      final s = _s(repeat: RecurRepeat.monthly, monthDay: 31);
+      final s = _s(repeat: RecurRepeat.monthly, monthDays: 1 << 30);
       expect(occurrenceOnOrBefore(s, DateTime.utc(2027, 2, 28)),
           DateTime.utc(2027, 2, 28));
       expect(occurrenceOnOrBefore(s, DateTime.utc(2027, 3, 31)),
@@ -136,7 +136,7 @@ void main() {
           firstOccurrenceOnOrAfter(
               _s(
                   repeat: RecurRepeat.monthly,
-                  monthDay: 31,
+                  monthDays: 1 << 30,
                   start: DateTime.utc(2026, 10, 20)),
               DateTime.utc(2026, 10, 1)),
           DateTime.utc(2026, 10, 31));
@@ -219,11 +219,50 @@ void main() {
     });
   });
 
+
+  group('每月多选', () {
+    test('每月 1 号与 15 号：前后查询各取最近的一天', () {
+      final s = _s(
+          repeat: RecurRepeat.monthly, monthDays: (1 << 0) | (1 << 14));
+      expect(occurrenceOnOrBefore(s, DateTime.utc(2026, 3, 20)),
+          DateTime.utc(2026, 3, 15));
+      expect(occurrenceOnOrBefore(s, DateTime.utc(2026, 3, 10)),
+          DateTime.utc(2026, 3, 1));
+      expect(nextOccurrenceAfter(s, DateTime.utc(2026, 3, 1)),
+          DateTime.utc(2026, 3, 15));
+    });
+
+    test('2 月选 29/30/31：夹到月末并去重，只出现一天', () {
+      final s = _s(
+          repeat: RecurRepeat.monthly,
+          monthDays: (1 << 28) | (1 << 29) | (1 << 30));
+      expect(occurrenceOnOrBefore(s, DateTime.utc(2027, 2, 28)),
+          DateTime.utc(2027, 2, 28));
+      expect(nextOccurrenceAfter(s, DateTime.utc(2027, 2, 28)),
+          DateTime.utc(2027, 3, 29)); // 3 月：29/30/31 各自成立
+    });
+
+    test('monthDays == 0 是脏数据，不出发生日', () {
+      expect(
+          occurrenceOnOrBefore(_s(repeat: RecurRepeat.monthly, monthDays: 0),
+              DateTime.utc(2026, 9, 1)),
+          isNull);
+    });
+
+    test('ruleLabel 拼出多天', () {
+      expect(
+        _s(repeat: RecurRepeat.monthly, monthDays: (1 << 0) | (1 << 14))
+            .ruleLabel,
+        L10n.everyMonthOnDays([1, 15]),
+      );
+    });
+  });
+
   test('规则描述：提醒正文用它，且不带日期', () {
     expect(_s(repeat: RecurRepeat.daily, timeMinute: 9 * 60).ruleLabel, '每天');
     expect(
         _s(repeat: RecurRepeat.weekly, weekdays: _wed).ruleLabel, '每周三');
-    expect(_s(repeat: RecurRepeat.monthly, monthDay: 1).ruleLabel, '每月 1 号');
+    expect(_s(repeat: RecurRepeat.monthly, monthDays: 1).ruleLabel, '每月 1 号');
     // 多选：拼成「每周一、三、五」而不是「每周周一、周三、周五」
     expect(_s(repeat: RecurRepeat.weekly, weekdays: _mon | _wed | _fri).ruleLabel,
         '每周一、三、五');

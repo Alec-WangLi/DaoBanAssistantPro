@@ -197,7 +197,7 @@ void main() {
       title: '灭火器检查',
       repeat: RecurRepeat.monthly,
       startDate: dateOnly(DateTime(t.year, t.month + 1, 1)),
-      monthDay: 1,
+      monthDays: 1,
     );
     await repo.advanceRecurringTodos(today: dateOnly(t));
     expect(

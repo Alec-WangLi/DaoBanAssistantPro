@@ -179,26 +179,11 @@ extension RecurringSeriesRowX on RecurringSeriesRow {
         advanceRemindMinutes: advanceRemindMinutes,
         alarmEnabled: alarmEnabled,
         weekdays: weekdays,
-        monthDay: _lowestMonthDay(monthDays),
+        monthDays: monthDays,
         skipThrough: skipThrough,
         enabled: enabled,
       );
 }
-
-/// 位掩码里最小的那个日子（1..31）；掩码为空返回 1。
-///
-/// v15 迁移期间库里的列已经是「每月多选」的掩码，而领域模型这一版还是单日
-/// （`RecurringTodo.monthDay`）。这一步只是过渡：把单日的领域接口接到掩码列上，
-/// 多选行为在领域层那一轮再打开。
-int _lowestMonthDay(int mask) {
-  for (var d = 1; d <= 31; d++) {
-    if ((mask & (1 << (d - 1))) != 0) return d;
-  }
-  return 1;
-}
-
-/// 单日 → 位掩码；越界的脏值写 0（查询层按「没有发生日」处理）。
-int _monthDayBit(int day) => day >= 1 && day <= 31 ? 1 << (day - 1) : 0;
 
 extension AppDatabaseQueries on AppDatabase {
   /// 监听**全部**排班方案（含各自的班次、闹钟、周期、按天覆盖），装配成
@@ -984,7 +969,7 @@ class AppRepository {
     int? advanceRemindMinutes,
     bool alarmEnabled = false,
     int weekdays = 0,
-    int monthDay = 1,
+    int monthDays = 1,
   }) {
     return db.into(db.recurringSeriesRows).insert(
           RecurringSeriesRowsCompanion.insert(
@@ -995,7 +980,7 @@ class AppRepository {
             advanceRemindMinutes: Value(advanceRemindMinutes),
             alarmEnabled: Value(alarmEnabled),
             weekdays: Value(weekdays),
-            monthDays: Value(_monthDayBit(monthDay)),
+            monthDays: Value(monthDays),
             enabled: const Value(true),
             createdAt: DateTime.now(),
           ),
@@ -1017,7 +1002,7 @@ class AppRepository {
       advanceRemindMinutes: Value(s.advanceRemindMinutes),
       alarmEnabled: Value(s.alarmEnabled),
       weekdays: Value(s.weekdays),
-      monthDays: Value(_monthDayBit(s.monthDay)),
+      monthDays: Value(s.monthDays),
       skipThrough: Value(s.skipThrough),
       enabled: Value(s.enabled),
     ));

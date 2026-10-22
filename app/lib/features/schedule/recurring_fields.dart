@@ -30,7 +30,7 @@ class RecurringRulePicker extends StatelessWidget {
     super.key,
     required this.repeat,
     required this.weekdays,
-    required this.monthDay,
+    required this.monthDays,
     required this.fallbackWeekday,
     required this.onChanged,
   });
@@ -41,8 +41,8 @@ class RecurringRulePicker extends StatelessWidget {
   /// 每周的位掩码（`1 << (weekday - 1)`）。
   final int weekdays;
 
-  /// 每月的第几天（1..31）。
-  final int monthDay;
+  /// 每月选中的日子（1..31 的位掩码）。
+  final int monthDays;
 
   /// 切到「每周」而掩码还是空的时候，默认勾哪一天（1 = 周一）。
   ///
@@ -51,7 +51,16 @@ class RecurringRulePicker extends StatelessWidget {
   /// 生成器一条都不生成，界面上看不出任何异常。
   final int fallbackWeekday;
 
-  final void Function(RecurRepeat? repeat, int weekdays, int monthDay) onChanged;
+  final void Function(RecurRepeat? repeat, int weekdays, int monthDays) onChanged;
+
+  /// 多选网格之前的过渡：旧版「每月」是单选，这里取掩码里最小的那一天显示。
+  /// 多选网格在下一轮替换掉这段 ListTile。
+  int get _monthDayShown {
+    for (var d = 1; d <= 31; d++) {
+      if ((monthDays & (1 << (d - 1))) != 0) return d;
+    }
+    return 1;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +78,7 @@ class RecurringRulePicker extends StatelessWidget {
             if (next == RecurRepeat.weekly && w == 0) {
               w = 1 << (fallbackWeekday - 1);
             }
-            onChanged(next, w, monthDay);
+            onChanged(next, w, monthDays);
           },
           itemBuilder: (i, selected) => FittedBox(
             // 英文「Does not repeat」在 320dp × 大字号下比一格还宽 —— 直接交给
@@ -96,23 +105,25 @@ class RecurringRulePicker extends StatelessWidget {
               value: weekdays,
               // **这里不补触觉**：控件自己已经发了一记（`Haptics.select()`），
               // 调用点再补就是一次操作震两下 —— 两下比一下信息量更少。
-              onChanged: (v) => onChanged(repeat, v, monthDay),
+              onChanged: (v) => onChanged(repeat, v, monthDays),
             ),
           ),
         if (repeat == RecurRepeat.monthly)
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(L10n.repeatMonthly),
-            trailing: Text('$monthDay'),
+            trailing: Text('$_monthDayShown'),
             onTap: () async {
               final picked = await showGlassOptionPicker<int>(
                 context,
                 title: L10n.repeatMonthly,
                 options: [for (var d = 1; d <= 31; d++) d],
                 labelOf: (d) => '$d',
-                selected: monthDay,
+                selected: _monthDayShown,
               );
-              if (picked != null) onChanged(repeat, weekdays, picked);
+              if (picked != null) {
+                onChanged(repeat, weekdays, 1 << (picked - 1));
+              }
             },
           ),
       ],

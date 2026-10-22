@@ -26,7 +26,7 @@ class RecurringTodo {
     this.advanceRemindMinutes,
     this.alarmEnabled = false,
     this.weekdays = 0,
-    this.monthDay = 1,
+    this.monthDays = 1,
     this.skipThrough,
     this.enabled = true,
   });
@@ -50,8 +50,10 @@ class RecurringTodo {
   /// 也与 `CustomAlarms.weekdays` 同一约定）。
   final int weekdays;
 
-  /// 每月：1..31；该月没有这一天时取该月最后一天。
-  final int monthDay;
+  /// 每月：1..31 的**位掩码**（`1 << (day - 1)`，与 [weekdays] 同一套路）。
+  /// 该月没有这一天时取该月最后一天；多个选中日夹到月末后**按日期去重**
+  /// （2 月同时选 30 与 31 只出现一天）。
+  final int monthDays;
 
   /// 首次生效日（纯日期）。这一天之前不产生任何发生日。
   final DateTime startDate;
@@ -81,7 +83,10 @@ class RecurringTodo {
         if (days.isEmpty) return L10n.repeatWeekly;
         return L10n.everyWeekOn(days);
       case RecurRepeat.monthly:
-        return L10n.everyMonthOnDay(monthDay);
+        final days = _monthDaysOf(monthDays);
+        // 掩码为空同样是脏数据：退回不带日子的说法，别拼出「每月  号」。
+        if (days.isEmpty) return L10n.repeatMonthly;
+        return L10n.everyMonthOnDays(days);
     }
   }
 
@@ -107,7 +112,7 @@ class RecurringTodo {
     int? advanceRemindMinutes,
     bool? alarmEnabled,
     int? weekdays,
-    int? monthDay,
+    int? monthDays,
     DateTime? startDate,
     int? skipThrough,
     bool? enabled,
@@ -120,7 +125,7 @@ class RecurringTodo {
         advanceRemindMinutes: advanceRemindMinutes ?? this.advanceRemindMinutes,
         alarmEnabled: alarmEnabled ?? this.alarmEnabled,
         weekdays: weekdays ?? this.weekdays,
-        monthDay: monthDay ?? this.monthDay,
+        monthDays: monthDays ?? this.monthDays,
         startDate: startDate ?? this.startDate,
         skipThrough: skipThrough ?? this.skipThrough,
         enabled: enabled ?? this.enabled,
@@ -135,12 +140,21 @@ class RecurringTodo {
 /// 最后一天，`d = -1` = 上上月最后一天）。
 DateTime _addDays(DateTime d, int n) => DateTime.utc(d.year, d.month, d.day + n);
 
-/// 「每月某日」落在某个年月上的**具体日期**：该月没有这一天时取该月最后一天
-/// （每月 31 号 → 2 月落在 28/29）。`month` 可以溢出（13 = 次年 1 月）。
-DateTime _monthlyIn(int year, int month, int monthDay) {
-  // `DateTime.utc(y, m + 1, 0)` 就是「m 月的最后一天」—— day = 0 会规范化成上月末。
+/// 位掩码里选中的日子（升序）。
+List<int> _monthDaysOf(int mask) =>
+    [for (var d = 1; d <= 31; d++) if ((mask & (1 << (d - 1))) != 0) d];
+
+/// 某年某月里，多选日**夹到月末并按日期去重**后的日期（升序）。
+///
+/// `month` 可以溢出（13 = 次年 1 月）。2 月同时选 29/30/31 时三者都夹到 2/28
+/// （闰年 2/29），去重后**只剩一天** —— 不去重会生成两条同一天的待办。
+List<DateTime> _monthlyCandidates(int year, int month, int mask) {
   final last = DateTime.utc(year, month + 1, 0).day;
-  return DateTime.utc(year, month, monthDay <= last ? monthDay : last);
+  final days = <int>{
+    for (final d in _monthDaysOf(mask)) d <= last ? d : last,
+  }.toList()
+    ..sort();
+  return [for (final d in days) DateTime.utc(year, month, d)];
 }
 
 bool _matchesWeekday(int weekdays, DateTime d) =>
@@ -162,11 +176,14 @@ DateTime? firstOccurrenceOnOrAfter(RecurringTodo s, DateTime from) {
       }
       return null;
     case RecurRepeat.monthly:
-      // 最多找两年：`monthDay` 在 1..31 之内时一定能在 2 个月内找到，
-      // 上限只是防御（脏数据里的 0 或 99）。
+      if (s.monthDays == 0) return null;
+      // 最多找两年：选中的日子都在 1..31 之内，两个月内必然能命中，
+      // 上限只是防御（脏数据）。
       for (var i = 0; i < 24; i++) {
-        final c = _monthlyIn(base.year, base.month + i, s.monthDay);
-        if (daysBetween(base, c) >= 0) return c;
+        for (final c
+            in _monthlyCandidates(base.year, base.month + i, s.monthDays)) {
+          if (daysBetween(base, c) >= 0) return c;
+        }
       }
       return null;
   }
@@ -190,9 +207,12 @@ DateTime? occurrenceOnOrBefore(RecurringTodo s, DateTime day) {
       }
       return null;
     case RecurRepeat.monthly:
+      if (s.monthDays == 0) return null;
       for (var back = 0; back < 24; back++) {
-        final c = _monthlyIn(d.year, d.month - back, s.monthDay);
-        if (daysBetween(c, d) >= 0) {
+        final candidates =
+            _monthlyCandidates(d.year, d.month - back, s.monthDays);
+        for (final c in candidates.reversed) {
+          if (daysBetween(c, d) < 0) continue;
           return daysBetween(start, c) >= 0 ? c : null;
         }
       }
