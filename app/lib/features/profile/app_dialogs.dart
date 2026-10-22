@@ -41,6 +41,13 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.3\n'
+    '· 重复待办新增「按班次」：从排班表的班次里多选（比如上夜班、下夜班），到这些班次那天自动出现。它按班次名字匹配，换排班表后只要新表里有同名班次就继续生效；名字对不上时「重复待办」面板会明确写出来\n'
+    '· 「每月」现在能多选几天：比如每月 1 号、15 号各签一次记录；小月没有的日期落在当月最后一天，同一天只出现一次\n'
+    '· 新建待办选「每周」时，七个星期格子排成一行等宽，不再挤成两行\n'
+    '· 「重复待办」面板行尾的小铅笔去掉了 —— 整行点进去本来就是编辑\n'
+    '· 修：在待办页新建的重复待办现在会立刻排上提醒，不用等下次打开 App\n'
+    '\n'
 'v0.12.2\n'
     '· 待办标题框改成 1~3 行自动长高（添加与编辑都有）：长标题以前只看得见尾巴，想改前面的内容得先把字滚回去\n'
     '· 已添加的重复待办现在能直接改规则了：在「重复待办」面板点任何一条，就能改标题、每天 / 每周 / 每月（每周可勾任意几天）、时间与提醒。就算它这一轮还没有「当前这一次」也改得动 —— 以前每月 1 号的系列在 1 号之前列表里没有那一条，点面板只会弹一句「没有下一次」\n'
@@ -91,14 +98,16 @@ const String _changelogZh =
     '· 顺带修掉一件更早就有的毛病：那层实心填充原来是半透明的（85% 到 50%），压在白底上连默认蓝的渐变尽头都只有 2.1:1\n'
     '· 代价：实心面比「我的 → 外观」里那颗主色深一档（大致是同一个色更暗一截），字保持白\n'
     '\n'
-'v0.11.20\n'
-    '· 输入框的名字改成写在框的上方 —— 你截图里那两个字被压成半截，是 Android 上 Material「浮动标签」在系统字体（MiSans）下的毛病，这边复现不出、也没法从参数上调平，就干脆不用它了\n'
-    '· 日历格子上那个「有闹钟」的小圆点去掉了 —— 挂过闹钟的日子接近一半，半个网格都顶着一个小点，是不好看；「这天调过班」那个点还在（右上角那个）\n'
-    '· 顺带：所有输入框会比以前高一点点（名字从压在框线上，变成框上面单独一行）\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.3\n'
+    '· Repeating todos gain a "By shift" rule: pick shifts from your schedule (night, late and so on) and the todo shows up on those days. Matching is by shift name, so switching schedules keeps it working as long as the new one has the same name; when it does not, the Repeating panel says so\n'
+    '· Monthly repeats can now pick several days at once, for example the 1st and the 15th; in shorter months those days fall on the last day, and never twice in one day\n'
+    '· The weekday row in "Weekly" now fits seven equal cells on one line instead of wrapping to two\n'
+    '· Removed the small pencil at the end of each Repeating panel row — tapping the row was already the edit button\n'
+    '· Fix: a repeating todo created on the todo page now gets its reminder scheduled immediately instead of waiting for the next app launch\n'
+    '\n'
 'v0.12.2\n'
     '· The todo title field now grows from one to three lines (both adding and editing): long titles used to show only their tail, so fixing the beginning meant scrolling back first\n'
     '· Added recurring todos can now be edited directly: tap any row in the "Repeating" panel to change its title, daily / weekly / monthly rule (pick any weekdays), time and reminder. It works even when the series has no current occurrence right now — before, a monthly series due on the 1st had no row before that day, and tapping the panel only said "no current occurrence"\n'
@@ -148,11 +157,6 @@ const String _changelogEn =
     '· Solid accent surfaces now use a one-step darker accent: primary buttons, dialog buttons, the selected nav item, switches, checkboxes, the todo floating button and the top-bar accent pills. White text on the original accent was only 2.6:1 for teal and orange — effectively unreadable; all five accents are now 5.9:1 or better\n'
     '· Fixed a longer-standing problem on the way: that fill used to be semi-transparent (85% to 50%), which left even the default blue at 2.1:1 at the far end against a white card\n'
     '· The trade-off: solid surfaces are one step darker than the accent shown under Me > Appearance; the text stays white\n'
-    '\n'
-'v0.11.20\n'
-    '· Field labels are now drawn above the box instead of floating on its border. The two squashed characters in your screenshot come from Android\'s Material floating label under the system font (MiSans): it does not reproduce here and cannot be tuned away from our side, so the app no longer uses it\n'
-    '· Removed the little "has an alarm" dot from the calendar cells — nearly half the days carry alarms, so half the grid was speckled. The "shift was adjusted" dot (top-right) stays\n'
-    '· Side effect: every input box is a little taller, because the label now takes its own line above the box\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

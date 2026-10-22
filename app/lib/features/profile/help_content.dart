@@ -188,8 +188,16 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('每周三开会，不想每周手填一遍',
                 'A meeting every Wednesday — I do not want to type it in each week'),
             answer: L10nText(
-              '新建待办时把「重复」选上，可以按天、按星期几（能多选，比如周一三五）、或按每月几号。建好之后想改：待办页右上角的「重复待办」，点那一条就能改标题和规则。',
-              'When you create the todo, turn on "Repeating" — it can repeat daily, on any chosen weekdays, or on a day of the month. To change one later: open "Repeating" at the top right of the todo page and tap it.',
+              '新建待办时把「重复」选上，可以按天、按星期几（能多选，比如周一三五）、按每月哪几天（比如 1 号和 15 号）、或者按班次（比如每次上夜班）自动出现。建好之后想改：待办页右上角的「重复待办」，点那一条就能改标题和规则。',
+              'When you create the todo, turn on "Repeating" — it can repeat daily, on any chosen weekdays, on several days of the month (say the 1st and 15th), or on chosen shifts (say every night shift). To change one later: open "Repeating" at the top right of the todo page and tap it.',
+            ),
+          ),
+          (
+            question: L10nText('每次上夜班都要提醒我带工牌',
+                'Remind me to bring my badge on every night shift'),
+            answer: L10nText(
+              '新建待办时把「重复」选到「按班次」，勾上夜班（可以多选）。它按班次名字匹配：换了排班表，只要新表里还有同名班次就继续生效；名字对不上时，「重复待办」面板会明确写出来。',
+              'Choose "By shift" as the repeat, then tick the night shift (several allowed). It matches by shift name — after switching schedules it keeps working as long as the new one has the same name; if not, the Repeating panel says so.',
             ),
           ),
           (
