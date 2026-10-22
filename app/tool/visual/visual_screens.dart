@@ -124,6 +124,25 @@ final List<VisualScreen> visualScreens = [
     title: '重复待办 · 管理面板',
     build: (db) async {
       await seedRecurringTodo(db);
+      final repo = AppRepository(db);
+      // 按班次的两条：一条能匹配（显示「下次」），一条名字已不在当前排班表里
+      // （显示缺名提示）。
+      await repo.addRecurringTodo(
+        title: '夜班带工牌',
+        repeat: RecurRepeat.shift,
+        startDate: dateOnly(DateTime.now()),
+        shiftNames: const ['夜班'],
+        timeMinute: 19 * 60,
+        advanceRemindMinutes: 60,
+      );
+      await repo.addRecurringTodo(
+        title: '旧班次巡检',
+        repeat: RecurRepeat.shift,
+        startDate: dateOnly(DateTime.now()),
+        shiftNames: const ['旧夜班'],
+        timeMinute: 9 * 60,
+        advanceRemindMinutes: 0,
+      );
       return const _DialogHost(showRecurringTodosDialog);
     },
     needsOnboardingPrefs: false,
@@ -542,10 +561,28 @@ final List<VisualScreen> visualScreens = [
     build: (db) async {
       final repo = AppRepository(db);
       await repo.addRecurringTodo(
-        title: '每周一三五巡检',
-        repeat: RecurRepeat.weekly,
+        title: '夜班带工牌',
+        repeat: RecurRepeat.shift,
         startDate: dateOnly(DateTime.now()),
-        weekdays: (1 << 0) | (1 << 2) | (1 << 4),
+        shiftNames: const ['夜班', '中班'],
+        timeMinute: 19 * 60,
+        advanceRemindMinutes: 60,
+      );
+      return const _SeriesEditorHost();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 每月多选（v0.12.3）：31 格网格 + 1/15 两天的选中态。
+    slug: '66_recurring_monthly_days',
+    title: '重复待办 · 每月多选',
+    build: (db) async {
+      final repo = AppRepository(db);
+      await repo.addRecurringTodo(
+        title: '灭火器检查',
+        repeat: RecurRepeat.monthly,
+        startDate: dateOnly(DateTime.now()),
+        monthDays: (1 << 0) | (1 << 14),
         timeMinute: 9 * 60,
         advanceRemindMinutes: 0,
       );
