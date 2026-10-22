@@ -10,6 +10,8 @@ import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 
 RecurringTodo _s({
   int? id = 1,
+  RecurRepeat repeat = RecurRepeat.weekly,
+  List<String> shiftNames = const [],
   int? timeMinute = 9 * 60,
   int? advance = 0,
   bool enabled = true,
@@ -17,8 +19,9 @@ RecurringTodo _s({
     RecurringTodo(
       id: id,
       title: '周三例会',
-      repeat: RecurRepeat.weekly,
+      repeat: repeat,
       startDate: DateTime.utc(2026, 9, 16),
+      shiftNames: shiftNames,
       weekdays: 1 << 2, // 周三
       timeMinute: timeMinute,
       advanceRemindMinutes: advance,
@@ -76,6 +79,16 @@ void main() {
         planRecurringReminders([_s(id: null)],
             from: DateTime(2026, 9, 23, 15)),
         isEmpty);
+  });
+
+  test('按班次系列：只在接班次的日子排提醒', () {
+    final series = _s(repeat: RecurRepeat.shift, shiftNames: ['上夜班']);
+    String? night(DateTime d) =>
+        d.weekday == DateTime.wednesday ? '上夜班' : '白班';
+    final plans = planRecurringReminders([series],
+        from: DateTime(2026, 9, 21, 8), shiftNameOn: night);
+    expect(plans.single.fireAt, DateTime(2026, 9, 23, 9));
+    expect(plans.single.repeatTimes.first, DateTime(2026, 9, 30, 9));
   });
 
   test('计划里的时刻都是「从现在往后」且升序（队首 + 队列一起看）', () {
