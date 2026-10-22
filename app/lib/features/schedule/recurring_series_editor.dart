@@ -144,15 +144,19 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
           ),
           const SizedBox(height: 12),
           RecurringRulePicker(
-            repeat: _repeat,
-            weekdays: _weekdays,
-            monthDays: _monthDays,
-            // 掩码为空时先勾今天（脏数据会让生成器一条都不生成）。
-            fallbackWeekday: DateTime.now().weekday,
-            onChanged: (r, w, m) => setState(() {
-              _repeat = r;
-              _weekdays = w;
-              _monthDays = m;
+            value: RecurRuleValue(
+              repeat: _repeat,
+              weekdays: _weekdays,
+              monthDays: _monthDays,
+            ),
+            // 班次选项与已选名字在系列编辑器那一轮接上；这里先给空表。
+            shiftChoices: const [],
+            fallbackDay: DateTime.now(),
+            fallbackShiftName: null,
+            onChanged: (v) => setState(() {
+              _repeat = v.repeat;
+              _weekdays = v.weekdays;
+              _monthDays = v.monthDays;
             }),
           ),
           EventTimingPicker(

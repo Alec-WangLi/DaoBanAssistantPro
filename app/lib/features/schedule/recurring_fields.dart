@@ -18,21 +18,24 @@ import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
 import '../../domain/recurring_todo.dart';
-import '../../domain/shift_rotation.dart' show formatClock;
+import '../../domain/shift_rotation.dart' show formatClock, ShiftClass;
 
-class RecurringRulePicker extends StatelessWidget {
-  const RecurringRulePicker({
-    super.key,
+/// 规则的一组值：周期 + 星期掩码 + 每月掩码 + 按班次的名字。
+///
+/// 抽成值对象是因为回调从三个参数长到了四个 —— 参数汤容易让两个调用点各记错
+/// 一个位置，而这类错误**不会报错**（只是某个星期 / 某一天永远选不上）。
+class RecurRuleValue {
+  const RecurRuleValue({
     required this.repeat,
-    required this.weekdays,
-    required this.monthDays,
-    required this.fallbackWeekday,
-    required this.onChanged,
+    this.weekdays = 0,
+    this.monthDays = 1,
+    this.shiftNames = const [],
   });
 
   /// null = 不重复。
@@ -44,22 +47,97 @@ class RecurringRulePicker extends StatelessWidget {
   /// 每月选中的日子（1..31 的位掩码）。
   final int monthDays;
 
-  /// 切到「每周」而掩码还是空的时候，默认勾哪一天（1 = 周一）。
-  ///
-  /// 待办弹窗传当前选中日期、系列编辑器传今天 —— 两者都只是「先给一天，
-  /// 用户再改」。**掩码为空是脏数据**：`occurrenceOnOrBefore` 返回 null，
-  /// 生成器一条都不生成，界面上看不出任何异常。
-  final int fallbackWeekday;
+  /// 按班次：选中的班次名字（`ShiftClass.name`）。
+  final List<String> shiftNames;
 
-  final void Function(RecurRepeat? repeat, int weekdays, int monthDays) onChanged;
+  RecurRuleValue copyWith({
+    RecurRepeat? repeat,
+    int? weekdays,
+    int? monthDays,
+    List<String>? shiftNames,
+  }) =>
+      RecurRuleValue(
+        repeat: repeat ?? this.repeat,
+        weekdays: weekdays ?? this.weekdays,
+        monthDays: monthDays ?? this.monthDays,
+        shiftNames: shiftNames ?? this.shiftNames,
+      );
+}
+
+class RecurringRulePicker extends StatelessWidget {
+  const RecurringRulePicker({
+    super.key,
+    required this.value,
+    required this.shiftChoices,
+    required this.fallbackDay,
+    required this.fallbackShiftName,
+    required this.onChanged,
+    this.validationMessage,
+  });
+
+  final RecurRuleValue value;
+
+  /// 当前排班链上「从今天起还可能生效」的班次（`classChoicesFrom`）。
+  final List<ShiftClass> shiftChoices;
+
+  /// 切到「每周 / 每月 / 按班次」而还没有选择时，默认按哪一天补。
+  ///
+  /// 待办弹窗传当前选中日期、系列编辑器传今天 —— 两者都只是「先给一个，
+  /// 用户再改」。**空掩码 / 空名字是脏数据**：生成器一条都不生成，而界面上
+  /// 看不出任何异常。
+  final DateTime fallbackDay;
+
+  /// [fallbackDay] 那天我们班组的班次名；没有班表时为 null。
+  final String? fallbackShiftName;
+
+  final ValueChanged<RecurRuleValue> onChanged;
+
+  /// 保存被挡下时显示的一行提示（由调用点在点「保存」后传入）。
+  final String? validationMessage;
 
   /// 多选网格之前的过渡：旧版「每月」是单选，这里取掩码里最小的那一天显示。
   /// 多选网格在下一轮替换掉这段 ListTile。
   int get _monthDayShown {
     for (var d = 1; d <= 31; d++) {
-      if ((monthDays & (1 << (d - 1))) != 0) return d;
+      if ((value.monthDays & (1 << (d - 1))) != 0) return d;
     }
     return 1;
+  }
+
+  void _select(int i) {
+    final next = i == 0 ? null : RecurRepeat.values[i - 1];
+    var w = value.weekdays;
+    var m = value.monthDays;
+    var names = value.shiftNames;
+    if (next == RecurRepeat.weekly && w == 0) {
+      w = 1 << (fallbackDay.weekday - 1);
+    }
+    if (next == RecurRepeat.monthly && m == 0) {
+      m = 1 << (fallbackDay.day - 1);
+    }
+    if (next == RecurRepeat.shift && names.isEmpty) {
+      final choiceNames = {for (final c in shiftChoices) c.name};
+      final fallback = fallbackShiftName;
+      if (fallback != null && choiceNames.contains(fallback)) {
+        names = [fallback];
+      } else if (shiftChoices.isNotEmpty) {
+        names = [shiftChoices.first.name];
+      }
+    }
+    onChanged(RecurRuleValue(
+        repeat: next, weekdays: w, monthDays: m, shiftNames: names));
+  }
+
+  void _toggleShift(String name) {
+    final next = [...value.shiftNames];
+    if (next.contains(name)) {
+      // **不许清空到最后一项**：空名字的规则一条都不生成，而界面上看不出来。
+      if (next.length == 1) return;
+      next.remove(name);
+    } else {
+      next.add(name);
+    }
+    onChanged(value.copyWith(shiftNames: next));
   }
 
   @override
@@ -69,21 +147,14 @@ class RecurringRulePicker extends StatelessWidget {
       children: [
         // 与闹钟弹窗的「一次性 / 每天 / 每周」同一个控件、同一套字重规则
         // （选中 w700、未选中 w500）。
+        //
+        // 五档之后每格只占约 56dp，英文「Does not repeat」缩到 0.6 倍也只有
+        // 8px 高 —— 所以 `repeatNone` 的英文改成了 `Never`（中文不变）。
         GlassSegment(
-          count: 4,
-          selectedIndex: repeat == null ? 0 : repeat!.index + 1,
-          onSelected: (i) {
-            final next = i == 0 ? null : RecurRepeat.values[i - 1];
-            var w = weekdays;
-            if (next == RecurRepeat.weekly && w == 0) {
-              w = 1 << (fallbackWeekday - 1);
-            }
-            onChanged(next, w, monthDays);
-          },
+          count: 5,
+          selectedIndex: value.repeat == null ? 0 : value.repeat!.index + 1,
+          onSelected: _select,
           itemBuilder: (i, selected) => FittedBox(
-            // 英文「Does not repeat」在 320dp × 大字号下比一格还宽 —— 直接交给
-            // `Text` 会被容器裁短（字号护栏抓的就是这一种）。与 v0.11.12 收
-            // 字号档位那一处同一条做法：按宽缩小，不省略、不裁。
             fit: BoxFit.scaleDown,
             child: Text(
               [
@@ -91,6 +162,7 @@ class RecurringRulePicker extends StatelessWidget {
                 L10n.repeatDaily,
                 L10n.repeatWeekly,
                 L10n.repeatMonthly,
+                L10n.repeatShift,
               ][i],
               style: AppTokens.labelSecondary.copyWith(
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
@@ -98,17 +170,17 @@ class RecurringRulePicker extends StatelessWidget {
             ),
           ),
         ),
-        if (repeat == RecurRepeat.weekly)
+        if (value.repeat == RecurRepeat.weekly)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
             child: GlassWeekdayPicker(
-              value: weekdays,
+              value: value.weekdays,
               // **这里不补触觉**：控件自己已经发了一记（`Haptics.select()`），
               // 调用点再补就是一次操作震两下 —— 两下比一下信息量更少。
-              onChanged: (v) => onChanged(repeat, v, monthDays),
+              onChanged: (v) => onChanged(value.copyWith(weekdays: v)),
             ),
           ),
-        if (repeat == RecurRepeat.monthly)
+        if (value.repeat == RecurRepeat.monthly)
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(L10n.repeatMonthly),
@@ -122,11 +194,90 @@ class RecurringRulePicker extends StatelessWidget {
                 selected: _monthDayShown,
               );
               if (picked != null) {
-                onChanged(repeat, weekdays, 1 << (picked - 1));
+                onChanged(value.copyWith(monthDays: 1 << (picked - 1)));
               }
             },
           ),
+        if (value.repeat == RecurRepeat.shift) _buildShift(context),
+        if (validationMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppTokens.spaceSm),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                validationMessage!,
+                style: AppTokens.microText
+                    .copyWith(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          ),
       ],
+    );
+  }
+
+  /// 「按班次」那一块：班次 chips + 匹配口径说明 + 缺名提示。
+  Widget _buildShift(BuildContext context) {
+    final choiceNames = {for (final c in shiftChoices) c.name};
+    final missing = [
+      for (final n in value.shiftNames)
+        if (!choiceNames.contains(n)) n,
+    ];
+    final muted = AppTokens.inkMuted(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (shiftChoices.isNotEmpty || missing.isNotEmpty)
+            Wrap(
+              spacing: AppTokens.spaceSm,
+              runSpacing: AppTokens.spaceSm,
+              children: [
+                for (final c in shiftChoices)
+                  GlassChoiceChip(
+                    label: c.name,
+                    color: Color(c.color),
+                    selected: value.shiftNames.contains(c.name),
+                    onTap: () => _toggleShift(c.name),
+                  ),
+                // 选过、但当前排班表里找不到的班次也要显示出来（否则用户不知道
+                // 自己选的是哪一条），用错误色 + 缺名提示一起说清楚。
+                for (final n in missing)
+                  GlassChoiceChip(
+                    label: n,
+                    color: Theme.of(context).colorScheme.error,
+                    selected: true,
+                    onTap: () => _toggleShift(n),
+                  ),
+              ],
+            ),
+          if (shiftChoices.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+              child: Text(
+                L10n.shiftRuleNoSchedule,
+                style: AppTokens.microText.copyWith(color: muted),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+            child: Text(
+              L10n.shiftRuleHint,
+              style: AppTokens.microText.copyWith(color: muted),
+            ),
+          ),
+          if (missing.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+              child: Text(
+                L10n.shiftRuleMissing(missing),
+                style: AppTokens.microText
+                    .copyWith(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

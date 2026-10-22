@@ -572,14 +572,19 @@ class _EventFields {
       // 重复规则那一组（四档 + 星期多选 + 每月几号）走共享件：系列编辑器用的是
       // 同一份，两处各写一遍必然走样。
       RecurringRulePicker(
-        repeat: repeat,
-        weekdays: weekdays,
-        monthDays: monthDays,
-        fallbackWeekday: date.weekday,
-        onChanged: (r, w, m) => setState(() {
-          repeat = r;
-          weekdays = w;
-          monthDays = m;
+        value: RecurRuleValue(
+          repeat: repeat,
+          weekdays: weekdays,
+          monthDays: monthDays,
+        ),
+        // 班次选项与已选名字在待办弹窗那一轮接上；这里先给空表。
+        shiftChoices: const [],
+        fallbackDay: date,
+        fallbackShiftName: null,
+        onChanged: (v) => setState(() {
+          repeat = v.repeat;
+          weekdays = v.weekdays;
+          monthDays = v.monthDays;
         }),
       ),
       ListTile(
