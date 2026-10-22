@@ -456,7 +456,7 @@ void main() {
     });
 
     test('没有排班方案 → 空表', () {
-      expect(ScheduleChain().classChoicesFrom(_d(2026, 9, 15)), isEmpty);
+      expect(const ScheduleChain().classChoicesFrom(_d(2026, 9, 15)), isEmpty);
     });
   });
 

@@ -182,7 +182,7 @@ void main() {
     await repo.saveSchedule(
       name: '固定夜班',
       anchorDate: DateTime.utc(2026, 10, 1),
-      classes: [
+      classes: const [
         ShiftClass(
             name: '上夜班', abbr: '夜', startMinute: 1200, endMinute: 480),
         ShiftClass(name: '休班', abbr: '休', isRest: true),
@@ -206,7 +206,7 @@ void main() {
     final schedId = await repo.saveSchedule(
       name: '固定夜班',
       anchorDate: DateTime.utc(2026, 10, 1),
-      classes: [
+      classes: const [
         ShiftClass(
             name: '上夜班', abbr: '夜', startMinute: 1200, endMinute: 480),
         ShiftClass(name: '休班', abbr: '休', isRest: true),
@@ -228,7 +228,7 @@ void main() {
       scheduleId: schedId,
       name: '固定夜班',
       anchorDate: DateTime.utc(2026, 10, 1),
-      classes: [
+      classes: const [
         ShiftClass(
             name: '上夜班', abbr: '夜', startMinute: 1200, endMinute: 480),
         ShiftClass(name: '休班', abbr: '休', isRest: true),

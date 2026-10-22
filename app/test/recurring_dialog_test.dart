@@ -168,12 +168,12 @@ void main() {
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
-        MethodChannel('com.daoban.shiftassistantpro/settings'), (call) async {
+        const MethodChannel('com.daoban.shiftassistantpro/settings'), (call) async {
       calls.add(call);
       return null;
     });
     addTearDown(() => messenger.setMockMethodCallHandler(
-        MethodChannel('com.daoban.shiftassistantpro/settings'), null));
+        const MethodChannel('com.daoban.shiftassistantpro/settings'), null));
 
     await mount(tester);
     await tester.tap(find.byIcon(Icons.add_outlined));
