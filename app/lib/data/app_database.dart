@@ -277,8 +277,15 @@ class RecurringSeriesRows extends Table {
   /// 每周：`1 << (weekday - 1)`，周一 = 1。与 `CustomAlarms.weekdays` 同一约定。
   IntColumn get weekdays => integer().withDefault(const Constant(0))();
 
-  /// 每月：1..31；该月没有这一天时取该月最后一天。
-  IntColumn get monthDay => integer().withDefault(const Constant(1))();
+  /// 每月：1..31 的**位掩码**（`1 << (day - 1)`，与 [weekdays] 同一套路）。
+  /// 该月没有这一天时取该月最后一天；多个选中日夹到月末后会去重。
+  ///
+  /// v15 之前这里是单日的 `month_day`，那一版的行在迁移里换算成掩码。
+  IntColumn get monthDays => integer().withDefault(const Constant(0))();
+
+  /// 按班次：选中的班次**名字**列表（JSON 数组），按名字匹配 —— 换排班表后只要
+  /// 新表里有同名班次就继续生效。空 / null = 未选。
+  TextColumn get shiftNames => text().nullable()();
 
   /// 首次生效日（纯日期，`dateOnly` 口径）。这一天之前不产生任何发生日。
   DateTimeColumn get startDate => dateTime()();
@@ -317,12 +324,41 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 15) {
+            // 重复待办：每月从「单日」改成「多选几天」（位掩码），并加一列按班次
+            // 选择的**班次名字**。旧的 `month_day` 迁完就删（不留死列，照 v10 删
+            // `alarm_minute` 的先例）。
+            //
+            // ⚠️ **必须排在 `from < 11` 之前**（分支按倒序跑），而
+            // `recurring_series_rows` 是 `from < 11` 那段才建的 —— 所以先判版本。
+            // 从 v10 及更早升上来时，表由 `from < 11` 按**当前 schema** 建出来，
+            // 新列自带默认值（照 v9→v10「只有 v6 及以后才有 shift_class_rows」、
+            // v12→v13「只有 v12 才有时段两列」两次先例）。
+            //
+            // ⚠️ **`addColumn` 必须在 `alterTable` 之前**：`TableMigration` 只拷
+            // 「新旧表都有的列」，先重建的话 `month_days` 会拿到默认值 0、迁移数据
+            // 全丢。
+            if (from >= 11) {
+              await m.addColumn(
+                  recurringSeriesRows, recurringSeriesRows.monthDays);
+              await m.addColumn(
+                  recurringSeriesRows, recurringSeriesRows.shiftNames);
+              // 单日 → 位掩码。dirty 的 month_day（0 / >31）不动，留 0。
+              await customStatement(
+                'UPDATE recurring_series_rows '
+                'SET month_days = (1 << (month_day - 1)) '
+                'WHERE repeat_type = 2 AND month_day BETWEEN 1 AND 31',
+              );
+              // ignore: experimental_member_use
+              await m.alterTable(TableMigration(recurringSeriesRows));
+            }
+          }
           if (from < 14) {
             // 按月排班：**纯新增**，一行既有数据都不碰。
             //

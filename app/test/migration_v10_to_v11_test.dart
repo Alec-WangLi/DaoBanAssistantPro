@@ -103,7 +103,7 @@ void main() {
     addTearDown(db.close);
     // 从 v10 升上来会一路跑到**最新**的 schema（迁移分支按倒序全部执行），
     // 所以这里跟的是当前的 `schemaVersion`，不是 11 —— 每加一版 schema 都要回来改。
-    expect(db.schemaVersion, 14);
+    expect(db.schemaVersion, 15);
 
     // ① 老待办原样保留，且新列取到的是 null
     final events = await db.select(db.scheduleEvents).get();
@@ -138,7 +138,8 @@ void main() {
     expect(dayNumber(series.startDate), dayNumber(DateTime(2026, 10, 14)));
     // 带默认值的几列要真的落到默认值上（DDL 写歪了这里就会红）
     expect(series.repeatType, 0, reason: '默认「每天」');
-    expect(series.monthDay, 1);
+    // v15 起「每月」改成位掩码列 `month_days`，默认 0（= 没有选中任何一天）。
+    expect(series.monthDays, 0);
     expect(series.enabled, isTrue);
     expect(series.alarmEnabled, isFalse);
     expect(series.skipThrough, isNull);

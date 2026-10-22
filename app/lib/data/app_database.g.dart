@@ -3999,14 +3999,20 @@ class $RecurringSeriesRowsTable extends RecurringSeriesRows
       type: DriftSqlType.int,
       requiredDuringInsert: false,
       defaultValue: const Constant(0));
-  static const VerificationMeta _monthDayMeta =
-      const VerificationMeta('monthDay');
+  static const VerificationMeta _monthDaysMeta =
+      const VerificationMeta('monthDays');
   @override
-  late final GeneratedColumn<int> monthDay = GeneratedColumn<int>(
-      'month_day', aliasedName, false,
+  late final GeneratedColumn<int> monthDays = GeneratedColumn<int>(
+      'month_days', aliasedName, false,
       type: DriftSqlType.int,
       requiredDuringInsert: false,
-      defaultValue: const Constant(1));
+      defaultValue: const Constant(0));
+  static const VerificationMeta _shiftNamesMeta =
+      const VerificationMeta('shiftNames');
+  @override
+  late final GeneratedColumn<String> shiftNames = GeneratedColumn<String>(
+      'shift_names', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _startDateMeta =
       const VerificationMeta('startDate');
   @override
@@ -4044,7 +4050,8 @@ class $RecurringSeriesRowsTable extends RecurringSeriesRows
         alarmEnabled,
         repeatType,
         weekdays,
-        monthDay,
+        monthDays,
+        shiftNames,
         startDate,
         skipThrough,
         enabled,
@@ -4097,9 +4104,15 @@ class $RecurringSeriesRowsTable extends RecurringSeriesRows
       context.handle(_weekdaysMeta,
           weekdays.isAcceptableOrUnknown(data['weekdays']!, _weekdaysMeta));
     }
-    if (data.containsKey('month_day')) {
-      context.handle(_monthDayMeta,
-          monthDay.isAcceptableOrUnknown(data['month_day']!, _monthDayMeta));
+    if (data.containsKey('month_days')) {
+      context.handle(_monthDaysMeta,
+          monthDays.isAcceptableOrUnknown(data['month_days']!, _monthDaysMeta));
+    }
+    if (data.containsKey('shift_names')) {
+      context.handle(
+          _shiftNamesMeta,
+          shiftNames.isAcceptableOrUnknown(
+              data['shift_names']!, _shiftNamesMeta));
     }
     if (data.containsKey('start_date')) {
       context.handle(_startDateMeta,
@@ -4146,8 +4159,10 @@ class $RecurringSeriesRowsTable extends RecurringSeriesRows
           .read(DriftSqlType.int, data['${effectivePrefix}repeat_type'])!,
       weekdays: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}weekdays'])!,
-      monthDay: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}month_day'])!,
+      monthDays: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}month_days'])!,
+      shiftNames: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}shift_names']),
       startDate: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}start_date'])!,
       skipThrough: attachedDatabase.typeMapping
@@ -4183,8 +4198,15 @@ class RecurringSeriesRow extends DataClass
   /// 每周：`1 << (weekday - 1)`，周一 = 1。与 `CustomAlarms.weekdays` 同一约定。
   final int weekdays;
 
-  /// 每月：1..31；该月没有这一天时取该月最后一天。
-  final int monthDay;
+  /// 每月：1..31 的**位掩码**（`1 << (day - 1)`，与 [weekdays] 同一套路）。
+  /// 该月没有这一天时取该月最后一天；多个选中日夹到月末后会去重。
+  ///
+  /// v15 之前这里是单日的 `month_day`，那一版的行在迁移里换算成掩码。
+  final int monthDays;
+
+  /// 按班次：选中的班次**名字**列表（JSON 数组），按名字匹配 —— 换排班表后只要
+  /// 新表里有同名班次就继续生效。空 / null = 未选。
+  final String? shiftNames;
 
   /// 首次生效日（纯日期，`dateOnly` 口径）。这一天之前不产生任何发生日。
   final DateTime startDate;
@@ -4207,7 +4229,8 @@ class RecurringSeriesRow extends DataClass
       required this.alarmEnabled,
       required this.repeatType,
       required this.weekdays,
-      required this.monthDay,
+      required this.monthDays,
+      this.shiftNames,
       required this.startDate,
       this.skipThrough,
       required this.enabled,
@@ -4226,7 +4249,10 @@ class RecurringSeriesRow extends DataClass
     map['alarm_enabled'] = Variable<bool>(alarmEnabled);
     map['repeat_type'] = Variable<int>(repeatType);
     map['weekdays'] = Variable<int>(weekdays);
-    map['month_day'] = Variable<int>(monthDay);
+    map['month_days'] = Variable<int>(monthDays);
+    if (!nullToAbsent || shiftNames != null) {
+      map['shift_names'] = Variable<String>(shiftNames);
+    }
     map['start_date'] = Variable<DateTime>(startDate);
     if (!nullToAbsent || skipThrough != null) {
       map['skip_through'] = Variable<int>(skipThrough);
@@ -4249,7 +4275,10 @@ class RecurringSeriesRow extends DataClass
       alarmEnabled: Value(alarmEnabled),
       repeatType: Value(repeatType),
       weekdays: Value(weekdays),
-      monthDay: Value(monthDay),
+      monthDays: Value(monthDays),
+      shiftNames: shiftNames == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shiftNames),
       startDate: Value(startDate),
       skipThrough: skipThrough == null && nullToAbsent
           ? const Value.absent()
@@ -4271,7 +4300,8 @@ class RecurringSeriesRow extends DataClass
       alarmEnabled: serializer.fromJson<bool>(json['alarmEnabled']),
       repeatType: serializer.fromJson<int>(json['repeatType']),
       weekdays: serializer.fromJson<int>(json['weekdays']),
-      monthDay: serializer.fromJson<int>(json['monthDay']),
+      monthDays: serializer.fromJson<int>(json['monthDays']),
+      shiftNames: serializer.fromJson<String?>(json['shiftNames']),
       startDate: serializer.fromJson<DateTime>(json['startDate']),
       skipThrough: serializer.fromJson<int?>(json['skipThrough']),
       enabled: serializer.fromJson<bool>(json['enabled']),
@@ -4289,7 +4319,8 @@ class RecurringSeriesRow extends DataClass
       'alarmEnabled': serializer.toJson<bool>(alarmEnabled),
       'repeatType': serializer.toJson<int>(repeatType),
       'weekdays': serializer.toJson<int>(weekdays),
-      'monthDay': serializer.toJson<int>(monthDay),
+      'monthDays': serializer.toJson<int>(monthDays),
+      'shiftNames': serializer.toJson<String?>(shiftNames),
       'startDate': serializer.toJson<DateTime>(startDate),
       'skipThrough': serializer.toJson<int?>(skipThrough),
       'enabled': serializer.toJson<bool>(enabled),
@@ -4305,7 +4336,8 @@ class RecurringSeriesRow extends DataClass
           bool? alarmEnabled,
           int? repeatType,
           int? weekdays,
-          int? monthDay,
+          int? monthDays,
+          Value<String?> shiftNames = const Value.absent(),
           DateTime? startDate,
           Value<int?> skipThrough = const Value.absent(),
           bool? enabled,
@@ -4320,7 +4352,8 @@ class RecurringSeriesRow extends DataClass
         alarmEnabled: alarmEnabled ?? this.alarmEnabled,
         repeatType: repeatType ?? this.repeatType,
         weekdays: weekdays ?? this.weekdays,
-        monthDay: monthDay ?? this.monthDay,
+        monthDays: monthDays ?? this.monthDays,
+        shiftNames: shiftNames.present ? shiftNames.value : this.shiftNames,
         startDate: startDate ?? this.startDate,
         skipThrough: skipThrough.present ? skipThrough.value : this.skipThrough,
         enabled: enabled ?? this.enabled,
@@ -4341,7 +4374,9 @@ class RecurringSeriesRow extends DataClass
       repeatType:
           data.repeatType.present ? data.repeatType.value : this.repeatType,
       weekdays: data.weekdays.present ? data.weekdays.value : this.weekdays,
-      monthDay: data.monthDay.present ? data.monthDay.value : this.monthDay,
+      monthDays: data.monthDays.present ? data.monthDays.value : this.monthDays,
+      shiftNames:
+          data.shiftNames.present ? data.shiftNames.value : this.shiftNames,
       startDate: data.startDate.present ? data.startDate.value : this.startDate,
       skipThrough:
           data.skipThrough.present ? data.skipThrough.value : this.skipThrough,
@@ -4360,7 +4395,8 @@ class RecurringSeriesRow extends DataClass
           ..write('alarmEnabled: $alarmEnabled, ')
           ..write('repeatType: $repeatType, ')
           ..write('weekdays: $weekdays, ')
-          ..write('monthDay: $monthDay, ')
+          ..write('monthDays: $monthDays, ')
+          ..write('shiftNames: $shiftNames, ')
           ..write('startDate: $startDate, ')
           ..write('skipThrough: $skipThrough, ')
           ..write('enabled: $enabled, ')
@@ -4378,7 +4414,8 @@ class RecurringSeriesRow extends DataClass
       alarmEnabled,
       repeatType,
       weekdays,
-      monthDay,
+      monthDays,
+      shiftNames,
       startDate,
       skipThrough,
       enabled,
@@ -4394,7 +4431,8 @@ class RecurringSeriesRow extends DataClass
           other.alarmEnabled == this.alarmEnabled &&
           other.repeatType == this.repeatType &&
           other.weekdays == this.weekdays &&
-          other.monthDay == this.monthDay &&
+          other.monthDays == this.monthDays &&
+          other.shiftNames == this.shiftNames &&
           other.startDate == this.startDate &&
           other.skipThrough == this.skipThrough &&
           other.enabled == this.enabled &&
@@ -4409,7 +4447,8 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
   final Value<bool> alarmEnabled;
   final Value<int> repeatType;
   final Value<int> weekdays;
-  final Value<int> monthDay;
+  final Value<int> monthDays;
+  final Value<String?> shiftNames;
   final Value<DateTime> startDate;
   final Value<int?> skipThrough;
   final Value<bool> enabled;
@@ -4422,7 +4461,8 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
     this.alarmEnabled = const Value.absent(),
     this.repeatType = const Value.absent(),
     this.weekdays = const Value.absent(),
-    this.monthDay = const Value.absent(),
+    this.monthDays = const Value.absent(),
+    this.shiftNames = const Value.absent(),
     this.startDate = const Value.absent(),
     this.skipThrough = const Value.absent(),
     this.enabled = const Value.absent(),
@@ -4436,7 +4476,8 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
     this.alarmEnabled = const Value.absent(),
     this.repeatType = const Value.absent(),
     this.weekdays = const Value.absent(),
-    this.monthDay = const Value.absent(),
+    this.monthDays = const Value.absent(),
+    this.shiftNames = const Value.absent(),
     required DateTime startDate,
     this.skipThrough = const Value.absent(),
     this.enabled = const Value.absent(),
@@ -4452,7 +4493,8 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
     Expression<bool>? alarmEnabled,
     Expression<int>? repeatType,
     Expression<int>? weekdays,
-    Expression<int>? monthDay,
+    Expression<int>? monthDays,
+    Expression<String>? shiftNames,
     Expression<DateTime>? startDate,
     Expression<int>? skipThrough,
     Expression<bool>? enabled,
@@ -4467,7 +4509,8 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
       if (alarmEnabled != null) 'alarm_enabled': alarmEnabled,
       if (repeatType != null) 'repeat_type': repeatType,
       if (weekdays != null) 'weekdays': weekdays,
-      if (monthDay != null) 'month_day': monthDay,
+      if (monthDays != null) 'month_days': monthDays,
+      if (shiftNames != null) 'shift_names': shiftNames,
       if (startDate != null) 'start_date': startDate,
       if (skipThrough != null) 'skip_through': skipThrough,
       if (enabled != null) 'enabled': enabled,
@@ -4483,7 +4526,8 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
       Value<bool>? alarmEnabled,
       Value<int>? repeatType,
       Value<int>? weekdays,
-      Value<int>? monthDay,
+      Value<int>? monthDays,
+      Value<String?>? shiftNames,
       Value<DateTime>? startDate,
       Value<int?>? skipThrough,
       Value<bool>? enabled,
@@ -4496,7 +4540,8 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
       alarmEnabled: alarmEnabled ?? this.alarmEnabled,
       repeatType: repeatType ?? this.repeatType,
       weekdays: weekdays ?? this.weekdays,
-      monthDay: monthDay ?? this.monthDay,
+      monthDays: monthDays ?? this.monthDays,
+      shiftNames: shiftNames ?? this.shiftNames,
       startDate: startDate ?? this.startDate,
       skipThrough: skipThrough ?? this.skipThrough,
       enabled: enabled ?? this.enabled,
@@ -4528,8 +4573,11 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
     if (weekdays.present) {
       map['weekdays'] = Variable<int>(weekdays.value);
     }
-    if (monthDay.present) {
-      map['month_day'] = Variable<int>(monthDay.value);
+    if (monthDays.present) {
+      map['month_days'] = Variable<int>(monthDays.value);
+    }
+    if (shiftNames.present) {
+      map['shift_names'] = Variable<String>(shiftNames.value);
     }
     if (startDate.present) {
       map['start_date'] = Variable<DateTime>(startDate.value);
@@ -4556,7 +4604,8 @@ class RecurringSeriesRowsCompanion extends UpdateCompanion<RecurringSeriesRow> {
           ..write('alarmEnabled: $alarmEnabled, ')
           ..write('repeatType: $repeatType, ')
           ..write('weekdays: $weekdays, ')
-          ..write('monthDay: $monthDay, ')
+          ..write('monthDays: $monthDays, ')
+          ..write('shiftNames: $shiftNames, ')
           ..write('startDate: $startDate, ')
           ..write('skipThrough: $skipThrough, ')
           ..write('enabled: $enabled, ')
@@ -6694,7 +6743,8 @@ typedef $$RecurringSeriesRowsTableCreateCompanionBuilder
   Value<bool> alarmEnabled,
   Value<int> repeatType,
   Value<int> weekdays,
-  Value<int> monthDay,
+  Value<int> monthDays,
+  Value<String?> shiftNames,
   required DateTime startDate,
   Value<int?> skipThrough,
   Value<bool> enabled,
@@ -6709,7 +6759,8 @@ typedef $$RecurringSeriesRowsTableUpdateCompanionBuilder
   Value<bool> alarmEnabled,
   Value<int> repeatType,
   Value<int> weekdays,
-  Value<int> monthDay,
+  Value<int> monthDays,
+  Value<String?> shiftNames,
   Value<DateTime> startDate,
   Value<int?> skipThrough,
   Value<bool> enabled,
@@ -6747,8 +6798,11 @@ class $$RecurringSeriesRowsTableFilterComposer
   ColumnFilters<int> get weekdays => $composableBuilder(
       column: $table.weekdays, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<int> get monthDay => $composableBuilder(
-      column: $table.monthDay, builder: (column) => ColumnFilters(column));
+  ColumnFilters<int> get monthDays => $composableBuilder(
+      column: $table.monthDays, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get shiftNames => $composableBuilder(
+      column: $table.shiftNames, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get startDate => $composableBuilder(
       column: $table.startDate, builder: (column) => ColumnFilters(column));
@@ -6795,8 +6849,11 @@ class $$RecurringSeriesRowsTableOrderingComposer
   ColumnOrderings<int> get weekdays => $composableBuilder(
       column: $table.weekdays, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<int> get monthDay => $composableBuilder(
-      column: $table.monthDay, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<int> get monthDays => $composableBuilder(
+      column: $table.monthDays, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get shiftNames => $composableBuilder(
+      column: $table.shiftNames, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<DateTime> get startDate => $composableBuilder(
       column: $table.startDate, builder: (column) => ColumnOrderings(column));
@@ -6841,8 +6898,11 @@ class $$RecurringSeriesRowsTableAnnotationComposer
   GeneratedColumn<int> get weekdays =>
       $composableBuilder(column: $table.weekdays, builder: (column) => column);
 
-  GeneratedColumn<int> get monthDay =>
-      $composableBuilder(column: $table.monthDay, builder: (column) => column);
+  GeneratedColumn<int> get monthDays =>
+      $composableBuilder(column: $table.monthDays, builder: (column) => column);
+
+  GeneratedColumn<String> get shiftNames => $composableBuilder(
+      column: $table.shiftNames, builder: (column) => column);
 
   GeneratedColumn<DateTime> get startDate =>
       $composableBuilder(column: $table.startDate, builder: (column) => column);
@@ -6894,7 +6954,8 @@ class $$RecurringSeriesRowsTableTableManager extends RootTableManager<
             Value<bool> alarmEnabled = const Value.absent(),
             Value<int> repeatType = const Value.absent(),
             Value<int> weekdays = const Value.absent(),
-            Value<int> monthDay = const Value.absent(),
+            Value<int> monthDays = const Value.absent(),
+            Value<String?> shiftNames = const Value.absent(),
             Value<DateTime> startDate = const Value.absent(),
             Value<int?> skipThrough = const Value.absent(),
             Value<bool> enabled = const Value.absent(),
@@ -6908,7 +6969,8 @@ class $$RecurringSeriesRowsTableTableManager extends RootTableManager<
             alarmEnabled: alarmEnabled,
             repeatType: repeatType,
             weekdays: weekdays,
-            monthDay: monthDay,
+            monthDays: monthDays,
+            shiftNames: shiftNames,
             startDate: startDate,
             skipThrough: skipThrough,
             enabled: enabled,
@@ -6922,7 +6984,8 @@ class $$RecurringSeriesRowsTableTableManager extends RootTableManager<
             Value<bool> alarmEnabled = const Value.absent(),
             Value<int> repeatType = const Value.absent(),
             Value<int> weekdays = const Value.absent(),
-            Value<int> monthDay = const Value.absent(),
+            Value<int> monthDays = const Value.absent(),
+            Value<String?> shiftNames = const Value.absent(),
             required DateTime startDate,
             Value<int?> skipThrough = const Value.absent(),
             Value<bool> enabled = const Value.absent(),
@@ -6936,7 +6999,8 @@ class $$RecurringSeriesRowsTableTableManager extends RootTableManager<
             alarmEnabled: alarmEnabled,
             repeatType: repeatType,
             weekdays: weekdays,
-            monthDay: monthDay,
+            monthDays: monthDays,
+            shiftNames: shiftNames,
             startDate: startDate,
             skipThrough: skipThrough,
             enabled: enabled,
