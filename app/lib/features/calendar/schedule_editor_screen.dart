@@ -1707,7 +1707,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     // v0.12.3 用户反馈的根因：输入框在，但没人知道它在。
                     if (!_crewExpanded)
                       Padding(
-                        padding: const EdgeInsets.only(top: 2),
+                        padding:
+                            const EdgeInsets.only(top: AppTokens.gapHair),
                         child: Text(
                           L10n.teamSettingsHint(
                               _teamNames.take(_teamCount).join(' · ')),

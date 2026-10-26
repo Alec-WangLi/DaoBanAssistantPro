@@ -13,6 +13,7 @@ import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pill.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
+import 'package:shiftassistantpro/core/widgets/glass_weekday_picker.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -214,11 +215,19 @@ void main() {
         reason: '没有当前这一次，也要能打开系列编辑器');
     expect(find.text(L10n.save), findsOneWidget);
 
-    // 改标题 + 把规则改成每周（勾周一），保存后系列真的落库。
+    // 改标题 + 把规则改成每周（挑一个**当前没被选中**的星期），保存后系列真的落库。
+    //
+    // ⚠️ 别写死「周一」：切到每周时控件会把默认那天（起始日 / 今天）先勾上，
+    // 若那天正好是周一，再点一下就是**取消**它 —— 这条用例因此会在周一必红
+    // （2026-10-26 全套测试撞上过）。
     await tester.enterText(find.byType(TextField), '灭火器月检');
     await tester.tap(find.text(L10n.repeatWeekly));
     await _settle(tester, frames: 6);
-    await tester.tap(find.text(L10n.weekday(0)));
+    final picker =
+        tester.widget<GlassWeekdayPicker>(find.byType(GlassWeekdayPicker));
+    final int day = List<int>.generate(7, (i) => i)
+        .firstWhere((i) => picker.value & (1 << i) == 0);
+    await tester.tap(find.text(L10n.weekday(day)));
     await _settle(tester, frames: 6);
     await tester.tap(find.text(L10n.save));
     await _settle(tester);
@@ -228,8 +237,8 @@ void main() {
     final s = (await repo.listRecurringTodos()).single;
     expect(s.title, '灭火器月检');
     expect(s.repeat, RecurRepeat.weekly);
-    expect(s.weekdays & (1 << 0), isNot(0),
-        reason: '勾了周一 —— 掩码里至少得有这一天');
+    expect(s.weekdays & (1 << day), isNot(0),
+        reason: '勾了 ${L10n.weekday(day)} —— 掩码里至少得有这一天');
     await _dispose(tester);
   });
 
