@@ -11,6 +11,7 @@
 import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,12 +24,14 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/data/seed.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
+import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
-import '../tool/visual/visual_harness.dart' show seedMyTemplates;
+import '../tool/visual/visual_harness.dart'
+    show makeVisualDatabase, seedBlankSchedule, seedMyTemplates;
 
 /// 有界推进若干帧（待办 / 闹钟页都有常驻定时器，不能 `pumpAndSettle`）。
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
@@ -84,6 +87,31 @@ Future<AppDatabase> _pump(
 Finder _chevronIn(String key) => find.descendant(
     of: find.byKey(Key(key)),
     matching: find.byIcon(Icons.chevron_right_outlined));
+
+/// 用视觉工装那份「有排班、有待办、有闹钟」的种子库挂一屏。
+Future<AppDatabase> _pumpVisual(
+  WidgetTester tester,
+  Widget home, {
+  Size size = const Size(420, 900),
+  Future<void> Function(AppDatabase db)? setup,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  final db = await makeVisualDatabase();
+  addTearDown(db.close);
+  _stubPluginChannels();
+  if (setup != null) await setup(db);
+
+  await tester.pumpWidget(ProviderScope(
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: MaterialApp(home: home),
+  ));
+  await _settle(tester);
+  return db;
+}
 
 void main() {
   setUpAll(() async {
@@ -208,6 +236,31 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(const Key('todo-edit-hint')), findsOneWidget);
     expect(find.byType(GlassDeleteButton), findsWidgets);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('日历信息卡：有班表才有调整箭头', (tester) async {
+    await _pumpVisual(tester, const CalendarScreen());
+    expect(find.byKey(const Key('info-card-shift-chevron')), findsOneWidget);
+    await _dispose(tester);
+
+    await _pumpVisual(tester, const CalendarScreen(), setup: seedBlankSchedule);
+    expect(find.byKey(const Key('info-card-shift-chevron')), findsNothing,
+        reason: '空白表没有可挑的班次，那一行本来就不该点');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('200×400 紧凑信息卡：有箭头，时间不被省略', (tester) async {
+    await _pumpVisual(tester, const CalendarScreen(),
+        size: const Size(200, 400));
+
+    expect(find.byKey(const Key('compact-shift-chevron')), findsOneWidget);
+    final time = tester.renderObject<RenderParagraph>(
+        find.byKey(const Key('compact-shift-time')));
+    expect(time.didExceedMaxLines, isFalse,
+        reason: '紧凑卡的时间不许被省略 —— 加箭头换来的宽度要用缩放补');
 
     await _dispose(tester);
   });

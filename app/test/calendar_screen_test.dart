@@ -191,6 +191,14 @@ Future<void> _pumpFrames(WidgetTester tester, int frames) async {
   }
 }
 
+/// 顶栏的「下一月」圆钮。**别用 `find.byIcon`**：信息卡那一行也有一颗
+/// chevron_right（v0.12.4 加的「点开调整班次」暗示，16dp），按图标找会 ambiguous。
+/// 顶栏那两颗圆钮里的图标恒为 `iconMd`（20），按尺寸区分。
+Finder _nextMonth() => find.byWidgetPredicate((w) =>
+    w is Icon &&
+    w.icon == Icons.chevron_right_outlined &&
+    w.size == AppTokens.iconMd);
+
 void main() {
   setUpAll(() async {
     // L10n.yearMonth 用 intl DateFormat('zh')，测试里要自己初始化。
@@ -480,7 +488,7 @@ void main() {
     final start = DateTime(DateTime.now().year, DateTime.now().month, 1);
     for (var i = 0; i < 24 && (plainMonth == null || holidayMonth == null); i++) {
       if (i > 0) {
-        await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+        await tester.tap(_nextMonth());
         await tester.pumpAndSettle();
       }
       final m = DateTime(start.year, start.month + i, 1);
@@ -1148,7 +1156,7 @@ void main() {
     final start = DateTime(now.year, now.month, 1);
     for (var i = 0; i < 24; i++) {
       if (i > 0) {
-        await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+        await tester.tap(_nextMonth());
         await tester.pumpAndSettle();
       }
       final m = DateTime(start.year, start.month + i, 1);
@@ -1252,7 +1260,7 @@ void main() {
     final cell = find.byKey(const ValueKey('day-card-1'));
     expect(cell, findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+    await tester.tap(_nextMonth());
     await tester.pump(); // 起手一帧
     await tester.pump(AppTokens.durMed ~/ 2); // 动画正中间
     expect(cell, findsNWidgets(2),

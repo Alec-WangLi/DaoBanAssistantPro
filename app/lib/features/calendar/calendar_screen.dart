@@ -2538,16 +2538,38 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                               // 挤一起的结果是「白班 0…」—— 时间全被截掉。
                               if (timeText != null) ...[
                                 const SizedBox(height: AppTokens.gapHair),
-                                Text(
-                                  timeText,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTokens.labelSecondary,
+                                // 加箭头之后这一行只剩约 96dp，而最长的一串
+                                // 「20:30 – 次日08:30」要 103dp：直接加就会打
+                                // 省略号。与完整卡同一套降级 —— 缩，不省略。
+                                SizedBox(
+                                  height: _oneLineHeight(
+                                      context, AppTokens.labelSecondary),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      timeText,
+                                      key: const Key('compact-shift-time'),
+                                      maxLines: 1,
+                                      style: AppTokens.labelSecondary,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],
                           ),
                         ),
+                        if (daySchedule != null &&
+                            daySchedule.classes.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                                left: AppTokens.gapIconText,
+                                top: AppTokens.padChipV),
+                            child: AppIcon(Icons.chevron_right_outlined,
+                                key: const Key('compact-shift-chevron'),
+                                size: AppTokens.iconSm,
+                                color: muted),
+                          ),
                       ],
                     ),
                   ],
@@ -2737,6 +2759,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     Padding(
                       padding: const EdgeInsets.only(left: AppTokens.spaceSm),
                       child: _adjustedBadge(context, primary),
+                    ),
+                  // 「这一行能点开调整班次」的唯一暗示。判据与 `onTap` 同源：
+                  // 空白表没有班次可挑，那一行本来就不可点，也就不画。
+                  if (daySchedule.classes.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: AppTokens.spaceSm),
+                      child: AppIcon(Icons.chevron_right_outlined,
+                          key: const Key('info-card-shift-chevron'),
+                          size: AppTokens.iconSm,
+                          color: muted),
                     ),
                 ],
               ),
