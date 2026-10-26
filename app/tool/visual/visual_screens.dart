@@ -590,6 +590,18 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 班组设置**展开态**（v0.12.4）：这一节从 v0.6 加进来到现在**从没进过屏单**
+    // —— 默认折叠，唯一会滚到附近的 `15_editor_crew_clash` 拍到的也是收起态。
+    // 「输入框在、但没人知道它在」正是用户 2026-10-26 反馈的根因。
+    slug: '67_editor_crew_expanded',
+    title: '排班编辑器 · 班组设置展开',
+    build: (db) async => ScheduleEditorScreen(
+      scheduleId: await currentScheduleId(db),
+      initialCrewExpanded: true,
+    ),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -911,4 +923,6 @@ const Map<String, double> visualScrollDown = {
   '57_editor_monthly': 1500,
   // 选择页那两张「从零开始」的卡在 20 来个模板之后，滚到底才看得到。
   '58_template_picker_monthly': 4000,
+  // 班组卡在周期表下面；滚到底靠钳位把展开的四行露出来。
+  '67_editor_crew_expanded': 2400,
 };
