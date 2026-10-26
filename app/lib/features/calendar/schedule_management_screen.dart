@@ -115,9 +115,19 @@ class ScheduleManagementScreen extends ConsumerWidget {
                             // 一个段都没有时左边的标签已经写着「正在使用」了，
                             // 尾巴上再挂一个「当前」是同一件事说两遍。
                             '${isCurrent && spans.isNotEmpty ? ' · ${L10n.current}' : ''}'),
-                        trailing: GlassDeleteButton(
-                          compact: true,
-                          onPressed: () => _deleteSchedule(context, ref, s),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.chevron_right_outlined,
+                                key: const Key('scheme-open-hint'),
+                                size: AppTokens.iconSm,
+                                color: AppTokens.inkMuted(context)),
+                            const SizedBox(width: AppTokens.gapIconText),
+                            GlassDeleteButton(
+                              compact: true,
+                              onPressed: () => _deleteSchedule(context, ref, s),
+                            ),
+                          ],
                         ),
                         onTap: () => _openEditor(context, ref, s.id),
                       ),

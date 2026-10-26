@@ -330,6 +330,11 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ],
             ),
           ),
+          Icon(Icons.edit_outlined,
+              key: const Key('alarm-edit-hint'),
+              size: AppTokens.iconSm,
+              color: AppTokens.inkMuted(context)),
+          const SizedBox(width: AppTokens.gapIconText),
           GlassDeleteButton(
             // 与待办列表同理：行尾用紧凑形态，别让一屏几行的列表挂满红圆。
             compact: true,

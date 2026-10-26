@@ -18,10 +18,17 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/data/seed.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
+import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+
+import '../tool/visual/visual_harness.dart' show seedMyTemplates;
 
 /// 有界推进若干帧（待办 / 闹钟页都有常驻定时器，不能 `pumpAndSettle`）。
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
@@ -52,6 +59,7 @@ Future<AppDatabase> _pump(
   WidgetTester tester,
   Widget home, {
   Size size = const Size(420, 1400),
+  Future<void> Function(AppDatabase db)? seed,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -62,6 +70,8 @@ Future<AppDatabase> _pump(
   final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
   addTearDown(db.close);
   _stubPluginChannels();
+
+  if (seed != null) await seed(db);
 
   await tester.pumpWidget(ProviderScope(
     overrides: [databaseProvider.overrideWithValue(db)],
@@ -129,6 +139,75 @@ void main() {
       expect(find.byKey(Key(key)), findsOneWidget, reason: '$key 在小窗里不在');
       expect(_chevronIn(key), findsOneWidget, reason: '$key 在小窗里没有箭头');
     }
+
+    await _dispose(tester);
+  });
+
+  testWidgets('待办行：铅笔在删除钮之前，且点铅笔也能开编辑弹窗', (tester) async {
+    await _pump(tester, const ScheduleScreen(), seed: (db) async {
+      await AppRepository(db)
+          .addEvent(title: '交班记录', date: dateOnly(DateTime.now()));
+    });
+
+    final hint = find.byKey(const Key('todo-edit-hint'));
+    expect(hint, findsOneWidget);
+    expect(tester.getTopLeft(hint).dx,
+        lessThan(tester.getTopLeft(find.byType(GlassDeleteButton)).dx));
+
+    await tester.tap(hint);
+    await _settle(tester);
+    expect(find.text(L10n.editEvent), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('闹钟行：铅笔在删除钮之前，且点铅笔也能开编辑弹窗', (tester) async {
+    await _pump(tester, const AlarmScreen(), seed: (db) async {
+      await AppRepository(db).addCustomAlarm(hour: 7, minute: 30, repeatType: 1);
+    });
+
+    final hint = find.byKey(const Key('alarm-edit-hint'));
+    expect(hint, findsOneWidget);
+    expect(tester.getTopLeft(hint).dx,
+        lessThan(tester.getTopLeft(find.byType(GlassDeleteButton)).dx));
+
+    await tester.tap(hint);
+    await _settle(tester);
+    expect(find.text(L10n.editAlarm), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('我的模板管理行：有编辑铅笔', (tester) async {
+    await _pump(tester, const ShiftTemplatePickerScreen(),
+        seed: (db) => seedMyTemplates(db));
+
+    await tester.tap(find.text(L10n.manageTemplates));
+    await _settle(tester);
+    expect(find.byKey(const Key('template-edit-hint')), findsWidgets);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('排班管理方案行：有打开箭头', (tester) async {
+    await _pump(tester, const ScheduleManagementScreen(),
+        seed: (db) => seedIfEmpty(db));
+
+    expect(find.byKey(const Key('scheme-open-hint')), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('200×400：待办行铅笔与删除钮都在、不溢出', (tester) async {
+    await _pump(tester, const ScheduleScreen(),
+        size: const Size(200, 400), seed: (db) async {
+      await AppRepository(db)
+          .addEvent(title: '交班记录', date: dateOnly(DateTime.now()));
+    });
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('todo-edit-hint')), findsOneWidget);
+    expect(find.byType(GlassDeleteButton), findsWidgets);
 
     await _dispose(tester);
   });

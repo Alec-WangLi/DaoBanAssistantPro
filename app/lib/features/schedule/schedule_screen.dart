@@ -425,6 +425,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
               ],
             ),
           ),
+          AppIcon(
+            Icons.edit_outlined,
+            key: const Key('todo-edit-hint'),
+            size: AppTokens.iconSm,
+            color: AppTokens.inkMuted(context),
+          ),
+          const SizedBox(width: AppTokens.gapIconText),
           GlassDeleteButton(
             // 列表行尾部用紧凑形态：完整形态是个 48pt 的红圆，一屏五行就是五个
             // 警报，盖过待办本身（组件注释里写明了这个分工）。

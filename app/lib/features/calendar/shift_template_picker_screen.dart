@@ -416,14 +416,24 @@ class _ShiftTemplatePickerScreenState
                     title: Text(t.name,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(_savedSubtitle(t)),
-                    trailing: GlassDeleteButton(
-                      compact: true,
-                      onPressed: () {
-                        // 先关掉管理弹窗再弹确认：嵌套两层弹窗时，
-                        // 底下那层的按钮位置会随上面那层开合而跳。
-                        Navigator.of(dialogContext).pop();
-                        _deleteTemplate(context, t);
-                      },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_outlined,
+                            key: const Key('template-edit-hint'),
+                            size: AppTokens.iconSm,
+                            color: AppTokens.inkMuted(dialogContext)),
+                        const SizedBox(width: AppTokens.gapIconText),
+                        GlassDeleteButton(
+                          compact: true,
+                          onPressed: () {
+                            // 先关掉管理弹窗再弹确认：嵌套两层弹窗时，
+                            // 底下那层的按钮位置会随上面那层开合而跳。
+                            Navigator.of(dialogContext).pop();
+                            _deleteTemplate(context, t);
+                          },
+                        ),
+                      ],
                     ),
                     onTap: () {
                       Navigator.of(dialogContext).pop();
