@@ -35,9 +35,20 @@ import 'shift_color_picker.dart';
 ///
 /// [scheduleId] 为空时编辑当前排班方案；否则编辑指定方案。
 class ScheduleEditorScreen extends ConsumerStatefulWidget {
-  const ScheduleEditorScreen({super.key, this.scheduleId});
+  const ScheduleEditorScreen({
+    super.key,
+    this.scheduleId,
+    this.initialCrewExpanded = false,
+  });
 
   final int? scheduleId;
+
+  /// 仅供测试与视觉工装：首帧就展开「班组设置」。
+  ///
+  /// `text_fit_guard_test` 直接渲染屏单、没有交互钩子 —— 不给这条路径的话，
+  /// 「展开态不许截字」会在一张永远收起的卡上通过，等于没验。
+  @visibleForTesting
+  final bool initialCrewExpanded;
 
   @override
   ConsumerState<ScheduleEditorScreen> createState() =>
@@ -124,7 +135,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   int _ourTeamIndex = 0;
   List<int> _teamOffsets = [0, 1, 2, 3];
   bool _followHoliday = false; // 空白表：跟随法定节假日，无班次轮换
-  bool _crewExpanded = false;
+  late bool _crewExpanded = widget.initialCrewExpanded;
 
   // 可编辑文本用真控制器（与 _classes / _teamNames 平行），而不是每次 build
   // 新建 —— 后者会让光标跳动并泄漏控制器。
@@ -608,7 +619,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       ],
                     ),
                   ),
-                  AppIcon(Icons.edit_outlined,
+                  AppIcon(Icons.chevron_right_outlined,
+                      key: const Key('my-cycle-start-chevron'),
                       size: AppTokens.iconMd, color: muted),
                 ],
               ),
@@ -1388,7 +1400,8 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                           ),
                           if (index > 0) ...[
                             const SizedBox(width: AppTokens.spaceXs),
-                            AppIcon(Icons.edit_outlined,
+                            AppIcon(Icons.chevron_right_outlined,
+                                key: Key('monthly-day-chevron-$index'),
                                 size: AppTokens.iconSm, color: muted),
                           ],
                         ],
@@ -1674,17 +1687,34 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        L10n.crewSettingsOptional,
-                        style: AppTokens.titleStrong,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            L10n.teamSettings,
+                            style: AppTokens.titleStrong,
+                          ),
+                        ),
+                        Icon(_crewExpanded
+                            ? Icons.expand_less_outlined
+                            : Icons.expand_more_outlined),
+                      ],
                     ),
-                    Icon(_crewExpanded
-                        ? Icons.expand_less_outlined
-                        : Icons.expand_more_outlined),
+                    // 折叠时也要看得见「这里有名字，而且能改」——这一条正是
+                    // v0.12.3 用户反馈的根因：输入框在，但没人知道它在。
+                    if (!_crewExpanded)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          L10n.teamSettingsHint(
+                              _teamNames.take(_teamCount).join(' · ')),
+                          maxLines: 2,
+                          style: AppTokens.microText.copyWith(color: muted),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1744,18 +1774,20 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: TextField(
-                  controller: _teamNameCtrls[i],
-                  onChanged: (v) => _teamNames[i] = v,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: L10n.teamName,
+                child: GlassField(
+                  label: L10n.teamName,
+                  isDense: true,
+                  child: TextField(
+                    key: Key('crew-name-$i'),
+                    controller: _teamNameCtrls[i],
+                    onChanged: (v) => _teamNames[i] = v,
+                    decoration: glassInputDecoration(context, isDense: true),
+                    style: AppTokens.titleStrong.copyWith(
+                        fontWeight: isOurs ? FontWeight.w700 : FontWeight.w500),
                   ),
-                  style: AppTokens.titleStrong
-                      .copyWith(fontWeight: isOurs ? FontWeight.w700 : FontWeight.w500),
                 ),
               ),
               const SizedBox(width: AppTokens.spaceSm),
@@ -1811,6 +1843,11 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                                 1),
                         style: AppTokens.labelSecondary,
                       ),
+                      const Spacer(),
+                      AppIcon(Icons.chevron_right_outlined,
+                          key: Key('crew-segment-chevron-$i'),
+                          size: AppTokens.iconSm,
+                          color: muted),
                     ],
                   ),
                 ),
@@ -1830,14 +1867,33 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       AppIcon(Icons.event_outlined,
                           size: AppTokens.iconSm, color: muted),
                       const SizedBox(width: AppTokens.spaceSm),
-                      Text(L10n.crewCycleStart,
-                          style:
-                              AppTokens.rowSecondary.copyWith(color: muted)),
-                      const SizedBox(width: AppTokens.spaceSm),
-                      Text(
-                        L10n.yearMonthDay(_crewStartDate(i)),
-                        style: AppTokens.labelSecondary,
+                      // 标签 + 日期一起缩：加了右边那颗箭头之后，320dp 下这一行
+                      // 会超 37px（实测）。箭头与左侧图标固定，中间的串按需缩，
+                      // 装得下时逐像素不变。
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(L10n.crewCycleStart,
+                                  style: AppTokens.rowSecondary
+                                      .copyWith(color: muted)),
+                              const SizedBox(width: AppTokens.spaceSm),
+                              Text(
+                                L10n.yearMonthDay(_crewStartDate(i)),
+                                style: AppTokens.labelSecondary,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      AppIcon(Icons.chevron_right_outlined,
+                          key: Key('crew-start-chevron-$i'),
+                          size: AppTokens.iconSm,
+                          color: muted),
                     ],
                   ),
                 ),

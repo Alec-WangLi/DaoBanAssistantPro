@@ -337,7 +337,7 @@ void main() {
           teamSegOffsets: const [2, 0, 1],
           teamCount: 3,
         ));
-    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.tap(find.text(L10n.teamSettings));
     await tester.pumpAndSettle();
 
     expect(find.text(L10n.crewSegmentStart(3)), findsOneWidget);
@@ -504,7 +504,7 @@ void main() {
           teamSegOffsets: const [2, 2, 1],
           teamCount: 3,
         ));
-    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.tap(find.text(L10n.teamSettings));
     await tester.pumpAndSettle();
     expect(find.text(L10n.crewSegmentStart(3)), findsNWidgets(2), reason: '甲乙都在第 3 段');
 

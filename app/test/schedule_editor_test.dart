@@ -191,6 +191,7 @@ Future<_FakeRepository> _pumpEditor(
   WidgetTester tester,
   ShiftSchedule domain, {
   ShiftSchedule? active,
+  bool crewExpanded = false,
   // 默认给足高度，让周期里的每一行都真的被构建出来（`find` 才找得到）。
   // 底部那颗悬浮胶囊的用例要的是**真机比例**的视口（正文真的溢出、真的能滚），
   // 传 `Size(420, 900)` / `Size(200, 400)`。
@@ -215,7 +216,8 @@ Future<_FakeRepository> _pumpEditor(
             child: ElevatedButton(
               onPressed: () => Navigator.of(context).push<bool>(
                 MaterialPageRoute(
-                    builder: (_) => const ScheduleEditorScreen(scheduleId: 7)),
+                    builder: (_) => ScheduleEditorScreen(
+                        scheduleId: 7, initialCrewExpanded: crewExpanded)),
               ),
               child: const Text('open'),
             ),
@@ -668,7 +670,7 @@ void main() {
     expect(find.text(L10n.dayN(6)), findsOneWidget);
 
     // 展开「班组设置」
-    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.tap(find.text(L10n.teamSettings));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.event_outlined), findsNWidgets(4));
 
@@ -697,7 +699,7 @@ void main() {
         L10n.yearMonthDay(DateTime.utc(2025, 6, 1)));
 
     // 展开班组设置，把第 3 组（下标 2）设为「我」
-    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.tap(find.text(L10n.teamSettings));
     await tester.pumpAndSettle();
     expect(find.text(L10n.setAsMine), findsNWidgets(3));
     await tester.tap(find.text(L10n.setAsMine).at(1));
@@ -723,7 +725,7 @@ void main() {
 
     // 先把第 3 组（下标 2）设为「我」——这步只改 _ourTeamIndex、不动偏移，
     // 于是我的基线偏移 = offsets[2] = 2，重锚定时必须扣掉它。
-    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.tap(find.text(L10n.teamSettings));
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.setAsMine).at(1));
     await tester.pumpAndSettle();
@@ -1146,7 +1148,7 @@ void main() {
       tester,
       _domain(anchor: DateTime.utc(2025, 6, 1), teamOffsets: const [0, 1, 2, 3]),
     );
-    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.tap(find.text(L10n.teamSettings));
     await tester.pumpAndSettle();
 
     // 「我的班组」chip：可点按钮的标签，13 档里没有 w700，走 copyWith
@@ -1808,5 +1810,92 @@ void main() {
     expect(find.text(L10n.monthlyFromDay(31)), findsOneWidget,
         reason: '按月那一行没被构建 —— 下面那条不溢出断言等于没测');
     expect(tester.takeException(), isNull, reason: '这一行横向溢出了');
+  });
+
+  testWidgets('班组名是带标签的有框输入框', (tester) async {
+    await _pumpEditor(tester, _domain(), crewExpanded: true);
+
+    final field = find.byKey(const Key('crew-name-0'));
+    expect(field, findsOneWidget);
+    final tf = tester.widget<TextField>(field);
+    expect(tf.decoration?.border, isA<OutlineInputBorder>());
+    expect(tf.decoration?.hintText, isNull,
+        reason: '标签已经画在框上方，框里不该再有一个同名的残留提示');
+    expect(find.ancestor(of: field, matching: find.byType(GlassField)),
+        findsOneWidget);
+  });
+
+  testWidgets('班组设置折叠时列出当前班组名', (tester) async {
+    await _pumpEditor(tester, _domain());
+
+    final title = find.text(L10n.teamSettings);
+    // 用**整串**副标题来认：撞班提示里也会出现「一班与二班」，textContaining
+    // 会一次命中两条（这一版的默认夹具正好是撞班状态）。
+    final hint =
+        find.text(L10n.teamSettingsHint(L10n.defaultTeamNames(4).join(' · ')));
+    expect(title, findsOneWidget);
+    expect(hint, findsOneWidget);
+    expect(tester.getTopLeft(hint).dy,
+        greaterThan(tester.getTopLeft(title).dy),
+        reason: '副标题要在标题下面，不能替掉标题');
+  });
+
+  testWidgets('展开班组后：四行班组起始日都有箭头', (tester) async {
+    await _pumpEditor(tester, _domain(), crewExpanded: true);
+    for (var i = 0; i < 4; i++) {
+      expect(find.byKey(Key('crew-start-chevron-$i')), findsOneWidget,
+          reason: '第 $i 个班组的起始日没有箭头');
+    }
+  });
+
+  testWidgets('改班组名会落库', (tester) async {
+    final repo = await _pumpEditor(tester, _domain(), crewExpanded: true);
+    await tester.enterText(find.byKey(const Key('crew-name-0')), '甲班');
+    await tester.tap(find.text(L10n.saveAndReschedule));
+    await tester.pumpAndSettle();
+    expect(repo.saved?.teamNames.first, '甲班');
+  });
+
+  testWidgets('按月模式：段起始与每月第 N 天起都是箭头，不是铅笔', (tester) async {
+    await _pumpEditor(
+      tester,
+      _domain(
+        monthly: true,
+        monthSegments: const [
+          MonthlySegment(startDay: 1, classIndex: 0),
+          MonthlySegment(startDay: 11, classIndex: 1),
+        ],
+      ),
+      crewExpanded: true,
+    );
+
+    expect(find.byKey(const Key('crew-segment-chevron-0')), findsOneWidget);
+    expect(find.byKey(const Key('monthly-day-chevron-1')), findsOneWidget);
+    expect(find.byKey(const Key('monthly-day-chevron-0')), findsNothing,
+        reason: '第一段恒从 1 号起，不能改，就不该给箭头');
+  });
+
+  testWidgets('「我这组从这个周期开始」用箭头，不再用铅笔', (tester) async {
+    await _pumpEditor(tester, _domain());
+    expect(find.byKey(const Key('my-cycle-start-chevron')), findsOneWidget);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing,
+        reason: '铅笔从此只表示「进入编辑表单」，这一行打开的是日期选择器');
+  });
+
+  testWidgets('320×640：班组卡展开后不溢出', (tester) async {
+    // 视口取 **320**（本仓对编辑页的保证线，见 v0.11.13），不是 200：
+    // 200 宽下这一页**既有**的「周期设置 / N 个班组」两行（并排两个 48dp
+    // 圆钮 + 标题 + 计数）就会溢出，与班组卡无关，也不在本次改动范围里。
+    await _pumpEditor(tester, _domain(),
+        crewExpanded: true, size: const Size(320, 640));
+    await tester.dragUntilVisible(
+      find.byKey(const Key('crew-name-0')),
+      find.byType(ListView).first,
+      const Offset(0, -400),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull, reason: '320dp 宽下班组卡溢出了');
+    expect(find.byKey(const Key('crew-name-0')), findsOneWidget);
   });
 }

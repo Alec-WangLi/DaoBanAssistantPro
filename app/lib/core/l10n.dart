@@ -692,8 +692,14 @@ class L10n {
   // 英文用 'Abbr' 而不是 'Short'：这个标签浮在 60pt 宽的窄输入框上，
   // 'Short'（5 字）会被裁成「Sh…」，'Abbr'（4 字）放得下且更准确。
   static String get abbrLabel => t('简称', 'Abbr');
-  static String get crewSettingsOptional =>
-      t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
+
+  /// 「班组设置」折叠时的副标题：把当前班组名亮出来，并明说可以改名。
+  ///
+  /// 这一条是从真机反馈倒推出来的：改名的输入框**本来就有**，但那一节默认折叠、
+  /// 标题从前写着「可选，用于查看其他班组」，用户和作者都没发现名字能改。
+  /// 「点开可改名」不能只藏在展开之后。
+  static String teamSettingsHint(String names) =>
+      t('$names · 点开可改名', '$names · tap to rename');
 
   // ── 按月排班 ────────────────────────────────────────────────────────────
   //
