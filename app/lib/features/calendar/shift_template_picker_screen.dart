@@ -299,7 +299,18 @@ class _ShiftTemplatePickerScreenState
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    texts,
+                    // 堆叠档以前把箭头整个丢掉，卡片退化成纯信息卡。阈值本来就
+                    // 给它留了宽度（`_chevronWidth` 一直在 `stacked` 的算式里）。
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: texts),
+                        const SizedBox(width: AppTokens.gapIconText),
+                        Icon(Icons.chevron_right_outlined,
+                            key: const Key('template-card-chevron'),
+                            color: muted),
+                      ],
+                    ),
                     const SizedBox(height: AppTokens.spaceMd),
                     _cycleStrip(context, classes: classes, cycle: cycle),
                   ],
@@ -312,7 +323,8 @@ class _ShiftTemplatePickerScreenState
                   _cycleStrip(context, classes: classes, cycle: cycle),
                   const SizedBox(width: 12),
                   Expanded(child: texts),
-                  Icon(Icons.chevron_right_outlined, color: muted),
+                  Icon(Icons.chevron_right_outlined,
+                      key: const Key('template-card-chevron'), color: muted),
                 ],
               );
             }),

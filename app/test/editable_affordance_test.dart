@@ -27,6 +27,7 @@ import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
+import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -261,6 +262,42 @@ void main() {
         find.byKey(const Key('compact-shift-time')));
     expect(time.didExceedMaxLines, isFalse,
         reason: '紧凑卡的时间不许被省略 —— 加箭头换来的宽度要用缩放补');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('我的页：五个动作行都有箭头', (tester) async {
+    // 高给足：这几行分布在「清除重置」和「关于」两组，1400 高时后者还没被构建。
+    await _pump(tester, const ProfileScreen(), size: const Size(420, 2400));
+
+    for (final key in const [
+      'profile-chevron-update',
+      'profile-chevron-changelog',
+      'profile-chevron-help',
+      'profile-chevron-log',
+      'profile-chevron-reset',
+    ]) {
+      expect(find.byKey(Key(key)), findsOneWidget, reason: '$key 不在');
+    }
+
+    await _dispose(tester);
+  });
+
+  testWidgets('时段弹层：「管理排班时段」有箭头', (tester) async {
+    await _pumpVisual(tester, const CalendarScreen());
+    await tester.tap(find.byIcon(Icons.timeline));
+    await _settle(tester);
+
+    expect(find.byKey(const Key('manage-timeline-chevron')), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('窄屏模板卡（堆叠版式）也有箭头', (tester) async {
+    await _pump(tester, const ShiftTemplatePickerScreen(),
+        size: const Size(200, 400), seed: (db) => seedMyTemplates(db));
+
+    expect(find.byKey(const Key('template-card-chevron')), findsWidgets);
 
     await _dispose(tester);
   });

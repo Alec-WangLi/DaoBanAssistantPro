@@ -1322,6 +1322,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: Text(L10n.manageTimeline),
+                          trailing: const Icon(Icons.chevron_right_outlined,
+                              key: Key('manage-timeline-chevron')),
                           onTap: () {
                             Navigator.pop(sheetContext);
                             Navigator.of(context).push(MaterialPageRoute<void>(
