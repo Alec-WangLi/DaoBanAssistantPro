@@ -2519,22 +2519,32 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      shift.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTokens.rowPrimary,
-                                    ),
+                              // 加了右侧箭头之后，200dp + 特大的「名字 + 已调班徽章」
+                              // 放不下，「白班」会被截成「白…」。与时间行同一套：
+                              // 高度钉死，装不下时整行缩，不省略、不改卡高。
+                              SizedBox(
+                                height: _oneLineHeight(
+                                    context, AppTokens.rowPrimary),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        shift.name,
+                                        key: const Key('compact-shift-name'),
+                                        maxLines: 1,
+                                        style: AppTokens.rowPrimary,
+                                      ),
+                                      if (isAdjusted) ...[
+                                        const SizedBox(
+                                            width: AppTokens.gapIconText),
+                                        _adjustedBadge(context, accent),
+                                      ],
+                                    ],
                                   ),
-                                  if (isAdjusted) ...[
-                                    const SizedBox(
-                                        width: AppTokens.gapIconText),
-                                    _adjustedBadge(context, accent),
-                                  ],
-                                ],
+                                ),
                               ),
                               // 时间另起一行而不是与班次名挤同一行：200dp 宽下
                               // 挤一起的结果是「白班 0…」—— 时间全被截掉。

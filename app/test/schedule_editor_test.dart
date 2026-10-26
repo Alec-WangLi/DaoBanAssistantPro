@@ -1898,4 +1898,28 @@ void main() {
     expect(tester.takeException(), isNull, reason: '320dp 宽下班组卡溢出了');
     expect(find.byKey(const Key('crew-name-0')), findsOneWidget);
   });
+
+  testWidgets('8 个长名字的班组：折叠副标题退回短串，不裁字', (tester) async {
+    await _pumpEditor(
+      tester,
+      _domain(
+        teamCount: 8,
+        teamNames: List.generate(8, (i) => '运行${i + 1}班甲组'),
+        teamOffsets: const [0, 1, 2, 3, 4, 5, 6, 7],
+      ),
+      size: const Size(320, 4600),
+    );
+
+    expect(find.text(L10n.teamSettingsShortHint(8)), findsOneWidget,
+        reason: '8 个长名字装不下两行时该退回「8 个班组 · 点开可改名」');
+    final p = tester.renderObject<RenderParagraph>(
+        find.text(L10n.teamSettingsShortHint(8)));
+    expect(p.didExceedMaxLines, isFalse, reason: '短串自己也被裁了');
+  });
+
+  testWidgets('空班组名不会在副标题里留下空段', (tester) async {
+    await _pumpEditor(tester, _domain(teamNames: ['', '二班', '三班', '四班']));
+
+    expect(find.text(L10n.teamSettingsHint('二班 · 三班 · 四班')), findsOneWidget);
+  });
 }

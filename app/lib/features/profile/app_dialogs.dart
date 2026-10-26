@@ -41,6 +41,12 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.5\n'
+    '· 修：弹窗里的值行（待办的时间与提醒、闹钟的时间与日期）右侧的值与箭头现在贴齐右边；200dp 小窗下标签与值改成上下两行，标签不再被截掉\n'
+    '· 修：班组设置折叠时那行班组名，8 个长名字装不下会改成「N 个班组 · 点开可改名」，不再把字裁掉；清空的班组名也不会留下「 · 二班」这种空段\n'
+    '· 修：小窗 + 特大字号下，调过班的那天信息卡不再把班次名截成「白…」\n'
+    '· 无障碍：弹窗里的值行重新被读成按钮\n'
+    '\n'
 'v0.12.4\n'
     '· 班组名现在看得出来能改了：编辑排班里每个班组是一只有框的输入框（之前是个光秃秃的文本框，读起来像固定的名单）；「班组设置」折叠时也会把当前班组名列出来，并写着「点开可改名」\n'
     '· 全 app 统一了「哪些东西能点」的提示：铅笔表示点开进入编辑（待办、自定义闹钟、我的模板）；箭头表示点开打开选择器、页面或弹窗（弹窗里的时间与日期、日历信息卡那行班次、排班管理里每套方案、我的页那几个入口、窄屏的模板卡）\n'
@@ -95,14 +101,15 @@ const String _changelogZh =
     '· 今日卡补齐了 App 信息卡上有的三行：班次后面那句备注（「休息日 · 不响闹钟」/「闹钟 07:00」）、「其他班组」四个字、以及「本月 大休13 · 白7 · 上夜6 · 下夜5」\n'
     '· 顺带：那三行补上之后今日卡上下的空白小了一半；月历格子里的班次胶囊也跟着格子大小缩放了，不再是一成不变的小号\n'
     '\n'
-'v0.11.22\n'
-    '· 修上一版带出来的一处：浅色模式下，压在实心主色上的字是黑的 —— 底部导航选中的那两个字、「我的」页那几条分段器（主题模式 / 语言 / 字体大小）都读不清，现在一律白字\n'
-    '· 压深改成「够用就好」：以前不管原来多浅都再压掉四成，默认那颗蓝明明够亮也被压成近黑；现在只有真不够的（青、橙）才压，而且压到刚读得清就停\n'
-    '· 于是胶囊、按钮、导航、开关这几处的颜色都回到了接近「我的 → 外观」里那颗主色 —— 上一版说的「实心面比主色深一档」那个代价，现在只在青和橙上还看得到\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.5\n'
+    '· Fix: value rows in dialogs (todo time and reminder, alarm time and date) now put the value and arrow flush right; at 200 dp the label and value stack into two lines instead of the label being clipped\n'
+    '· Fix: the collapsed crew subtitle falls back to "N crews · tap to rename" when eight long custom names do not fit, instead of clipping; an emptied name no longer leaves a stray separator\n'
+    '· Fix: in a small window at the largest text size, the info card no longer cuts the shift name to "D…" on an adjusted day\n'
+    '· Accessibility: value rows in dialogs are announced as buttons again\n'
+    '\n'
 'v0.12.4\n'
     '· Crew names now look editable: each crew in the editor is a labelled input field, where it used to be a bare text box that read like a fixed list. The Crews section also lists the current crew names while collapsed, with "tap to rename"\n'
     '· One rule now tells you what can be tapped: a pencil opens an editor (todos, custom alarms, my templates); an arrow opens a picker, a page or a dialog (times and dates in dialogs, the shift row on the calendar info card, each schedule in Schedule management, the entries on Me, and template cards on narrow screens)\n'
@@ -156,11 +163,6 @@ const String _changelogEn =
     '· The month widget marks today with the same translucent block the app uses (accent wash plus accent outline) instead of a solid fill; and if that day is a public holiday, the lunar date is red again\n'
     '· The today card gained the three rows the app info card has: the note after the shift name (Rest day · no alarm / Alarm 07:00), the Other crews label, and the month tally (This month · 13 off · 7 day · …)\n'
     '· Along the way: with those three rows the card top and bottom gaps are about half what they were, and the shift chips in the month grid now scale with the cell instead of staying one small size\n'
-    '\n'
-'v0.11.22\n'
-    '· Fixed what the previous release brought in: in light mode the text on solid accent surfaces was dark, so the selected bottom-nav item and the segments on Me (theme mode / language / font size) were hard to read. They are white now\n'
-    '· Darkening is now "just enough". It used to take 40% off the accent no matter how dark it already was, which crushed the default blue into near-black; now only the accents that genuinely need it (teal, orange) are darkened, and only until white text just passes\n'
-    '· So pills, buttons, the nav item and switches are back near the accent you picked under Me, Appearance. The "one step darker" trade-off from the last release only shows on teal and orange now\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

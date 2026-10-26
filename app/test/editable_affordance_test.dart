@@ -29,10 +29,20 @@ import 'package:shiftassistantpro/features/calendar/schedule_management_screen.d
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import '../tool/visual/visual_harness.dart'
-    show makeVisualDatabase, seedBlankSchedule, seedMyTemplates;
+    show
+        ensureVisualFonts,
+        makeVisualDatabase,
+        onboardingPrefs,
+        pumpScreen,
+        seedBlankSchedule,
+        seedMyTemplates,
+        seedTodayOverride,
+        teardownVisual,
+        useStandardGlassTier;
 
 /// 有界推进若干帧（待办 / 闹钟页都有常驻定时器，不能 `pumpAndSettle`）。
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
@@ -118,6 +128,7 @@ void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    await ensureVisualFonts();
   });
   setUp(() {
     L10n.locale = 'zh';
@@ -300,5 +311,28 @@ void main() {
     expect(find.byKey(const Key('template-card-chevron')), findsWidgets);
 
     await _dispose(tester);
+  });
+
+  testWidgets('200×400 · 特大：调过班的紧凑卡班次名不被省略', (tester) async {
+    useStandardGlassTier();
+    final db = await makeVisualDatabase();
+    addTearDown(db.close);
+    await seedTodayOverride(db);
+
+    await pumpScreen(
+      tester,
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      size: const Size(200, 400),
+      fontSize: AppFontSize.extraLarge,
+      extraPrefs: onboardingPrefs,
+    );
+
+    final name = tester.renderObject<RenderParagraph>(
+        find.byKey(const Key('compact-shift-name')));
+    expect(name.didExceedMaxLines, isFalse,
+        reason: '小窗 + 特大时班次名被「已调班」徽章与箭头挤成了省略号');
+
+    await teardownVisual(tester);
   });
 }

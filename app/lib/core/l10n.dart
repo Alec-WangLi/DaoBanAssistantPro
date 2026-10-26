@@ -701,6 +701,14 @@ class L10n {
   static String teamSettingsHint(String names) =>
       t('$names · 点开可改名', '$names · tap to rename');
 
+  /// 折叠副标题装不下完整班组名时的降级串（8 个长名字在两行里放不下）。
+  ///
+  /// 本仓的降级顺序是「折行 > 按宽缩小 > 换短串」—— 这里换短串，因为把
+  /// 8 个自定义名字缩到 6px 就等于没写。
+  static String teamSettingsShortHint(int n) => t(
+      '$n 个班组 · 点开可改名',
+      n == 1 ? '1 crew · tap to rename' : '$n crews · tap to rename');
+
   // ── 按月排班 ────────────────────────────────────────────────────────────
   //
   // 「一套方案二选一：按周期轮换（连续周期）还是按月（每月 1 号归零）」。

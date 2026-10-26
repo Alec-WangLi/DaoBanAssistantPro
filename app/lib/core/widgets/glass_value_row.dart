@@ -52,42 +52,99 @@ class GlassValueRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = AppTokens.inkMuted(context);
-    return GlassPressable(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
-          child: Row(
-            children: [
-              Expanded(
-                // 标签允许折两行（设计 §6.4）：这一行**不允许**出现省略号。
-                child: Text(label, maxLines: 2, style: AppTokens.rowPrimary),
-              ),
-              const SizedBox(width: AppTokens.spaceSm),
-              Flexible(
-                // 值按可用宽度**等比缩小**，不省略 —— 它短、且是这一行的主角。
-                // `FittedBox(scaleDown)` 只在装不下时才动手，装得下逐像素不变。
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    textAlign: TextAlign.right,
-                    style: valueStyle ??
-                        (mutedValue
-                            ? AppTokens.rowSecondary.copyWith(color: muted)
-                            : AppTokens.labelStrong),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppTokens.gapIconText),
-              // 默认给一个「点进去」的箭头；时段那两行传自己的尾部（有值时是清空钮）。
-              trailing ??
-                  Icon(Icons.chevron_right_outlined,
-                      size: AppTokens.iconSm, color: muted),
-            ],
+    final effectiveValueStyle = valueStyle ??
+        (mutedValue
+            ? AppTokens.rowSecondary.copyWith(color: muted)
+            : AppTokens.labelStrong);
+    final labelWidget =
+        Text(label, maxLines: 2, style: AppTokens.rowPrimary);
+    final valueWidget = Text(
+      value,
+      maxLines: 1,
+      textAlign: TextAlign.right,
+      style: effectiveValueStyle,
+    );
+    final arrow = trailing ??
+        Icon(Icons.chevron_right_outlined,
+            size: AppTokens.iconSm, color: muted);
+
+    return Semantics(
+      button: true,
+      child: GlassPressable(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
+            // 宽档：标签按自然宽（可折两行），右侧的「值 + 箭头」**贴着内容右缘**
+            // 排成一列 —— 别让 `Flexible` 没吃完的份额落到箭头右边（那会在默认
+            // 宽度下留出 60~120dp 的死区，三行的值与箭头参差不齐）。
+            //
+            // 窄档（200dp 的弹窗 / 小窗）：一行塞不下「7 字标签 + 值 + 箭头」，
+            // 塞下去的结果是标签被 `maxLines: 2` 硬裁（实测 128dp 宽时 6 处）。
+            // 按本仓既有的降级顺序「折行 > 按宽缩小 > 换短串」，这里改成上下两行：
+            // 标签整行折，值 + 箭头在第二行贴右。
+            //
+            // 阈值取 200 而不是「像 HelpEntry 那样 260」：320dp 屏上管理页时间线的
+            // 内容宽约 240，260 会把那几行也切成两行（实测整屏 55% 像素变化）——
+            // 那里标签与值并排本来就放得下，窄档只该服务真正的小窗弹窗。
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 200) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      labelWidget,
+                      const SizedBox(height: AppTokens.gapHair),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: valueWidget,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppTokens.gapIconText),
+                          arrow,
+                        ],
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    // 标签**不做弹性子件**：弹性子件没吃满的份额会留在行尾，
+                    // 把箭头推到半空。自然宽 + 55% 上限，剩下的全给右边那组。
+                    ConstrainedBox(
+                      constraints:
+                          BoxConstraints(maxWidth: constraints.maxWidth * 0.55),
+                      child: labelWidget,
+                    ),
+                    const SizedBox(width: AppTokens.spaceSm),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: valueWidget,
+                            ),
+                          ),
+                          const SizedBox(width: AppTokens.gapIconText),
+                          arrow,
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),

@@ -1705,15 +1705,38 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                     ),
                     // 折叠时也要看得见「这里有名字，而且能改」——这一条正是
                     // v0.12.3 用户反馈的根因：输入框在，但没人知道它在。
+                    //
+                    // 8 个自定义长名字在两行里放不下（实测 320dp × 每一档字号都
+                    // 会裁），按本仓的降级顺序换短串，而不是把名字缩到看不清。
+                    // 空名字先滤掉：清空一栏后会留下「 · 二班」这种残段。
                     if (!_crewExpanded)
                       Padding(
                         padding:
                             const EdgeInsets.only(top: AppTokens.gapHair),
-                        child: Text(
-                          L10n.teamSettingsHint(
-                              _teamNames.take(_teamCount).join(' · ')),
-                          maxLines: 2,
-                          style: AppTokens.microText.copyWith(color: muted),
+                        child: LayoutBuilder(
+                          builder: (context, cons) {
+                            final style = AppTokens.microText
+                                .copyWith(color: muted);
+                            final names = _teamNames
+                                .take(_teamCount)
+                                .map((n) => n.trim())
+                                .where((n) => n.isNotEmpty)
+                                .toList();
+                            String text =
+                                L10n.teamSettingsShortHint(_teamCount);
+                            if (names.isNotEmpty) {
+                              final full =
+                                  L10n.teamSettingsHint(names.join(' · '));
+                              final tp = TextPainter(
+                                text: TextSpan(text: full, style: style),
+                                maxLines: 2,
+                                textDirection: TextDirection.ltr,
+                                textScaler: MediaQuery.textScalerOf(context),
+                              )..layout(maxWidth: cons.maxWidth);
+                              if (!tp.didExceedMaxLines) text = full;
+                            }
+                            return Text(text, maxLines: 2, style: style);
+                          },
                         ),
                       ),
                   ],
