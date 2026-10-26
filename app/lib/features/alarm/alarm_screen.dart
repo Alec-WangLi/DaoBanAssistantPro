@@ -18,6 +18,7 @@ import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/glass_value_row.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
 import '../../core/widgets/section_heading.dart';
 import '../../data/app_repository.dart';
@@ -403,11 +404,11 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(L10n.time),
-                trailing: Text(_fmt(time.hour * 60 + time.minute),
-                    style: AppTokens.sectionTitle),
+              GlassValueRow(
+                key: const Key('alarm-time-row'),
+                label: L10n.time,
+                value: _fmt(time.hour * 60 + time.minute),
+                valueStyle: AppTokens.sectionTitle,
                 onTap: () async {
                   final p = await showGlassTimePicker(
                       context, initialTime: time);
@@ -429,13 +430,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ),
               const SizedBox(height: 8),
               if (repeatType == 0)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(L10n.date),
+                GlassValueRow(
+                  key: const Key('alarm-date-row'),
+                  label: L10n.date,
                   // 这一行写的是**真正会响的那天**（`onceDateAt` 派生），不是用户
                   // 选的那个原始日期 —— 两者只在「选的那天已经过去」时才不同。
-                  trailing: Text(
-                      L10n.monthDay(onceDateAt(time.hour, time.minute))),
+                  value: L10n.monthDay(onceDateAt(time.hour, time.minute)),
                   onTap: () async {
                     final p = await showGlassDatePicker(
                       context,

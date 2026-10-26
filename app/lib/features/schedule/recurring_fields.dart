@@ -23,6 +23,7 @@ import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/glass_value_row.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
 import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart' show formatClock, ShiftClass;
@@ -309,10 +310,11 @@ class EventTimingPicker extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(L10n.timeOptional),
-          trailing: Text(timeMinute == null ? L10n.none : formatClock(timeMinute!)),
+        GlassValueRow(
+          key: const Key('todo-time-row'),
+          label: L10n.timeOptional,
+          value: timeMinute == null ? L10n.none : formatClock(timeMinute!),
+          mutedValue: timeMinute == null,
           onTap: () async {
             final p = await showGlassTimePicker(
               context,
@@ -324,10 +326,11 @@ class EventTimingPicker extends StatelessWidget {
             if (p != null) onChanged(p.hour * 60 + p.minute, advance, alarm);
           },
         ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(L10n.advanceRemindOptional),
-          trailing: Text(L10n.remindOptionLabel(advance ?? L10n.remindNone)),
+        GlassValueRow(
+          key: const Key('todo-remind-row'),
+          label: L10n.advanceRemindOptional,
+          value: L10n.remindOptionLabel(advance ?? L10n.remindNone),
+          mutedValue: advance == null,
           onTap: () async {
             final picked = await showGlassOptionPicker<int>(
               context,

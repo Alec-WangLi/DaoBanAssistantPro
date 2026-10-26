@@ -16,6 +16,7 @@ import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
+import '../../core/widgets/glass_value_row.dart';
 import '../../core/widgets/glass_check.dart';
 import '../../data/app_repository.dart';
 import '../../data/todo_archive.dart';
@@ -635,12 +636,12 @@ class _EventFields {
           validation = null;
         }),
       ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
+      GlassValueRow(
+        key: const Key('todo-date-row'),
         // 重复项那一行不叫「日期」：它的意思是「从哪天开始生效」，之后的日期由
         // 规则算出来，用户改不了单次（想改就改这一次那条行本身）。
-        title: Text(repeat == null ? L10n.date : L10n.startsOn),
-        trailing: Text(L10n.monthDay(date)),
+        label: repeat == null ? L10n.date : L10n.startsOn,
+        value: L10n.monthDay(date),
         onTap: () async {
           final p = await showGlassDatePicker(
             context,
