@@ -21,6 +21,7 @@ import '../../core/widgets/glass_check.dart';
 import '../../data/app_repository.dart';
 import '../../data/todo_archive.dart';
 import '../../domain/recurring_todo.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
@@ -93,6 +94,14 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
     final events = eventsAsync.valueOrNull ?? const [];
+    // 待办行的「提醒落在次日 / 前一天」标记：要按 seriesId 查规则、按那天查班次。
+    final seriesById = <int, RecurringTodo>{
+      for (final s
+          in (ref.watch(recurringSeriesProvider).valueOrNull ??
+              const <RecurringTodo>[]))
+        if (s.id != null) s.id!: s,
+    };
+    final chain = ref.watch(activeScheduleProvider).valueOrNull?.chain;
     final split = splitTodos(events, _sessionRows);
     ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
@@ -171,7 +180,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                           16, 8, 16, kFloatingActionInset),
                       children: [
                         for (final e in split.active)
-                          _eventTile(context, ref, e),
+                          _eventTile(context, ref, e,
+                              chain: chain, series: seriesById[e.seriesId]),
                         // 主列表空了、归档还有：那句话仍要出现，而折叠区挂在它下面
                         // —— 不能让归档被空态顶掉（那几条就再也点不开了）。
                         if (split.active.isEmpty)
@@ -180,7 +190,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                           _archiveHeader(context, split.archived.length),
                           if (_archiveOpen)
                             for (final e in split.archived)
-                              _eventTile(context, ref, e, archived: true),
+                              _eventTile(context, ref, e,
+                                  archived: true,
+                                  chain: chain,
+                                  series: seriesById[e.seriesId]),
                         ],
                       ],
                     ),
@@ -334,10 +347,36 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   }
 
   Widget _eventTile(BuildContext context, WidgetRef ref, ScheduleEvent e,
-      {bool archived = false}) {
+      {bool archived = false,
+      ScheduleChain? chain,
+      RecurringTodo? series}) {
+    // 提醒时刻按「那天的班次」落在前一天 / 当天 / 次日。**四道一致性闸门缺一
+    // 不可**（spec §4.1）：
+    //   ① 这条行属于某条系列，且规则是「按班次」；
+    //   ② 系列设了钟点，且**与行上的钟点一致** —— 排定用的是系列那份，这一格
+    //      印的是行里那份，对不上时宁可不标；
+    //   ③ 那天的班次名**在这条系列选过的名字里** —— 改排班后留在原地的旧行，
+    //      排定侧根本不会给它排提醒，标了就是从无关班次算出来的谎话；
+    //   ④ 有排班链（没有就查不到班次）。
+    final shift = chain?.shiftOn(e.date);
+    final markedClock = (e.seriesId != null &&
+            series != null &&
+            series.repeat == RecurRepeat.shift &&
+            series.timeMinute != null &&
+            series.timeMinute == e.timeMinute &&
+            shift != null &&
+            series.shiftNames.contains(shift.name))
+        ? series.timeMinute
+        : null;
+    final timeText = e.timeMinute == null
+        ? null
+        : (markedClock == null
+            ? _fmt(e.timeMinute!)
+            : (todoReminderClockLabel(clockMinute: markedClock, shift: shift) ??
+                _fmt(e.timeMinute!)));
     final subtitle = [
       L10n.monthDayWeekday(e.date),
-      if (e.timeMinute != null) _fmt(e.timeMinute!),
+      if (timeText != null) timeText,
       if (e.advanceRemindMinutes != null)
         L10n.remindOptionLabel(e.advanceRemindMinutes!),
     ].join(' · ');

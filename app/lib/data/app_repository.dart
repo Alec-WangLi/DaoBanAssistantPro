@@ -1391,6 +1391,19 @@ final eventsProvider = StreamProvider<List<ScheduleEvent>>((ref) {
   return db.watchEvents();
 });
 
+/// 全部重复系列（响应式）。
+///
+/// 待办列表要按 `seriesId` 查「这条是不是按班次规则、提醒钟点落在哪天」——
+/// 系列被编辑 / 开关 / 删除时列表要能自己跟上。**页面自己 watch**（不是弹窗里
+/// 一次性读），与 [eventsProvider] 同一套路。
+final recurringSeriesProvider = StreamProvider<List<RecurringTodo>>((ref) {
+  final db = ref.watch(databaseProvider);
+  return db
+      .select(db.recurringSeriesRows)
+      .watch()
+      .map((rows) => rows.map((r) => r.toDomain()).toList());
+});
+
 /// 重复待办面板一次性要的两样：全部系列 + 当前排班链。
 ///
 /// **一次性读 + `autoDispose`**，不是流 —— 与 `savedTemplatesProvider` 同一套

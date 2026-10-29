@@ -289,6 +289,24 @@ DateTime _fireAt(DateTime occ, int clock, int advance, {ShiftClass? shift}) {
       .add(Duration(minutes: clock - advance));
 }
 
+/// 待办提醒的钟点按当天班次落在**前一天 / 当天 / 次日**时的显示串。
+///
+/// 落点在当天、没有班次（不是按班次规则 / 那天没排班）时返回 null —— 调用点据此
+/// 显示原钟点。**与排定共用 `alarmDayAnchor`**：两处各写一份必然分岔，症状是
+/// 「行上写 00:00、实际次日才响」这种不报错的错。
+String? todoReminderClockLabel({
+  required int clockMinute,
+  required ShiftClass? shift,
+}) {
+  if (shift == null) return null;
+  final clock = formatClock(clockMinute);
+  return switch (alarmDayAnchor(shift, ShiftAlarm(minute: clockMinute))) {
+    AlarmDayAnchor.prev => L10n.clockPrevDay(clock),
+    AlarmDayAnchor.next => L10n.clockNextDay(clock),
+    AlarmDayAnchor.same => null,
+  };
+}
+
 /// 从 [from] 之后开始、未来 [days] 天里这条系列要响的全部时刻，最多 [cap] 条。
 ///
 /// **起点是「不晚于 from 的那一次」，不是「下一次」**：今天这次还没到点的话，它
