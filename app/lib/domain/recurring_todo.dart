@@ -271,8 +271,23 @@ DateTime? nextOccurrenceAfter(RecurringTodo s, DateTime day,
 /// `occ` 是 UTC 纯日期，要取它的年月日再按本地时区重建 —— 直接在它上面加分钟会
 /// 带着 UTC 标志，交给原生算 epoch 毫秒时差一个时区（`eventReminderTime` 里
 /// 记的是同一个坑）。
-DateTime _fireAt(DateTime occ, int clock, int advance) =>
-    DateTime(occ.year, occ.month, occ.day).add(Duration(minutes: clock - advance));
+///
+/// [shift] 非空时按班次闹钟的**三档落点**（`alarmDayAnchor`）把日期挪一天：
+/// 夜班 20:30–次日 08:30 的 00:00 落在**次日**、00:00 上班的 23:00 落在**前一天**。
+/// **提前量在落点之后减** —— 判据必须作用在用户设的钟点上，先减再判会把
+/// 00:00 变成 23:55、再落到上班前。
+DateTime _fireAt(DateTime occ, int clock, int advance, {ShiftClass? shift}) {
+  var delta = 0;
+  if (shift != null) {
+    delta = switch (alarmDayAnchor(shift, ShiftAlarm(minute: clock))) {
+      AlarmDayAnchor.prev => -1,
+      AlarmDayAnchor.same => 0,
+      AlarmDayAnchor.next => 1,
+    };
+  }
+  return DateTime(occ.year, occ.month, occ.day + delta)
+      .add(Duration(minutes: clock - advance));
+}
 
 /// 从 [from] 之后开始、未来 [days] 天里这条系列要响的全部时刻，最多 [cap] 条。
 ///
@@ -294,17 +309,35 @@ List<DateTime> upcomingFireTimes(
 }) {
   final advance = s.advanceRemindMinutes;
   if (advance == null || !s.enabled) return const [];
+  // 落点只作用于「按班次」且**用户明确设了钟点**的系列：全天提醒的钟点是
+  // 提醒层的策略值（`allDayReminderHour`），拿它去套值班窗口会改变一整类待办
+  // 的真实响铃时刻，而界面上一个字都不显示。
+  final shiftRule = s.repeat == RecurRepeat.shift && s.timeMinute != null;
   final horizon = from.add(Duration(days: days));
-  final out = <DateTime>[];
-  var occ = occurrenceOnOrBefore(s, from, shiftOn: shiftOn) ??
-      firstOccurrenceOnOrAfter(s, from, shiftOn: shiftOn);
-  while (occ != null && out.length < cap) {
-    final fire = _fireAt(occ, clockMinute, advance);
-    if (!fire.isBefore(from)) {
-      if (fire.isAfter(horizon)) break;
-      out.add(fire);
-    }
+  // 落点最多偏一天，所以扫描窗口两头各罩一天：起点提前一天（昨天那次的提醒
+  // 可能还在未来），循环上界放宽一天。起点不提前的话，连续夜班日里上一条
+  // 还差几分钟的提醒会被漏掉。
+  final start = shiftRule ? _addDays(dateOnly(from), -1) : from;
+  final lastOcc = _addDays(dateOnly(from), days + 1);
+  // **先收集、再排序、最后去重 / 裁地平线**：落点可能让相邻两次倒序
+  // （夜班 → 次日、零点班 → 前一天），而原生只弹队首、续队尾 ——
+  // 乱序队列里排在后面、时刻却更早的那条永远不会响。
+  final candidates = <DateTime>[];
+  var occ = occurrenceOnOrBefore(s, start, shiftOn: shiftOn) ??
+      firstOccurrenceOnOrAfter(s, start, shiftOn: shiftOn);
+  while (occ != null && daysBetween(dateOnly(occ), lastOcc) >= 0) {
+    final shift = shiftRule ? shiftOn?.call(occ) : null;
+    final fire = _fireAt(occ, clockMinute, advance, shift: shift);
+    if (!fire.isBefore(from)) candidates.add(fire);
     occ = nextOccurrenceAfter(s, occ, shiftOn: shiftOn);
+  }
+  candidates.sort();
+  final out = <DateTime>[];
+  for (final f in candidates) {
+    if (f.isAfter(horizon)) break;
+    if (out.isNotEmpty && out.last == f) continue;
+    out.add(f);
+    if (out.length >= cap) break;
   }
   return out;
 }

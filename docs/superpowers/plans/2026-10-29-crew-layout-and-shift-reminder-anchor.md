@@ -115,6 +115,8 @@ git add -A && git commit -m "refactor(todo): 按班次回调改为返回班次�
 
 - [ ] **Step 1: 写失败用例**
 
+⚠️ **执行注记（2026-10-29）**：下面最初写的 `only(night)` 让**每天**都是夜班 —— 那种夹具下「落点」只是把钟点重新贴了个日期标签，整串时刻与「发生日 + 钟点」完全一样，用例**永远绿、没有鉴别力**。实施时改成**稀疏班次日**（`onDays({22: night})`），见 `recurring_todo_test.dart` 的「按班次 · 落点」组；`only` 的返回类型也应为 `ShiftClass? Function(DateTime)`。
+
 在 `recurring_todo_test.dart` 新开一组（用 Task 1 的夹具与下面的班次常量）。每条都用 `upcomingFireTimes`（记得给 `advance: 0`，否则提前量会挪时刻）：
 
 ```dart

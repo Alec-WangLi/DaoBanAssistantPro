@@ -90,8 +90,10 @@ void main() {
         d.weekday == DateTime.wednesday ? nightShift : dayShift;
     final plans = planRecurringReminders([series],
         from: DateTime(2026, 9, 21, 8), shiftOn: night);
-    expect(plans.single.fireAt, DateTime(2026, 9, 23, 9));
-    expect(plans.single.repeatTimes.first, DateTime(2026, 9, 30, 9));
+    // 夜班 20:30–次日 08:00 配 09:00：落在下班后 1 小时，比上班前的 11.5 小时近
+    // → 三档落点取**次日**（与班次闹钟同一条判据）。
+    expect(plans.single.fireAt, DateTime(2026, 9, 24, 9));
+    expect(plans.single.repeatTimes.first, DateTime(2026, 10, 1, 9));
   });
 
   test('计划里的时刻都是「从现在往后」且升序（队首 + 队列一起看）', () {

@@ -315,6 +315,175 @@ void main() {
     });
   });
 
+  group('按班次 · 落点（与班次闹钟同一判据）', () {
+    // 夜班 20:30–次日 08:30：回绕式存法 end = 510
+    const night = ShiftClass(name: '夜班', startMinute: 1230, endMinute: 510);
+    const nightCum = ShiftClass(name: '夜班', startMinute: 1230, endMinute: 1950);
+    const zero = ShiftClass(name: '零点班', startMinute: 0, endMinute: 360);
+    const duty = ShiftClass(name: '值班', startMinute: 480, endMinute: 1920);
+    const rest = ShiftClass(name: '休班', isRest: true);
+
+    // **班次日必须稀疏**：每天都命中时，落点只是把「哪一天的钟点」重新贴了个
+    // 标签，整串时刻与「发生日 + 钟点」完全一样 —— 那样的用例改不改实现都绿。
+    ShiftClass? Function(DateTime) onDays(
+            Map<int, ShiftClass> byDay) =>
+        (DateTime d) => byDay[d.day];
+
+    RecurringTodo shiftAt(int clock, {List<String> names = const ['夜班']}) =>
+        _s(
+            repeat: RecurRepeat.shift,
+            shiftNames: names,
+            timeMinute: clock,
+            advance: 0);
+
+    final only22 = onDays({22: night});
+    final only23Zero = onDays({23: zero});
+
+    test('班中钟点 → 次日（不是发生日当天的凌晨）', () {
+      final times = upcomingFireTimes(shiftAt(0),
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 0,
+          shiftOn: only22);
+      // 22 日夜班 20:30–次日 08:30 的 00:00 → 23 日 00:00；改前会是 22 日 00:00。
+      expect(times.first, DateTime(2026, 9, 23, 0));
+    });
+
+    test('班中后段（07:00）同样落次日', () {
+      final times = upcomingFireTimes(shiftAt(7 * 60),
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 7 * 60,
+          shiftOn: only22);
+      expect(times.first, DateTime(2026, 9, 23, 7));
+    });
+
+    test('上班前的 19:00 → 当天', () {
+      final times = upcomingFireTimes(shiftAt(19 * 60),
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 19 * 60,
+          shiftOn: only22);
+      expect(times.first, DateTime(2026, 9, 22, 19));
+    });
+
+    test('窗口外的 10:00 离下班更近 → 次日', () {
+      final times = upcomingFireTimes(shiftAt(10 * 60),
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 10 * 60,
+          shiftOn: only22);
+      expect(times.first, DateTime(2026, 9, 23, 10));
+    });
+
+    test('零点班 23:00 → 前一天', () {
+      final times = upcomingFireTimes(shiftAt(23 * 60, names: const ['零点班']),
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 23 * 60,
+          shiftOn: only23Zero);
+      expect(times.first, DateTime(2026, 9, 22, 23));
+    });
+
+    test('24 小时值班：全天都算当天', () {
+      final times = upcomingFireTimes(shiftAt(7 * 60, names: const ['值班']),
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 7 * 60,
+          shiftOn: onDays({22: duty}));
+      expect(times.first, DateTime(2026, 9, 22, 7));
+    });
+
+    test('两种 endMinute 存法同解', () {
+      for (final sh in [night, nightCum]) {
+        final times = upcomingFireTimes(shiftAt(0),
+            from: DateTime(2026, 9, 21, 12),
+            clockMinute: 0,
+            shiftOn: onDays({22: sh}));
+        expect(times.first, DateTime(2026, 9, 23, 0), reason: '$sh');
+      }
+    });
+
+    test('提醒钟点正好等于下班钟点 → 落到次日那一刻', () {
+      final times = upcomingFireTimes(shiftAt(8 * 60 + 30),
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 8 * 60 + 30,
+          shiftOn: only22);
+      expect(times.first, DateTime(2026, 9, 23, 8, 30));
+    });
+
+    test('班次没有上下班时间（休班）→ 落点当天', () {
+      final times = upcomingFireTimes(shiftAt(0, names: const ['休班']),
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 0,
+          shiftOn: onDays({22: rest}));
+      expect(times.first, DateTime(2026, 9, 22, 0));
+    });
+
+    test('提前量作用在落点之后（00:00 提前 5 分钟 → 发生日 23:55）', () {
+      final s = _s(
+          repeat: RecurRepeat.shift,
+          shiftNames: const ['夜班'],
+          timeMinute: 0,
+          advance: 5);
+      final times = upcomingFireTimes(s,
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 0,
+          shiftOn: only22);
+      expect(times.first, DateTime(2026, 9, 22, 23, 55));
+    });
+
+    test('from 恰好等于那条提醒、且它属于昨天那次：不能漏', () {
+      // 22、23 都是夜班；22 日的 00:15 提醒落在 23 日 00:15，from 正好取这一刻。
+      // **两天都要是班次日**：否则 `occurrenceOnOrBefore(from)` 直接就给昨天那次，
+      // 「窗口要从昨天起算」这条根本测不出来。相等也算「不早于」。
+      final s = _s(
+          repeat: RecurRepeat.shift,
+          shiftNames: const ['夜班'],
+          timeMinute: 15,
+          advance: 0);
+      final times = upcomingFireTimes(s,
+          from: DateTime(2026, 9, 23, 0, 15),
+          clockMinute: 15,
+          shiftOn: onDays({22: night, 23: night}));
+      expect(times.first, DateTime(2026, 9, 23, 0, 15));
+    });
+
+    test('相邻两次倒序（21/22 夜班 + 23 零点班，配 07:00）→ 输出必须升序', () {
+      // 21 夜班 → 22 日 07:00；22 夜班 → 23 日 07:00；23 零点班 → 22 日 07:00。
+      // 扫描顺序是第三天的 22 日、第一天的 22 日、第二天的 23 日 —— 不排序就是倒序队列。
+      final times = upcomingFireTimes(shiftAt(7 * 60,
+              names: const ['夜班', '零点班']),
+          from: DateTime(2026, 9, 20, 12),
+          clockMinute: 7 * 60,
+          shiftOn: onDays({21: night, 22: night, 23: zero}));
+      expect(times.take(2).toList(),
+          [DateTime(2026, 9, 22, 7), DateTime(2026, 9, 23, 7)]);
+      // 只看前两条抓不到「9/23 之后又冒出 9/22」那种乱序 —— 整条队列都要严格升序。
+      for (var i = 1; i < times.length; i++) {
+        expect(times[i].isAfter(times[i - 1]), isTrue,
+            reason: '队列第 $i 条不在前一条之后：${times[i - 1]} → ${times[i]}');
+      }
+    });
+
+    test('相邻两次落成同一时刻 → 只排一条', () {
+      // 22 日夜班 00:15 → 23 日 00:15（next）；23 日零点班 00:15 → 23 日 00:15（窗口内）。
+      // `onDays` 按「几号」匹配，所以下一次同样的一对在 10 月 22/23 日。
+      final times = upcomingFireTimes(shiftAt(15,
+              names: const ['夜班', '零点班']),
+          from: DateTime(2026, 9, 20, 12),
+          clockMinute: 15,
+          shiftOn: onDays({22: night, 23: zero}));
+      expect(times.take(2).toList(),
+          [DateTime(2026, 9, 23, 0, 15), DateTime(2026, 10, 23, 0, 15)]);
+    });
+
+    test('全天提醒不套落点', () {
+      final s =
+          _s(repeat: RecurRepeat.shift, shiftNames: const ['夜班'], advance: 0);
+      final times = upcomingFireTimes(s,
+          from: DateTime(2026, 9, 21, 12),
+          clockMinute: 9 * 60,
+          shiftOn: only22);
+      expect(times.first, DateTime(2026, 9, 22, 9)); // 发生日当天 9 点
+    });
+  });
+
+
   test('规则描述：提醒正文用它，且不带日期', () {
     expect(_s(repeat: RecurRepeat.daily, timeMinute: 9 * 60).ruleLabel, '每天');
     expect(
