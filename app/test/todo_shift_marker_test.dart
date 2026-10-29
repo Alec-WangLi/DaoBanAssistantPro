@@ -166,6 +166,63 @@ void main() {
       await _dispose(tester);
     });
 
+    testWidgets('每天规则但残留班次名（切规则留下的）→ 仍不标', (tester) async {
+      // `RecurringRulePicker` 从「按班次」切回「每天」时不会清空 shiftNames ——
+      // 只有 `repeat == shift` 这道闸门拦得住。
+      await useNightToday();
+      await repo.addRecurringTodo(
+        title: '每天均可',
+        repeat: RecurRepeat.daily,
+        startDate: dateOnly(DateTime.now()),
+        shiftNames: const ['夜班'],
+        timeMinute: 0,
+        advanceRemindMinutes: 0,
+      );
+      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await pumpScreen(tester);
+
+      expect(find.text('每天均可'), findsOneWidget);
+      expect(find.textContaining('次日'), findsNothing,
+          reason: '规则不是按班次，就算名字还在，也没有班次上下文');
+      await _dispose(tester);
+    });
+
+    testWidgets('系列停用 → 不标（排定侧不会响）', (tester) async {
+      await useNightToday();
+      final sid = await repo.addRecurringTodo(
+        title: '停用的夜班',
+        repeat: RecurRepeat.shift,
+        startDate: dateOnly(DateTime.now()),
+        shiftNames: const ['夜班'],
+        timeMinute: 0,
+        advanceRemindMinutes: 0,
+      );
+      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await repo.setRecurringEnabled(sid, false);
+      await pumpScreen(tester);
+
+      expect(find.text('停用的夜班'), findsOneWidget);
+      expect(find.textContaining('次日'), findsNothing);
+      await _dispose(tester);
+    });
+
+    testWidgets('没设提醒 → 不标（排定侧不会响）', (tester) async {
+      await useNightToday();
+      await repo.addRecurringTodo(
+        title: '不提醒的夜班',
+        repeat: RecurRepeat.shift,
+        startDate: dateOnly(DateTime.now()),
+        shiftNames: const ['夜班'],
+        timeMinute: 0,
+      );
+      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await pumpScreen(tester);
+
+      expect(find.text('不提醒的夜班'), findsOneWidget);
+      expect(find.textContaining('次日'), findsNothing);
+      await _dispose(tester);
+    });
+
     testWidgets('旧行：今天的班次不在系列选的名单里 → 不标', (tester) async {
       // 改排班后生成器「只往前不回退」会留下这种行；排定侧不会给它排提醒。
       await useNightToday();

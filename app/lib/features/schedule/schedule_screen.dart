@@ -361,6 +361,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
     final shift = chain?.shiftOn(e.date);
     final markedClock = (e.seriesId != null &&
             series != null &&
+            series.enabled &&
+            series.advanceRemindMinutes != null &&
             series.repeat == RecurRepeat.shift &&
             series.timeMinute != null &&
             series.timeMinute == e.timeMinute &&

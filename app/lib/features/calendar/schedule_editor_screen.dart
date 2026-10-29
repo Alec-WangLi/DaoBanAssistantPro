@@ -1800,30 +1800,30 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               // 输入框**封顶**：两三个字的班组名不该占掉大半行（用户
-              // v0.12.5 的真机反馈）。`Flexible` 与后面的 `Spacer` 按 2:1 分
-              // 剩余空间、封顶 180 —— 别用 `Expanded`：那是紧约束，会把上限
-              // 顶掉。份额取 2:1 而不是 1:1：320dp + 大字号英文下，1:1 会把
-              // 「Team name」标签挤成省略号（text_fit_guard 抓到的）。
-              Flexible(
-                flex: 2,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 180),
-                  child: GlassField(
-                    label: L10n.teamName,
-                    isDense: true,
-                    child: TextField(
-                      key: Key('crew-name-$i'),
-                      controller: _teamNameCtrls[i],
-                      onChanged: (v) => _teamNames[i] = v,
-                      decoration: glassInputDecoration(context, isDense: true),
-                      style: AppTokens.titleStrong.copyWith(
-                          fontWeight:
-                              isOurs ? FontWeight.w700 : FontWeight.w500),
+              // v0.12.5 的真机反馈）。**填充的那段必须是紧约束**（`Expanded`
+              // + `Align`）：`Flexible` 没用完的份额会留在芯片左边，宽画布
+              // （横屏 / 平板）上芯片就漂在卡片中间。
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: GlassField(
+                      label: L10n.teamName,
+                      isDense: true,
+                      child: TextField(
+                        key: Key('crew-name-$i'),
+                        controller: _teamNameCtrls[i],
+                        onChanged: (v) => _teamNames[i] = v,
+                        decoration: glassInputDecoration(context, isDense: true),
+                        style: AppTokens.titleStrong.copyWith(
+                            fontWeight:
+                                isOurs ? FontWeight.w700 : FontWeight.w500),
+                      ),
                     ),
                   ),
                 ),
               ),
-              const Spacer(),
               GlassPressable(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -1904,40 +1904,60 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         const SizedBox(height: AppTokens.spaceSm),
         Container(height: 1, color: outline.withValues(alpha: 0.7)),
         GlassPressable(
-          child: GestureDetector(
-            key: rowKey,
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.gapHair, vertical: AppTokens.spaceMd),
-              child: Row(
-                children: [
-                  AppIcon(icon, size: AppTokens.iconSm, color: muted),
-                  const SizedBox(width: AppTokens.spaceSm),
-                  Expanded(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(label, style: AppTokens.rowPrimary),
-                    ),
-                  ),
-                  if (value != null) ...[
-                    const SizedBox(width: AppTokens.spaceSm),
-                    Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        // 值走 13/w600（`labelSecondary`）：与 chip 的 w700 保持
-                        // 一档层级 —— `schedule_editor_test` 那条 w700/w600 的
-                        // 用例就是钉这个的。别为了「值更显眼」升到 labelStrong。
-                        child: Text(value, style: AppTokens.labelSecondary),
+          child: Semantics(
+            button: true,
+            child: GestureDetector(
+              key: rowKey,
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.gapHair, vertical: AppTokens.spaceMd),
+                child: LayoutBuilder(
+                  builder: (context, cons) => Row(
+                    children: [
+                      AppIcon(icon, size: AppTokens.iconSm, color: muted),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      // 标签**不做弹性子件**：弹性子件没吃满的份额会作为
+                      // 「剩余空间」落在行尾，把「值 + 箭头」推到半路（实测
+                      // 900dp 下空 232dp）。自然宽 + 55% 上限，剩下的全给
+                      // 右边那组 —— 与 v0.12.5 修过的 `GlassValueRow` 同一写法。
+                      ConstrainedBox(
+                        constraints:
+                            BoxConstraints(maxWidth: cons.maxWidth * 0.55),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(label, style: AppTokens.rowPrimary),
+                        ),
                       ),
-                    ),
-                  ],
-                  const SizedBox(width: AppTokens.gapHair),
-                  AppIcon(Icons.chevron_right_outlined,
-                      key: chevronKey, size: AppTokens.iconSm, color: muted),
-                ],
+                      const SizedBox(width: AppTokens.spaceSm),
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (value != null)
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  // 值走 13/w600（`labelSecondary`）：与 chip
+                                  // 的 w700 保持一档层级 —— `schedule_editor_test`
+                                  // 那条 w700/w600 的用例就是钉这个的。
+                                  child: Text(value,
+                                      style: AppTokens.labelSecondary),
+                                ),
+                              ),
+                            const SizedBox(width: AppTokens.gapHair),
+                            AppIcon(Icons.chevron_right_outlined,
+                                key: chevronKey,
+                                size: AppTokens.iconSm,
+                                color: muted),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

@@ -1862,6 +1862,30 @@ void main() {
         reason: '这一行是整行可点的入口，矮了就成了「又长又矮、点不着」');
   });
 
+  testWidgets('班组卡：周期起始日的箭头贴住内容右缘', (tester) async {
+    await _pumpEditor(tester, _domain(), crewExpanded: true);
+
+    final row = tester.getRect(find.byKey(const Key('crew-start-row-0')));
+    final chevron =
+        tester.getRect(find.byKey(const Key('crew-start-chevron-0')));
+    // 行内左右各 2dp 内边距（gapHair），箭头右缘与行右缘只该差这一点。
+    expect(row.right - chevron.right, lessThanOrEqualTo(3.0),
+        reason: '标签吃满剩余宽度，会把「日期 + 箭头」留在半路（v0.12.5 GlassValueRow 的同一个坑）');
+  });
+
+  testWidgets('班组卡：宽画布下「我的班」仍贴右缘', (tester) async {
+    await _pumpEditor(tester, _domain(),
+        crewExpanded: true, size: const Size(1200, 4600));
+
+    final chip = tester.getRect(find
+        .ancestor(
+            of: find.text(L10n.myTeam), matching: find.byType(Container))
+        .first);
+    final row = tester.getRect(find.byKey(const Key('crew-start-row-0')));
+    expect(row.right - chip.right, lessThanOrEqualTo(1.0),
+        reason: '输入框封顶后多出来的宽度不能把芯片留在卡片中间');
+  });
+
   testWidgets('改班组名会落库', (tester) async {
     final repo = await _pumpEditor(tester, _domain(), crewExpanded: true);
     await tester.enterText(find.byKey(const Key('crew-name-0')), '甲班');
