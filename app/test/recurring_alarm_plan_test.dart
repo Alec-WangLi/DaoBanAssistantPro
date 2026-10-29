@@ -6,6 +6,7 @@
 // 那两样都靠界面看不出来。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 
 RecurringTodo _s({
@@ -83,10 +84,12 @@ void main() {
 
   test('按班次系列：只在接班次的日子排提醒', () {
     final series = _s(repeat: RecurRepeat.shift, shiftNames: ['上夜班']);
-    String? night(DateTime d) =>
-        d.weekday == DateTime.wednesday ? '上夜班' : '白班';
+    const nightShift = ShiftClass(name: '上夜班', startMinute: 1230, endMinute: 1920);
+    const dayShift = ShiftClass(name: '白班', startMinute: 480, endMinute: 1080);
+    ShiftClass? night(DateTime d) =>
+        d.weekday == DateTime.wednesday ? nightShift : dayShift;
     final plans = planRecurringReminders([series],
-        from: DateTime(2026, 9, 21, 8), shiftNameOn: night);
+        from: DateTime(2026, 9, 21, 8), shiftOn: night);
     expect(plans.single.fireAt, DateTime(2026, 9, 23, 9));
     expect(plans.single.repeatTimes.first, DateTime(2026, 9, 30, 9));
   });

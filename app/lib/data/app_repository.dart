@@ -1108,9 +1108,7 @@ class AppRepository {
     // 按班次规则要问「那一天我们班组上什么班」—— 走整条链（含按天调班）。
     // 读在事务外：装配要做好几次查询，没必要把写事务撑大。
     final schedules = await getActiveSchedules();
-    final String? Function(DateTime day)? shiftNameOn = schedules == null
-        ? null
-        : (DateTime d) => schedules.chain.shiftOn(d)?.name;
+    final shiftOn = schedules?.chain.shiftOn;
     await db.transaction(() async {
       final series = await listRecurringTodos();
       final rows = await listEvents();
@@ -1119,7 +1117,7 @@ class AppRepository {
         // 替他删掉他就再也看不见了。
         if (!s.enabled) continue;
 
-        final occ = occurrenceOnOrBefore(s, today, shiftNameOn: shiftNameOn);
+        final occ = occurrenceOnOrBefore(s, today, shiftOn: shiftOn);
         if (occ == null) continue; // 还没到起始日
         // 「这次不要了」：跳过标记与 occurrence 都是「自 epoch 天数」。
         // 直接拿 DateTime 比 int 是拿毫秒去比天数，恒不成立 —— 那正是「删了又回来」。

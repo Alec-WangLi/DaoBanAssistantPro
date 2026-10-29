@@ -180,12 +180,12 @@ const int _shiftScanDays = 400;
 
 /// 这天是不是这条规则要的班次。没给 resolver / 名字为空都算「不是」。
 bool _matchesShift(
-        RecurringTodo s, DateTime day, String? Function(DateTime day)? on) =>
-    on != null && s.shiftNames.isNotEmpty && s.shiftNames.contains(on(day));
+        RecurringTodo s, DateTime day, ShiftClass? Function(DateTime day)? on) =>
+    on != null && s.shiftNames.isNotEmpty && s.shiftNames.contains(on(day)?.name);
 
 /// 不早于 [from] 的**第一次**发生日；受 `startDate` 约束，无解返回 null。
 DateTime? firstOccurrenceOnOrAfter(RecurringTodo s, DateTime from,
-    {String? Function(DateTime day)? shiftNameOn}) {
+    {ShiftClass? Function(DateTime day)? shiftOn}) {
   final start = dateOnly(s.startDate);
   var base = dateOnly(from);
   if (daysBetween(start, base) < 0) base = start;
@@ -214,7 +214,7 @@ DateTime? firstOccurrenceOnOrAfter(RecurringTodo s, DateTime from,
       if (s.shiftNames.isEmpty) return null;
       for (var i = 0; i <= _shiftScanDays; i++) {
         final c = _addDays(base, i);
-        if (_matchesShift(s, c, shiftNameOn)) return c;
+        if (_matchesShift(s, c, shiftOn)) return c;
       }
       return null;
   }
@@ -222,7 +222,7 @@ DateTime? firstOccurrenceOnOrAfter(RecurringTodo s, DateTime from,
 
 /// 不晚于 [day] 的**最近一次**发生日；`startDate` 之前返回 null。
 DateTime? occurrenceOnOrBefore(RecurringTodo s, DateTime day,
-    {String? Function(DateTime day)? shiftNameOn}) {
+    {ShiftClass? Function(DateTime day)? shiftOn}) {
   final start = dateOnly(s.startDate);
   final d = dateOnly(day);
   if (daysBetween(start, d) < 0) return null;
@@ -254,7 +254,7 @@ DateTime? occurrenceOnOrBefore(RecurringTodo s, DateTime day,
       for (var back = 0; back <= _shiftScanDays; back++) {
         final c = _addDays(d, -back);
         if (daysBetween(start, c) < 0) return null;
-        if (_matchesShift(s, c, shiftNameOn)) return c;
+        if (_matchesShift(s, c, shiftOn)) return c;
       }
       return null;
   }
@@ -262,9 +262,9 @@ DateTime? occurrenceOnOrBefore(RecurringTodo s, DateTime day,
 
 /// **严格晚于** [day] 的下一次发生日。
 DateTime? nextOccurrenceAfter(RecurringTodo s, DateTime day,
-        {String? Function(DateTime day)? shiftNameOn}) =>
+        {ShiftClass? Function(DateTime day)? shiftOn}) =>
     firstOccurrenceOnOrAfter(s, _addDays(dateOnly(day), 1),
-        shiftNameOn: shiftNameOn);
+        shiftOn: shiftOn);
 
 /// 某一次发生日的**触发时刻**（本地时间）。
 ///
@@ -290,21 +290,21 @@ List<DateTime> upcomingFireTimes(
   required int clockMinute,
   int days = 180,
   int cap = 200,
-  String? Function(DateTime day)? shiftNameOn,
+  ShiftClass? Function(DateTime day)? shiftOn,
 }) {
   final advance = s.advanceRemindMinutes;
   if (advance == null || !s.enabled) return const [];
   final horizon = from.add(Duration(days: days));
   final out = <DateTime>[];
-  var occ = occurrenceOnOrBefore(s, from, shiftNameOn: shiftNameOn) ??
-      firstOccurrenceOnOrAfter(s, from, shiftNameOn: shiftNameOn);
+  var occ = occurrenceOnOrBefore(s, from, shiftOn: shiftOn) ??
+      firstOccurrenceOnOrAfter(s, from, shiftOn: shiftOn);
   while (occ != null && out.length < cap) {
     final fire = _fireAt(occ, clockMinute, advance);
     if (!fire.isBefore(from)) {
       if (fire.isAfter(horizon)) break;
       out.add(fire);
     }
-    occ = nextOccurrenceAfter(s, occ, shiftNameOn: shiftNameOn);
+    occ = nextOccurrenceAfter(s, occ, shiftOn: shiftOn);
   }
   return out;
 }

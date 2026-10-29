@@ -8,6 +8,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
 
 RecurringTodo _s({
   RecurRepeat repeat = RecurRepeat.daily,
@@ -263,17 +264,20 @@ void main() {
 
   group('按班次', () {
     final shift = _s(repeat: RecurRepeat.shift, shiftNames: ['上夜班']);
-    String? night(DateTime d) =>
-        d.weekday == DateTime.wednesday ? '上夜班' : '白班';
+    // 回调返回的是**班次定义**（提醒落点要用起止时间），不再是名字。
+    const nightShift = ShiftClass(name: '上夜班', startMinute: 1230, endMinute: 1920);
+    const dayShift = ShiftClass(name: '白班', startMinute: 480, endMinute: 1080);
+    ShiftClass? night(DateTime d) =>
+        d.weekday == DateTime.wednesday ? nightShift : dayShift;
 
     test('发生日 = 班次名匹配的那天（前后都找）', () {
       expect(
           occurrenceOnOrBefore(shift, DateTime.utc(2026, 9, 25),
-              shiftNameOn: night),
+              shiftOn: night),
           DateTime.utc(2026, 9, 23));
       expect(
           nextOccurrenceAfter(shift, DateTime.utc(2026, 9, 20),
-              shiftNameOn: night),
+              shiftOn: night),
           DateTime.utc(2026, 9, 23));
     });
 
@@ -283,7 +287,7 @@ void main() {
           occurrenceOnOrBefore(
               _s(repeat: RecurRepeat.shift, shiftNames: const []),
               DateTime.utc(2026, 9, 25),
-              shiftNameOn: night),
+              shiftOn: night),
           isNull);
     });
 
@@ -291,7 +295,7 @@ void main() {
       final s = _s(repeat: RecurRepeat.shift, shiftNames: ['上夜班', '白班']);
       expect(
           occurrenceOnOrBefore(s, DateTime.utc(2026, 9, 22),
-              shiftNameOn: night),
+              shiftOn: night),
           DateTime.utc(2026, 9, 22));
     });
 
@@ -302,7 +306,7 @@ void main() {
           start: DateTime.utc(2026, 9, 24));
       expect(
           occurrenceOnOrBefore(s, DateTime.utc(2026, 9, 25),
-              shiftNameOn: night),
+              shiftOn: night),
           isNull);
     });
 

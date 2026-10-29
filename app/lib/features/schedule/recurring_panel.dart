@@ -77,9 +77,7 @@ class _RecurringList extends ConsumerWidget {
       ScheduleChain? chain) {
     final today = dateOnly(DateTime.now());
     // 按班次系列要问「那天我们班组上什么班」—— 与生成器 / 提醒同一条解析链。
-    final String? Function(DateTime day)? shiftNameOn = chain == null
-        ? null
-        : (DateTime d) => chain.shiftOn(d)?.name;
+    final shiftOn = chain?.shiftOn;
     final knownNames = {
       for (final c in (chain?.classChoicesFrom(today) ?? const <ShiftClass>[]))
         c.name,
@@ -91,7 +89,7 @@ class _RecurringList extends ConsumerWidget {
     // 「下次」要的是**严格晚于今天**的那一次。用 `occurrenceOnOrBefore` 兜底是错的：
     // 那给出的是「已经过去的那一次」（比如今天是周二、系列是每周三，它给上周三），
     // 而那一行此刻就在列表里躺着 —— 面板上再把它写成「下次 9月23日」是在说反话。
-    final next = nextOccurrenceAfter(s, today, shiftNameOn: shiftNameOn);
+    final next = nextOccurrenceAfter(s, today, shiftOn: shiftOn);
     final parts = [
       s.ruleLabel,
       if (s.timeLabel.isNotEmpty) s.timeLabel,

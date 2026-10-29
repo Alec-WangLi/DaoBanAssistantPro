@@ -783,7 +783,7 @@ class _EventFields {
       final s = (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
       final chain = (await repo.getActiveSchedules())?.chain;
       final occ = occurrenceOnOrBefore(s, dateOnly(DateTime.now()),
-          shiftNameOn: chain == null ? null : (d) => chain.shiftOn(d)?.name);
+          shiftOn: chain?.shiftOn);
       if (occ != null) {
         for (final r in (await repo.listEvents())
             .where((e) => e.seriesId == sid && !e.isCompleted)) {

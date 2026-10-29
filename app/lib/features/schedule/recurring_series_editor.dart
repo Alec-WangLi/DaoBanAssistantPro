@@ -164,8 +164,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
           (await repo.listRecurringTodos()).firstWhere((x) => x.id == id);
       final chain = _chain;
       final occ = ruleChanged
-          ? occurrenceOnOrBefore(s, today,
-              shiftNameOn: chain == null ? null : (d) => chain.shiftOn(d)?.name)
+          ? occurrenceOnOrBefore(s, today, shiftOn: chain?.shiftOn)
           : null;
       for (final r in (await repo.listEvents())
           .where((e) => e.seriesId == id && !e.isCompleted)) {

@@ -198,7 +198,7 @@ List<RecurringAlarmPlan> planRecurringReminders(
   required DateTime from,
   int days = 180,
   int cap = 200,
-  String? Function(DateTime day)? shiftNameOn,
+  ShiftClass? Function(DateTime day)? shiftOn,
 }) {
   final out = <RecurringAlarmPlan>[];
   for (final s in series) {
@@ -212,7 +212,7 @@ List<RecurringAlarmPlan> planRecurringReminders(
       clockMinute: s.timeMinute ?? allDayReminderHour * 60,
       days: days,
       cap: cap,
-      shiftNameOn: shiftNameOn,
+      shiftOn: shiftOn,
     );
     if (times.isEmpty) continue;
     out.add(RecurringAlarmPlan(
@@ -955,7 +955,7 @@ class AlarmService {
     // 待办那一段会跳过带 `seriesId` 的行）。
     await rescheduleRecurringReminders(
       await repo.listRecurringTodos(),
-      shiftNameOn: (DateTime d) => schedules.chain.shiftOn(d)?.name,
+      shiftOn: schedules.chain.shiftOn,
     );
   }
 
@@ -1112,9 +1112,9 @@ class AlarmService {
   /// 清空了，所以这里排的就是全部 —— 停了、删了的系列自然不会再排上。
   static Future<void> rescheduleRecurringReminders(
       List<RecurringTodo> series,
-      {String? Function(DateTime day)? shiftNameOn}) async {
+      {ShiftClass? Function(DateTime day)? shiftOn}) async {
     final plans = planRecurringReminders(series,
-        from: DateTime.now(), shiftNameOn: shiftNameOn);
+        from: DateTime.now(), shiftOn: shiftOn);
     for (final p in plans) {
       final s = series.firstWhere((x) => x.id == p.seriesId);
       final id = _recurringBaseId + p.seriesId;
@@ -1150,13 +1150,11 @@ class AlarmService {
   /// 号段互不重叠（`cancelAllTodoReminders` 会把两段都清掉）。
   static Future<void> rescheduleTodoReminders(AppRepository repo) async {
     final active = await repo.getActiveSchedules();
-    final String? Function(DateTime)? shiftNameOn = active == null
-        ? null
-        : (DateTime d) => active.chain.shiftOn(d)?.name;
+    final shiftOn = active?.chain.shiftOn;
     await rescheduleEventReminders(await repo.listEvents());
     await rescheduleRecurringReminders(
       await repo.listRecurringTodos(),
-      shiftNameOn: shiftNameOn,
+      shiftOn: shiftOn,
     );
   }
 
