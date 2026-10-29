@@ -266,6 +266,15 @@ class RecurringRulePicker extends StatelessWidget {
               style: AppTokens.microText.copyWith(color: muted),
             ),
           ),
+          // 落点规则：用户最容易被「夜班的 0 点提醒落在哪天」绊住（v0.12.5
+          // 真机反馈），所以选到这一档就把判据写在这儿。
+          Padding(
+            padding: const EdgeInsets.only(top: AppTokens.spaceXs),
+            child: Text(
+              L10n.shiftAnchorHint,
+              style: AppTokens.microText.copyWith(color: muted),
+            ),
+          ),
           if (missing.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: AppTokens.spaceXs),

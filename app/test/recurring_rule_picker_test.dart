@@ -109,6 +109,24 @@ void main() {
   });
 
 
+  testWidgets('按班次档的说明里写着落点规则；其它档不显示', (tester) async {
+    await _pump(
+      tester,
+      _Host(
+        initial: const RecurRuleValue(repeat: RecurRepeat.daily),
+        choices: [_cls('白班')],
+        fallbackShiftName: '白班',
+      ),
+    );
+    expect(find.text(L10n.shiftAnchorHint), findsNothing,
+        reason: '不是按班次档就不该讲落点，否则是噪音');
+
+    await tester.tap(find.text(L10n.repeatShift));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.shiftAnchorHint), findsOneWidget);
+  });
+
+
   testWidgets('每月多选 1 与 15；点掉最后一天不生效', (tester) async {
     RecurRuleValue? out;
     await _pump(

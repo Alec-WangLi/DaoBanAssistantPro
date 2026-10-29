@@ -330,6 +330,10 @@ class L10n {
       '按班次名称匹配；换排班表后，新表里有同名班次就会继续生效',
       'Matched by shift name — switching schedules keeps it working if the new one has the same name');
 
+  static String get shiftAnchorHint => t(
+      '提醒落在班次值班时间里时按那天的班次算（跨午夜的班次会落在次日）',
+      "A reminder moment inside the shift's working window follows that shift — cross-midnight shifts land on the next day");
+
   static String get shiftRuleNoSchedule => t(
       '还没有排班表，先把班排上再来选班次',
       'No schedule yet — set one up first');
