@@ -1779,7 +1779,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   Widget _crewRow(BuildContext context, int i) {
     final primary = Theme.of(context).colorScheme.primary;
     final outline = Theme.of(context).colorScheme.outlineVariant;
-    final muted = AppTokens.inkMuted(context);
     final isOurs = i == _ourTeamIndex;
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceSm),
@@ -1800,21 +1799,31 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(
-                child: GlassField(
-                  label: L10n.teamName,
-                  isDense: true,
-                  child: TextField(
-                    key: Key('crew-name-$i'),
-                    controller: _teamNameCtrls[i],
-                    onChanged: (v) => _teamNames[i] = v,
-                    decoration: glassInputDecoration(context, isDense: true),
-                    style: AppTokens.titleStrong.copyWith(
-                        fontWeight: isOurs ? FontWeight.w700 : FontWeight.w500),
+              // 输入框**封顶**：两三个字的班组名不该占掉大半行（用户
+              // v0.12.5 的真机反馈）。`Flexible` 与后面的 `Spacer` 按 2:1 分
+              // 剩余空间、封顶 180 —— 别用 `Expanded`：那是紧约束，会把上限
+              // 顶掉。份额取 2:1 而不是 1:1：320dp + 大字号英文下，1:1 会把
+              // 「Team name」标签挤成省略号（text_fit_guard 抓到的）。
+              Flexible(
+                flex: 2,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 180),
+                  child: GlassField(
+                    label: L10n.teamName,
+                    isDense: true,
+                    child: TextField(
+                      key: Key('crew-name-$i'),
+                      controller: _teamNameCtrls[i],
+                      onChanged: (v) => _teamNames[i] = v,
+                      decoration: glassInputDecoration(context, isDense: true),
+                      style: AppTokens.titleStrong.copyWith(
+                          fontWeight:
+                              isOurs ? FontWeight.w700 : FontWeight.w500),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: AppTokens.spaceSm),
+              const Spacer(),
               GlassPressable(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -1845,86 +1854,95 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           ),
           // 第二行：周期模式给「周期起始日」，按月模式给「从第几段入场」——
           // 按月不读基准日，摆一个日期在那儿就是让用户操作一个不生效的值。
+          //
+          // 两条都走同一条**加高的值行**（v0.12.5 用户：「又长又矮，不太好
+          // 点到」）：细分隔线 + 12dp 上下内边距 ≈ 44dp 的可点高度。
           if (_monthly)
-            GlassPressable(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _pickCrewSegmentStart(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.gapHair,
-                      vertical: AppTokens.spaceXs),
-                  child: Row(
-                    children: [
-                      AppIcon(Icons.format_list_numbered,
-                          size: AppTokens.iconSm, color: muted),
-                      const SizedBox(width: AppTokens.spaceSm),
-                      Text(
-                        L10n.crewSegmentStart(
-                            (i < _teamSegOffsets.length
-                                    ? _teamSegOffsets[i]
-                                    : 0) +
-                                1),
-                        style: AppTokens.labelSecondary,
-                      ),
-                      const Spacer(),
-                      AppIcon(Icons.chevron_right_outlined,
-                          key: Key('crew-segment-chevron-$i'),
-                          size: AppTokens.iconSm,
-                          color: muted),
-                    ],
-                  ),
-                ),
-              ),
+            _crewValueRow(
+              context,
+              icon: Icons.format_list_numbered,
+              label: L10n.crewSegmentStart(
+                  (i < _teamSegOffsets.length ? _teamSegOffsets[i] : 0) + 1),
+              chevronKey: Key('crew-segment-chevron-$i'),
+              rowKey: Key('crew-segment-row-$i'),
+              onTap: () => _pickCrewSegmentStart(i),
             )
           else
-            GlassPressable(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _pickCrewStartDate(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.gapHair,
-                      vertical: AppTokens.spaceXs),
-                  child: Row(
-                    children: [
-                      AppIcon(Icons.event_outlined,
-                          size: AppTokens.iconSm, color: muted),
-                      const SizedBox(width: AppTokens.spaceSm),
-                      // 标签 + 日期一起缩：加了右边那颗箭头之后，320dp 下这一行
-                      // 会超 37px（实测）。箭头与左侧图标固定，中间的串按需缩，
-                      // 装得下时逐像素不变。
-                      Expanded(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(L10n.crewCycleStart,
-                                  style: AppTokens.rowSecondary
-                                      .copyWith(color: muted)),
-                              const SizedBox(width: AppTokens.spaceSm),
-                              Text(
-                                L10n.yearMonthDay(_crewStartDate(i)),
-                                style: AppTokens.labelSecondary,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppTokens.spaceSm),
-                      AppIcon(Icons.chevron_right_outlined,
-                          key: Key('crew-start-chevron-$i'),
-                          size: AppTokens.iconSm,
-                          color: muted),
-                    ],
-                  ),
-                ),
-              ),
+            _crewValueRow(
+              context,
+              icon: Icons.event_outlined,
+              label: L10n.crewCycleStart,
+              value: L10n.yearMonthDay(_crewStartDate(i)),
+              chevronKey: Key('crew-start-chevron-$i'),
+              rowKey: Key('crew-start-row-$i'),
+              onTap: () => _pickCrewStartDate(i),
             ),
         ],
       ),
+    );
+  }
+
+  /// 班组卡里那条「图标 + 标签 [— 值] ›」的值行。
+  ///
+  /// 高度是刻意的：12 + 行盒 + 12，实测 ≥ 44dp —— 用户 v0.12.5 报「又长又矮，
+  /// 不太好点到」，光有整行可点不够，得看得出它有厚度。标签与值都走
+  /// `FittedBox(scaleDown)`（320dp + 大字号下缩，不省略）。
+  Widget _crewValueRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    String? value,
+    required Key chevronKey,
+    required Key rowKey,
+    required VoidCallback onTap,
+  }) {
+    final muted = AppTokens.inkMuted(context);
+    final outline = Theme.of(context).colorScheme.outline;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppTokens.spaceSm),
+        Container(height: 1, color: outline.withValues(alpha: 0.7)),
+        GlassPressable(
+          child: GestureDetector(
+            key: rowKey,
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.gapHair, vertical: AppTokens.spaceMd),
+              child: Row(
+                children: [
+                  AppIcon(icon, size: AppTokens.iconSm, color: muted),
+                  const SizedBox(width: AppTokens.spaceSm),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(label, style: AppTokens.rowPrimary),
+                    ),
+                  ),
+                  if (value != null) ...[
+                    const SizedBox(width: AppTokens.spaceSm),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        // 值走 13/w600（`labelSecondary`）：与 chip 的 w700 保持
+                        // 一档层级 —— `schedule_editor_test` 那条 w700/w600 的
+                        // 用例就是钉这个的。别为了「值更显眼」升到 labelStrong。
+                        child: Text(value, style: AppTokens.labelSecondary),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: AppTokens.gapHair),
+                  AppIcon(Icons.chevron_right_outlined,
+                      key: chevronKey, size: AppTokens.iconSm, color: muted),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

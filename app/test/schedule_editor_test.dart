@@ -1848,6 +1848,20 @@ void main() {
     }
   });
 
+  testWidgets('班组卡：输入框收窄、周期起始日那一行够高好点', (tester) async {
+    await _pumpEditor(tester, _domain(), crewExpanded: true);
+
+    final field = tester.getSize(find.ancestor(
+        of: find.byKey(const Key('crew-name-0')),
+        matching: find.byType(GlassField)));
+    expect(field.width, lessThanOrEqualTo(180),
+        reason: '班组名两三个字，输入框不该占掉大半行');
+
+    final row = tester.getSize(find.byKey(const Key('crew-start-row-0')));
+    expect(row.height, greaterThanOrEqualTo(44),
+        reason: '这一行是整行可点的入口，矮了就成了「又长又矮、点不着」');
+  });
+
   testWidgets('改班组名会落库', (tester) async {
     final repo = await _pumpEditor(tester, _domain(), crewExpanded: true);
     await tester.enterText(find.byKey(const Key('crew-name-0')), '甲班');
