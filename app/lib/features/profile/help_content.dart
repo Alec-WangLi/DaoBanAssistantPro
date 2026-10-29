@@ -196,7 +196,7 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('每次上夜班都要提醒我带工牌',
                 'Remind me to bring my badge on every night shift'),
             answer: L10nText(
-              '新建待办时把「重复」选到「按班次」，勾上夜班（可以多选）。它按班次名字匹配：换了排班表，只要新表里还有同名班次就继续生效；名字对不上时，「重复待办」面板会明确写出来。提醒时刻落在班次的值班时间里（比如夜班的凌晨 0 点）时，会按值班时间排在次日；不在值班时间里时，按离上班还是离下班近来定。',
+              '新建待办时把「重复」选到「按班次」，勾上夜班（可以多选）。它按班次名字匹配：换了排班表，只要新表里还有同名班次就继续生效；名字对不上时，「重复待办」面板会明确写出来。提醒时刻落在班次的值班时间里（比如夜班的凌晨 0 点）时，会按值班时间排在次日；钟点晚于上班时间、又不在值班窗口里（下班之后）时，落在前一天（也就是班次开始之前）；早于上班时间时，按离上班还是离下班近来定。',
               'Choose "By shift" as the repeat, then tick the night shift (several allowed). It matches by shift name — after switching schedules it keeps working as long as the new one has the same name; if not, the Repeating panel says so. A reminder moment inside the shift\'s working window (say midnight during a night shift) lands on the next day; otherwise it goes to whichever side of the shift it is nearer.',
             ),
           ),

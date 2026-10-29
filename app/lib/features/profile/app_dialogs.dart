@@ -41,8 +41,14 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.7\n'
+    '· 修：编辑排班的班组卡里，「周期起始日」与箭头现在贴住右边（之前整组停在半路，右边空出一大截）；宽屏 / 横屏下「我的班」芯片也不再漂在卡片中间\n'
+    '· 修：待办行的「次日 00:00」标记只在真的会响时显示 —— 系列停用、或没设提醒时不显示\n'
+    '· 文案：帮助与更新说明里「钟点不在值班时间里」的说法改准 —— 晚于上班时间又不在值班窗口里时落在前一天（上班前），早于上班时间时按离上班 / 下班哪边近来定\n'
+    '· 无障碍：班组卡里那两行值行重新被读成按钮\n'
+    '\n'
 'v0.12.6\n'
-    '· 重复待办的「按班次」提醒现在按当天的值班时间算落在哪天：上夜班（20:30–次日 08:30）配凌晨 0 点的提醒，会落在次日 0 点，不再是上班当天凌晨；钟点不在值班时间里时，按离上班还是离下班近来定\n'
+    '· 重复待办的「按班次」提醒现在按当天的值班时间算落在哪天：上夜班（20:30–次日 08:30）配凌晨 0 点的提醒，会落在次日 0 点，不再是上班当天凌晨；钟点晚于上班时间、又不在值班窗口里时落在前一天（上班前），早于上班时间时按离上班还是离下班近来定\n'
     '· 待办列表那一行会标出落点（「次日 00:00」/「前一天 23:00」），与闹钟列表同一套说法\n'
     '· 「按班次」规则的说明里补了一句落点规则\n'
     '· 编辑排班 → 班组设置：「班组名」输入框不再占掉大半行；「周期起始日」那一行加高了（约 44dp），点起来不再发虚\n'
@@ -94,16 +100,17 @@ const String _changelogZh =
     '· 周条上「今天」那一块玻璃长高了：以前格子里那三行（周几 / 日期 / 班次）离块的上下边只剩一点点，看着像贴着边画的；现在上下多留出跟左右一样多的空隙\n'
     '· 今日卡的「其他班组」那一行字大了一档 —— 它原来比 App 里同一行、也比这张卡自己的「本月统计」小一号，是搬过来时掉了一级，不是没位置\n'
     '\n'
-'v0.11.24\n'
-    '· 桌面小组件的班次胶囊改成跟着文字宽窄走：以前是个一刀切的定值，格子一小它就顶满格子、跟格子边贴在一起；现在「白」是窄的、「大休」是宽的，左右都留出跟 App 里一样的间隙\n'
-    '· 周条跟月历对齐了：今天那一列也换成半透明块（不再是实心一块），周标题改成「一 二 三 …日」\n'
-    '· 编辑排班的「每月第 N 天起」不再出现省略号 —— 明明旁边还有位置，却被挤成了「每月第 3…」\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.7\n'
+    '· Fix: in the crew card, the cycle start date and its chevron now sit flush right (the pair used to stop mid-row with a wide gap); on landscape and tablet widths the Set as mine chip no longer floats in the middle of the card\n'
+    '· Fix: the next-day / day-before marker on a todo row now only shows when a reminder can actually fire — a paused series or one with no reminder shows none\n'
+    '· Copy: the help and release notes now describe the landing rule accurately: a moment later than the shift start but outside the window lands on the day before (ahead of the shift); earlier moments go to whichever side is nearer\n'
+    '· Accessibility: the two value rows in the crew card are read as buttons again\n'
+    '\n'
 'v0.12.6\n'
-    '· Reminders on shift-based repeating todos now follow the shift\'s working hours: a 00:00 reminder on a night shift (20:30 to 08:30 next morning) lands at 00:00 the next day instead of the small hours of the shift\'s starting day; moments outside the shift go to whichever side of it is nearer\n'
+    '· Reminders on shift-based repeating todos now follow the shift\'s working hours: a 00:00 reminder on a night shift (20:30 to 08:30 next morning) lands at 00:00 the next day instead of the small hours of the shift\'s starting day; moments later than the shift start but outside the window land on the day before, ahead of the shift; earlier moments go to whichever side is nearer\n'
     '· The todo row now marks that landing (next-day 00:00 / day-before 23:00), the same wording the alarm list uses\n'
     '· The By shift hint now says how the landing is decided\n'
     '· Edit schedule > crew settings: the name field no longer takes most of the row, and the cycle start date row is taller (about 44 dp), so it reads as tappable\n'
@@ -154,11 +161,6 @@ const String _changelogEn =
 'v0.11.25\n'
     '· The today block in the week strip is taller. The three rows inside it (weekday, date, shift) used to sit right against its top and bottom edges; they now keep the same breathing room all round as they do left and right\n'
     '· The Other crews row on the today card is one size larger. It had come over a step smaller than the same row in the app, and smaller than the month tally line on the same card - that was a slip when porting, not a lack of room\n'
-    '\n'
-'v0.11.24\n'
-    '· The widget shift chips now follow how wide their text is: they used to be a fixed size, so in a small cell the chip filled it and touched both edges. A one-character shift is narrow and a two-character one is wide, each keeping the same gap the app leaves\n'
-    '· The week strip now matches the month widget: its today column is a translucent block instead of a solid one, and the weekday header uses the single-character form\n'
-    '· The editor no longer truncates “from day N of each month” — there was room beside it, and it still came out as “from day 3…”\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
