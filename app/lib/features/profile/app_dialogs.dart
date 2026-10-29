@@ -41,6 +41,12 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.6\n'
+    '· 重复待办的「按班次」提醒现在按当天的值班时间算落在哪天：上夜班（20:30–次日 08:30）配凌晨 0 点的提醒，会落在次日 0 点，不再是上班当天凌晨；钟点不在值班时间里时，按离上班还是离下班近来定\n'
+    '· 待办列表那一行会标出落点（「次日 00:00」/「前一天 23:00」），与闹钟列表同一套说法\n'
+    '· 「按班次」规则的说明里补了一句落点规则\n'
+    '· 编辑排班 → 班组设置：「班组名」输入框不再占掉大半行；「周期起始日」那一行加高了（约 44dp），点起来不再发虚\n'
+    '\n'
 'v0.12.5\n'
     '· 修：弹窗里的值行（待办的时间与提醒、闹钟的时间与日期）右侧的值与箭头现在贴齐右边；200dp 小窗下标签与值改成上下两行，标签不再被截掉\n'
     '· 修：班组设置折叠时那行班组名，8 个长名字装不下会改成「N 个班组 · 点开可改名」，不再把字裁掉；清空的班组名也不会留下「 · 二班」这种空段\n'
@@ -93,17 +99,15 @@ const String _changelogZh =
     '· 周条跟月历对齐了：今天那一列也换成半透明块（不再是实心一块），周标题改成「一 二 三 …日」\n'
     '· 编辑排班的「每月第 N 天起」不再出现省略号 —— 明明旁边还有位置，却被挤成了「每月第 3…」\n'
     '\n'
-'v0.11.23\n'
-    '· 底部导航滑块滑动时那圈彩色光晕，右边不再有「一刀切」的硬边：以前那圈颜色绕一圈到右边时接不上、差了 60 度，看着像被切开。分段器、开关、日历那枚块共用同一份，一处修全都好\n'
-    '· 桌面小组件不再跟着系统字体大小变：系统字号调到 200% 时，今日卡的时间行与「其他班组」那一行会被切掉、周条的星期几挤成一团；现在三张卡的尺寸和字都不随系统字号动\n'
-    '· 月历小组件的周标题改成「一 二 三 四 五 六 日」（与 App 日历页同一份），以前是「周一 周二 …」，宽度差一倍、那一行比 App 抢眼得多\n'
-    '· 月历里「今天」那一格改成 App 同款的半透明块（主色淡染 + 主色描边），不再是实心一块；那天要是法定节假日，农历的红色也回来了\n'
-    '· 今日卡补齐了 App 信息卡上有的三行：班次后面那句备注（「休息日 · 不响闹钟」/「闹钟 07:00」）、「其他班组」四个字、以及「本月 大休13 · 白7 · 上夜6 · 下夜5」\n'
-    '· 顺带：那三行补上之后今日卡上下的空白小了一半；月历格子里的班次胶囊也跟着格子大小缩放了，不再是一成不变的小号\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.6\n'
+    '· Reminders on shift-based repeating todos now follow the shift\'s working hours: a 00:00 reminder on a night shift (20:30 to 08:30 next morning) lands at 00:00 the next day instead of the small hours of the shift\'s starting day; moments outside the shift go to whichever side of it is nearer\n'
+    '· The todo row now marks that landing (next-day 00:00 / day-before 23:00), the same wording the alarm list uses\n'
+    '· The By shift hint now says how the landing is decided\n'
+    '· Edit schedule > crew settings: the name field no longer takes most of the row, and the cycle start date row is taller (about 44 dp), so it reads as tappable\n'
+    '\n'
 'v0.12.5\n'
     '· Fix: value rows in dialogs (todo time and reminder, alarm time and date) now put the value and arrow flush right; at 200 dp the label and value stack into two lines instead of the label being clipped\n'
     '· Fix: the collapsed crew subtitle falls back to "N crews · tap to rename" when eight long custom names do not fit, instead of clipping; an emptied name no longer leaves a stray separator\n'
@@ -155,14 +159,6 @@ const String _changelogEn =
     '· The widget shift chips now follow how wide their text is: they used to be a fixed size, so in a small cell the chip filled it and touched both edges. A one-character shift is narrow and a two-character one is wide, each keeping the same gap the app leaves\n'
     '· The week strip now matches the month widget: its today column is a translucent block instead of a solid one, and the weekday header uses the single-character form\n'
     '· The editor no longer truncates “from day N of each month” — there was room beside it, and it still came out as “from day 3…”\n'
-    '\n'
-'v0.11.23\n'
-    '· The coloured rim on the bottom-nav slider no longer has a hard edge on the right: the hues went 300 degrees around and did not meet, leaving a 60-degree step that read as a cut. The segment control, the switch and the calendar block share the same gradient, so all of them are fixed at once\n'
-    '· Desktop widgets no longer scale with the system font size. At 200% the today card had its time row and the other-crews row clipped, and the week strip squeezed its weekday labels together; all three cards now keep their layout and their type whatever the system font size is\n'
-    '· The month widget header now reads the single-character 一 二 三 form, the same one the app calendar page uses, instead of 周一 周二 … — twice as wide and far more prominent than the app row\n'
-    '· The month widget marks today with the same translucent block the app uses (accent wash plus accent outline) instead of a solid fill; and if that day is a public holiday, the lunar date is red again\n'
-    '· The today card gained the three rows the app info card has: the note after the shift name (Rest day · no alarm / Alarm 07:00), the Other crews label, and the month tally (This month · 13 off · 7 day · …)\n'
-    '· Along the way: with those three rows the card top and bottom gaps are about half what they were, and the shift chips in the month grid now scale with the cell instead of staying one small size\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
