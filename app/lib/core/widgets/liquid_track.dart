@@ -39,6 +39,8 @@ class LiquidTrack extends StatelessWidget {
     this.showRefractedEdge = true,
     this.clipContent = true,
     this.trackTint,
+    this.spectral = true,
+    this.refract = false,
     double? contentPad,
   }) : _contentPad = contentPad;
 
@@ -56,6 +58,24 @@ class LiquidTrack extends StatelessWidget {
 
   /// 把容器上下沿「折进来」那条线。小控件上也要关掉，理由同上。
   final bool showRefractedEdge;
+
+  /// 透镜上那几层**画出来的**光谱（彩线 / 两层内晕 / 外溢）开不开，默认开。
+  ///
+  /// ⚠️ **只有底栏传 `false`**（见 `glass_nav_bar.dart` 的液态档）。分段器与开关
+  /// 也是本件搭出来的，它们**没有**真折射接手那圈光 —— 一起关掉的话，两个小控件
+  /// 在拖动时就变成「一枚没有边缘光的玻璃滴」，而这件事谁都没验收过。
+  /// 底栏关它的理由写在 `LiquidLens.spectral` 那边（对齐 iOS 26）。
+  final bool spectral;
+
+  /// 胶囊那一层用 [GlassRefract]（模糊 **+ 边缘逐像素折射**）而不是 [GlassBlur]。
+  /// 默认 `false`，**只有底栏传 `true`**。
+  ///
+  /// 为什么不无条件换：`GlassRefract` 的三道闸门（平台 / 程序 / 档位）在测试环境里
+  /// 恒不过 —— `FragmentProgram` 加载不出 asset 时它退化成 `GlassBlur`，于是
+  /// 「逐像素不变」那批用例**看不见**真机上的差别。折射的参数（带 20 / 位移 8）
+  /// 是按底栏那枚 64 高的胶囊量的：46 宽的开关上带会被夹到 14、位移 8 相当于
+  /// 钮高的 29%，那不是「边缘弯一点」，是整颗钮在抖。
+  final bool refract;
 
   /// 内容层裁在胶囊里。开着的效果与底栏标准档一致（`GestureDetector` 在 `ClipRRect`
   /// 里面，胶囊圆角外那一小块不会穿透到页面内容）。
@@ -107,27 +127,27 @@ class LiquidTrack extends StatelessWidget {
             clipBehavior: Clip.none,
             children: <Widget>[
               // ① 胶囊：与标准档同一份配方（模糊 + tint + 描边）。
+              //
+              // 底栏（`refract: true`）把「模糊」换成「模糊 + 边缘折射」
+              // （`GlassRefract`）—— 容器边缘那一圈会把背景弯掉，这才是「一块有
+              // 厚度的玻璃」与「一块磨砂纸」的分别。三道闸门不过时它退化成同一个
+              // `GlassBlur`，所以换与不换只差真机上的那一层。
+              //
+              // 分段器 / 开关不换：理由见 [refract] 的说明。
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(capsuleH / 2),
-                  child: GlassBlur(
-                    sigma: AppTokens.blurPanel,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(capsuleH / 2),
-                        border: Border.all(color: AppTokens.navBorder(isDark)),
-                        // **对角轴**（不是竖直）—— 与底栏标准档、以及抽这一层
-                        // 之前的液态档逐字一致。写反了的症状是深色下胶囊的
-                        // 着色差一档（深色那两档 navFill 的 alpha 差得更大），
-                        // 出图逐像素比会当场照出来。
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: AppTokens.navFill(isDark),
+                  child: refract
+                      ? GlassRefract(
+                          sigma: AppTokens.blurPanel,
+                          size: size,
+                          radius: capsuleH / 2,
+                          child: _capsule(isDark, capsuleH),
+                        )
+                      : GlassBlur(
+                          sigma: AppTokens.blurPanel,
+                          child: _capsule(isDark, capsuleH),
                         ),
-                      ),
-                    ),
-                  ),
                 ),
               ),
               // ①c 轨道着色（开关的「已打开」）。压在边光**之下**、透镜**之上**
@@ -200,6 +220,11 @@ class LiquidTrack extends StatelessWidget {
                         fill: fill,
                         showRingCore: showRingCore,
                         showRefractedEdge: showRefractedEdge,
+                        // 底栏这一档不再画那圈彩虹：真 iOS 的玻璃几乎没有虹彩，
+                        // 那圈彩色在极简黑白底上只能靠「画」才看得见，是装饰不是物理。
+                        // 它的位置交给 `GlassRefract` 的逐像素折射（三波长各偏一点）。
+                        // 其余两处（分段器 / 开关）照旧 —— 见 [spectral]。
+                        spectral: spectral,
                       );
                     },
                   ),
@@ -217,6 +242,25 @@ class LiquidTrack extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// 胶囊本身（tint + 描边）。模糊与折射两档共用这一份 —— 换档只换外面那层滤镜。
+  ///
+  /// **对角轴**（不是竖直）—— 与底栏标准档、以及抽这一层之前的液态档逐字一致。
+  /// 写反了的症状是深色下胶囊的着色差一档（深色那两档 navFill 的 alpha 差得更大），
+  /// 出图逐像素比会当场照出来。
+  Widget _capsule(bool isDark, double capsuleH) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(capsuleH / 2),
+        border: Border.all(color: AppTokens.navBorder(isDark)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: AppTokens.navFill(isDark),
+        ),
       ),
     );
   }

@@ -438,6 +438,12 @@ class _GlassNavBarState extends State<GlassNavBar>
               protrude: AppTokens.navLensProtrude,
               liftWidth: AppTokens.lensLiftWidth,
             ),
+            // **全 app 只有底栏这一处两样一起改**（参数说明见 `LiquidTrack.refract`
+            // 与 `.spectral`）：胶囊边缘改由真折射弯（`GlassRefract`），画出来的那圈
+            // 彩虹随之收掉 —— 真 iOS 的 UI 玻璃几乎没有虹彩，那圈彩色在这套极简
+            // 黑白底上只能靠画，是装饰不是物理。分段器 / 开关不跟这一档走。
+            refract: true,
+            spectral: false,
             contentBuilder: (BuildContext context, double itemW) => GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapDown: (d) => _press(d.localPosition.dx, itemW),

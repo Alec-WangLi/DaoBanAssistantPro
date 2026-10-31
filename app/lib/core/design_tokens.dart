@@ -385,6 +385,14 @@ class AppTokens {
   /// ② 底下那 0.50 端让 `teal`/`orange` 这类浅主色上的白字彻底读不出来。
   /// 现在两端都接近不透明，白字在**整条渐变上**都过 AA —— 而且是**按需**过：
   /// 底色的深浅由 [solidAccent] 只压到刚好够，不再多压。
+  ///
+  /// ⚠️ **底端 0.92 这个半透明是刻意留的，不是漏改。** 压上去的文字色由
+  /// [navForeground] / [onSolid] 按**纯 [solidAccent]** 算，实测五种主色两档主题
+  /// 都过 AA（护栏在 `test/design_tokens_test.dart` 的「导航选中项的字色」与
+  /// 「onSolid」两条）。曾经想把它改成「混 8% 黑」让它完全不透明 —— 那会让液态档
+  /// 那枚凸出的透镜变成一块**实心色块**，`test/liquid_lens_test.dart` 的
+  /// 「凸出来的应该还是玻璃」当场变红。玻璃要透，字要够黑够白，两件事分别由
+  /// 这一条与 [onSolid] 负责，不要拿一条去顶另一条。
   static LinearGradient accentGradient(Color accent) {
     final solid = solidAccent(accent);
     return LinearGradient(

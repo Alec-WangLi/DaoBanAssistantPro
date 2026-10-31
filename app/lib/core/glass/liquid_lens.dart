@@ -497,6 +497,7 @@ class LiquidLens extends StatelessWidget {
     this.fill,
     this.showRingCore = true,
     this.showRefractedEdge = true,
+    this.spectral = true,
     this.restEdge = 0,
   });
 
@@ -540,6 +541,22 @@ class LiquidLens extends StatelessWidget {
   /// 宽，那几道弧读起来是乱线。
   final bool showRefractedEdge;
 
+  /// 那几层**画出来的**光谱（彩线 / 两层内晕 / 外溢）开不开。默认开。
+  ///
+  /// 底栏是唯一传 `false` 的地方，理由在 2026-11 那一轮的需求里定死：
+  /// **判据是「对齐 iOS 26」**。真 iOS 的 UI 玻璃几乎没有虹彩 ——
+  /// `liquid_glass_widgets` 给 iOS 26 那档甚至主动把色散校准成 0，它自己的注释写着
+  /// 「真实的 iOS UI 玻璃几乎没有虹彩」；而本 App 的底色是刻意的极简黑白，
+  /// 那圈彩虹只能**画**出来（见 `_paintSpectralRing` 的说明），于是它注定是装饰而
+  /// 不是物理 —— 装饰就该为「像不像 iOS」让路。
+  ///
+  /// 关掉之后底栏那圈彩边的位置由**真折射**接手：`GlassRefract` 在容器边缘做逐像素
+  /// 位移，三波长各偏一点点 —— 那是从背景里算出来的，不是画上去的。
+  ///
+  /// ⚠️ **默认 true，其余几处（分段器 / 开关 / 勾 / 响铃页药丸 / 日历块与水带）
+  /// 一位都不动** —— 它们有「逐像素不变」的验收在，而且不在这轮范围内。
+  final bool spectral;
+
   /// **静止时也画的那一圈边缘高光**（0 = 不画，默认）。
   ///
   /// 光谱那几层全被 `motion` 关着 ——「静止时一个彩色像素都没有」是 v0.10.7 为底栏
@@ -568,7 +585,8 @@ class LiquidLens extends StatelessWidget {
             accent: accent,
             fill: fill,
             showRingCore: showRingCore,
-            showRefractedEdge: showRefractedEdge),
+            showRefractedEdge: showRefractedEdge,
+            spectral: spectral),
       ),
     );
 
@@ -596,7 +614,11 @@ class LiquidLens extends StatelessWidget {
         child: IgnorePointer(
           child: CustomPaint(
             painter: _LensGlowPainter(
-                outline: outline, origin: origin, lift: lift, accent: accent),
+                outline: outline,
+                origin: origin,
+                lift: lift,
+                accent: accent,
+                spectral: spectral),
           ),
         ),
       ),
@@ -825,6 +847,7 @@ class _LensGlowPainter extends CustomPainter {
     required this.origin,
     required this.lift,
     required this.accent,
+    required this.spectral,
   });
 
   final LiquidLensOutline outline;
@@ -832,8 +855,12 @@ class _LensGlowPainter extends CustomPainter {
   final double lift;
   final Color accent;
 
+  /// 见 [LiquidLens.spectral]。`false` 时这一层整个不存在（不是画一层透明的）。
+  final bool spectral;
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (!spectral) return;
     if (outline.motion <= 0.05) return;
     final Path p = outline.paintPath(origin);
     final double k = outline.rimScale;
@@ -946,11 +973,15 @@ class _LensBodyPainter extends CustomPainter {
     required this.fill,
     required this.showRingCore,
     required this.showRefractedEdge,
+    required this.spectral,
   });
 
   final List<Color>? fill;
   final bool showRingCore;
   final bool showRefractedEdge;
+
+  /// 见 [LiquidLens.spectral]。
+  final bool spectral;
 
   final LiquidLensOutline outline;
   final Offset origin;
@@ -973,7 +1004,10 @@ class _LensBodyPainter extends CustomPainter {
     );
     // 静止时**连画都不画**：不是「画一层透明的」，而是这一整趟省掉。
     // 门用 `motion`（「在动」）而不是 `stretch`（「多快」）—— 见 `motion` 的说明。
-    if (outline.motion > 0.05) {
+    //
+    // 底栏传 `spectral: false`：那圈彩虹是**画**出来的装饰，真 iOS 的玻璃没有它，
+    // 而底栏这一档的真折射已经由 `GlassRefract` 接手（见 [LiquidLens.spectral]）。
+    if (spectral && outline.motion > 0.05) {
       // 顺序要紧：**光晕在下、彩线在上**。反过来的话那条细线会浮在光晕外面，
       // 又读回「贴了一层彩带」。
       _paintHalo(canvas, p);
@@ -1038,7 +1072,8 @@ class _LensBodyPainter extends CustomPainter {
       old.accent != accent ||
       !listEquals(old.fill, fill) ||
       old.showRingCore != showRingCore ||
-      old.showRefractedEdge != showRefractedEdge;
+      old.showRefractedEdge != showRefractedEdge ||
+      old.spectral != spectral;
   /// **折射光晕**：同一条扫掠渐变，画得又宽又糊 —— 这是「光晕」而不是「彩带」的
   /// 全部来源。
   ///

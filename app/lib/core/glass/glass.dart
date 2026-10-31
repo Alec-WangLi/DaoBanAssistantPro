@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
+import 'glass_refraction.dart';
 
 /// 低端机自动降级标志（物理内存 < 4GB，main() 设置）。**语义不变**：强制省电档。
 bool lowEndDevice = false;
@@ -16,17 +17,30 @@ final ValueNotifier<bool> glassBlurDisabled = ValueNotifier<bool>(false);
 
 /// 液态档生效中。
 ///
-/// 判据只有两个条件，**没有 shader 能力检查** —— 因为这个档里没有 shader：
-/// 实测折射在平背景上 ≤1/255（本 App 的底色是刻意的极简黑白），
-/// 看得见的那一层是「加色」的边缘光与透镜，而它用 `CustomPainter` 就够。
-/// 于是计划里那条 shader 构建链、以及 Impeller / GLES / Windows 三个坑，
-/// 一个都不用碰。
+/// 判据只有两个条件，**没有 shader 能力检查** —— 这个档的**绘制**部分（透镜、
+/// 边光、滑块）全用 `CustomPainter`，与 runtime effect 无关。
+///
+/// 逐像素的**边缘折射**是另一件事，它有自己的闸门 [liquidRefractionEnabled] ——
+/// 两者分开的理由：折射依赖 `FragmentProgram` 加载成功，而加载是异步的，
+/// 首帧必然不可用。把两件事捆在一个 notifier 里，会让「液态档」在启动瞬间
+/// 闪一下档位，那会把底栏那棵树整棵重建两次。
 final ValueNotifier<bool> liquidGlassActive = ValueNotifier<bool>(false);
 
-/// 重新计算两个档位（main() 与「外观」开关变更时调用）。
+/// 边缘折射生效中：液态档 + 着色器程序已就绪 + 非省电档。
+///
+/// 关着的时候 [GlassRefract] 只挂模糊，与今天逐像素一致 —— 这是「新能力默认不可见」
+/// 的落点。
+///
+/// 由 [recomputeGlassTiers] 统一算，**别在别处直接改它**：`FragmentProgram` 加载完成
+/// 之后要再调一次 [recomputeGlassTiers]，否则这一位会一直停在 false。
+final ValueNotifier<bool> liquidRefractionEnabled = ValueNotifier<bool>(false);
+
+/// 重新计算档位（main()、外观开关变更、着色器加载完成后调用）。
 void recomputeGlassTiers() {
   glassBlurDisabled.value = lowEndDevice;
   liquidGlassActive.value = !lowEndDevice && liquidGlassEnabled.value;
+  liquidRefractionEnabled.value =
+      liquidGlassActive.value && GlassRefraction.available;
 }
 
 /// 玻璃的完整 filter：**模糊 + 真实饱和度**，合成一个 filter 而不是叠两层
@@ -232,6 +246,104 @@ class GlassBlur extends StatelessWidget {
         );
       },
       child: child,
+    );
+  }
+}
+
+/// 会**弯**的 [GlassBlur]：同一笔模糊，外加容器边缘那一圈逐像素折射。
+///
+/// 与 [GlassBlur] 的关系是「升级版」而不是「替代品」—— 三道闸门任何一道不过
+/// （非移动端 / 程序没加载出来 / 档位关着），它构造出的滤镜与 [GlassBlur]
+/// **逐字节相同**，画面也一样。于是调用点可以无条件换过来。
+///
+/// ## 尺寸必须由调用点给
+///
+/// 折射要知道容器的形状（宽高 + 圆角半径）才能算出「哪一圈该弯」。这两样在
+/// `LayoutBuilder` 里天然就有，所以不让它自己去量 —— 自己去量要么多一层
+/// `LayoutBuilder`（多一次布局），要么在 `paint` 里量（那时已经晚了）。
+///
+/// ## 滤镜对象要缓存
+///
+/// `BackdropFilter` 每换一个 `filter` 实例就重抓一次 backdrop。这里把
+/// [GlassRefraction.filter] 的结果按「尺寸 + 档位」缓存起来，参数不变时
+/// 一帧都不会重抓。
+class GlassRefract extends StatefulWidget {
+  const GlassRefract({
+    super.key,
+    required this.sigma,
+    required this.size,
+    required this.radius,
+    required this.child,
+  });
+
+  /// 模糊强度，语义与 [GlassBlur] 完全一致。
+  final double sigma;
+
+  /// 容器尺寸（逻辑像素）。折射只在容器边缘一圈生效。
+  final Size size;
+
+  /// 容器圆角半径（逻辑像素）。胶囊就是 `高度 / 2`。
+  final double radius;
+
+  final Widget child;
+
+  @override
+  State<GlassRefract> createState() => _GlassRefractState();
+}
+
+class _GlassRefractState extends State<GlassRefract> {
+  ImageFilter? _cached;
+  Size? _cachedSize;
+  double? _cachedRadius;
+  double? _cachedDpr;
+  bool? _cachedRefract;
+
+  /// 每帧都会走这里，所以缓存键要比 `==` 便宜 —— 直接比四个字段。
+  ///
+  /// **dpr 也是键**：折射的尺寸在 shader 里一律是设备像素，`dpr` 一变
+  /// （分屏 / 折叠屏换形态 / 显示大小改档）不重建的话，边缘那一圈会按旧比例
+  /// 弯，而且错得不明显 —— 只是「看起来没那么透」。
+  ImageFilter _filterFor(bool refract, double dpr) {
+    if (_cached != null &&
+        _cachedSize == widget.size &&
+        _cachedRadius == widget.radius &&
+        _cachedDpr == dpr &&
+        _cachedRefract == refract) {
+      return _cached!;
+    }
+    final ImageFilter? built = refract
+        ? GlassRefraction.filter(
+            size: widget.size,
+            dpr: dpr,
+            radius: widget.radius,
+            tint: null,
+            blur: glassFilter(widget.sigma),
+          )
+        : null;
+    final ImageFilter result = built ?? glassFilter(widget.sigma);
+    _cached = result;
+    _cachedSize = widget.size;
+    _cachedRadius = widget.radius;
+    _cachedDpr = dpr;
+    _cachedRefract = refract;
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+    return ValueListenableBuilder<bool>(
+      valueListenable: glassBlurDisabled,
+      builder: (BuildContext context, bool disabled, Widget? child) {
+        if (disabled) return child!;
+        return ValueListenableBuilder<bool>(
+          valueListenable: liquidRefractionEnabled,
+          builder: (BuildContext context, bool refract, Widget? child) =>
+              BackdropFilter(filter: _filterFor(refract, dpr), child: child!),
+          child: child,
+        );
+      },
+      child: widget.child,
     );
   }
 }
