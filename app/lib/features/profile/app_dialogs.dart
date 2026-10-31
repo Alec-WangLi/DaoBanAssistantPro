@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.8\n'
+    '· 底栏那枚玻璃胶囊的边缘现在会把背后的内容轻轻「弯」过去一点 —— 它读起来像一块有厚度的玻璃，而不是一张磨砂纸。这一层只在给得住它的手机上出现，别的机型与以前一模一样\n'
+    '· 顺着这条，胶囊边缘那圈画出来的彩色收掉了：真玻璃几乎没有虹彩，那圈颜色在咱们这套极简黑白底上只能靠画。方向感现在由上面那层弯折承担\n'
+    '· 分段器与开关一个像素都没动 —— 它们小得多，同一套弯折放到 46dp 的开关上会让整颗钮抖起来\n'
+    '\n'
 'v0.12.7\n'
     '· 修：编辑排班的班组卡里，「周期起始日」与箭头现在贴住右边（之前整组停在半路，右边空出一大截）；宽屏 / 横屏下「我的班」芯片也不再漂在卡片中间\n'
     '· 修：待办行的「次日 00:00」标记只在真的会响时显示 —— 系列停用、或没设提醒时不显示\n'
@@ -96,13 +101,14 @@ const String _changelogZh =
     '· 今日卡最左边那条主色竖条通到卡片底了 —— 以前它只有「日期」那一行那么高\n'
     '· 今日卡「其他班组」换成了 App 里那种半透明胶囊（之前是圆点加光秃秃的文字），几颗紧挨着排左边\n'
     '\n'
-'v0.11.25\n'
-    '· 周条上「今天」那一块玻璃长高了：以前格子里那三行（周几 / 日期 / 班次）离块的上下边只剩一点点，看着像贴着边画的；现在上下多留出跟左右一样多的空隙\n'
-    '· 今日卡的「其他班组」那一行字大了一档 —— 它原来比 App 里同一行、也比这张卡自己的「本月统计」小一号，是搬过来时掉了一级，不是没位置\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.8\n'
+    '· The edge of the nav bar capsule now bends the content behind it a little, so it reads as a piece of glass with thickness rather than a sheet of frosted paper. That layer only appears on phones that can render it; everything else looks exactly as before\n'
+    '· The painted colour rim along that capsule is gone with it: real glass has almost no iridescence, and on this flat black-and-white background that ring could only ever be drawn. The sense of direction now comes from the bending layer\n'
+    '· Segments and switches are unchanged to the pixel - they are far smaller, and the same bending on a 46 dp switch would make the whole knob wobble\n'
+    '\n'
 'v0.12.7\n'
     '· Fix: in the crew card, the cycle start date and its chevron now sit flush right (the pair used to stop mid-row with a wide gap); on landscape and tablet widths the Set as mine chip no longer floats in the middle of the card\n'
     '· Fix: the next-day / day-before marker on a todo row now only shows when a reminder can actually fire — a paused series or one with no reminder shows none\n'
@@ -157,10 +163,6 @@ const String _changelogEn =
 'v0.11.26\n'
     '· The accent bar on the left of the today card now runs the full height of the card - before it was only as tall as the date row\n'
     '· The Other crews row on the today card uses the same translucent capsules as the app, packed together on the left; it used to be bare dots with plain text\n'
-    '\n'
-'v0.11.25\n'
-    '· The today block in the week strip is taller. The three rows inside it (weekday, date, shift) used to sit right against its top and bottom edges; they now keep the same breathing room all round as they do left and right\n'
-    '· The Other crews row on the today card is one size larger. It had come over a step smaller than the same row in the app, and smaller than the month tally line on the same card - that was a slip when porting, not a lack of room\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
