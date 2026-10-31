@@ -1,3 +1,4 @@
+import 'dart:async' show scheduleMicrotask;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -296,18 +297,23 @@ class _GlassRefractState extends State<GlassRefract> {
   Size? _cachedSize;
   double? _cachedRadius;
   double? _cachedDpr;
+  double? _cachedSigma;
   bool? _cachedRefract;
 
-  /// 每帧都会走这里，所以缓存键要比 `==` 便宜 —— 直接比四个字段。
+  /// 每帧都会走这里，所以缓存键要比 `==` 便宜 —— 直接比字段。
   ///
   /// **dpr 也是键**：折射的尺寸在 shader 里一律是设备像素，`dpr` 一变
   /// （分屏 / 折叠屏换形态 / 显示大小改档）不重建的话，边缘那一圈会按旧比例
   /// 弯，而且错得不明显 —— 只是「看起来没那么透」。
+  ///
+  /// **sigma 也是键**：退化那条路（折射没挂上）直接把它交给 `glassFilter`，
+  /// 父级只改 sigma、其余不变时若还复用旧滤镜，模糊就永远停在旧档上。
   ImageFilter _filterFor(bool refract, double dpr) {
     if (_cached != null &&
         _cachedSize == widget.size &&
         _cachedRadius == widget.radius &&
         _cachedDpr == dpr &&
+        _cachedSigma == widget.sigma &&
         _cachedRefract == refract) {
       return _cached!;
     }
@@ -316,15 +322,26 @@ class _GlassRefractState extends State<GlassRefract> {
             size: widget.size,
             dpr: dpr,
             radius: widget.radius,
-            tint: null,
             blur: glassFilter(widget.sigma),
           )
         : null;
+    if (built == null && refract && liquidRefractionEnabled.value) {
+      // 折射没挂上（程序还没就绪 / 后端不支持 —— 后者已经在 `filter` 里把
+      // `_program` 清掉了）。档位位得跟着翻回去，否则它会一直骗下游「折射活着」：
+      // 底栏那圈彩边是折射的**替身**，替身只在折射真的挂上时才让位。若这里不翻，
+      // Impeller 回落到 Skia 的机型上就是「彩边没了、折射也没来」，净退化。
+      //
+      // 走微任务而不是直接赋值 —— 这里是 `build`，改通知器会在构建期
+      // markNeedsBuild。只翻一次：`recomputeGlassTiers()` 之后再进来时
+      // `liquidRefractionEnabled.value` 已经是 false，不会自我循环。
+      scheduleMicrotask(recomputeGlassTiers);
+    }
     final ImageFilter result = built ?? glassFilter(widget.sigma);
     _cached = result;
     _cachedSize = widget.size;
     _cachedRadius = widget.radius;
     _cachedDpr = dpr;
+    _cachedSigma = widget.sigma;
     _cachedRefract = refract;
     return result;
   }

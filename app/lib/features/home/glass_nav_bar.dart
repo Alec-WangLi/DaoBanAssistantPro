@@ -438,12 +438,17 @@ class _GlassNavBarState extends State<GlassNavBar>
               protrude: AppTokens.navLensProtrude,
               liftWidth: AppTokens.lensLiftWidth,
             ),
-            // **全 app 只有底栏这一处两样一起改**（参数说明见 `LiquidTrack.refract`
-            // 与 `.spectral`）：胶囊边缘改由真折射弯（`GlassRefract`），画出来的那圈
-            // 彩虹随之收掉 —— 真 iOS 的 UI 玻璃几乎没有虹彩，那圈彩色在这套极简
-            // 黑白底上只能靠画，是装饰不是物理。分段器 / 开关不跟这一档走。
+            // **全 app 只有底栏这一处传 `refract: true`**（参数说明见
+            // `LiquidTrack.refract`）：胶囊边缘改由真折射弯（`GlassRefract`），
+            // 画出来的那圈彩虹随之收掉 —— 真 iOS 的 UI 玻璃几乎没有虹彩，那圈
+            // 彩色在这套极简黑白底上只能靠画，是装饰不是物理。分段器 / 开关不跟
+            // 这一档走。
+            //
+            // ⚠️ **别在这里补 `spectral: false`**：彩边在底栏是**折射的替身**，
+            // 收不收由 `liquidRefractionEnabled` 实时决定（Impeller 回落 Skia 的
+            // 机器上折射粘性失败，那时彩边得照旧画）。静态 `false` 会把这条退路
+            // 焊死，拖动时只剩白芯与折边 —— 见 `LiquidTrack.spectral`。
             refract: true,
-            spectral: false,
             contentBuilder: (BuildContext context, double itemW) => GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapDown: (d) => _press(d.localPosition.dx, itemW),

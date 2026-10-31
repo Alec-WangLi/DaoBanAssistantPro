@@ -889,6 +889,13 @@ class _LensGlowPainter extends CustomPainter {
       old.lift != lift ||
       old.accent != accent ||
       old.origin != origin ||
+      // 彩边开不开**运行期会变**（底栏那圈是折射的替身：折射活不活着由
+      // `liquidRefractionEnabled` 实时决定）。⚠️ 这条是**防御性正确**，不是被
+      // 像素用例守着的那一类：这层光晕与本体在**同一个图层**里，本体一重绘整幅
+      // picture 就重录了，所以删掉这一行没有任何用例会红（我试过）。留着是因为
+      // 「painter 的每个入参都要进 shouldRepaint」这条纪律本身值钱 —— 哪天有人给
+      // 光晕套一层 RepaintBoundary（比如为了单独做混合模式），它就是唯一的守门。
+      old.spectral != spectral ||
       old.outline.outlineStamp != outline.outlineStamp ||
       old.outline.motion != outline.motion ||
       // 亮峰换了一侧也要重画：几何一模一样、光的方向在转（日历那枚块滑行时）。

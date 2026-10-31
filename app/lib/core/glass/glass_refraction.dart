@@ -75,6 +75,30 @@ class GlassRefraction {
         defaultTargetPlatform == TargetPlatform.iOS;
   }
 
+  /// 把半径与折射带夹进距离场能接受的范围。**纯函数**，所以能在没有渲染后端
+  /// （`flutter test` 的 Skia）的情况下被直接量。
+  ///
+  /// 两条夹取各有各的理由：
+  /// 1. 半径不能超过短边的一半，否则距离场退化成胶囊、边缘那一圈会自相交；
+  /// 2. 折射带比半径大没有意义（带内缘会跑出容器）。
+  ///
+  /// ⚠️ **第 2 条的上界必须先兜住**：写成 `band.clamp(1.0, r)` 时，`0 < r < 1`
+  /// 会让下界大于上界，Dart 直接抛 `ArgumentError` —— 而这一行在 `filter` 里那个
+  /// `try` **之前**，不会被「回落成 null」接住，而是每帧从 `GlassRefract.build`
+  /// 抛出去、整页红屏。半径小于 1 不是理论情况：`LiquidTrack` 的半径取的是
+  /// `capsuleH / 2`，谁给一条 2px 高的轨道（折叠动画的中间帧、横屏矮条）就命中。
+  @visibleForTesting
+  static ({double radius, double band}) sanitizeGeometry({
+    required Size size,
+    required double radius,
+    required double band,
+  }) {
+    final double shortSide = size.width < size.height ? size.width : size.height;
+    final double r = radius.clamp(0.0, shortSide / 2);
+    final double b = r <= 1.0 ? 1.0 : band.clamp(1.0, r);
+    return (radius: r, band: b);
+  }
+
   /// 造一条「先模糊、再折射」的滤镜。
   ///
   /// [blur] 由调用点给（项目里是 [glassFilter]，还带饱和度），这里只是把它套在
@@ -87,11 +111,17 @@ class GlassRefraction {
   /// [origin] 是图层原点到容器左上角的偏移（逻辑像素）。容器正好铺满图层时传
   /// `Offset.zero`。**这一项是探针结果**：Impeller 给 backdrop 的坐标空间是图层局部，
   /// 不是屏幕根坐标，所以只要容器贴住图层左上角就不需要校正。
+  ///
+  /// ⚠️ **今天所有调用点都传 0**（`GlassRefract` 不传），也就是这条校正通路没有
+  /// 任何用例或真机证据在守 —— 它留着是因为「万一某台机器的 backdrop 坐标不是图层
+  /// 局部」时它是唯一的旋钮。真机验收时要验的正是这一点：胶囊后面放一张高对比棋盘，
+  /// 看边缘那一圈采的是**胶囊外**的内容（正确），还是被 clamp 在容器边缘的糊带。
+  ///
+  /// 染色不在这一层做（`uTint` 从来没有过），颜色仍由 Dart 侧那层渐变叠上去。
   static ui.ImageFilter? filter({
     required Size size,
     required double dpr,
     required double radius,
-    required List<Color>? tint,
     ui.ImageFilter? blur,
     double band = _bandLogic,
     double bend = _bendLogic,
@@ -102,23 +132,29 @@ class GlassRefraction {
     if (program == null) return null;
     if (size.width <= 0 || size.height <= 0) return null;
 
-    // 半径不能超过短边的一半，否则距离场退化成胶囊、边缘那一圈会自相交。
-    final double shortSide = size.width < size.height ? size.width : size.height;
-    final double r = radius.clamp(0.0, shortSide / 2);
-
-    // 折射带比半径大没有意义（带内缘会跑出容器），取一半再夹一刀。
-    final double b = band.clamp(1.0, r > 0 ? r : 1.0);
+    final ({double radius, double band}) geom =
+        sanitizeGeometry(size: size, radius: radius, band: band);
+    final double r = geom.radius;
+    final double b = geom.band;
 
     final ui.FragmentShader shader = program.fragmentShader();
     shader
-      ..setFloat(0, size.width * dpr)
-      ..setFloat(1, size.height * dpr)
+      // floats 0/1 是 `uSize`，**故意不设** —— `ImageFilter.shader` 的文档写明
+      // 「The first uniform value must be a vec2, this will be set by the engine to
+      // the size of the bound texture」，引擎会用输入快照的纹理尺寸覆写它。而这条
+      // 链的输入是上游那层高斯模糊的输出，模糊按 `ceil(√3·σ)` 对称外扩（σ=24 时
+      // 每边约 42dp），所以 `uSize` 比容器大一圈。这里设了也是空操作。
+      //
+      // 容器自己的尺寸走 floats 8/9（`uContainer`，引擎不碰），着色器拿两者之差
+      // 反推外扩量，几何才算得对 —— 详见 `glass_refraction.frag` 顶部那段。
       ..setFloat(2, origin.dx * dpr)
       ..setFloat(3, origin.dy * dpr)
       ..setFloat(4, r * dpr)
       ..setFloat(5, b * dpr)
       ..setFloat(6, bend * dpr)
-      ..setFloat(7, spread);
+      ..setFloat(7, spread)
+      ..setFloat(8, size.width * dpr)
+      ..setFloat(9, size.height * dpr);
 
     final ui.ImageFilter refraction;
     try {

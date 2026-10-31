@@ -61,10 +61,14 @@ class LiquidTrack extends StatelessWidget {
 
   /// 透镜上那几层**画出来的**光谱（彩线 / 两层内晕 / 外溢）开不开，默认开。
   ///
-  /// ⚠️ **只有底栏传 `false`**（见 `glass_nav_bar.dart` 的液态档）。分段器与开关
-  /// 也是本件搭出来的，它们**没有**真折射接手那圈光 —— 一起关掉的话，两个小控件
-  /// 在拖动时就变成「一枚没有边缘光的玻璃滴」，而这件事谁都没验收过。
-  /// 底栏关它的理由写在 `LiquidLens.spectral` 那边（对齐 iOS 26）。
+  /// 分段器与开关一直走这个默认值 —— 它们**没有**真折射接手那圈光，关掉的话
+  /// 两个小控件在拖动时就变成「一枚没有边缘光的玻璃滴」，而这件事谁都没验收过。
+  ///
+  /// ⚠️ 底栏（[refract] 为 true 的那一档）**不传这个参数**：彩边在那儿是**折射的
+  /// 替身**，开不开由 `liquidRefractionEnabled` 实时决定 —— 见 [refract] 与
+  /// `build` 里那个 `ValueListenableBuilder`。调用点再传一个静态 `false` 就把它
+  /// 变成死的了：Impeller 回落 Skia 的机器上折射粘性失败，彩边又按静态值收着，
+  /// 拖动时只剩白芯与折边（「真空档」）。
   final bool spectral;
 
   /// 胶囊那一层用 [GlassRefract]（模糊 **+ 边缘逐像素折射**）而不是 [GlassBlur]。
@@ -166,7 +170,9 @@ class LiquidTrack extends StatelessWidget {
                             : ((controller.position - 0.5) / (slots - 1))
                                 .clamp(0.0, 1.0);
                         final Color? c = trackTint!(t);
-                        if (c == null || c.a == 0) return const SizedBox.shrink();
+                        if (c == null || c.a == 0) {
+                          return const SizedBox.shrink();
+                        }
                         return CustomPaint(
                           painter: _TrackTintPainter(
                             color: c,
@@ -200,31 +206,42 @@ class LiquidTrack extends StatelessWidget {
                     listenable: controller,
                     builder: (BuildContext context, Widget? _) {
                       final double lift = controller.lift;
-                      return LiquidLens(
-                        size: size,
-                        outline: LiquidLensShape.of(
-                          itemW: itemW,
-                          capsuleH: capsuleH,
-                          pad: pad,
-                          // 弹簧存的是**中心**（静止时 = 格号 + 0.5），形状要的是左缘。
-                          centerPage: controller.position - 0.5,
+                      // 彩边是**折射的替身**，不是装饰：开折射的那一档，真折射活着
+                      // 时彩边让位；折射没挂上时（Impeller 回落 Skia 的机器 ——
+                      // `ImageFilter.shader` 在 Skia 上直接抛，见
+                      // `glass_refraction.dart` 里「程序就绪不等于这条链能用」）它
+                      // 照旧画，否则那枚滴拖动时只剩白芯与折边、一点边缘光都没有。
+                      // ⚠️ 不能写成 `spectral && !refractLive`：`false && x` 恒 false。
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: liquidRefractionEnabled,
+                        builder: (BuildContext context, bool refractLive,
+                                Widget? _) =>
+                            LiquidLens(
+                          size: size,
+                          outline: LiquidLensShape.of(
+                            itemW: itemW,
+                            capsuleH: capsuleH,
+                            pad: pad,
+                            // 弹簧存的是**中心**（静止时 = 格号 + 0.5），形状要的是左缘。
+                            centerPage: controller.position - 0.5,
+                            lift: lift,
+                            velocity: controller.velocity,
+                            stretch: controller.stretch,
+                            motion: controller.motion,
+                            metrics: metrics,
+                          ),
                           lift: lift,
-                          velocity: controller.velocity,
-                          stretch: controller.stretch,
-                          motion: controller.motion,
-                          metrics: metrics,
+                          isDark: isDark,
+                          accent: accent,
+                          fill: fill,
+                          showRingCore: showRingCore,
+                          showRefractedEdge: showRefractedEdge,
+                          // 底栏这一档不再画那圈彩虹：真 iOS 的玻璃几乎没有虹彩，
+                          // 那圈彩色在极简黑白底上只能靠「画」才看得见，是装饰不是物理。
+                          // 它的位置交给 `GlassRefract` 的逐像素折射（三波长各偏一点）。
+                          // 其余两处（分段器 / 开关）照旧 —— 见 [spectral]。
+                          spectral: refract ? !refractLive : spectral,
                         ),
-                        lift: lift,
-                        isDark: isDark,
-                        accent: accent,
-                        fill: fill,
-                        showRingCore: showRingCore,
-                        showRefractedEdge: showRefractedEdge,
-                        // 底栏这一档不再画那圈彩虹：真 iOS 的玻璃几乎没有虹彩，
-                        // 那圈彩色在极简黑白底上只能靠「画」才看得见，是装饰不是物理。
-                        // 它的位置交给 `GlassRefract` 的逐像素折射（三波长各偏一点）。
-                        // 其余两处（分段器 / 开关）照旧 —— 见 [spectral]。
-                        spectral: spectral,
                       );
                     },
                   ),
