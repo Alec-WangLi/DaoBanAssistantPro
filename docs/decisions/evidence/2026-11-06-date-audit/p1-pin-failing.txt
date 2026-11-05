@@ -1,0 +1,6 @@
+Failing tests:
+  C:/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app/test/alarm_screen_test.dart: 「前一天」只跟在落在前一天的那条下面
+  C:/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app/test/alarm_screen_test.dart: 一个班次两条闹钟：同一天两行都列出来
+  C:/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app/test/alarm_screen_test.dart: 英文界面：那一行不露出中文
+  C:/Users/Alec/Documents/DeepSeekHermesData/shiftassistant/app/test/alarm_screen_test.dart: 首条已响、后面还有 → 那一行仍然在（连已响的那条也还列着）
+  ... and 17 more
