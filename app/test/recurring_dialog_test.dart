@@ -24,6 +24,7 @@ import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'support/fixed_clock.dart';
 
 /// 有界推进若干帧（**不用 `pumpAndSettle`**：页面上有一堆永远调度下一帧的东西）。
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
@@ -58,6 +59,7 @@ const _wedBit = 1 << 2;
 const _friBit = 1 << 4;
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -94,14 +96,14 @@ void main() {
   /// `occurrenceOnOrBefore` 返回 null（那是对的 —— 第一次要等下周三），于是列表里
   /// 什么都没有，后面那些「点开它」的步骤全会找不到控件。放一周前就恒有一个。
   Future<int> seedSeries() async {
-    final t = DateTime.now();
+    final t = kAnchor;
     final id = await repo.addRecurringTodo(
       title: '周三例会',
       repeat: RecurRepeat.weekly,
       startDate: dateOnly(DateTime(t.year, t.month, t.day - 7)),
       weekdays: _wedBit,
     );
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
     return id;
   }
 
@@ -121,7 +123,7 @@ void main() {
     // 切到「每月」默认勾当天（所选日期那一天的号数）。**只补勾还没有的那几天**
     // —— 盲目点 15 的话，今天是 15 号时那一击会把默认勾的当天**取消掉**，
     // 用例就按日期现形了（v0.9.14 那条「周三/周四必红」是同一类）。
-    final today = DateTime.now().day;
+    final today = kAnchor.day;
     for (final d in const [1, 15]) {
       if (d == today) continue;
       await tester.tap(inDialog(find.text('$d')));
@@ -139,7 +141,7 @@ void main() {
     // 空白表（跟随法定节假日）没有班次定义。
     await repo.saveSchedule(
       name: '法定班次',
-      anchorDate: dateOnly(DateTime.now()),
+      anchorDate: dateOnly(kAnchor),
       classes: const [],
       cycle: const [],
     );
@@ -199,7 +201,7 @@ void main() {
 
 
   testWidgets('编辑弹窗：老数据的空月日打开时补当天', (tester) async {
-    final t = DateTime.now();
+    final t = kAnchor;
     final sid = await repo.addRecurringTodo(
       title: '老月检',
       repeat: RecurRepeat.monthly,
@@ -235,7 +237,7 @@ void main() {
     // 选「每周」之后**默认勾上今天那一天**（掩码为空的话生成器会当脏数据、
     // 一条都不生成，而界面上看不出来）。把它调成「只有周三」——
     // 这里要按今天是星期几来调，否则用例会在周三那天自己把勾点掉。
-    final todayWd = DateTime.now().weekday; // 1..7，周一 = 1
+    final todayWd = kAnchor.weekday; // 1..7，周一 = 1
     if (todayWd != DateTime.wednesday) {
       await tester.ensureVisible(find.text(L10n.weekday(todayWd - 1)));
       await tester.tap(find.text(L10n.weekday(todayWd - 1)));
@@ -302,7 +304,7 @@ void main() {
         reason: '对齐到新规则 —— 生成器不会替我们回退');
 
     // 落点应当是「不晚于今天的最近一个周五」
-    final t = DateTime.now();
+    final t = kAnchor;
     final back = (t.weekday - DateTime.friday + 7) % 7;
     final expected = DateTime(t.year, t.month, t.day - back);
     expect(dayNumber(after.date), dayNumber(expected));

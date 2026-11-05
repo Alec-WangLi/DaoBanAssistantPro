@@ -15,6 +15,7 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'support/fixed_clock.dart';
 
 void main() {
   late AppDatabase db;
@@ -244,7 +245,7 @@ void main() {
 
 
   test('按天调班：把今天改成上夜班 → 按班次的待办出现', () async {
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(kAnchor);
     await repo.saveSchedule(
       name: '白班表',
       anchorDate: today,

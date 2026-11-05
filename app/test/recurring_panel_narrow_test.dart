@@ -20,6 +20,7 @@ import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'support/fixed_clock.dart';
 
 /// 拆掉这棵树 —— **必须做**：页面里的 drift 查询流在取消时会用 `Timer.run` 排一个
 /// 零时长定时器，而 widget 测试在测试体结束**立刻**校验「没有待处理的定时器」，
@@ -38,6 +39,7 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -71,14 +73,14 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final DateTime t = DateTime.now();
+    final DateTime t = kAnchor;
     await repo.addRecurringTodo(
       title: '周三例会',
       repeat: RecurRepeat.weekly,
       startDate: dateOnly(DateTime(t.year, t.month, t.day - 7)),
       weekdays: 1 << 2,
     );
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
 
     await tester.pumpWidget(ProviderScope(
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
