@@ -191,17 +191,24 @@ class LiquidTrack extends StatelessWidget {
               // ①b 边光。**不挂在 `ListenableBuilder` 底下** —— 它不读 [controller]
               // （「光跟随滑块」那条亮带 v0.10.11 拆掉了），挂上去只是每帧白重建一个
               // `CustomPaint`。
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: CapsuleRimPainter(
-                      radius: capsuleH / 2,
-                      isDark: isDark,
-                      compact: true,
+              //
+              // ⚠️ **底栏这一档不叠它**（`refract` 开着时）。底栏另有一层「厚玻璃」
+              // 边光 `_CapsuleEdgePainter`（见 `_capsule` 的 foregroundPainter），
+              // 两圈画在同一处会相加：v0.12.9 实测合成约 0.97 的白，真机上沿 249
+              // 压在 47 的底色上（差 202 级），用户报「太亮、刺眼」。
+              // 分段器与开关**没有**第二层，它们照旧只有这一圈，一个像素不变。
+              if (!refract)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: CapsuleRimPainter(
+                        radius: capsuleH / 2,
+                        isDark: isDark,
+                        compact: true,
+                      ),
                     ),
                   ),
                 ),
-              ),
               // ② 透镜。
               Positioned.fill(
                 child: IgnorePointer(

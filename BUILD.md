@@ -86,7 +86,7 @@ Material Icons 走 Apache 2.0，全文与来源说明在 `app/test/fonts/README.
 
 见下一节。要分发的那一份**只能在主 checkout 里构建**，理由见末尾第 ② 条。
 
-### 5. 六条最贵的坑
+### 5. 七条最贵的坑
 
 | 现象 | 真正的原因 | 怎么办 |
 |---|---|---|
@@ -96,6 +96,7 @@ Material Icons 走 Apache 2.0，全文与来源说明在 `app/test/fonts/README.
 | `flutter test` 一条用例都跑不到，报 `null. The flutter tool cannot access the file or directory.` | 受限环境（本项目的沙箱）里 `%TEMP%` 不可写，而 `flutter test` 开场就要建临时目录 | 只在受限环境需要，且**先 `cd app`**（文档前文的命令都在这层）：`mkdir -p "$PWD/../work/tmp" && export TMP="$PWD/../work/tmp" TEMP="$TMP"`（见 `tools/flutter-test.sh`）。普通电脑别抄 |
 | 视觉工装报 `字体资产缺 …`，或 CI 上只有和文字尺寸有关的用例红 | 量文字宽高的用例读的是真实字形；字体换一把尺子，2dp 的行盒差就能让布局溢出 | 三份字体在 `app/test/fonts/` 入库，别删；要换就 `VISUAL_CJK_FONT` 显式指 |
 | 沙箱里跑过 `flutter` 之后，构建报 `Building with plugins requires symlink support` | 直接跑 `flutter` 会用默认 pub 缓存、改写 `.flutter-plugins-dependencies`，而本沙箱建不了符号链接，`.plugin_symlinks` 被清空 | 一律走 `bash tools/flutter-test.sh` / `tools/flutter-analyze.sh`（它们设了 `PUB_CACHE` 与 `TMP`） |
+| 每天 23:55–23:59 之间跑全套，会有一条谁都没碰过的用例红（2026-11-06 前：`app/test/alarm_screen_test.dart:178`） | 那条用例拿「现在 + 5 分钟」当样本；跨过午夜后 24 小时值班把它锚在当天、那个时刻已经过去，行被 `alarm_screen.dart:99` continue 掉 | 2026-11-06 已把用例钉到固定时钟。**记住这一类**：任何依赖真实「现在几点」的用例都是定时炸弹 —— 新写用例一律 `useFixedNow()`；出包前碰上一次莫名其妙红，先看表 |
 
 ## 在你自己的电脑上构建（Windows）
 

@@ -601,14 +601,33 @@ class AppTokens {
   ///
   /// 亮档下端收成**深墨**而不是更淡的白 —— 白底上白线等于没画，浅色里玻璃的边
   /// 读作「一圈接触阴影 + 上面一点高光」。
+  ///
+  /// ⚠️ **这是底栏唯一的一层边光**（`LiquidTrack` 在 `refract` 开着时不再叠
+  /// `CapsuleRimPainter` 那一圈，见那里的注释）。别再往底栏上叠第二圈 ——
+  /// v0.12.9 之前两圈是叠着的：这一道白 0.92 压在那圈白 0.62 上，
+  /// `1 − (1 − 0.62)(1 − 0.92) ≈ 0.97` 的白，真机实测上沿 249 压在 47 的底色上
+  /// （差 202 级），用户报的就是「深色底栏边缘太亮、刺眼」。
+  ///
+  /// 深色上端从 0.92 收到 **0.42**。上沿与底色的落差：**202 级 → 122 级**
+  /// （渲染工装 169 对 47；真机 166 对 45，差 121 —— 同一件事，差 1 级是屏幕
+  /// 那边的取整，报告里统一按 **122** 说）。
+  ///
+  /// 浅色那端**不能用白**：0.95 的白压在本就 239 的近白底上读不出来，还把
+  /// 14% 的深色轮廓线盖掉（用户：「浅色尤其上边看不清」，实测改前只有 5~11 级）。
+  /// 改成 ink 0.18 的**暗线**：压暗 **85 级**（渲染工装 239−154，真机 245−158）。
+  /// 浅色玻璃的边靠「接触阴影」读，不靠高光。
+  ///
+  /// 这两个数各有一条护栏：原料在 `test/design_tokens_test.dart`（0.42 / 0.18、
+  /// 浅色必须暗于底色），合成后的像素在 `test/glass_refraction_test.dart`
+  /// （122±4 / 85±4，按真组件渲出来量）。
   static List<Color> capsuleEdgeRim(bool isDark) => isDark
       ? [
-          Colors.white.withValues(alpha: 0.92),
-          Colors.white.withValues(alpha: 0.16),
+          Colors.white.withValues(alpha: 0.42),
+          Colors.white.withValues(alpha: 0.10),
         ]
       : [
-          Colors.white.withValues(alpha: 0.95),
-          inkLight.withValues(alpha: 0.10),
+          inkLight.withValues(alpha: 0.18),
+          inkLight.withValues(alpha: 0.04),
         ];
 
   /// 厚度暗边（内圈那一道很淡的黑，压出「玻璃有厚度」）。

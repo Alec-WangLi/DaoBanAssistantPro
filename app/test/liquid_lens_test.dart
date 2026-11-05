@@ -1217,8 +1217,12 @@ void main() {
   //
   //   1. `refractedCapsuleEdge` 用的是**沿运动轴**的半径，而竖直档里那个半径被
   //      兜底钳位 `_cap = min(高, 宽) / 2` 卡住，`reach = max(rl, rr) − cy` 恒为负；
-  //   2. 竖直档那枚滴其实是**椭圆**（不是「两个圆 + 外公切线」），横向那套弦长算式
+  //   2. 竖直档那枚滴当时是**椭圆**（不是「两个圆 + 外公切线」），横向那套弦长算式
   //      会把两个圆心算到对方的另一侧、得出一小段挤在正中间的弧。
+  //
+  // ⚠️ **2026-11-05 第 2 条的前提变了**：用户点名「按住变大后是椭圆，我要正好相切
+  // 的两个半圆」，竖直档已改成真胶囊（两端半径 = 宽/2）。于是弦长换成胶囊那条
+  // （直线切到就是满宽、越过端头圆心就是圆弦），不再是椭圆归一化那条。
   //
   // 前两条钉住修好之后的行为，第三条钉住**横向档没被带坏** —— 底栏与分段器走的是
   // 横向档，它们有「逐像素不变」的验收，这条就是那件事的可断言形式。
@@ -1245,14 +1249,58 @@ void main() {
     expect(e!.fade, greaterThan(0));
   });
 
-  test('竖直档：折边的弦长是椭圆那条，不是横向那套', () {
+  test('竖直档：折边的弦长按**真胶囊**算（不是椭圆那条）', () {
     final shape = pillShape();
     final e = refractedCapsuleEdge(shape)!;
-    // 椭圆在边线（局部 y = 0 / capsuleH）上的弦长 = 宽 · √(1 − (2·cy/高)²)。
-    final double k = 2 * shape.centerY / shape.height;
-    final double expected = shape.width * math.sqrt(1 - k * k);
+    // 真胶囊：两端半径 r = 宽/2 = 22、端头圆心离透镜中心 (84 − 44)/2 = 20；
+    // 边线（距中心 cy = 36）落在下端圆上 16px 处 → 半弦 = √(22² − 16²) = 15.10。
+    final double r = shape.width / 2;
+    final double capY = (shape.height - shape.width) / 2;
+    final double d = shape.centerY - capY;
+    final double expected = 2 * math.sqrt(r * r - d * d);
     expect(e.xR - e.xL, closeTo(expected, 0.5));
+    expect(e.xR - e.xL, closeTo(30.20, 0.1), reason: '定值：药丸这档弦长 2 × 15.10');
+    // 旧的椭圆算式给 22.66 —— 差 7.5px，折边整条画进滴的内部。
+    final double k = 2 * shape.centerY / shape.height;
+    expect(e.xR - e.xL,
+        isNot(closeTo(shape.width * math.sqrt(1 - k * k), 1.0)),
+        reason: '还按椭圆那条算 —— 形状已经不是拉伸出来的椭圆了');
     expect(e.xL + e.xR, closeTo(2 * shape.centerX, 0.5), reason: '两端不对称');
+  });
+
+  test('竖直档：开关那颗（27×42）的弦长是 22.45 —— 椭圆的算不出来这个数', () {
+    // 开关的几何：`itemW 25 / capsuleH 30 / pad 3`，满升程 27×42
+    // （metrics: protrude 9 / liftWidth 2 / rimScale 0.25 / velocityRef 180）。
+    // 药丸那颗上面已经钉了 30.20，这里补开关 —— 两处的弦长公式是同一行代码，
+    // 但被改回去时红的是不同的数（审查 2026-11-05 把弦长换回椭圆式，
+    // 竖直档 14 条全绿，就是因为只有药丸那颗被钉住了）。
+    final LiquidLensShape shape = LiquidLensShape.of(
+      itemW: 25,
+      capsuleH: 30,
+      pad: 3,
+      centerPage: 0,
+      lift: 1,
+      velocity: 0,
+      stretch: 0,
+      metrics: const LiquidLensMetrics(
+          protrude: 9, liftWidth: 2, rimScale: 0.25, velocityRef: 180),
+    );
+    expect(shape.width, closeTo(27, 0.01));
+    expect(shape.height, closeTo(42, 0.01));
+
+    final e = refractedCapsuleEdge(shape)!;
+    // 真胶囊：两端半径 r = 27/2 = 13.5，端头圆心离中心 (42 − 27)/2 = 7.5；
+    // 边线在 cy = capsuleH/2 = 15 → 越过圆心 7.5，半弦 = √(13.5² − 7.5²) = 11.225。
+    expect(shape.centerY, closeTo(15, 0.01));
+    expect(2 * math.sqrt(13.5 * 13.5 - 7.5 * 7.5), closeTo(22.45, 0.01));
+    expect(e.xR - e.xL, closeTo(22.45, 0.05), reason: '定值：2 × 11.225');
+    expect(e.xL + e.xR, closeTo(2 * shape.centerX, 0.5), reason: '两端不对称');
+
+    // 旧的椭圆算式给 18.90（差 3.5px，折边整条画进滴的内侧）。
+    final double k = 2 * shape.centerY / shape.height;
+    expect(e.xR - e.xL,
+        isNot(closeTo(shape.width * math.sqrt(1 - k * k), 0.5)),
+        reason: '还按椭圆那条算 —— 形状已经是「两个正圆 + 外公切线」了');
   });
 
   test('横向档：横轴半径与原来那个逐值相等（底栏不受影响的可断言形式）', () {

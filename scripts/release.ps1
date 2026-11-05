@@ -26,6 +26,7 @@
 
 .PARAMETER SkipVerify
     跳过一致性校验（不推荐，仅紧急补发时使用）。
+    **它只跳一致性校验，签名校验始终执行**；真要连签名都不验，那是 -SkipSignCheck 的事。
 
 .PARAMETER SkipConfirm
     跳过人工确认（用于脚本化/CI）。
@@ -37,6 +38,11 @@
 
 .PARAMETER Stable
     强制标记为「正式稳定版」（用于覆盖自动判断）。
+
+.PARAMETER SkipSignCheck
+    显式跳过签名校验。**默认不跳过**：校验跑不了（缺 apksigner / keytool，或没吐出证书摘要）
+    会直接 throw —— 签名是「这包能不能装到用户手机上」的唯一保证，没有保证不该默认放行。
+    2026-11-05 发 v0.12.9 时因为没 dot-source tools\build-env.ps1，这一步空转、只发了 Warning。
 
 .PARAMETER WhatIf
     演练模式：只做检查和打印，不创建 Release。
@@ -57,6 +63,15 @@
     不 dot-source 时 ANDROID_HOME / JAVA_HOME 不在环境里，第 3 步的签名校验找不到
     apksigner / keytool，只会打印「跳过签名校验」而不报错 —— 这一步就空转了。
     2026-11-05 发 v0.12.9 时实际发生过一次，那个包是另外手工验的。
+
+    另一个坑记在这里：2026-11-06 之前，app/test/alarm_screen_test.dart 那条用例拿
+    「现在 + 5 分钟」当样本，于是每天 23:55-23:59 之间跑全套会无缘无故红一条 ——
+    跨过午夜之后 24 小时值班把它锚在当天，那个时刻已经过去。当天已把用例钉到固定
+    时钟；这条不再拦人，留着是因为**时间本身也能让测试变红**：出包前碰上一次
+    「谁都没动却红了」，先看表，再查代码。
+
+    签名校验默认**硬拦**（跑不了就 throw），要跳过必须显式加 -SkipSignCheck；
+    而且它**不受 -SkipVerify 影响** —— 紧急补发跳一致性校验时，签名照验。
 #>
 
 [CmdletBinding()]
@@ -67,6 +82,7 @@ param(
     [switch]$SkipConfirm,
     [switch]$Prerelease,
     [switch]$Stable,
+    [switch]$SkipSignCheck,
     [switch]$WhatIf
 )
 
@@ -151,74 +167,94 @@ if (-not $SkipVerify) {
         Write-Warning "本地 $branch 与 origin/$branch 不一致，Release tag 将指向本地提交 $($localMain.Substring(0,7))（未推送的提交不会被其他人看到）。"
     }
 
-    # ---- 3b. 签名校验（2026-10-13 加，被一次真事故逼出来的）----
-    #
-    # v0.11.16 第一次发出去的那个 APK，是在一个 **git worktree** 里构建的 —— 而
-    # `app/android/key.properties` 与 `keystore/release.jks` **都是 gitignore 的**，
-    # worktree 里没有，`build.gradle.kts` 于是**静默回退到 debug 证书**。包发出去、
-    # 版本号 / 资产 / latest.json 全对，用户一装就报「Conflicting app signatures」
-    # （`Couldn't install (-7)`），只能卸载重装。**签名不对，上面那几条校验一条都照不出来。**
-    #
-    # 判据：APK 的签名证书必须与 `release.jks` 里那一枚**逐位相同**。
-    # 不拿 DN 比（DN 是人填的、可以重名），拿 SHA-256。
-    $kpPath = Join-Path $root 'app\android\key.properties'
-    if (-not (Test-Path $kpPath)) {
-        throw "app\android\key.properties 不存在 —— 这样构建出来的 APK 会用 **debug 证书**签名，用户装不上（Conflicting app signatures）。请从备份恢复 key.properties 与 keystore\release.jks，然后重新构建。"
-    }
+    Write-Host "      ✅ 工作区干净；无源码晚于构建；branch=$branch"
+} else {
+    Write-Host "[4/6] 一致性校验: 已跳过 (-SkipVerify)；签名校验照跑"
+}
 
-    $btDir = if ($env:ANDROID_HOME) { Join-Path $env:ANDROID_HOME 'build-tools' } else { $null }
-    $apksigner = $null
-    if ($btDir -and (Test-Path $btDir)) {
-        $apksigner = Get-ChildItem $btDir -Directory |
-            Sort-Object { try { [version]$_.Name } catch { [version]'0.0.0' } } |
-            ForEach-Object { Join-Path $_.FullName 'apksigner.bat' } |
-            Where-Object { Test-Path $_ } | Select-Object -Last 1
-    }
-    $keytool = if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin\keytool.exe' } else { $null }
+# ---- 3b. 签名校验：无论上面是否 -SkipVerify，都跑 ----
+# 这一段**不受 -SkipVerify 管**：跳过一致性校验不等于跳过签名校验（2026-11-06 收掉的门）。
+#
+# v0.11.16 第一次发出去的那个 APK，是在一个 **git worktree** 里构建的 —— 而
+# `app/android/key.properties` 与 `keystore/release.jks` **都是 gitignore 的**，
+# worktree 里没有，`build.gradle.kts` 于是**静默回退到 debug 证书**。包发出去、
+# 版本号 / 资产 / latest.json 全对，用户一装就报「Conflicting app signatures」
+# （`Couldn't install (-7)`），只能卸载重装。**签名不对，上面那几条校验一条都照不出来。**
+#
+# 判据：APK 的签名证书必须与 `release.jks` 里那一枚**逐位相同**。
+# 不拿 DN 比（DN 是人填的、可以重名），拿 SHA-256。
+$kpPath = Join-Path $root 'app\android\key.properties'
+if (-not (Test-Path $kpPath)) {
+    throw "app\android\key.properties 不存在 —— 这样构建出来的 APK 会用 **debug 证书**签名，用户装不上（Conflicting app signatures）。请从备份恢复 key.properties 与 keystore\release.jks，然后重新构建。"
+}
 
-    if (-not $apksigner -or -not $keytool -or -not (Test-Path $keytool)) {
-        # 工具不全就**不拦**，只把话说清楚：这一步是保险，不是发布的必要条件。
-        Write-Warning "找不到 apksigner / keytool（ANDROID_HOME / JAVA_HOME 没设？），**跳过签名校验** —— 这次的 APK 到底是不是用 release.jks 签的，没人替你确认过。"
+$btDir = if ($env:ANDROID_HOME) { Join-Path $env:ANDROID_HOME 'build-tools' } else { $null }
+$apksigner = $null
+if ($btDir -and (Test-Path $btDir)) {
+    $apksigner = Get-ChildItem $btDir -Directory |
+        Sort-Object { try { [version]$_.Name } catch { [version]'0.0.0' } } |
+        ForEach-Object { Join-Path $_.FullName 'apksigner.bat' } |
+        Where-Object { Test-Path $_ } | Select-Object -Last 1
+}
+$keytool = if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin\keytool.exe' } else { $null }
+
+if (-not $apksigner -or -not $keytool -or -not (Test-Path $keytool)) {
+    # 工具不全 → 默认拦下来（2026-11-06 用户定：签名是「这包能不能装到用户手机上」的唯一保证，
+    # 跑不了就等于没有保证，而「没有保证」不该是默认放行）。确实要跳过时显式加 -SkipSignCheck。
+    $signWhy = "找不到 apksigner / keytool（ANDROID_HOME / JAVA_HOME 没设？）—— 签名校验跑不了。"
+    if ($SkipSignCheck) {
+        Write-Warning "$signWhy`n  （已显式 -SkipSignCheck：跳过。这次没人替你确认过这个 APK 用的是不是 release.jks。）"
     } else {
-        # 这一段全是原生命令、且 stderr 上写的都是常规输出，照 8b 那条规矩临时放宽
-        # ErrorActionPreference（`2>&1` 在 `Stop` 下会把常规提示包成异常抛出来）。
-        $prevEapSign = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            $props = @{}
-            Get-Content $kpPath | ForEach-Object {
-                if ($_ -match '^\s*([^#=]+?)\s*=\s*(.+?)\s*$') { $props[$Matches[1]] = $Matches[2] }
-            }
-            $storeFile = $props['storeFile']
-            if ($storeFile -and -not [System.IO.Path]::IsPathRooted($storeFile)) {
-                $storeFile = Join-Path (Join-Path $root 'app\android') $storeFile
-            }
-            $ksOut = & $keytool -list -v -keystore $storeFile -storepass $props['storePassword'] -alias $props['keyAlias'] 2>&1 | Out-String
-            $ksDigest = ([regex]::Match($ksOut, 'SHA256:\s*([0-9A-Fa-f:]+)')).Groups[1].Value -replace ':', ''
-            $apkOut = & $apksigner verify --print-certs $apk 2>&1 | Out-String
-            $apkDigest = ([regex]::Match($apkOut, 'SHA-256 digest:\s*([0-9A-Fa-f:]+)')).Groups[1].Value -replace ':', ''
-        } finally {
-            $ErrorActionPreference = $prevEapSign
+        throw @"
+${signWhy}签名是「这包能不能装到用户手机上」的唯一保证 —— 跑不了就等于没有保证，所以默认拦下。装错签名的包，用户只会看到 Conflicting app signatures 然后装不上。
+  先 dot-source 构建环境再跑：   . .\tools\build-env.ps1
+  确实要跳过（这台机器没有工具链、只是补发）：  加 -SkipSignCheck
+"@
+    }
+} else {
+    # 这一段全是原生命令、且 stderr 上写的都是常规输出，照 8b 那条规矩临时放宽
+    # ErrorActionPreference（`2>&1` 在 `Stop` 下会把常规提示包成异常抛出来）。
+    $prevEapSign = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $props = @{}
+        Get-Content $kpPath | ForEach-Object {
+            if ($_ -match '^\s*([^#=]+?)\s*=\s*(.+?)\s*$') { $props[$Matches[1]] = $Matches[2] }
         }
+        $storeFile = $props['storeFile']
+        if ($storeFile -and -not [System.IO.Path]::IsPathRooted($storeFile)) {
+            $storeFile = Join-Path (Join-Path $root 'app\android') $storeFile
+        }
+        $ksOut = & $keytool -list -v -keystore $storeFile -storepass $props['storePassword'] -alias $props['keyAlias'] 2>&1 | Out-String
+        $ksDigest = ([regex]::Match($ksOut, 'SHA256:\s*([0-9A-Fa-f:]+)')).Groups[1].Value -replace ':', ''
+        $apkOut = & $apksigner verify --print-certs $apk 2>&1 | Out-String
+        $apkDigest = ([regex]::Match($apkOut, 'SHA-256 digest:\s*([0-9A-Fa-f:]+)')).Groups[1].Value -replace ':', ''
+    } finally {
+        $ErrorActionPreference = $prevEapSign
+    }
 
-        if (-not $ksDigest -or -not $apkDigest) {
-            Write-Warning "签名校验没跑成（keytool 或 apksigner 没吐出证书摘要），**跳过** —— 请人工确认这个 APK 是用 release.jks 签的。"
-        } elseif ($ksDigest -ne $apkDigest) {
+    if (-not $ksDigest -or -not $apkDigest) {
+        $signWhy2 = "签名校验没跑成（keytool 或 apksigner 没吐出证书摘要）—— 无法确认这个 APK 是用 release.jks 签的。"
+        if ($SkipSignCheck) {
+            Write-Warning "$signWhy2`n  （已显式 -SkipSignCheck：跳过。）"
+        } else {
             throw @"
+${signWhy2}工具在、却没吐出摘要：多半是 keystore 路径 / storePassword / keyAlias 与 key.properties 对不上，或者 apksigner 版本太老。
+  确认过要跳过：  加 -SkipSignCheck
+"@
+        }
+    } elseif ($ksDigest -ne $apkDigest) {
+        throw @"
 APK 的签名证书与 release.jks 对不上 —— 用户会看到「Conflicting app signatures」而装不上（Couldn't install (-7)）。
   release.jks : $($ksDigest.ToLower())
   这个 APK    : $($apkDigest.ToLower())
 多半是在一个**没有 key.properties 的地方**构建的（比如 git worktree —— 它和 release.jks 都是 gitignore 的）。请在本仓库根目录下重新构建。
 "@
-        } else {
-            Write-Host "      ✅ 签名证书与 release.jks 一致（$($apkDigest.Substring(0, 16).ToLower())…）"
-        }
+    } else {
+        Write-Host "      ✅ 签名证书与 release.jks 一致（$($apkDigest.Substring(0, 16).ToLower())…）"
     }
-
-    Write-Host "      ✅ 工作区干净；无源码晚于构建；branch=$branch"
-} else {
-    Write-Host "[4/6] 一致性校验: 已跳过 (-SkipVerify)"
 }
+
 
 # ---------- 4. 发布说明 ----------
 if ($NotesFile) {

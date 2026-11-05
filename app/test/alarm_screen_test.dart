@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 import 'package:shiftassistantpro/core/layout.dart';
 import 'package:shiftassistantpro/core/widgets/glass_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
@@ -26,6 +27,8 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+
+import 'support/fixed_clock.dart';
 
 /// 有界推进若干帧（不能用 `pumpAndSettle`：页面自己有个 1 分钟的周期定时器）。
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
@@ -173,11 +176,21 @@ void main() {
   });
 
   // v0.9.3 修的那条（独立审查抓出来的）：**首条已响、后面还有时，整行不能藏**。
-  // 用 24 小时值班的形状，这样两条闹钟无论几点跑都落在「当天」，断言与时刻无关；
+  // 用 24 小时值班的形状，所以两条闹钟都锚在**当天**；
   // 第一条取「一分钟前」（已响）、第二条取「五分钟后」（还等着）。
+  //
+  // ⚠️ **「现在」必须钉死。** 原来这里读 `DateTime.now()`，于是每天
+  // 23:55–23:59 必红：那个钟点 + 5 分钟已经跨到次日 00:0x，而 24 小时值班把闹钟
+  // 锚在**当天**，「五分钟后」那个时刻于是成了「今天已经过去」⇒
+  // `hasPendingShiftAlarm`（`alarm_service.dart:235`）判「没有待响」⇒
+  // `alarm_screen.dart:99` 整行 continue 掉 ⇒ 行没了、`alarm-day-row-*` 找不到。
+  // 审查 2026-11-05 23:56 撞上（一天约 0.35% 的窗口），00:01 同一份代码就绿了。
+  // 锚点取 `kAnchor`（2026-10-15）往后 9 小时 —— 09:00 前后，离午夜足够远。
   testWidgets('首条已响、后面还有 → 那一行仍然在（连已响的那条也还列着）',
       (tester) async {
-    final now = DateTime.now();
+    final DateTime now = kAnchor.add(const Duration(hours: 9));
+    appNow = () => now;
+    addTearDown(() => appNow = DateTime.now);
     final rung = (now.subtract(const Duration(minutes: 1)).hour * 60) +
         now.subtract(const Duration(minutes: 1)).minute;
     final pending = (now.add(const Duration(minutes: 5)).hour * 60) +

@@ -1084,4 +1084,53 @@ Text('x', style: TextStyle(
     expect(AppTokens.onSolid(const Color(0xFFFF9F0A)), Colors.black);
     expect(AppTokens.onSolid(const Color(0xFF5A5F73)), Colors.white);
   });
+
+  // ── 底栏边光的**数值**（用户报的是亮度，结构守住了不算守住）─────────────
+
+  test('底栏边光：深色是一层 0.42 的白、浅色是一道暗线（不是白线）', () {
+    // 2026-11-05 用户报「深色底栏边缘太亮、刺眼；浅色尤其上边看不清」。根因是
+    // 两圈边光叠了一层（见 `liquid_track.dart` 的注释），改法是拆掉一圈 + 把
+    // 剩下这圈的亮度从 0.92 收到 0.42、浅色的白线换成 ink 暗线。
+    //
+    // 为什么数值也要守：全 app 只有这一处画底栏的边光，把 0.42 改回 0.92 是
+    // 「一行手滑」，而它换来的就是那条 202 级的白光 —— 结构用例（`if (!refract)`）
+    // 对此一言不发。像素合成值由 `glass_refraction_test.dart` 的「底栏边光亮度」
+    // 那条按真组件渲出来量（深色差 122±4、浅色压暗 85±4），这里守的是原料。
+    final List<Color> dark = AppTokens.capsuleEdgeRim(true);
+    final List<Color> light = AppTokens.capsuleEdgeRim(false);
+    expect(dark, hasLength(2), reason: '边光只有「上端亮、下端收」两个停靠点');
+    expect(light, hasLength(2));
+
+    expect(dark.first.a, closeTo(0.42, 0.02),
+        reason: '深色上端现在是 ${dark.first.a}。0.92 就是 v0.12.9 那条 202 级的白光'
+            '（真机上沿 249 压在 47 的底色上）—— 用户报「刺眼」的原样');
+    expect(light.first.a, closeTo(0.18, 0.02),
+        reason: '浅色上端现在是 ${light.first.a}');
+
+    // 浅色上端必须**比底色暗**：浅色玻璃的边靠「接触阴影」读，不靠高光。
+    expect(
+      light.first.computeLuminance(),
+      lessThan(AppTokens.bgLight.computeLuminance()),
+      reason: '浅色上端又变回亮色了 —— 白线压在 239 的近白底上读不出来，'
+          '用户原话「浅色尤其上边看不清」（改前只有 5~11 级落差）',
+    );
+    // 深色上端反过来：它是一层白光，必须比底色亮。
+    expect(
+      dark.first.computeLuminance(),
+      greaterThan(AppTokens.bgDark.computeLuminance()),
+      reason: '深色上端掉到了底色以下 —— 深色玻璃的边是高光，不是阴影',
+    );
+
+    // 别把别的令牌直接拿过来当这个 alpha（0.42 / 0.18 是按 202 → 122 与
+    // 5~11 → 85 这两笔实测账量出来的，不是随手借一个数）。
+    for (final double other in <double>[
+      AppTokens.lensStretch,
+      AppTokens.lensSquash,
+      AppTokens.lensVelocityRef / 1000,
+    ]) {
+      expect(dark.first.a, isNot(closeTo(other, 0.01)),
+          reason: '$other 是别处的令牌值 —— 边光的 alpha 是量出来的，不是借来的');
+      expect(light.first.a, isNot(closeTo(other, 0.01)));
+    }
+  });
 }

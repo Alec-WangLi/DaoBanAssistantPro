@@ -31,6 +31,7 @@
 // 而折射的参数是按底栏那枚 64 高的胶囊量的 —— 46 宽的开关上带会被夹到 14、
 // 位移 8 相当于钮高的 29%，那不是「边缘弯一点」，是整颗钮在抖。
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -399,6 +400,101 @@ void main() {
     );
   });
 
+  // ── 4c. 底栏不叠第二圈边光 ───────────────────────────────────────────────
+
+  testWidgets('底栏折射开着时不叠 CapsuleRimPainter —— 两圈相加就是 202 级白光',
+      (tester) async {
+    // 2026-11-05 用户报「深色下底栏边光太亮、刺眼」。根因不是参数调过头，是
+    // **两圈边光叠在同一位置**：`CapsuleRimPainter`（探针光，0.62）＋
+    // `_CapsuleEdgePainter`（厚玻璃主光，0.92），合成 1−(1−0.62)(1−0.92) ≈ 0.97 白，
+    // 真机上沿 249 顶着 47 的底色（差 **202 级**）。改法是「底栏这一档不叠探针光，
+    // 只留主光」，真机量到峰值 166 / 周边 45（差 120）。
+    //
+    // 为什么必须扫源码：把那个条件写回无条件，**像素用例一条都不会红** ——
+    // 渲染工装在 Skia 上也照样画得出那圈白，没人会注意到尖峰又回到 202 级，
+    // 直到用户再报一次「刺眼」。
+    final code = blankNonCode(
+      File('lib/core/widgets/liquid_track.dart').readAsStringSync(),
+    );
+    final uses = RegExp(r'CapsuleRimPainter\s*\(').allMatches(code).toList();
+    expect(
+      uses,
+      hasLength(1),
+      reason: '`liquid_track.dart` 里出现了 ${uses.length} 处 CapsuleRimPainter —— '
+          '底栏只该有这一处（被 refract 包着）。多出来的那处没有人守，'
+          '等于又把第二圈光加回底栏。',
+    );
+
+    final String before = code.substring(0, uses.single.start);
+    final guards = RegExp(r'if \(([^)]*)\)').allMatches(before).toList();
+    final guard = guards.isEmpty ? null : guards.last;
+    expect(
+      guard?.group(1)?.replaceAll(RegExp(r'\s+'), ''),
+      '!refract',
+      reason: 'CapsuleRimPainter 外面那层条件被改了（现在是 '
+          '`if (${guard?.group(1)?.trim() ?? '无'} )`）。它必须是 `if (!refract)`：'
+          '底栏折射开着时**不叠**这圈探针光，分段器与开关（没有第二层）照旧画。',
+    );
+    expect(
+      before.substring(guard!.end),
+      isNot(contains(';')),
+      reason: '`if (!refract)` 的语句已经结束了，CapsuleRimPainter 落在条件外面 —— '
+          '底栏又成了两圈光相加的 202 级。',
+    );
+
+    // 行为侧：真搭一棵 LiquidTrack，两种档位各数一次树里的这枚 painter。
+    final controller = LiquidLensController(
+      slots: 3,
+      pad: 0,
+      liftWidth: AppTokens.lensLiftWidth,
+      vsync: tester,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(() => liquidRefractionEnabled.value = true);
+
+    Future<void> pumpTrack({required bool refract}) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 300,
+              height: _navCapsuleH,
+              child: LiquidTrack(
+                slots: 3,
+                capsuleH: _navCapsuleH,
+                pad: 0,
+                controller: controller,
+                refract: refract,
+                contentBuilder: (BuildContext context, double itemW) =>
+                    const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    int rims() => tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .where((CustomPaint w) => w.painter is CapsuleRimPainter)
+        .length;
+
+    await pumpTrack(refract: false);
+    expect(
+      rims(),
+      1,
+      reason: '分段器 / 开关只有这一圈边光 —— 它没了，拖动时那枚滴一点亮带都不剩',
+    );
+
+    await pumpTrack(refract: true);
+    expect(
+      rims(),
+      0,
+      reason: '底栏又把探针光叠了回来：与主光合成 0.97 白，真机上沿差 202 级、刺眼',
+    );
+  });
+
   // ── 4b. 着色器的坐标前提：`uSize` 是**纹理**尺寸，不是容器 ──────────────
 
   test('着色器把容器尺寸另立成 uContainer —— uSize 是引擎覆写的纹理尺寸', () {
@@ -683,4 +779,123 @@ void main() {
     expect(nav.radius, _navCapsuleH / 2);
     expect(nav.band, GlassRefraction.debugParams()[0]);
   });
+
+  // ── 7. 边光的亮度：只钉结构不算数，渲出来量 ─────────────────────────────
+
+  testWidgets('底栏边光亮度：深色上端压到 122 级、浅色上端压暗 85 级', (tester) async {
+    // 用户报的是**亮度**（深色刺眼、浅色看不见），而亮度只活在渲出来的像素里。
+    // 只钉结构（`if (!refract)` 那条）拦不住有人把 0.42 改回 0.92 —— 结构守住了、
+    // 白光照样回来，全套照样全绿，直到用户再报一次。
+    //
+    // 量的位置就是真机上看到的那个：胶囊**上沿**那一列，背景是页面底色
+    // （深色 47 / 浅色 239）。这台工装与真机的偏差 ≤3 级 —— 真机 166 / 45、
+    // 这里 169 / 47；浅色真机 158 对 245、这里 154 对 239。
+    tester.view.physicalSize = const Size(1200, 300);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = LiquidLensController(
+      slots: 3,
+      pad: 6,
+      liftWidth: 10,
+      vsync: tester,
+    );
+    addTearDown(controller.dispose);
+
+    final ({int bg, int extreme}) dark =
+        await _probeRimEdge(tester, dark: true, controller: controller);
+    expect(dark.extreme, greaterThan(dark.bg),
+        reason: '深色上端应当比底色**亮** —— 它是一层白光');
+    expect(dark.extreme - dark.bg, closeTo(122, 4),
+        reason: '深色上沿与底色差 ${dark.extreme - dark.bg} 级，目标 122。'
+            '改回 0.92 那道白就是 202 级 —— 用户报「刺眼」的正是这个数');
+
+    final ({int bg, int extreme}) light =
+        await _probeRimEdge(tester, dark: false, controller: controller);
+    expect(light.extreme, lessThan(light.bg),
+        reason: '浅色上端必须是**暗**线：白线压在 239 的近白底上读不出来'
+            '（改前只有 5~11 级，用户原话「浅色尤其上边看不清」）');
+    expect(light.bg - light.extreme, closeTo(85, 4),
+        reason: '浅色上沿只压暗了 ${light.bg - light.extreme} 级，目标 85');
+  });
+}
+
+/// 把真 `LiquidTrack` 渲到离屏位图上，量**胶囊上沿**那一条的亮度。
+///
+/// 背景是**胶囊内填色的替身**，不是页面底色：真机量得底色 **47 / 239**（边光本来
+/// 就压在这层内填色上，物理上取它才对），而页面底色 `AppTokens.bgDark` #0B0B10 = 11、
+/// `AppTokens.bgLight` #F5F6FA = 245 —— 边光是半透明的，基准一换整条护栏的数就废了，
+/// 别把这里的 47 / 239 当页面底色抄走。返回（底色, 上沿极值）：深色取最大（白光），
+/// 浅色取最小（暗线）。
+///
+/// 只读红通道（`:882` 的 `at()`）：白光与 ink 边光在三个通道上相等，够用；将来若换成
+/// 暖色边光，红通道就不再代表亮度，得改成按亮度加权。
+Future<({int bg, int extreme})> _probeRimEdge(
+  WidgetTester tester, {
+  required bool dark,
+  required LiquidLensController controller,
+}) async {
+  final GlobalKey key = GlobalKey();
+  await tester.pumpWidget(MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      brightness: dark ? Brightness.dark : Brightness.light,
+      useMaterial3: true,
+    ),
+    home: Scaffold(
+      backgroundColor: Colors.transparent,
+      body: RepaintBoundary(
+        key: key,
+        child: Container(
+          color: dark ? const Color(0xFF2F2F2F) : const Color(0xFFEFEFEF),
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: 300,
+            height: _navCapsuleH,
+            child: LiquidTrack(
+              refract: true,
+              slots: 3,
+              capsuleH: _navCapsuleH,
+              pad: 6,
+              controller: controller,
+              contentBuilder: (BuildContext context, double itemW) =>
+                  const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ));
+  await tester.pumpAndSettle();
+
+  final RenderRepaintBoundary boundary =
+      key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  late Uint8List px;
+  late int w;
+  late int h;
+  await tester.runAsync(() async {
+    final ui.Image img = await boundary.toImage(pixelRatio: 3.0);
+    w = img.width;
+    h = img.height;
+    final ByteData? data =
+        await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+    px = data!.buffer.asUint8List();
+    img.dispose();
+  });
+
+  int at(int x, int y) => px[(y * w + x) * 4];
+  final int x0 = w ~/ 2;
+  final int bg = at(x0, 4);
+  // 从顶上往下走：第一条与底色差 >15 的行就是胶囊上沿。
+  int y = 4;
+  while (y < h && (at(x0, y) - bg).abs() <= 15) {
+    y++;
+  }
+  int extreme = at(x0, y);
+  for (int k = y; k < h && k < y + 14; k++) {
+    final int v = at(x0, k);
+    if (dark ? v > extreme : v < extreme) extreme = v;
+  }
+  return (bg: bg, extreme: extreme);
 }
