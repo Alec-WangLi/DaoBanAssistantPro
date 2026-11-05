@@ -1,0 +1,124 @@
+name: visual
+
+# 每日视觉巡场。只报告，不拦截 —— `continue-on-error: true` 是刻意的，别改成 false。
+#
+# 为什么不拿它当红灯：图是字体画出来的。字体换一版、字距微调几个 hundredth，图就变，
+# 而 App 一个像素都没坏。真红与假红混在一起，几次之后所有人学会无视这个红 —— 那比不做更糟。
+# 它挡的是另一件事：某个界面今天画崩了（布局溢出、字被静默裁掉），
+# 第二天早上能在 artifact 里看见，不必等用户截图来投诉。
+# 和上一版比像素是下一步的事，这一版只回答「今天画得出来、画出来几张」。
+
+on:
+  schedule:
+    # 02:00 北京时间 = 18:00 UTC（前一天）。GitHub 的 cron 只认 UTC，写本地时间会提前 8 小时。
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+# 不要 push / pull_request：它不该在每次提交上跑（1284 条、约 55 秒、出 356 张 627MB 的图）。
+concurrency:
+  group: visual-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 与 ci.yml 同一个版本。视觉断言是按这一版量的，两边不一致等于两把尺子。
+  FLUTTER_VERSION: '3.47.2'
+  TZ: Asia/Shanghai
+
+jobs:
+  visual:
+    name: 视觉工装（只报告，红也不拦）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # 这一行的意义：job 内任何一步失败，workflow 结论仍是 success —— 不把仓库染红。
+    # 失败信息看 job 页与 artifact，不看这个勾。
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: pub 缓存
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          # 与 ci.yml 同一个键 —— 两边命中同一份缓存，不各存一份。
+          key: pub-${{ runner.os }}-${{ hashFiles('app/pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      # 硬需求，不是保险：视觉工装里也有一批用例直接开内存 SQLite
+      # （sqlite3-2.9.4/lib/src/ffi/load_library.dart:60 在 Linux 上只找 libsqlite3.so）。
+      - name: 系统依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsqlite3-dev
+
+      - name: flutter pub get
+        working-directory: app
+        run: flutter pub get
+
+      # 三份字体是入库资产（app/test/fonts/），缺一份 ensureVisualFonts() 就抛 StateError。
+      # 提前喊比跑完 55 秒才炸划算。
+      - name: 字体资产
+        shell: bash
+        run: |
+          for f in app/test/fonts/roboto-regular.ttf \
+                   app/test/fonts/materialicons-regular.otf \
+                   app/test/fonts/NotoSansSC-Regular.otf; do
+            if [ ! -s "$f" ]; then
+              echo "::error::缺字体资产 $f —— 视觉工装会直接抛 StateError。"
+              exit 1
+            fi
+            ls -l "$f"
+          done
+
+      - name: flutter test tool/visual
+        working-directory: app
+        shell: bash
+        run: |
+          # 与 ci.yml 同一条理由：Actions 默认 `bash -e`、没有 pipefail，
+          # `flutter test | tee` 的退出码是 tee 的 0 —— 红会被管道吞掉。这一行不能省。
+          set -o pipefail
+          log="$RUNNER_TEMP/visual-test.log"
+          start=$(date +%s)
+          flutter test tool/visual/ --reporter expanded 2>&1 | tee "$log"
+          echo "ELAPSED=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+
+      # 失败也要写摘要与留图 —— 那两个「失败信息从哪看」的答案就在这儿。
+      - name: 写 job summary
+        if: always()
+        shell: bash
+        run: |
+          log="$RUNNER_TEMP/visual-test.log"
+          total=$(grep -oE '^[0-9]{2}:[0-9]{2} \+[0-9]+' "$log" 2>/dev/null | tail -1 | grep -oE '\+[0-9]+' | tr -d '+' || true)
+          imgs=$(find app/build/visual -name '*.png' 2>/dev/null | wc -l | tr -d ' ')
+          size=$(du -sh app/build/visual 2>/dev/null | cut -f1)
+          last=$(tail -3 "$log" 2>/dev/null | sed '/^$/d' | tail -1)
+          if [ -n "${ELAPSED:-}" ]; then elapsed="$ELAPSED 秒"; else elapsed="未记录（测试步骤没跑完）"; fi
+
+          {
+            echo "## 视觉巡场"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "|---|---|"
+            echo "| 通过条数 | ${total:-未解析出来} |"
+            echo "| 出图张数 | ${imgs} 张 |"
+            echo "| 图片体积 | ${size:-无} |"
+            echo "| 耗时 | ${elapsed} |"
+            echo "| 末尾一行 | \`${last:-无}\` |"
+            echo ""
+            echo "这一版**只做「画得出来」**，不与上一版比像素。图在本次运行的 artifact 里，保留 7 天。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 失败也要把图捞出来 —— 恰恰是失败那天最需要看图。
+      - name: 上传出图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-${{ github.run_number }}
+          path: app/build/visual/
+          retention-days: 7
+          if-no-files-found: warn
