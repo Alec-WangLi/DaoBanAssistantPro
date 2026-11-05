@@ -41,6 +41,12 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.9\n'
+    '· 底栏那圈彩色边缘回来了 —— 上一版把它让给了「弯折」那层，可那层只有部分机型画得出来，于是没轮到的人看到的是一枚既没有颜色、也没有弯折的胶囊。现在彩边一直画着，弯折在支持的机型上叠在上面，两者不再互相顶掉\n'
+    '· 桌面小组件不再是白块：同步没成功时它自己重试两次，还不行就提示一句；实在拿不到数据时写「打开 App 同步排班」，而不是一片空白\n'
+    '· 极端字号下月历格只差一两个像素时，不再因此多出一条滚动条\n'
+    '· 待办行右边那颗铅笔去掉了 —— 整行本来就能点开编辑，那颗图标只会让人以为这里有两件事\n'
+    '\n'
 'v0.12.8\n'
     '· 底栏那枚玻璃胶囊的边缘现在会把背后的内容轻轻「弯」过去一点 —— 它读起来像一块有厚度的玻璃，而不是一张磨砂纸。这一层只在给得住它的手机上出现，别的机型与以前一模一样\n'
     '· 顺着这条，胶囊边缘那圈画出来的彩色收掉了：真玻璃几乎没有虹彩，那圈颜色在咱们这套极简黑白底上只能靠画。方向感现在由上面那层弯折承担\n'
@@ -97,13 +103,15 @@ const String _changelogZh =
     '· 闹钟落点扩到前一天 / 当天 / 次日三档，每个班次上限 6 → 10 条；贪睡时长可选 1 / 5 / 10 / 15 / 20 / 30 分钟\n'
     '· 修：浅色档下状态栏图标跟着主题走、输入框标签在真机字体下不再被压扁、实心主色面上改白字、底部导航彩边接缝、编辑排班的「每月第 N 天起」不再省略、待办勾选后的「撤销」在切页后仍然生效\n'
     '\n'
-'v0.11.26\n'
-    '· 今日卡最左边那条主色竖条通到卡片底了 —— 以前它只有「日期」那一行那么高\n'
-    '· 今日卡「其他班组」换成了 App 里那种半透明胶囊（之前是圆点加光秃秃的文字），几颗紧挨着排左边\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.9\n'
+    '· The colour rim on the nav bar capsule is back. The last version handed that job to the bending layer, but that layer only exists on some phones - everyone else got a capsule with neither colour nor bending. The rim is drawn again, always, and the bending stacks on top where it is available\n'
+    '· The home-screen widget no longer goes blank: a failed sync retries twice on its own and then says so once; when there is really no data it reads "Open the app to sync" instead of an empty card\n'
+    '· At very large text sizes the calendar no longer grows a scrollbar over a one- or two-pixel shortfall\n'
+    '· The pencil on todo rows is gone - the whole row already opens the editor, and the icon only suggested there were two things to tap\n'
+    '\n'
 'v0.12.8\n'
     '· The edge of the nav bar capsule now bends the content behind it a little, so it reads as a piece of glass with thickness rather than a sheet of frosted paper. That layer only appears on phones that can render it; everything else looks exactly as before\n'
     '· The painted colour rim along that capsule is gone with it: real glass has almost no iridescence, and on this flat black-and-white background that ring could only ever be drawn. The sense of direction now comes from the bending layer\n'
@@ -159,10 +167,6 @@ const String _changelogEn =
     '· The calendar becomes two columns in landscape, on tablets and car screens; bottom sheets share one header and can be pulled down to close; section headings, empty and loading states and press feedback are unified across the app\n'
     '· Alarm anchors now cover the day before, the same day and the next day; up to 10 alarms per shift; snooze length selectable from 1 to 30 minutes\n'
     '· Fixes: status-bar icons follow the theme in light mode, field labels are no longer squashed under the device font, white text on solid accent surfaces, the coloured rim seam on the nav bar, the editor no longer truncates "from day N of each month", and undo still works after switching tabs\n'
-    '\n'
-'v0.11.26\n'
-    '· The accent bar on the left of the today card now runs the full height of the card - before it was only as tall as the date row\n'
-    '· The Other crews row on the today card uses the same translucent capsules as the app, packed together on the left; it used to be bare dots with plain text\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
