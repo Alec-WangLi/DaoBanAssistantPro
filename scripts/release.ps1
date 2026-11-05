@@ -20,6 +20,9 @@
 
 .PARAMETER NotesFile
     指定发布说明文件。缺省时自动生成 tools/gh/release-notes-v<版本>.md。
+    2026-11-05 出过一次「文件明明在、脚本却判它不存在」的事故：发布前 1 分钟写好的
+    说明文件被下面那段模板覆盖成 418 字节的占位稿，根因未查明。**发版一律显式传
+    -NotesFile 绝对路径**，绕开这条。
 
 .PARAMETER SkipVerify
     跳过一致性校验（不推荐，仅紧急补发时使用）。
@@ -44,6 +47,16 @@
     .\scripts\release.ps1 -Prerelease          # 强制标记为测试版
     .\scripts\release.ps1 -Stable              # 强制标记为正式版
     .\scripts\release.ps1 -WhatIf
+
+.NOTES
+    跑之前先 dot-source 构建环境：
+
+        . .\tools\build-env.ps1
+        .\scripts\release.ps1 -Prerelease
+
+    不 dot-source 时 ANDROID_HOME / JAVA_HOME 不在环境里，第 3 步的签名校验找不到
+    apksigner / keytool，只会打印「跳过签名校验」而不报错 —— 这一步就空转了。
+    2026-11-05 发 v0.12.9 时实际发生过一次，那个包是另外手工验的。
 #>
 
 [CmdletBinding()]
@@ -212,6 +225,11 @@ if ($NotesFile) {
     if (-not (Test-Path $NotesFile)) { throw "指定的发布说明文件不存在: $NotesFile" }
     $notes = (Resolve-Path $NotesFile).Path
 } else {
+    # ⚠️ 2026-11-05 的事故：$notes 这个文件在发版前 1 分钟刚写好（2270 B），这里的
+    #    Test-Path 仍判它不存在，于是下面按模板生成、把同名文件覆盖成了 418 B 的占位稿
+    #    （Release 正文一度是「（待补充…）」）。事后同一个路径 Test-Path 返回 True，
+    #    脚本里也没有 stash / clean / Remove-Item，根因没查出来。
+    #    所以：发版一律显式传 -NotesFile 绝对路径，别依赖这条自动查找。
     $notes = Join-Path $root "tools\gh\release-notes-v$Version.md"
     if (-not (Test-Path $notes)) {
         $sha = (Get-FileHash $apk -Algorithm SHA256).Hash

@@ -37,6 +37,18 @@ flutter analyze       # 必须 No issues found
 参考耗时（Windows，冷编译）：`flutter test` **43 秒**、`flutter analyze` **8 秒**。
 所以「跑一遍全套」比刷一次手机还快，改完就跑，别只跑自己动过的那一个文件。
 
+**在本项目的沙箱里别直接敲 `flutter`**：那里 Dart/Flutter 进程建符号链接会被拒
+（`ERROR_PRIVILEGE_NOT_HELD 1314`，开发者模式其实是开的）。不设 `PUB_CACHE` 直接跑，
+`flutter` 会用默认 pub 缓存重新解析、把 `app/.dart_tool/.flutter-plugins-dependencies`
+指过去，下一次运行就判定要重建插件符号链接 —— 而链接建不出来，
+`app/windows/flutter/ephemeral/.plugin_symlinks` 会被清空，随后报
+`Building with plugins requires symlink support`（2026-11-05 实测）。走包装脚本就不会：
+
+```bash
+bash tools/flutter-test.sh        # 全套测试
+bash tools/flutter-analyze.sh     # 静态分析
+```
+
 `dart run build_runner build` **只在改了 Drift 表之后要跑**（别再带 `--delete-conflicting-outputs`，
 build_runner 2.15.1 起这个参数已被移除，传了会被静默忽略）；
 生成物 `app/lib/data/app_database.g.dart` 是入库的，CI 会比对它有没有落后于表定义。
@@ -57,26 +69,33 @@ flutter test tool/visual/     # 1284 条
 它把每个界面按屏单渲成 PNG 到 `app/build/visual/`，**只看不出图、不比对基线**；唯一的断言是
 「渲染期间没有布局溢出、没有静默截断」。参考耗时 **57 秒**。
 
-中文需要字体：工装会依次找 Windows 的等线/黑体、macOS 的苹方、Linux 的 Noto CJK。
-一个都没找到就会把中文渲成方块，启动时打一行 `[visual] 字体缺 中文…`。用别的字体：
+**字体是入库资产，不再靠系统找**：`app/test/fonts/` 里放着三份
+（`NotoSansSC-Regular.otf` 2.86MB、`materialicons-regular.otf` 1.6MB、`roboto-regular.ttf` 172KB），
+工装按仓库相对路径加载；缺任何一份直接 `StateError` 报出缺哪个文件，**不会再静默渲成方块**。
+所以 Windows / macOS / Linux / CI 量的是同一把尺子 —— 2026-11-05 CI 上一度有 8 条用例因为这把尺子
+不同而红（本地量等线、CI 量 Noto，行盒高度差 2dp）。要临时换字体：
 
 ```bash
-VISUAL_CJK_FONT=/path/to/your-font.ttf flutter test tool/visual/
+VISUAL_CJK_FONT=/path/to/your-font.ttf bash tools/flutter-test.sh tool/visual/
 ```
+
+⚠️ 它们是**许可资产**：Noto 走 SIL OFL 1.1（子集，未声明 Reserved Font Name），Roboto 与
+Material Icons 走 Apache 2.0，全文与来源说明在 `app/test/fonts/README.md` 同目录。删之前先想清楚。
 
 ### 4. 出 APK
 
 见下一节。要分发的那一份**只能在主 checkout 里构建**，理由见末尾第 ② 条。
 
-### 5. 五条最贵的坑
+### 5. 六条最贵的坑
 
 | 现象 | 真正的原因 | 怎么办 |
 |---|---|---|
 | `git clean -xdf` 之后什么都跑不动 | `tools/`、`toolchain/`、`dist/` 是 gitignore 的本机资产，clean 会连它们一起删 | 用 `git clean -xdf -e tools -e toolchain -e dist -e work`，或者干脆别 clean |
 | 发出去的包用户一装就报 `Conflicting app signatures` | 在 `git worktree` 里构建：那里没有 `key.properties`，`build.gradle.kts` **静默**回退 debug 证书 | 只在主 checkout 构建；`scripts/release.ps1` 已带签名校验 |
 | 编译过了，运行时报「列不存在」 | 改了 Drift 表没重生成 `app_database.g.dart` | 改表后跑 `dart run build_runner build`，CI 也会拦 |
-| `flutter test` 一条用例都跑不到，报 `null. The flutter tool cannot access the file or directory.` | 受限环境（本项目的沙箱）里 `%TEMP%` 不可写，而 `flutter test` 开场就要建临时目录 | 只在受限环境需要：`export TMP=$PWD/work/tmp`（见 `tools/flutter-test.sh`）。普通电脑别抄 |
-| 视觉工装只有方块 | 没找到中文 TTF（`.ttc` 字体集合引擎也不保证能加载） | 设 `VISUAL_CJK_FONT` 指一个 `.ttf` |
+| `flutter test` 一条用例都跑不到，报 `null. The flutter tool cannot access the file or directory.` | 受限环境（本项目的沙箱）里 `%TEMP%` 不可写，而 `flutter test` 开场就要建临时目录 | 只在受限环境需要，且**先 `cd app`**（文档前文的命令都在这层）：`mkdir -p "$PWD/../work/tmp" && export TMP="$PWD/../work/tmp" TEMP="$TMP"`（见 `tools/flutter-test.sh`）。普通电脑别抄 |
+| 视觉工装报 `字体资产缺 …`，或 CI 上只有和文字尺寸有关的用例红 | 量文字宽高的用例读的是真实字形；字体换一把尺子，2dp 的行盒差就能让布局溢出 | 三份字体在 `app/test/fonts/` 入库，别删；要换就 `VISUAL_CJK_FONT` 显式指 |
+| 沙箱里跑过 `flutter` 之后，构建报 `Building with plugins requires symlink support` | 直接跑 `flutter` 会用默认 pub 缓存、改写 `.flutter-plugins-dependencies`，而本沙箱建不了符号链接，`.plugin_symlinks` 被清空 | 一律走 `bash tools/flutter-test.sh` / `tools/flutter-analyze.sh`（它们设了 `PUB_CACHE` 与 `TMP`） |
 
 ## 在你自己的电脑上构建（Windows）
 
