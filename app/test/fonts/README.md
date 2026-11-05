@@ -17,9 +17,10 @@
 
 ## 许可说明
 
-- Noto Sans CJK 采用 **SIL OFL 1.1**：允许随软件一起再分发（含子集化），条件是随附许可文本并保留版权声明。
-  许可全文见 <https://scripts.sil.org/OFL>，上游 <https://github.com/notofonts/noto-cjk>。
-- Roboto 与 Material Icons 采用 **Apache License 2.0**：同样允许再分发，需保留声明。
-  许可全文见 <https://www.apache.org/licenses/LICENSE-2.0>。
+许可全文就在本目录，离线可查（逐字取自官方，未改写，抓取日期 2026-11-05）：
+
+- `OFL-1.1.txt` —— Noto Sans SC。SIL OFL 1.1 允许再分发（含子集化），条件是**随附许可文本并保留版权声明**；
+  版权行 © 2014-2021 Adobe 也写在该文件头部。本字体未声明 Reserved Font Name。
+- `APACHE-2.0.txt` —— Roboto 与 Material Icons，Apache License 2.0，同样须随附许可文本与版权声明。
 
 这三份文件只在 `flutter test` 里被加载，不参与 `flutter build apk`，因此不会增大安装包。
