@@ -7,8 +7,9 @@
 ## 开工 SOP（每次新对话必须先执行，不要跳过；每步都有成本上限）
 1. **读本文件**（一屏，≤35KB）。
 2. **一条命令拿现场**：`git log --oneline -8 && git tag | tail -5 && git status --short`，再读 `app/pubspec.yaml` 顶部的 `version:`（唯一版本号来源，与 `app/lib/core/app_info.dart` 同步）。
-3. **按任务挑一个 topic 文件**（下表），只读那一个；需要判重时才 `grep` 版本号进 `docs/changelog/`。
-4. 之后再开始改代码。
+3. **报技能**（§技能纪律），一句话说清这次用哪几个、为什么。
+4. **按任务挑一个 topic 文件**（下表），只读那一个；需要判重时才 `grep` 版本号进 `docs/changelog/`。
+5. 之后再开始改代码。
 
 | 你要动的东西 | 读这一个 |
 |---|---|
@@ -19,6 +20,18 @@
 | 液态玻璃 / 着色器 / 共享玻璃件 | `docs/decisions/glass.md` |
 | 桌面小组件 / RemoteViews | `docs/decisions/widget.md` |
 | 颜色 / 布局 / 弹窗 / 触觉 / 字号 / 视觉工装 | `docs/decisions/ui-rules.md` |
+
+## 技能纪律（2026-11-06 用户拍板；此前多次「该用没用」，靠记忆汇报）
+
+> 触发这次立规矩的事实：v0.12.8~v0.12.10 三轮工作里，`skill` 工具调用 **0 次**，而其中至少有 4 处本该用（TDD、系统化排障、写计划、收尾前验证）。结论不是"技能不重要"，而是"没有强制动作 → 一定忘"。
+
+**规矩一：开工先报技能。** 动第一行代码之前，先说一句「这次用 X、Y，因为……」。说不出来就是没想过 —— 那也要说「这次不需要，因为……」。**这句话是给用户看的，用户可以当场否决。**
+
+**规矩二：收尾前强制过 `verification-before-completion`。** 说"好了/修完了/全绿"之前，必须有本回合跑出来的原始输出作证据（测试尾行、analyze 的 issues 计数、curl 回来的 JSON）。**"我记得跑过了"不算证据。**
+
+**规矩三：新类型的活先扫一眼能力库。** 遇到没见过的工作类型，先看 `~/.dsh/skills/`（约 29 个；`implement` `to-tickets` `test-driven-development` `systematic-debugging` `verification-before-completion` `code-review` `writing-for-agents` `wait-what` `grilling` `stop-slop` 与本项目最相关），再判断要不要用 `learn` / `find-skills` 去外面搜。**搜到有用的报给用户，不擅自安装。**
+
+**规矩四：不许用 `capability-router` 插件。** 用户 2026-11-06 明确：「这个插件已经落伍了，所以我才不启用它」—— 能力匹配靠规则一，不靠那个插件。
 
 ## 一句话
 倒班助手Pro —— Flutter 本地离线排班助手，包名 `com.daoban.shiftassistantpro`。自研排班引擎，轮转规则（四班两倒等）按倒班行业通用轮转规则独立实现。设计语言：**简洁 + 液态玻璃（磨砂模糊）+ Q弹动画**。
