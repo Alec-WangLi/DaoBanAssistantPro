@@ -56,9 +56,11 @@ jobs:
       - name: 生成代码是否最新
         working-directory: app
         run: |
-          dart run build_runner build --delete-conflicting-outputs
+          # 别再带 `--delete-conflicting-outputs`：build_runner 2.15.1 已移除这个参数，
+          # 传了只打一句 “These options have been removed and were ignored”，删除冲突输出已是默认行为。
+          dart run build_runner build
           if ! git diff --quiet -- lib/data/app_database.g.dart; then
-            echo '::error::app_database.g.dart 与表定义不一致 —— 本地跑 `dart run build_runner build --delete-conflicting-outputs` 后提交生成物'
+            echo '::error::app_database.g.dart 与表定义不一致 —— 本地跑 `dart run build_runner build` 后提交生成物'
             git --no-pager diff --stat -- lib/data/app_database.g.dart
             exit 1
           fi
@@ -88,11 +90,31 @@ jobs:
       # DynamicLibrary.open('libsqlite3.so')，没有 .so.0 回退；
       # Ubuntu 的 libsqlite3-0 只给带版本号的库文件，无版本软链由 -dev 包提供。
       - name: 系统依赖
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libsqlite3-dev
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsqlite3-dev \
+            fonts-noto-cjk fonts-droid-fallback
 
       - name: flutter pub get
         working-directory: app
         run: flutter pub get
+
+      # 四条「文字尺寸」类用例量的是**真实字形宽度**，靠
+      # app/tool/visual/visual_harness.dart 的 ensureVisualFonts() 现场装字体：
+      # Roboto / MaterialIcons 取自 $FLUTTER_ROOT/bin/cache/artifacts/material_fonts，
+      # 中文取自 _cjkCandidates 里第一个存在的文件。runner 上这两处都可能空着，
+      # 于是文字被渲成方块、量出来的宽度与 Windows 对不上 —— 2026-11-05 第一次跑
+      # CI 时 8 条用例就是这么红的。这一段只做体检，不判红。
+      - name: 字体体检
+        shell: bash
+        run: |
+          echo "FLUTTER_ROOT=$FLUTTER_ROOT"
+          ls "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" 2>/dev/null \
+            | grep -E 'roboto-regular|materialicons-regular' || echo "缺 material_fonts"
+          ls -l /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc 2>/dev/null \
+            || echo "缺 NotoSansCJK-Regular.ttc"
+          ls -l /usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf 2>/dev/null \
+            || echo "缺 DroidSansFallbackFull.ttf"
 
       - name: flutter test
         working-directory: app

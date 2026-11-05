@@ -4192,7 +4192,8 @@ class RecurringSeriesRow extends DataClass
   final int? advanceRemindMinutes;
   final bool alarmEnabled;
 
-  /// 0 = 每天，1 = 每周（看 [weekdays]），2 = 每月（看 [monthDay]）。
+  /// 0 = 每天，1 = 每周（看 [weekdays]），2 = 每月（看 [monthDays]），
+  /// 3 = 按班次（看 [shiftNames]）。
   final int repeatType;
 
   /// 每周：`1 << (weekday - 1)`，周一 = 1。与 `CustomAlarms.weekdays` 同一约定。

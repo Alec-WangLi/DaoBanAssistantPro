@@ -144,7 +144,7 @@ BUILD.md                      # 构建与运行指南
 ```powershell
 cd app
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs   # 生成 Drift 代码
+dart run build_runner build   # 生成 Drift 代码
 flutter build apk --release
 ```
 

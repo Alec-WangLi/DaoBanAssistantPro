@@ -86,7 +86,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 > 全部 ~90 条已按主题搬进 `docs/decisions/`（7 个文件，原文一字未改）。这里只留**动手前必看**的 8 条 —— 每一条都对应一次真实事故。
 
-1. **改 Drift 表后必须重生成**：`dart run build_runner build --delete-conflicting-outputs`（表定义与迁移都改了才算）。
+1. **改 Drift 表后必须重生成**：`dart run build_runner build`（表定义与迁移都改了才算）。
 2. **`saveSchedule` 必须按 id 增量更新，不能删光重建** —— 删光重建会让每次保存都换掉全部班次 id，按天改班（覆盖表）立刻指飞，而且**不报错**。
 3. **改动「今天归哪套」的任何入口，必须同时重排闹钟**（`AlarmService.replanAfterScheduleChange`）：日历立刻变，而系统里旧计划排的闹钟照旧在原定时刻响。
 4. **`ImageFilter.shader` 的 uniform 0 不是你的** —— 引擎覆写成「输入纹理尺寸」，而滤镜链上游（高斯模糊）会外扩纹理。任何「按容器尺寸归一化」的着色器，都得把容器尺寸另立一个 uniform。详见 `docs/decisions/glass.md`。
@@ -120,8 +120,8 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
-- 改表后：`dart run build_runner build --delete-conflicting-outputs`。
-- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 **1211** 条，只增不减）。⚠️ **日历页的「今天」走 `core/clock.dart` 的 `appNow()`**（不要直接写 `DateTime.now()`）：用例用 `test/support/fixed_clock.dart` 的 `useFixedNow()` 把它钉在 2026-10-15，**期望值也一律用 `appNow()` 算** —— 否则用例会随真实月份漂移（2026-11-05 一次红了 10 条）。视觉工装另算：`flutter test tool/visual/`（当前 **1284** 条）。
+- 改表后：`dart run build_runner build`。⚠️ **别再带 `--delete-conflicting-outputs`** —— build_runner 2.15.1 起这个参数已被移除，传了会被静默忽略（日志里只有一句 `These options have been removed and were ignored`），删除冲突输出现在是默认行为。
+- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 **1218** 条，只增不减；CI 的 `EXPECTED_TESTS` 必须同步改）。⚠️ **日历页的「今天」走 `core/clock.dart` 的 `appNow()`**（不要直接写 `DateTime.now()`）：用例用 `test/support/fixed_clock.dart` 的 `useFixedNow()` 把它钉在 2026-10-15，**期望值也一律用 `appNow()` 算** —— 否则用例会随真实月份漂移（2026-11-05 一次红了 10 条）。视觉工装另算：`flutter test tool/visual/`（当前 **1284** 条）。
 - 构建：`flutter build apk --release --target-platform android-arm64` → `app/build/app/outputs/flutter-apk/app-release.apk`（**切 arm64 单 ABI**，APK 从 ~60MB 降到 ~21MB；仅 64 位设备）。
 - 分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，用 `aapt2 dump badging` 校验 versionName/versionCode 与包名。
 - 一键发布（GitHub Releases）：`scripts/release.ps1`。

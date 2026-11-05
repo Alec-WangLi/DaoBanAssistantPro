@@ -120,7 +120,7 @@
 | `ShiftDayOverrides` | 按天改班覆盖：复合主键 `{scheduleId, day}`（`day` = 自 epoch 天数），`classId` 指到本方案的某个班次定义；只作用于我们班组 |
 
 > 某天的班次**默认不落库**，按「周期起始日 + 周期序列」实时计算；只有被**按天覆盖**的那些天才在 `ShiftDayOverrides` 里有一行（表里存 `classId`，读时转成 `classes` 下标）。
-> **改表后必须重生成**：`dart run build_runner build --delete-conflicting-outputs`。
+> **改表后必须重生成**：`dart run build_runner build`。
 > **v5 → v6 迁移**：把旧的 `ShiftTypeRows`（每方案一串班次）拆成 `ShiftClassRows` + `ShiftCycleRows`，重复班次合并去重；旧表迁移后删除。
 > **v6 → v7 迁移**：`ScheduleEvents` 加一列 `alarm_enabled`（默认 0 = 只弹通知，保持旧行为）。
 > **v7 → v8 迁移**：新建 `ShiftDayOverrides` 表（按天改班覆盖）；原有数据一条不丢。

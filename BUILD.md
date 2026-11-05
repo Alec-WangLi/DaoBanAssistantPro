@@ -30,15 +30,22 @@
 ```bash
 cd app
 flutter pub get
-flutter test          # 1211 条
+flutter test          # 1218 条
 flutter analyze       # 必须 No issues found
 ```
 
 参考耗时（Windows，冷编译）：`flutter test` **43 秒**、`flutter analyze` **8 秒**。
 所以「跑一遍全套」比刷一次手机还快，改完就跑，别只跑自己动过的那一个文件。
 
-`dart run build_runner build --delete-conflicting-outputs` **只在改了 Drift 表之后要跑**；
+`dart run build_runner build` **只在改了 Drift 表之后要跑**（别再带 `--delete-conflicting-outputs`，
+build_runner 2.15.1 起这个参数已被移除，传了会被静默忽略）；
 生成物 `app/lib/data/app_database.g.dart` 是入库的，CI 会比对它有没有落后于表定义。
+⚠️ 受限环境（本项目的沙箱）里它和 `flutter test` 是同一个毛病 —— 建临时目录失败：
+```bash
+cd app
+PUB_CACHE=$PWD/../toolchain/pub-cache TMP=$PWD/../work/tmp TEMP=$PWD/../work/tmp \
+  dart run build_runner build
+```
 
 ### 3. 视觉工装（可选，出图用）
 
@@ -67,7 +74,7 @@ VISUAL_CJK_FONT=/path/to/your-font.ttf flutter test tool/visual/
 |---|---|---|
 | `git clean -xdf` 之后什么都跑不动 | `tools/`、`toolchain/`、`dist/` 是 gitignore 的本机资产，clean 会连它们一起删 | 用 `git clean -xdf -e tools -e toolchain -e dist -e work`，或者干脆别 clean |
 | 发出去的包用户一装就报 `Conflicting app signatures` | 在 `git worktree` 里构建：那里没有 `key.properties`，`build.gradle.kts` **静默**回退 debug 证书 | 只在主 checkout 构建；`scripts/release.ps1` 已带签名校验 |
-| 编译过了，运行时报「列不存在」 | 改了 Drift 表没重生成 `app_database.g.dart` | 改表后跑 `dart run build_runner build --delete-conflicting-outputs`，CI 也会拦 |
+| 编译过了，运行时报「列不存在」 | 改了 Drift 表没重生成 `app_database.g.dart` | 改表后跑 `dart run build_runner build`，CI 也会拦 |
 | `flutter test` 一条用例都跑不到，报 `null. The flutter tool cannot access the file or directory.` | 受限环境（本项目的沙箱）里 `%TEMP%` 不可写，而 `flutter test` 开场就要建临时目录 | 只在受限环境需要：`export TMP=$PWD/work/tmp`（见 `tools/flutter-test.sh`）。普通电脑别抄 |
 | 视觉工装只有方块 | 没找到中文 TTF（`.ttc` 字体集合引擎也不保证能加载） | 设 `VISUAL_CJK_FONT` 指一个 `.ttf` |
 
@@ -85,7 +92,7 @@ VISUAL_CJK_FONT=/path/to/your-font.ttf flutter test tool/visual/
 ```powershell
 cd app
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs   # 生成 Drift 代码（首次/改表后）
+dart run build_runner build   # 生成 Drift 代码（首次/改表后）
 flutter build apk --release                                  # 或 --debug
 ```
 
