@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
@@ -99,9 +100,26 @@ Future<void> _disposeCalendar(WidgetTester tester) async {
 }
 
 /// 点一个**离今天够远**的日子 —— 那会起一次滑行（每帧都在动），正是要量的场景。
-Finder _farDay() {
-  final int today = DateTime.now().day;
-  return find.byKey(ValueKey<String>('day-card-${today > 15 ? today - 7 : today + 7}'));
+///
+/// 「今天」取 `appNow()`，**不取真实时钟**：原来这里读 `DateTime.now().day`，
+/// 而网格画的是夹具锚点那个月。真实今天是 **8 号或 22 号**时，`±7` 正好落在
+/// 锚点的今天（15 号）上 —— 那一击点的是那枚块**当前所在**的格子，滑行根本没起，
+/// 「重建数 ≤ 80」于是静默变成空转（每月 2 天，约 6.5%）。
+/// 所以另外配一条前置断言（[_assertFarFromToday]），把这件事钉死。
+Finder _farDay() =>
+    find.byKey(ValueKey<String>('day-card-${_farDayNumber()}'));
+
+int _farDayNumber() {
+  final int today = appNow().day;
+  return today > 15 ? today - 7 : today + 7;
+}
+
+/// 前置：要点的那一格必须真的离今天远 —— 否则这条在测「原地不动」。
+void _assertFarFromToday() {
+  final int far = _farDayNumber();
+  expect((far - appNow().day).abs(), greaterThanOrEqualTo(5),
+      reason: '要点的那天（$far 号）离今天（${appNow().day} 号）太近：'
+          '滑行不会起，「重建数」这条就变成空转了');
 }
 
 void main() {
@@ -114,6 +132,7 @@ void main() {
 
   testWidgets('液态档：点日期起滑行时，一帧重建的 widget 数 ≤ 80', (tester) async {
     await _pumpCalendar(tester, liquid: true);
+    _assertFarFromToday();
     final int n = await _rebuildsInOneFrame(tester,
         act: () => tester.tap(_farDay()));
     expect(n, lessThanOrEqualTo(80),
@@ -155,6 +174,7 @@ void main() {
   testWidgets('对照：标准档同一个动作仍然只有个位数', (tester) async {
     // 标准档那棵树一个字没动（`AnimatedPositioned` 自己走），所以它本来就该小。
     await _pumpCalendar(tester, liquid: false);
+    _assertFarFromToday();
     final int n = await _rebuildsInOneFrame(tester,
         act: () => tester.tap(_farDay()));
     expect(n, lessThanOrEqualTo(20), reason: '标准档那棵树不该被这一轮碰到；实测：$n');
