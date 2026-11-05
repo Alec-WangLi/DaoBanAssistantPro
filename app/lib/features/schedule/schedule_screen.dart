@@ -27,6 +27,7 @@ import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import 'recurring_panel.dart';
 import 'recurring_fields.dart';
+import '../../core/clock.dart';
 
 /// 归档行左侧那个空位的边长 —— 必须与 `GlassCheck` 的默认尺寸（28）一致，否则
 /// 归档区的文字缩进会比主列表差一档。
@@ -86,7 +87,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   /// 跑一遍重复待办的生成器，再重排提醒（改完「当前这一次」提醒也要跟着走）。
   Future<void> _advanceRecurring() async {
     final repo = ref.read(appRepositoryProvider);
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(appNow()));
     await _rescheduleReminders(ref);
   }
 
@@ -466,13 +467,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
               ],
             ),
           ),
-          AppIcon(
-            Icons.edit_outlined,
-            key: const Key('todo-edit-hint'),
-            size: AppTokens.iconSm,
-            color: AppTokens.inkMuted(context),
-          ),
-          const SizedBox(width: AppTokens.gapIconText),
+          // ⚠️ **这一行曾经有一颗铅笔**（`Icons.edit_outlined` + `todo-edit-hint`），
+          // v0.12.4 按「铅笔 = 点开进入编辑表单」的规则补的。2026-11-05 用户看过真机
+          // 之后否掉了它：「待办事项界面我不想要那个编辑笔的图标，太多余了」——
+          // 整行本来就可点、点了就开编辑弹窗，那颗铅笔只是把「可点」又说了一遍，
+          // 而它占的是每行最贵的那段横向空间。删掉之后**行本身的点击没变**。
+          // 想再补回来之前先读 `docs/decisions/ui-rules.md` 里那条规则的例外清单。
           GlassDeleteButton(
             // 列表行尾部用紧凑形态：完整形态是个 48pt 的红圆，一屏五行就是五个
             // 警报，盖过待办本身（组件注释里写明了这个分工）。
@@ -530,7 +530,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
 
   Future<void> _openAddDialog(BuildContext context, WidgetRef ref) async {
     final titleCtrl = TextEditingController();
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     // 「按班次」要列出当前排班表的班次 —— 读一次，别在弹窗里 watch 流
     // （drift 流取消时的零时长定时器会让 widget 用例报 Timer still pending）。
     final active = await ref.read(appRepositoryProvider).getActiveSchedules();
@@ -823,7 +823,7 @@ class _EventFields {
     if (sid != null) {
       final s = (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
       final chain = (await repo.getActiveSchedules())?.chain;
-      final occ = occurrenceOnOrBefore(s, dateOnly(DateTime.now()),
+      final occ = occurrenceOnOrBefore(s, dateOnly(appNow()),
           shiftOn: chain?.shiftOn);
       if (occ != null) {
         for (final r in (await repo.listEvents())
@@ -853,7 +853,7 @@ Future<void> showEditEventDialog(
   if (!context.mounted) return;
 
   final active = await ref.read(appRepositoryProvider).getActiveSchedules();
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
   final choices = active?.chain.classChoicesFrom(today) ?? const <ShiftClass>[];
   final todayShift = active?.chain.shiftOn(today)?.name;
   var shiftNames = series?.shiftNames ?? const <String>[];

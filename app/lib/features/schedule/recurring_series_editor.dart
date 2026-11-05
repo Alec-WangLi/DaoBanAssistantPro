@@ -27,6 +27,7 @@ import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
 import 'recurring_fields.dart';
+import '../../core/clock.dart';
 
 /// 打开一个系列的编辑器。面板里点任意一行都走这里。
 Future<void> showRecurringSeriesEditor(
@@ -76,7 +77,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
   Future<void> _loadChoices() async {
     final active = await ref.read(appRepositoryProvider).getActiveSchedules();
     if (!mounted) return;
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     final chain = active?.chain;
     final choices = chain?.classChoicesFrom(today) ?? const <ShiftClass>[];
     final todayShift = chain?.shiftOn(today)?.name;
@@ -156,7 +157,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
         skipThrough: widget.series.skipThrough,
         enabled: widget.series.enabled,
       ));
-      final today = dateOnly(DateTime.now());
+      final today = dateOnly(appNow());
       // 规则换了之后「当前这一次」可能根本不存在（比如从每月 1 号改成每周三，
       // 而最近一个周三已经过去）—— 这一步把它补出来。
       await repo.advanceRecurringTodos(today: today);
@@ -214,7 +215,7 @@ class _SeriesEditorState extends ConsumerState<_SeriesEditor> {
               shiftNames: _shiftNames,
             ),
             shiftChoices: _shiftChoices,
-            fallbackDay: DateTime.now(),
+            fallbackDay: appNow(),
             fallbackShiftName: _fallbackShiftName,
             validationMessage: _validation,
             onChanged: (v) => setState(() {

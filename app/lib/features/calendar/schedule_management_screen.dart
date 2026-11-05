@@ -24,6 +24,7 @@ import '../alarm/alarm_service.dart';
 import 'schedule_editor_screen.dart';
 import 'schedule_span_label.dart';
 import 'shift_template_picker_screen.dart';
+import '../../core/clock.dart';
 
 /// 排班管理：列出所有排班表，可单独编辑、新增、删除。
 class ScheduleManagementScreen extends ConsumerWidget {
@@ -563,7 +564,7 @@ Widget _spanDateRow(
     onTap: () async {
       final picked = await showGlassDatePicker(
         context,
-        initialDate: value ?? dateOnly(DateTime.now()),
+        initialDate: value ?? dateOnly(appNow()),
       );
       if (picked != null) onChanged(picked);
     },

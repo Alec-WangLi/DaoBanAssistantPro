@@ -12,6 +12,7 @@ import '../domain/shift_rotation.dart';
 import 'app_database.dart';
 import 'seed.dart';
 import 'todo_archive.dart';
+import '../core/clock.dart';
 
 export 'app_database.dart';
 
@@ -610,7 +611,7 @@ class AppRepository {
             monthly: Value(t.monthly),
             monthSegments: Value(encodeTemplateMonthSegments(t.monthlySegments)),
             teamSegOffsets: Value(encodeTemplateOffsets(t.teamSegOffsets)),
-            createdAt: DateTime.now(),
+            createdAt: appNow(),
           ),
         );
   }
@@ -879,7 +880,7 @@ class AppRepository {
             advanceRemindMinutes: Value(advanceRemindMinutes),
             alarmEnabled: Value(alarmEnabled),
             seriesId: Value(seriesId),
-            createdAt: DateTime.now(),
+            createdAt: appNow(),
           ),
         );
   }
@@ -1002,7 +1003,7 @@ class AppRepository {
             shiftNames:
                 Value(shiftNames.isEmpty ? null : jsonEncode(shiftNames)),
             enabled: const Value(true),
-            createdAt: DateTime.now(),
+            createdAt: appNow(),
           ),
         );
   }
@@ -1137,7 +1138,7 @@ class AppRepository {
                   advanceRemindMinutes: Value(s.advanceRemindMinutes),
                   alarmEnabled: Value(s.alarmEnabled),
                   seriesId: Value(s.id),
-                  createdAt: DateTime.now(),
+                  createdAt: appNow(),
                 ),
               );
           continue;
@@ -1316,7 +1317,7 @@ class AppRepository {
 
   /// 删除已响过的一次性自定义闹钟（fireAt 已过去）。
   Future<void> deleteExpiredOnceAlarms() async {
-    final now = DateTime.now();
+    final now = appNow();
     final alarms = await listCustomAlarms();
     for (final a in alarms) {
       if (a.repeatType != 0 || a.onceDate == null) continue;

@@ -47,6 +47,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 // **`import` 给本文件自己用（`pumpScreen` 里要调），`export` 给下游用** ——
 // 两者都要，`export` 不会把名字引进本文件。`export` 必须待在所有声明之前。
 import '../../test/support/plugin_channels.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 export '../../test/support/plugin_channels.dart';
 
@@ -297,7 +298,7 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
   // 把语言留成了什么，同一个界面两次渲染会不一样。
   L10n.locale = 'zh';
 
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
 
   // 六天一轮的四班三倒：白 / 白 / 中 / 中 / 夜 / 休。
   // 夜班跨午夜（20:30 → 08:00），专门让「跨午夜」那段展示逻辑有东西可画。

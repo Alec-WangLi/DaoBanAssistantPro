@@ -107,7 +107,7 @@
 |---|---|
 | 框架 | Flutter（stable 通道；`app/pubspec.lock` 锁定下限 Flutter ≥ 3.44 / Dart ≥ 3.12；minSdk 26 = Android 8.0+） |
 | 状态管理 | Riverpod |
-| 本地数据库 | Drift（类型安全 SQLite，响应式查询；schemaVersion 13） |
+| 本地数据库 | Drift（类型安全 SQLite，响应式查询；schemaVersion 15） |
 | 闹钟调度 | 原生 Kotlin（`setAlarmClock` / `AlarmReceiver` / 前台服务 / `AlarmStore`+`BootReceiver` 开机重排）+ flutter_local_notifications |
 | 农历 | lunar_plus（农历 / 节气 / 干支 / 生肖 / 法定节假日） |
 | 设计 | 自研液态玻璃设计系统，跟随系统深浅双主题 |
@@ -138,6 +138,8 @@ BUILD.md                      # 构建与运行指南
 ## 🔨 构建
 
 前置：Flutter SDK、JDK 17、Android SDK（详见 [`BUILD.md`](BUILD.md)）。
+
+> **只想先跑起来看看？** 跑测试不需要 JDK / Android SDK：见 [`BUILD.md` 的「第一次跑测试」](BUILD.md#第一次跑测试克隆之后-5-分钟)，两条命令，全套 1211 条 43 秒。
 
 ```powershell
 cd app

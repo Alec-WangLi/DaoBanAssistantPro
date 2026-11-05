@@ -439,15 +439,14 @@ class _GlassNavBarState extends State<GlassNavBar>
               liftWidth: AppTokens.lensLiftWidth,
             ),
             // **全 app 只有底栏这一处传 `refract: true`**（参数说明见
-            // `LiquidTrack.refract`）：胶囊边缘改由真折射弯（`GlassRefract`），
-            // 画出来的那圈彩虹随之收掉 —— 真 iOS 的 UI 玻璃几乎没有虹彩，那圈
-            // 彩色在这套极简黑白底上只能靠画，是装饰不是物理。分段器 / 开关不跟
-            // 这一档走。
+            // `LiquidTrack.refract`）：胶囊边缘改由真折射弯（`GlassRefract`）。
             //
-            // ⚠️ **别在这里补 `spectral: false`**：彩边在底栏是**折射的替身**，
-            // 收不收由 `liquidRefractionEnabled` 实时决定（Impeller 回落 Skia 的
-            // 机器上折射粘性失败，那时彩边得照旧画）。静态 `false` 会把这条退路
-            // 焊死，拖动时只剩白芯与折边 —— 见 `LiquidTrack.spectral`。
+            // ⚠️ **`spectral` 走默认值（true），别在这里传 `false`** —— 2026-11-05
+            // 用户原话「底栏那个彩色边缘没有了」。曾经的做法是「折射活着就让彩边
+            // 让位」，实测下来那圈折射带只有边缘几像素、Skia 回落的机器上干脆没有
+            // （`ImageFilter.shader` 在 Skia 上直接抛），于是拖动时只剩白芯与折边。
+            // 现在两件同时画：折射管「背后的东西被弯一点」，彩边管「方向感」。
+            // 这条契约由 `test/liquid_nav_spectral_test.dart` 钉住。
             refract: true,
             contentBuilder: (BuildContext context, double itemW) => GestureDetector(
               behavior: HitTestBehavior.opaque,

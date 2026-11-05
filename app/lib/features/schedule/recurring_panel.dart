@@ -26,6 +26,7 @@ import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
 import 'recurring_series_editor.dart';
+import '../../core/clock.dart';
 
 /// 弹出「重复待办」管理面板。
 ///
@@ -75,7 +76,7 @@ class _RecurringList extends ConsumerWidget {
   /// 兜底：实在放不下时先牺牲标题与副标题的宽度（它们本来就是省略号结尾）。
   Widget _row(BuildContext context, WidgetRef ref, RecurringTodo s,
       ScheduleChain? chain) {
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     // 按班次系列要问「那天我们班组上什么班」—— 与生成器 / 提醒同一条解析链。
     final shiftOn = chain?.shiftOn;
     final knownNames = {
@@ -174,7 +175,7 @@ class _RecurringList extends ConsumerWidget {
   Future<void> _setEnabled(WidgetRef ref, RecurringTodo s, bool v) async {
     final repo = ref.read(appRepositoryProvider);
     await repo.setRecurringEnabled(s.id!, v);
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(appNow()));
     await AlarmService.rescheduleAll(repo);
     ref.invalidate(recurringPanelProvider);
   }

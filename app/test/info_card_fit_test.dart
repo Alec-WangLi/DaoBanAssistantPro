@@ -29,6 +29,7 @@ import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 
 import '../tool/visual/visual_harness.dart';
+import 'support/fixed_clock.dart';
 
 Future<void> _pump(WidgetTester tester,
     {Size size = const Size(320, 640),
@@ -62,6 +63,7 @@ double _scrollRoom(WidgetTester tester) {
 }
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     await initializeDateFormatting('en');

@@ -1137,4 +1137,11 @@ class L10n {
   static String get widgetDayAfter => t('后天', 'Day after');
   static String get widgetEmptyHint =>
       t('还没有排班，点一下去设置', 'No schedule yet — tap to set up');
+
+  /// 桌面小组件推送失败、重试用尽之后弹一次（每个进程一次）。
+  ///
+  /// 措辞刻意不写「推送失败」：用户不关心是哪一层出的问题，只关心「桌面那张卡
+  /// 还是旧的」。也不写「请重试」—— 下一次改排班或回前台会自动再推。
+  static String get widgetSyncFailed =>
+      t('桌面小组件没同步上，下次打开会自动再试', 'Widget out of sync — it will retry next time');
 }

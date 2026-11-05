@@ -17,6 +17,8 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:shiftassistantpro/core/clock.dart';
+import 'support/fixed_clock.dart';
 
 /// 边界：上半月（1..14）归 A、下半月（15..）归 B。
 const int _boundaryDay = 15;
@@ -36,7 +38,7 @@ Future<AppDatabase> _pumpChainedCalendar(WidgetTester tester,
   addTearDown(db.close);
 
   final repo = AppRepository(db);
-  final now = DateTime.now();
+  final now = appNow();
 
   Future<int> save(String name, String abbr, {required bool current}) =>
       repo.saveSchedule(
@@ -109,6 +111,7 @@ Future<void> _longPressDrag(WidgetTester tester, int fromDay, int stepRows) asyn
 }
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -117,7 +120,7 @@ void main() {
 
   testWidgets('跨时段边界：边界前的格子画 A、边界后的画 B', (tester) async {
     await _pumpChainedCalendar(tester);
-    final now = DateTime.now();
+    final now = appNow();
     final days = DateTime(now.year, now.month + 1, 0).day;
 
     // 闭区间：14 日仍归 A、15 日起归 B。
@@ -147,7 +150,7 @@ void main() {
 
   testWidgets('「本月统计」跨方案时按简称合并，加总等于月长', (tester) async {
     await _pumpChainedCalendar(tester);
-    final now = DateTime.now();
+    final now = appNow();
     final days = DateTime(now.year, now.month + 1, 0).day;
 
     // 统计行只在装得下的那天画，所以逐天点开找一个画着的日子。

@@ -8,4 +8,7 @@
     <string name="widget_week_strip_name">Shift Assistant Pro · This week</string>
     <string name="widget_today_name">Shift Assistant Pro · Today</string>
     <string name="widget_month_name">Shift Assistant Pro · Month</string>
+
+    <!-- The one line shown in the fallback state (see layout/widget_placeholder.xml). -->
+    <string name="widget_placeholder_hint">Open the app to sync</string>
 </resources>

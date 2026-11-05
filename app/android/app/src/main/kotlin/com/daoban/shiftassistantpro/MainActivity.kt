@@ -647,9 +647,21 @@ class MainActivity : FlutterActivity() {
                         if (json.isEmpty()) {
                             result.error("BAD_ARGS", "json 缺失", null)
                         } else {
-                            WidgetStore.write(this, json)
-                            ShiftWidgets.refreshAll(this)
-                            result.success(true)
+                            // **如实回话**：原来无论成败都 `result.success(true)`，
+                            // 于是 Dart 侧拿不到「没写进去」这个事实，重推逻辑形同虚设。
+                            // 落盘成没成、刷新有没有抛，两条都算进这个布尔里。
+                            val written = WidgetStore.write(this, json)
+                            if (!written) {
+                                AlarmLog.error(this, "widgetPushSnapshot: 快照落盘失败")
+                            }
+                            val refreshed = try {
+                                ShiftWidgets.refreshAll(this)
+                                true
+                            } catch (e: Exception) {
+                                AlarmLog.error(this, "widgetPushSnapshot: refreshAll 抛了: ${e.message}")
+                                false
+                            }
+                            result.success(written && refreshed)
                         }
                     }
                     "getWidgetLaunchDay" -> {

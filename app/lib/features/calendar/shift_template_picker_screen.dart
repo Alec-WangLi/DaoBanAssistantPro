@@ -16,6 +16,7 @@ import '../../domain/monthly_pattern.dart';
 import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../../domain/shift_templates.dart';
+import '../../core/clock.dart';
 
 /// 选择页的返回值。
 ///
@@ -688,7 +689,7 @@ Future<int?> createScheduleFromTemplatePicker(
   if (choice.monthly) {
     return ref.read(appRepositoryProvider).saveSchedule(
           name: L10n.monthlyPattern,
-          anchorDate: dateOnly(DateTime.now()),
+          anchorDate: dateOnly(appNow()),
           classes: d.classes,
           cycle: const [],
           monthly: true,
@@ -710,7 +711,7 @@ Future<int?> createScheduleFromTemplatePicker(
   final teamCount = picked?.teamCount ?? mine?.teamCount ?? d.teamCount;
   return ref.read(appRepositoryProvider).saveSchedule(
         name: mine?.name ?? picked?.subtitle ?? L10n.newSchedule,
-        anchorDate: dateOnly(DateTime.now()),
+        anchorDate: dateOnly(appNow()),
         classes: picked?.classes ?? mine?.classes ?? d.classes,
         cycle: picked?.cycle ?? mine?.cycle ?? d.cycle,
         makeCurrent: makeCurrent,

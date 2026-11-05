@@ -36,6 +36,8 @@ import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/info_card_metrics.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:shiftassistantpro/core/clock.dart';
+import 'support/fixed_clock.dart';
 
 ShiftTemplate _template(String id) =>
     shiftTemplates.firstWhere((t) => t.id == id);
@@ -140,7 +142,7 @@ Future<AppDatabase> _pumpCalendar(WidgetTester tester, String templateId,
 
   await AppRepository(db).saveSchedule(
     name: blank ? L10n.holidayScheduleName : template.subtitle,
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(appNow()),
     classes: blank ? const [] : template.classes,
     cycle: blank ? const [] : template.cycle,
     makeCurrent: true,
@@ -200,6 +202,7 @@ Finder _nextMonth() => find.byWidgetPredicate((w) =>
     w.size == AppTokens.iconMd);
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     // L10n.yearMonth 用 intl DateFormat('zh')，测试里要自己初始化。
     await initializeDateFormatting('zh');
@@ -360,7 +363,7 @@ void main() {
   // 用信息卡自己的日期文本定位。不要用 L10n.today —— 「今天」在顶栏按钮和
   // 信息卡的「今天」徽章各出现一次，find.text 会一次命中两个。
   Finder cardDate() =>
-      find.text(L10n.monthDayWeekday(dateOnly(DateTime.now())));
+      find.text(L10n.monthDayWeekday(dateOnly(appNow())));
 
   testWidgets('宽屏：日历改左右分栏，信息卡在右不在下', (tester) async {
     // ⚠️ **尺寸必须写成「宽且横」**（1280×800）。原来只传了 `width: 1280`、
@@ -425,7 +428,7 @@ void main() {
 
     // 把整月的每一天都点一遍：每天的农历、节气、节日与班次都不一样。
     final daysInMonth =
-        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+        DateTime(appNow().year, appNow().month + 1, 0).day;
     var maxContentH = 0.0;
     for (var d = 1; d <= daysInMonth; d++) {
       await tester.tap(find.text('$d').first);
@@ -485,7 +488,7 @@ void main() {
     var plainGridH = 0.0;
     var holidayCardH = 0.0;
     var holidayGridH = 0.0;
-    final start = DateTime(DateTime.now().year, DateTime.now().month, 1);
+    final start = DateTime(appNow().year, appNow().month, 1);
     for (var i = 0; i < 24 && (plainMonth == null || holidayMonth == null); i++) {
       if (i > 0) {
         await tester.tap(_nextMonth());
@@ -556,7 +559,7 @@ void main() {
         (AppTokens.spaceLg * 2 + 2);
 
     final daysInMonth =
-        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+        DateTime(appNow().year, appNow().month + 1, 0).day;
     for (var d = 1; d <= daysInMonth; d++) {
       await tester.tap(find.text('$d').first);
       await tester.pump();
@@ -579,7 +582,7 @@ void main() {
     // 找出本月的第一个法定节假日（中秋那种）。
     final badgeFinder = find.byKey(const Key('info-card-holiday-badge'));
     final daysInMonth =
-        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+        DateTime(appNow().year, appNow().month + 1, 0).day;
     var found = false;
     for (var d = 1; d <= daysInMonth && !found; d++) {
       await tester.tap(find.text('$d').first);
@@ -608,7 +611,7 @@ void main() {
 
     final badgeFinder = find.byKey(const Key('info-card-holiday-badge'));
     final daysInMonth =
-        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+        DateTime(appNow().year, appNow().month + 1, 0).day;
     for (var d = 1; d <= daysInMonth; d++) {
       await tester.tap(find.text('$d').first);
       await tester.pump();
@@ -638,7 +641,7 @@ void main() {
   testWidgets('信息卡：班次名、时间、闹钟在同一行', (tester) async {
     await _pumpCalendar(tester, 'four_crew_three_shift');
     // 默认选中今天；先点一个「上夜班」的日子，让时间与闹钟都出来。
-    await tester.tap(find.text('${DateTime.now().day}').first);
+    await tester.tap(find.text('${appNow().day}').first);
     await tester.pump();
 
     final line = _shiftLine(tester);
@@ -779,7 +782,7 @@ void main() {
             .decoration! as BoxDecoration;
     double chipAlpha(int day) => chipDeco(day).color!.a;
 
-    final today = DateTime.now().day;
+    final today = appNow().day;
     final other = today == 1 ? 2 : 1;
 
     // 初始选中「今天」（`initState` 就把 `_selected` 设成今天）。
@@ -799,7 +802,7 @@ void main() {
 
   testWidgets('格子班次胶囊：实心时文字色取 onSolid，且与底色过 AA', (tester) async {
     await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
-    final today = DateTime.now().day;
+    final today = appNow().day;
 
     final chip = tester.widget<AnimatedContainer>(
         find.byKey(ValueKey('day-chip-$today')));
@@ -843,7 +846,7 @@ void main() {
     // 看起来就是「滑块没把日期格子盖住」。两处现在都取 `_cellRadius`，
     // 这条用例钉着它们相等：哪天有人只改其中一边，这里会红。
     await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
-    final today = DateTime.now().day;
+    final today = appNow().day;
 
     final blockRadius = (tester
             .widget<Container>(find.byKey(const Key('calendar-selection-block')))
@@ -866,7 +869,7 @@ void main() {
     // （真机实测）。改成让 FittedBox 按实际排版缩，这里钉住那个兜底还在。
     await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
 
-    final chip = find.byKey(ValueKey('day-chip-${DateTime.now().day}'));
+    final chip = find.byKey(ValueKey('day-chip-${appNow().day}'));
     expect(chip, findsOneWidget, reason: '今天那格应该有班次胶囊');
     expect(find.descendant(of: chip, matching: find.byType(FittedBox)),
         findsOneWidget,
@@ -877,7 +880,7 @@ void main() {
 
   testWidgets('信息卡待办提示：选中那天有待办才显示，且不改变卡片高度', (tester) async {
     final db = await _pumpCalendar(tester, 'white_white_night_night_rest_rest');
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     await AppRepository(db).addEvent(
       title: '交体检报告',
       date: today,
@@ -909,7 +912,7 @@ void main() {
         width: 320);
     await AppRepository(db).addEvent(
       title: '交体检报告',
-      date: dateOnly(DateTime.now()),
+      date: dateOnly(appNow()),
       timeMinute: 14 * 60,
       advanceRemindMinutes: 15,
     );
@@ -922,7 +925,7 @@ void main() {
 
   testWidgets('信息卡那行班次可点，弹层选中后日历跟着变', (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
 
     // 点开入口
     await tester.tap(find.byKey(const Key('info-card-shift-line')));
@@ -962,7 +965,7 @@ void main() {
   testWidgets('信息卡弹层选「恢复轮转」：覆盖行清掉，「已调整」也不再显示',
       (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
 
     // 先造出「今天被单独改过」的状态
     final classes = await db.select(db.shiftClassRows).get();
@@ -1013,7 +1016,7 @@ void main() {
 
   testWidgets('被覆盖的那天在格子上有小圆点标记', (tester) async {
     final db = await _pumpCalendar(tester, 'day_night_rest_rest');
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
 
     expect(find.byKey(ValueKey('day-adjusted-${today.day}')), findsNothing);
 
@@ -1055,7 +1058,7 @@ void main() {
 
     final classes = await db.select(db.shiftClassRows).get();
     final repo = AppRepository(db);
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     await repo.setDayOverrides([today], classId: classes.first.id);
     await tester.pumpAndSettle();
 
@@ -1152,7 +1155,7 @@ void main() {
   /// 往后翻，找到第一个**有法定节假日**的月份（只有这种月份才有富余可填；没有节假日
   /// 的月份，卡片是按普通日子的高度定的，几乎没有空档）。
   Future<DateTime> seekHolidayMonth(WidgetTester tester) async {
-    final now = DateTime.now();
+    final now = appNow();
     final start = DateTime(now.year, now.month, 1);
     for (var i = 0; i < 24; i++) {
       if (i > 0) {
@@ -1329,7 +1332,7 @@ void main() {
 
     // 圈住的那 8 天都要落库，而且**就是这 8 天**（不是数目对、日子错）。
     final rows = await db.select(db.shiftDayOverrides).get();
-    final now = DateTime.now();
+    final now = appNow();
     expect(
         rows.map((r) => r.day).toSet(),
         {
@@ -1357,7 +1360,7 @@ void main() {
     await tester.tap(find.text(classes.first.name).last);
     await tester.pumpAndSettle();
 
-    final now = DateTime.now();
+    final now = appNow();
     final rows = await db.select(db.shiftDayOverrides).get();
     expect(
         rows.map((r) => r.day).toSet(),
@@ -1397,7 +1400,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 滑块吸附到下一行那一格 → 选中日变成 15 日，且那一格的胶囊是实心的。
-    final now = DateTime.now();
+    final now = appNow();
     expect(
         find.text(L10n.monthDayWeekday(
             DateTime(now.year, now.month, _rangeLastDay))),
@@ -1481,7 +1484,7 @@ void main() {
     expect(find.text(L10n.noSchedule), findsNothing,
         reason: '信息卡里那句同样不该出现');
 
-    final today = DateTime.now();
+    final today = appNow();
     final daysInMonth = DateTime(today.year, today.month + 1, 0).day;
     for (var d = 1; d <= daysInMonth; d++) {
       expect(find.byKey(ValueKey('day-chip-$d'), skipOffstage: false),
@@ -1719,7 +1722,7 @@ void main() {
     // 给「今天」上一条按天调整，标记必须出现在信息卡上。
     final classes = await db.select(db.shiftClassRows).get();
     await AppRepository(db)
-        .setDayOverrides([dateOnly(DateTime.now())], classId: classes.first.id);
+        .setDayOverrides([dateOnly(appNow())], classId: classes.first.id);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('info-card-adjusted')), findsOneWidget,
@@ -1743,14 +1746,14 @@ void main() {
     expect(find.text(L10n.rest), findsNothing);
     expect(find.text(L10n.noSchedule), findsNothing);
     // 日期还在（卡片不是空的，只是不再多说什么）。
-    expect(find.text(L10n.monthDay(dateOnly(DateTime.now()))), findsOneWidget);
+    expect(find.text(L10n.monthDay(dateOnly(appNow()))), findsOneWidget);
 
     await _disposeCalendar(tester);
   });
 
   testWidgets('400×640 那档小窗不受影响：网格与「已调班」都还在', (tester) async {
     // 各机型小窗的默认尺寸，高 640 > 480，**不该**被上面那条规则收走网格。
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     final db = await _pumpCalendar(tester, 'day_night_rest_rest',
         width: 400, height: 640);
 
@@ -1778,7 +1781,7 @@ void main() {
       ShiftAlarm(minute: 17 * 60 + 30),
     ]);
     final daysInMonth =
-        DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
+        DateTime(appNow().year, appNow().month + 1, 0).day;
     var found = false;
     for (var d = 1; d <= daysInMonth && !found; d++) {
       await tester.tap(find.text('$d').first);
@@ -1829,7 +1832,7 @@ void main() {
         (tester) async {
       await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
       final TestGesture g = await tester.startGesture(tester.getCenter(
-          find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+          find.byKey(ValueKey('day-card-${appNow().day}'))));
       for (int i = 0; i < 20; i++) {
         await tester.pump(const Duration(milliseconds: 16));
       }
@@ -1848,7 +1851,7 @@ void main() {
       // 位置逐日不同 —— 锚在它身上只有每月头两天才成立。2026-10-10 实测：它红了，
       // 而且与任何改动无关（干净树上一样红）。8 日永远落在第 1 行，右邻是 9 日；
       // 只有月初偏移为 6（1 号是周日）那种月份 8 / 9 不同行，那种月份改取 9 / 10。
-      final DateTime now = DateTime.now();
+      final DateTime now = appNow();
       final int leading = DateTime(now.year, now.month, 1).weekday - 1;
       final int anchor = leading == 6 ? 9 : 8;
       final Finder anchorCard = find.byKey(ValueKey('day-card-$anchor'));
@@ -1899,7 +1902,7 @@ void main() {
     testWidgets('拖到本月之外的空白格：不崩、块照旧跟着走', (tester) async {
       await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
       final TestGesture g = await tester.startGesture(tester.getCenter(
-          find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+          find.byKey(ValueKey('day-card-${appNow().day}'))));
       for (int i = 0; i < 20; i++) {
         await g.moveBy(const Offset(20, 0)); // 一路拖出行尾
         await tester.pump(const Duration(milliseconds: 16));
@@ -1922,7 +1925,7 @@ void main() {
     // 格子一点反应都没有）。现在位置由我们自己算，三件事从同一个数推出来。
     testWidgets('点「今天」：那枚块真的**滑行**过去，不是瞬移', (tester) async {
       await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
-      final int today = DateTime.now().day;
+      final int today = appNow().day;
       final int other = today >= 15 ? today - 10 : today + 10; // 一定在 1..25 里
       final Finder block = find.byKey(const Key('calendar-selection-block'));
       final Finder todayBtn = find.byIcon(Icons.today_outlined);
@@ -1960,14 +1963,14 @@ void main() {
 
     testWidgets('滑行中：挤压场跟着那枚块走，不是一直盯着终点', (tester) async {
       await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
-      final int today = DateTime.now().day;
+      final int today = appNow().day;
       final int other = today >= 15 ? today - 10 : today + 10;
       final Finder todayBtn = find.byIcon(Icons.today_outlined);
 
       /// 全月有多少格的内容被透镜挤了（`Transform` 只在液态档、且只在非恒等时套）。
       int warpedCells() {
         var n = 0;
-        final int days = DateTime(DateTime.now().year, DateTime.now().month + 1, 0)
+        final int days = DateTime(appNow().year, appNow().month + 1, 0)
             .day;
         for (var d = 1; d <= days; d++) {
           if (tester.any(find.descendant(
@@ -2001,7 +2004,7 @@ void main() {
 
     testWidgets('滑行中：彩边亮起来（块在动），落定之后熄灭', (tester) async {
       await _pumpCalendar(tester, 'four_crew_three_shift', liquid: true);
-      final int today = DateTime.now().day;
+      final int today = appNow().day;
       final int other = today >= 15 ? today - 10 : today + 10;
       final Finder todayBtn = find.byIcon(Icons.today_outlined);
       double motion() =>
@@ -2160,7 +2163,7 @@ void main() {
   group('光晕在交互时暂停', () {
     Future<TestGesture> pressToday(WidgetTester tester) async {
       final TestGesture g = await tester.startGesture(tester.getCenter(
-          find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+          find.byKey(ValueKey('day-card-${appNow().day}'))));
       // 走掉 18px 的 slop 之后 Pan 才赢下竞技场
       for (int i = 0; i < 6; i++) {
         await g.moveBy(const Offset(5, 0));
@@ -2252,7 +2255,7 @@ void main() {
           .widget<Text>(find.byKey(const Key('info-card-month-tally')))
           .data!;
 
-      final DateTime today = dateOnly(DateTime.now());
+      final DateTime today = dateOnly(appNow());
       final ActiveSchedules schedules =
           (await AppRepository(db).getActiveSchedules())!;
       final ShiftClass target = schedules.chain.scheduleOn(today)!.classes[1];

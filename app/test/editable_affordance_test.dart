@@ -183,20 +183,24 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('待办行：铅笔在删除钮之前，且点铅笔也能开编辑弹窗', (tester) async {
+  testWidgets('待办行没有编辑笔，点行本身仍开编辑弹窗', (tester) async {
+    // 2026-11-05 用户看过真机之后否掉了那颗铅笔：「待办事项界面我不想要那个编辑笔的
+    // 图标，太多余了」。整行本来就可点、点了就开编辑弹窗，铅笔只是把「可点」又说了一遍。
+    // 这条用例钉两头：**不许再补回来**，而**行的点击不能跟着一起丢**。
     await _pump(tester, const ScheduleScreen(), seed: (db) async {
       await AppRepository(db)
           .addEvent(title: '交班记录', date: dateOnly(DateTime.now()));
     });
 
-    final hint = find.byKey(const Key('todo-edit-hint'));
-    expect(hint, findsOneWidget);
-    expect(tester.getTopLeft(hint).dx,
-        lessThan(tester.getTopLeft(find.byType(GlassDeleteButton)).dx));
+    expect(find.byKey(const Key('todo-edit-hint')), findsNothing,
+        reason: '编辑笔被补回来了 —— 用户明确否掉过它');
+    expect(find.byIcon(Icons.edit_outlined), findsNothing,
+        reason: '别换个图标再补回来');
 
-    await tester.tap(hint);
+    await tester.tap(find.text('交班记录'));
     await _settle(tester);
-    expect(find.text(L10n.editEvent), findsOneWidget);
+    expect(find.text(L10n.editEvent), findsOneWidget,
+        reason: '删了铅笔之后整行还得能点开编辑 —— 那才是这条入口');
 
     await _dispose(tester);
   });
@@ -238,7 +242,7 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('200×400：待办行铅笔与删除钮都在、不溢出', (tester) async {
+  testWidgets('200×400：待办行没有铅笔、删除钮还在、不溢出', (tester) async {
     await _pump(tester, const ScheduleScreen(),
         size: const Size(200, 400), seed: (db) async {
       await AppRepository(db)
@@ -246,7 +250,8 @@ void main() {
     });
 
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const Key('todo-edit-hint')), findsOneWidget);
+    // 铅笔 2026-11-05 整行删掉了（用户否掉；行本身可点就是暗示）。
+    expect(find.byKey(const Key('todo-edit-hint')), findsNothing);
     expect(find.byType(GlassDeleteButton), findsWidgets);
 
     await _dispose(tester);

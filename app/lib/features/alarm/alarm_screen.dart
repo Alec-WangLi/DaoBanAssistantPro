@@ -25,6 +25,7 @@ import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import 'alarm_service.dart';
+import '../../core/clock.dart';
 
 /// 闹钟：未来 30 天班次闹钟（可单独开关，响过的自动隐藏）+ 自定义闹钟。
 class AlarmScreen extends ConsumerStatefulWidget {
@@ -83,7 +84,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
         const <int, bool>{};
     ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
-    final now = DateTime.now();
+    final now = appNow();
     final today = dateOnly(now);
     final shiftAlarms = <_ShiftAlarmEntry>[];
     if (chain != null) {
@@ -393,12 +394,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     // 这里不能「改钟点时就把 `onceDate` 就地改写成结果」：默认值一顺延到明天，
     // 用户再把钟点往前调回今天，就再也回不到今天了 —— 派生而不是回写，才不会
     // 把默认值当成用户的选择。
-    var onceDate = a?.onceDate ?? dateOnly(DateTime.now());
+    var onceDate = a?.onceDate ?? dateOnly(appNow());
     DateTime onceDateAt(int hour, int minute) => nextOnceDate(
-        now: DateTime.now(), chosen: onceDate, hour: hour, minute: minute);
+        now: appNow(), chosen: onceDate, hour: hour, minute: minute);
     var weekdays = a?.weekdays ?? 0;
     if (repeatType == 2 && weekdays == 0) {
-      weekdays = 1 << (DateTime.now().weekday - 1);
+      weekdays = 1 << (appNow().weekday - 1);
     }
 
     showGlassDialog<void>(

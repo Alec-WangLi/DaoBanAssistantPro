@@ -1,0 +1,118 @@
+name: ci
+
+on:
+  push:
+    branches: [beta, main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支连推几次，只留最后一次 —— 不排队烧分钟数
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 卡死版本：视觉断言与字号是按这一版量的。改这里必须同时改 BUILD.md 与 AGENTS.md。
+  FLUTTER_VERSION: '3.47.2'
+  # 用例数基线（只增不减）。加/删用例时同步改这里 —— 它是「护栏会不会被悄悄拆掉」的唯一把手。
+  # 口径 = `cd app && flutter test`（不带路径）实际跑过的条数，不含 `app/tool/visual/` 那 1284 条。
+  # 哪天有人把视觉用例挪进 `app/test/`，这个数要跟着跳一次。
+  EXPECTED_TESTS: '1218'
+  # runner 默认 UTC；本仓库当前无 TZ 敏感用例（已逐条核过），保留此行只为固定环境，
+  # 撤掉不影响结果。
+  TZ: Asia/Shanghai
+
+jobs:
+  analyze:
+    name: analyze + 生成代码是否最新
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true          # 缓存 SDK 本体，命中时省掉 clone + precache
+
+      - name: pub 缓存
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('app/pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - name: flutter pub get
+        working-directory: app
+        run: flutter pub get
+
+      - name: flutter analyze
+        working-directory: app
+        run: flutter analyze
+
+      # 改了 Drift 表却忘了重生成 —— 编译期看不出来，运行期报「列不存在」。
+      # 生成物 app/lib/data/app_database.g.dart 是入库的，所以这里能比。
+      - name: 生成代码是否最新
+        working-directory: app
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          if ! git diff --quiet -- lib/data/app_database.g.dart; then
+            echo '::error::app_database.g.dart 与表定义不一致 —— 本地跑 `dart run build_runner build --delete-conflicting-outputs` 后提交生成物'
+            git --no-pager diff --stat -- lib/data/app_database.g.dart
+            exit 1
+          fi
+
+  test:
+    name: flutter test（用例数守卫）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: pub 缓存
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('app/pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      # 硬需求，不是保险：用例直接 package:sqlite3 开内存库，而
+      # sqlite3-2.9.4/lib/src/ffi/load_library.dart:60 在 Linux 上只有一句
+      # DynamicLibrary.open('libsqlite3.so')，没有 .so.0 回退；
+      # Ubuntu 的 libsqlite3-0 只给带版本号的库文件，无版本软链由 -dev 包提供。
+      - name: 系统依赖
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libsqlite3-dev
+
+      - name: flutter pub get
+        working-directory: app
+        run: flutter pub get
+
+      - name: flutter test
+        working-directory: app
+        shell: bash
+        run: |
+          # GitHub Actions 默认 `bash -e`，**没有 pipefail**：`flutter test | tee` 的退出码是 tee 的 0，
+          # 红了的测试会被整条管道吞掉，CI 照样绿。这一行不能省。
+          set -o pipefail
+          log="$RUNNER_TEMP/flutter-test.log"
+          flutter test --reporter expanded 2>&1 | tee "$log"
+
+          # 末行形如 `00:43 +1214: All tests passed!`；skip: 掉的用例不计入 +N，
+          # 所以「删测试文件」和「给用例加 skip」这两条路都会被数字变小抓到。
+          total=$(grep -oE '^[0-9]{2}:[0-9]{2} \+[0-9]+' "$log" | tail -1 | grep -oE '\+[0-9]+' | tr -d '+')
+          if [ -z "$total" ]; then
+            echo "::error::没能从日志里解析出用例数 —— 输出格式变了？看 $log"
+            exit 1
+          fi
+          echo "用例数 $total（期望 $EXPECTED_TESTS）"
+          if [ "$total" != "$EXPECTED_TESTS" ]; then
+            echo "::error::用例数 $total ≠ 期望 $EXPECTED_TESTS —— 删了测试、给用例加了 skip:，或者真加了用例却没改 env.EXPECTED_TESTS"
+            exit 1
+          fi

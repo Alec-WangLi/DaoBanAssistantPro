@@ -55,6 +55,14 @@ class AppTokens {
   static const double blurCard = 18;
   static const double blurPanel = 24;
 
+  /// 底栏那枚玻璃胶囊的模糊半径（逻辑像素）。
+  ///
+  /// **比 [blurPanel] 小一半是有意的**：胶囊边缘要做真折射，而折射只有在背景
+  /// **还有结构**时才看得见 —— 模糊半径一旦接近或超过折射带宽度，背景先被糊成
+  /// 一张平色纸，位移上去等于没位移（v0.12.8 实测底栏带内最大差只有 10/255）。
+  /// 底栏底下本来就有内容穿过（滚动时那圈边缘会把它们掰弯），这一档把它留住。
+  static const double navRefractSigma = 12;
+
   // ── 时长（非弹簧过渡） ──
   static const Duration durFast = Duration(milliseconds: 120);
   static const Duration durMed = Duration(milliseconds: 220);
@@ -568,6 +576,51 @@ class AppTokens {
   static Color navBorder(bool isDark) => isDark
       ? Colors.white.withValues(alpha: 0.16)
       : inkLight.withValues(alpha: 0.14);
+
+  // ── 胶囊那一圈「厚玻璃」的边光配方（底栏那一档专用，见 `_CapsuleEdgePainter`） ──
+  //
+  // 这一组是**画出来的厚度**：不碰背景、只用控件自己的尺寸，于是与渲染后端无关、
+  // 逐像素可测。层序由外到内：厚度暗边 → 主边光 + 它的光晕 → 冷暖两道色散细边。
+  //
+  // ⚠️ **渐变轴必须是竖直的（上亮下暗），不许用对角轴。** 胶囊是 6:1 的长条，
+  // 对角轴在它上面会退化成「左端纯白、右端 10% 黑」—— 那条教训写在
+  // `glass_tier_test.dart` 的「浅色档：胶囊左右两条边必须是同一个值」里
+  // （用户 2026-10-01 真机报的「左边很浅，几乎看不清胶囊」）。
+  static const double capsuleEdgeShadowDepth = 1.6;
+  static const double capsuleEdgeShadowWidth = 2.4;
+  static const double capsuleEdgeShadowBlur = 2.2;
+  static const double capsuleEdgeRimDepth = 0.8;
+  static const double capsuleEdgeRimWidth = 1.6;
+  static const double capsuleEdgeGlowWidth = 3.0;
+  static const double capsuleEdgeGlowBlur = 3.5;
+  static const double capsuleEdgeWarmDepth = 1.5;
+  static const double capsuleEdgeCoolDepth = 0.2;
+  static const double capsuleEdgeFringeWidth = 0.9;
+
+  /// 主边光在竖直轴两端的白：上端（受光面）几乎纯白、下端收掉。
+  ///
+  /// 亮档下端收成**深墨**而不是更淡的白 —— 白底上白线等于没画，浅色里玻璃的边
+  /// 读作「一圈接触阴影 + 上面一点高光」。
+  static List<Color> capsuleEdgeRim(bool isDark) => isDark
+      ? [
+          Colors.white.withValues(alpha: 0.92),
+          Colors.white.withValues(alpha: 0.16),
+        ]
+      : [
+          Colors.white.withValues(alpha: 0.95),
+          inkLight.withValues(alpha: 0.10),
+        ];
+
+  /// 厚度暗边（内圈那一道很淡的黑，压出「玻璃有厚度」）。
+  static Color capsuleEdgeShadow(bool isDark) =>
+      Colors.black.withValues(alpha: isDark ? 0.22 : 0.08);
+
+  /// 色散：暖端偏琥珀、冷端偏青 —— 玻璃边缘把不同波长折到不同位置。
+  static Color capsuleEdgeWarm(bool isDark) =>
+      const Color(0xFFFFB27A).withValues(alpha: isDark ? 0.20 : 0.26);
+
+  static Color capsuleEdgeCool(bool isDark) =>
+      const Color(0xFF7AD3FF).withValues(alpha: isDark ? 0.20 : 0.22);
 
   /// 胶囊滑块**选中项**的前景（图标与文字）—— 由**它压着的那块底**决定。
   ///

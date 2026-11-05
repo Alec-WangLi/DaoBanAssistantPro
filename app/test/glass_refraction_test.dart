@@ -68,15 +68,18 @@ void main() {
 
   test('折射参数是按底栏那枚 64 高胶囊量的，改它就得重新量一遍', () {
     // 带 20 = 胶囊高的三分之一（再宽就盖到图标下面，读起来像整块玻璃在抖）；
-    // 位移 8 = 看得出弯、又不到「糊成一团」；三波长 0.055 = 极窄的冷暖分离，
-    // 不是彩虹环。
+    // 位移 12 = 看得出弯、又不到「糊成一团」（模糊已降到 12，够结构）；
+    // 厚度 0.35 = 法线被往中心拽多少；色散 0.18 = 冷暖分离的可见度上限；
+    // 边光 1.0 = 菲涅尔反射的强度。
     //
-    // 这三个数**同时**是「为什么不能无条件换进 LiquidTrack」的依据：46 宽的开关上
-    // 带被 `clamp` 到 14、位移 8 是钮高（29）的 27.6%。
+    // 这几个数**同时**是「为什么不能无条件换进 LiquidTrack」的依据：46 宽的开关上
+    // 带被 `clamp` 到 14、位移 12 是钮高（29）的 41%。
     final List<double> p = GlassRefraction.debugParams();
     expect(p[0], 20, reason: '折射带宽度变了 —— 这条是按 64 高胶囊量的');
-    expect(p[1], 8, reason: '最大位移变了 —— 大了就糊成一团、小了看不出弯');
-    expect(p[2], 0.055, reason: '三波长偏移变了 —— 大了就是彩虹环，不是玻璃');
+    expect(p[1], 12, reason: '最大位移变了 —— 大了就糊成一团、小了看不出弯');
+    expect(p[2], 0.35, reason: '法线朝中心的权重变了 —— 直边中段会失去弯折');
+    expect(p[3], 0.18, reason: '色散变了 —— 大了就是彩虹环，不是玻璃');
+    expect(p[4], 1.0, reason: '边光强度变了 —— 边缘会不再「发亮」');
     expect(
       p[1] / _navCapsuleH,
       lessThan(0.2),
@@ -269,12 +272,15 @@ void main() {
     expect(track.refract, isFalse, reason: '默认开了折射 —— 46 宽的开关会被整颗弯掉');
   });
 
-  testWidgets('底栏的彩边是折射的替身：折射没挂上时它照旧画', (tester) async {
-    // 为什么要有这条：`spectral: false` 与「折射活没活着」**本来没有关系**，
-    // 而折射在 Skia 后端会粘性失败回落纯模糊。于是 Impeller 回落到 Skia 的机器上
-    // 会出现一个**真空档** —— 画出来的彩边收掉了、折射又没来，拖动时那枚滴只剩
-    // 白芯与折边、一点边缘光都没有。出图工装照不出来（静止帧本来就不画彩虹，
-    // 337 屏逐像素全同就是这么来的），只能在这里钉住。
+  testWidgets('底栏的彩边恒开：折射活没活着都照旧画', (tester) async {
+    // 为什么要有这条：2026-11-05 用户报「底栏那个彩色边缘没有了」。原来的写法是
+    // `spectral: refract ? !refractLive : spectral` —— 「折射活着就让彩边让位」，
+    // 理由是「真 iOS 的玻璃几乎没有虹彩」。实测下来那圈折射带只有边缘几像素，
+    // 而且 Skia 回落的机器上**根本没有**（`ImageFilter.shader` 在 Skia 上直接抛），
+    // 于是拖动时那枚滴只剩白芯与折边。
+    //
+    // 现在两件同时画。这条用例守的正是那个**翻转**：闸门从 false 翻到 true，
+    // 彩边必须一直在 —— 出图工装照不出来（静止帧本来就不画彩虹），只能在这里钉。
     final controller = LiquidLensController(
       slots: 3,
       pad: 0,
@@ -324,8 +330,38 @@ void main() {
     await tester.pump();
     expect(
       spectralPassed(),
+      isTrue,
+      reason: '折射一活彩边就收掉了 —— 用户 2026-11-05 报的「彩色边缘没有了」'
+          '正是这一条。彩边与折射是两个图层，谁也不替谁。',
+    );
+
+    // ③ 这一位仍然**是透传的**：调用方传 false 就该是 false。没有这一条，上面
+    // 两条靠「把 spectral 写死成 true」也能过 —— 那会把分段器 / 开关的选择权一起没收。
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 300,
+            height: _navCapsuleH,
+            child: LiquidTrack(
+              slots: 3,
+              capsuleH: _navCapsuleH,
+              pad: 0,
+              controller: controller,
+              refract: true,
+              spectral: false,
+              contentBuilder: (BuildContext context, double itemW) =>
+                  const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(
+      spectralPassed(),
       isFalse,
-      reason: '折射活着却还在画彩边 —— 底栏那圈彩虹没被收掉，等于叠了两层',
+      reason: '传 false 读回来还是 true —— 这一位被写死了，调用方失去选择权',
     );
   });
 
@@ -341,9 +377,9 @@ void main() {
           '64 高胶囊量的，换到别的尺寸上就不是「边缘弯一点」了。',
     );
 
-    // 底栏那圈彩边是**折射的替身**：开不开由 `liquidRefractionEnabled` 实时决定
-    // （见 `LiquidTrack.spectral` 与上面那条用例）。任何一处写死 `spectral: false`
-    // 都会把这条退路焊死 —— Impeller 回落 Skia 的机器上就只剩白芯与折边。
+    // 彩边**恒开**（见 `LiquidTrack.spectral` 与上面那条用例）：任何一处写死
+    // `spectral: false` 都会把那圈边缘光收掉，而折射带在 Skia 回落的机器上根本
+    // 不存在 —— 拖动时只剩白芯与折边。分段器 / 开关 / 底栏三处一视同仁。
     final spectralOff = _filesMatching('spectral: false');
     expect(
       spectralOff,
@@ -391,7 +427,8 @@ void main() {
     expect(code, isNot(contains('halfSize = uSize * 0.5')));
     // 采样留在纹理空间：位移加到 fragPx 上，不是容器空间的 px。
     expect(code, contains('toUv(fragPx)'));
-    expect(code, contains('toUv(fragPx + bend * (1.0 + uSpread))'));
+    expect(code, contains('toUv(fragPx + bendR)'));
+    expect(code, contains('toUv(fragPx + bendB)'));
   });
 
   test('容器尺寸灌在 floats 8/9 —— 别搬回 0/1，那两个引擎会覆写', () {

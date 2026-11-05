@@ -26,6 +26,7 @@ import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
 import 'shift_color_picker.dart';
+import '../../core/clock.dart';
 
 /// 排班方案编辑器。
 ///
@@ -465,7 +466,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     // 叠上按天覆盖之后，用户改周期就看不出规则本身的变化了，预览会失去意义。
     // 代价是它跟日历上看到的不一致 —— 所以下面在有覆盖时给一行提示。
     final schedule = _draftSchedule();
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     final muted = AppTokens.inkMuted(context);
 
     return GlassTile(

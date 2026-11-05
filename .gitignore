@@ -12,13 +12,10 @@
 *.apk
 *.aab
 
-# ---- 个人分析笔记与内部文档（不入库）----
-/源码结构说明书.md
-/二次开发修改说明.md
-/domain-logic-extract.md
-/SKILLS_PLAYBOOK.md
-/cross-platform-harmonyos-research.md
-/liquid-glass-open-source-research.md
+# ---- 个人分析笔记与内部草稿（不入库）----
+# 2026-11-05 整理：原根目录 6 份分析笔记 + `docs/liquid-glass-edge-spec.md` 已移入
+# `work/notes/`（由上面的 `/work/` 整目录覆盖），不再逐份点名根路径。
+# 本次搬迁前已备份到 `work/notes/backup-docs-reorg-20261105/`。
 /倒班助手Pro-液态玻璃交付包/
 
 # 注：`/docs/superpowers/`（每个功能的 spec 与实施 plan）**有意入库** ——
@@ -52,3 +49,6 @@ __pycache__/
 *.pyc
 # 一次性探针（AGENTS.md：跑完即删，不入库）
 /app/tool/probe/
+
+# 榫卯插件自动生成的规则文件（会自行长回来，不入库）
+/PROJECT_RULES.md

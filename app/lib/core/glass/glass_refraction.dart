@@ -125,7 +125,10 @@ class GlassRefraction {
     ui.ImageFilter? blur,
     double band = _bandLogic,
     double bend = _bendLogic,
-    double spread = _spread,
+    double thickness = _thickness,
+    double dispersion = _dispersion,
+    double rim = _rim,
+    Offset light = _light,
     Offset origin = Offset.zero,
   }) {
     final ui.FragmentProgram? program = _program;
@@ -152,9 +155,16 @@ class GlassRefraction {
       ..setFloat(4, r * dpr)
       ..setFloat(5, b * dpr)
       ..setFloat(6, bend * dpr)
-      ..setFloat(7, spread)
+      ..setFloat(7, thickness)
       ..setFloat(8, size.width * dpr)
-      ..setFloat(9, size.height * dpr);
+      ..setFloat(9, size.height * dpr)
+      // 光来向与三个通道的折射率。**这些都不是「色值」，是光学量**：位移剖面
+      // 由折射率算出来，色散是三个通道算出三个不同的位移，亮边是菲涅尔。
+      ..setFloat(10, light.dx)
+      ..setFloat(11, light.dy)
+      ..setFloat(12, rim)
+      ..setFloat(13, dispersion)
+      ..setFloat(14, _ior);
 
     final ui.ImageFilter refraction;
     try {
@@ -188,17 +198,45 @@ class GlassRefraction {
   /// 再宽就会盖到图标下面，读起来像整块玻璃在抖。
   static const double _bandLogic = 20;
 
-  /// 最大位移（逻辑像素）。超过约 12 就明显「糊成一团」，低于 4 又看不出弯。
-  static const double _bendLogic = 8;
+  /// 外缘最大位移（逻辑像素）。
+  ///
+  /// 剖面按斯涅尔定律推出来之后，位移**只集中在最外那 20% 的带**（半带处只剩
+  /// 0.165），所以这个值要比第一版（8）给得大一点才看得见弯；超过约 14 边缘就
+  /// 开始「撕开」，与胶囊的白描边打架。
+  static const double _bendLogic = 12;
 
-  /// 三波长偏移比例。iOS 26 的玻璃在边缘只有极窄的冷暖分离，不是彩虹环 ——
-  /// 这个数刻意压在小数点后一位，配合项目里删掉的那圈静态光谱。
-  static const double _spread = 0.055;
+  /// 玻璃厚度感：把法线往容器中心拽多少。0 = 纯棱镜（只有贴边一圈弯），
+  /// 1 = 位移方向全被中心拽走。直边中段之所以也会偏折，靠的就是这一项 ——
+  /// 玻璃是有厚度的凸透镜，它的面在三维里是弯的。
+  static const double _thickness = 0.35;
+
+  /// 色散：三个通道位移的比例分离。
+  ///
+  /// ⚠️ **方向按柯西色散、幅度按可见度。** 真实冕牌玻璃在「10dp 位移 / 20dp 带」
+  /// 这个尺度上，红蓝与绿的差只有零点几个 dp —— 亚像素，做出来等于没有（第一版
+  /// 的 ±0.44dp 就是这么死的）。所以这里取一个看得见的比例：红 0.82×、蓝 1.18×。
+  static const double _dispersion = 0.18;
+
+  /// 菲涅尔亮边强度。贴边那道白线是 Schlick 近似算出来的（掠射角反射率趋近 1），
+  /// 这一项只调它的可见度。
+  static const double _rim = 1.0;
+
+  /// 位移剖面用的折射率（冕牌玻璃量级）。形状由它定，色散另见 [_dispersion]。
+  static const double _ior = 1.5;
+
+  /// 光来向（屏幕坐标，x 右、y 下）。固定在左上，与 `accentGradient` 同向 ——
+  /// 亮边的明暗因此与全 app 的渐变方向一致，不会各说各话。
+  static const Offset _light = Offset(-0.7071067811865476, -0.7071067811865476);
 
   /// 仅供测试断言用：把当前参数摊平成可比较的值。
   @visibleForTesting
-  static List<double> debugParams() =>
-      <double>[_bandLogic, _bendLogic, _spread];
+  static List<double> debugParams() => <double>[
+        _bandLogic,
+        _bendLogic,
+        _thickness,
+        _dispersion,
+        _rim,
+      ];
 
   /// 仅供测试：清掉加载状态（`_failed` 会粘住，用例之间要能复位）。
   @visibleForTesting

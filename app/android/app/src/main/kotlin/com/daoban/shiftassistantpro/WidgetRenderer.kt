@@ -1255,6 +1255,15 @@ object WidgetRenderer {
             R.id.wg_ph_label,
             context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light),
         )
+        // 提示那一句用 ink 而不是 muted：它是这块卡**唯一**告诉用户「该做什么」的字，
+        // 而应用名只是标识。两者都 11dp，靠颜色分层，不靠字号（4×1 只有 78dp 高）。
+        // 文字本身来自 `@string/widget_placeholder_hint`（layout 里设的），
+        // 这里只负责按深浅档给色 —— 与上面 label 同一条理由（RemoteViews 读不到
+        // 夜间资源切换，颜色必须由渲染侧显式设）。
+        v.setTextColor(
+            R.id.wg_ph_hint,
+            context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light),
+        )
         return v
     }
 }

@@ -9,4 +9,9 @@
     <string name="widget_week_strip_name">倒班助手Pro · 本周</string>
     <string name="widget_today_name">倒班助手Pro · 今日</string>
     <string name="widget_month_name">倒班助手Pro · 整月</string>
+
+    <!-- 降级态那一句（见 layout/widget_placeholder.xml 头注释）。
+         走资源而不是 Kotlin 字面量：这样英文设备能拿到 values-en 那份，
+         Kotlin 里也不必出现中文字符串。 -->
+    <string name="widget_placeholder_hint">打开 App 同步排班</string>
 </resources>

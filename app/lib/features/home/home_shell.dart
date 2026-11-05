@@ -9,6 +9,7 @@ import 'glass_nav_bar.dart';
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/glass_snackbar.dart';
 import '../../core/update_checker.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
@@ -21,6 +22,7 @@ import '../profile/app_dialogs.dart';
 import '../profile/profile_screen.dart';
 import '../schedule/schedule_screen.dart';
 import '../widget/widget_service.dart';
+import '../../core/clock.dart';
 
 /// 底部导航壳：悬浮液态玻璃胶囊（点击切整数 tab，拖拽松手停在手指位置）。
 class HomeShell extends ConsumerStatefulWidget {
@@ -59,6 +61,21 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   /// 快照推送的去抖句柄（见 [_scheduleWidgetPush]）。
   Timer? _pushDebounce;
+
+  /// 推送失败后的重试句柄（见 [_pushWidgetSnapshot]）。`null` = 没有待重试的。
+  Timer? _pushRetry;
+
+  /// 「桌面小组件没同步上」这条提示**每个进程只弹一次**。
+  bool _widgetSyncWarned = false;
+
+  /// 推失败之后重试几次、隔多久。
+  ///
+  /// 3 秒是「打开 App 之后用户会瞄一眼桌面」的量级；**上限 2 次** —— 坏机型上
+  /// 无限重试等于烧电，而小组件只是锦上添花，App 本身一切照常。
+  ///
+  /// ⚠️ 这两个是**重试节奏**，不是界面过渡时长，所以没走 `AppTokens`。
+  static const int _widgetPushMaxRetries = 2;
+  static const Duration _widgetPushRetryDelay = Duration(seconds: 3);
 
   @override
   void initState() {
@@ -124,7 +141,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   /// 冷启动静默检查更新：同一天最多查一次，只有发现新正式版才弹窗（测试版走手动面板）。
   Future<void> _maybeAutoCheckUpdate() async {
     final sp = await SharedPreferences.getInstance();
-    final now = DateTime.now();
+    final now = appNow();
     final todayKey = now.year * 10000 + now.month * 100 + now.day;
     if (sp.getInt('lastUpdateCheckDay') == todayKey) return;
     await sp.setInt('lastUpdateCheckDay', todayKey);
@@ -144,6 +161,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
     AlarmService.openTodoRequested.removeListener(_onTodoRequested);
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetDayRequested);
     _pushDebounce?.cancel();
+    // 重试那个计时器也必须取消：留着的话 widget 测试会报
+    // 「A Timer is still pending after the widget tree was disposed」，
+    // 真机上则是在已经销毁的 State 上再推一次。
+    _pushRetry?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -174,6 +195,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
   /// ⚠️ **`dispose()` 里必须 cancel**：留着的话 widget 测试会报
   /// 「A Timer is still pending after the widget tree was disposed」。
   void _scheduleWidgetPush() {
+    // 新触发来了：上一次失败留下的重试**作废** —— 内容已经变了，那次重试要推的
+    // 是旧快照。让它跑完只会白推一遍，还可能把新的一发挤掉（`_inFlight`）。
+    _pushRetry?.cancel();
     _pushDebounce?.cancel();
     _pushDebounce = Timer(AppTokens.durSlow, () {
       if (mounted) _pushWidgetSnapshot();
@@ -229,12 +253,23 @@ class _HomeShellState extends ConsumerState<HomeShell>
   /// `hasValue` 那道闸门是必需的：`activeScheduleProvider` 是 StreamProvider，
   /// 首帧还没读到库时 `.value` 是 null，此时推会把「有一定有排班」误报成
   /// 「没有排班」，桌面上闪一下空表提示。等它真下发（哪怕下发的就是 null）再推。
-  Future<void> _pushWidgetSnapshot() async {
+  ///
+  /// **失败要自己爬起来**（[attempt] 是本轮的次数）：`push` 现在会如实回话，
+  /// 失败就隔 [_widgetPushRetryDelay] 再来一次，最多 [_widgetPushMaxRetries] 次。
+  /// 没有这一层的话，「打开过 App、桌面却一直是降级态」就只有一个出口 —— 等下一次
+  /// 改排班或重启桌面（2026-11-05 MIUI13 那位用户就是卡在这里）。
+  Future<void> _pushWidgetSnapshot({int attempt = 0}) async {
     final async = ref.read(activeScheduleProvider);
-    if (!async.hasValue) return;
+    if (!async.hasValue) {
+      // 流还没到齐：这一发推出去会闪一下空表提示。但它到齐时**未必**还有一次触发
+      // （`ref.listenManual` 那次已经在路上了，可它跑的是同一个判断），所以这里也
+      // 排一次重试 —— 冷启动首帧与库下发之间的那个窗口，就是白块最容易定住的时刻。
+      _scheduleWidgetRetry(attempt);
+      return;
+    }
     // 今日未完成待办数：与日历信息卡上那个「N 项待办」徽章同一个口径
     // （同一天、`completed == false`）。
-    final today = DateTime.now();
+    final today = appNow();
     // 待办数读失败不能让整次推送中断 —— `WidgetService.push` 自己的错误处理
     // 在下面，读失败就根本走不到那儿。读不到就按 0 计（徽章不显示），
     // 并留一条痕（「桌面怎么没变」只能靠日志查）。
@@ -246,13 +281,51 @@ class _HomeShellState extends ConsumerState<HomeShell>
       await WidgetService.logInfo('widget push: 待办数读取失败，按 0 计: $e');
     }
     if (!mounted) return;
-    await WidgetService.push(
+    final bool pushed = await WidgetService.push(
       // 推的是**整条链**：快照窗口是一个多月，跨时段边界是常态。
       // 原生侧不受影响 —— 它本来只照着 `days[]` 排版。
       chain: async.value?.chain,
       settings: ref.read(appSettingsProvider),
       todayTodoCount: todoCount,
     );
+    if (!mounted) return;
+    if (pushed) return;
+    _scheduleWidgetRetry(attempt);
+  }
+
+  /// 排一次重推；次数用尽就提示一次（每个进程只提示一次）。
+  ///
+  /// ⚠️ **用尽时只在「真的失败过」才提示**：`WidgetService.push` 回 `false` 有两种
+  /// 意思 —— 一是推失败（`lastFailure` 有值），二是**上一发还在飞、这一发被合并掉**
+  /// （`lastFailure` 为 null，内容会在尾重推里补上）。后者是正常现象（保存一次排班
+  /// 会让好几个 provider 连着发），把它当失败提示出去，等于用户什么都没坏就看见
+  /// 一条「小组件没同步上」。
+  void _scheduleWidgetRetry(int attempt) {
+    if (attempt >= _widgetPushMaxRetries) {
+      if (WidgetService.lastFailure.value != null) _warnWidgetSyncOnce();
+      return;
+    }
+    _pushRetry?.cancel();
+    _pushRetry = Timer(_widgetPushRetryDelay, () {
+      if (mounted) _pushWidgetSnapshot(attempt: attempt + 1);
+    });
+  }
+
+  /// 「桌面小组件没同步上」只提示一次。
+  ///
+  /// 这是「失败可观测」那条：`WidgetService.lastFailure` 与原生日志都只有抓 logcat
+  /// 的人看得到，而用户能看到的只有桌面那张卡。**只弹一次**、用 2 秒的提示条，
+  /// 不打断任何操作 —— 小组件坏掉不该让 App 变成弹窗工厂。
+  void _warnWidgetSyncOnce() {
+    if (_widgetSyncWarned || !mounted) return;
+    _widgetSyncWarned = true;
+    final reason = WidgetService.lastFailure.value;
+    showGlassSnack(
+      context,
+      L10n.widgetSyncFailed,
+      icon: Icons.sync_problem_outlined,
+    );
+    if (reason != null) WidgetService.logInfo('widget push 已放弃重试: $reason');
   }
 
   void _showRinging() {
@@ -291,7 +364,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final repo = ref.read(appRepositoryProvider);
     // **先生成、再重排**：重复待办的提醒要按「今天该有的那一条」来排，顺序反了
     // 会拿上一轮的日期去算。
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(appNow()));
     // 归档（已完成的待办）裁到上限 —— **放在这里、不放在勾选那一刻**：用户完全
     // 可能勾一条去年完成过的待办，在那一刻裁会让它当场消失，连「先划掉再收走」
     // 的那一眼反馈都没有（spec §4 与 `pruneArchivedTodos` 的注释）。

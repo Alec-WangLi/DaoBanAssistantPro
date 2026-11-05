@@ -1,6 +1,6 @@
-# 倒班助手Pro · 产品与技术规格（现状规格 · v0.12.0）
+# 倒班助手Pro · 产品与技术规格（现状规格 · v0.12.8）
 
-> 本文档是**唯一权威规格**，反映当前实现现状（v0.12.0）。早期「MVP 确认稿」的功能已随 0.2~0.6 各版演进并入正文，不再单列历史章节。
+> 本文档是**唯一权威规格**，反映当前实现现状（v0.12.8）。早期「MVP 确认稿」的功能已随 0.2~0.6 各版演进并入正文，不再单列历史章节。
 
 ---
 
@@ -18,7 +18,7 @@
 | 冻结 / 未交付 | iOS（无 Mac，冻结，仅保持跨端干净）、鸿蒙（无设备）、Windows（按需插队） |
 | 数据迁移 | 手动重录，不做导入脚本 |
 
-## 2. 功能范围（现状 v0.12.0）
+## 2. 功能范围（现状 v0.12.8）
 
 ### 排班日历
 1. **两层轮换模型**：**班次定义**（一个班次只定义一次）+ **周期序列**（长度即周期，元素引用班次定义），周期长度 1–60 天；班组相位由「每班组一个周期起始日」表达。轮换算法为纯函数，某天班次由（日期 − 周期起始日）对周期取模得出，天数差用 UTC 日期整数，避免时区问题。
@@ -41,7 +41,7 @@
 10. **每个班次最多 10 个联动闹钟**（各自的钟点 + 可选名字，如「起床」「午休」），加一个总开关（关掉**不清空**已配的钟点）；`AlarmService.reschedule` 按排班自动排定**未来 60 天**并自动续排。响铃标题取「班次名 · 闹钟名」（没起名就是「白班提醒」）。**按天改班自动流进闹钟排定**：改成休班那天不排闹钟，改成别的班次就按那个班自己的闹钟排。这与「按天关闹钟」（`ShiftAlarmOverrides`）**正交**，两条规则各管各的 —— 那天被单独关过闹钟的，改完班之后仍然关着（关的是当天这个班次的**全部**闹钟，不是逐个）。**落在哪天的规则**（`alarmDayAnchor` / `shiftAlarmFireAt`，三档：前一天 / 当天 / **次日**）：钟点落在**值班窗口** `[start, end)` 内 → **那一刻出现所在的那一天**（窗口跨过午夜时就是**次日**：中班 16:30–次日 0:30 的 00:15、零点班班中的 03:00 是这一档）；否则**晚于上班钟点** → **前一天**同一钟点（00:00 上班、23:00 响铃的夜班排的是前一天晚上 23:00 —— 排在班次当天那一刻这个班已经结束 15 小时）；否则 → **当天与次日里离窗口更近的那一个**（「下班之后那一刻」：同一个班次配 01:00 → 次日 01:00）。**24 小时值班（窗口整整一整天）一律算当天**。班次编辑里不落在班次当天的那条写成「前一天 23:00」/「次日 00:15」并补一行说明，闹钟列表行与日历信息卡同样标（多条时**每条标各自的**）；上班时间没填时无从判断、仍按当天算。原生 id 与 `offset` 始终按**班次那一天**算，不跟着前移的触发时刻走；id = `序号 × 60 + 天数偏移`，**上限 10 就是这么来的**（Kotlin 侧只扫 0..600）。排定窗口从**昨天**起算（次日档的闹钟属于昨天那个班次、在今天响）。
 11. **未来 30 天预览列表**：每条可单独开关（写入按天覆盖表 `ShiftAlarmOverrides`，主键 `day` = 自 epoch 天数，由 `dayNumber()` 计算），响过后自动隐藏；`Timer.periodic(1min)` + 回前台重建刷新。
 12. **自定义闹钟**：一次性 / 每天 / 每周（多选星期，位掩码）；重复型由原生侧同一 id 续排；新建默认时间即此刻，**重复方式默认「一次性」**（v0.9.6 起，原先默认「每天」），一次性那行的日期由 `nextOnceDate` 取「该钟点的下一次出现」——写「今天」的话那一刻已经过去了，这种闹钟既排不出去又会被 `deleteExpiredOnceAlarms` 收走（判据与边界见 `alarm_service.dart` / `once_alarm_date_test.dart`）。
-13. **可靠响铃**：系统精确闹钟（`setAlarmClock`）+ 前台服务（`AlarmRingService`：MediaPlayer + Vibrator + WakeLock + fullScreenIntent）+ 全屏响铃界面（贪睡 5 分钟 / 上滑关闭滑块 —— 可见轨道 72dp、触摸热区 112dp，整屏也可上滑关闭，矮屏 `AppLayout.isShort` 下轨道与底部留白各收一档）；铃声内置、系统可选，**或从手机里挑自己的音频**（系统文件选择器选中后复制进应用私有目录，换回内置/系统时自动删掉副本；自选文件损坏或丢失时回落内置，不会一声不出），**或选「仅震动」——到点只震动、不发声**（存在同一个 `ringtoneUri` 键里的哨兵值 `vibrateOnly`，不是新字段；原生 `AlarmSound` 认它并**显式不播放**，不回落内置）、可试听，「我的」页那一行显示当前选的是哪一档；**测试闹钟**一键排定 10 秒后响；**响铃界面亮着超过 15 分钟仍无人操作会自己停**（v0.10.22，与用户手动关闭走**完全相同**的拆除路径：撤通知、放锁、放 WakeLock、`stopSelf`，并经 `MainActivity.onAlarmAutoStopped` 让 Dart 侧收掉那一层路由）—— 此前它会一直响、一直震，手机扔在包里也停不下来。通知小图标统一用 `drawable/ic_notification`（白剪影矢量），原生前台服务与 `flutter_local_notifications` 共用同一个 —— 启动器图标是彩色的 mipmap/自适应图标，不能当通知小图标。**重启重排**：排定时同步落盘一份清单（`AlarmStore`），开机由 `BootReceiver` 排回去 —— 每天/每周的顺延到下一次，一次性且未到点的按原时刻排回，**关机期间已经错过的直接丢掉、不补**；「待办提醒」那条安静链路（`scheduleQuiet` → `TodoReminderReceiver`）走同一套。取消路径必须同步删清单（`AlarmScheduler.cancel` / `cancelAllNativeAlarms` / `cancelTodoReminders`），漏一处就留下一条重启后才现形的「幽灵闹钟」。
+13. **可靠响铃**：系统精确闹钟（`setAlarmClock`）+ 前台服务（`AlarmRingService`：MediaPlayer + Vibrator + WakeLock + fullScreenIntent）+ 全屏响铃界面（贪睡时长可选 1 / 5 / 10 / 15 / 20 / 30 分钟、默认 5（v0.11.8；响铃那颗按钮上直接写着时长）/ 上滑关闭滑块 —— 可见轨道 72dp、触摸热区 112dp，整屏也可上滑关闭，矮屏 `AppLayout.isShort` 下轨道与底部留白各收一档）；铃声内置、系统可选，**或从手机里挑自己的音频**（系统文件选择器选中后复制进应用私有目录，换回内置/系统时自动删掉副本；自选文件损坏或丢失时回落内置，不会一声不出），**或选「仅震动」——到点只震动、不发声**（存在同一个 `ringtoneUri` 键里的哨兵值 `vibrateOnly`，不是新字段；原生 `AlarmSound` 认它并**显式不播放**，不回落内置）、可试听，「我的」页那一行显示当前选的是哪一档；**测试闹钟**一键排定 10 秒后响；**响铃界面亮着超过 15 分钟仍无人操作会自己停**（v0.10.22，与用户手动关闭走**完全相同**的拆除路径：撤通知、放锁、放 WakeLock、`stopSelf`，并经 `MainActivity.onAlarmAutoStopped` 让 Dart 侧收掉那一层路由）—— 此前它会一直响、一直震，手机扔在包里也停不下来。通知小图标统一用 `drawable/ic_notification`（白剪影矢量），原生前台服务与 `flutter_local_notifications` 共用同一个 —— 启动器图标是彩色的 mipmap/自适应图标，不能当通知小图标。**重启重排**：排定时同步落盘一份清单（`AlarmStore`），开机由 `BootReceiver` 排回去 —— 每天/每周的顺延到下一次，一次性且未到点的按原时刻排回，**关机期间已经错过的直接丢掉、不补**；「待办提醒」那条安静链路（`scheduleQuiet` → `TodoReminderReceiver`）走同一套。取消路径必须同步删清单（`AlarmScheduler.cancel` / `cancelAllNativeAlarms` / `cancelTodoReminders`），漏一处就留下一条重启后才现形的「幽灵闹钟」。
 14. **小米机型「锁屏/后台弹不出响铃界面」= 少开了一项系统权限，不是 OS 限制**（v0.7.4 起更正 —— 此前这里记的「已接受的 OS 限制：小米/华为免解锁弹全屏受限」是**错的**，当时没接真机调试）：MIUI 把「后台弹出界面」（系统英文界面里叫 `Open new windows while running in the background`）单独设成一项权限，不开时 `ActivityStarterImpl` 会**静默**拒绝从后台拉起 Activity（系统把它降级成 "invisible launch"，连 `onNewIntent` 都不走），**通知那条 `fullScreenIntent` 的 PendingIntent 也一起被拒** —— 所以「靠通知兜底」这条路不存在。它与「显示悬浮窗」（AOSP 的 `SYSTEM_ALERT_WINDOW`，管 AOSP 层的后台启动豁免）、「锁屏显示」（管锁屏下能否顶掉 keyguard）是**三项不同的权限**；后两项 App 能检测或跳转，前者读不到状态、也没法用 adb 授予（MIUI 的 op 常量 `OP_BACKGROUND_START_ACTIVITY` 没进 `AppOpsManager` 的名字表），只能用 `miui.intent.action.APP_PERM_EDITOR` + `extra_pkgname` 跳转引导。实测三项齐备后：退后台会自动拉回前台；锁屏会点亮屏幕并顶掉 keyguard。
 
 ### 待办日程
@@ -75,6 +75,17 @@
 
 **按天改班的边界（本轮有意不做，别再当漏做）**：空白表方案（跟随法定节假日）下不支持按天改班（没有班次定义可挑）、不支持跨月拖选、不支持「从这天起一直……」这种开放式范围、不支持同一天对不同班组分别覆盖、不支持临时自定义一个只用于那天的班次。
 
+### v0.12.1 ~ v0.12.8 新增能力（2026-10 ~ 11，尚未并入上面带编号的各条）
+
+- **改排班结构必须同时重排闹钟**（v0.12.1）：排班管理页换「其余时间 / 全部日子」、增删改排班时段、删一套方案这三处，加上编辑页保存与日历调班，统一走 `AlarmService.replanAfterScheduleChange`（先 `advanceRecurringTodos` 再整链重排）。原来那三处只写库不重排 —— 日历立刻变，系统里旧计划排的班次闹钟照旧在原定时刻响（真机表现：当天白班，19:30 响了「上夜班」的闹钟）。
+- **重复待办可编辑**（v0.12.2）：新增系列编辑器 `features/schedule/recurring_series_editor.dart` —— 列表里点任意一行都开它，改标题 / 每天每周每月 / 每周任选几天 / 时间 / 提醒；有当前这一次就一起更新，**只有规则真的变了才对齐日期**（只改标题不会把用户手工挪过的那次拽回规则日）。待办标题框 1~3 行自动长高（添加 / 编辑 / 系列编辑器三处）。
+- **重复规则第五档「按班次」+「每月」多选**（v0.12.3）：规则可写成「这个班次上班那天提醒」；选项取自 `ScheduleChain.classChoicesFrom(今天)`（从今天起还可能生效的方案的班次，按名字去重、已结束时段的方案不贡献选项），按 `ShiftClass.name` 匹配 `chain.shiftOn(day)` —— 因此覆盖按天调班、多套方案衔接、按月切法；换排班表按**同名班次**延续，缺名在控件与面板两处明说。「每月」从单日改成 31 位掩码 `monthDays`（小月先夹到月末再按日期去重：选 29/30/31 的 2 月只出现一天）；星期选择器改成一行七格等宽。生成器「只往前不回退」不变 —— 改排班后已生成在今天、今天不再匹配的那一行**留在原地**（有意接受）。
+- **可编辑暗示统一**（v0.12.4）：**有框 = 直接输入 / 铅笔 = 点开进入编辑表单 / 箭头 = 点开打开别的东西**（选择器 / 页面 / 说明或动作弹窗），全 app 照此标注；班组名那个「一直都存在、但用户和作者都没发现能改」的裸 `TextField` 换成带标签的 `GlassField`。弹窗值行抽成 `core/widgets/glass_value_row.dart`。四处**有意例外**：重复待办面板（尊重用户去掉铅笔）、取色圆点（太小）、长按拖选（手势）、年月胶囊（360dp 标准档实测加箭头只剩 19.59dp，会把一行顶栏顶成两行）。
+- **重复待办提醒接入三档落点**（v0.12.6）：判据**复用** `alarmDayAnchor`（不新写），待办提醒因此也有「前一天 / 当天 / 次日」；`upcomingFireTimes` 改为「收集 → 排序 → 相邻去重 → 裁地平线」（落点会让相邻两次倒序，原生只弹队首，倒序队列里更早那条会静默不响）；扫描窗口从 `from − 1 天` 起算（连续夜班日里昨天那次还在未来的提醒不能漏）；**全天提醒不参与落点**（9:00 是策略值，不是用户钟点）。
+- **液态玻璃真折射**（v0.12.8）：`app/shaders/glass_refraction.frag` + `core/glass/glass_refraction.dart` + `GlassRefract` —— 底栏那枚胶囊的边缘开始把背后内容弯过去一点。**全 app 只有 `features/home/glass_nav_bar.dart` 传 `refract: true`**：折射带（20）与位移（8）是按 64 高的胶囊量的，套到 46 宽的开关上会被 `clamp` 成 14、位移约 29% 钮高，那不是「边缘弯一点」而是整颗钮在抖。**Skia 上 `ui.ImageFilter.shader` 直接抛 `UnsupportedError`（只有 Impeller 支持）**，所以「程序加载成功」不等于「这条链能用」—— 失败与未就绪走同一条纪律**粘住**、回落纯模糊；Impeller 回落到 Skia 的机型由「**彩边是折射的替身**」兜住。
+
+> 逐条细节与「为什么这么改」在 `docs/changelog/`（按版本）与 `docs/decisions/`（按主题），本节只留对规格有影响的那一层。
+
 ## 3. 班次模型（默认配置，引擎通用）
 
 默认「四班两倒」，4 天一个周期（App 内可改，引擎不绑定该配置）。班次定义只需配一次，周期里所有同名单日自动同步时间 / 颜色 / 联动闹钟：
@@ -91,19 +102,20 @@
 - 班组相位由「每班组一个周期起始日」表达：编辑器中为每个班组指定它的周期第 1 天（持久化为相对基准日的天数偏移 `teamOffsets`）。
 - 「法定班次」型方案（空白表）：`classes` 为空、周期为空、跟随法定节假日，不做轮换。
 
-## 4. 数据模型（Drift · schemaVersion = 13）
+## 4. 数据模型（Drift · schemaVersion = 15）
 
 | 表 | 关键字段 / 说明 |
 |---|---|
-| `ShiftScheduleRows` | 排班方案：id、name、anchorDate、isCurrent（**「其余时间」用哪一套**，可以全是 false = 「无」）+ 班组配置（班组数 / 班组名 / 每班组相对基准日的天数偏移 `teamOffsets` / 我们的班组）。**时段两列已删**（v13 搬进 `ScheduleSpanRows`） |
+| `ShiftScheduleRows` | 排班方案：id、name、anchorDate、isCurrent（**「其余时间」用哪一套**，可以全是 false = 「无」）+ 班组配置（班组数 / 班组名 / 每班组相对基准日的天数偏移 `teamOffsets` / 我们的班组）。**时段两列已删**（v13 搬进 `ScheduleSpanRows`）；**v14 又加 `monthly`（这套方案是否按月排班）+ `teamSegOffsets`（各班组在按月段上的偏移）** |
 | `ScheduleSpanRows` | 时间线上的一段：`scheduleId`（→ 方案）+ 可空的 `startDate` / `endDate`（闭区间纯日期；空 = 不限起点 / 一直持续）。**段独立成表**是为了让一套方案出现在**多段**上。段之间**不许重叠**（界面挡在保存前，迁移也规整过）。表名带 `Rows` 后缀：drift 按表名生成行类，叫 `ScheduleSpans` 会与领域层的 `ScheduleSpan` 撞名 |
 | `ShiftClassRows` | 班次定义：scheduleId、order、name、abbr?、startMinute?、endMinute?、isRest、color、alarmEnabled（联动闹钟**总开关**） |
 | `ShiftCycleRows` | 周期序列：scheduleId、order、classId（第 N 天用哪个班次定义） |
+| `ScheduleMonthSegmentRows` | **v14 起**（按月排班）：scheduleId、order、`startDay`（每月的第几天起，1..31，第一段恒为 1）、classId（→ 本方案的班次定义）。一行 = 一个「每月 1 号重新开始」的切法里的一个段；多班组按 `ShiftScheduleRows.teamSegOffsets` 错开 |
 | `ShiftClassAlarms` | 班次闹钟：复合主键 `{classId, order}` + minute + label?（可选名字）。`order` 同时是原生 id 的**序号**；**没有自增 id** —— 没有任何东西引用单条闹钟（按天关闹钟是按天、模板不存身份），别为了对称给它加。上限 10 由原生 id 空间决定（见 §2 第 10 条） |
 | `ScheduleEvents` | 待办日程：title、date、timeMinute?、advanceRemindMinutes?、isCompleted、alarmEnabled（联动闹钟）、`seriesId?`（属于哪个重复系列；空 = 一次性待办）、createdAt |
-| `RecurringSeriesRows` | 重复待办的**系列定义**：title、timeMinute?、advanceRemindMinutes?、alarmEnabled、repeatType（0 每天 / 1 每周 / 2 每月）、weekdays（位掩码）、monthDay、startDate（首次生效日）、`skipThrough?`（「这次已经了结」记到哪天为止，自 epoch 天数）、enabled、createdAt。**表名带 `Rows` 后缀**：drift 按表名生成行类，叫 `RecurringTodos` 会与领域层的 `RecurringTodo` 撞名（`ShiftClassRows` → `ShiftClassRow` 是同一回事） |
+| `RecurringSeriesRows` | 重复待办的**系列定义**：title、timeMinute?、advanceRemindMinutes?、alarmEnabled、repeatType（0 每天 / 1 每周 / 2 每月 / **3 按班次**）、weekdays（位掩码）、**monthDays（31 位掩码，v15 起；`monthDay` 单日列迁完即删）**、**shiftNames（JSON 名字数组，repeatType=3 用；v15 起）**、startDate（首次生效日）、`skipThrough?`（「这次已经了结」记到哪天为止，自 epoch 天数）、enabled、createdAt。**表名带 `Rows` 后缀**：drift 按表名生成行类，叫 `RecurringTodos` 会与领域层的 `RecurringTodo` 撞名（`ShiftClassRows` → `ShiftClassRow` 是同一回事） |
 | `CustomAlarms` | 自定义闹钟：一次性 / 每天 / 每周（星期位掩码）等 |
-| `CustomTemplates` | 「我的模板」：name + **整块快照**（classes 走 JSON、cycle / teamOffsets 走逗号分隔）+ teamCount + createdAt。模板是只读快照（没有按字段查询、没有跨表引用、也不与任何行共享身份），所以整块存不拆表；比方案少两张表与一整套装配代码 |
+| `CustomTemplates` | 「我的模板」：name + **整块快照**（classes 走 JSON、cycle / teamOffsets 走逗号分隔）+ teamCount + createdAt；**v14 补了按月排班那三列**（`monthly` / `monthSegments` / `teamSegOffsets`）。模板是只读快照（没有按字段查询、没有跨表引用、也不与任何行共享身份），所以整块存不拆表；比方案少两张表与一整套装配代码 |
 | `ShiftAlarmOverrides` | 按天覆盖班次闹钟开关：主键 `day`（自 epoch 天数），false 的日期重排时跳过 |
 | `ShiftDayOverrides` | 按天改班覆盖：复合主键 `{scheduleId, day}`（`day` = 自 epoch 天数），`classId` 指到本方案的某个班次定义；只作用于我们班组 |
 
@@ -117,6 +129,9 @@
 
 > **v11 → v12 迁移**：给 `ShiftScheduleRows` 加两列可空的 `effective_from` / `effective_to`（彼时的「生效时段」）。**这两列在 v13 又被删掉了** —— 它只是中间态，别照它理解现状。
 > **v12 → v13 迁移**：新建 `ScheduleSpanRows`（段独立成表），把方案行上那两列**按旧解析结果等价重放**成段、再删掉那两列。算法是「按边界切 → 逐区间重放旧规则 → 合并相邻同胜者」，**天然无损**（含「外段被内段截断之后接着用」那种一套方案出现在两段上的形状）。从 v11 及更早升上来时那两列还不存在（`from < 12` 那段排在**后面**跑），所以读列之前先判 `from >= 12`。
+> **v13 → v14 迁移**：按月排班，**纯新增，一行既有数据都不碰** —— 新建 `ScheduleMonthSegmentRows`，给 `ShiftScheduleRows` 加 `monthly` / `team_seg_offsets` 两列，给 `CustomTemplates` 加 `monthly` / `month_segments` / `team_seg_offsets` **三**列。⚠️ 这段**必须排在 `from < 13` 之前**（分支倒序跑），因为那一段会用 `TableMigration` 重建方案表；而 `custom_templates` 只有 v9 及以后才有，所以 `from >= 9` 才碰它，否则 `no such table`（真机上不会现形，只有 v5~v8 的 fixture 会）。
+> **v14 → v15 迁移**：重复待办的「每月」从单日 `month_day` 改成 31 位掩码 `month_days`，并新增 `shift_names`（JSON 名字数组，按班次规则用）；`month_day` 迁完即删（不留死列，照 v10 删 `alarm_minute` 的先例）。⚠️ **`addColumn` 必须在 `alterTable` 之前** —— `TableMigration` 只拷「新旧表都有的列」，先重建会让 `month_days` 拿到默认值 0、迁移数据全丢；这段还要排在 `from < 11`（它才建 `recurring_series_rows`）之前，所以先判 `from >= 11`。
+
 > ⚠️ **迁移分支一律按倒序跑**（`from < 12` 在所有更早分支的前面），所以**谁碰了什么表，所有更早版本的迁移 fixture 就都得有那张表** —— v10→v11 给 `schedule_events` 加列，于是 v7/v8/v9 三份 fixture 都被迫补上了它的 DDL；v11→v12 给 `shift_schedule_rows` 加列，于是 v6→v7 与 v10→v11 两份又补上了那张表（它们按「只抄自己碰到的表」的惯例没建它）。两者都会在缺表时抛 `no such table`，而**真机上不会** —— 只在这个仓库的测试里现形。改动迁移链时先看这一条。
 
 ## 5. 技术选型（实际实现）
@@ -148,7 +163,7 @@
 ## 7. 版本与发布链路（现状）
 
 - 版本号唯一来源 `app/pubspec.yaml`（`X.Y.Z+build`），与 `app/lib/core/app_info.dart` 的 `appVersion` 同步，一致性由 `app/test/app_info_test.dart` 把关；末位 `Z=0` 为正式版（条目需归纳为总结版），非 0 为测试版（条目原样保留）。
-- 应用内更新：`UpdateChecker` 无鉴权请求公开仓库 `/releases`（未认证限 60 次/小时）；APK 直接经 `browser_download_url` 下载安装。
+- 应用内更新：`UpdateChecker` **先读仓库根目录 `latest.json`**（`raw.githubusercontent.com/<owner>/<repo>/main/latest.json`，静态文件不限次数，由 `release.ps1` 第 8b 步在每次发版时同步到 main），失败才回退 GitHub API `/releases`（未认证限 60 次/小时/IP，共享出口很容易耗尽，实测常年 403）；两条通道在不同域名上，只被墙了一个的网络也兜得住。按语义版本自行计算「最新正式版 + 最新测试版」双通道展示；APK 直接经 `browser_download_url` 下载安装，连不上时的提示直说「国内需要开代理或加速器」。⚠️ **`latest.json` 必须留在 `main` 上**；手动补的时候**只改本次发布那个通道的那一个节点（+ `updatedAt`）**，整份覆盖会把 main 上正确的 `stable` 冲回旧值（beta 那份的 `stable` 永远停在旧值 —— v0.11.0 就是这么丢的）。
 - 本地发布：`scripts/release.ps1`（读版本号 → 校验 → 按末位自动标正式/预发布 → 上传 GitHub Release；发布说明写到 `tools\gh\release-notes-vX.Y.Z.md` 自动复用）；APK 产出 `dist/倒班助手Pro-vX.Y.Z.apk`（`dist/`、`*.apk` 均不入库）。
 - 验收标准：`flutter analyze` 0 error / 0 warning；`flutter test` 全绿。
 
