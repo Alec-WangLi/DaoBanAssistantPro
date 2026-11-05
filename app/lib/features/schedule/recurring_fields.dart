@@ -16,6 +16,7 @@
 // 状态留在弹窗那一层，是因为保存时要把这几样与标题一起提交。
 import 'package:flutter/material.dart';
 
+import '../../core/clock.dart';
 import '../../core/design_tokens.dart';
 import '../../core/haptics.dart';
 import '../../core/l10n.dart';
@@ -327,8 +328,10 @@ class EventTimingPicker extends StatelessWidget {
           onTap: () async {
             final p = await showGlassTimePicker(
               context,
+              // 与排定逻辑同一个时钟：这里只是打开选择器，但默认值混进真实时钟，
+              // 将来任何钉住时钟的用例都会在这条路径上变成空转。
               initialTime: timeMinute == null
-                  ? TimeOfDay.now()
+                  ? TimeOfDay.fromDateTime(appNow())
                   : TimeOfDay(
                       hour: timeMinute! ~/ 60, minute: timeMinute! % 60),
             );

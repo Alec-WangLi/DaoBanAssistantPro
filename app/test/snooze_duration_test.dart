@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
@@ -87,29 +88,52 @@ void main() {
       SharedPreferences.setMockInitialValues({AlarmService.snoozeMinutesKey: 30});
       final calls = _captureSchedule();
 
-      final before = DateTime.now();
+      // 时钟钉住：`snoozeAlarm` 里的「此刻」取的是 `appNow()`（alarm_service.dart:847），
+      // 所以这条的基准也必须取 `appNow()` —— 以前两边一个读 `appNow()`、一个读
+      // `DateTime.now()`，默认情况下两者相等，看着没问题；一旦这里把时钟钉住
+      // （或者将来谁给这个文件加了 `useFixedNow()`），断言量到的就是两个时钟之差。
+      final DateTime pinned = DateTime(2026, 10, 15, 9);
+      appNow = () => pinned;
+      addTearDown(() => appNow = DateTime.now);
+
+      final before = appNow();
       await AlarmService.snoozeAlarm(const AlarmRing('早班', '9月15日 周二 · 14:30'));
 
-      // ⚠️ **余量只有 0.02 分钟（1.2 秒），且是必须的**：排定时刻经
-      // `millisecondsSinceEpoch` 传过通道，那一下会把 `DateTime` 的**微秒截断**，
-      // 所以它可能比「此刻 + 30 分钟」早不到 1 毫秒。而这一条要分辨的是 30 分钟与
-      // 「没读到设置、还在用 5 分钟」—— 两者差 25 分钟，余量再放大 1000 倍也掩不住。
-      expect(_minutesAhead(calls, before), closeTo(30, 0.02),
+      // 时钟钉住之后余量收到 1 毫秒：排定时刻经 `millisecondsSinceEpoch` 传过通道，
+      // 那一下只截微秒，而钉住的这个时刻微秒为 0，所以本该分毫不差。
+      // 这一条要分辨的是 30 分钟与「没读到设置、还在用 5 分钟」—— 两者差 25 分钟。
+      expect(_minutesAhead(calls, before), closeTo(30, 0.001),
           reason: '排定时刻距测试里那一点不足 30 分钟，说明设置没读到');
     });
 
     test('没设过 → 还是 5 分钟（老行为一个字节不变）', () async {
       final calls = _captureSchedule();
 
-      final before = DateTime.now();
+      // 时钟钉住：`snoozeAlarm` 里的「此刻」取的是 `appNow()`（alarm_service.dart:847），
+      // 所以这条的基准也必须取 `appNow()` —— 以前两边一个读 `appNow()`、一个读
+      // `DateTime.now()`，默认情况下两者相等，看着没问题；一旦这里把时钟钉住
+      // （或者将来谁给这个文件加了 `useFixedNow()`），断言量到的就是两个时钟之差。
+      final DateTime pinned = DateTime(2026, 10, 15, 9);
+      appNow = () => pinned;
+      addTearDown(() => appNow = DateTime.now);
+
+      final before = appNow();
       await AlarmService.snoozeAlarm(const AlarmRing('早班'));
 
-      expect(_minutesAhead(calls, before), closeTo(5, 0.02),
+      expect(_minutesAhead(calls, before), closeTo(5, 0.001),
           reason: '没设过就该是 5 分钟 —— 这一项出现之前是写死的，升级上来不许变');
     });
 
     test('标题与说明原样带过去，号段仍是 99998', () async {
       final calls = _captureSchedule();
+
+      // 时钟钉住：`snoozeAlarm` 里的「此刻」取的是 `appNow()`（alarm_service.dart:847），
+      // 所以这条的基准也必须取 `appNow()` —— 以前两边一个读 `appNow()`、一个读
+      // `DateTime.now()`，默认情况下两者相等，看着没问题；一旦这里把时钟钉住
+      // （或者将来谁给这个文件加了 `useFixedNow()`），断言量到的就是两个时钟之差。
+      final DateTime pinned = DateTime(2026, 10, 15, 9);
+      appNow = () => pinned;
+      addTearDown(() => appNow = DateTime.now);
       await AlarmService.snoozeAlarm(const AlarmRing('早班', '9月15日 周二 · 14:30'));
 
       final args = calls

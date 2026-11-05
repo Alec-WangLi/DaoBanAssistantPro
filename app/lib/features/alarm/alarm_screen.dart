@@ -381,7 +381,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   /// 新建（[a] 为 null）或编辑（[a] 非空）自定义闹钟。
   void _showAlarmDialog({CustomAlarm? a}) {
     final isEdit = a != null;
-    final now = TimeOfDay.now();
+    // 默认钟点必须与下面那行日期用同一个时钟（`dateOnly(appNow())`）。原先这里是
+    // `TimeOfDay.now()`：两个时钟一旦不同步（钉住时钟的用例就是），默认落点就总在
+    // 「此刻」之后，`nextOnceDate` 的顺延那一支永远走不到 —— 用例绿着，却什么都没验。
+    final now = TimeOfDay.fromDateTime(appNow());
     var time = TimeOfDay(hour: a?.hour ?? now.hour, minute: a?.minute ?? now.minute);
     // 默认「一次性」：新建自定义闹钟里绝大多数就是「响这一次」，响过之后
     // `deleteExpiredOnceAlarms` 会把它收走，不用用户自己回来删。编辑既有闹钟时

@@ -26,6 +26,8 @@ import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
+import 'package:shiftassistantpro/features/alarm/alarm_service.dart'
+    show nextOnceDate;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import 'support/fixed_clock.dart';
@@ -297,7 +299,26 @@ void main() {
     final a = alarms.single;
     expect(a.repeatType, 0, reason: '新建的默认重复类型该是一次性');
 
+    // 默认钟点与默认日期必须是**同一个时钟**上的两个分量。原先钟点读的是
+    // `TimeOfDay.now()`（真实时钟），日期读 `dateOnly(appNow())`：两个时钟一旦
+    // 不同步，落点就总在「此刻」之后，下面那条顺延断言会变成碰运气 —— 真跑起来
+    // 还常常是绿的，等于什么都没验。
+    expect(a.hour * 60 + a.minute, appNow().hour * 60 + appNow().minute,
+        reason: '新建闹钟的默认钟点该是 appNow() 的钟点（${appNow()}），'
+            '不是真实时钟的钟点');
+
+    // 前置断言：先证明这一条**每次都在验顺延**。存下来的钟点与锚点同一个时刻，
+    // `nextOnceDate` 就只能走「今天这一支已过 → 顺延一天」。
+    final rolled = nextOnceDate(
+        now: appNow(), chosen: dateOnly(appNow()), hour: a.hour, minute: a.minute);
+    expect(rolled, isNot(dateOnly(appNow())),
+        reason: '这条没验到顺延：默认钟点（${a.hour}:${a.minute}）落在锚点'
+            '（${appNow()}）之后，`nextOnceDate` 走了「今天还没到」那一支，'
+            '「已过 → 顺延一天」根本没走到');
+
     final od = a.onceDate!;
+    expect(dateOnly(od), dateOnly(rolled),
+        reason: '卡上写的日期必须等于 nextOnceDate 算出来的那天');
     final fire = DateTime(od.year, od.month, od.day, a.hour, a.minute);
     expect(fire.isAfter(appNow()), isTrue,
         reason: '一次性的触发时刻落在过去 = 这一条排不出去、也不会响，'
