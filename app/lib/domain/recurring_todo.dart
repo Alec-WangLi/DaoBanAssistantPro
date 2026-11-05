@@ -289,6 +289,23 @@ DateTime _fireAt(DateTime occ, int clock, int advance, {ShiftClass? shift}) {
       .add(Duration(minutes: clock - advance));
 }
 
+/// 按班次系列的那一行**挂在日历上的哪一天**。
+///
+/// 与 [upcomingFireTimes] 用的是同一条落点判据（`alarmDayAnchor`），差在用途：
+/// 那边算「什么时候响」，这里算「列表里哪天出现」。两处必须同源 —— 否则夜班
+/// 20:30 那天摆一条 0 点的待办、却要到次日 0 点才响，用户点开只会觉得算错了
+/// （2026-11-05 用户反馈，Chief 定：行跟着提醒走）。
+///
+/// 三道闸门与排定侧一致：按班次规则、用户设了钟点、那天有班次。任一条不成立就
+/// 退回发生日本身 —— 全天提醒的钟点是策略值（`allDayReminderHour`），拿它去套
+/// 值班窗口会改变一整类待办。
+DateTime todoDisplayDay(RecurringTodo s, DateTime occ, {ShiftClass? shift}) {
+  if (s.repeat != RecurRepeat.shift || s.timeMinute == null || shift == null) {
+    return dateOnly(occ);
+  }
+  return dateOnly(_fireAt(occ, s.timeMinute!, 0, shift: shift));
+}
+
 /// 待办提醒的钟点按当天班次落在**前一天 / 当天 / 次日**时的显示串。
 ///
 /// 落点在当天、没有班次（不是按班次规则 / 那天没排班）时返回 null —— 调用点据此

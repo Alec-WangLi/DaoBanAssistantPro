@@ -128,7 +128,7 @@ void main() {
       await _settle(tester);
     }
 
-    testWidgets('按班次 + 夜班 + 00:00：行上标「次日 00:00」', (tester) async {
+    testWidgets('按班次 + 夜班 + 00:00：行落次日、日期就是提醒那天', (tester) async {
       await useNightToday();
       final sid = await repo.addRecurringTodo(
         title: '夜班写台账',
@@ -141,9 +141,16 @@ void main() {
       await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
       await pumpScreen(tester);
 
-      expect(find.text('夜班写台账'), findsOneWidget);
-      expect(find.textContaining(L10n.clockNextDay('00:00')), findsOneWidget,
-          reason: '夜班 20:30–次日 08:30 的 00:00 提醒落在次日，行上要标出来');
+      // 行跟着提醒走（2026-11-05 定）：夜班 20:30–次日 08:30 的 00:00 提醒
+      // 落在**次日**，那行就挂在次日 —— 于是列表里看到的是明天那条，
+      // 日期自己就把话说清了，行上不再需要「次日」两个字。
+      final tomorrow = dateOnly(DateTime.now()).add(const Duration(days: 1));
+      expect(find.text('夜班写台账'), findsOneWidget,
+          reason: '行不会消失：列表不过滤未来日期，它只是换了日期');
+      expect(find.textContaining(L10n.monthDayWeekday(tomorrow)), findsOneWidget,
+          reason: '日期必须是提醒落地那天，不是班次日');
+      expect(find.textContaining(L10n.clockNextDay('00:00')), findsNothing,
+          reason: '行已经落在提醒那天，再标「次日」就是自己跟自己打架');
       expect(sid, isNotNull);
       await _dispose(tester);
     });

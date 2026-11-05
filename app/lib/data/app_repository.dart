@@ -1124,6 +1124,12 @@ class AppRepository {
         // 直接拿 DateTime 比 int 是拿毫秒去比天数，恒不成立 —— 那正是「删了又回来」。
         if (s.skipThrough != null && dayNumber(occ) <= s.skipThrough!) continue;
 
+        // 行挂在**提醒落地的那一天**，不是发生日：夜班 20:30–次日 08:30 配 0 点的
+        // 待办，响在次日 0 点，那行就该在次日出现 —— 与 `planRecurringReminders`
+        // 同一条落点判据（`todoDisplayDay`）。`occ` 仍是「这一次属于哪个班次日」，
+        // 只有下面两处写库/顺延改用显示日；混用会让夜班那条每天多插一行。
+        final day = todoDisplayDay(s, occ, shift: shiftOn?.call(occ));
+
         final live = rows
             .where((r) => r.seriesId == s.id && !r.isCompleted)
             .toList()
@@ -1133,7 +1139,7 @@ class AppRepository {
           await db.into(db.scheduleEvents).insert(
                 ScheduleEventsCompanion.insert(
                   title: s.title,
-                  date: occ,
+                  date: day,
                   timeMinute: Value(s.timeMinute),
                   advanceRemindMinutes: Value(s.advanceRemindMinutes),
                   alarmEnabled: Value(s.alarmEnabled),
@@ -1155,10 +1161,10 @@ class AppRepository {
         // **只往前顺延**：用户手工把这一次改到别的日子（这周的会挪到周五）之后，
         // 生成器不许把它拽回来。这是有意的 —— 代价是「改周期」那条路径要自己把
         // 当前那条对齐（见 `_EventFields.commit`），别把哪一边当 bug 改。
-        if (daysBetween(keep.date, occ) > 0) {
+        if (daysBetween(keep.date, day) > 0) {
           await (db.update(db.scheduleEvents)
                 ..where((r) => r.id.equals(keep.id)))
-              .write(ScheduleEventsCompanion(date: Value(occ)));
+              .write(ScheduleEventsCompanion(date: Value(day)));
         }
       }
     });

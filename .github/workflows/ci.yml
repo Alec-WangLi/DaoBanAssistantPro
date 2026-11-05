@@ -17,7 +17,7 @@ env:
   # 用例数基线（只增不减）。加/删用例时同步改这里 —— 它是「护栏会不会被悄悄拆掉」的唯一把手。
   # 口径 = `cd app && flutter test`（不带路径）实际跑过的条数，不含 `app/tool/visual/` 那 1284 条。
   # 哪天有人把视觉用例挪进 `app/test/`，这个数要跟着跳一次。
-  EXPECTED_TESTS: '1220'
+  EXPECTED_TESTS: '1228'
   # 字体**不再靠环境变量把关**：三份字体已经进仓库（app/test/fonts/），
   # `ensureVisualFonts()` 缺一个就无条件抛错 —— 比一个「本地不设就不生效」的开关更严。
   # 2026-11-05 第一次 CI 红了 8 条，报错是 `Found 0 widgets with key
