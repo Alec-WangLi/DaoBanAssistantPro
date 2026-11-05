@@ -22,6 +22,7 @@ import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 const MethodChannel _channel =
@@ -64,7 +65,7 @@ Future<(AppRepository, ScheduleChain, int)> _seedChain() async {
       shiftTemplates.firstWhere((ShiftTemplate x) => x.id == 'four_crew_three_shift');
   final int id = await repo.saveSchedule(
     name: t.subtitle,
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(kAnchor),
     classes: t.classes,
     cycle: t.cycle,
     makeCurrent: true,
@@ -78,6 +79,7 @@ Future<(AppRepository, ScheduleChain, int)> _seedChain() async {
 }
 
 void main() {
+  useFixedNow();
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
@@ -121,7 +123,7 @@ void main() {
 
       // 调班：把今天改成这套方案里的另一个班次
       final domain = await repo.getScheduleDomain(id);
-      await repo.setDayOverrides(<DateTime>[dateOnly(DateTime.now())],
+      await repo.setDayOverrides(<DateTime>[dateOnly(kAnchor)],
           classId: domain!.classes[1].id!);
       final ScheduleChain after = (await repo.getActiveSchedules())!.chain;
       await WidgetService.push(

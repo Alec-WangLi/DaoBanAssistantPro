@@ -17,6 +17,7 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
@@ -44,6 +45,7 @@ void _stubPluginChannels() {
 }
 
 void main() {
+  useFixedNow();
   setUp(() => L10n.locale = 'zh');
 
   group('todoReminderClockLabel', () {
@@ -88,7 +90,7 @@ void main() {
     /// 把当前方案换成「今天 = 夜班（20:30–次日 08:30）」的三天轮转。
     /// 锚点往前挪一天：周期 [白, 夜, 休] → 今天正好落在夜班。
     Future<void> useNightToday() async {
-      final today = dateOnly(DateTime.now());
+      final today = dateOnly(kAnchor);
       await repo.saveSchedule(
         name: '夜班 · 今天',
         anchorDate: DateTime(today.year, today.month, today.day - 1),
@@ -133,18 +135,18 @@ void main() {
       final sid = await repo.addRecurringTodo(
         title: '夜班写台账',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(kAnchor),
         shiftNames: const ['夜班'],
         timeMinute: 0,
         advanceRemindMinutes: 0,
       );
-      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
       await pumpScreen(tester);
 
       // 行跟着提醒走（2026-11-05 定）：夜班 20:30–次日 08:30 的 00:00 提醒
       // 落在**次日**，那行就挂在次日 —— 于是列表里看到的是明天那条，
       // 日期自己就把话说清了，行上不再需要「次日」两个字。
-      final tomorrow = dateOnly(DateTime.now()).add(const Duration(days: 1));
+      final tomorrow = dateOnly(kAnchor).add(const Duration(days: 1));
       expect(find.text('夜班写台账'), findsOneWidget,
           reason: '行不会消失：列表不过滤未来日期，它只是换了日期');
       expect(find.textContaining(L10n.monthDayWeekday(tomorrow)), findsOneWidget,
@@ -160,11 +162,11 @@ void main() {
       await repo.addRecurringTodo(
         title: '每天现场巡检',
         repeat: RecurRepeat.daily,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(kAnchor),
         timeMinute: 0,
         advanceRemindMinutes: 0,
       );
-      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
       await pumpScreen(tester);
 
       expect(find.text('每天现场巡检'), findsOneWidget);
@@ -180,12 +182,12 @@ void main() {
       await repo.addRecurringTodo(
         title: '每天均可',
         repeat: RecurRepeat.daily,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(kAnchor),
         shiftNames: const ['夜班'],
         timeMinute: 0,
         advanceRemindMinutes: 0,
       );
-      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
       await pumpScreen(tester);
 
       expect(find.text('每天均可'), findsOneWidget);
@@ -199,12 +201,12 @@ void main() {
       final sid = await repo.addRecurringTodo(
         title: '停用的夜班',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(kAnchor),
         shiftNames: const ['夜班'],
         timeMinute: 0,
         advanceRemindMinutes: 0,
       );
-      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
       await repo.setRecurringEnabled(sid, false);
       await pumpScreen(tester);
 
@@ -218,11 +220,11 @@ void main() {
       await repo.addRecurringTodo(
         title: '不提醒的夜班',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(kAnchor),
         shiftNames: const ['夜班'],
         timeMinute: 0,
       );
-      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
       await pumpScreen(tester);
 
       expect(find.text('不提醒的夜班'), findsOneWidget);
@@ -236,14 +238,14 @@ void main() {
       final sid = await repo.addRecurringTodo(
         title: '白班才提醒',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(kAnchor),
         shiftNames: const ['白班'],
         timeMinute: 0,
         advanceRemindMinutes: 0,
       );
       await repo.addEvent(
         title: '白班才提醒',
-        date: dateOnly(DateTime.now()),
+        date: dateOnly(kAnchor),
         timeMinute: 0,
         seriesId: sid,
       );
@@ -259,14 +261,14 @@ void main() {
       final sid = await repo.addRecurringTodo(
         title: '钟点对不上',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(kAnchor),
         shiftNames: const ['夜班'],
         timeMinute: 0,
         advanceRemindMinutes: 0,
       );
       await repo.addEvent(
         title: '钟点对不上',
-        date: dateOnly(DateTime.now()),
+        date: dateOnly(kAnchor),
         timeMinute: 9 * 60,
         seriesId: sid,
       );

@@ -26,6 +26,7 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 Future<void> _pumpCalendar(WidgetTester tester) async {
@@ -42,7 +43,7 @@ Future<void> _pumpCalendar(WidgetTester tester) async {
       .firstWhere((ShiftTemplate x) => x.id == 'four_crew_three_shift');
   await AppRepository(db).saveSchedule(
     name: t.subtitle,
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(kAnchor),
     classes: t.classes,
     cycle: t.cycle,
     makeCurrent: true,
@@ -75,6 +76,7 @@ Future<int> _paintedInOneFrame(WidgetTester tester, Duration step) async {
 }
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;

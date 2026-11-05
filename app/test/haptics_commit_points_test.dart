@@ -39,6 +39,7 @@ import 'package:shiftassistantpro/core/widgets/glass_check.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 /// 有界推进若干帧。
@@ -96,6 +97,7 @@ Future<AppDatabase> _pumpTodos(WidgetTester tester,
 }
 
 void main() {
+  useFixedNow();
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late List<Object?> fired;
@@ -182,7 +184,7 @@ void main() {
     final repo = AppRepository(db);
     await repo.addEvent(
       title: '交体检报告',
-      date: dateOnly(DateTime.now()),
+      date: dateOnly(kAnchor),
       timeMinute: 14 * 60,
     );
     await _settle(tester);

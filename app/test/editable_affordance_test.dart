@@ -30,6 +30,7 @@ import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import '../tool/visual/visual_harness.dart'
@@ -125,6 +126,7 @@ Future<AppDatabase> _pumpVisual(
 }
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -189,7 +191,7 @@ void main() {
     // 这条用例钉两头：**不许再补回来**，而**行的点击不能跟着一起丢**。
     await _pump(tester, const ScheduleScreen(), seed: (db) async {
       await AppRepository(db)
-          .addEvent(title: '交班记录', date: dateOnly(DateTime.now()));
+          .addEvent(title: '交班记录', date: dateOnly(kAnchor));
     });
 
     expect(find.byKey(const Key('todo-edit-hint')), findsNothing,
@@ -246,7 +248,7 @@ void main() {
     await _pump(tester, const ScheduleScreen(),
         size: const Size(200, 400), seed: (db) async {
       await AppRepository(db)
-          .addEvent(title: '交班记录', date: dateOnly(DateTime.now()));
+          .addEvent(title: '交班记录', date: dateOnly(kAnchor));
     });
 
     expect(tester.takeException(), isNull);
