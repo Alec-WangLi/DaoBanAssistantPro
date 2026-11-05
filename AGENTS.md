@@ -97,7 +97,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 关键决策与坑（索引）
 
-> 全部 ~90 条已按主题搬进 `docs/decisions/`（7 个文件，原文一字未改）。这里只留**动手前必看**的 10 条 —— 每一条都对应一次真实事故。
+> 全部 ~90 条已按主题搬进 `docs/decisions/`（7 个文件，原文一字未改）。这里只留**动手前必看**的 12 条 —— 每一条都对应一次真实事故。
 
 1. **改 Drift 表后必须重生成**：`dart run build_runner build`（表定义与迁移都改了才算）。
 2. **`saveSchedule` 必须按 id 增量更新，不能删光重建** —— 删光重建会让每次保存都换掉全部班次 id，按天改班（覆盖表）立刻指飞，而且**不报错**。
@@ -109,6 +109,8 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 8. **界面上的钟点一律 24 小时制**（`ringClockText`）；`TimeOfDay.hourOfPeriod` 会把 20:10 写成「08:10」。
 9. **用例里的日期/时钟一律走 `appNow()` + `kAnchor`**，不许直接 `DateTime.now()` / `TimeOfDay.now()` —— 「静默空转」比「会红」更危险，清点必须钉住时钟前后各跑一遍。详见 `docs/decisions/date-time-in-tests.md`。
 10. **扫文档/源码的正则或链接校验，必须先剥掉围栏代码块与行内代码** —— 否则「举例说明」会被当成真问题（2026-11-06 一次误报 6 条：`docs/changelog` 2 条、`docs/superpowers` 4 条，全是 `[文字](链接)` 这种被人故意写出来讲解 markdown 的写法）。工具见 `scripts/link_check.py`。
+11. **同一台机器上不许同时跑两份 `flutter test`** —— 两个进程抢同一个 `app/build/test_cache/`，表现**不是报错，而是某几条用例莫名其妙地红**（2026-11-06：一份全套从 38 秒变成 10 分 4 秒、`calendar_day_cell_test.dart` 两条挂掉，单跑又全绿）。跑之前先数进程（`dart.exe` / `dartvm` / `flutter_tester` 应为 0）；**任何 `job_kill`、超时、异常中断之后都要再数一次** —— 父进程没了，它派生的 `dart.exe` / `dartaotruntime.exe` 可能还挂着缓存，`job_output` 里看不出来。**一条红的用例，先排除「当时是不是有人在并发跑」才值得去查。**
+12. **清点用例条数不许用 `grep -c '^  testWidgets('`** —— 缩进是 2 格还是 4 格（`group()` 里）不一，会数出 0 或漏一半（2026-11-06 我按 2 格缩进数 `calendar_liquid_test.dart` 得到 0，实际 18）。要么用 `^ +(testWidgets|test)\(`，要么直接看 `flutter test` 尾行的 `+N`。
 
 ## 症状索引（用户报的现象 → 该读哪一条）
 
