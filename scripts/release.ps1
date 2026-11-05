@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     一键发布「倒班助手Pro」APK 到 GitHub Releases。
 
@@ -335,6 +335,31 @@ if ($LASTEXITCODE -ne 0) {
     throw "gh release create 失败（exit $LASTEXITCODE）。若 tag 已存在，可先手动删除或改用新版本号。"
 }
 
+# 上传之后再对一次名：2026-11-05 发 v0.12.10 时，上面那个「先 Copy-Item 成 ASCII 名再传」
+# 在 Windows 上仍然传成了 app-release.apk（gh 不理会「路径#新名」，且这里没走那条语法），
+# 结果 latest.json 里的 asset / url 与实物对不上，App「检查更新」拼出来的地址 404。
+# 所以这里**读回来的名字不对就用 API 改名**，改名不改内容（size 与 digest 不变）。
+if ($repo) {
+    try {
+        $rawRel = & $gh api "repos/$repo/releases/tags/$tag"
+        if ($LASTEXITCODE -eq 0) {
+            $relObj = ($rawRel -join '') | ConvertFrom-Json
+            foreach ($a in $relObj.assets) {
+                if ($a.name -ne $assetName) {
+                    & $gh api -X PATCH "repos/$repo/releases/assets/$($a.id)" -f "name=$assetName" | Out-Null
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "      ✅ 资产名已校正：$($a.name) → $assetName"
+                    } else {
+                        Write-Warning "资产名校正失败（exit $LASTEXITCODE）：实测名 $($a.name) 与期望 $assetName 不一致，latest.json 的 url 会 404。"
+                    }
+                }
+            }
+        }
+    } catch {
+        Write-Warning "资产名校验没跑成：$_（请手动确认 Release 上的资产名是 $assetName）"
+    }
+}
+
 # ---------- 7. 验证 ----------
 if ($repo) {
     # 两条都与 7b 步同源，见那一段的长注释：
@@ -386,6 +411,9 @@ if ($repo) {
     } else {
         $manifest | Add-Member -Force -MemberType NoteProperty -Name 'stable' -Value $update
     }
+    # updatedAt 必须是真的 UTC。2026-11-05 发 v0.12.10 时这里被手工写成「本地时间贴个 Z」
+    # （00:25:00Z，实际是 08:25 本地），比真值早/晚 8 小时 —— 所以下面一律走 ToUniversalTime()，
+    # 谁要手工改 latest.json 也必须用 Get-Date -AsUTC 或换算后再贴 Z。
     $manifest | Add-Member -Force -MemberType NoteProperty -Name 'updatedAt' -Value ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))
     [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 4), [System.Text.UTF8Encoding]::new($false))
     Write-Host "[8/8] latest.json 已更新（stable=$($manifest.stable.version) / prerelease=$($manifest.prerelease.version)）"
