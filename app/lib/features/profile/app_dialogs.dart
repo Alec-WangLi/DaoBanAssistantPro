@@ -41,6 +41,10 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.12.10\n'
+    '· 底栏那圈边光重新配了亮度：深色档下不再白得发亮，浅色档下那条细边也终于看得清 —— 以前它几乎融进底色里\n'
+    '· 按住开关拖动、上滑关闹钟的时候，那颗圆钮的两头一直是真圆了：之前会被拉成一头尖一头胖的椭圆\n'
+    '\n'
 'v0.12.9\n'
     '· 底栏那圈彩色边缘回来了 —— 上一版把它让给了「弯折」那层，可那层只有部分机型画得出来，于是没轮到的人看到的是一枚既没有颜色、也没有弯折的胶囊。现在彩边一直画着，弯折在支持的机型上叠在上面，两者不再互相顶掉\n'
     '· 桌面小组件不再是白块：同步没成功时它自己重试两次，还不行就在你下次打开 App 时提示一次；实在拿不到数据时写「打开 App 同步排班」，而不是一片空白\n'
@@ -94,19 +98,13 @@ const String _changelogZh =
     '· 修：在「排班管理」里换「其余时间 / 全部日子」、增删改排班时段、或者删掉一套排班表之后，日历立刻变了，但系统里已经排好的闹钟没跟着变 —— 旧方案里的班次闹钟还按旧日子响。10 月 18 日晚上就是它：当天明明是白班，19:30 却响了旧方案里上夜班的闹钟。现在这三处一改就立刻重排全部闹钟\n'
     '· 修：全屏响铃界面上的时刻是 12 小时制却不写上午 / 下午 —— 20:10 的闹钟响起来，屏幕上写的是「08:10」。现在跟全 app 其余地方一样走 24 小时制\n'
     '\n'
-'v0.12.0\n'
-    '· 桌面小组件贴齐 App：今日卡补齐班次备注 / 其他班组 / 本月统计，主色竖条通到卡底；月历「今天」换成半透明块、周标题改单字、班次胶囊按文字宽现量；三张卡的字号不再跟系统字号走\n'
-    '· 按月排班：每月 1 号重新开始的一套切法，编辑排班顶上在「周期 / 按月」之间切换，段可加可删\n'
-    '· 班次颜色扩到 16 种，并能自己调：色相条 + 饱和度/明度方盘 + 十六进制，两颗日历小样当场变色\n'
-    '· 待办自动归档：做完的收进「已完成 N 条」，主列表只留没做的；一次性待办能从归档里点回来\n'
-    '· 字号四档，App 自己管、不跟系统字号走；日历顶栏与信息卡跟着重排，不省略\n'
-    '· 横屏 / 平板 / 车机上日历改成左右两栏；底部弹层统一头部、按住往下一拉就关；全 app 的小节标题、空态、加载态与按压反馈收成一套\n'
-    '· 闹钟落点扩到前一天 / 当天 / 次日三档，每个班次上限 6 → 10 条；贪睡时长可选 1 / 5 / 10 / 15 / 20 / 30 分钟\n'
-    '· 修：浅色档下状态栏图标跟着主题走、输入框标签在真机字体下不再被压扁、实心主色面上改白字、底部导航彩边接缝、编辑排班的「每月第 N 天起」不再省略、待办勾选后的「撤销」在切页后仍然生效\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.12.10\n'
+    '· The rim along the nav bar has been re-lit: in the dark theme it no longer glows white, and in the light theme the thin edge is finally visible - it used to blend into the background\n'
+    '· Hold and drag the switch, or swipe up to stop an alarm, and the knob now stays properly round at both ends instead of being pulled into a lopsided oval\n'
+    '\n'
 'v0.12.9\n'
     '· The colour rim on the nav bar capsule is back. The last version handed that job to the bending layer, but that layer only exists on some phones - everyone else got a capsule with neither colour nor bending. The rim is drawn again, always, and the bending stacks on top where it is available\n'
     '· The home-screen widget no longer goes blank: a failed sync retries twice on its own and then says so once the next time you open the app; when there is really no data it reads "Open the app to sync" instead of an empty card\n'
@@ -159,16 +157,6 @@ const String _changelogEn =
 'v0.12.1\n'
     '· Fix: changing the fallback schedule (All days), adding, editing or deleting a schedule period, or deleting a schedule in Schedule management updated the calendar immediately, but alarms already set on the system did not follow - alarms from the old schedule still rang on their old days. That is what happened on the evening of 18 Oct: the day was a day shift, yet a night-shift alarm rang at 19:30. All three now re-plan every alarm immediately\n'
     '· Fix: the clock on the full-screen ringing page used a 12-hour hour without AM/PM - a 20:10 alarm showed "08:10". It now uses the same 24-hour format as the rest of the app\n'
-    '\n'
-'v0.12.0\n'
-    '· Home-screen widgets now match the app: the today card gained the shift note, other crews and month tally, and the accent bar runs the full height; the month view marks today with the translucent block, uses single-character weekday headers and sizes shift chips to their text; none of the three cards follow the system font size any more\n'
-    '· Monthly rosters: a schedule that starts over on the 1st of every month, switchable at the top of the editor, with addable and removable segments\n'
-    '· Shift colours expanded to 16, plus a custom picker: hue bar, saturation/value square and hex input, with two live calendar samples\n'
-    '· Todo auto-archive: completed items collect under "N completed" and the main list keeps only open ones; one-off items can be ticked back out of the archive\n'
-    '· Four text sizes managed by the app rather than the system; the calendar header and info card reflow without ellipsis\n'
-    '· The calendar becomes two columns in landscape, on tablets and car screens; bottom sheets share one header and can be pulled down to close; section headings, empty and loading states and press feedback are unified across the app\n'
-    '· Alarm anchors now cover the day before, the same day and the next day; up to 10 alarms per shift; snooze length selectable from 1 to 30 minutes\n'
-    '· Fixes: status-bar icons follow the theme in light mode, field labels are no longer squashed under the device font, white text on solid accent surfaces, the coloured rim seam on the nav bar, the editor no longer truncates "from day N of each month", and undo still works after switching tabs\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
