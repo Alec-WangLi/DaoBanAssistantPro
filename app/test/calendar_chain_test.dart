@@ -149,6 +149,10 @@ void main() {
   });
 
   testWidgets('「本月统计」跨方案时按简称合并，加总等于月长', (tester) async {
+    // 统计行只在装得下的日子画；换到没有富余的月份（如 3 月）就一天都画不出来。
+    // 这条钉的是「跨方案按简称合并」，不是月份形状，所以把今天钉到 10 月。
+    appNow = () => DateTime(2026, 10, 15, 9);
+    addTearDown(() => appNow = () => kAnchor);
     await _pumpChainedCalendar(tester);
     final now = appNow();
     final days = DateTime(now.year, now.month + 1, 0).day;

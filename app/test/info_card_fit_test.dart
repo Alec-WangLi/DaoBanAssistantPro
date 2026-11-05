@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
@@ -62,6 +63,39 @@ double _scrollRoom(WidgetTester tester) {
   return total;
 }
 
+/// 把「今天」钉到 [when]（用例结束时还原成夹具锚点 `kAnchor`）。
+///
+/// 「一屏装下」这条保证只管**5 行的月份**（见文件头）；外层锚点落在 6 行月时，
+/// 让用例自己把要的那种月份点名要过来 —— 前提失败会明说「这个月不是 5 行」，
+/// 而不是把多出来的那一行悄悄合法化。
+void _pinNow(DateTime when) {
+  appNow = () => when;
+  addTearDown(() => appNow = () => kAnchor);
+}
+
+/// 这一帧网格**真实画了几行**：按格子顶边去重量，不按日历算式推。
+int _weekRows(WidgetTester tester) {
+  final int days = DateTime(appNow().year, appNow().month + 1, 0).day;
+  final Set<int> rows = <int>{};
+  for (int d = 1; d <= days; d++) {
+    final Finder f = find.byKey(ValueKey('day-card-$d'));
+    if (f.evaluate().isEmpty) continue;
+    rows.add(tester.getRect(f).top.round());
+  }
+  return rows.length;
+}
+
+/// 网格自己（`calendar-grid` 里那支 `SingleChildScrollView`）还剩多少可滚余量。
+double _gridRoom(WidgetTester tester) {
+  final ScrollableState s = tester.state<ScrollableState>(find
+      .descendant(
+        of: find.byKey(const Key('calendar-grid')),
+        matching: find.byType(Scrollable),
+      )
+      .first);
+  return s.position.maxScrollExtent;
+}
+
 void main() {
   useFixedNow();
   setUpAll(() async {
@@ -76,7 +110,11 @@ void main() {
     for (final font in AppFontSize.values) {
       testWidgets('一屏构图：${size.width.toInt()}dp · ${font.name}',
           (tester) async {
+        // 2026-10：10 月 1 日是周四、31 天 → 5 行（`_weekRows` 会当场量一遍）。
+        _pinNow(DateTime(2026, 10, 15));
         await _pump(tester, size: size, font: font);
+        expect(_weekRows(tester), 5,
+            reason: '这条保证线只管 5 行的月份；6 行月是已知代价，另有专门一条');
         expect(truncatedParagraphs(tester), isEmpty,
             reason: '整条农历与班次行都要装得下（放不下就折行/缩小，不许省略）');
         expect(_scrollRoom(tester), 0,
@@ -89,9 +127,61 @@ void main() {
 
   // ── 英文：同一块屏、最大档 —— 英文串更长，是最狠的那一格 ──
   testWidgets('一屏构图：360dp · 特大 · 英文', (tester) async {
+    _pinNow(DateTime(2026, 10, 15));
     await _pump(tester, size: const Size(360, 780), lang: 'en');
+    expect(_weekRows(tester), 5,
+        reason: '同上：这里是英文串更长的 5 行月，6 行月另有专门一条');
     expect(truncatedParagraphs(tester), isEmpty);
     expect(_scrollRoom(tester), 0);
+    await teardownVisual(tester);
+  });
+
+
+  // ── 6 行月：**装不下是已知代价**，但要滚得有界、而且差多少算得出来 ──────
+  //
+  // 账：格子有可读下限 `_minCellH = 58`（`calendar_screen.dart:3094` —— 三行字
+  // 装得下的最小高度）。5 行月信息卡让得起，6 行月要多一整行 ≈62dp，信息卡里
+  // 再也抠不出 18dp 的富余，于是多出来的那一行只能靠滚。
+  //
+  // 这是**产品取舍，不是 bug**：拿「字糊 / 卡片缺内容」换「少滑一下」不划算。
+  // 所以我们不把 18dp 说成「通过」，而是把它钉成一条**算得出来的定数** ——
+  // 哪天有人动了格高下限或卡片让步逻辑，这条会立刻报出差值变了多少。
+  testWidgets('六行月：装不下是已知代价，滚的量恰好等于格子卡在 58 上的差额',
+      (tester) async {
+    // 2026-03：3 月 1 日是周日、31 天 → 6 行。
+    _pinNow(DateTime(2026, 3, 15));
+    await _pump(tester, size: const Size(360, 780));
+    final int rows = _weekRows(tester);
+    expect(rows, 6, reason: '这条要的是 6 行的月份');
+
+    // 两份数分开来：可用高度**量**，格子高度**算**（走生产那颗纯函数）。
+    // 拿量的格子高去推期望值就成了「同一份配置读两遍」，等于没测。
+    final Rect grid = tester.getRect(find.byKey(const Key('calendar-grid')));
+    final double cellW =
+        tester.getSize(find.byKey(const ValueKey('day-card-1'))).width;
+    final double cellH = calendarCellHeight(
+      cellW: cellW,
+      availHeight: grid.height,
+      weekRows: rows,
+      weekdayH: 26,
+    );
+    expect(cellH, closeTo(58, 0.01), reason: '格子应当正卡在可读下限 58 上');
+    // 真画出来的格高必须就是算出来那个（否则这条在量一个不存在的东西）。
+    expect(
+        tester.getSize(find.byKey(const ValueKey('day-card-1'))).height,
+        closeTo(cellH, 0.5),
+        reason: '画出来的格高与 calendarCellHeight 的结论对不上');
+
+    final double deficit = 26 + rows * cellH - grid.height;
+    expect(deficit, greaterThan(0), reason: '这条要的是「真的差一点」的月份');
+    expect(_gridRoom(tester), closeTo(deficit, 1),
+        reason: '网格滚的量应当恰好是缺口 ${deficit.toStringAsFixed(1)}dp'
+            '（周标题 26 + $rows × $cellH − 网格可用 ${grid.height.toStringAsFixed(1)}）');
+    // 除了网格，谁都不许滚 —— 信息卡尤其（它只是让回高度，内容一条没少）。
+    expect(_scrollRoom(tester), closeTo(_gridRoom(tester), 0.01),
+        reason: '除网格之外还有东西在滚：信息卡自己撑破了');
+    expect(truncatedParagraphs(tester), isEmpty,
+        reason: '让高度不等于让内容：农历与班次行仍然一个字都不许省略');
     await teardownVisual(tester);
   });
 

@@ -43,6 +43,16 @@ ShiftTemplate _template(String id) =>
     shiftTemplates.firstWhere((t) => t.id == id);
 
 /// 色块 chip 的文本形状：`组名 简称`（例：`二班 休`）。
+
+/// 把「今天」临时钉到 [when]（用例结束时还原成夹具锚点 `kAnchor`）。
+///
+/// 这几条用例要的是**一个具体形状的月份**：那个月里有法定节假日，或者信息卡里
+/// 装得下「本月统计」那一行。全局锚点一旦换到没有节假日的月份（比如 3 月），
+/// 它们的前提就不成立了 —— 与其赌锚点正好是哪个月，不如用例自己把那个月点名要过来。
+void _pinNow(DateTime when) {
+  appNow = () => when;
+  addTearDown(() => appNow = () => kAnchor);
+}
 final _chipPattern = RegExp(r'^[一二三四五六七八九]班 [早中夜休值晚]$');
 
 /// 长按拖选用例圈住的那一段日子（闭区间 8…15）。
@@ -55,6 +65,27 @@ final _chipPattern = RegExp(r'^[一二三四五六七八九]班 [早中夜休值
 const int _rangeFirstDay = 8;
 const int _rangeLastDay = 15;
 const int _rangeSpan = _rangeLastDay - _rangeFirstDay + 1;
+
+/// 找一个「往下拖一格、再往右越一格」都成立的起点：
+/// ① 它右边还有同类格子（不在最后一列 —— 2026-02 的 8 日就是周日，往右拖直接出网格，
+///    焦点不挪、末端不动，那是几何不是 bug）；
+/// ② 它往后 8 天还在本月（末端才落得进网格）。
+int _dragStartDay(WidgetTester tester) {
+  final int days = DateTime(appNow().year, appNow().month + 1, 0).day;
+  Rect? rectOf(int d) {
+    final Finder f = find.byKey(ValueKey('day-card-$d'));
+    return f.evaluate().isEmpty ? null : tester.getRect(f);
+  }
+
+  for (int s = 1; s <= days - 8; s++) {
+    final Rect? here = rectOf(s);
+    final Rect? next = rectOf(s + 1);
+    if (here == null || next == null) continue;
+    if ((next.top - here.top).abs() > 0.5) continue; // s 在最后一列
+    return s;
+  }
+  fail('这个月找不到可拖的起点 —— 网格行数或列数不对');
+}
 
 /// 玻璃块（选中滑块）当前的缩放：按住/拖拽时 1.22，松手后回到 1.0。
 ///
@@ -606,6 +637,8 @@ void main() {
   // 徽章连图标带「法定节假日 · 」有一百多 dp，和农历并排时农历只剩一半宽度。
   testWidgets('信息卡：节假日徽章自占一行，农历独占下一行且不再被挤到右边',
       (tester) async {
+    // 国庆那几天：这个月一定有法定节假日。
+    _pinNow(DateTime(2026, 10, 3));
     await _pumpCalendar(tester, 'four_crew_three_shift');
 
     // 找出本月的第一个法定节假日（中秋那种）。
@@ -636,6 +669,7 @@ void main() {
   // 节假日，徽章根本不出现在图里。这条直接在控件树上量它的真配色补上缺口 ——
   // v0.6.8 之前它用原色红压在同色淡底上，浅深两套主题都只有 3.4:1。
   testWidgets('节假日徽章：文字与淡染底要过 AA 对比度', (tester) async {
+    _pinNow(DateTime(2026, 10, 3));
     await _pumpCalendar(tester, 'four_crew_three_shift');
 
     final badgeFinder = find.byKey(const Key('info-card-holiday-badge'));
@@ -2113,26 +2147,32 @@ void main() {
       // ⚠️ 后半截是必需的：挤压场只够到一格的半径，末端**停在格正中**时连它自己
       // 那一格都不套 Transform（t≈0）。要它挤，末端得卡在**两格之间** ——
       // 既有的「挤字只变换绘制」那条也是这么拖的（半格）。
-      final Offset start = tester
-          .getCenter(find.byKey(const ValueKey('day-card-$_rangeFirstDay')));
+      // ⚠️ 起点与步长都从**这一帧的格子尺寸**来，不写死 8 日与 60/34 像素：
+      // 8 日可能正好在最后一列（2026-02 的 8 日是周日），往右拖会出网格；
+      // 格子高度也随「这个月几行」而变，写死的 60 在 6 行月里跨不过一行。
+      final int startDay = _dragStartDay(tester);
+      final Size cell =
+          tester.getSize(find.byKey(ValueKey('day-card-$startDay')));
+      final Offset start =
+          tester.getCenter(find.byKey(ValueKey('day-card-$startDay')));
       final TestGesture g = await tester.startGesture(start);
       await tester.pump(const Duration(milliseconds: 600)); // 过长按判定
-      await g.moveBy(const Offset(0, 60)); // 下一行 → 末端 15 日
+      await g.moveBy(Offset(0, cell.height)); // 下一行 → 末端 startDay + 7
       await tester.pump();
-      // ⚠️ 34 而不是 28（半格）：格宽 56.6、半格是 28.3 —— 走 28 那一步还**差 0.3px
-      // 没跨过格界**，焦点仍停在 15 日，末端一动不动（第一版就是这么写的，量不到东西）。
-      await g.moveBy(const Offset(34, 0)); // 跨过格界 → 焦点到 16 日、末端淌过去
+      // ⚠️ 要**跨过格界**才算挪一格：0.6 格宽（比半格多留一点余量 —— 半格差 0.3px
+      // 的那次就是没跨过去，焦点仍停着，末端一动不动）。
+      await g.moveBy(Offset(cell.width * 0.6, 0)); // 跨过格界 → 末端淌过去
       // ⚠️ 推**三帧**：ticker 的第一帧在下一帧才跑，一帧之后末端还停在原处 ——
       // 那时场心正好压在 15 日正中（`t≈0`，什么都不套），这条就测不到东西。
       for (int i = 0; i < 3; i++) {
         await tester.pump(const Duration(milliseconds: 16));
       }
 
-      expect(warped(tester, 15) || warped(tester, 16), isTrue,
+      expect(warped(tester, startDay + 7) || warped(tester, startDay + 8), isTrue,
           reason: '流动那一端旁边那几格没被挤 —— 挤压场没跟着末端走');
-      expect(warped(tester, 10), isFalse,
+      expect(warped(tester, startDay + 2), isFalse,
           reason: '带子内部（已经圈住的日子）也被挤了 —— spec §4.5：那里面不该动');
-      expect(warped(tester, 11), isFalse, reason: '同上（再往深一格）');
+      expect(warped(tester, startDay + 3), isFalse, reason: '同上（再往深一格）');
 
       await g.up();
       await tester.pumpAndSettle();
@@ -2275,6 +2315,8 @@ void main() {
   // 这正是下面第二条用例钉住的（独立审查抓的）。
   group('当月事实缓存', () {
     testWidgets('调过班之后「本月统计」那一行跟着变（键里必须含排班本身）', (tester) async {
+      // 要一个有富余画统计行的月份（见 `_pinNow`）。
+      _pinNow(DateTime(2026, 10, 15));
       // ⚠️ 这一条是独立审查抓的：键原来用的是 `chain.cacheKey`，而那个是**信息卡
       // 高度**的指纹 —— 它只看组名 / 简称 / 空白表 / 时段，**不含基准日、周期、
       // 班组错位、按天改班的覆盖**。于是「调一次班」之后键不变 ⇒ 这一行一直显示
@@ -2301,6 +2343,7 @@ void main() {
     });
 
     testWidgets('换语言之后「本月统计」那一行跟着换（键里必须含语言）', (tester) async {
+      _pinNow(DateTime(2026, 10, 15));
       await _pumpCalendar(tester, 'four_crew_three_shift');
       expect(find.textContaining(L10n.monthTally), findsOneWidget,
           reason: '前提：这一行本来就画出来了（不然下面比的是「都没有」）');
@@ -2351,7 +2394,9 @@ void main() {
     await _pumpCalendar(tester, 'six_crew_three_shift',
         width: 900, height: 420);
     expect(find.byKey(const ValueKey('day-card-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('day-card-31')), findsOneWidget);
+    // ⚠️ 末格按**当月天数**取，不写死 31：2 月只有 28 天，写死的那版在 2 月必红。
+    final int lastDay = DateTime(appNow().year, appNow().month + 1, 0).day;
+    expect(find.byKey(ValueKey('day-card-$lastDay')), findsOneWidget);
     await _disposeCalendar(tester);
   });
 

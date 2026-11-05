@@ -139,7 +139,7 @@ BUILD.md                      # 构建与运行指南
 
 前置：Flutter SDK、JDK 17、Android SDK（详见 [`BUILD.md`](BUILD.md)）。
 
-> **只想先跑起来看看？** 跑测试不需要 JDK / Android SDK：见 [`BUILD.md` 的「第一次跑测试」](BUILD.md#第一次跑测试克隆之后-5-分钟)，两条命令，全套 1236 条 45 秒。
+> **只想先跑起来看看？** 跑测试不需要 JDK / Android SDK：见 [`BUILD.md` 的「第一次跑测试」](BUILD.md#第一次跑测试克隆之后-5-分钟)，两条命令，全套 1237 条 45 秒。
 
 ```powershell
 cd app
