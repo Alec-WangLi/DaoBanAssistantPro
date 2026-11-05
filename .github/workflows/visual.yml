@@ -94,9 +94,18 @@ jobs:
         run: |
           log="$RUNNER_TEMP/visual-test.log"
           total=$(grep -oE '^[0-9]{2}:[0-9]{2} \+[0-9]+' "$log" 2>/dev/null | tail -1 | grep -oE '\+[0-9]+' | tr -d '+' || true)
-          imgs=$(find app/build/visual -name '*.png' 2>/dev/null | wc -l | tr -d ' ')
-          size=$(du -sh app/build/visual 2>/dev/null | cut -f1)
-          last=$(tail -3 "$log" 2>/dev/null | sed '/^$/d' | tail -1)
+          # 目录不存在时 find / du 返回 1，而本步骤是 bash -e -o pipefail ——
+          # 一条失败的管道会把这步直接拖成 exit 1。2026-11-06 真踩过：当时用 2>/dev/null 吞了 stderr，
+          # 日志里只剩「Process completed with exit code 1」，看不出是缺目录。所以这里显式分流，缺目录要吼出来。
+          if [ -d app/build/visual ]; then
+            imgs=$(find app/build/visual -name '*.png' | wc -l | tr -d ' ')
+            size=$(du -sh app/build/visual | cut -f1)
+          else
+            imgs="0（app/build/visual 不存在）"
+            size="—"
+            echo "::warning::app/build/visual 不存在 —— 出图那一步没有产出，先看上面哪一步失败或跳过了。"
+          fi
+          last=$(tail -3 "$log" 2>/dev/null | sed '/^$/d' | tail -1 || true)
           if [ -n "${ELAPSED:-}" ]; then elapsed="$ELAPSED 秒"; else elapsed="未记录（测试步骤没跑完）"; fi
 
           {
