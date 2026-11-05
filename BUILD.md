@@ -30,7 +30,7 @@
 ```bash
 cd app
 flutter pub get
-flutter test          # 1218 条
+flutter test          # 1220 条
 flutter analyze       # 必须 No issues found
 ```
 

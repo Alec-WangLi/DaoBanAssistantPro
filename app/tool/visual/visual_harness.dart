@@ -66,34 +66,34 @@ String kVisualOutDir = 'build/visual';
 // ---------------------------------------------------------------------------
 // 字体
 // ---------------------------------------------------------------------------
+//
+// 三份字体**在仓库里**（`app/test/fonts/`），本地与 CI 读同一份字节 —— 量尺只有一把。
+//
+// 为什么不探 SDK 了：`flutter test` 用的那两个英文字体住在
+// `$FLUTTER_ROOT/bin/cache/artifacts/material_fonts`，而 CI 的 flutter-action 还原
+// 缓存之后那个目录**是空的**（2026-11-05 run 42030769732 实测：Noto 的 19MB 与 Droid
+// 的 4MB 都装上了，只有这个目录不存在）。原来那套「从可执行文件向上找 + FLUTTER_ROOT
+// 兜底」的两条路指向的是同一个空目录，于是 CI 上量到的是方块的宽度，8 条「文字放不放
+// 得下」的用例一起红，报错还指向 `header-single-row` 找不到 —— 与真因毫无关系。
+//
+// 为什么是 Noto 而不是等线：等线（Deng.ttf）是 Windows 自带字体，不能随仓库分发；
+// Noto Sans CJK 是 SIL OFL，可以。这份是 `NotoSansCJK-Regular.ttc` 的第 2 个面（SC）
+// 的子集：GB2312 全部 6,763 字 ∪ 仓库里实际用到的 1,514 字 = 6,784 字，外加
+// 拉丁 / 标点 / 全角区，2,858,516 B。要重抽的话命令见
+// `docs/decisions/ui-rules.md` 的「视觉工装的字体」一节。
+const String _fontDir = 'test/fonts';
+const String _latinPath = '$_fontDir/roboto-regular.ttf';
+const String _iconsPath = '$_fontDir/materialicons-regular.otf';
+const String _cjkPath = '$_fontDir/NotoSansSC-Regular.otf';
 
 /// 装上的字体家族名；CJK 走 fallback，拉丁仍用 Roboto。
 const String _cjkFamily = 'HarnessCJK';
 
 bool _fontsReady = false;
 bool _latinLoaded = false;
-bool _iconsLoaded = false;
 
-/// 实际采用的 CJK 字体路径；null 表示一个都没找到（中文会渲染成方块）。
+/// 实际采用的 CJK 字体路径。
 String? loadedCjkFont;
-
-/// 探 SDK 根目录：`flutter test` 的可执行文件就在 SDK 内部
-/// （.../flutter/bin/cache/artifacts/engine/<os>/flutter_tester.exe），
-/// 从它逐级向上找带 `bin/cache/artifacts/material_fonts` 的目录即可，
-/// 不依赖 FLUTTER_ROOT 环境变量是否被设置。
-String? _findFlutterRoot() {
-  var dir = File(Platform.resolvedExecutable).parent;
-  for (var i = 0; i < 8; i++) {
-    if (Directory('${dir.path}/bin/cache/artifacts/material_fonts')
-        .existsSync()) {
-      return dir.path;
-    }
-    final parent = dir.parent;
-    if (parent.path == dir.path) break;
-    dir = parent;
-  }
-  return Platform.environment['FLUTTER_ROOT'];
-}
 
 Future<void> _loadFamily(String family, String path) async {
   final bytes = await File(path).readAsBytes();
@@ -103,19 +103,6 @@ Future<void> _loadFamily(String family, String path) async {
   await loader.load();
 }
 
-/// 候选 CJK 字体，按「更像正经 UI 字」排序。
-///
-/// 只用 .ttf：`.ttc` 是字体集合，引擎不保证能解析出里面第几个面，写进去
-/// 可能整族加载失败，反而不如退到黑体。
-const List<String> _cjkCandidates = [
-  r'C:/Windows/Fonts/Deng.ttf', // 等线，最接近现代 UI 字重
-  r'C:/Windows/Fonts/simhei.ttf', // 黑体
-  r'C:/Windows/Fonts/simsunb.ttf', // 宋体-粗
-  r'C:/Windows/Fonts/simfang.ttf', // 仿宋
-  '/System/Library/Fonts/PingFang.ttc',
-  '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-];
-
 /// 幂等。**必须在 `setUpAll` 里调用**，不能在用例体内。
 ///
 /// 读字体文件是真 I/O，而 `testWidgets` 的用例体跑在 fake_async 的伪造时钟区里
@@ -124,47 +111,30 @@ Future<void> ensureVisualFonts() async {
   if (_fontsReady) return;
   _fontsReady = true;
 
-  final root = _findFlutterRoot();
-  if (root != null) {
-    final dir = '$root/bin/cache/artifacts/material_fonts';
-    for (final entry in {
-      'Roboto': 'roboto-regular.ttf',
-      'MaterialIcons': 'materialicons-regular.otf',
-    }.entries) {
-      final path = '$dir/${entry.value}';
-      if (!File(path).existsSync()) continue;
-      await _loadFamily(entry.key, path);
-      if (entry.key == 'Roboto') {
-        _latinLoaded = true;
-      } else {
-        _iconsLoaded = true;
-      }
+  // 缺了就当场抛，缺哪个文件写哪个文件。**不再有「退化到方块继续跑」这条路**：
+  // 缺字体时这些用例照样跑、量到的是方块字宽，结果没有意义。工作目录必须是 app/。
+  for (final path in [_latinPath, _iconsPath, _cjkPath]) {
+    if (!File(path).existsSync()) {
+      throw StateError('[visual] 缺字体文件 $path —— 这三份是仓库内资产'
+          '（app/$_fontDir/），不该缺。请确认工作目录是 app/。');
     }
   }
 
+  await _loadFamily('Roboto', _latinPath);
+  await _loadFamily('MaterialIcons', _iconsPath);
+  _latinLoaded = true;
+
+  // `VISUAL_CJK_FONT` 仍是**覆盖**语义（设了就只认它）：留给「想用系统里另一份
+  // 中文字体对一下」的场合。不设就用仓库里那份。
   final override = Platform.environment['VISUAL_CJK_FONT'];
-  final candidates = override != null ? [override] : _cjkCandidates;
-  for (final path in candidates) {
-    if (!File(path).existsSync()) continue;
-    try {
-      await _loadFamily(_cjkFamily, path);
-      loadedCjkFont = path;
-      break;
-    } catch (_) {
-      // 这个面加载不了就试下一个，别让整轮渲染挂掉
-    }
+  final cjk = override != null && override.isNotEmpty ? override : _cjkPath;
+  if (!File(cjk).existsSync()) {
+    throw StateError('[visual] VISUAL_CJK_FONT 指向的字体不存在：$cjk');
   }
+  await _loadFamily(_cjkFamily, cjk);
+  loadedCjkFont = cjk;
 
-  // 报告一次装载结果——少装了哪一类要一眼能看出来，否则会误以为
-  // 「图里是方块」是界面本身的问题。
-  final missing = [
-    if (!_latinLoaded) '拉丁(Roboto)',
-    if (!_iconsLoaded) '图标(MaterialIcons)',
-    if (loadedCjkFont == null) '中文',
-  ];
-  stdout.writeln(missing.isEmpty
-      ? '[visual] 字体就绪：Roboto + MaterialIcons + ${loadedCjkFont!}'
-      : '[visual] 字体缺 ${missing.join(" / ")}，缺的部分会渲染成方块');
+  stdout.writeln('[visual] 字体就绪（仓库内）：Roboto + MaterialIcons + $cjk');
 
   // 玻璃拨到默认的「标准」档再出图 —— 否则看到的是省电档那个不透明填充，
   // 不是真实观感。

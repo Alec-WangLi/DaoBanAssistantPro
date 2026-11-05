@@ -34,3 +34,31 @@
 - **指路 / 遮罩那类「盖在别的东西上」的层必须 `IgnorePointer`**（整月无排班时那句指路就是），否则它会把下面的手势吃掉。而**验它有两条路，缺一不可**：出图看「有没有把文字压在一起」，以及**在那一层自己的中心做一次命中测试、断言它不在命中路径里**（`tester.hitTestOnBinding`）—— 后者才是有鉴别力的那条（别写成「它有没有 `IgnorePointer` 祖先」：框架内部自己就套了三层，那种断言两种写法都能过）。
   - **工装**：`32_calendar_blank_schedule`（这种班表此前**从没进过屏单** —— 单测问得出「有没有指路」，问不出「整张日历被盖住好不好看」）。
 - **日历页在「系统字号放大」下的两条规则（v0.9.9 定）**：**网格是定尺的点阵，格子里的字一律归一到格子里**（靠 `FittedBox(scaleDown)`，日期 / 班次胶囊 / 农历 / 周标题 / 窄窗退路的纯文字五处都要有）；**真正按系统字号长的是底栏信息卡**（`info_card_metrics.dart` 用 `textScaler` 实测高度，会随字号变高、把网格挤矮）。三处容易再踩的细节：① 整格外面那层 `FittedBox` **救不了**格子里某一行 —— 外层给的约束是固定的 `contentW` 宽，那一行在**固定宽**下排好、`ellipsis` 已经烘进结果，之后再缩也变不回来（「缩小不能取消省略」）；② **不要按系统字号去长高 `_weekdayH`** —— 那个常量同时被 `_buildGrid` 六处命中测试算式用（`d.localPosition.dy - _weekdayH`），改成逐帧算的值漏一处就是「系统字号调大之后点哪一格都不对」，而且换来的高度也换不成更大的字；③ 极长的名字要**先截再缩**，不能只靠缩：`LunarInfo.cellLabel` 把节日名截到 3 字 + 省略号（`全民国防教育日` 7 个字交给 `FittedBox` 会缩到 0.46 倍约 6px —— **完整但没人看得见，比截断更糟**），信息卡仍用完整的 `shortLabel`；信息卡第一行「日期 + 今天 + N 项待办」三个元素都要紧、谁也丢不得，用 `Flexible + FittedBox`（紧凑卡那一支仍走省略号，那边窄到 200dp 缩下去没法看）。
+- **视觉工装的三份字体在仓库里（`app/test/fonts/`），本地与 CI 读同一份字节 —— 量尺只有一把**（2026-11-05）。原状：`ensureVisualFonts()` 去 `$FLUTTER_ROOT/bin/cache/artifacts/material_fonts` 探 Roboto / MaterialIcons，CJK 按候选表探系统字体。CI 上 subosito/flutter-action 还原缓存之后那个目录**是空的**（run 42030769732 实测：Noto 19MB 与 Droid 4MB 都装上了，只有它不存在），于是拉丁/图标全缺、文字渲成方块，8 条「文字放不放得下」的用例一起红，而报错指向 `Found 0 widgets with key [<'header-single-row'>]` —— 与真因毫无关系。现在：`roboto-regular.ttf` 171,676 B、`materialicons-regular.otf` 1,645,184 B、`NotoSansSC-Regular.otf` 2,858,516 B，三份都进仓库；`_findFlutterRoot()` 整段删除，`ensureVisualFonts()` 缺任一份就 `throw StateError`（**没有「退化到方块继续跑」这条路**，比原来那个 `VISUAL_FONT_STRICT` 环境开关更严，该开关已删）。`VISUAL_CJK_FONT` 仍是**覆盖**语义（设了就只认它）。
+  **中文字体为什么是 Noto**：等线（`Deng.ttf`）是 Windows 自带、不能随仓库分发；Noto Sans CJK 是 SIL OFL，可以。取的是 `NotoSansCJK-Regular.ttc`（19,484,784 B，10 个字面）的第 2 个面 = SC，全字面 16,437,340 B，再子集到 **GB2312 全部 6,763 字 ∪ 仓库里实际用到的 1,514 字 = 6,784 字**，加 `U+0020-007E,U+00A0-00FF,U+2000-206F,U+3000-303F,U+FF00-FFEF`，`--layout-features='*' --no-hinting`。**要重抽（改了文案、出现新字、渲成豆腐块时）**：
+  ```bash
+  pip install fonttools
+  curl -L -o NotoSansCJK-Regular.ttc https://github.com/notofonts/noto-cjk/raw/main/Sans/OTC/NotoSansCJK-Regular.ttc
+  python -m fontTools.ttLib.ttCollection  # 确认第 2 个面是 SC（0 JP / 1 KR / 2 SC / 3 TC / 4 HK / 5-9 Mono）
+  python - <<'PY'
+  import glob, io
+  from fontTools.ttLib import TTCollection
+  TTCollection('NotoSansCJK-Regular.ttc').fonts[2].save('NotoSansCJKsc-Regular.otf')
+  chars = set()
+  for pat in ('app/lib/**/*.dart', 'app/test/**/*.dart', 'app/tool/**/*.dart'):
+      for p in glob.glob(pat, recursive=True):
+          chars |= {c for c in io.open(p, encoding='utf-8', errors='ignore').read()
+                    if '\u3000' <= c <= '\u9fff' or '\uff00' <= c <= '\uffef'}
+  gb = set()
+  for hi in range(0xB0, 0xF8):
+      for lo in range(0xA1, 0xFF):
+          try: gb.add(bytes([hi, lo]).decode('gb2312'))
+          except Exception: pass
+  io.open('cover.txt', 'w', encoding='utf-8').write(''.join(sorted(gb | chars)))
+  PY
+  python -m fontTools.subset NotoSansCJKsc-Regular.otf --text-file=cover.txt \
+    --unicodes="U+0020-007E,U+00A0-00FF,U+2000-206F,U+3000-303F,U+FF00-FFEF" \
+    --layout-features='*' --no-hinting --output-file=app/test/fonts/NotoSansSC-Regular.otf
+  ```
+  体积对照（同一份源、同样参数）：全字面 16,437,340 / U+4E00-9FFF 9,224,420 / 仅 GB2312 2,857,128 / 仅仓库字符 620,372 / **采用 2,858,516**。
+  **换尺子的代价量过了**：Noto 的行盒比等线高约 1.16×，360×780 特大档的信息卡因此高 2dp、网格可用高度 316 → 314，而 `_weekdayH + 5 × _minCellH = 316` —— 正好多 2dp（探针实测 `maxScrollExtent == 2.0`）。修法不是放宽断言，是 `calendarCellHeight` 加一条 `_cellFitTolerance = 1.0`：**每行差额 ≤1dp 就让格子吃掉，差得更多仍守 `_minCellH` 并走外层滚动兜底**。换字体时用微软雅黑 / 黑体对照跑过（11 条全绿），只有 Noto 会触发 —— 说明这不是布局坏了，是字体的 ascent/descent 本来就不一样。

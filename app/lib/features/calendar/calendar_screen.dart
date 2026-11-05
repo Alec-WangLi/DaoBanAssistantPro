@@ -3093,6 +3093,17 @@ const double _chipMinContentW = 34;
 /// `FittedBox` 的事 —— 内容按需缩，不由这个下限兜。
 const double _minCellH = 58;
 
+/// 「差一点点就装得下」时，每行最多让出多少 dp。
+///
+/// 起因：2026-11-05 把视觉工装的字体钉成仓库内的 Noto Sans CJK 之后，360×780
+/// 特大档的信息卡比原来（等线）高 2dp，网格可用高度从 316 掉到 314，而
+/// `_weekdayH + 5 × _minCellH = 26 + 290 = 316` —— 正好多 2dp，网格于是多出一条
+/// 「滑一下才看到最后一行」的滚动条（探针实测 `maxScrollExtent == 2.0`）。
+///
+/// 2dp 的滚动条对用户没有意义，格子少 0.4dp 也看不出来；但差得多就必须照旧滚动
+/// （那是「真的装不下」，见下面 [_minCellH] 的理由）。所以只吃掉**每行 ≤1dp** 的差额。
+const double _cellFitTolerance = 1.0;
+
 /// 日历格子高度：**宽高共同决定**。
 ///
 /// 抽成顶层纯函数是为了能直接断言「横屏进入压缩分支」——
@@ -3123,7 +3134,14 @@ double calendarCellHeight({
   final shrunk = fillCellH >= naturalCellH
       ? math.min(fillCellH, cellW / aspectMin)
       : fillCellH;
-  return math.max(shrunk, _minCellH);
+  final fitted = math.max(shrunk, _minCellH);
+  // 差一点点就装得下时，让格子吃掉那点差额，而不是多出一条滚动条。
+  // 判据按「每行」算：差额摊到每一格不超过 [_cellFitTolerance] 才算「差一点点」。
+  final overflow = weekdayH + weekRows * fitted - availHeight;
+  if (overflow > 0 && overflow / weekRows <= _cellFitTolerance) {
+    return fitted - overflow / weekRows;
+  }
+  return fitted;
 }
 
 /// 换月动画里的一「页」（网格，或年月胶囊里那几个字），带着**它自己那个月**。

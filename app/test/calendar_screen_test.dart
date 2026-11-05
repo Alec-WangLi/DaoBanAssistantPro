@@ -311,6 +311,35 @@ void main() {
     expect(portrait, closeTo(cellW / 0.62, 0.01));
   });
 
+  test('差 2dp 就装得下时，格子吃掉差额而不是多出一条滚动条', () {
+    // 2026-11-05：视觉工装的字体钉成仓库内 Noto Sans CJK 之后，360×780 特大档的
+    // 信息卡比等线高 2dp，网格可用高度 316 → 314，而 26 + 5×58 = 316，
+    // 于是探针量到 `maxScrollExtent == 2.0`。2dp 的滚动条没有意义。
+    const cellW = 48.0; // (360 − 24) / 7
+    final fitted = calendarCellHeight(
+      cellW: cellW,
+      availHeight: 314,
+      weekRows: 5,
+      weekdayH: 26,
+    );
+    expect(fitted, lessThan(58),
+        reason: '让出 0.4dp，别顶在可读下限上制造 2dp 溢出');
+    expect(26 + 5 * fitted, lessThanOrEqualTo(314 + 0.001),
+        reason: '让完之后必须正好装进视口');
+  });
+
+  test('差得更多时仍守可读下限，交给外层滚动兜底', () {
+    // 同一个函数，差 20dp 就不该再让 —— 那是「真的装不下」，
+    // 硬让会把格子压到装不下三行字。
+    final fitted = calendarCellHeight(
+      cellW: 48.0,
+      availHeight: 296,
+      weekRows: 5,
+      weekdayH: 26,
+    );
+    expect(fitted, 58);
+  });
+
   test('小窗 200 宽：格子高度仍不低于可读下限', () {
     // 起因：小窗（小米小窗实测 200×400）cellW ≈ 25，naturalCellH ≈ 32，
     // 而「不许再瘦」的比例在窄屏放开到 0.46 → cellW / 0.46 ≈ 54。

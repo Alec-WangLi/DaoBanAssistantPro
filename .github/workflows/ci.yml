@@ -17,7 +17,13 @@ env:
   # 用例数基线（只增不减）。加/删用例时同步改这里 —— 它是「护栏会不会被悄悄拆掉」的唯一把手。
   # 口径 = `cd app && flutter test`（不带路径）实际跑过的条数，不含 `app/tool/visual/` 那 1284 条。
   # 哪天有人把视觉用例挪进 `app/test/`，这个数要跟着跳一次。
-  EXPECTED_TESTS: '1218'
+  EXPECTED_TESTS: '1220'
+  # 字体**不再靠环境变量把关**：三份字体已经进仓库（app/test/fonts/），
+  # `ensureVisualFonts()` 缺一个就无条件抛错 —— 比一个「本地不设就不生效」的开关更严。
+  # 2026-11-05 第一次 CI 红了 8 条，报错是 `Found 0 widgets with key
+  # [<'header-single-row'>]` 之类，与真因（runner 上没有英文字体、文字渲成方块）
+  # 毫无关系；那次就是因为 $FLUTTER_ROOT/bin/cache/artifacts/material_fonts 在
+  # flutter-action 还原缓存后是空目录。详见 app/tool/visual/visual_harness.dart 文件头。
   # runner 默认 UTC；本仓库当前无 TZ 敏感用例（已逐条核过），保留此行只为固定环境，
   # 撤掉不影响结果。
   TZ: Asia/Shanghai
@@ -92,29 +98,29 @@ jobs:
       - name: 系统依赖
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libsqlite3-dev \
-            fonts-noto-cjk fonts-droid-fallback
+          sudo apt-get install -y -qq libsqlite3-dev
 
       - name: flutter pub get
         working-directory: app
         run: flutter pub get
 
       # 四条「文字尺寸」类用例量的是**真实字形宽度**，靠
-      # app/tool/visual/visual_harness.dart 的 ensureVisualFonts() 现场装字体：
-      # Roboto / MaterialIcons 取自 $FLUTTER_ROOT/bin/cache/artifacts/material_fonts，
-      # 中文取自 _cjkCandidates 里第一个存在的文件。runner 上这两处都可能空着，
-      # 于是文字被渲成方块、量出来的宽度与 Windows 对不上 —— 2026-11-05 第一次跑
-      # CI 时 8 条用例就是这么红的。这一段只做体检，不判红。
-      - name: 字体体检
+      # app/tool/visual/visual_harness.dart 的 ensureVisualFonts() 现场装字体。
+      # 三份字体都在仓库里（app/test/fonts/），本地与 CI 读同一份字节 —— 量尺只有一把。
+      # 这一步只是提前把「文件没进仓库 / 被 LFS 吞了」这类事喊出来，快于跑完 40 秒才炸。
+      - name: 字体资产
         shell: bash
         run: |
-          echo "FLUTTER_ROOT=$FLUTTER_ROOT"
-          ls "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" 2>/dev/null \
-            | grep -E 'roboto-regular|materialicons-regular' || echo "缺 material_fonts"
-          ls -l /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc 2>/dev/null \
-            || echo "缺 NotoSansCJK-Regular.ttc"
-          ls -l /usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf 2>/dev/null \
-            || echo "缺 DroidSansFallbackFull.ttf"
+          for f in app/test/fonts/roboto-regular.ttf \
+                   app/test/fonts/materialicons-regular.otf \
+                   app/test/fonts/NotoSansSC-Regular.otf; do
+            if [ ! -s "$f" ]; then
+              echo "::error::缺字体资产 $f —— 视觉/量字宽用例会直接抛 StateError。"
+              exit 1
+            fi
+            ls -l "$f"
+          done
+          echo "字体齐了：三份都来自仓库"
 
       - name: flutter test
         working-directory: app
