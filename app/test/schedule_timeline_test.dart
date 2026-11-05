@@ -19,6 +19,7 @@ import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 /// 建两套方案（A 是「其余时间」）+ 渲染排班管理页。
@@ -78,6 +79,7 @@ Future<void> _pickDay(WidgetTester tester, int day) async {
 }
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -175,7 +177,7 @@ void main() {
     final db = await _pump(tester);
     final repo = AppRepository(db);
     final rows = await repo.listSchedules();
-    final now = DateTime.now();
+    final now = kAnchor;
     await repo.addSpan(rows[1].id,
         from: DateTime(now.year, now.month, 1),
         to: DateTime(now.year, now.month + 1, 0));
@@ -200,7 +202,7 @@ void main() {
     final db = await _pump(tester);
     final repo = AppRepository(db);
     final rows = await repo.listSchedules();
-    final now = DateTime.now();
+    final now = kAnchor;
     await repo.addSpan(rows[1].id,
         from: DateTime(now.year, now.month, 1),
         to: DateTime(now.year, now.month, 14));
@@ -225,7 +227,7 @@ void main() {
     final db = await _pump(tester);
     final repo = AppRepository(db);
     final rows = await repo.listSchedules();
-    final now = DateTime.now();
+    final now = kAnchor;
     await repo.addSpan(rows[1].id,
         from: DateTime(now.year, now.month, 1),
         to: DateTime(now.year, now.month, 14));

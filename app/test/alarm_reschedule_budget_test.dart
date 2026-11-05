@@ -20,12 +20,14 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 const MethodChannel _channel =
     MethodChannel('com.daoban.shiftassistantpro/settings');
 
 void main() {
+  useFixedNow();
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
@@ -44,7 +46,7 @@ void main() {
         shiftTemplates.firstWhere((x) => x.id == 'four_crew_three_shift');
     await repo.saveSchedule(
       name: template.subtitle,
-      anchorDate: dateOnly(DateTime.now()),
+      anchorDate: dateOnly(kAnchor),
       classes: template.classes,
       cycle: template.cycle,
       makeCurrent: true,

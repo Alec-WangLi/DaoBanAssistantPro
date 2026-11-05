@@ -63,7 +63,7 @@ Future<AppDatabase> _pumpAlarmScreen(
 
   await AppRepository(db).saveSchedule(
     name: '测试方案',
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(kAnchor),
     classes: [
       ShiftClass(
         name: name,
@@ -113,6 +113,7 @@ Finder _alarmBlock(DateTime date, int k) =>
     find.byKey(Key('alarm-block-${dayNumber(date)}-$k'));
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -138,7 +139,7 @@ void main() {
       ],
     );
 
-    final date = dateOnly(DateTime.now()).add(const Duration(days: 2));
+    final date = dateOnly(kAnchor).add(const Duration(days: 2));
     expect(_dayRow(date), findsOneWidget);
 
     // 两条各自成一行（时间 + 名字）
@@ -166,7 +167,7 @@ void main() {
       ],
     );
 
-    final date = dateOnly(DateTime.now()).add(const Duration(days: 2));
+    final date = dateOnly(kAnchor).add(const Duration(days: 2));
     expect(find.descendant(of: _alarmBlock(date, 0), matching: find.text(L10n.prevDay)),
         findsOneWidget, reason: '23:00 晚于 00:00 上班钟点、又在窗口外 → 前一天');
     expect(find.descendant(of: _alarmBlock(date, 1), matching: find.text(L10n.prevDay)),
@@ -236,7 +237,7 @@ void main() {
       alarms: const [ShiftAlarm(minute: 23 * 60)],
     );
 
-    final date = dateOnly(DateTime.now()).add(const Duration(days: 2));
+    final date = dateOnly(kAnchor).add(const Duration(days: 2));
     expect(find.descendant(of: _alarmBlock(date, 0), matching: find.text(L10n.prevDay)),
         findsOneWidget);
     expect(find.text('前一天'), findsNothing, reason: '英文界面不该出现中文标记');
@@ -298,7 +299,7 @@ void main() {
 
     final od = a.onceDate!;
     final fire = DateTime(od.year, od.month, od.day, a.hour, a.minute);
-    expect(fire.isAfter(DateTime.now()), isTrue,
+    expect(fire.isAfter(appNow()), isTrue,
         reason: '一次性的触发时刻落在过去 = 这一条排不出去、也不会响，'
             '下次进闹钟页还会被 deleteExpiredOnceAlarms 删掉 —— '
             '新建时的默认时间就是此刻，所以这一条必须靠日期顺延兜住');
