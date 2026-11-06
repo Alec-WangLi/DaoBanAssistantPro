@@ -8,7 +8,7 @@
 1. **读本文件**（一屏，≤35KB）。
 2. **一条命令拿现场**：`git log --oneline -8 && git tag | tail -5 && git status --short`，再读 `app/pubspec.yaml` 顶部的 `version:`（唯一版本号来源，与 `app/lib/core/app_info.dart` 同步）。
 3. **报技能**（§技能纪律），一句话说清这次用哪几个、为什么。
-4. **按任务挑一个 topic 文件**（下表），只读那一个；需要判重时才 `grep` 版本号进 `docs/changelog/`。
+4. **读规范层**：写任何代码读 `docs/standards/dev-standards.md`；动 UI / 视觉 / 玻璃 / 触觉再读 `docs/standards/design-principles.md`。**再按任务挑一个 topic 文件**（下表），只读那一个；需要判重时才 `grep` 版本号进 `docs/changelog/`。
 5. 之后再开始改代码。
 
 | 你要动的东西 | 读这一个 |
@@ -186,3 +186,4 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 ## 相关文档
 - `README.md`（对外介绍）、`BUILD.md`（构建指南）、`PRODUCT_SPEC.md`（产品规格）、`LICENSE`（MIT）。
 - `docs/changelog/`（版本流水，按大版本）、`docs/decisions/`（逐条决策与坑，按主题）、`docs/release/vX.Y.Z/`（每次发版的酷安稿与配图）。
+- `docs/standards/design-principles.md`（设计理念·规范层）、`docs/standards/dev-standards.md`（开发标准·规范层）。
