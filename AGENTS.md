@@ -96,7 +96,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 共享玻璃组件（core/widgets/）
 - `GlassSegment` 胶囊滑块 · `GlassSwitch` Q弹开关 · `GlassDialog` 通用弹窗 · `GlassButton` 主色玻璃实心按钮。
-  **这四个件里，`GlassSegment` 与 `GlassSwitch` 自 v0.10.9 起有液态档**（两条档位两棵树，关掉时与之前逐像素相同）；`GlassDialog` / `GlassButton` 与其余共享玻璃面**仍然只有标准档**。液态档的判据只许出现在 `core/glass/glass.dart`（定义处）与**四个调用点**（`features/home/`、`core/widgets/glass_segment.dart`、`core/widgets/glass_switch.dart`）—— 由 `test/liquid_scope_guard_test.dart` 扫源码守着（**名单里没有新抽出来的 `liquid_track.dart` / `liquid_lens_controller.dart`：它们不读档位**）。
+  **这四个件里，`GlassSegment` 与 `GlassSwitch` 自 v0.10.9 起有液态档**（两条档位两棵树，关掉时与之前逐像素相同）；`GlassDialog` / `GlassButton` 与其余共享玻璃面**仍然只有标准档**。液态档的判据只许出现在 `core/glass/glass.dart`（定义处）与**六个调用点**（`features/home/`、`core/widgets/glass_check.dart`、`core/widgets/glass_segment.dart`、`core/widgets/glass_switch.dart`、`features/alarm/alarm_ringing_screen.dart`、`features/calendar/calendar_screen.dart`）—— 由 `test/liquid_scope_guard_test.dart` 扫源码守着（**名单里没有新抽出来的 `liquid_track.dart` / `liquid_lens_controller.dart`：它们不读档位**）。
   **往别处搬之前先想清楚那一处的观感** —— v0.10.2 就是因为光加到了那些 `enableBlur:false` 的列表行上，用户在闹钟页与待办页各报了一次「边缘有点丑」。判据：那处得同时有 ① 胶囊形的容器 ② 会滑动/会被按住的指示块 ③ 四周有空隙让它凸出去；**静止的玻璃面不加**（静止时这套东西一个像素都不画，加了等于没加）。
 - `GlassPill`（**顶部栏那种紧凑玻璃胶囊**：年月、「今天」，以及各页标题行右侧的动作入口。`accent:true` = 实心主色渐变 + 白字，内容一律写 `Colors.white`；默认 40dp 高、圆角 `radiusL`。与 `GlassButton` 的分工是「栏内控件 vs 主操作」，别混用）
 - `GlassActionButton`（primary / secondary / danger 变体；`onPressed` 返回 `Future` 时本次动作跑完前不再响应点击）· `GlassPressable`（统一玻璃触摸反馈）· `GlassDeleteButton`（红色调圆形玻璃删除钮）+ `dangerButtonStyle`（危险红确认按钮）· `glass_dialog.dart` 的 `dialogCloser(context)`（弹窗动作在 `await` 之后关窗要用它，见「关键决策与坑」）

@@ -39,8 +39,8 @@
 - **谁守门**：`glass_tier_test`（两档逐像素一致）。
 - **反模式**：动 `glassTint`/`glassSurface` 的 alpha 去「救」饱和度（实测否掉：底近中性救不回来，还破坏省电档观感）。
 
-### 5. 液态档判据只许 4 处；静止玻璃面不加
-- **原则**：液态档的「开/关」判据只许出现在 `core/glass/glass.dart` 定义处 + 4 个调用点（`features/home/`、`glass_segment.dart`、`glass_switch.dart`）。往别处搬先想：那处得有①胶囊容器②会滑动/被按住的指示块③四周有空隙凸出去；**静止玻璃面不加**（静止时这套东西一个像素都不画）。
+### 5. 液态档判据只许 6 个调用点；静止玻璃面不加
+- **原则**：液态档的「开/关」判据只许出现在 `core/glass/glass.dart` 定义处 + 6 个调用点（`features/home/`、`glass_check.dart`、`glass_segment.dart`、`glass_switch.dart`、`alarm_ringing_screen.dart`、`calendar_screen.dart`）。往别处搬先想：那处得有①胶囊容器②会滑动/被按住的指示块③四周有空隙凸出去；**静止玻璃面不加**（静止时这套东西一个像素都不画）。
 - **落到哪**：见 `test/liquid_scope_guard_test.dart` 的名单。
 - **谁守门**：`liquid_scope_guard_test` 扫源码守名单；「观感合不合适」**自守**。
 - **反模式**：给 `enableBlur:false` 的列表行加液态光（v0.10.2 闹钟页/待办页各报一次「边缘有点丑」）。

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/clock.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/glass/liquid_lens.dart';
@@ -193,7 +194,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     final thumbH = layout.isShort ? _thumbHShort : _thumbH;
     final gapBelow = layout.isShort ? _gapBelowShort : _gapBelow;
 
-    final timeStr = ringClockText(TimeOfDay.now());
+    final timeStr = ringClockText(TimeOfDay.fromDateTime(appNow()));
 
     // 屏蔽系统返回手势：响铃界面是压在 App 主界面之上的一层路由，而这一层可能正
     // 盖在锁屏上（见 MainActivity 的 setShowWhenLocked）。一次返回就退回主界面 =
