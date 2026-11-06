@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/clock.dart';
 import '../../core/design_tokens.dart';
 import '../../core/frame_notifier.dart';
 import '../../core/haptics.dart';
@@ -434,7 +435,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   @override
   void initState() {
     super.initState();
-    final n = DateTime.now();
+    final n = appNow();
     _month = DateTime(n.year, n.month, 1);
     _selected = dateOnly(n);
     WidgetService.widgetLaunchRequested.addListener(_onWidgetLaunchRequested);
@@ -497,7 +498,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   void _prev() => _setMonth(DateTime(_month.year, _month.month - 1, 1));
   void _next() => _setMonth(DateTime(_month.year, _month.month + 1, 1));
   void _today() {
-    final n = DateTime.now();
+    final n = appNow();
     setState(() {
       // 今天跳回本月要不要滑、往哪边滑，同样按前后关系定。
       _monthRoll = DateTime(n.year, n.month, 1).isAfter(_month) ? 1 : -1;
@@ -1241,7 +1242,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     if (!mounted) return;
     final current = ref.read(activeScheduleProvider).valueOrNull;
     final remaining = current?.current;
-    final today = dayNumber(dateOnly(DateTime.now()));
+    final today = dayNumber(dateOnly(appNow()));
 
     // 今天落在哪一段上（段之间不重叠，所以至多一段）—— 给那一行打勾。
     int? todaySpanId;
@@ -1790,7 +1791,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 比「同一天」用 `isSameDay` 而不是 `==`：`dateOnly` 是 UTC 日期、这里的
     // `date` 是本地日期，`DateTime.==` 连 `isUtc` 一起比，`==` 恒为假
     // （「今天」的日期因此一直没加粗过）。
-    final today = DateTime.now();
+    final today = appNow();
     // 班次胶囊画成实心的那一格 = 滑块当前吸附到的格。拖动中跟 `_visual` 走而不是
     // 跟 `_selected`：`_selected` 要松手才更新，跟它的话，手指滑过的中间格会停在
     // 「淡染胶囊压在淡主色底上」的糊态；跟吸附格则滑块盖住的格子永远是实心的。
@@ -2406,7 +2407,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 「有没有班表在管」是**另一件事**，由 `chain.hasScheduleOn` 回答（只有
     // 「整月没有任何班表」时才写「这段时间没有排班」）。
     final shift = chain?.shiftOn(_selected);
-    final isToday = _selected == dateOnly(DateTime.now());
+    final isToday = _selected == dateOnly(appNow());
     final muted = AppTokens.inkMuted(context);
     final accent = shift != null
         ? Color(shift.color)
