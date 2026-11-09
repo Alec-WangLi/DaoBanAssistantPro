@@ -9,6 +9,7 @@ import 'glass_nav_bar.dart';
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
+import '../../core/migration_flags.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/update_checker.dart';
 import '../../data/app_repository.dart';
@@ -364,6 +365,13 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final repo = ref.read(appRepositoryProvider);
     // **先生成、再重排**：重复待办的提醒要按「今天该有的那一条」来排，顺序反了
     // 会拿上一轮的日期去算。
+    //
+    // 迁移必须排在生成器**之前**：旧行还挂在提醒落地日，生成器一跑就会按旧日期
+    // 去比「要不要往前顺延」。只跑一次（prefs 键），手工挪过的行不会被反复拽。
+    if (!await legacyRecurringRowDayMigrated()) {
+      await repo.migrateLegacyRecurringRowDays();
+      await markLegacyRecurringRowDayMigrated();
+    }
     await repo.advanceRecurringTodos(today: dateOnly(appNow()));
     // 归档（已完成的待办）裁到上限 —— **放在这里、不放在勾选那一刻**：用户完全
     // 可能勾一条去年完成过的待办，在那一刻裁会让它当场消失，连「先划掉再收走」

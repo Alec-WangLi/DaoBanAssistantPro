@@ -289,17 +289,19 @@ DateTime _fireAt(DateTime occ, int clock, int advance, {ShiftClass? shift}) {
       .add(Duration(minutes: clock - advance));
 }
 
-/// 按班次系列的那一行**挂在日历上的哪一天**。
+/// 旧版「行跟着提醒走」时的显示日 —— **只给一次性迁移与解绑用，新行不要用**。
 ///
-/// 与 [upcomingFireTimes] 用的是同一条落点判据（`alarmDayAnchor`），差在用途：
-/// 那边算「什么时候响」，这里算「列表里哪天出现」。两处必须同源 —— 否则夜班
-/// 20:30 那天摆一条 0 点的待办、却要到次日 0 点才响，用户点开只会觉得算错了
-/// （2026-11-05 用户反馈，Chief 定：行跟着提醒走）。
+/// 2026-11-09 用户拍板把行改回发生日（班次那天），这个函数不再参与生成器；
+/// 它现在还服务两件事：
+///   · 升级时把旧行从「提醒落地日」迁回发生日（`migrateLegacyRecurringRowDays`）；
+///   · 「以后不再重复」解绑时，把当前行改到提醒落地日，保住一次性的绝对时刻。
+/// 下一版可以删。
 ///
 /// 三道闸门与排定侧一致：按班次规则、用户设了钟点、那天有班次。任一条不成立就
 /// 退回发生日本身 —— 全天提醒的钟点是策略值（`allDayReminderHour`），拿它去套
 /// 值班窗口会改变一整类待办。
-DateTime todoDisplayDay(RecurringTodo s, DateTime occ, {ShiftClass? shift}) {
+DateTime legacyDisplayDayForMigration(RecurringTodo s, DateTime occ,
+    {ShiftClass? shift}) {
   if (s.repeat != RecurRepeat.shift || s.timeMinute == null || shift == null) {
     return dateOnly(occ);
   }

@@ -1124,11 +1124,11 @@ class AppRepository {
         // 直接拿 DateTime 比 int 是拿毫秒去比天数，恒不成立 —— 那正是「删了又回来」。
         if (s.skipThrough != null && dayNumber(occ) <= s.skipThrough!) continue;
 
-        // 行挂在**提醒落地的那一天**，不是发生日：夜班 20:30–次日 08:30 配 0 点的
-        // 待办，响在次日 0 点，那行就该在次日出现 —— 与 `planRecurringReminders`
-        // 同一条落点判据（`todoDisplayDay`）。`occ` 仍是「这一次属于哪个班次日」，
-        // 只有下面两处写库/顺延改用显示日；混用会让夜班那条每天多插一行。
-        final day = todoDisplayDay(s, occ, shift: shiftOn?.call(occ));
+        // 行挂在**发生日**（按班次 = 班次那天），不是提醒落地日。
+        // 2026-11-09 用户拍板改回这一口径：夜班 20:30–次日 08:30 配 02:00 的待办，
+        // 行属于「上夜班那天」，提醒在次日 02:00 —— 行副标题会写「上夜班 · 次日 02:00」。
+        // 旧版把行写在提醒落地日，导致跨午夜待办出现在第二天（可能是大休）的列表里。
+        // 旧数据的迁移见 `migrateLegacyRecurringRowDays`。
 
         final live = rows
             .where((r) => r.seriesId == s.id && !r.isCompleted)
@@ -1139,7 +1139,7 @@ class AppRepository {
           await db.into(db.scheduleEvents).insert(
                 ScheduleEventsCompanion.insert(
                   title: s.title,
-                  date: day,
+                  date: occ,
                   timeMinute: Value(s.timeMinute),
                   advanceRemindMinutes: Value(s.advanceRemindMinutes),
                   alarmEnabled: Value(s.alarmEnabled),
@@ -1161,10 +1161,55 @@ class AppRepository {
         // **只往前顺延**：用户手工把这一次改到别的日子（这周的会挪到周五）之后，
         // 生成器不许把它拽回来。这是有意的 —— 代价是「改周期」那条路径要自己把
         // 当前那条对齐（见 `_EventFields.commit`），别把哪一边当 bug 改。
-        if (daysBetween(keep.date, day) > 0) {
+        if (daysBetween(keep.date, occ) > 0) {
           await (db.update(db.scheduleEvents)
                 ..where((r) => r.id.equals(keep.id)))
-              .write(ScheduleEventsCompanion(date: Value(day)));
+              .write(ScheduleEventsCompanion(date: Value(occ)));
+        }
+      }
+    });
+  }
+
+  /// 旧数据一次性迁移：把「行挂在提醒落地日」的旧行改回发生日。
+  ///
+  /// v0.12.10 及以前，按班次系列的行写在提醒落地那天
+  /// （`legacyDisplayDayForMigration`）：夜班 20:30–次日 08:30 配 02:00 的待办，
+  /// 行在次日。v0.12.11 起行回到发生日。
+  ///
+  /// **覆盖所有行（主列表 + 归档）**：归档行如果留在旧口径，行上的「班次名 ·
+  /// 次日」会指到一个不是它发生日的班次。迁移只做一次（调用方用 prefs 键把关）。
+  ///
+  /// 判据：在 `row.date - 1 / row.date / row.date + 1` 里找**唯一**一个满足
+  /// 「那天是这条系列选中的班次，且旧显示日 == row.date」的候选。多个候选时不动 ——
+  /// 宁可留一条旧行，也不把用户手工挪过的行拽错。
+  Future<void> migrateLegacyRecurringRowDays() async {
+    final schedules = await getActiveSchedules();
+    final shiftOn = schedules?.chain.shiftOn;
+    await db.transaction(() async {
+      final series = await listRecurringTodos();
+      final rows = await listEvents();
+      for (final s in series) {
+        final sid = s.id;
+        if (sid == null || s.repeat != RecurRepeat.shift || s.timeMinute == null) {
+          continue;
+        }
+        for (final row in rows.where((r) => r.seriesId == sid)) {
+          final candidates = <DateTime>[];
+          for (var d = -1; d <= 1; d++) {
+            final occ = dateOnly(DateTime.utc(
+                row.date.year, row.date.month, row.date.day + d));
+            final shift = shiftOn?.call(occ);
+            if (shift == null || !s.shiftNames.contains(shift.name)) continue;
+            if (dayNumber(legacyDisplayDayForMigration(s, occ, shift: shift)) ==
+                dayNumber(row.date)) {
+              candidates.add(occ);
+            }
+          }
+          if (candidates.length != 1) continue;
+          final occ = candidates.single;
+          if (dayNumber(occ) == dayNumber(row.date)) continue;
+          await (db.update(db.scheduleEvents)..where((e) => e.id.equals(row.id)))
+              .write(ScheduleEventsCompanion(date: Value(occ)));
         }
       }
     });
