@@ -344,7 +344,9 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   static Future<void> _restoreCompleted(
       AppRepository repo, ScheduleEvent e) async {
     await repo.setEventCompleted(e, false);
-    await AlarmService.rescheduleEventReminders(await repo.listEvents());
+    // **重复待办的提醒也要重排**：排提醒现在读 `skipThrough`，只排一次性行
+    // 的话，撤销之后系列那一条不会回来（`rescheduleTodoReminders` 两段一起排）。
+    await AlarmService.rescheduleTodoReminders(repo);
   }
 
   Widget _eventTile(BuildContext context, WidgetRef ref, ScheduleEvent e,

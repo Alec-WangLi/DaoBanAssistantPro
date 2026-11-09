@@ -935,8 +935,22 @@ class AppRepository {
     await (db.update(db.scheduleEvents)..where((r) => r.id.equals(e.id)))
         .write(ScheduleEventsCompanion(isCompleted: Value(done)));
     final sid = e.seriesId;
-    if (done && sid != null) {
+    if (sid == null) return;
+    if (done) {
       await skipRecurringOccurrence(sid, e.date);
+      return;
+    }
+    // 取消勾选 / 撤销：把这一次的水位线撤掉。排提醒现在读 `skipThrough`，
+    // 不清的话「勾错了 → 撤销」会留下一个永远不响的提醒：行回来了，提醒没了。
+    //
+    // **只在「水位线正好等于这一次」时撤**：更高说明还有更晚的一次被跳过，
+    // 把水位线往回写会让已经删掉的那一次复活。
+    final row = await (db.select(db.recurringSeriesRows)
+          ..where((t) => t.id.equals(sid)))
+        .getSingleOrNull();
+    if (row != null && row.skipThrough == dayNumber(e.date)) {
+      await (db.update(db.recurringSeriesRows)..where((t) => t.id.equals(sid)))
+          .write(const RecurringSeriesRowsCompanion(skipThrough: Value(null)));
     }
   }
 

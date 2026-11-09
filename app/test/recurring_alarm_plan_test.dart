@@ -104,4 +104,12 @@ void main() {
       expect(all[i].isAfter(all[i - 1]), isTrue);
     }
   });
+
+  test('skipThrough 覆盖到的那一次不排', () {
+    final s = _s(repeat: RecurRepeat.daily, timeMinute: 9 * 60)
+        .copyWith(skipThrough: dayNumber(DateTime(2026, 9, 23)));
+    final plans = planRecurringReminders([s], from: DateTime(2026, 9, 23, 8));
+    expect(plans.single.fireAt, DateTime(2026, 9, 24, 9),
+        reason: '打勾 / 删掉的那一次不能还被排上');
+  });
 }

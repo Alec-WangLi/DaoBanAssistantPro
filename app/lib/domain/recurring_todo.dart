@@ -363,6 +363,12 @@ List<DateTime> upcomingFireTimes(
   var occ = occurrenceOnOrBefore(s, start, shiftOn: shiftOn) ??
       firstOccurrenceOnOrAfter(s, start, shiftOn: shiftOn);
   while (occ != null && daysBetween(dateOnly(occ), lastOcc) >= 0) {
+    // 「这一次已经了结」：打勾 / 删除都会把 skipThrough 写到发生日。
+    // 生成器读它，排提醒也必须读 —— 否则勾完还会响（2026-11-09 用户反馈）。
+    if (s.skipThrough != null && dayNumber(occ) <= s.skipThrough!) {
+      occ = nextOccurrenceAfter(s, occ, shiftOn: shiftOn);
+      continue;
+    }
     final shift = shiftRule ? shiftOn?.call(occ) : null;
     final fire = _fireAt(occ, clockMinute, advance, shift: shift);
     if (!fire.isBefore(from)) candidates.add(fire);
