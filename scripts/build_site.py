@@ -145,9 +145,13 @@ def main() -> int:
                 f"{apk.name} 有 {size / 1024 / 1024:.2f} MiB，超过 Cloudflare Pages "
                 "单文件 25 MiB 上限 —— 改放 Cloudflare R2（免费 10GB 存储 + 零出口费）"
             )
-        shutil.copy2(apk, OUT / "download" / apk.name)
-        copied.add(apk.name)
-        print(f"  带上 {channel} {version}：{apk.name}（{size / 1024 / 1024:.2f} MiB）")
+        # 落盘用**清单里的 asset 名**，不是 dist/ 里的文件名：release.ps1 在 dist/
+        # 存的是中文名「倒班助手Pro-vX.Y.Z.apk」，照搬会让下面「文件是否存在」
+        # 的判断对不上，那条 URL 就退回 GitHub 了 —— 正是要避免的事。
+        dest = node.get("asset") or f"DaoBanAssistantPro-v{version}.apk"
+        shutil.copy2(apk, OUT / "download" / dest)
+        copied.add(dest)
+        print(f"  带上 {channel} {version}：{dest}（{size / 1024 / 1024:.2f} MiB）")
 
     # 站点上真有的文件才改写地址，否则保留原样（GitHub）。
     for channel in ("stable", "prerelease"):
