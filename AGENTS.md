@@ -142,6 +142,8 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 | 「点那个系列就崩」 | `docs/decisions/todo.md`（`live.single` → `live.last`） |
 | 「拖完再点日期会抽一下」 | `docs/decisions/glass.md`（陈旧速度灌回） |
 | 「一装就报 Conflicting app signatures」 | 本文「构建 / 测试 / 发布」（签名校验） |
+| 「下载 APK 很慢 / github.com 打不开」 | 本文「官网与下载镜像」 |
+| 「检查更新转圈很久，最后说失败」 | 本文「检查更新」+「官网与下载镜像」（三条通道、两处域名要一致） |
 
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
@@ -153,7 +155,12 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 - **正式签名**：release 用独立 keystore `app/android/keystore/release.jks`，口令在 `app/android/key.properties`（storeFile/storePassword/keyAlias/keyPassword），二者均 gitignore 不入库、**务必本地备份**（丢了无法再发可覆盖升级的包）。`key.properties` 缺失时 `build.gradle.kts` 自动回退 debug 证书便于本机调试。
   ⚠️ **那条「自动回退」的代价是「静默」—— 2026-10-13 真踩过一次。** v0.11.16 的 APK 是在一个 **git worktree** 里构建的，而 worktree 是一次干净 checkout、**既没有 key.properties 也没有 release.jks**（两者都 gitignore），于是它被 **debug 证书**签了名。包照常发了出去，版本号 / 资产 / `latest.json` / 清单**全对**，用户一装就报 `Couldn't install (-7)` — **Conflicting app signatures**，只能卸载重装。**一句话：要发的 APK 只能在主 checkout 里构建**（`dist/`、`tools/`、`toolchain/` 也都只在那儿）。
   现在 `release.ps1` 的一致性校验里多一条**签名校验**：① `app/android/key.properties` 必须存在；② 用 `apksigner verify --print-certs` 取 APK 的证书 SHA-256，与 `keytool -list -v -keystore release.jks` 那一枚**逐位比**（不拿 DN 比 —— DN 是人填的、可以重名；实测 release 那枚是 `265d09b2…ce893`）。⚠️ **2026-11-05 起默认硬拦（v0.12.10）**：工具不全 / 吐不出摘要 → 默认 `throw`，要跳过必须显式 `-SkipSignCheck`；摘要对不上**任何情况都不放行**（无口子）。这一节还搬出了 `if (-not $SkipVerify)` —— 以前加 `-SkipVerify` 会把签名校验整段静默关掉。**别再把这条当「保险」**：v0.12.9 那次 418B 占位稿就是被「只是保险、不必需」的旧说法放过去的。**两条路径都验过**：拿 worktree 里那份 debug 签名的 APK 当反例，脚本退出码 1 并把两枚摘要一起打出来。
-- **检查更新（公开仓库）**：`UpdateChecker` 无鉴权，**先读仓库根目录 `latest.json`**（`raw.githubusercontent.com` 静态文件，不限次数，由 `release.ps1` 每次发版自动同步到 main），失败才回退 GitHub API `/releases`。**API 不当主通道**：未认证限 60 次/小时/IP，共享出口很容易耗尽（实测常年 403），拿它优先等于大部分时间都在走回退。两条**在不同域名**上，只被墙了一个的网络也兜得住。按语义版本自行计算「最新正式版 + 最新测试版」双通道展示；`downloadApk` 直接经 `browser_download_url` 下载安装。连不上时的提示直说「国内需要开代理或加速器」（`showUpdateFailedDialog`，走弹窗不走 2 秒的 snack）。
+- **检查更新（公开仓库）**：`UpdateChecker` 无鉴权，三条通道依次回退：**官网清单**（`siteBase/latest.json`）→ 仓库根目录 `latest.json` → GitHub API `/releases`。官网排第一是因为它才是国内用户的快通道，以前 GitHub 那条先试，国内往往要等满 8 秒超时才回退。**API 不当主通道**：未认证限 60 次/小时/IP，共享出口很容易耗尽（实测常年 403），拿它优先等于大部分时间都在走回退。两条**在不同域名**上，只被墙了一个的网络也兜得住。按语义版本自行计算「最新正式版 + 最新测试版」双通道展示；`downloadApk` 直接经 `browser_download_url` 下载安装。连不上时的提示直说「国内需要开代理或加速器」（`showUpdateFailedDialog`，走弹窗不走 2 秒的 snack）。
+- **官网与下载镜像（2026-11-10 用户选 A 档）**：`site/` 是一页静态官网；`.github/workflows/site.yml` 在每次 Release published 时把 `site/` + 截图 + **本次的 APK** 组装成 `_site/` 推到 Cloudflare Pages（项目名 `daoban-shift` → `https://daoban-shift.pages.dev`），并生成一份指向本站 APK 的 `latest.json`。**APK 不进仓库**（`dist/` 本来就 gitignore），只在部署时从 Release 拉一次。
+  - 站点的 `SITE_BASE` 与 `UpdateChecker.siteBase` **必须一致**，由 `update_checker_test.dart` 的「官网地址一致性」用例扫 workflow 守着（改域名只改一处会静默回退，不报错）。
+  - 部署要 repo secrets **`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`**；没配时 workflow 不报红，只上传 `site-standalone` 产物并打 warning。
+  - ⚠️ **Pages 单文件上限 25 MiB，当前 APK 22.05 MiB** —— 再涨约 3 MiB 就超，届时改放 Cloudflare R2（免费 10GB 存储 + 零出口费）。workflow 里已有 `26214400` 字节的硬闸，会直接红，别等它某天悄悄失败。
+  - 免备案的代价是走国际线路：比 GitHub 快得多，但不是国内 CDN 那种秒开。要秒开只能备案 + 国内 CDN（B 档，约 ¥200/年，审批 2~3 周）。
 - `dist/`、`*.apk`、`*.aab` 均 gitignore，不进仓库。
 
 ## 工作流

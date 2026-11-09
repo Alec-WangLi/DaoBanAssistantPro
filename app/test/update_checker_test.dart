@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/update_checker.dart';
 
@@ -61,19 +63,30 @@ void main() {
 
   /// 装一个假的取数接缝。传 null 表示该通道不通（网络异常）。
   void serve({
+    String? site,
     String? manifest,
     String? releases,
+    int siteStatus = 200,
     int manifestStatus = 200,
   }) {
     UpdateChecker.fetch = (uri, timeout) async {
-      final isManifest = uri.host == 'raw.githubusercontent.com';
-      hits.add(isManifest ? 'manifest' : 'api');
-      if (isManifest) {
-        if (manifest == null) return null;
-        return (status: manifestStatus, body: manifest);
+      final tag = switch (uri.host) {
+        'daoban-shift.pages.dev' => 'site',
+        'raw.githubusercontent.com' => 'manifest',
+        _ => 'api',
+      };
+      hits.add(tag);
+      switch (tag) {
+        case 'site':
+          if (site == null) return null;
+          return (status: siteStatus, body: site);
+        case 'manifest':
+          if (manifest == null) return null;
+          return (status: manifestStatus, body: manifest);
+        default:
+          if (releases == null) return null;
+          return (status: 200, body: releases);
       }
-      if (releases == null) return null;
-      return (status: 200, body: releases);
     };
   }
 
@@ -153,50 +166,88 @@ void main() {
   });
 
   group('checkUpdates 通道顺序', () {
-    test('清单通就用清单，不再打 API', () async {
+    test('官网清单通就用它，不再打 GitHub', () async {
+      serve(site: _manifestJson, manifest: _manifestJson, releases: _releasesJson);
+      final r = await UpdateChecker.checkUpdates();
+      expect(r.error, isFalse);
+      expect(r.latestStable?.version, '0.9.0');
+      expect(hits, ['site']);
+    });
+
+    test('官网不通回退到仓库清单', () async {
       serve(manifest: _manifestJson, releases: _releasesJson);
       final r = await UpdateChecker.checkUpdates();
       expect(r.error, isFalse);
       expect(r.latestStable?.version, '0.9.0');
-      expect(hits, ['manifest']);
+      expect(hits, ['site', 'manifest']);
     });
 
-    test('清单不通才回退到 API', () async {
+    test('官网返回非 200 也算不通', () async {
+      serve(
+        site: _manifestJson,
+        manifest: _manifestJson,
+        siteStatus: 404,
+      );
+      await UpdateChecker.checkUpdates();
+      expect(hits, ['site', 'manifest']);
+    });
+
+    test('官网清单内容坏掉也回退', () async {
+      serve(site: '<html>', manifest: _manifestJson);
+      final r = await UpdateChecker.checkUpdates();
+      expect(r.error, isFalse);
+      expect(hits, ['site', 'manifest']);
+    });
+
+    test('仓库清单不通才回退到 API', () async {
       serve(manifest: null, releases: _releasesJson);
       final r = await UpdateChecker.checkUpdates();
       expect(r.error, isFalse);
       expect(r.latestStable?.version, '0.9.0');
-      expect(hits, ['manifest', 'api']);
+      expect(hits, ['site', 'manifest', 'api']);
     });
 
-    test('清单返回非 200 也算不通', () async {
+    test('仓库清单返回非 200 也算不通', () async {
       serve(
         manifest: _manifestJson,
         releases: _releasesJson,
         manifestStatus: 403,
       );
       await UpdateChecker.checkUpdates();
-      expect(hits, ['manifest', 'api']);
+      expect(hits, ['site', 'manifest', 'api']);
     });
 
-    test('清单内容坏掉也回退到 API', () async {
+    test('仓库清单内容坏掉也回退到 API', () async {
       serve(manifest: '<html>', releases: _releasesJson);
       final r = await UpdateChecker.checkUpdates();
       expect(r.error, isFalse);
-      expect(hits, ['manifest', 'api']);
+      expect(hits, ['site', 'manifest', 'api']);
     });
 
-    test('两条都不通就是错误', () async {
+    test('三条都不通就是错误', () async {
       serve(manifest: null, releases: null);
       final r = await UpdateChecker.checkUpdates();
       expect(r.error, isTrue);
-      expect(hits, ['manifest', 'api']);
+      expect(hits, ['site', 'manifest', 'api']);
     });
 
     test('取数抛异常也走回退，不把异常漏出去', () async {
       UpdateChecker.fetch = (uri, timeout) async => throw Exception('boom');
       final r = await UpdateChecker.checkUpdates();
       expect(r.error, isTrue);
+    });
+  });
+
+  group('官网地址一致性', () {
+    // 站点地址写死在两处：Dart 常量与部署 workflow。改了这头忘了那头，
+    // App 会安安静静地去查一个不存在的域名 —— 不报错，只是永远回退。
+    test('UpdateChecker.siteBase 与 site.yml 的 SITE_BASE 相同', () {
+      final workflow = File('../.github/workflows/site.yml');
+      if (!workflow.existsSync()) return; // 脱离仓库运行时不判
+      final m = RegExp(r'^\s*SITE_BASE:\s*(\S+)', multiLine: true)
+          .firstMatch(workflow.readAsStringSync());
+      expect(m, isNotNull, reason: 'site.yml 里找不到 SITE_BASE');
+      expect(m!.group(1), UpdateChecker.siteBase);
     });
   });
 }

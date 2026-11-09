@@ -7,6 +7,8 @@
 /dist/
 /tools/
 /work/
+# 官网本地组装产物（scripts/build_site.py 生成，CI 里由 site.yml 现场拼）
+/_site/
 
 # ---- 二进制产物：APK / AAB 走 GitHub Releases，不进 git 历史 ----
 *.apk

@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.1\n'
+    '· 官网与国内下载镜像上线：APK 现在有一份放在国内能访问的站点上，不必再走 github.com 慢慢等\n'
+    '· 「检查更新」改成先读官网的发布清单，读不到才回退到 GitHub —— 国内网络下不再先卡满 8 秒超时\n'
+    '· 更新日志、截图与下载入口都在官网上，国内打开更快\n'
+    '\n'
 'v0.13.0\n'
     '· 重复待办这一轮整体收口：可以按班次重复（上夜班 / 下夜班那天自动出现）、每月多选几天、随时改规则；提醒按当天值班时间落在前一天 / 当天 / 次日；行回到它属于的班次那天，副标题写「上夜班 · 次日 00:00」；勾掉或删掉之后那一次不再响，勾错了点「撤销」提醒会回来；冷启动也会把提醒重新排上\n'
     '· 桌面小组件：三张固定尺寸的卡（本周条 / 今日卡 / 整月），现在会跟着系统的深浅色自动切换；同步失败会自己重试，字号不跟系统字号走\n'
@@ -99,16 +104,14 @@ const String _changelogZh =
     '· 班组设置的「周期起始日」与「从第 N 段入场」改成箭头；「每月第 N 天起」与「我这组从这个周期开始」也改箭头，铅笔从此只表示「进入编辑」\n'
     '· 修：窄屏下「周期起始日」那一行加箭头后会横向溢出；现在标签与日期会一起按宽缩小\n'
     '\n'
-'v0.12.3\n'
-    '· 重复待办新增「按班次」：从排班表的班次里多选（比如上夜班、下夜班），到这些班次那天自动出现。它按班次名字匹配，换排班表后只要新表里有同名班次就继续生效；名字对不上时「重复待办」面板会明确写出来\n'
-    '· 「每月」现在能多选几天：比如每月 1 号、15 号各签一次记录；小月没有的日期落在当月最后一天，同一天只出现一次\n'
-    '· 新建待办选「每周」时，七个星期格子排成一行等宽，不再挤成两行\n'
-    '· 「重复待办」面板行尾的小铅笔去掉了 —— 整行点进去本来就是编辑\n'
-    '· 修：在待办页新建的重复待办现在会立刻排上提醒，不用等下次打开 App\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.1\n'
+    '· A download mirror is live: the APK is also served from a site that is reachable from mainland China, so installing no longer means waiting on github.com\n'
+    '· Check for updates now reads the mirror manifest first and only falls back to GitHub when that fails, so it no longer burns the full 8-second timeout on a slow network\n'
+    '· The changelog, screenshots and download link all live on the site too\n'
+    '\n'
 'v0.13.0\n'
     '· Recurring todos are rounded out: repeat by shift (night / late), pick several days of the month, edit the rule any time; reminders land on the previous / same / next day per the shift window; the row sits on its shift day with a subtitle like "Night - next day 00:00"; checking or deleting an occurrence stops its reminder, Undo brings it back, and a cold start re-schedules them\n'
     '· Home-screen widgets: three fixed-size cards (week strip / today / month) now follow the system light and dark theme; a failed sync retries on its own; the font size does not follow the system setting\n'
@@ -166,13 +169,6 @@ const String _changelogEn =
     '· The calendar info card and the small-window card both gained the arrow; the time in the small-window card now shrinks to fit instead of being cut off with an ellipsis\n'
     '· Crew cycle start and segment start now use arrows; so do "from day N of each month" and "my crew starts this cycle on", leaving the pencil to mean "opens an editor" only\n'
     '· Fix: on narrow screens the crew cycle-start row overflowed once it had an arrow; the label and date now shrink together\n'
-    '\n'
-'v0.12.3\n'
-    '· Repeating todos gain a "By shift" rule: pick shifts from your schedule (night, late and so on) and the todo shows up on those days. Matching is by shift name, so switching schedules keeps it working as long as the new one has the same name; when it does not, the Repeating panel says so\n'
-    '· Monthly repeats can now pick several days at once, for example the 1st and the 15th; in shorter months those days fall on the last day, and never twice in one day\n'
-    '· The weekday row in "Weekly" now fits seven equal cells on one line instead of wrapping to two\n'
-    '· Removed the small pencil at the end of each Repeating panel row — tapping the row was already the edit button\n'
-    '· Fix: a repeating todo created on the todo page now gets its reminder scheduled immediately instead of waiting for the next app launch\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
