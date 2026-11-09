@@ -235,11 +235,12 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('排班管理方案行：有打开箭头', (tester) async {
+  testWidgets('排班管理方案行：不再有打开箭头', (tester) async {
     await _pump(tester, const ScheduleManagementScreen(),
         seed: (db) => seedIfEmpty(db));
 
-    expect(find.byKey(const Key('scheme-open-hint')), findsOneWidget);
+    expect(find.byKey(const Key('scheme-open-hint')), findsNothing,
+        reason: '用户 2026-11-09 明确去掉这一列的箭头');
 
     await _dispose(tester);
   });

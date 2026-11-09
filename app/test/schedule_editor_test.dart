@@ -1840,11 +1840,11 @@ void main() {
         reason: '副标题要在标题下面，不能替掉标题');
   });
 
-  testWidgets('展开班组后：四行班组起始日都有箭头', (tester) async {
+  testWidgets('展开班组后：四行班组起始日不再有箭头', (tester) async {
     await _pumpEditor(tester, _domain(), crewExpanded: true);
     for (var i = 0; i < 4; i++) {
-      expect(find.byKey(Key('crew-start-chevron-$i')), findsOneWidget,
-          reason: '第 $i 个班组的起始日没有箭头');
+      expect(find.byKey(Key('crew-start-chevron-$i')), findsNothing,
+          reason: '用户 2026-11-09 明确去掉排班表里的箭头');
     }
   });
 
@@ -1862,15 +1862,12 @@ void main() {
         reason: '这一行是整行可点的入口，矮了就成了「又长又矮、点不着」');
   });
 
-  testWidgets('班组卡：周期起始日的箭头贴住内容右缘', (tester) async {
+  testWidgets('班组卡：周期起始日不再有箭头', (tester) async {
     await _pumpEditor(tester, _domain(), crewExpanded: true);
 
-    final row = tester.getRect(find.byKey(const Key('crew-start-row-0')));
-    final chevron =
-        tester.getRect(find.byKey(const Key('crew-start-chevron-0')));
-    // 行内左右各 2dp 内边距（gapHair），箭头右缘与行右缘只该差这一点。
-    expect(row.right - chevron.right, lessThanOrEqualTo(3.0),
-        reason: '标签吃满剩余宽度，会把「日期 + 箭头」留在半路（v0.12.5 GlassValueRow 的同一个坑）');
+    expect(find.byKey(const Key('crew-start-row-0')), findsOneWidget);
+    expect(find.byKey(const Key('crew-start-chevron-0')), findsNothing,
+        reason: '整行仍可点，但用户明确不要箭头');
   });
 
   testWidgets('班组卡：宽画布下「我的班」仍贴右缘', (tester) async {
@@ -1894,7 +1891,7 @@ void main() {
     expect(repo.saved?.teamNames.first, '甲班');
   });
 
-  testWidgets('按月模式：段起始与每月第 N 天起都是箭头，不是铅笔', (tester) async {
+  testWidgets('按月模式：段起始与每月第 N 天起不再有箭头', (tester) async {
     await _pumpEditor(
       tester,
       _domain(
@@ -1907,17 +1904,17 @@ void main() {
       crewExpanded: true,
     );
 
-    expect(find.byKey(const Key('crew-segment-chevron-0')), findsOneWidget);
-    expect(find.byKey(const Key('monthly-day-chevron-1')), findsOneWidget);
+    expect(find.byKey(const Key('crew-segment-chevron-0')), findsNothing);
+    expect(find.byKey(const Key('monthly-day-chevron-1')), findsNothing);
     expect(find.byKey(const Key('monthly-day-chevron-0')), findsNothing,
-        reason: '第一段恒从 1 号起，不能改，就不该给箭头');
+        reason: '用户 2026-11-09 明确去掉排班表里的箭头');
   });
 
-  testWidgets('「我这组从这个周期开始」用箭头，不再用铅笔', (tester) async {
+  testWidgets('「我这组从这个周期开始」不再有箭头', (tester) async {
     await _pumpEditor(tester, _domain());
-    expect(find.byKey(const Key('my-cycle-start-chevron')), findsOneWidget);
+    expect(find.byKey(const Key('my-cycle-start-chevron')), findsNothing);
     expect(find.byIcon(Icons.edit_outlined), findsNothing,
-        reason: '铅笔从此只表示「进入编辑表单」，这一行打开的是日期选择器');
+        reason: '铅笔仍然只表示「进入编辑表单」');
   });
 
   testWidgets('320×640：班组卡展开后不溢出', (tester) async {

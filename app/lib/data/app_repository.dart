@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/monthly_pattern.dart';
@@ -13,6 +14,7 @@ import 'app_database.dart';
 import 'seed.dart';
 import 'todo_archive.dart';
 import '../core/clock.dart';
+import '../core/migration_flags.dart';
 
 export 'app_database.dart';
 
@@ -1092,6 +1094,11 @@ class AppRepository {
   /// 与 [deleteRecurringTodo] 的差别正是这一条：用户说的是「别再自动出现了」，
   /// 不是「把我这条待办删了」。已完成的那些历史也解绑成普通待办留着 —— 它们本来
   /// 就是做过的事，列表里一直看得见，用户想清自己删。
+  ///
+  /// **前提**：当前那一行还在发生日上。若用户手工把它挪到别的日子，
+  /// `shiftOn(live.date)` 可能为空或换成另一个班次，这里不会改日期 —— 一次性
+  /// 提醒就落在用户挪到的那天（保留用户的移动），而不是系列原本的落点。
+  /// 想改这个取舍，先想清楚「用户手工挪过」要不要被覆盖。
   Future<void> unlinkRecurringSeries(int id) async {
     final seriesRow = await (db.select(db.recurringSeriesRows)
           ..where((t) => t.id.equals(id)))
@@ -1221,6 +1228,8 @@ class AppRepository {
   /// 「那天是这条系列选中的班次，且旧显示日 == row.date」的候选。多个候选时不动 ——
   /// 宁可留一条旧行，也不把用户手工挪过的行拽错。
   Future<void> migrateLegacyRecurringRowDays() async {
+    // 一次性保护放在**方法里**，不只放在调用点：以后谁再调它都不会二次搬日期。
+    if (await legacyRecurringRowDayMigrated()) return;
     final schedules = await getActiveSchedules();
     final shiftOn = schedules?.chain.shiftOn;
     await db.transaction(() async {
@@ -1243,14 +1252,44 @@ class AppRepository {
               candidates.add(occ);
             }
           }
-          if (candidates.length != 1) continue;
+          if (candidates.length != 1) {
+            debugPrint('migrateLegacyRecurringRowDays: 系列 $sid 的行 '
+                '${row.id}（${row.date}）候选不唯一（${candidates.length}），跳过');
+            continue;
+          }
           final occ = candidates.single;
           if (dayNumber(occ) == dayNumber(row.date)) continue;
           await (db.update(db.scheduleEvents)..where((e) => e.id.equals(row.id)))
               .write(ScheduleEventsCompanion(date: Value(occ)));
         }
+
+        // 旧水位线也是「显示日」口径：还原到发生日，否则跨午夜系列会在升级后
+        // 把**下一次**也跳过（2026-11-09 真机：给夜班系列加下夜班，当天的行
+        // 被旧水位线吃掉）。候选不唯一时不动 —— 宁可留旧值，不误跳。
+        final watermark = s.skipThrough;
+        if (watermark == null) continue;
+        final wmDate = DateTime.utc(1970, 1, 1).add(Duration(days: watermark));
+        final wmCandidates = <DateTime>[];
+        for (var d = -1; d <= 1; d++) {
+          final occ = dateOnly(DateTime.utc(
+              wmDate.year, wmDate.month, wmDate.day + d));
+          final shift = shiftOn?.call(occ);
+          if (shift == null || !s.shiftNames.contains(shift.name)) continue;
+          if (dayNumber(legacyDisplayDayForMigration(s, occ, shift: shift)) ==
+              watermark) {
+            wmCandidates.add(occ);
+          }
+        }
+        if (wmCandidates.length != 1) continue;
+        final occ = wmCandidates.single;
+        if (dayNumber(occ) == watermark) continue;
+        await (db.update(db.recurringSeriesRows)
+              ..where((t) => t.id.equals(sid)))
+            .write(RecurringSeriesRowsCompanion(
+                skipThrough: Value(dayNumber(occ))));
       }
     });
+    await markLegacyRecurringRowDayMigrated();
   }
 
   /// 立即读取全部日程（重排提醒用，避免读 Riverpod 流拿到旧值）。

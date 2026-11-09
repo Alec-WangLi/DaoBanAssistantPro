@@ -104,16 +104,17 @@ class MainActivity : FlutterActivity() {
     private var pendingRingtoneResult: MethodChannel.Result? = null
 
     /**
-     * 诊断（2026-11-09）：App 活着时收系统深浅色切换。
-     * 与 manifest 那条对照，判断「运行时接收器」这条路通不通（manifest 那条在
-     * Android 8+ 的隐式广播限制下大概率收不到）。
+     * App 活着时收系统深浅色切换。
+     *
+     * 这是 API < 31（没有 `setColorInt`）与「宿主不重新应用 RemoteViews」时的兜底；
+     * manifest 那条在 Android 8+ 的隐式广播限制下收不到，已删。
      */
-    private var themeProbeReceiver: BroadcastReceiver? = null
+    private var themeReceiver: BroadcastReceiver? = null
 
-    private fun registerThemeProbe() {
+    private fun registerThemeReceiver() {
         val r = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                AlarmLog.info(context, "MainActivity: 运行时收到 ${intent.action}（诊断）")
+                AlarmLog.info(context, "MainActivity: 运行时收到 ${intent.action}")
                 ShiftWidgets.refreshAll(context)
             }
         }
@@ -124,7 +125,7 @@ class MainActivity : FlutterActivity() {
                 IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED),
                 ContextCompat.RECEIVER_NOT_EXPORTED,
             )
-            themeProbeReceiver = r
+            themeReceiver = r
         } catch (e: Exception) {
             AlarmLog.error(this, "MainActivity: 主题探针注册失败: ${e.message}")
         }
@@ -134,12 +135,12 @@ class MainActivity : FlutterActivity() {
         // 响铃自停靠这个引用回来撤锁屏标志：Activity 没了就把它清掉，别让它挂着一个
         // 已经销毁的 Activity（那会把整个 Activity 泄漏到进程结束）。
         instance = null
-        themeProbeReceiver?.let { r ->
+        themeReceiver?.let { r ->
             try {
                 unregisterReceiver(r)
             } catch (_: Exception) {
             }
-            themeProbeReceiver = null
+            themeReceiver = null
         }
         super.onDestroy()
     }
@@ -151,7 +152,7 @@ class MainActivity : FlutterActivity() {
         instance = this
         handleAlarmIntent(intent)
         handleWidgetIntent(intent)
-        registerThemeProbe()
+        registerThemeReceiver()
         // 捕获原生未处理异常（含闹钟 receiver 触发时的崩溃），写入日志文件
         val default = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->

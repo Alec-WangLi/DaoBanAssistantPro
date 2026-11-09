@@ -63,4 +63,57 @@ void main() {
     expect(AlarmService.eventReminderTime(row), DateTime(2026, 9, 24, 2, 0),
         reason: '解绑不能把提醒挪 24 小时');
   });
+
+  test('行被手工挪到休息日：解绑保留用户挪到的那天', () async {
+    final sid = await repo.addRecurringTodo(
+      title: '写台账',
+      repeat: RecurRepeat.shift,
+      startDate: DateTime(2026, 9, 23),
+      shiftNames: const ['夜班'],
+      timeMinute: 2 * 60,
+      advanceRemindMinutes: 0,
+    );
+    await repo.advanceRecurringTodos(today: DateTime(2026, 9, 23));
+    final live = (await repo.listEvents()).single;
+    // 用户手工把这一次挪到 9/22（休息日）。
+    await repo.setEventDate(live.id, DateTime.utc(2026, 9, 22));
+
+    await repo.unlinkRecurringSeries(sid);
+
+    final row = (await repo.listEvents()).single;
+    expect(dayNumber(row.date), dayNumber(DateTime(2026, 9, 22)),
+        reason: '手工挪过的行不该被拽回系列落点');
+    expect(AlarmService.eventReminderTime(row), DateTime(2026, 9, 22, 2, 0),
+        reason: '一次性提醒跟着用户挪到的日子走');
+  });
+
+  test('零点班 23:00（前一天落点）：解绑后仍在 9/22 23:00', () async {
+    await repo.saveSchedule(
+      name: '零点班',
+      anchorDate: DateTime(2026, 9, 23),
+      classes: const [
+        ShiftClass(name: '零点班', abbr: '零', startMinute: 0, endMinute: 480),
+      ],
+      cycle: const [0],
+      makeCurrent: true,
+      teamCount: 1,
+      teamNames: const ['我'],
+      ourTeamIndex: 0,
+      teamOffsets: const [0],
+    );
+    final sid = await repo.addRecurringTodo(
+      title: '零点班台账',
+      repeat: RecurRepeat.shift,
+      startDate: DateTime(2026, 9, 23),
+      shiftNames: const ['零点班'],
+      timeMinute: 23 * 60,
+      advanceRemindMinutes: 0,
+    );
+    await repo.advanceRecurringTodos(today: DateTime(2026, 9, 23));
+    await repo.unlinkRecurringSeries(sid);
+
+    final row = (await repo.listEvents()).single;
+    expect(AlarmService.eventReminderTime(row), DateTime(2026, 9, 22, 23, 0),
+        reason: '前一天落点的一次性提醒不能被挪到 9/23 23:00（晚 24 小时）');
+  });
 }

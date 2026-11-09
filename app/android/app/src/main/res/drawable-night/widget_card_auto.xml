@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 诊断（2026-11-09）：卡片底的深色档，与 `drawable/widget_card_auto.xml` 同名。 -->
+<!-- 跟随系统（2026-11-09）：卡片底的深色档，与 `drawable/widget_card_auto.xml` 同名。 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <corners android:radius="22dp" />

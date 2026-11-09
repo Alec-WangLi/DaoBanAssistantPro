@@ -91,4 +91,54 @@ void main() {
     await markLegacyRecurringRowDayMigrated();
     expect(await legacyRecurringRowDayMigrated(), true);
   });
+
+  test('旧水位线也迁回发生日', () async {
+    final sid = await repo.addRecurringTodo(
+      title: '交班记录',
+      repeat: RecurRepeat.shift,
+      startDate: DateTime(2026, 9, 23),
+      shiftNames: const ['夜班'],
+      timeMinute: 0,
+      advanceRemindMinutes: 0,
+    );
+    // 旧版：9/23 夜班的提醒落在 9/24，勾掉后水位线写在 9/24。
+    await repo.skipRecurringOccurrence(sid, DateTime.utc(2026, 9, 24));
+    expect((await repo.listRecurringTodos()).single.skipThrough,
+        dayNumber(DateTime(2026, 9, 24)));
+
+    await repo.migrateLegacyRecurringRowDays();
+
+    expect((await repo.listRecurringTodos()).single.skipThrough,
+        dayNumber(DateTime(2026, 9, 23)),
+        reason: '旧显示日要还原到发生日，否则下一次会被多跳一天');
+    expect(await legacyRecurringRowDayMigrated(), true,
+        reason: '迁移结束要自己置位，不能只靠调用点');
+  });
+
+  test('第二次调用不再搬日期（仓库内一次性保护）', () async {
+    final sid = await repo.addRecurringTodo(
+      title: '交班记录',
+      repeat: RecurRepeat.shift,
+      startDate: DateTime(2026, 9, 23),
+      shiftNames: const ['夜班'],
+      timeMinute: 0,
+      advanceRemindMinutes: 0,
+    );
+    await repo.advanceRecurringTodos(today: DateTime(2026, 9, 23));
+    final row = (await repo.listEvents()).single;
+
+    // 第一次：把旧显示日的行搬回发生日。
+    await repo.setEventDate(row.id, DateTime.utc(2026, 9, 24));
+    await repo.migrateLegacyRecurringRowDays();
+    expect(dayNumber((await repo.listEvents()).single.date),
+        dayNumber(DateTime(2026, 9, 23)));
+
+    // 再把行挪回旧显示日；第二次调用必须直接返回（flag 已置位）。
+    await repo.setEventDate(row.id, DateTime.utc(2026, 9, 24));
+    await repo.migrateLegacyRecurringRowDays();
+    expect(dayNumber((await repo.listEvents()).single.date),
+        dayNumber(DateTime(2026, 9, 24)),
+        reason: '第二次调用如果不设防，会把手工挪过的行又拽回去');
+    expect(sid, isNotNull);
+  });
 }

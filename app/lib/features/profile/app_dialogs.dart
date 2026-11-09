@@ -41,6 +41,15 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.0\n'
+    '· 重复待办这一轮整体收口：可以按班次重复（上夜班 / 下夜班那天自动出现）、每月多选几天、随时改规则；提醒按当天值班时间落在前一天 / 当天 / 次日；行回到它属于的班次那天，副标题写「上夜班 · 次日 00:00」；勾掉或删掉之后那一次不再响，勾错了点「撤销」提醒会回来；冷启动也会把提醒重新排上\n'
+    '· 桌面小组件：三张固定尺寸的卡（本周条 / 今日卡 / 整月），现在会跟着系统的深浅色自动切换；同步失败会自己重试，字号不跟系统字号走\n'
+    '· 排班：班组卡排版收口（输入框收窄、周期起始日不再又长又矮）；排班管理与编辑排班里的箭头去掉，整行仍然可点\n'
+    '· 液态玻璃：底栏胶囊的真折射与彩边、开关与分段器的液态档、滑块两端真圆\n'
+    '· 待办：勾完收进「已完成 N 条」，点回勾就回到主列表；行尾的编辑笔去掉\n'
+    '· 外观：字号四档、深色模式、16 种班次色 + 自定义取色\n'
+    '· 修：冷启动后重复待办的提醒会重新排上；签名校验默认硬拦，避免装出「签名冲突」的包\n'
+    '\n'
 'v0.12.11\n'
     '· 桌面小组件现在会跟着系统的深浅色自动切换了：App 里选「跟随系统」时，系统切到深色 / 浅色，三张卡当场换色，不用再打开 App\n'
     '· 重复待办的行回到它属于的那个班次那天：上夜班 20:30–次日 08:30 配 02:00 的待办，行挂在上夜班那天，提醒仍在次日 02:00；副标题把「上夜班 · 次日 02:00」一起写出来\n'
@@ -97,14 +106,18 @@ const String _changelogZh =
     '· 「重复待办」面板行尾的小铅笔去掉了 —— 整行点进去本来就是编辑\n'
     '· 修：在待办页新建的重复待办现在会立刻排上提醒，不用等下次打开 App\n'
     '\n'
-'v0.12.2\n'
-    '· 待办标题框改成 1~3 行自动长高（添加与编辑都有）：长标题以前只看得见尾巴，想改前面的内容得先把字滚回去\n'
-    '· 已添加的重复待办现在能直接改规则了：在「重复待办」面板点任何一条，就能改标题、每天 / 每周 / 每月（每周可勾任意几天）、时间与提醒。就算它这一轮还没有「当前这一次」也改得动 —— 以前每月 1 号的系列在 1 号之前列表里没有那一条，点面板只会弹一句「没有下一次」\n'
-    '· 面板每一行加了小铅笔、点整行都能进；只改标题时不会把你手工挪过的那一次拽回规则日\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.0\n'
+    '· Recurring todos are rounded out: repeat by shift (night / late), pick several days of the month, edit the rule any time; reminders land on the previous / same / next day per the shift window; the row sits on its shift day with a subtitle like "Night - next day 00:00"; checking or deleting an occurrence stops its reminder, Undo brings it back, and a cold start re-schedules them\n'
+    '· Home-screen widgets: three fixed-size cards (week strip / today / month) now follow the system light and dark theme; a failed sync retries on its own; the font size does not follow the system setting\n'
+    '· Schedule: the crew card layout is tightened; the arrows in Schedule management and the editor are gone, while the whole row stays tappable\n'
+    '· Liquid glass: real refraction and the colour rim on the nav capsule, liquid segments and switches, round slider ends\n'
+    '· Todos: completed items move into "N completed" and come back when unchecked; the edit pencil is gone\n'
+    '· Appearance: four font sizes, dark mode, 16 shift colours plus a custom picker\n'
+    '· Fixes: recurring reminders are re-scheduled after a cold start; the signature check now fails closed, so a mismatched APK cannot be published\n'
+    '\n'
 'v0.12.11\n'
     '· The home-screen widgets now follow the system light / dark theme: with the app set to Follow system, all three cards switch as soon as the system does, without opening the app\n'
     '· A recurring todo now sits on the shift day it belongs to: a 02:00 todo on a 20:30-08:30 night shift lives on the shift day, while its reminder still fires at 02:00 the next day; the subtitle spells out "Night - next day 02:00"\n'
@@ -160,11 +173,6 @@ const String _changelogEn =
     '· The weekday row in "Weekly" now fits seven equal cells on one line instead of wrapping to two\n'
     '· Removed the small pencil at the end of each Repeating panel row — tapping the row was already the edit button\n'
     '· Fix: a repeating todo created on the todo page now gets its reminder scheduled immediately instead of waiting for the next app launch\n'
-    '\n'
-'v0.12.2\n'
-    '· The todo title field now grows from one to three lines (both adding and editing): long titles used to show only their tail, so fixing the beginning meant scrolling back first\n'
-    '· Added recurring todos can now be edited directly: tap any row in the "Repeating" panel to change its title, daily / weekly / monthly rule (pick any weekdays), time and reminder. It works even when the series has no current occurrence right now — before, a monthly series due on the 1st had no row before that day, and tapping the panel only said "no current occurrence"\n'
-    '· Each panel row now shows a small pencil and the whole row opens the editor; changing only the title no longer pulls an occurrence you moved by hand back to the rule date\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

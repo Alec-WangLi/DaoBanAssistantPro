@@ -33,6 +33,27 @@ void main() {
     }
   });
 
+  test('auto 背景的亮 / 暗两份没有接反', () {
+    for (final name in [
+      'widget_card_auto',
+      'widget_page_auto',
+      'widget_cell_auto',
+    ]) {
+      final light = _read('android/app/src/main/res/drawable/$name.xml');
+      final night = _read('android/app/src/main/res/drawable-night/$name.xml');
+      expect(light.contains('_light'), true,
+          reason: '$name 的亮色档引用了暗色令牌');
+      expect(night.contains('_dark'), true,
+          reason: '$name 的暗色档引用了亮色令牌');
+    }
+    final dotLight =
+        _read('android/app/src/main/res/drawable/widget_dot_empty.xml');
+    final dotNight =
+        _read('android/app/src/main/res/drawable-night/widget_dot_empty.xml');
+    expect(dotLight.contains('wg_empty_light'), true);
+    expect(dotNight.contains('wg_empty_dark'), true);
+  });
+
   test('中性文字色走 setColorInt，且只在 API 31+ 用 -night', () {
     final kt = blankNonCode(_read('$_kt/WidgetRenderer.kt'));
     expect(kt.contains('setColorInt'), true, reason: '文字色必须日夜双值');

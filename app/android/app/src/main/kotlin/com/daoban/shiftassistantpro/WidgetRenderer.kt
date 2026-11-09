@@ -427,20 +427,20 @@ object WidgetRenderer {
     }
 
     /*
-     * ── 诊断（2026-11-09）：主题感知的渲染 ──
+     * ── 主题感知的渲染（2026-11-09 起正式采用） ──
      *
-     * 现状：颜色在渲染时就被烤成具体 ARGB / 具体 drawable id，而刷新只在跨天、
+     * 原来的颜色在渲染时就被烤成具体 ARGB / 具体 drawable id，而刷新只在跨天、
      * 班次边界、App 数据变化时发生 —— 系统切深浅色不触发任何一条，于是小组件
      * 永远停在最后一次渲染的那一档。
      *
-     * 这两条 helper 让 RemoteViews 自己带上「日/夜两份值」：
+     * 现在 RemoteViews 自己带上「日/夜两份值」：
      *   · 文字色走 `setColorInt`（API 31+），宿主**重新应用**时按当时的 uiMode 选；
      *   · 背景走同名 + `drawable-night` 的两份 drawable，宿主重新应用时按当时的
      *     配置解析。
      * `themeMode` 明确选了 light / dark 时仍走原来的烤死路径 —— 那时小组件不该
      * 跟系统。`API < 31` 没有 `setColorInt`，也退回烤死的那一档。
      *
-     * ⚠️ 这是**诊断版**：先验证小米桌面到底会不会重新应用，再决定它留在哪儿。
+     * 实测与兜底见 `docs/decisions/widget.md`（2026-11-09：MIUI 宿主会重新应用）。
      */
     private fun themedColor(
         rv: RemoteViews,
@@ -461,7 +461,7 @@ object WidgetRenderer {
     private fun auto(system: Boolean): Boolean =
         system && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-    /** 卡片底：跟随系统时用带了 `-night` 的那一份（诊断）。 */
+    /** 卡片底：跟随系统时用带了 `-night` 的那一份。 */
     private fun cardBackground(system: Boolean, dark: Boolean): Int =
         if (auto(system)) R.drawable.widget_card_auto
         else if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light
