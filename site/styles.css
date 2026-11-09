@@ -211,6 +211,48 @@ a { color: var(--accent-3); }
 
 .hint { margin: 12px 0 0; color: var(--faint); font-size: 13px; }
 
+/* 平台提示：整页最重要的一句免责声明，别做成一闪而过的灰色小字 */
+.platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 18px auto 0;
+  padding: 9px 16px;
+  max-width: min(560px, 100%);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.platform svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: var(--accent-3);
+}
+
+.platform strong { color: var(--ink); font-weight: 600; }
+
+.btn-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-right: 9px;
+  fill: currentColor;
+}
+
+.beta-line {
+  margin: 12px 0 0;
+  color: var(--faint);
+  font-size: 13.5px;
+}
+
+.beta-line a { color: #b9a8ff; }
+
 .badges {
   display: flex;
   flex-wrap: wrap;

@@ -545,7 +545,10 @@ if (-not $siteBase) {
         # python / npx 都会往 stderr 写正常提示，Stop 下会被包成异常抛出来
         $ErrorActionPreference = 'Continue'
 
-        & python (Join-Path $root 'scripts\build_site.py') --base $siteBase
+        # 本次写哪个通道。判据与第 8 步同一处 —— 另一个通道由 build_site.py
+        # 从 origin/main 的清单里取，不会把 main 上的正式版覆盖成 beta 的旧值。
+        $siteChannel = if ($isPrerelease) { 'prerelease' } else { 'stable' }
+        & python (Join-Path $root 'scripts\build_site.py') --base $siteBase --channel $siteChannel
         if ($LASTEXITCODE -ne 0) { throw "build_site.py 退出码 $LASTEXITCODE" }
 
         Push-Location $root
@@ -564,7 +567,7 @@ if (-not $siteBase) {
     if ($siteError) {
         Write-Warning "[9/9] 官网部署失败：$siteError"
         Write-Warning "  发布本身是成功的；手动补这两条即可："
-        Write-Warning "    python scripts\build_site.py --base $siteBase"
+        Write-Warning "    python scripts\build_site.py --base $siteBase --channel $siteChannel"
         Write-Warning "    npx wrangler pages deploy _site --project-name=daoban-shift --branch=main"
         Write-Warning "  若报未登录：先 npx wrangler login"
     } else {

@@ -4,8 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>倒班助手Pro · 排班日历 · 班次闹钟 · 待办日程</title>
-<meta name="description" content="倒班助手Pro —— 为倒班人群打造的排班日历、班次闹钟与待办日程。无账号、无广告、无后端、纯本地离线、开源 MIT。">
+<meta name="description" content="倒班助手Pro —— 为倒班人群打造的排班日历、班次闹钟与待办日程。仅支持 Android，无账号、无广告、无后端、纯本地离线、开源 MIT。">
 <meta name="theme-color" content="#0b0b16">
+<meta property="og:type" content="website">
+<meta property="og:title" content="倒班助手Pro · 排班日历 · 班次闹钟 · 待办日程">
+<meta property="og:description" content="为倒班人群打造，仅支持 Android。无账号 · 无广告 · 纯本地离线 · 开源 MIT。">
+<meta property="og:image" content="__SITE_BASE__/assets/hero.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%236d7dff'/%3E%3Crect x='14' y='18' width='36' height='32' rx='8' fill='none' stroke='white' stroke-width='4'/%3E%3Cpath d='M14 28h36M24 12v10M40 12v10' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="./styles.css">
 </head>
@@ -42,11 +47,21 @@
       <a id="download" class="btn loading"
          href="https://github.com/Alec-WangLi/DaoBanAssistantPro/releases/latest"
          target="_blank" rel="noopener">
+        <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.46 11.46 0 0 0-8.94 0L5.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
         <span class="btn-label">下载 APK</span>
       </a>
       <span id="version" class="pill">最新版</span>
     </div>
-    <p id="dl-note" class="hint">Android 8.0+ · arm64 · 23 MB</p>
+
+    <p class="platform">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.46 11.46 0 0 0-8.94 0L5.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
+      <span><strong>仅支持 Android 8.0 及以上（arm64）</strong>，暂无 iOS 与 Windows 版本</span>
+    </p>
+
+    <p id="dl-note" class="hint">安装包约 23 MB · 下载后允许「安装未知来源应用」即可</p>
+    <p id="beta-line" class="beta-line" hidden>
+      想先试新版？<a id="beta-link" href="#" target="_blank" rel="noopener">下载测试版</a>
+    </p>
 
     <ul class="badges">
       <li>无账号</li>
@@ -206,21 +221,41 @@
   const btn = document.getElementById('download');
   const label = btn.querySelector('.btn-label');
   const ver = document.getElementById('version');
-  const note = document.getElementById('dl-note');
+  const betaLine = document.getElementById('beta-line');
+  const betaLink = document.getElementById('beta-link');
+
+  const cmp = (a, b) => {
+    const pa = String(a).split('.').map(Number);
+    const pb = String(b).split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      const d = (pa[i] || 0) - (pb[i] || 0);
+      if (d) return d;
+    }
+    return 0;
+  };
+
   try {
     const res = await fetch('./latest.json', { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const m = await res.json();
-    const hasStable = !!(m.stable && m.stable.version);
-    const node = hasStable ? m.stable
-               : (m.prerelease && m.prerelease.version) ? m.prerelease : null;
-    if (!node || !node.url) throw new Error('empty manifest');
-    btn.href = node.url;
-    label.textContent = '下载 v' + node.version;
-    ver.textContent = hasStable ? '正式版' : '测试版';
-    note.textContent = 'Android 8.0+ · arm64';
+
+    const stable = (m.stable && m.stable.version && m.stable.url) ? m.stable : null;
+    const pre = (m.prerelease && m.prerelease.version && m.prerelease.url) ? m.prerelease : null;
+    const pick = stable || pre;
+    if (!pick) throw new Error('empty manifest');
+
+    btn.href = pick.url;
+    label.textContent = '下载 v' + pick.version;
+    ver.textContent = stable ? '正式版' : '测试版';
+
+    // 只有「测试版确实比正式版新」才放出入口。正式版已经追上时，
+    // 摆一个更旧的测试版只会让人装回旧版本。
+    if (stable && pre && cmp(pre.version, stable.version) > 0) {
+      betaLink.href = pre.url;
+      betaLink.textContent = '下载测试版 v' + pre.version;
+      betaLine.hidden = false;
+    }
   } catch (e) {
-    // 清单不可用：按钮保持指向 GitHub Releases，不误导。
     label.textContent = '前往 GitHub 下载';
     ver.textContent = '最新版';
   } finally {
