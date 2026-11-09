@@ -2,13 +2,13 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>倒班助手Pro · 排班日历 · 班次闹钟 · 待办日程</title>
-<meta name="description" content="倒班助手Pro —— 为倒班人群打造的排班日历、班次闹钟与待办日程。仅支持 Android，无账号、无广告、无后端、纯本地离线、开源 MIT。">
-<meta name="theme-color" content="#0b0b16">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>倒班助手 Pro · 排班日历 · 班次闹钟 · 待办日程</title>
+<meta name="description" content="为倒班的人做的排班日历、班次闹钟与待办日程。仅支持 Android。无账号、无广告、无后端、纯本地离线，MIT 开源。">
+<meta name="theme-color" content="#000000">
 <meta property="og:type" content="website">
-<meta property="og:title" content="倒班助手Pro · 排班日历 · 班次闹钟 · 待办日程">
-<meta property="og:description" content="为倒班人群打造，仅支持 Android。无账号 · 无广告 · 纯本地离线 · 开源 MIT。">
+<meta property="og:title" content="倒班助手 Pro · 排班日历 · 班次闹钟 · 待办日程">
+<meta property="og:description" content="为倒班的人做的一套 App。仅支持 Android。无账号 · 无广告 · 纯本地离线 · 开源 MIT。">
 <meta property="og:image" content="__SITE_BASE__/assets/hero.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%236d7dff'/%3E%3Crect x='14' y='18' width='36' height='32' rx='8' fill='none' stroke='white' stroke-width='4'/%3E%3Cpath d='M14 28h36M24 12v10M40 12v10' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
@@ -16,251 +16,282 @@
 </head>
 <body>
 
-<div class="bg" aria-hidden="true"></div>
-
-<header class="nav">
-  <a class="brand" href="./">
-    <svg viewBox="0 0 64 64" aria-hidden="true">
-      <rect x="14" y="18" width="36" height="32" rx="8" fill="none" stroke="currentColor" stroke-width="4"/>
-      <path d="M14 28h36M24 12v10M40 12v10" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-    </svg>
-    <span>倒班助手<em>Pro</em></span>
-  </a>
-  <nav class="links">
-    <a href="#features">功能</a>
-    <a href="#shots">截图</a>
-    <a href="#changelog">更新日志</a>
-    <a href="https://github.com/Alec-WangLi/DaoBanAssistantPro" target="_blank" rel="noopener">GitHub</a>
-  </nav>
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="wordmark" href="./">倒班助手<span>Pro</span></a>
+    <nav class="nav-links" aria-label="主导航">
+      <a href="#calendar">排班</a>
+      <a href="#alarm">闹钟</a>
+      <a href="#todos">待办</a>
+      <a href="#changelog">更新</a>
+      <a href="https://github.com/Alec-WangLi/DaoBanAssistantPro" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <a class="nav-cta" href="#download">下载</a>
+  </div>
 </header>
 
 <main>
 
-  <section class="hero">
-    <p class="eyebrow">排班日历 · 班次闹钟 · 待办日程</p>
-    <h1>倒班助手<em>Pro</em></h1>
-    <p class="lede">
-      为倒班人群打造。一套 App 搞定这个月怎么倒、什么时候该起、交班要记住什么。
+  <!-- ============ 首屏 ============ -->
+  <section class="hero" id="download">
+    <div class="hero-glow" aria-hidden="true"></div>
+
+    <p class="hero-kicker">为倒班的人做的一套 App</p>
+    <h1 class="hero-title">倒班助手 <span class="hero-title-pro">Pro</span></h1>
+    <p class="hero-lede">
+      这个月怎么倒、什么时候该起、交班要记住什么。<br>
+      一套 App 说完。
     </p>
 
-    <div class="cta">
-      <a id="download" class="btn loading"
+    <div class="hero-cta">
+      <a id="download-btn" class="btn"
          href="https://github.com/Alec-WangLi/DaoBanAssistantPro/releases/latest"
          target="_blank" rel="noopener">
         <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.46 11.46 0 0 0-8.94 0L5.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
-        <span class="btn-label">下载 APK</span>
+        <span class="btn-label">下载</span>
       </a>
-      <span id="version" class="pill">最新版</span>
+      <span id="version" class="version">最新版</span>
     </div>
 
-    <p class="platform">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.46 11.46 0 0 0-8.94 0L5.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
-      <span><strong>仅支持 Android 8.0 及以上（arm64）</strong>，暂无 iOS 与 Windows 版本</span>
+    <p class="platform-note">
+      仅支持 Android 8.0 及以上（arm64）· 暂无 iOS 与 Windows 版本
     </p>
 
-    <p id="dl-note" class="hint">安装包约 23 MB · 下载后允许「安装未知来源应用」即可</p>
     <p id="beta-line" class="beta-line" hidden>
-      想先试新版？<a id="beta-link" href="#" target="_blank" rel="noopener">下载测试版</a>
+      <a id="beta-link" href="#" target="_blank" rel="noopener">下载测试版</a>
     </p>
 
-    <ul class="badges">
-      <li>无账号</li>
-      <li>无广告</li>
-      <li>无后端</li>
-      <li>纯本地离线</li>
-      <li>开源 MIT</li>
+    <div class="hero-stage" aria-hidden="true">
+      <div class="hour-rail"></div>
+      <div class="phones">
+        <img class="phone phone-left" src="./assets/shot-todos.png" alt="" width="564" height="1067" fetchpriority="high">
+        <img class="phone phone-mid" src="./assets/shot-calendar.png" alt="" width="564" height="1067" fetchpriority="high">
+        <img class="phone phone-right" src="./assets/shot-alarm.png" alt="" width="564" height="1067" fetchpriority="high">
+      </div>
+      <div class="horizon" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- ============ 排班 ============ -->
+  <section class="chapter" id="calendar">
+    <header class="chapter-head reveal">
+      <p class="chapter-kicker">排班日历</p>
+      <h2 class="chapter-title">一眼看完这个月。</h2>
+      <p class="chapter-lede">
+        20 种倒班方式模板起步，周期表随便改。换班、请假只动那一天，不动整套排班。
+      </p>
+    </header>
+
+    <ul class="facts reveal">
+      <li><b>按月排班</b>每月 1 号重新开始的一套切法，按段指定。</li>
+      <li><b>按日期衔接</b>多套方案按天生效，翻回历史看到的是那时的班。</li>
+      <li><b>农历与节假日</b>节气、节日、法定放假与调休「班」标记。</li>
+      <li><b>多班组对照</b>交接班前先看一眼对方那组。</li>
     </ul>
 
-    <figure class="hero-shot">
-      <img src="./assets/hero.png" alt="倒班助手Pro 界面总览" width="1200" fetchpriority="high">
+    <figure class="stage reveal">
+      <img src="./assets/shot-calendar.png" alt="排班日历界面" width="564" height="1067" loading="lazy" decoding="async">
     </figure>
   </section>
 
-  <section id="features" class="section">
-    <h2>你每天真正会用到的那几件事</h2>
+  <!-- ============ 闹钟 ============ -->
+  <section class="chapter" id="alarm">
+    <div class="split">
+      <div class="split-copy reveal">
+        <p class="chapter-kicker">班次闹钟</p>
+        <h2 class="chapter-title">到点就响，<br>不用你记得。</h2>
+        <p class="chapter-lede">
+          跟着排班自动排定未来 60 天，重启手机也会自己排回去。一个班次最多挂 10 条闹钟，「起床」和「午休」分开响。
+        </p>
+        <p class="callout">
+          零点班（00:00 上班）的响铃排在<strong>上班前一晚</strong>。不会等你在上班当天凌晨才响。
+        </p>
+      </div>
 
-    <div class="grid">
-      <article class="card">
-        <h3>📅 排班日历</h3>
-        <p>内置 20 种倒班方式模板，选中就能起步；周期表自由编辑，也能按月排班。</p>
-        <ul>
-          <li>按天改班：换班、请假只改那一天，不动整套排班</li>
-          <li>多套方案按日期衔接，「其余时间」可设成无</li>
-          <li>农历、节气、法定节假日与调休「班」标记</li>
-          <li>多班组视图，交接班对照一眼看清</li>
-        </ul>
-      </article>
-
-      <article class="card">
-        <h3>⏰ 班次闹钟</h3>
-        <p>跟着排班自动响，未来 60 天自动续排，不用每天设。</p>
-        <ul>
-          <li>一个班次最多挂 10 条闹钟，各自起名字</li>
-          <li>落点算准「前一天 / 当天 / 次日」，零点班不会错</li>
-          <li>重启手机自动排回去；锁屏也会全屏响铃</li>
-          <li>铃声可选内置、系统、自己的音频，或仅震动</li>
-        </ul>
-      </article>
-
-      <article class="card">
-        <h3>✅ 待办日程</h3>
-        <p>交班、开会、领料 —— 记下来，到点提醒。</p>
-        <ul>
-          <li>可按班次重复：上夜班那天自动出现</li>
-          <li>提醒按当天值班时间落在前一天 / 当天 / 次日</li>
-          <li>勾完自动收进「已完成」，点回勾就回来</li>
-          <li>一次性的响过自动消失，天天响点一下「每天」</li>
-        </ul>
-      </article>
-
-      <article class="card">
-        <h3>🧩 桌面小组件</h3>
-        <p>三张固定尺寸的卡，不打开 App 也看得到。</p>
-        <ul>
-          <li>本周条（4×1）、今日卡（4×3）、整月（4×5）</li>
-          <li>跟随系统深浅色，App 不在运行也切换</li>
-          <li>标题两侧能翻前后各三个月</li>
-          <li>点整卡开 App，点某天跳到那天的日历</li>
-        </ul>
-      </article>
+      <div class="split-media reveal">
+        <figure>
+          <img src="./assets/shot-alarm.png" alt="班次闹钟列表" width="564" height="1067" loading="lazy" decoding="async">
+          <figcaption>每条能起名字，也能按天单独关掉。</figcaption>
+        </figure>
+        <figure>
+          <img src="./assets/shot-ringing.png" alt="全屏响铃界面" width="564" height="1067" loading="lazy" decoding="async">
+          <figcaption>锁屏与后台都会顶上来。</figcaption>
+        </figure>
+      </div>
     </div>
   </section>
 
-  <section id="shots" class="section">
-    <h2>看一眼</h2>
-    <div class="shots">
-      <figure><img src="./assets/shot-calendar.png" alt="排班日历" loading="lazy"><figcaption>排班日历</figcaption></figure>
-      <figure><img src="./assets/shot-templates.png" alt="倒班方式模板" loading="lazy"><figcaption>20 种倒班模板</figcaption></figure>
-      <figure><img src="./assets/shot-editor.png" alt="排班编辑器" loading="lazy"><figcaption>排班编辑器</figcaption></figure>
-      <figure><img src="./assets/shot-alarm.png" alt="班次闹钟" loading="lazy"><figcaption>班次闹钟</figcaption></figure>
-      <figure><img src="./assets/shot-todos.png" alt="待办日程" loading="lazy"><figcaption>待办日程</figcaption></figure>
-      <figure><img src="./assets/shot-ringing.png" alt="全屏响铃" loading="lazy"><figcaption>全屏响铃</figcaption></figure>
+  <!-- ============ 待办 ============ -->
+  <section class="chapter" id="todos">
+    <div class="split split-reverse">
+      <div class="split-copy reveal">
+        <p class="chapter-kicker">待办日程</p>
+        <h2 class="chapter-title">交班、开会、领料，<br>都忘不了。</h2>
+        <p class="chapter-lede">
+          按班次重复：上夜班那天自动出现，提醒按当天值班时间落在前一天、当天或次日。勾完收进「已完成」，点回勾就回来。
+        </p>
+      </div>
+
+      <div class="split-media split-media-single reveal">
+        <figure>
+          <img src="./assets/shot-todos.png" alt="待办日程界面" width="564" height="1067" loading="lazy" decoding="async">
+        </figure>
+      </div>
     </div>
   </section>
 
-  <section class="section">
-    <h2>动起来看</h2>
-    <div class="gifs">
-      <figure>
-        <img src="./assets/v0130-color.gif" alt="自定义班次颜色" loading="lazy">
-        <figcaption>自定义班次颜色：16 颗现成色，也可以自己调</figcaption>
-      </figure>
-      <figure>
-        <img src="./assets/v0130-monthly.gif" alt="按月排班" loading="lazy">
-        <figcaption>按月排班：每月 1 号重新开始的一套切法</figcaption>
-      </figure>
-    </div>
+  <!-- ============ 小组件 ============ -->
+  <section class="chapter chapter-quiet" id="widget">
+    <header class="chapter-head reveal">
+      <p class="chapter-kicker">桌面小组件</p>
+      <h2 class="chapter-title">不打开 App，<br>也看得到。</h2>
+      <p class="chapter-lede">
+        三张固定尺寸的卡：本周条、今日卡、整月。跟随系统深浅色，App 不在运行也切换。
+      </p>
+    </header>
   </section>
 
-  <section class="section facts">
-    <h2>它不做什么</h2>
-    <div class="facts-grid">
-      <div><strong>不需要账号</strong><span>装完就能用，没有注册、没有登录。</span></div>
-      <div><strong>不联网也能用</strong><span>排班、闹钟、待办全在本地，没有后端。</span></div>
-      <div><strong>不上传数据</strong><span>没有统计、没有埋点、没有广告 SDK。</span></div>
-      <div><strong>不锁功能</strong><span>MIT 开源，代码都在 GitHub 上。</span></div>
-    </div>
+  <!-- ============ 承诺 ============ -->
+  <section class="chapter chapter-promise">
+    <h2 class="promise-title reveal">你的排班，<br>只在你手机里。</h2>
+
+    <ul class="promises">
+      <li class="reveal"><b>不需要账号</b><span>装完就能用，没有注册，没有登录。</span></li>
+      <li class="reveal"><b>不联网也能用</b><span>排班、闹钟、待办全在本地，没有后端。</span></li>
+      <li class="reveal"><b>不上传数据</b><span>没有统计，没有埋点，没有广告 SDK。</span></li>
+      <li class="reveal"><b>不锁功能</b><span>MIT 开源，代码全在 GitHub 上。</span></li>
+    </ul>
   </section>
 
-  <section id="changelog" class="section">
-    <h2>更新日志</h2>
-    <div class="log">
-      <article>
-        <h3>v0.13.0 <span class="tag">正式版</span></h3>
-        <ul>
-          <li>重复待办整体收口：可按班次重复、每月多选几天、随时改规则</li>
-          <li>桌面小组件跟随系统深浅色自动切换</li>
-          <li>排班管理与编辑排班的箭头去掉，整行仍可点</li>
-          <li>液态玻璃：底栏胶囊真折射与彩边、开关与分段器液态档</li>
-        </ul>
-      </article>
-      <article>
+  <!-- ============ 更新日志 ============ -->
+  <section class="chapter" id="changelog">
+    <header class="chapter-head reveal">
+      <p class="chapter-kicker">更新日志</p>
+      <h2 class="chapter-title">最近的几次更新。</h2>
+    </header>
+
+    <ol class="log">
+      <li class="reveal">
+        <h3>v0.13.1 <em>测试版</em></h3>
+        <p>官网与国内下载镜像上线；App 里的「检查更新」改成先读官网清单，国内不必再开代理。</p>
+      </li>
+      <li class="reveal">
+        <h3>v0.13.0</h3>
+        <p>重复待办整体收口；桌面小组件跟随系统深浅色；排班管理与编辑排班的箭头去掉。</p>
+      </li>
+      <li class="reveal">
         <h3>v0.12.11</h3>
-        <ul>
-          <li>小组件跟随系统深浅色；同步失败会自己重试</li>
-          <li>重复待办行挂到它属于的班次那天</li>
-          <li>修：勾掉之后那一次提醒还会响</li>
-        </ul>
-      </article>
-      <article>
-        <h3>v0.12.10</h3>
-        <ul>
-          <li>底栏边光重新配亮度</li>
-          <li>开关与关闹钟时，圆钮两头恢复真圆</li>
-        </ul>
-      </article>
-    </div>
-    <p class="more">
-      <a href="https://github.com/Alec-WangLi/DaoBanAssistantPro/releases" target="_blank" rel="noopener">全部版本 →</a>
+        <p>小组件跟随系统深浅色；重复待办行挂到它属于的班次那天。</p>
+      </li>
+    </ol>
+
+    <p class="log-more reveal">
+      <a href="https://github.com/Alec-WangLi/DaoBanAssistantPro/releases" target="_blank" rel="noopener">全部版本</a>
     </p>
+  </section>
+
+  <!-- ============ 结尾 CTA ============ -->
+  <section class="closer">
+    <h2 class="closer-title reveal">装上下一次倒班，<br>就轻松一点。</h2>
+    <div class="hero-cta reveal">
+      <a class="btn" href="https://github.com/Alec-WangLi/DaoBanAssistantPro/releases/latest" target="_blank" rel="noopener">
+        <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.46 11.46 0 0 0-8.94 0L5.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
+        <span class="btn-label">下载 APK</span>
+      </a>
+    </div>
+    <p class="platform-note">仅支持 Android 8.0 及以上（arm64）</p>
   </section>
 
 </main>
 
-<footer>
-  <div class="foot-brand">
-    <svg viewBox="0 0 64 64" aria-hidden="true">
-      <rect x="14" y="18" width="36" height="32" rx="8" fill="none" stroke="currentColor" stroke-width="4"/>
-      <path d="M14 28h36M24 12v10M40 12v10" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-    </svg>
-    <span>倒班助手Pro</span>
-  </div>
-  <p>com.daoban.shiftassistantpro · MIT License</p>
-  <p>
+<footer class="foot">
+  <p class="foot-name">倒班助手 <span>Pro</span></p>
+  <p class="foot-meta">com.daoban.shiftassistantpro · MIT License</p>
+  <nav class="foot-links" aria-label="页脚">
     <a href="https://github.com/Alec-WangLi/DaoBanAssistantPro" target="_blank" rel="noopener">源码</a>
-    ·
     <a href="https://github.com/Alec-WangLi/DaoBanAssistantPro/releases" target="_blank" rel="noopener">全部版本</a>
-    ·
     <a href="https://github.com/Alec-WangLi/DaoBanAssistantPro/issues" target="_blank" rel="noopener">反馈</a>
-  </p>
+  </nav>
 </footer>
 
 <script>
-// 下载按钮：优先读同站的发布清单，拿不到就退回 GitHub Releases。
-(async () => {
-  const btn = document.getElementById('download');
-  const label = btn.querySelector('.btn-label');
-  const ver = document.getElementById('version');
-  const betaLine = document.getElementById('beta-line');
-  const betaLink = document.getElementById('beta-link');
+(() => {
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('is-scrolled', window.scrollY > 12);
+  onScroll();
+  addEventListener('scroll', onScroll, { passive: true });
 
-  const cmp = (a, b) => {
-    const pa = String(a).split('.').map(Number);
-    const pb = String(b).split('.').map(Number);
-    for (let i = 0; i < 3; i++) {
-      const d = (pa[i] || 0) - (pb[i] || 0);
-      if (d) return d;
-    }
-    return 0;
-  };
-
-  try {
-    const res = await fetch('./latest.json', { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const m = await res.json();
-
-    const stable = (m.stable && m.stable.version && m.stable.url) ? m.stable : null;
-    const pre = (m.prerelease && m.prerelease.version && m.prerelease.url) ? m.prerelease : null;
-    const pick = stable || pre;
-    if (!pick) throw new Error('empty manifest');
-
-    btn.href = pick.url;
-    label.textContent = '下载 v' + pick.version;
-    ver.textContent = stable ? '正式版' : '测试版';
-
-    // 只有「测试版确实比正式版新」才放出入口。正式版已经追上时，
-    // 摆一个更旧的测试版只会让人装回旧版本。
-    if (stable && pre && cmp(pre.version, stable.version) > 0) {
-      betaLink.href = pre.url;
-      betaLink.textContent = '下载测试版 v' + pre.version;
-      betaLine.hidden = false;
-    }
-  } catch (e) {
-    label.textContent = '前往 GitHub 下载';
-    ver.textContent = '最新版';
-  } finally {
-    btn.classList.remove('loading');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduced && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        e.target.classList.add('is-in');
+        io.unobserve(e.target);
+      }
+    }, { rootMargin: '0px 0px -12% 0px', threshold: 0.12 });
+    for (const el of document.querySelectorAll('.reveal')) io.observe(el);
+  } else {
+    for (const el of document.querySelectorAll('.reveal')) el.classList.add('is-in');
   }
+
+  // 首屏那三台手机随滚动轻微错位，幅度压得很小，只为「有厚度」。
+  const phones = document.querySelector('.phones');
+  if (phones && !reduced) {
+    let ticking = false;
+    addEventListener('scroll', () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = Math.min(window.scrollY, 900);
+        phones.style.setProperty('--dy', (y * 0.06).toFixed(1) + 'px');
+        ticking = false;
+      });
+    }, { passive: true });
+  }
+
+  // 下载按钮：优先读同站的发布清单，拿不到就退回 GitHub Releases。
+  (async () => {
+    const btn = document.getElementById('download-btn');
+    const label = btn.querySelector('.btn-label');
+    const ver = document.getElementById('version');
+    const betaLine = document.getElementById('beta-line');
+    const betaLink = document.getElementById('beta-link');
+
+    const cmp = (a, b) => {
+      const pa = String(a).split('.').map(Number);
+      const pb = String(b).split('.').map(Number);
+      for (let i = 0; i < 3; i++) {
+        const d = (pa[i] || 0) - (pb[i] || 0);
+        if (d) return d;
+      }
+      return 0;
+    };
+
+    try {
+      const res = await fetch('./latest.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const m = await res.json();
+
+      const stable = (m.stable && m.stable.version && m.stable.url) ? m.stable : null;
+      const pre = (m.prerelease && m.prerelease.version && m.prerelease.url) ? m.prerelease : null;
+      const pick = stable || pre;
+      if (!pick) throw new Error('empty manifest');
+
+      btn.href = pick.url;
+      label.textContent = '下载 v' + pick.version;
+      ver.textContent = stable ? '正式版' : '测试版';
+
+      if (stable && pre && cmp(pre.version, stable.version) > 0) {
+        betaLink.href = pre.url;
+        betaLink.textContent = '下载测试版 v' + pre.version;
+        betaLine.hidden = false;
+      }
+    } catch (e) {
+      label.textContent = '前往 GitHub 下载';
+      ver.textContent = '';
+    }
+  })();
 })();
 </script>
 

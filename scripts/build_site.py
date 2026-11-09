@@ -34,9 +34,16 @@ SRC = ROOT / "site"
 OUT = ROOT / "_site"
 IMAGES = ROOT / "docs" / "images"
 
-# 与 index.html 保持一致：只带首页真正引用的图。
-PNGS = ["hero.png"]
-GIFS = ["v0130-color.gif", "v0130-monthly.gif"]
+# 与 index.html 保持一致：只带页面真正用到的图。
+PNGS = ["hero.png"]          # 只给 og:image，不渲染在页面上
+SHOTS = [                     # 首屏三台 + 各章各一张
+    "shot-calendar.png",
+    "shot-alarm.png",
+    "shot-ringing.png",
+    "shot-todos.png",
+]
+# 页面改版后不再放 GIF：首屏到页脚全用 shot-*.png，整站从 ~8MB 降到 ~3MB。
+GIFS: list[str] = []
 
 # Cloudflare Pages 单文件上限。逼近时会安静地失败在 wrangler 那边，这里先喊。
 PAGE_FILE_LIMIT = 25 * 1024 * 1024
@@ -112,7 +119,7 @@ def main() -> int:
     )
     _copy(SRC / "styles.css", OUT / "styles.css")
 
-    for name in PNGS + sorted(p.name for p in IMAGES.glob("shot-*.png")):
+    for name in PNGS + SHOTS:
         _copy(IMAGES / name, OUT / "assets" / name)
     for name in GIFS:
         _copy(IMAGES / name, OUT / "assets" / name)
