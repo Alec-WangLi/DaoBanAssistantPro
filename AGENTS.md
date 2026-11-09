@@ -66,7 +66,7 @@
 2026-11-06 记过「main 连续四次红、根因是比 beta 少 148 行 `ensureVisualFonts()`」。**这条已经不成立：** v0.13.0 把 beta 整体合进了 main，`app/tool/visual/visual_harness.dart` 在 main 与 beta 逐字节相同（`git diff --stat origin/main origin/beta -- app/tool/visual/visual_harness.dart` 空输出），main 最新提交 `449f2d9` 的 CI 是 success。**以后看到 main 的 CI 红，按真 bug 查，别再往这条旧结论上靠。**
 
 - **`ci.yml` 的 `EXPECTED_TESTS` 仍然是分支相关项，不是常量**：main 与 beta 现在都是 1257（v0.13.0 合并后两边同一份代码），但 beta 下一次加用例后两边会再次分开，改一边要记得另一边。**基线只认 CI 日志里那行「用例数 N」**，推算值不能当基线（2026-11-06 按「1242 − 113」推成 1129，实测 1096）。
-- **`visual.yml`（每日视觉巡场）仍是 `disabled_manually`**：当初禁用的两个理由里，「main 缺字体加载逻辑、只能量方块」已随 v0.13.0 消除；「`continue-on-error` 让 0 张图也判绿」是它的设计取舍，不是 bug。恢复只需 `gh workflow enable visual.yml`，然后**手动 dispatch 一次并去 artifact 里数图** —— 绿不等于出图。
+- **`visual.yml`（每日视觉巡场）已于 2026-11-10 恢复**（`gh workflow enable visual.yml` + 手动 dispatch 一次，run `42652960542`）：**1284 条断言全过、写出 337 张图、artifact 89.9 MB**，不是当初那种 0 张图的假绿。判绿**不能只看结论** —— `continue-on-error: true` 是设计取舍，结论永远是 success。**数图不用下载 89 MB 的 artifact**：`gh run view <id> --log | grep -aoE 'build/visual/[^ ]+\.png' | sort -u | wc -l`，出图那一步逐张打了路径。
 
 
 ## 目录架构地图（app/lib）
