@@ -47,6 +47,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 // **`import` 给本文件自己用（`pumpScreen` 里要调），`export` 给下游用** ——
 // 两者都要，`export` 不会把名字引进本文件。`export` 必须待在所有声明之前。
 import '../../test/support/plugin_channels.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 export '../../test/support/plugin_channels.dart';
 
@@ -267,7 +268,7 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
   // 把语言留成了什么，同一个界面两次渲染会不一样。
   L10n.locale = 'zh';
 
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
 
   // 六天一轮的四班三倒：白 / 白 / 中 / 中 / 夜 / 休。
   // 夜班跨午夜（20:30 → 08:00），专门让「跨午夜」那段展示逻辑有东西可画。
@@ -743,6 +744,45 @@ Future<void> seedRecurringTodo(AppDatabase db) async {
     timeMinute: 17 * 60,
     advanceRemindMinutes: 60,
   );
+
+  // 「按班次 · 夜班 · 00:00」：让「次日 00:00」这个落点标记在待办行上有图可看。
+  // 今天必须落在跨午夜的夜班日上：锚点往前挪一天、三天轮转「白 / 夜 / 休」，
+  // 于是今天 = 夜班（与 `makeMidnightShiftCurrent` 同一手法）。
+  final today0 = dateOnly(t);
+  await repo.saveSchedule(
+    name: '夜班 · 提醒落次日',
+    anchorDate: DateTime(today0.year, today0.month, today0.day - 1),
+    classes: const [
+      ShiftClass(
+          name: '白班',
+          abbr: '白',
+          startMinute: 480,
+          endMinute: 1200,
+          color: 0xFF4C8DFF),
+      ShiftClass(
+          name: '夜班',
+          abbr: '夜',
+          startMinute: 1230,
+          endMinute: 480,
+          color: 0xFF7A5CFF),
+      ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
+    ],
+    cycle: const [0, 1, 2],
+    makeCurrent: true,
+    teamCount: 1,
+    teamNames: L10n.defaultTeamNames(1),
+    ourTeamIndex: 0,
+    teamOffsets: const [0],
+  );
+  await repo.addRecurringTodo(
+    title: '夜班写台账',
+    repeat: RecurRepeat.shift,
+    startDate: today0,
+    shiftNames: const ['夜班'],
+    timeMinute: 0,
+    advanceRemindMinutes: 0,
+  );
+  await repo.advanceRecurringTodos(today: today0);
 }
 
 /// 让种子库里**已有的第二套方案**带一个生效时段，边界落在**本月中间**。

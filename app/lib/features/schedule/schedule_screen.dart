@@ -15,18 +15,19 @@ import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
-import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
+import '../../core/widgets/glass_value_row.dart';
 import '../../core/widgets/glass_check.dart';
-import '../../core/widgets/glass_switch.dart';
-import '../../core/widgets/glass_weekday_picker.dart';
 import '../../data/app_repository.dart';
 import '../../data/todo_archive.dart';
 import '../../domain/recurring_todo.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import 'recurring_panel.dart';
+import 'recurring_fields.dart';
+import '../../core/clock.dart';
 
 /// 归档行左侧那个空位的边长 —— 必须与 `GlassCheck` 的默认尺寸（28）一致，否则
 /// 归档区的文字缩进会比主列表差一档。
@@ -57,6 +58,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   /// 折叠区展开了没有。默认收起。
   bool _archiveOpen = false;
 
+  /// 「添加待办」弹窗正在开 / 正在等排班数据 —— 挡住悬浮按钮的连点
+  /// （`_showAddDialog` 现在要先 await 一次读库，双击会叠两层弹窗）。
+  bool _addDialogOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -82,7 +87,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   /// 跑一遍重复待办的生成器，再重排提醒（改完「当前这一次」提醒也要跟着走）。
   Future<void> _advanceRecurring() async {
     final repo = ref.read(appRepositoryProvider);
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(appNow()));
     await _rescheduleReminders(ref);
   }
 
@@ -90,6 +95,14 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
     final events = eventsAsync.valueOrNull ?? const [];
+    // 待办行的「提醒落在次日 / 前一天」标记：要按 seriesId 查规则、按那天查班次。
+    final seriesById = <int, RecurringTodo>{
+      for (final s
+          in (ref.watch(recurringSeriesProvider).valueOrNull ??
+              const <RecurringTodo>[]))
+        if (s.id != null) s.id!: s,
+    };
+    final chain = ref.watch(activeScheduleProvider).valueOrNull?.chain;
     final split = splitTodos(events, _sessionRows);
     ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
@@ -168,7 +181,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                           16, 8, 16, kFloatingActionInset),
                       children: [
                         for (final e in split.active)
-                          _eventTile(context, ref, e),
+                          _eventTile(context, ref, e,
+                              chain: chain, series: seriesById[e.seriesId]),
                         // 主列表空了、归档还有：那句话仍要出现，而折叠区挂在它下面
                         // —— 不能让归档被空态顶掉（那几条就再也点不开了）。
                         if (split.active.isEmpty)
@@ -177,7 +191,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                           _archiveHeader(context, split.archived.length),
                           if (_archiveOpen)
                             for (final e in split.archived)
-                              _eventTile(context, ref, e, archived: true),
+                              _eventTile(context, ref, e,
+                                  archived: true,
+                                  chain: chain,
+                                  series: seriesById[e.seriesId]),
                         ],
                       ],
                     ),
@@ -327,14 +344,48 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   static Future<void> _restoreCompleted(
       AppRepository repo, ScheduleEvent e) async {
     await repo.setEventCompleted(e, false);
-    await AlarmService.rescheduleEventReminders(await repo.listEvents());
+    // **重复待办的提醒也要重排**：排提醒现在读 `skipThrough`，只排一次性行
+    // 的话，撤销之后系列那一条不会回来（`rescheduleTodoReminders` 两段一起排）。
+    await AlarmService.rescheduleTodoReminders(repo);
   }
 
   Widget _eventTile(BuildContext context, WidgetRef ref, ScheduleEvent e,
-      {bool archived = false}) {
+      {bool archived = false,
+      ScheduleChain? chain,
+      RecurringTodo? series}) {
+    // 提醒时刻按「那天的班次」落在前一天 / 当天 / 次日。**四道一致性闸门缺一
+    // 不可**（spec §4.1）：
+    //   ① 这条行属于某条系列，且规则是「按班次」；
+    //   ② 系列设了钟点，且**与行上的钟点一致** —— 排定用的是系列那份，这一格
+    //      印的是行里那份，对不上时宁可不标；
+    //   ③ 那天的班次名**在这条系列选过的名字里** —— 改排班后留在原地的旧行，
+    //      排定侧根本不会给它排提醒，标了就是从无关班次算出来的谎话；
+    //   ④ 有排班链（没有就查不到班次）。
+    final shift = chain?.shiftOn(e.date);
+    final markedClock = (e.seriesId != null &&
+            series != null &&
+            series.enabled &&
+            series.advanceRemindMinutes != null &&
+            series.repeat == RecurRepeat.shift &&
+            series.timeMinute != null &&
+            series.timeMinute == e.timeMinute &&
+            shift != null &&
+            series.shiftNames.contains(shift.name))
+        ? series.timeMinute
+        : null;
+    final timeText = e.timeMinute == null
+        ? null
+        : (markedClock == null
+            ? _fmt(e.timeMinute!)
+            : (todoReminderClockLabel(clockMinute: markedClock, shift: shift) ??
+                _fmt(e.timeMinute!)));
     final subtitle = [
       L10n.monthDayWeekday(e.date),
-      if (e.timeMinute != null) _fmt(e.timeMinute!),
+      // 行挂在班次那天，提醒可能在次日 / 前一天 —— 把班次名写在钟点前面，
+      // 读起来是「这属于上夜班，提醒在次日 02:00」，而不是「日期算错了」。
+      // 四道闸门与钟点标记同源：只有 `markedClock != null` 时才有班次上下文。
+      if (markedClock != null && shift != null) shift.name,
+      if (timeText != null) timeText,
       if (e.advanceRemindMinutes != null)
         L10n.remindOptionLabel(e.advanceRemindMinutes!),
     ].join(' · ');
@@ -422,6 +473,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
               ],
             ),
           ),
+          // ⚠️ **这一行曾经有一颗铅笔**（`Icons.edit_outlined` + `todo-edit-hint`），
+          // v0.12.4 按「铅笔 = 点开进入编辑表单」的规则补的。2026-11-05 用户看过真机
+          // 之后否掉了它：「待办事项界面我不想要那个编辑笔的图标，太多余了」——
+          // 整行本来就可点、点了就开编辑弹窗，那颗铅笔只是把「可点」又说了一遍，
+          // 而它占的是每行最贵的那段横向空间。删掉之后**行本身的点击没变**。
+          // 想再补回来之前先读 `docs/decisions/ui-rules.md` 里那条规则的例外清单。
           GlassDeleteButton(
             // 列表行尾部用紧凑形态：完整形态是个 48pt 的红圆，一屏五行就是五个
             // 警报，盖过待办本身（组件注释里写明了这个分工）。
@@ -462,14 +519,36 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
   /// 只重排待办提醒，不动班次闹钟：勾一个复选框不该把上千条班次闹钟全扫一遍。
   Future<void> _rescheduleReminders(WidgetRef ref) async {
     final repo = ref.read(appRepositoryProvider);
-    await AlarmService.rescheduleEventReminders(await repo.listEvents());
+    // 一次性与重复待办的提醒一起排 —— 只排前者的话，新建的重复待办要等到
+    // 下一次 `rescheduleAll`（冷启动等）才排得上，当天可能该响而不响。
+    await AlarmService.rescheduleTodoReminders(repo);
   }
 
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
-    final titleCtrl = TextEditingController();
-    final fields = _EventFields(date: dateOnly(DateTime.now()));
+  Future<void> _showAddDialog(BuildContext context, WidgetRef ref) async {
+    if (_addDialogOpen) return;
+    _addDialogOpen = true;
+    try {
+      await _openAddDialog(context, ref);
+    } finally {
+      _addDialogOpen = false;
+    }
+  }
 
-    showGlassDialog(
+  Future<void> _openAddDialog(BuildContext context, WidgetRef ref) async {
+    final titleCtrl = TextEditingController();
+    final today = dateOnly(appNow());
+    // 「按班次」要列出当前排班表的班次 —— 读一次，别在弹窗里 watch 流
+    // （drift 流取消时的零时长定时器会让 widget 用例报 Timer still pending）。
+    final active = await ref.read(appRepositoryProvider).getActiveSchedules();
+    if (!context.mounted) return;
+    final choices = active?.chain.classChoicesFrom(today) ?? const <ShiftClass>[];
+    final fields = _EventFields(
+      date: today,
+      shiftChoices: choices,
+      fallbackShiftName: active?.chain.shiftOn(today)?.name,
+    );
+
+    await showGlassDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -487,6 +566,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                     child: TextField(
                       controller: titleCtrl,
                       autofocus: true,
+                      // **标题可以写好几行**（用户 2026-10-21：「想修改前面的内容
+                      // 比较费劲」）：一行时后半段被滚出视野，光标一落在末尾，
+                      // 前面写了什么就看不见了。1~3 行自动长高，长标题整段可读；
+                      // 超过 3 行在框内滚动（弹窗本身还装得下其余字段）。
+                      minLines: 1,
+                      maxLines: 3,
+                      keyboardType: TextInputType.multiline,
                       decoration: glassInputDecoration(context),
                     ),
                   ),
@@ -507,7 +593,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                     // 标题为空 = 这一下什么也没做，按钮的锁当帧就放开（同步返回，
                     // 见 `GlassActionButton._fire`）。
                     if (title.isEmpty) return;
-                    await fields.commit(ref, title: title);
+                    final ok = await fields.commit(ref, title: title);
+                    if (!ok) {
+                      setState(() {});
+                      return;
+                    }
                     await _rescheduleReminders(ref);
                     close();
                   },
@@ -535,8 +625,11 @@ class _EventFields {
     this.alarm = false,
     this.repeat,
     this.weekdays = 0,
-    this.monthDay = 1,
+    this.monthDays = 0,
+    this.shiftNames = const [],
     this.seriesId,
+    this.shiftChoices = const [],
+    this.fallbackShiftName,
   });
 
   DateTime date;
@@ -556,72 +649,53 @@ class _EventFields {
   /// 每周的位掩码（`1 << (weekday - 1)`）。
   int weekdays;
 
-  /// 每月的第几天（1..31）。
-  int monthDay;
+  /// 每月选中的日子（1..31 的位掩码）。
+  int monthDays;
+
+  /// 按班次选中的名字。
+  List<String> shiftNames;
+
+  /// 当前排班链上「从今天起可选」的班次。
+  final List<ShiftClass> shiftChoices;
+
+  /// 今天我们班组的班次名（切到「按班次」时默认勾它）。
+  final String? fallbackShiftName;
+
+  /// 保存被挡下时显示的一行提示。
+  String? validation;
 
   /// 这条行属于哪个系列；null = 一次性待办。编辑既有行时带进来。
   int? seriesId;
 
   List<Widget> build(BuildContext context, StateSetter setState) {
     return [
-      // 重复：四档胶囊。与闹钟弹窗的「一次性 / 每天 / 每周」同一个控件、同一套
-      // 字重规则（选中 w700、未选中 w500）—— 那是最靠近的同类件。
-      GlassSegment(
-        count: 4,
-        selectedIndex: repeat == null ? 0 : repeat!.index + 1,
-        onSelected: (i) => setState(() {
-          repeat = i == 0 ? null : RecurRepeat.values[i - 1];
-          // **「每周」至少得有一天**：掩码为空时 `occurrenceOnOrBefore` 返回 null，
-          // 生成器会当它是脏数据、一条都不生成 —— 而界面上完全看不出来，
-          // 用户只会觉得「选了每周却什么都没发生」。默认勾上今天那一天，他再改。
-          if (repeat == RecurRepeat.weekly && weekdays == 0) {
-            weekdays = 1 << (date.weekday - 1);
-          }
+      // 重复规则那一组（四档 + 星期多选 + 每月几号）走共享件：系列编辑器用的是
+      // 同一份，两处各写一遍必然走样。
+      RecurringRulePicker(
+        value: RecurRuleValue(
+          repeat: repeat,
+          weekdays: weekdays,
+          monthDays: monthDays,
+          shiftNames: shiftNames,
+        ),
+        shiftChoices: shiftChoices,
+        fallbackDay: date,
+        fallbackShiftName: fallbackShiftName,
+        validationMessage: validation,
+        onChanged: (v) => setState(() {
+          repeat = v.repeat;
+          weekdays = v.weekdays;
+          monthDays = v.monthDays;
+          shiftNames = v.shiftNames;
+          validation = null;
         }),
-        itemBuilder: (i, selected) => Text(
-          [
-            L10n.repeatNone,
-            L10n.repeatDaily,
-            L10n.repeatWeekly,
-            L10n.repeatMonthly,
-          ][i],
-          style: AppTokens.labelSecondary.copyWith(
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
       ),
-      if (repeat == RecurRepeat.weekly)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
-          child: GlassWeekdayPicker(
-            value: weekdays,
-            // **这里不补触觉**：控件自己已经发了一记（`Haptics.select()`），
-            // 调用点再补就是一次操作震两下 —— 两下比一下信息量更少。
-            onChanged: (v) => setState(() => weekdays = v),
-          ),
-        ),
-      if (repeat == RecurRepeat.monthly)
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(L10n.repeatMonthly),
-          trailing: Text('$monthDay'),
-          onTap: () async {
-            final picked = await showGlassOptionPicker<int>(
-              context,
-              title: L10n.repeatMonthly,
-              options: [for (var d = 1; d <= 31; d++) d],
-              labelOf: (d) => '$d',
-              selected: monthDay,
-            );
-            if (picked != null) setState(() => monthDay = picked);
-          },
-        ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
+      GlassValueRow(
+        key: const Key('todo-date-row'),
         // 重复项那一行不叫「日期」：它的意思是「从哪天开始生效」，之后的日期由
         // 规则算出来，用户改不了单次（想改就改这一次那条行本身）。
-        title: Text(repeat == null ? L10n.date : L10n.startsOn),
-        trailing: Text(L10n.monthDay(date)),
+        label: repeat == null ? L10n.date : L10n.startsOn,
+        value: L10n.monthDay(date),
         onTap: () async {
           final p = await showGlassDatePicker(
             context,
@@ -632,54 +706,17 @@ class _EventFields {
           if (p != null) setState(() => date = dateOnly(p));
         },
       ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(L10n.timeOptional),
-        trailing: Text(timeMinute == null ? L10n.none : _fmt(timeMinute!)),
-        onTap: () async {
-          final p = await showGlassTimePicker(
-            context,
-            initialTime: timeMinute == null
-                ? TimeOfDay.now()
-                : TimeOfDay(hour: timeMinute! ~/ 60, minute: timeMinute! % 60),
-          );
-          if (p != null) setState(() => timeMinute = p.hour * 60 + p.minute);
-        },
-      ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(L10n.advanceRemindOptional),
-        trailing: Text(L10n.remindOptionLabel(advance ?? L10n.remindNone)),
-        onTap: () async {
-          final picked = await showGlassOptionPicker<int>(
-            context,
-            title: L10n.advanceRemindOptional,
-            options: L10n.remindOptions,
-            labelOf: L10n.remindOptionLabel,
-            selected: advance ?? L10n.remindNone,
-          );
-          // null = 点外面关掉了，保持原值不动。
-          if (picked == null) return;
-          setState(() {
-            advance = picked < 0 ? null : picked;
-            // 「不设」的意思就是别提醒我 —— 联动闹钟跟着关掉。不然开关开着、
-            // 却没有可响的时刻，用户会以为它会响（而它永远不会）。
-            if (advance == null) alarm = false;
-          });
-        },
-      ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(L10n.linkAlarm),
-        subtitle: Text(L10n.linkAlarmHint),
-        trailing: GlassSwitch(
-          value: alarm,
-          onChanged: (v) => setState(() {
-            alarm = v;
-            // 开着闹钟就得有个可响的时点：提醒是「不设」时自动补成「准时」。
-            if (v) advance ??= 0;
-          }),
-        ),
+      // 时间 / 提醒 / 联动闹钟这三行同样走共享件（系列编辑器用同一份）——
+      // 「不设提醒就关掉联动闹钟」那条耦合只在那边写了一次。
+      EventTimingPicker(
+        timeMinute: timeMinute,
+        advance: advance,
+        alarm: alarm,
+        onChanged: (t, a, link) => setState(() {
+          timeMinute = t;
+          advance = a;
+          alarm = link;
+        }),
       ),
     ];
   }
@@ -691,11 +728,20 @@ class _EventFields {
   /// 之后不生效」或者「解绑了系列还留着」。
   ///
   /// [existing] 为 null 表示新建。
-  Future<void> commit(
+  Future<bool> commit(
     WidgetRef ref, {
     required String title,
     ScheduleEvent? existing,
   }) async {
+    // 无效规则不落库：空班次 / 空月日的规则一条都不生成，而界面上看不出异常。
+    if (repeat == RecurRepeat.shift && shiftNames.isEmpty) {
+      validation = L10n.ruleNeedsShift;
+      return false;
+    }
+    if (repeat == RecurRepeat.monthly && monthDays == 0) {
+      validation = L10n.ruleNeedsMonthDay;
+      return false;
+    }
     final repo = ref.read(appRepositoryProvider);
     var sid = seriesId;
 
@@ -718,7 +764,8 @@ class _EventFields {
         advanceRemindMinutes: advance,
         alarmEnabled: alarm,
         weekdays: weekdays,
-        monthDay: monthDay,
+        monthDays: monthDays,
+        shiftNames: shiftNames,
       );
     } else {
       // 编辑既有系列：**显式全字段构造，不用 `copyWith`** —— 那是 `?? this.x`，
@@ -745,7 +792,8 @@ class _EventFields {
         advanceRemindMinutes: advance,
         alarmEnabled: alarm,
         weekdays: weekdays,
-        monthDay: monthDay,
+        monthDays: monthDays,
+        shiftNames: shiftNames,
         // 这两个不属于这个弹窗管的字段，原样带过去（不然会被清掉）。
         skipThrough: s.skipThrough,
         enabled: s.enabled,
@@ -780,7 +828,9 @@ class _EventFields {
     // 两条路径的分工写在这里，免得后人把哪一边当成 bug 去改。
     if (sid != null) {
       final s = (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
-      final occ = occurrenceOnOrBefore(s, dateOnly(DateTime.now()));
+      final chain = (await repo.getActiveSchedules())?.chain;
+      final occ = occurrenceOnOrBefore(s, dateOnly(appNow()),
+          shiftOn: chain?.shiftOn);
       if (occ != null) {
         for (final r in (await repo.listEvents())
             .where((e) => e.seriesId == sid && !e.isCompleted)) {
@@ -788,6 +838,7 @@ class _EventFields {
         }
       }
     }
+    return true;
   }
 }
 
@@ -807,6 +858,25 @@ Future<void> showEditEventDialog(
   }
   if (!context.mounted) return;
 
+  final active = await ref.read(appRepositoryProvider).getActiveSchedules();
+  final today = dateOnly(appNow());
+  final choices = active?.chain.classChoicesFrom(today) ?? const <ShiftClass>[];
+  final todayShift = active?.chain.shiftOn(today)?.name;
+  var shiftNames = series?.shiftNames ?? const <String>[];
+  var monthDays = series?.monthDays ?? 0;
+  // 老数据兜底：空月日 / 空班次规则打开时补一个合法值（有可选项时）。
+  if (series?.repeat == RecurRepeat.monthly && monthDays == 0) {
+    monthDays = 1 << (today.day - 1);
+  }
+  if (series?.repeat == RecurRepeat.shift && shiftNames.isEmpty) {
+    final names = {for (final c in choices) c.name};
+    if (todayShift != null && names.contains(todayShift)) {
+      shiftNames = [todayShift];
+    } else if (choices.isNotEmpty) {
+      shiftNames = [choices.first.name];
+    }
+  }
+
   final titleCtrl = TextEditingController(text: e.title);
   final fields = _EventFields(
     date: e.date,
@@ -815,8 +885,11 @@ Future<void> showEditEventDialog(
     alarm: e.alarmEnabled,
     repeat: series?.repeat,
     weekdays: series?.weekdays ?? 0,
-    monthDay: series?.monthDay ?? 1,
+    monthDays: monthDays,
+    shiftNames: shiftNames,
     seriesId: e.seriesId,
+    shiftChoices: choices,
+    fallbackShiftName: todayShift,
   );
 
   if (!context.mounted) return;
@@ -838,6 +911,10 @@ Future<void> showEditEventDialog(
                   child: TextField(
                     controller: titleCtrl,
                     autofocus: true,
+                    // 与「添加」弹窗同一档：标题 1~3 行自动长高（理由见那边）。
+                    minLines: 1,
+                    maxLines: 3,
+                    keyboardType: TextInputType.multiline,
                     decoration: glassInputDecoration(context),
                   ),
                 ),
@@ -856,9 +933,14 @@ Future<void> showEditEventDialog(
                 onPressed: () async {
                   final title = titleCtrl.text.trim();
                   if (title.isEmpty) return;
-                  await fields.commit(ref, title: title, existing: e);
-                  await AlarmService.rescheduleEventReminders(
-        await ref.read(appRepositoryProvider).listEvents());
+                  final ok =
+                      await fields.commit(ref, title: title, existing: e);
+                  if (!ok) {
+                    setState(() {});
+                    return;
+                  }
+                  await AlarmService.rescheduleTodoReminders(
+                      ref.read(appRepositoryProvider));
                   close();
                 },
                 label: L10n.save,

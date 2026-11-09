@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/monthly_pattern.dart';
@@ -11,6 +13,8 @@ import '../domain/shift_rotation.dart';
 import 'app_database.dart';
 import 'seed.dart';
 import 'todo_archive.dart';
+import '../core/clock.dart';
+import '../core/migration_flags.dart';
 
 export 'app_database.dart';
 
@@ -179,10 +183,26 @@ extension RecurringSeriesRowX on RecurringSeriesRow {
         advanceRemindMinutes: advanceRemindMinutes,
         alarmEnabled: alarmEnabled,
         weekdays: weekdays,
-        monthDay: monthDay,
+        monthDays: monthDays,
+        shiftNames: _decodeShiftNames(shiftNames),
         skipThrough: skipThrough,
         enabled: enabled,
       );
+}
+
+/// `shift_names` 列（JSON 数组）→ 名字列表。空 / 坏数据一律当「没选」。
+///
+/// **坏数据不崩**：这一列只在界面上写，但数据库是用户自己的，手改坏了不该让整个
+/// 待办页打不开。
+List<String> _decodeShiftNames(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return const [];
+  try {
+    final v = jsonDecode(raw);
+    if (v is! List) return const [];
+    return [for (final x in v) if (x is String) x];
+  } catch (_) {
+    return const [];
+  }
 }
 
 extension AppDatabaseQueries on AppDatabase {
@@ -593,7 +613,7 @@ class AppRepository {
             monthly: Value(t.monthly),
             monthSegments: Value(encodeTemplateMonthSegments(t.monthlySegments)),
             teamSegOffsets: Value(encodeTemplateOffsets(t.teamSegOffsets)),
-            createdAt: DateTime.now(),
+            createdAt: appNow(),
           ),
         );
   }
@@ -862,7 +882,7 @@ class AppRepository {
             advanceRemindMinutes: Value(advanceRemindMinutes),
             alarmEnabled: Value(alarmEnabled),
             seriesId: Value(seriesId),
-            createdAt: DateTime.now(),
+            createdAt: appNow(),
           ),
         );
   }
@@ -917,8 +937,22 @@ class AppRepository {
     await (db.update(db.scheduleEvents)..where((r) => r.id.equals(e.id)))
         .write(ScheduleEventsCompanion(isCompleted: Value(done)));
     final sid = e.seriesId;
-    if (done && sid != null) {
+    if (sid == null) return;
+    if (done) {
       await skipRecurringOccurrence(sid, e.date);
+      return;
+    }
+    // 取消勾选 / 撤销：把这一次的水位线撤掉。排提醒现在读 `skipThrough`，
+    // 不清的话「勾错了 → 撤销」会留下一个永远不响的提醒：行回来了，提醒没了。
+    //
+    // **只在「水位线正好等于这一次」时撤**：更高说明还有更晚的一次被跳过，
+    // 把水位线往回写会让已经删掉的那一次复活。
+    final row = await (db.select(db.recurringSeriesRows)
+          ..where((t) => t.id.equals(sid)))
+        .getSingleOrNull();
+    if (row != null && row.skipThrough == dayNumber(e.date)) {
+      await (db.update(db.recurringSeriesRows)..where((t) => t.id.equals(sid)))
+          .write(const RecurringSeriesRowsCompanion(skipThrough: Value(null)));
     }
   }
 
@@ -969,7 +1003,8 @@ class AppRepository {
     int? advanceRemindMinutes,
     bool alarmEnabled = false,
     int weekdays = 0,
-    int monthDay = 1,
+    int monthDays = 1,
+    List<String> shiftNames = const [],
   }) {
     return db.into(db.recurringSeriesRows).insert(
           RecurringSeriesRowsCompanion.insert(
@@ -980,9 +1015,11 @@ class AppRepository {
             advanceRemindMinutes: Value(advanceRemindMinutes),
             alarmEnabled: Value(alarmEnabled),
             weekdays: Value(weekdays),
-            monthDay: Value(monthDay),
+            monthDays: Value(monthDays),
+            shiftNames:
+                Value(shiftNames.isEmpty ? null : jsonEncode(shiftNames)),
             enabled: const Value(true),
-            createdAt: DateTime.now(),
+            createdAt: appNow(),
           ),
         );
   }
@@ -1002,7 +1039,9 @@ class AppRepository {
       advanceRemindMinutes: Value(s.advanceRemindMinutes),
       alarmEnabled: Value(s.alarmEnabled),
       weekdays: Value(s.weekdays),
-      monthDay: Value(s.monthDay),
+      monthDays: Value(s.monthDays),
+      shiftNames:
+          Value(s.shiftNames.isEmpty ? null : jsonEncode(s.shiftNames)),
       skipThrough: Value(s.skipThrough),
       enabled: Value(s.enabled),
     ));
@@ -1055,8 +1094,37 @@ class AppRepository {
   /// 与 [deleteRecurringTodo] 的差别正是这一条：用户说的是「别再自动出现了」，
   /// 不是「把我这条待办删了」。已完成的那些历史也解绑成普通待办留着 —— 它们本来
   /// 就是做过的事，列表里一直看得见，用户想清自己删。
+  ///
+  /// **前提**：当前那一行还在发生日上。若用户手工把它挪到别的日子，
+  /// `shiftOn(live.date)` 可能为空或换成另一个班次，这里不会改日期 —— 一次性
+  /// 提醒就落在用户挪到的那天（保留用户的移动），而不是系列原本的落点。
+  /// 想改这个取舍，先想清楚「用户手工挪过」要不要被覆盖。
   Future<void> unlinkRecurringSeries(int id) async {
+    final seriesRow = await (db.select(db.recurringSeriesRows)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    final chain = (await getActiveSchedules())?.chain;
     await db.transaction(() async {
+      if (seriesRow != null) {
+        final s = seriesRow.toDomain();
+        final liveRows = await (db.select(db.scheduleEvents)
+              ..where((e) => e.seriesId.equals(id) & e.isCompleted.equals(false))
+              ..orderBy([(e) => OrderingTerm.asc(e.date)]))
+            .get();
+        final live = liveRows.isEmpty ? null : liveRows.last;
+        if (live != null && s.repeat == RecurRepeat.shift && s.timeMinute != null) {
+          // 解绑后行变一次性，提醒走 `eventReminderTime`（行日期 + 钟点），
+          // 不再看 `alarmDayAnchor`。把行改到提醒落地日，绝对时刻才不变。
+          final shift = chain?.shiftOn(live.date);
+          final fireDay =
+              legacyDisplayDayForMigration(s, live.date, shift: shift);
+          if (dayNumber(fireDay) != dayNumber(live.date)) {
+            await (db.update(db.scheduleEvents)
+                  ..where((e) => e.id.equals(live.id)))
+                .write(ScheduleEventsCompanion(date: Value(fireDay)));
+          }
+        }
+      }
       await (db.update(db.scheduleEvents)..where((e) => e.seriesId.equals(id)))
           .write(const ScheduleEventsCompanion(seriesId: Value(null)));
       await (db.delete(db.recurringSeriesRows)..where((t) => t.id.equals(id))).go();
@@ -1083,6 +1151,10 @@ class AppRepository {
   /// `schedule_screen.dart`）。列表是 drift 流，**不写库就不会重发**，所以
   /// 「一直没关过的 App 跨过午夜」那条路径必须靠「回到前台」这一下。
   Future<void> advanceRecurringTodos({required DateTime today}) async {
+    // 按班次规则要问「那一天我们班组上什么班」—— 走整条链（含按天调班）。
+    // 读在事务外：装配要做好几次查询，没必要把写事务撑大。
+    final schedules = await getActiveSchedules();
+    final shiftOn = schedules?.chain.shiftOn;
     await db.transaction(() async {
       final series = await listRecurringTodos();
       final rows = await listEvents();
@@ -1091,11 +1163,17 @@ class AppRepository {
         // 替他删掉他就再也看不见了。
         if (!s.enabled) continue;
 
-        final occ = occurrenceOnOrBefore(s, today);
+        final occ = occurrenceOnOrBefore(s, today, shiftOn: shiftOn);
         if (occ == null) continue; // 还没到起始日
         // 「这次不要了」：跳过标记与 occurrence 都是「自 epoch 天数」。
         // 直接拿 DateTime 比 int 是拿毫秒去比天数，恒不成立 —— 那正是「删了又回来」。
         if (s.skipThrough != null && dayNumber(occ) <= s.skipThrough!) continue;
+
+        // 行挂在**发生日**（按班次 = 班次那天），不是提醒落地日。
+        // 2026-11-09 用户拍板改回这一口径：夜班 20:30–次日 08:30 配 02:00 的待办，
+        // 行属于「上夜班那天」，提醒在次日 02:00 —— 行副标题会写「上夜班 · 次日 02:00」。
+        // 旧版把行写在提醒落地日，导致跨午夜待办出现在第二天（可能是大休）的列表里。
+        // 旧数据的迁移见 `migrateLegacyRecurringRowDays`。
 
         final live = rows
             .where((r) => r.seriesId == s.id && !r.isCompleted)
@@ -1111,7 +1189,7 @@ class AppRepository {
                   advanceRemindMinutes: Value(s.advanceRemindMinutes),
                   alarmEnabled: Value(s.alarmEnabled),
                   seriesId: Value(s.id),
-                  createdAt: DateTime.now(),
+                  createdAt: appNow(),
                 ),
               );
           continue;
@@ -1135,6 +1213,83 @@ class AppRepository {
         }
       }
     });
+  }
+
+  /// 旧数据一次性迁移：把「行挂在提醒落地日」的旧行改回发生日。
+  ///
+  /// v0.12.10 及以前，按班次系列的行写在提醒落地那天
+  /// （`legacyDisplayDayForMigration`）：夜班 20:30–次日 08:30 配 02:00 的待办，
+  /// 行在次日。v0.12.11 起行回到发生日。
+  ///
+  /// **覆盖所有行（主列表 + 归档）**：归档行如果留在旧口径，行上的「班次名 ·
+  /// 次日」会指到一个不是它发生日的班次。迁移只做一次（调用方用 prefs 键把关）。
+  ///
+  /// 判据：在 `row.date - 1 / row.date / row.date + 1` 里找**唯一**一个满足
+  /// 「那天是这条系列选中的班次，且旧显示日 == row.date」的候选。多个候选时不动 ——
+  /// 宁可留一条旧行，也不把用户手工挪过的行拽错。
+  Future<void> migrateLegacyRecurringRowDays() async {
+    // 一次性保护放在**方法里**，不只放在调用点：以后谁再调它都不会二次搬日期。
+    if (await legacyRecurringRowDayMigrated()) return;
+    final schedules = await getActiveSchedules();
+    final shiftOn = schedules?.chain.shiftOn;
+    await db.transaction(() async {
+      final series = await listRecurringTodos();
+      final rows = await listEvents();
+      for (final s in series) {
+        final sid = s.id;
+        if (sid == null || s.repeat != RecurRepeat.shift || s.timeMinute == null) {
+          continue;
+        }
+        for (final row in rows.where((r) => r.seriesId == sid)) {
+          final candidates = <DateTime>[];
+          for (var d = -1; d <= 1; d++) {
+            final occ = dateOnly(DateTime.utc(
+                row.date.year, row.date.month, row.date.day + d));
+            final shift = shiftOn?.call(occ);
+            if (shift == null || !s.shiftNames.contains(shift.name)) continue;
+            if (dayNumber(legacyDisplayDayForMigration(s, occ, shift: shift)) ==
+                dayNumber(row.date)) {
+              candidates.add(occ);
+            }
+          }
+          if (candidates.length != 1) {
+            debugPrint('migrateLegacyRecurringRowDays: 系列 $sid 的行 '
+                '${row.id}（${row.date}）候选不唯一（${candidates.length}），跳过');
+            continue;
+          }
+          final occ = candidates.single;
+          if (dayNumber(occ) == dayNumber(row.date)) continue;
+          await (db.update(db.scheduleEvents)..where((e) => e.id.equals(row.id)))
+              .write(ScheduleEventsCompanion(date: Value(occ)));
+        }
+
+        // 旧水位线也是「显示日」口径：还原到发生日，否则跨午夜系列会在升级后
+        // 把**下一次**也跳过（2026-11-09 真机：给夜班系列加下夜班，当天的行
+        // 被旧水位线吃掉）。候选不唯一时不动 —— 宁可留旧值，不误跳。
+        final watermark = s.skipThrough;
+        if (watermark == null) continue;
+        final wmDate = DateTime.utc(1970, 1, 1).add(Duration(days: watermark));
+        final wmCandidates = <DateTime>[];
+        for (var d = -1; d <= 1; d++) {
+          final occ = dateOnly(DateTime.utc(
+              wmDate.year, wmDate.month, wmDate.day + d));
+          final shift = shiftOn?.call(occ);
+          if (shift == null || !s.shiftNames.contains(shift.name)) continue;
+          if (dayNumber(legacyDisplayDayForMigration(s, occ, shift: shift)) ==
+              watermark) {
+            wmCandidates.add(occ);
+          }
+        }
+        if (wmCandidates.length != 1) continue;
+        final occ = wmCandidates.single;
+        if (dayNumber(occ) == watermark) continue;
+        await (db.update(db.recurringSeriesRows)
+              ..where((t) => t.id.equals(sid)))
+            .write(RecurringSeriesRowsCompanion(
+                skipThrough: Value(dayNumber(occ))));
+      }
+    });
+    await markLegacyRecurringRowDayMigrated();
   }
 
   /// 立即读取全部日程（重排提醒用，避免读 Riverpod 流拿到旧值）。
@@ -1290,7 +1445,7 @@ class AppRepository {
 
   /// 删除已响过的一次性自定义闹钟（fireAt 已过去）。
   Future<void> deleteExpiredOnceAlarms() async {
-    final now = DateTime.now();
+    final now = appNow();
     final alarms = await listCustomAlarms();
     for (final a in alarms) {
       if (a.repeatType != 0 || a.onceDate == null) continue;
@@ -1365,18 +1520,43 @@ final eventsProvider = StreamProvider<List<ScheduleEvent>>((ref) {
   return db.watchEvents();
 });
 
-/// 全部重复待办（系列定义）。管理面板用它。
+/// 全部重复系列（响应式）。
+///
+/// 待办列表要按 `seriesId` 查「这条是不是按班次规则、提醒钟点落在哪天」——
+/// 系列被编辑 / 开关 / 删除时列表要能自己跟上。**页面自己 watch**（不是弹窗里
+/// 一次性读），与 [eventsProvider] 同一套路。
+final recurringSeriesProvider = StreamProvider<List<RecurringTodo>>((ref) {
+  final db = ref.watch(databaseProvider);
+  return db
+      .select(db.recurringSeriesRows)
+      .watch()
+      .map((rows) => rows.map((r) => r.toDomain()).toList());
+});
+
+/// 重复待办面板一次性要的两样：全部系列 + 当前排班链。
 ///
 /// **一次性读 + `autoDispose`**，不是流 —— 与 `savedTemplatesProvider` 同一套
 /// 理由与坑：
 ///  - 用流的话，每条挂这个弹窗的 widget 用例都会在拆树时报
 ///    「A Timer is still pending」（drift 取消查询流时排的零时长定时器）；
-///  - 而 `autoDispose` 是**必需**的：面板里改完 / 删完之后由调用点
+///  - `autoDispose` 是**必需**的：面板里改完 / 删完之后由调用点
 ///    `ref.invalidate` 重读，不 autoDispose 的话第一次读到的结果会被缓存一整个
-///    会话（v0.8.11 那个「存完模板看不到」就是这么来的）。
-final recurringTodosProvider =
-    FutureProvider.autoDispose<List<RecurringTodo>>((ref) {
-  return ref.watch(appRepositoryProvider).listRecurringTodos();
+///    会话（v0.8.11 那个「存完模板看不到」就是这么来的）；
+///  - 也**不 watch `activeScheduleProvider`**：同上，流取消时的零时长定时器会
+///    让弹窗用例报错。
+class RecurringPanelData {
+  const RecurringPanelData({required this.series, this.chain});
+
+  final List<RecurringTodo> series;
+  final ScheduleChain? chain;
+}
+
+final recurringPanelProvider =
+    FutureProvider.autoDispose<RecurringPanelData>((ref) async {
+  final repo = ref.watch(appRepositoryProvider);
+  final series = await repo.listRecurringTodos();
+  final active = await repo.getActiveSchedules();
+  return RecurringPanelData(series: series, chain: active?.chain);
 });
 
 /// 一条日程是不是「属于 [day] 且未完成」。

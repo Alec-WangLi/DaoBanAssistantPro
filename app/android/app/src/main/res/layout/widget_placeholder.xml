@@ -1,17 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  降级态：App 图标 + 应用名，**不含任何句子**。
-  这是唯一允许出现文字的地方 —— 文字取自 `applicationInfo.loadLabel()`（系统按
-  locale 给的），所以 Kotlin 里仍然一个中文字面量都没有。
-  什么情况下会走到这里：装了 App 但没打开过（还没有快照）；或者快照的绝对窗口
-  里对不上今天 —— 窗口是「本月 + 下月」（最前可到上个周末），最远约 68 天，
-  不是「一次打开管 14 天」。点它会打开 App，一打开就自愈。
+  降级态：App 图标 + 应用名 + 一句「打开 App 同步」。
+
+  什么情况下会走到这里：装了 App 但没打开过（还没有快照）；快照的绝对窗口里对不上
+  今天（两个多月没打开）；或者 Dart 侧构建快照时就抛了。点它会打开 App，一打开就自愈
+  —— `HomeShell` 那边另有「失败后 3 秒重推、上限 2 次」，那是自动的那条路。
+
+  ⚠️ **为什么必须有一句话**：2026-11-05 用户报 MIUI13 上「桌面小组件是白块」。
+  原来这里只有图标 + 灰色应用名，缩在 4×1 那张卡上缩略一看就是一块空白 —— 用户
+  读不出「这里本该有排班」，更读不出「打开 App 就好」。这句话是这块卡唯一的自我说明。
+
+  ⚠️ **语言只跟系统**：这句话走 `@string/widget_placeholder_hint`（values/ 中文、
+  values-en/ 英文），和 picker 里那三个卡名同一条边界 —— 资源在宿主进程按**系统
+  locale** 解析，跟不了 App 内的语言开关（那是 Dart 侧的 prefs，原生侧读不到）。
+  Kotlin 里仍然一个中文字面量都没有。
 
   ⚠️ **这套内容要能塞进最小的那张卡（4×1，渲染高约 78dp）。**
-  高度账：上下 padding 8 + 图标 32 + 间距 4 + 应用名一行（12sp ≈ 16） + 8 ≈ 68dp
-  —— 根是 `gravity="center"`，上下各余约 5dp，不裁切。
-  改这里的尺寸前先把这笔账重算一遍（初版是 12 + 40 + 6 + 16 + 12 = 86dp，
-  比 4×1 的 78dp 还高，图标顶部与应用名降部都被切掉）。
+  高度账：上下 padding 5 + 图标 26 + 间距 3 + 应用名一行（11dp 字 ≈ 12.8 行盒）
+  + 间距 1 + 提示一行（11dp 字 ≈ 12.8 行盒）+ 5 = **约 66dp** —— 根是
+  `gravity="center"`，上下各余约 6dp。
+  ⚠️ **行盒按 12.8dp 算，不是按 16**：这两行 `textSize` 写的是 **dp**（不是 sp），
+  所以**不跟系统字号**（v0.11.23 那条：桌面小组件不跟 fontScale），行盒只由字号
+  与字体自身的行高比例决定，MiSans 约 1.16×。第一版注释按 16dp/行算成 72dp，
+  那是把「12sp 的一行」当成了 11dp 的一行，余量少估了 6dp。
+  ⚠️ **4×1 的真实高度由启动器给**，78dp 是 `AppWidgetOptions` 在 4 行格子下的典型
+  值；余量按 12dp 算，别再加东西进去。改这里的尺寸前先把这笔账重算一遍
+  （初版是 12 + 40 + 6 + 16 + 12 = 86dp，比 78dp 还高，图标顶部与应用名降部
+  都被切掉）。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_ph_root"
@@ -20,12 +35,12 @@
     android:orientation="vertical"
     android:gravity="center"
     android:background="@drawable/widget_card_light"
-    android:padding="8dp">
+    android:padding="5dp">
 
     <ImageView
         android:id="@+id/wg_ph_icon"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
         android:contentDescription="@null"
         android:src="@mipmap/ic_launcher" />
 
@@ -33,9 +48,21 @@
         android:id="@+id/wg_ph_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="3dp"
         android:maxLines="1"
         android:ellipsize="end"
         android:textColor="@color/wg_muted_light"
-        android:textSize="12dp" />
+        android:textSize="11dp" />
+
+    <!-- 字色由 WidgetRenderer.placeholder() 按深浅档设（这里给个初值，免得预览时是黑的）。 -->
+    <TextView
+        android:id="@+id/wg_ph_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="@string/widget_placeholder_hint"
+        android:textColor="@color/wg_ink_light"
+        android:textSize="11dp" />
 </LinearLayout>

@@ -9,6 +9,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'support/fixed_clock.dart';
 
 void main() {
   late AppDatabase db;
@@ -352,7 +353,7 @@ void main() {
   test('班次闹钟：按列表顺序落库、按 order 读回来，不许被排序', () async {
     await repo.saveSchedule(
       name: '两条闹钟',
-      anchorDate: dateOnly(DateTime.now()),
+      anchorDate: dateOnly(kAnchor),
       classes: const [
         ShiftClass(
           name: '白班',

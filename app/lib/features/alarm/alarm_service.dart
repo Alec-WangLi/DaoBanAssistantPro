@@ -8,6 +8,7 @@ import '../../data/app_repository.dart';
 import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart';
 import '../widget/widget_service.dart';
+import '../../core/clock.dart';
 
 /// 没设时间的待办，提醒以当天这个整点为基准（「全天」那类待办没有更准的时点）。
 const int allDayReminderHour = 9;
@@ -198,6 +199,7 @@ List<RecurringAlarmPlan> planRecurringReminders(
   required DateTime from,
   int days = 180,
   int cap = 200,
+  ShiftClass? Function(DateTime day)? shiftOn,
 }) {
   final out = <RecurringAlarmPlan>[];
   for (final s in series) {
@@ -211,6 +213,7 @@ List<RecurringAlarmPlan> planRecurringReminders(
       clockMinute: s.timeMinute ?? allDayReminderHour * 60,
       days: days,
       cap: cap,
+      shiftOn: shiftOn,
     );
     if (times.isEmpty) continue;
     out.add(RecurringAlarmPlan(
@@ -673,7 +676,7 @@ class AlarmService {
     } catch (e) {
       await appendLog('testAlarm: cancel 异常: $e');
     }
-    final fire = DateTime.now().add(const Duration(seconds: 10));
+    final fire = appNow().add(const Duration(seconds: 10));
     await scheduleNativeAlarm(testId, fire, '测试闹钟');
     await logInfo('testAlarm: 排定成功，约 ${fire.toIso8601String()} 触发');
   }
@@ -841,7 +844,7 @@ class AlarmService {
   /// 再睡一会：按设置里的时长重新响铃（原生闹钟），标题与说明原样带过去。
   static Future<void> snoozeAlarm(AlarmRing ring) async {
     try {
-      final fire = DateTime.now().add(Duration(minutes: await snoozeMinutes()));
+      final fire = appNow().add(Duration(minutes: await snoozeMinutes()));
       await scheduleNativeAlarm(99998, fire, ring.title, detail: ring.detail);
     } catch (e) {
       await appendLog('snoozeAlarm 排定失败: $e');
@@ -951,7 +954,10 @@ class AlarmService {
     );
     // 重复待办的提醒走独立号段，与上面那条链路互不影响（`reschedule` 里的
     // 待办那一段会跳过带 `seriesId` 的行）。
-    await rescheduleRecurringReminders(await repo.listRecurringTodos());
+    await rescheduleRecurringReminders(
+      await repo.listRecurringTodos(),
+      shiftOn: schedules.chain.shiftOn,
+    );
   }
 
   /// 清除并按 [source] + [customAlarms] + [events] + [overrides] 重排所有闹钟。
@@ -997,7 +1003,7 @@ class AlarmService {
     // 「哪些天要排、各排几点」由 [planShiftAlarms] 这个纯函数决定（可单测）；
     // 这里只负责把决策落成原生闹钟。id 仍是 `_shiftBaseId + 天数偏移`。
     final List<ShiftAlarmPlan> shiftPlans = planShiftAlarms(source,
-        from: DateTime.now(), days: days, overrides: overrides);
+        from: appNow(), days: days, overrides: overrides);
     for (final plan in shiftPlans) {
       try {
         await scheduleNativeAlarm(
@@ -1011,7 +1017,7 @@ class AlarmService {
 
     // 2) 自定义闹钟：原生 setAlarmClock 只排「下一次」；每天/每周在触发后由
     //    AlarmReceiver 用同一 id 自动续排，因此每个重复闹钟始终只有一条待触发记录。
-    final now = DateTime.now();
+    final now = appNow();
     for (final a in customAlarms) {
       if (!a.enabled) continue;
       final alarmId = _customBaseId + a.id;
@@ -1076,7 +1082,7 @@ class AlarmService {
   static Future<void> rescheduleEventReminders(
       List<ScheduleEvent> events) async {
     await cancelAllTodoReminders();
-    final now = DateTime.now();
+    final now = appNow();
     for (final e in events) {
       // **重复待办的「某一次」不在这里排**：它的提醒由系列那一条负责
       // （`rescheduleRecurringReminders`）。两处都排的话同一次会响两声。
@@ -1106,8 +1112,10 @@ class AlarmService {
   /// 每次都把整条时刻表**重新算一遍**再排：`cancelTodoReminders` 已经把这一段
   /// 清空了，所以这里排的就是全部 —— 停了、删了的系列自然不会再排上。
   static Future<void> rescheduleRecurringReminders(
-      List<RecurringTodo> series) async {
-    final plans = planRecurringReminders(series, from: DateTime.now());
+      List<RecurringTodo> series,
+      {ShiftClass? Function(DateTime day)? shiftOn}) async {
+    final plans = planRecurringReminders(series,
+        from: appNow(), shiftOn: shiftOn);
     for (final p in plans) {
       final s = series.firstWhere((x) => x.id == p.seriesId);
       final id = _recurringBaseId + p.seriesId;
@@ -1134,6 +1142,30 @@ class AlarmService {
         await appendLog('rescheduleRecurringReminders: 排定失败: $e');
       }
     }
+  }
+
+  /// 待办页增删改之后的**一次**重排：一次性提醒 + 重复待办提醒。
+  ///
+  /// 从前这里只排一次性提醒，而重复系列的提醒只在冷启动等 `rescheduleAll`
+  /// 路径上才排得上 —— 新建一个重复待办可能当天该响却不响。两条一起排，
+  /// 号段互不重叠（`cancelAllTodoReminders` 会把两段都清掉）。
+  static Future<void> rescheduleTodoReminders(AppRepository repo) async {
+    final active = await repo.getActiveSchedules();
+    final shiftOn = active?.chain.shiftOn;
+    await rescheduleEventReminders(await repo.listEvents());
+    await rescheduleRecurringReminders(
+      await repo.listRecurringTodos(),
+      shiftOn: shiftOn,
+    );
+  }
+
+  /// 排班结构变了之后：先把按班次的「当前这一次」对齐，再整链重排闹钟。
+  ///
+  /// 两步缺一不可 —— 日历跟着库立刻变，但待办列表与原生闹钟都不会自己跟上
+  /// （v0.12.1 的教训）。所有「会改变某天上什么班」的入口都走这里。
+  static Future<void> replanAfterScheduleChange(AppRepository repo) async {
+    await repo.advanceRecurringTodos(today: dateOnly(appNow()));
+    await rescheduleAll(repo);
   }
 
   /// 下一次 [hour]:[minute]（今天未过则今天，否则明天），按设备本地时区。

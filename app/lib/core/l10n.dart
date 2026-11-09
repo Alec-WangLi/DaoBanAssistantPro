@@ -291,10 +291,11 @@ class L10n {
   static String get none => t('不设', 'None');
 
   // 重复待办
-  static String get repeatNone => t('不重复', 'Does not repeat');
+  static String get repeatNone => t('不重复', 'Never');
   static String get repeatDaily => t('每天', 'Every day');
   static String get repeatWeekly => t('每周', 'Every week');
   static String get repeatMonthly => t('每月', 'Every month');
+  static String get repeatShift => t('按班次', 'By shift');
   static String everyWeekOn(List<int> days) {
     final names = days.map(ruleWeekday).join(isEn ? ', ' : '、');
     return isEn ? 'Every $names' : '每周$names';
@@ -310,6 +311,43 @@ class L10n {
       ? const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]
       : const ['一', '二', '三', '四', '五', '六', '日'][i];
   static String everyMonthOnDay(int d) => t('每月 $d 号', 'Day $d of every month');
+
+  /// 每月多选几天（升序）。
+  static String everyMonthOnDays(List<int> days) {
+    final joined = days.join(isEn ? ', ' : '、');
+    return isEn
+        ? 'Day $joined of every month'
+        : '每月 $joined 号';
+  }
+
+  /// 每月多选网格下方那句口径说明。
+  static String get monthDaysHint => t(
+      '小月没有的日期会落在当月最后一天；同一天只出现一次',
+      'Days that do not exist in a month fall on its last day; never twice in a day');
+
+  /// 「按班次」一档的匹配口径 —— 用户 2026-10-22 点名要的提醒。
+  static String get shiftRuleHint => t(
+      '按班次名称匹配；换排班表后，新表里有同名班次就会继续生效',
+      'Matched by shift name — switching schedules keeps it working if the new one has the same name');
+
+  static String get shiftAnchorHint => t(
+      '提醒落在班次值班时间里时按那天的班次算（跨午夜的班次会落在次日）',
+      "A reminder moment inside the shift's working window follows that shift — cross-midnight shifts land on the next day");
+
+  static String get shiftRuleNoSchedule => t(
+      '还没有排班表，先把班排上再来选班次',
+      'No schedule yet — set one up first');
+
+  static String shiftRuleMissing(List<String> names) => t(
+      '当前排班表里没有「${names.join('、')}」',
+      'Not in the current schedule: "${names.join(', ')}"');
+
+  static String everyShift(List<String> names) => t(
+      '每次${names.join('、')}',
+      'On ${names.join(', ')}');
+
+  static String get ruleNeedsShift => t('先选一个班次', 'Pick at least one shift');
+  static String get ruleNeedsMonthDay => t('先选一天', 'Pick at least one day');
   static String get repeats => t('重复', 'Repeats');
   static String get startsOn => t('从这天起', 'Starts on');
   static String get skipThisOccurrence => t('只这一次不要了', 'Skip this one');
@@ -325,9 +363,9 @@ class L10n {
       '还没有重复待办。新建待办时把「重复」选上，它就会自己按期出现。',
       'No repeating todos yet. Pick a repeat when adding one and it comes back on its own.');
   static String nextTime(String d) => t('下次 $d', 'Next $d');
-  static String get recurringNoCurrent => t(
-      '这个重复现在没有「下一次」（起始日在将来，或这一次刚被你跳过）',
-      'This repeat has no current occurrence right now (it starts later, or you just skipped this one)');
+
+  /// 系列编辑器的标题（从管理面板点进来，编的是规则本身，不是某一次）。
+  static String get editRecurring => t('编辑重复待办', 'Edit repeating todo');
   static String deleteSeriesContent(String name, int n) => n == 0
       ? t('「$name」以后不会再自己出现了。', '"$name" will no longer come back on its own.')
       : t('「$name」以后不会再自己出现了，已经出现的 $n 条（含已完成的历史）也会一起删掉。',
@@ -658,8 +696,22 @@ class L10n {
   // 英文用 'Abbr' 而不是 'Short'：这个标签浮在 60pt 宽的窄输入框上，
   // 'Short'（5 字）会被裁成「Sh…」，'Abbr'（4 字）放得下且更准确。
   static String get abbrLabel => t('简称', 'Abbr');
-  static String get crewSettingsOptional =>
-      t('班组设置（可选，用于查看其他班组）', 'Crews (optional, to see other crews)');
+
+  /// 「班组设置」折叠时的副标题：把当前班组名亮出来，并明说可以改名。
+  ///
+  /// 这一条是从真机反馈倒推出来的：改名的输入框**本来就有**，但那一节默认折叠、
+  /// 标题从前写着「可选，用于查看其他班组」，用户和作者都没发现名字能改。
+  /// 「点开可改名」不能只藏在展开之后。
+  static String teamSettingsHint(String names) =>
+      t('$names · 点开可改名', '$names · tap to rename');
+
+  /// 折叠副标题装不下完整班组名时的降级串（8 个长名字在两行里放不下）。
+  ///
+  /// 本仓的降级顺序是「折行 > 按宽缩小 > 换短串」—— 这里换短串，因为把
+  /// 8 个自定义名字缩到 6px 就等于没写。
+  static String teamSettingsShortHint(int n) => t(
+      '$n 个班组 · 点开可改名',
+      n == 1 ? '1 crew · tap to rename' : '$n crews · tap to rename');
 
   // ── 按月排班 ────────────────────────────────────────────────────────────
   //
@@ -952,8 +1004,8 @@ class L10n {
         t('到点弹通知；给某条开「联动闹钟」会像班次闹钟一样全屏响铃',
             'A notification appears at that moment; a todo can also ring as a full-screen alarm like a shift does'),
         t('完成后勾一下（变暗 + 删除线）', 'Tick an item when done (dims + strikethrough)'),
-        t('可以设成每天 / 每周几 / 每月某日自动出现，不用每次手填',
-            'A todo can repeat daily, on chosen weekdays or on a day of the month, so you do not type it in again'),
+        t('可以设成每天 / 每周几 / 每月哪几天 / 按班次自动出现，不用每次手填',
+            'A todo can repeat daily, on chosen weekdays, on several days of the month, or on chosen shifts, so you do not type it in again'),
         t('做完的会收进列表底部「已完成 N 条」里，主列表只留没做的',
             'Completed items drop into a "completed" section at the bottom, leaving only the open ones in the list'),
         t('选中的那天有待办时，日历底栏信息卡会显示「N 项待办」',
@@ -1085,4 +1137,11 @@ class L10n {
   static String get widgetDayAfter => t('后天', 'Day after');
   static String get widgetEmptyHint =>
       t('还没有排班，点一下去设置', 'No schedule yet — tap to set up');
+
+  /// 桌面小组件推送失败、重试用尽之后弹一次（每个进程一次）。
+  ///
+  /// 措辞刻意不写「推送失败」：用户不关心是哪一层出的问题，只关心「桌面那张卡
+  /// 还是旧的」。也不写「请重试」—— 下一次改排班或回前台会自动再推。
+  static String get widgetSyncFailed =>
+      t('桌面小组件没同步上，下次打开会自动再试', 'Widget out of sync — it will retry next time');
 }

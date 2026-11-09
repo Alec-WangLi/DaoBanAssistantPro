@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/glass/glass.dart';
+import 'core/glass/glass_refraction.dart';
 import 'core/l10n.dart';
 import 'features/alarm/alarm_service.dart';
 
@@ -35,6 +36,9 @@ Future<void> main() async {
     }
   } catch (_) {}
   recomputeGlassTiers();
+  // 边缘折射用的 runtime effect 是异步加载的：先点着，**加载完再算一次档位**。
+  // 不 await 它 —— 首帧宁可先没有折射，也不能让启动多等一次资源装载。
+  GlassRefraction.warmUp().then((_) => recomputeGlassTiers());
 
   // 捕获 Flutter 框架错误 + 未处理异步错误，写入日志文件（「我的 → 查看日志」可看）
   FlutterError.onError = (details) {

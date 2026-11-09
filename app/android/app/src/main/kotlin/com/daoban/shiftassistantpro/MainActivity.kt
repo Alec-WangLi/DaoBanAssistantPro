@@ -3,8 +3,10 @@ package com.daoban.shiftassistantpro
 import android.app.ActivityManager
 import android.app.AlarmManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioManager
@@ -18,6 +20,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.OpenableColumns
 import android.provider.Settings
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
 import io.flutter.embedding.android.FlutterActivity
@@ -100,10 +103,45 @@ class MainActivity : FlutterActivity() {
     /** 等文件选择器回来的那个 Flutter 回调（同一时刻只允许一个）。 */
     private var pendingRingtoneResult: MethodChannel.Result? = null
 
+    /**
+     * App 活着时收系统深浅色切换。
+     *
+     * 这是 API < 31（没有 `setColorInt`）与「宿主不重新应用 RemoteViews」时的兜底；
+     * manifest 那条在 Android 8+ 的隐式广播限制下收不到，已删。
+     */
+    private var themeReceiver: BroadcastReceiver? = null
+
+    private fun registerThemeReceiver() {
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                AlarmLog.info(context, "MainActivity: 运行时收到 ${intent.action}")
+                ShiftWidgets.refreshAll(context)
+            }
+        }
+        try {
+            ContextCompat.registerReceiver(
+                this,
+                r,
+                IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            themeReceiver = r
+        } catch (e: Exception) {
+            AlarmLog.error(this, "MainActivity: 主题探针注册失败: ${e.message}")
+        }
+    }
+
     override fun onDestroy() {
         // 响铃自停靠这个引用回来撤锁屏标志：Activity 没了就把它清掉，别让它挂着一个
         // 已经销毁的 Activity（那会把整个 Activity 泄漏到进程结束）。
         instance = null
+        themeReceiver?.let { r ->
+            try {
+                unregisterReceiver(r)
+            } catch (_: Exception) {
+            }
+            themeReceiver = null
+        }
         super.onDestroy()
     }
 
@@ -114,6 +152,7 @@ class MainActivity : FlutterActivity() {
         instance = this
         handleAlarmIntent(intent)
         handleWidgetIntent(intent)
+        registerThemeReceiver()
         // 捕获原生未处理异常（含闹钟 receiver 触发时的崩溃），写入日志文件
         val default = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -647,9 +686,21 @@ class MainActivity : FlutterActivity() {
                         if (json.isEmpty()) {
                             result.error("BAD_ARGS", "json 缺失", null)
                         } else {
-                            WidgetStore.write(this, json)
-                            ShiftWidgets.refreshAll(this)
-                            result.success(true)
+                            // **如实回话**：原来无论成败都 `result.success(true)`，
+                            // 于是 Dart 侧拿不到「没写进去」这个事实，重推逻辑形同虚设。
+                            // 落盘成没成、刷新有没有抛，两条都算进这个布尔里。
+                            val written = WidgetStore.write(this, json)
+                            if (!written) {
+                                AlarmLog.error(this, "widgetPushSnapshot: 快照落盘失败")
+                            }
+                            val refreshed = try {
+                                ShiftWidgets.refreshAll(this)
+                                true
+                            } catch (e: Exception) {
+                                AlarmLog.error(this, "widgetPushSnapshot: refreshAll 抛了: ${e.message}")
+                                false
+                            }
+                            result.success(written && refreshed)
                         }
                     }
                     "getWidgetLaunchDay" -> {

@@ -438,6 +438,16 @@ class _GlassNavBarState extends State<GlassNavBar>
               protrude: AppTokens.navLensProtrude,
               liftWidth: AppTokens.lensLiftWidth,
             ),
+            // **全 app 只有底栏这一处传 `refract: true`**（参数说明见
+            // `LiquidTrack.refract`）：胶囊边缘改由真折射弯（`GlassRefract`）。
+            //
+            // ⚠️ **`spectral` 走默认值（true），别在这里传 `false`** —— 2026-11-05
+            // 用户原话「底栏那个彩色边缘没有了」。曾经的做法是「折射活着就让彩边
+            // 让位」，实测下来那圈折射带只有边缘几像素、Skia 回落的机器上干脆没有
+            // （`ImageFilter.shader` 在 Skia 上直接抛），于是拖动时只剩白芯与折边。
+            // 现在两件同时画：折射管「背后的东西被弯一点」，彩边管「方向感」。
+            // 这条契约由 `test/liquid_nav_spectral_test.dart` 钉住。
+            refract: true,
             contentBuilder: (BuildContext context, double itemW) => GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapDown: (d) => _press(d.localPosition.dx, itemW),

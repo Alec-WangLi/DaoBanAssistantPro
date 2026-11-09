@@ -18,6 +18,7 @@ import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'support/fixed_clock.dart';
 
 Future<void> _settle(WidgetTester tester, {int frames = 24}) async {
   for (var i = 0; i < frames; i++) {
@@ -57,6 +58,7 @@ Future<void> _resume(WidgetTester tester) async {
 }
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -89,7 +91,7 @@ void main() {
 
   /// 每天、一周前起效的系列。
   Future<int> seedDaily() async {
-    final t = DateTime.now();
+    final t = kAnchor;
     return repo.addRecurringTodo(
       title: '每天交班',
       repeat: RecurRepeat.daily,
@@ -109,7 +111,7 @@ void main() {
     final rows = await repo.listEvents();
     expect(rows.length, 1, reason: '进页面就该看到今天这一条');
     expect(rows.single.seriesId, id);
-    expect(dayNumber(rows.single.date), dayNumber(DateTime.now()));
+    expect(dayNumber(rows.single.date), dayNumber(kAnchor));
     await _dispose(tester);
   });
 
@@ -119,7 +121,7 @@ void main() {
     final row = (await repo.listEvents()).single;
 
     // 模拟「App 一直开着、跨过了午夜」：把那条行挪回昨天
-    final t = DateTime.now();
+    final t = kAnchor;
     final yesterday = DateTime(t.year, t.month, t.day - 1);
     await repo.setEventDate(row.id, dateOnly(yesterday));
     expect(dayNumber((await repo.listEvents()).single.date),
@@ -129,7 +131,7 @@ void main() {
     await _settle(tester);
 
     expect(dayNumber((await repo.listEvents()).single.date),
-        dayNumber(DateTime.now()),
+        dayNumber(kAnchor),
         reason: '回到前台要顺延到今天，否则界面上一直挂着昨天的日期');
     expect((await repo.listEvents()).single.id, row.id, reason: '就地顺延');
     await _dispose(tester);

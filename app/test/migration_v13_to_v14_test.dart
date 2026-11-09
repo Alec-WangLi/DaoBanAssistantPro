@@ -96,6 +96,24 @@ CREATE TABLE custom_templates (
   created_at INTEGER NOT NULL
 )
 ''',
+  // v11 起的重复待办表（本节迁移不碰它，但 v14→v15 会加两列删一列；迁移分支
+  // 倒序跑，从 v13 升上来时那一段同样会执行 —— fixture 必须补上真实老库里有的表）。
+  '''
+CREATE TABLE recurring_series_rows (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  time_minute INTEGER NULL,
+  advance_remind_minutes INTEGER NULL,
+  alarm_enabled INTEGER NOT NULL DEFAULT 0,
+  repeat_type INTEGER NOT NULL DEFAULT 0,
+  weekdays INTEGER NOT NULL DEFAULT 0,
+  month_day INTEGER NOT NULL DEFAULT 1,
+  start_date INTEGER NOT NULL,
+  skip_through INTEGER NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+)
+''',
 ];
 
 int _sec(DateTime d) => d.millisecondsSinceEpoch ~/ 1000;

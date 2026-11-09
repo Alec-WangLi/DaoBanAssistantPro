@@ -26,6 +26,7 @@ import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
 import 'shift_color_picker.dart';
+import '../../core/clock.dart';
 
 /// 排班方案编辑器。
 ///
@@ -35,9 +36,20 @@ import 'shift_color_picker.dart';
 ///
 /// [scheduleId] 为空时编辑当前排班方案；否则编辑指定方案。
 class ScheduleEditorScreen extends ConsumerStatefulWidget {
-  const ScheduleEditorScreen({super.key, this.scheduleId});
+  const ScheduleEditorScreen({
+    super.key,
+    this.scheduleId,
+    this.initialCrewExpanded = false,
+  });
 
   final int? scheduleId;
+
+  /// 仅供测试与视觉工装：首帧就展开「班组设置」。
+  ///
+  /// `text_fit_guard_test` 直接渲染屏单、没有交互钩子 —— 不给这条路径的话，
+  /// 「展开态不许截字」会在一张永远收起的卡上通过，等于没验。
+  @visibleForTesting
+  final bool initialCrewExpanded;
 
   @override
   ConsumerState<ScheduleEditorScreen> createState() =>
@@ -124,7 +136,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   int _ourTeamIndex = 0;
   List<int> _teamOffsets = [0, 1, 2, 3];
   bool _followHoliday = false; // 空白表：跟随法定节假日，无班次轮换
-  bool _crewExpanded = false;
+  late bool _crewExpanded = widget.initialCrewExpanded;
 
   // 可编辑文本用真控制器（与 _classes / _teamNames 平行），而不是每次 build
   // 新建 —— 后者会让光标跳动并泄漏控制器。
@@ -454,7 +466,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
     // 叠上按天覆盖之后，用户改周期就看不出规则本身的变化了，预览会失去意义。
     // 代价是它跟日历上看到的不一致 —— 所以下面在有覆盖时给一行提示。
     final schedule = _draftSchedule();
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     final muted = AppTokens.inkMuted(context);
 
     return GlassTile(
@@ -608,8 +620,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                       ],
                     ),
                   ),
-                  AppIcon(Icons.edit_outlined,
-                      size: AppTokens.iconMd, color: muted),
                 ],
               ),
             ),
@@ -1386,11 +1396,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTokens.labelSecondary),
                           ),
-                          if (index > 0) ...[
-                            const SizedBox(width: AppTokens.spaceXs),
-                            AppIcon(Icons.edit_outlined,
-                                size: AppTokens.iconSm, color: muted),
-                          ],
                         ],
                       ),
                     ),
@@ -1674,17 +1679,58 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(vertical: AppTokens.spaceXs),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        L10n.crewSettingsOptional,
-                        style: AppTokens.titleStrong,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            L10n.teamSettings,
+                            style: AppTokens.titleStrong,
+                          ),
+                        ),
+                        Icon(_crewExpanded
+                            ? Icons.expand_less_outlined
+                            : Icons.expand_more_outlined),
+                      ],
                     ),
-                    Icon(_crewExpanded
-                        ? Icons.expand_less_outlined
-                        : Icons.expand_more_outlined),
+                    // 折叠时也要看得见「这里有名字，而且能改」——这一条正是
+                    // v0.12.3 用户反馈的根因：输入框在，但没人知道它在。
+                    //
+                    // 8 个自定义长名字在两行里放不下（实测 320dp × 每一档字号都
+                    // 会裁），按本仓的降级顺序换短串，而不是把名字缩到看不清。
+                    // 空名字先滤掉：清空一栏后会留下「 · 二班」这种残段。
+                    if (!_crewExpanded)
+                      Padding(
+                        padding:
+                            const EdgeInsets.only(top: AppTokens.gapHair),
+                        child: LayoutBuilder(
+                          builder: (context, cons) {
+                            final style = AppTokens.microText
+                                .copyWith(color: muted);
+                            final names = _teamNames
+                                .take(_teamCount)
+                                .map((n) => n.trim())
+                                .where((n) => n.isNotEmpty)
+                                .toList();
+                            String text =
+                                L10n.teamSettingsShortHint(_teamCount);
+                            if (names.isNotEmpty) {
+                              final full =
+                                  L10n.teamSettingsHint(names.join(' · '));
+                              final tp = TextPainter(
+                                text: TextSpan(text: full, style: style),
+                                maxLines: 2,
+                                textDirection: TextDirection.ltr,
+                                textScaler: MediaQuery.textScalerOf(context),
+                              )..layout(maxWidth: cons.maxWidth);
+                              if (!tp.didExceedMaxLines) text = full;
+                            }
+                            return Text(text, maxLines: 2, style: style);
+                          },
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1725,7 +1771,6 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
   Widget _crewRow(BuildContext context, int i) {
     final primary = Theme.of(context).colorScheme.primary;
     final outline = Theme.of(context).colorScheme.outlineVariant;
-    final muted = AppTokens.inkMuted(context);
     final isOurs = i == _ourTeamIndex;
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spaceSm),
@@ -1744,21 +1789,33 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              // 输入框**封顶**：两三个字的班组名不该占掉大半行（用户
+              // v0.12.5 的真机反馈）。**填充的那段必须是紧约束**（`Expanded`
+              // + `Align`）：`Flexible` 没用完的份额会留在芯片左边，宽画布
+              // （横屏 / 平板）上芯片就漂在卡片中间。
               Expanded(
-                child: TextField(
-                  controller: _teamNameCtrls[i],
-                  onChanged: (v) => _teamNames[i] = v,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: L10n.teamName,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: GlassField(
+                      label: L10n.teamName,
+                      isDense: true,
+                      child: TextField(
+                        key: Key('crew-name-$i'),
+                        controller: _teamNameCtrls[i],
+                        onChanged: (v) => _teamNames[i] = v,
+                        decoration: glassInputDecoration(context, isDense: true),
+                        style: AppTokens.titleStrong.copyWith(
+                            fontWeight:
+                                isOurs ? FontWeight.w700 : FontWeight.w500),
+                      ),
+                    ),
                   ),
-                  style: AppTokens.titleStrong
-                      .copyWith(fontWeight: isOurs ? FontWeight.w700 : FontWeight.w500),
                 ),
               ),
-              const SizedBox(width: AppTokens.spaceSm),
               GlassPressable(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -1789,62 +1846,107 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
           ),
           // 第二行：周期模式给「周期起始日」，按月模式给「从第几段入场」——
           // 按月不读基准日，摆一个日期在那儿就是让用户操作一个不生效的值。
+          //
+          // 两条都走同一条**加高的值行**（v0.12.5 用户：「又长又矮，不太好
+          // 点到」）：细分隔线 + 12dp 上下内边距 ≈ 44dp 的可点高度。
           if (_monthly)
-            GlassPressable(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _pickCrewSegmentStart(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.gapHair,
-                      vertical: AppTokens.spaceXs),
-                  child: Row(
-                    children: [
-                      AppIcon(Icons.format_list_numbered,
-                          size: AppTokens.iconSm, color: muted),
-                      const SizedBox(width: AppTokens.spaceSm),
-                      Text(
-                        L10n.crewSegmentStart(
-                            (i < _teamSegOffsets.length
-                                    ? _teamSegOffsets[i]
-                                    : 0) +
-                                1),
-                        style: AppTokens.labelSecondary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            _crewValueRow(
+              context,
+              icon: Icons.format_list_numbered,
+              label: L10n.crewSegmentStart(
+                  (i < _teamSegOffsets.length ? _teamSegOffsets[i] : 0) + 1),
+              rowKey: Key('crew-segment-row-$i'),
+              onTap: () => _pickCrewSegmentStart(i),
             )
           else
-            GlassPressable(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _pickCrewStartDate(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.gapHair,
-                      vertical: AppTokens.spaceXs),
-                  child: Row(
+            _crewValueRow(
+              context,
+              icon: Icons.event_outlined,
+              label: L10n.crewCycleStart,
+              value: L10n.yearMonthDay(_crewStartDate(i)),
+              rowKey: Key('crew-start-row-$i'),
+              onTap: () => _pickCrewStartDate(i),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 班组卡里那条「图标 + 标签 [— 值] ›」的值行。
+  ///
+  /// 高度是刻意的：12 + 行盒 + 12，实测 ≥ 44dp —— 用户 v0.12.5 报「又长又矮，
+  /// 不太好点到」，光有整行可点不够，得看得出它有厚度。标签与值都走
+  /// `FittedBox(scaleDown)`（320dp + 大字号下缩，不省略）。
+  Widget _crewValueRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    String? value,
+    required Key rowKey,
+    required VoidCallback onTap,
+  }) {
+    final muted = AppTokens.inkMuted(context);
+    final outline = Theme.of(context).colorScheme.outline;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppTokens.spaceSm),
+        Container(height: 1, color: outline.withValues(alpha: 0.7)),
+        GlassPressable(
+          child: Semantics(
+            button: true,
+            child: GestureDetector(
+              key: rowKey,
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.gapHair, vertical: AppTokens.spaceMd),
+                child: LayoutBuilder(
+                  builder: (context, cons) => Row(
                     children: [
-                      AppIcon(Icons.event_outlined,
-                          size: AppTokens.iconSm, color: muted),
+                      AppIcon(icon, size: AppTokens.iconSm, color: muted),
                       const SizedBox(width: AppTokens.spaceSm),
-                      Text(L10n.crewCycleStart,
-                          style:
-                              AppTokens.rowSecondary.copyWith(color: muted)),
+                      // 标签**不做弹性子件**：弹性子件没吃满的份额会作为
+                      // 「剩余空间」落在行尾，把「值 + 箭头」推到半路（实测
+                      // 900dp 下空 232dp）。自然宽 + 55% 上限，剩下的全给
+                      // 右边那组 —— 与 v0.12.5 修过的 `GlassValueRow` 同一写法。
+                      ConstrainedBox(
+                        constraints:
+                            BoxConstraints(maxWidth: cons.maxWidth * 0.55),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(label, style: AppTokens.rowPrimary),
+                        ),
+                      ),
                       const SizedBox(width: AppTokens.spaceSm),
-                      Text(
-                        L10n.yearMonthDay(_crewStartDate(i)),
-                        style: AppTokens.labelSecondary,
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (value != null)
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  // 值走 13/w600（`labelSecondary`）：与 chip
+                                  // 的 w700 保持一档层级 —— `schedule_editor_test`
+                                  // 那条 w700/w600 的用例就是钉这个的。
+                                  child: Text(value,
+                                      style: AppTokens.labelSecondary),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2218,7 +2320,7 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
       // 重排读的是**整条链**（`rescheduleAll` → `getActiveSchedules`），链上既有
       // 刚编辑的这套、也有「其余时间」那套 —— 所以「编辑的是一套非当前方案」
       // 这条路径本来就对，不必再特别处理。
-      await AlarmService.rescheduleAll(repo);
+      await AlarmService.replanAfterScheduleChange(repo);
       // 返回 true 告知上层「已保存」，由上层弹提示（避免 SnackBar 随页面一起销毁）
       if (mounted) Navigator.of(context).pop(true);
     } finally {

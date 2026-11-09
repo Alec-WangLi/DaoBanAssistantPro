@@ -1220,7 +1220,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 「应用改班 / 恢复轮转」落在写库之后 ——「改班」是词汇表里点名的 commit
     // 语义（`haptics.dart` 的 `commit()` 文档）。写失败就走不到这一步。
     Haptics.commit();
-    await AlarmService.rescheduleAll(repo);
+    await AlarmService.replanAfterScheduleChange(repo);
     if (!mounted) return;
     showGlassSnack(
       context,
@@ -1323,6 +1323,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: Text(L10n.manageTimeline),
+                          trailing: const Icon(Icons.chevron_right_outlined,
+                              key: Key('manage-timeline-chevron')),
                           onTap: () {
                             Navigator.pop(sheetContext);
                             Navigator.of(context).push(MaterialPageRoute<void>(
@@ -2518,37 +2520,69 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      shift.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTokens.rowPrimary,
-                                    ),
+                              // 加了右侧箭头之后，200dp + 特大的「名字 + 已调班徽章」
+                              // 放不下，「白班」会被截成「白…」。与时间行同一套：
+                              // 高度钉死，装不下时整行缩，不省略、不改卡高。
+                              SizedBox(
+                                height: _oneLineHeight(
+                                    context, AppTokens.rowPrimary),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        shift.name,
+                                        key: const Key('compact-shift-name'),
+                                        maxLines: 1,
+                                        style: AppTokens.rowPrimary,
+                                      ),
+                                      if (isAdjusted) ...[
+                                        const SizedBox(
+                                            width: AppTokens.gapIconText),
+                                        _adjustedBadge(context, accent),
+                                      ],
+                                    ],
                                   ),
-                                  if (isAdjusted) ...[
-                                    const SizedBox(
-                                        width: AppTokens.gapIconText),
-                                    _adjustedBadge(context, accent),
-                                  ],
-                                ],
+                                ),
                               ),
                               // 时间另起一行而不是与班次名挤同一行：200dp 宽下
                               // 挤一起的结果是「白班 0…」—— 时间全被截掉。
                               if (timeText != null) ...[
                                 const SizedBox(height: AppTokens.gapHair),
-                                Text(
-                                  timeText,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTokens.labelSecondary,
+                                // 加箭头之后这一行只剩约 96dp，而最长的一串
+                                // 「20:30 – 次日08:30」要 103dp：直接加就会打
+                                // 省略号。与完整卡同一套降级 —— 缩，不省略。
+                                SizedBox(
+                                  height: _oneLineHeight(
+                                      context, AppTokens.labelSecondary),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      timeText,
+                                      key: const Key('compact-shift-time'),
+                                      maxLines: 1,
+                                      style: AppTokens.labelSecondary,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],
                           ),
                         ),
+                        if (daySchedule != null &&
+                            daySchedule.classes.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                                left: AppTokens.gapIconText,
+                                top: AppTokens.padChipV),
+                            child: AppIcon(Icons.chevron_right_outlined,
+                                key: const Key('compact-shift-chevron'),
+                                size: AppTokens.iconSm,
+                                color: muted),
+                          ),
                       ],
                     ),
                   ],
@@ -2738,6 +2772,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     Padding(
                       padding: const EdgeInsets.only(left: AppTokens.spaceSm),
                       child: _adjustedBadge(context, primary),
+                    ),
+                  // 「这一行能点开调整班次」的唯一暗示。判据与 `onTap` 同源：
+                  // 空白表没有班次可挑，那一行本来就不可点，也就不画。
+                  if (daySchedule.classes.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: AppTokens.spaceSm),
+                      child: AppIcon(Icons.chevron_right_outlined,
+                          key: const Key('info-card-shift-chevron'),
+                          size: AppTokens.iconSm,
+                          color: muted),
                     ),
                 ],
               ),
@@ -3049,6 +3093,17 @@ const double _chipMinContentW = 34;
 /// `FittedBox` 的事 —— 内容按需缩，不由这个下限兜。
 const double _minCellH = 58;
 
+/// 「差一点点就装得下」时，每行最多让出多少 dp。
+///
+/// 起因：2026-11-05 把视觉工装的字体钉成仓库内的 Noto Sans CJK 之后，360×780
+/// 特大档的信息卡比原来（等线）高 2dp，网格可用高度从 316 掉到 314，而
+/// `_weekdayH + 5 × _minCellH = 26 + 290 = 316` —— 正好多 2dp，网格于是多出一条
+/// 「滑一下才看到最后一行」的滚动条（探针实测 `maxScrollExtent == 2.0`）。
+///
+/// 2dp 的滚动条对用户没有意义，格子少 0.4dp 也看不出来；但差得多就必须照旧滚动
+/// （那是「真的装不下」，见下面 [_minCellH] 的理由）。所以只吃掉**每行 ≤1dp** 的差额。
+const double _cellFitTolerance = 1.0;
+
 /// 日历格子高度：**宽高共同决定**。
 ///
 /// 抽成顶层纯函数是为了能直接断言「横屏进入压缩分支」——
@@ -3079,7 +3134,14 @@ double calendarCellHeight({
   final shrunk = fillCellH >= naturalCellH
       ? math.min(fillCellH, cellW / aspectMin)
       : fillCellH;
-  return math.max(shrunk, _minCellH);
+  final fitted = math.max(shrunk, _minCellH);
+  // 差一点点就装得下时，让格子吃掉那点差额，而不是多出一条滚动条。
+  // 判据按「每行」算：差额摊到每一格不超过 [_cellFitTolerance] 才算「差一点点」。
+  final overflow = weekdayH + weekRows * fitted - availHeight;
+  if (overflow > 0 && overflow / weekRows <= _cellFitTolerance) {
+    return fitted - overflow / weekRows;
+  }
+  return fitted;
 }
 
 /// 换月动画里的一「页」（网格，或年月胶囊里那几个字），带着**它自己那个月**。

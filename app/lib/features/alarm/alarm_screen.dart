@@ -18,12 +18,14 @@ import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
+import '../../core/widgets/glass_value_row.dart';
 import '../../core/widgets/glass_weekday_picker.dart';
 import '../../core/widgets/section_heading.dart';
 import '../../data/app_repository.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import 'alarm_service.dart';
+import '../../core/clock.dart';
 
 /// 闹钟：未来 30 天班次闹钟（可单独开关，响过的自动隐藏）+ 自定义闹钟。
 class AlarmScreen extends ConsumerStatefulWidget {
@@ -82,7 +84,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
         const <int, bool>{};
     ref.watch(appSettingsProvider.select((s) => s.language)); // 语言切换时重建（**只订阅语言** —— 全量 watch 会让拨触觉开关也白重建整页）
 
-    final now = DateTime.now();
+    final now = appNow();
     final today = dateOnly(now);
     final shiftAlarms = <_ShiftAlarmEntry>[];
     if (chain != null) {
@@ -329,6 +331,11 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ],
             ),
           ),
+          Icon(Icons.edit_outlined,
+              key: const Key('alarm-edit-hint'),
+              size: AppTokens.iconSm,
+              color: AppTokens.inkMuted(context)),
+          const SizedBox(width: AppTokens.gapIconText),
           GlassDeleteButton(
             // 与待办列表同理：行尾用紧凑形态，别让一屏几行的列表挂满红圆。
             compact: true,
@@ -374,7 +381,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   /// 新建（[a] 为 null）或编辑（[a] 非空）自定义闹钟。
   void _showAlarmDialog({CustomAlarm? a}) {
     final isEdit = a != null;
-    final now = TimeOfDay.now();
+    // 默认钟点必须与下面那行日期用同一个时钟（`dateOnly(appNow())`）。原先这里是
+    // `TimeOfDay.now()`：两个时钟一旦不同步（钉住时钟的用例就是），默认落点就总在
+    // 「此刻」之后，`nextOnceDate` 的顺延那一支永远走不到 —— 用例绿着，却什么都没验。
+    final now = TimeOfDay.fromDateTime(appNow());
     var time = TimeOfDay(hour: a?.hour ?? now.hour, minute: a?.minute ?? now.minute);
     // 默认「一次性」：新建自定义闹钟里绝大多数就是「响这一次」，响过之后
     // `deleteExpiredOnceAlarms` 会把它收走，不用用户自己回来删。编辑既有闹钟时
@@ -387,12 +397,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     // 这里不能「改钟点时就把 `onceDate` 就地改写成结果」：默认值一顺延到明天，
     // 用户再把钟点往前调回今天，就再也回不到今天了 —— 派生而不是回写，才不会
     // 把默认值当成用户的选择。
-    var onceDate = a?.onceDate ?? dateOnly(DateTime.now());
+    var onceDate = a?.onceDate ?? dateOnly(appNow());
     DateTime onceDateAt(int hour, int minute) => nextOnceDate(
-        now: DateTime.now(), chosen: onceDate, hour: hour, minute: minute);
+        now: appNow(), chosen: onceDate, hour: hour, minute: minute);
     var weekdays = a?.weekdays ?? 0;
     if (repeatType == 2 && weekdays == 0) {
-      weekdays = 1 << (DateTime.now().weekday - 1);
+      weekdays = 1 << (appNow().weekday - 1);
     }
 
     showGlassDialog<void>(
@@ -403,11 +413,11 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(L10n.time),
-                trailing: Text(_fmt(time.hour * 60 + time.minute),
-                    style: AppTokens.sectionTitle),
+              GlassValueRow(
+                key: const Key('alarm-time-row'),
+                label: L10n.time,
+                value: _fmt(time.hour * 60 + time.minute),
+                valueStyle: AppTokens.sectionTitle,
                 onTap: () async {
                   final p = await showGlassTimePicker(
                       context, initialTime: time);
@@ -429,13 +439,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ),
               const SizedBox(height: 8),
               if (repeatType == 0)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(L10n.date),
+                GlassValueRow(
+                  key: const Key('alarm-date-row'),
+                  label: L10n.date,
                   // 这一行写的是**真正会响的那天**（`onceDateAt` 派生），不是用户
                   // 选的那个原始日期 —— 两者只在「选的那天已经过去」时才不同。
-                  trailing: Text(
-                      L10n.monthDay(onceDateAt(time.hour, time.minute))),
+                  value: L10n.monthDay(onceDateAt(time.hour, time.minute)),
                   onTap: () async {
                     final p = await showGlassDatePicker(
                       context,

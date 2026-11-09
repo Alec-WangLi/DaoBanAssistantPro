@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  今日卡「没班次」那个 12dp 圆点（2026-11-09）。
+  颜色随深浅色走，所以用同一资源名 + `drawable-night/` 的另一份；宿主重新应用
+  RemoteViews 时按当时的 uiMode 解析。位图做不到这一点（烤死的是具体 ARGB）。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/wg_empty_light" />
+</shape>

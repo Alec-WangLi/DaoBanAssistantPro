@@ -1,0 +1,346 @@
+// app/test/editable_affordance_test.dart
+//
+// 「能改 / 能点的东西看起来得像能改 / 能点」的界面护栏。
+//
+// 这一版把全 app 的提示统一成三种语言：
+//   · 有框的输入框 = 可以直接打字；
+//   · 铅笔 = 点开进入「编辑这条内容」的表单；
+//   · 箭头 = 点开打开别的东西（选择器 / 页面 / 说明或动作弹窗）。
+//
+// 本文件按页面分组，先收弹窗值行（Task 2），后续任务继续往里加。
+import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
+import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/data/seed.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
+import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
+import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
+import 'package:shiftassistantpro/features/profile/profile_screen.dart';
+import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
+import 'package:shiftassistantpro/state/app_settings.dart';
+import 'support/fixed_clock.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
+
+import '../tool/visual/visual_harness.dart'
+    show
+        ensureVisualFonts,
+        makeVisualDatabase,
+        onboardingPrefs,
+        pumpScreen,
+        seedBlankSchedule,
+        seedMyTemplates,
+        seedTodayOverride,
+        teardownVisual,
+        useStandardGlassTier;
+
+/// 有界推进若干帧（待办 / 闹钟页都有常驻定时器，不能 `pumpAndSettle`）。
+Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 40));
+  }
+}
+
+Future<void> _dispose(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 20));
+}
+
+/// 把插件通道挂上空实现（没人接的通道调用永远不会完成，重排链路会卡住）。
+void _stubPluginChannels() {
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  for (final channel in const [
+    'dexterous.com/flutter/local_notifications',
+    'com.daoban.shiftassistantpro/settings',
+  ]) {
+    messenger.setMockMethodCallHandler(
+        MethodChannel(channel), (call) async => null);
+  }
+}
+
+Future<AppDatabase> _pump(
+  WidgetTester tester,
+  Widget home, {
+  Size size = const Size(420, 1400),
+  Future<void> Function(AppDatabase db)? seed,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  final raw = sqlite3.sqlite3.openInMemory();
+  final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+  addTearDown(db.close);
+  _stubPluginChannels();
+
+  if (seed != null) await seed(db);
+
+  await tester.pumpWidget(ProviderScope(
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: MaterialApp(home: home),
+  ));
+  await _settle(tester);
+  return db;
+}
+
+Finder _chevronIn(String key) => find.descendant(
+    of: find.byKey(Key(key)),
+    matching: find.byIcon(Icons.chevron_right_outlined));
+
+/// 用视觉工装那份「有排班、有待办、有闹钟」的种子库挂一屏。
+Future<AppDatabase> _pumpVisual(
+  WidgetTester tester,
+  Widget home, {
+  Size size = const Size(420, 900),
+  Future<void> Function(AppDatabase db)? setup,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  final db = await makeVisualDatabase();
+  addTearDown(db.close);
+  _stubPluginChannels();
+  if (setup != null) await setup(db);
+
+  await tester.pumpWidget(ProviderScope(
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: MaterialApp(home: home),
+  ));
+  await _settle(tester);
+  return db;
+}
+
+void main() {
+  useFixedNow();
+  setUpAll(() async {
+    await initializeDateFormatting('zh');
+    drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    await ensureVisualFonts();
+  });
+  setUp(() {
+    L10n.locale = 'zh';
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets('待办弹窗：日期 / 时间 / 提醒三行都有箭头', (tester) async {
+    await _pump(tester, const ScheduleScreen());
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+
+    for (final key in const ['todo-date-row', 'todo-time-row', 'todo-remind-row']) {
+      expect(find.byKey(Key(key)), findsOneWidget, reason: '$key 不在');
+      expect(_chevronIn(key), findsOneWidget, reason: '$key 没有箭头');
+    }
+
+    await _dispose(tester);
+  });
+
+  testWidgets('闹钟弹窗：时间行保留 18 号字、两行都有箭头', (tester) async {
+    await _pump(tester, const AlarmScreen());
+    await tester.tap(find.text(L10n.newAlarm));
+    await _settle(tester);
+
+    final timeRow = find.byKey(const Key('alarm-time-row'));
+    expect(timeRow, findsOneWidget);
+    final texts = tester.widgetList<Text>(
+        find.descendant(of: timeRow, matching: find.byType(Text)));
+    expect(
+      texts.any((t) => t.style?.fontSize == AppTokens.sectionTitle.fontSize),
+      isTrue,
+      reason: '闹钟弹窗的时间是主角，必须保留 sectionTitle 那一档',
+    );
+    for (final key in const ['alarm-time-row', 'alarm-date-row']) {
+      expect(_chevronIn(key), findsOneWidget, reason: '$key 没有箭头');
+    }
+
+    await _dispose(tester);
+  });
+
+  testWidgets('200×400：待办弹窗三行不溢出、箭头可见', (tester) async {
+    await _pump(tester, const ScheduleScreen(), size: const Size(200, 400));
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+
+    expect(tester.takeException(), isNull);
+    for (final key in const ['todo-date-row', 'todo-time-row', 'todo-remind-row']) {
+      expect(find.byKey(Key(key)), findsOneWidget, reason: '$key 在小窗里不在');
+      expect(_chevronIn(key), findsOneWidget, reason: '$key 在小窗里没有箭头');
+    }
+
+    await _dispose(tester);
+  });
+
+  testWidgets('待办行没有编辑笔，点行本身仍开编辑弹窗', (tester) async {
+    // 2026-11-05 用户看过真机之后否掉了那颗铅笔：「待办事项界面我不想要那个编辑笔的
+    // 图标，太多余了」。整行本来就可点、点了就开编辑弹窗，铅笔只是把「可点」又说了一遍。
+    // 这条用例钉两头：**不许再补回来**，而**行的点击不能跟着一起丢**。
+    await _pump(tester, const ScheduleScreen(), seed: (db) async {
+      await AppRepository(db)
+          .addEvent(title: '交班记录', date: dateOnly(kAnchor));
+    });
+
+    expect(find.byKey(const Key('todo-edit-hint')), findsNothing,
+        reason: '编辑笔被补回来了 —— 用户明确否掉过它');
+    expect(find.byIcon(Icons.edit_outlined), findsNothing,
+        reason: '别换个图标再补回来');
+
+    await tester.tap(find.text('交班记录'));
+    await _settle(tester);
+    expect(find.text(L10n.editEvent), findsOneWidget,
+        reason: '删了铅笔之后整行还得能点开编辑 —— 那才是这条入口');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('闹钟行：铅笔在删除钮之前，且点铅笔也能开编辑弹窗', (tester) async {
+    await _pump(tester, const AlarmScreen(), seed: (db) async {
+      await AppRepository(db).addCustomAlarm(hour: 7, minute: 30, repeatType: 1);
+    });
+
+    final hint = find.byKey(const Key('alarm-edit-hint'));
+    expect(hint, findsOneWidget);
+    expect(tester.getTopLeft(hint).dx,
+        lessThan(tester.getTopLeft(find.byType(GlassDeleteButton)).dx));
+
+    await tester.tap(hint);
+    await _settle(tester);
+    expect(find.text(L10n.editAlarm), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('我的模板管理行：有编辑铅笔', (tester) async {
+    await _pump(tester, const ShiftTemplatePickerScreen(),
+        seed: (db) => seedMyTemplates(db));
+
+    await tester.tap(find.text(L10n.manageTemplates));
+    await _settle(tester);
+    expect(find.byKey(const Key('template-edit-hint')), findsWidgets);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('排班管理方案行：不再有打开箭头', (tester) async {
+    await _pump(tester, const ScheduleManagementScreen(),
+        seed: (db) => seedIfEmpty(db));
+
+    expect(find.byKey(const Key('scheme-open-hint')), findsNothing,
+        reason: '用户 2026-11-09 明确去掉这一列的箭头');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('200×400：待办行没有铅笔、删除钮还在、不溢出', (tester) async {
+    await _pump(tester, const ScheduleScreen(),
+        size: const Size(200, 400), seed: (db) async {
+      await AppRepository(db)
+          .addEvent(title: '交班记录', date: dateOnly(kAnchor));
+    });
+
+    expect(tester.takeException(), isNull);
+    // 铅笔 2026-11-05 整行删掉了（用户否掉；行本身可点就是暗示）。
+    expect(find.byKey(const Key('todo-edit-hint')), findsNothing);
+    expect(find.byType(GlassDeleteButton), findsWidgets);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('日历信息卡：有班表才有调整箭头', (tester) async {
+    await _pumpVisual(tester, const CalendarScreen());
+    expect(find.byKey(const Key('info-card-shift-chevron')), findsOneWidget);
+    await _dispose(tester);
+
+    await _pumpVisual(tester, const CalendarScreen(), setup: seedBlankSchedule);
+    expect(find.byKey(const Key('info-card-shift-chevron')), findsNothing,
+        reason: '空白表没有可挑的班次，那一行本来就不该点');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('200×400 紧凑信息卡：有箭头，时间不被省略', (tester) async {
+    await _pumpVisual(tester, const CalendarScreen(),
+        size: const Size(200, 400));
+
+    expect(find.byKey(const Key('compact-shift-chevron')), findsOneWidget);
+    final time = tester.renderObject<RenderParagraph>(
+        find.byKey(const Key('compact-shift-time')));
+    expect(time.didExceedMaxLines, isFalse,
+        reason: '紧凑卡的时间不许被省略 —— 加箭头换来的宽度要用缩放补');
+
+    await _dispose(tester);
+  });
+
+  testWidgets('我的页：五个动作行都有箭头', (tester) async {
+    // 高给足：这几行分布在「清除重置」和「关于」两组，1400 高时后者还没被构建。
+    await _pump(tester, const ProfileScreen(), size: const Size(420, 2400));
+
+    for (final key in const [
+      'profile-chevron-update',
+      'profile-chevron-changelog',
+      'profile-chevron-help',
+      'profile-chevron-log',
+      'profile-chevron-reset',
+    ]) {
+      expect(find.byKey(Key(key)), findsOneWidget, reason: '$key 不在');
+    }
+
+    await _dispose(tester);
+  });
+
+  testWidgets('时段弹层：「管理排班时段」有箭头', (tester) async {
+    await _pumpVisual(tester, const CalendarScreen());
+    await tester.tap(find.byIcon(Icons.timeline));
+    await _settle(tester);
+
+    expect(find.byKey(const Key('manage-timeline-chevron')), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('窄屏模板卡（堆叠版式）也有箭头', (tester) async {
+    await _pump(tester, const ShiftTemplatePickerScreen(),
+        size: const Size(200, 400), seed: (db) => seedMyTemplates(db));
+
+    expect(find.byKey(const Key('template-card-chevron')), findsWidgets);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('200×400 · 特大：调过班的紧凑卡班次名不被省略', (tester) async {
+    useStandardGlassTier();
+    final db = await makeVisualDatabase();
+    addTearDown(db.close);
+    await seedTodayOverride(db);
+
+    await pumpScreen(
+      tester,
+      home: const CalendarScreen(),
+      overrides: <Override>[databaseProvider.overrideWithValue(db)],
+      size: const Size(200, 400),
+      fontSize: AppFontSize.extraLarge,
+      extraPrefs: onboardingPrefs,
+    );
+
+    final name = tester.renderObject<RenderParagraph>(
+        find.byKey(const Key('compact-shift-name')));
+    expect(name.didExceedMaxLines, isFalse,
+        reason: '小窗 + 特大时班次名被「已调班」徽章与箭头挤成了省略号');
+
+    await teardownVisual(tester);
+  });
+}

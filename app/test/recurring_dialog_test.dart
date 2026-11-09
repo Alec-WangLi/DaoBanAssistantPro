@@ -18,11 +18,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'support/fixed_clock.dart';
 
 /// 有界推进若干帧（**不用 `pumpAndSettle`**：页面上有一堆永远调度下一帧的东西）。
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
@@ -57,6 +59,7 @@ const _wedBit = 1 << 2;
 const _friBit = 1 << 4;
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -93,16 +96,132 @@ void main() {
   /// `occurrenceOnOrBefore` 返回 null（那是对的 —— 第一次要等下周三），于是列表里
   /// 什么都没有，后面那些「点开它」的步骤全会找不到控件。放一周前就恒有一个。
   Future<int> seedSeries() async {
-    final t = DateTime.now();
+    final t = kAnchor;
     final id = await repo.addRecurringTodo(
       title: '周三例会',
       repeat: RecurRepeat.weekly,
       startDate: dateOnly(DateTime(t.year, t.month, t.day - 7)),
       weekdays: _wedBit,
     );
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
     return id;
   }
+
+
+  // ── v0.12.3：每月多选 / 按班次 / 新建重复待办立刻排提醒 ──
+
+  testWidgets('新建：每月勾 1 与 15，落库是两天的掩码', (tester) async {
+    await mount(tester);
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+    await tester.enterText(find.byType(TextField), '灭火器检查');
+    await tester.tap(find.text(L10n.repeatMonthly));
+    await _settle(tester, frames: 6);
+
+    Finder inDialog(Finder f) =>
+        find.descendant(of: find.byType(GlassDialog), matching: f);
+    // 切到「每月」默认勾当天（所选日期那一天的号数）。**只补勾还没有的那几天**
+    // —— 盲目点 15 的话，今天是 15 号时那一击会把默认勾的当天**取消掉**，
+    // 用例就按日期现形了（v0.9.14 那条「周三/周四必红」是同一类）。
+    final today = kAnchor.day;
+    for (final d in const [1, 15]) {
+      if (d == today) continue;
+      await tester.tap(inDialog(find.text('$d')));
+      await _settle(tester, frames: 4);
+    }
+    await tester.tap(find.text(L10n.add));
+    await _settle(tester);
+
+    final s = (await repo.listRecurringTodos()).single;
+    expect(s.monthDays, (1 << (today - 1)) | (1 << 0) | (1 << 14));
+    await _dispose(tester);
+  });
+
+  testWidgets('新建：按班次一个班次都没有 → 保存被挡下、不落库', (tester) async {
+    // 空白表（跟随法定节假日）没有班次定义。
+    await repo.saveSchedule(
+      name: '法定班次',
+      anchorDate: dateOnly(kAnchor),
+      classes: const [],
+      cycle: const [],
+    );
+    await mount(tester);
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+    await tester.enterText(find.byType(TextField), '带工牌');
+    await tester.tap(find.text(L10n.repeatShift));
+    await _settle(tester, frames: 6);
+    expect(find.text(L10n.shiftRuleNoSchedule), findsOneWidget);
+
+    await tester.tap(find.text(L10n.add));
+    await _settle(tester);
+
+    expect(find.text(L10n.addEvent), findsOneWidget, reason: '不许关窗');
+    expect(find.text(L10n.ruleNeedsShift), findsOneWidget);
+    expect(await repo.listRecurringTodos(), isEmpty, reason: '无效规则不落库');
+    await _dispose(tester);
+  });
+
+  testWidgets('新建重复待办会立刻排上提醒（不必等下一次 rescheduleAll）',
+      (tester) async {
+    final calls = <MethodCall>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+        const MethodChannel('com.daoban.shiftassistantpro/settings'), (call) async {
+      calls.add(call);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(
+        const MethodChannel('com.daoban.shiftassistantpro/settings'), null));
+
+    await mount(tester);
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+    await tester.enterText(find.byType(TextField), '每天交班');
+    // 每天 + 准时提醒
+    await tester.tap(find.text(L10n.repeatDaily));
+    await _settle(tester, frames: 4);
+    await tester.tap(find.text(L10n.advanceRemindOptional));
+    await _settle(tester);
+    await tester.tap(find.text(L10n.remindOptionLabel(0)));
+    await _settle(tester, frames: 6);
+    await tester.tap(find.text(L10n.add));
+    await _settle(tester);
+
+    final scheduled = calls
+        .where((c) => c.method == 'scheduleTodoReminder')
+        .map((c) => (c.arguments as Map)['id'] as int)
+        .toList();
+    // 重复待办的提醒号段是 40000 + 系列 id。
+    expect(scheduled.any((id) => id >= 40000), isTrue,
+        reason: '新建重复待办之后必须立刻排上它的提醒');
+    await _dispose(tester);
+  });
+
+
+  testWidgets('编辑弹窗：老数据的空月日打开时补当天', (tester) async {
+    final t = kAnchor;
+    final sid = await repo.addRecurringTodo(
+      title: '老月检',
+      repeat: RecurRepeat.monthly,
+      startDate: dateOnly(t),
+      monthDays: 0,
+    );
+    await repo.addEvent(
+        title: '老月检', date: dateOnly(t), seriesId: sid);
+    await mount(tester);
+    await tester.tap(find.text('老月检'));
+    await _settle(tester);
+    expect(find.text(L10n.editEvent), findsOneWidget);
+
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+    expect(find.text(L10n.editEvent), findsNothing, reason: '补上默认值后应能保存');
+    final s = (await repo.listRecurringTodos()).single;
+    expect(s.monthDays, 1 << (t.day - 1));
+    await _dispose(tester);
+  });
 
   testWidgets('新建：选「每周」→ 只勾周三 → 添加，落成一个系列', (tester) async {
     await mount(tester);
@@ -118,7 +237,7 @@ void main() {
     // 选「每周」之后**默认勾上今天那一天**（掩码为空的话生成器会当脏数据、
     // 一条都不生成，而界面上看不出来）。把它调成「只有周三」——
     // 这里要按今天是星期几来调，否则用例会在周三那天自己把勾点掉。
-    final todayWd = DateTime.now().weekday; // 1..7，周一 = 1
+    final todayWd = kAnchor.weekday; // 1..7，周一 = 1
     if (todayWd != DateTime.wednesday) {
       await tester.ensureVisible(find.text(L10n.weekday(todayWd - 1)));
       await tester.tap(find.text(L10n.weekday(todayWd - 1)));
@@ -185,7 +304,7 @@ void main() {
         reason: '对齐到新规则 —— 生成器不会替我们回退');
 
     // 落点应当是「不晚于今天的最近一个周五」
-    final t = DateTime.now();
+    final t = kAnchor;
     final back = (t.weekday - DateTime.friday + 7) % 7;
     final expected = DateTime(t.year, t.month, t.day - back);
     expect(dayNumber(after.date), dayNumber(expected));

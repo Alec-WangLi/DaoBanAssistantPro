@@ -22,6 +22,7 @@ import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/widget/widget_service.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 const MethodChannel _channel =
@@ -45,7 +46,7 @@ Future<int> _pushesOf(Future<void> Function() body, {int failFirst = 0}) async {
   return pushes;
 }
 
-Future<void> _push({int todoCount = 3}) => WidgetService.push(
+Future<bool> _push({int todoCount = 3}) => WidgetService.push(
       chain: null,
       settings: const AppSettings(),
       todayTodoCount: todoCount,
@@ -64,7 +65,7 @@ Future<(AppRepository, ScheduleChain, int)> _seedChain() async {
       shiftTemplates.firstWhere((ShiftTemplate x) => x.id == 'four_crew_three_shift');
   final int id = await repo.saveSchedule(
     name: t.subtitle,
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(kAnchor),
     classes: t.classes,
     cycle: t.cycle,
     makeCurrent: true,
@@ -78,6 +79,7 @@ Future<(AppRepository, ScheduleChain, int)> _seedChain() async {
 }
 
 void main() {
+  useFixedNow();
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
@@ -121,7 +123,7 @@ void main() {
 
       // 调班：把今天改成这套方案里的另一个班次
       final domain = await repo.getScheduleDomain(id);
-      await repo.setDayOverrides(<DateTime>[dateOnly(DateTime.now())],
+      await repo.setDayOverrides(<DateTime>[dateOnly(kAnchor)],
           classId: domain!.classes[1].id!);
       final ScheduleChain after = (await repo.getActiveSchedules())!.chain;
       await WidgetService.push(
@@ -182,8 +184,21 @@ void main() {
 
     final Future<void> a = _push(todoCount: 3);
     await Future<void>.delayed(Duration.zero); // 让它跑到跨端那一步、挂住
-    await _push(todoCount: 4); // 内容不同 ⇒ 去重拦不住，只能靠 in-flight 守卫
+    // 内容不同 ⇒ 去重拦不住，只能靠 in-flight 守卫。
+    final bool coalesced =
+        await _push(todoCount: 4);
     expect(pushes, 1, reason: '上一次还没回来就发第二发 —— 原生侧会重渲染两遍');
+
+    // ⚠️ **被合并掉的那一发必须回 `false`**（2026-11-05 独立审查指出）：能走到
+    // in-flight 这一行就说明内容与在飞那发**不同**，回 true 等于告诉调用方「这份
+    // 内容已经落地了」，而桌面上拿到的是**旧内容** —— 要等到下一次触发才跟上。
+    // 回 false 之后 `HomeShell` 会排一次尾重推，那时在飞那发早回来了。
+    expect(coalesced, isFalse,
+        reason: '被合并掉却报成功 —— 最新那份内容会静默丢掉，桌面停在旧内容上');
+    // 而它**不是失败**：没有失败原因，调用方据此不把它算进失败预算
+    // （否则保存一次排班就会弹「小组件没同步上」）。
+    expect(WidgetService.lastFailure.value, isNull,
+        reason: '合并不是失败，不该留下失败原因');
 
     gate.complete();
     await a;
@@ -191,5 +206,60 @@ void main() {
     await _push(todoCount: 5);
     expect(pushes, 2,
         reason: '守卫把闸门**永久**关死了 —— 那比没有守卫更糟：以后再也推不出去');
+  });
+
+  test('原生回 false：push 回 false、留下原因，且不算「已推」', () async {
+    // 2026-11-05 MIUI13 白块那条的**根**：原来 `MainActivity` 无论成败都
+    // `result.success(true)`，Dart 侧也不读返回值 ⇒「推失败」这个信号整条链上
+    // 不存在，`HomeShell` 的重推条件无从写起。现在原生如实回话，这里守三件事：
+    // ① 失败要能被调用方看见（返回 false）；② 失败原因要留下来（可观测）；
+    // ③ 失败不许记成「已推」（否则重推逻辑被去重键自己挡死）。
+    WidgetService.resetPushCache();
+    addTearDown(WidgetService.resetPushCache);
+    var pushes = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (MethodCall call) async {
+      if (call.method != 'widgetPushSnapshot') return null;
+      pushes++;
+      return false; // 落盘失败 / refreshAll 抛了 —— 原生如实回话
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, null));
+
+    expect(await _push(), isFalse, reason: '原生说没成，Dart 侧却报成功 —— 重推永远不会发生');
+    expect(
+      WidgetService.lastFailure.value,
+      isNotNull,
+      reason: '失败了却一个字都没留下 —— 用户只看到桌面不动，排查时也抓不到东西',
+    );
+
+    await _push();
+    expect(pushes, 2, reason: '失败那一次被记成「已推」，第二次直接去重掉了');
+  });
+
+  test('成功后把失败原因清掉（下一次失败要能重新报）', () async {
+    WidgetService.resetPushCache();
+    addTearDown(WidgetService.resetPushCache);
+    var ok = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (MethodCall call) async {
+      if (call.method != 'widgetPushSnapshot') return null;
+      return ok;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, null));
+
+    expect(await _push(), isFalse);
+    expect(WidgetService.lastFailure.value, isNotNull);
+
+    ok = true;
+    expect(await _push(todoCount: 9), isTrue, reason: '换了内容又回 true，还是推不出去');
+    expect(
+      WidgetService.lastFailure.value,
+      isNull,
+      reason: '成功后没清原因 —— 下一次真失败时那条提示会被旧原因骗过去',
+    );
   });
 }

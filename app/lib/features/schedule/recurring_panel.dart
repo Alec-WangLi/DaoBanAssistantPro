@@ -3,7 +3,7 @@
 // 形态是**弹窗**不是整页（照「我的模板」那个管理弹窗那套配方）：系列通常只有
 // 几个，为它单开一页反而要多一次进出。
 //
-// 数据走 `recurringTodosProvider`（一次性读 + autoDispose）—— **用流的话每条挂
+// 数据走 `recurringPanelProvider`（一次性读 + autoDispose）—— **用流的话每条挂
 // 这个弹窗的 widget 用例都会在拆树时报「A Timer is still pending」**
 // （drift 取消查询流时排的零时长定时器），而且面板是个短命弹层，没必要挂流。
 // 页内改 / 删之后由 `ref.invalidate` 重读。
@@ -19,13 +19,14 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_delete_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_loading.dart';
-import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../data/app_repository.dart';
 import '../../domain/recurring_todo.dart';
+import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
 import '../alarm/alarm_service.dart';
-import 'schedule_screen.dart';
+import 'recurring_series_editor.dart';
+import '../../core/clock.dart';
 
 /// 弹出「重复待办」管理面板。
 ///
@@ -49,19 +50,19 @@ class _RecurringList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final series = ref.watch(recurringTodosProvider).valueOrNull;
-    if (series == null) {
+    final data = ref.watch(recurringPanelProvider).valueOrNull;
+    if (data == null) {
       return const Padding(
         padding: EdgeInsets.all(AppTokens.spaceLg),
         child: GlassLoading(),
       );
     }
-    if (series.isEmpty) {
+    if (data.series.isEmpty) {
       return EmptyState(L10n.recurringEmpty);
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [for (final s in series) _row(context, ref, s)],
+      children: [for (final s in data.series) _row(context, ref, s, data.chain)],
     );
   }
 
@@ -73,12 +74,23 @@ class _RecurringList extends ConsumerWidget {
   /// 五六十 dp，而这一行尾部要放一个开关加一个删除钮，200×400 小窗实测尾部
   /// 直接溢出（视觉工装的 `failOnOverflow` 抓的）。中间那一段用 `Expanded`
   /// 兜底：实在放不下时先牺牲标题与副标题的宽度（它们本来就是省略号结尾）。
-  Widget _row(BuildContext context, WidgetRef ref, RecurringTodo s) {
-    final today = dateOnly(DateTime.now());
+  Widget _row(BuildContext context, WidgetRef ref, RecurringTodo s,
+      ScheduleChain? chain) {
+    final today = dateOnly(appNow());
+    // 按班次系列要问「那天我们班组上什么班」—— 与生成器 / 提醒同一条解析链。
+    final shiftOn = chain?.shiftOn;
+    final knownNames = {
+      for (final c in (chain?.classChoicesFrom(today) ?? const <ShiftClass>[]))
+        c.name,
+    };
+    final missingShiftNames = [
+      for (final n in s.shiftNames)
+        if (!knownNames.contains(n)) n,
+    ];
     // 「下次」要的是**严格晚于今天**的那一次。用 `occurrenceOnOrBefore` 兜底是错的：
     // 那给出的是「已经过去的那一次」（比如今天是周二、系列是每周三，它给上周三），
     // 而那一行此刻就在列表里躺着 —— 面板上再把它写成「下次 9月23日」是在说反话。
-    final next = nextOccurrenceAfter(s, today);
+    final next = nextOccurrenceAfter(s, today, shiftOn: shiftOn);
     final parts = [
       s.ruleLabel,
       if (s.timeLabel.isNotEmpty) s.timeLabel,
@@ -116,6 +128,13 @@ class _RecurringList extends ConsumerWidget {
         Text(s.title, maxLines: 2, style: AppTokens.rowPrimary),
         Text(parts.join(' · '),
             maxLines: 2, style: AppTokens.microText.copyWith(color: muted)),
+        if (missingShiftNames.isNotEmpty)
+          Text(
+            L10n.shiftRuleMissing(missingShiftNames),
+            maxLines: 2,
+            style: AppTokens.microText
+                .copyWith(color: Theme.of(context).colorScheme.error),
+          ),
       ],
     );
 
@@ -124,7 +143,10 @@ class _RecurringList extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: AppTokens.spaceMd),
       padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.spaceSm, vertical: AppTokens.spaceXs),
-      onTap: () => _edit(context, ref, s),
+      // 点整行 = 打开**系列编辑器**（不依赖「当前这一次」是否存在）。
+      // 2026-10-21 用户真机：「已添加的重复待办，它不能修改，也找不到编辑」——
+      // 从前这里编的是当前那一条，没有那一条就只弹一句提示。
+      onTap: () => showRecurringSeriesEditor(context, s),
       child: tight
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,6 +161,7 @@ class _RecurringList extends ConsumerWidget {
                 switchTile,
                 const SizedBox(width: AppTokens.gapIconText),
                 Expanded(child: texts),
+                const SizedBox(width: AppTokens.gapIconText),
                 deleteTile,
               ],
             ),
@@ -152,37 +175,9 @@ class _RecurringList extends ConsumerWidget {
   Future<void> _setEnabled(WidgetRef ref, RecurringTodo s, bool v) async {
     final repo = ref.read(appRepositoryProvider);
     await repo.setRecurringEnabled(s.id!, v);
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(appNow()));
     await AlarmService.rescheduleAll(repo);
-    ref.invalidate(recurringTodosProvider);
-  }
-
-  Future<void> _edit(
-      BuildContext context, WidgetRef ref, RecurringTodo s) async {
-    final repo = ref.read(appRepositoryProvider);
-    final live = (await repo.listEvents())
-        .where((e) => e.seriesId == s.id && !e.isCompleted)
-        .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
-    if (!context.mounted) return;
-    if (live.isEmpty) {
-      // 没有「当前这一次」就没地方挂那个编辑弹窗（它编的是**行**，顺带写回系列）。
-      // 不另做一个只编系列的界面：那种情况很少（起始日在将来 / 刚跳过），明说
-      // 一句比多一套界面划算。
-      showGlassSnack(context, L10n.recurringNoCurrent,
-          icon: Icons.info_outline);
-      return;
-    }
-    // **不写 `live.single`。** 库里短时间可能出现两条未完成（把当前那一条勾回来、
-    // 而生成器还没跑），`.single` 当场抛 `StateError`（「Bad state: Too many
-    // elements」）—— 这个系列点一下就崩。
-    //
-    // 取**日期最新的那条**，与 `advanceRecurringTodos` 收脏数据那条口径**一模一样**
-    // （`app_repository.dart` 里那句 `keep = live.last`，它也是先把 live 按日期升序
-    // 排过再取最后一条）。两处对「当前那一条」的定义必须一致 —— 不然面板编的是
-    // 这一条、生成器留的是那一条，用户改完看不出为什么没生效。
-    await showEditEventDialog(context, ref, live.last);
-    ref.invalidate(recurringTodosProvider);
+    ref.invalidate(recurringPanelProvider);
   }
 
   Future<void> _delete(
@@ -214,6 +209,6 @@ class _RecurringList extends ConsumerWidget {
     final repo = ref.read(appRepositoryProvider);
     await repo.deleteRecurringTodo(s.id!);
     await AlarmService.rescheduleAll(repo);
-    ref.invalidate(recurringTodosProvider);
+    ref.invalidate(recurringPanelProvider);
   }
 }

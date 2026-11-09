@@ -19,6 +19,7 @@ import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'support/fixed_clock.dart';
 
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
   for (var i = 0; i < frames; i++) {
@@ -45,6 +46,7 @@ void _stubPluginChannels() {
 }
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -78,15 +80,15 @@ void main() {
 
   /// 造一条「每周三、一周前起效」的系列 + 一条普通待办。
   Future<int> seed() async {
-    final t = DateTime.now();
+    final t = kAnchor;
     final id = await repo.addRecurringTodo(
       title: '周三例会',
       repeat: RecurRepeat.weekly,
       startDate: dateOnly(DateTime(t.year, t.month, t.day - 7)),
       weekdays: 1 << 2,
     );
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
-    await repo.addEvent(title: '交体检报告', date: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
+    await repo.addEvent(title: '交体检报告', date: dateOnly(kAnchor));
     return id;
   }
 
@@ -128,7 +130,7 @@ void main() {
     expect(rows.where((e) => e.seriesId != null), isEmpty);
 
     // 再跑一次生成器：不该补回来（这就是「删不掉」的那条护栏）
-    await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+    await repo.advanceRecurringTodos(today: dateOnly(kAnchor));
     expect((await repo.listEvents()).where((e) => e.seriesId != null), isEmpty);
     await _dispose(tester);
   });
@@ -160,7 +162,7 @@ void main() {
     // 条数要**真的撑破视口**（夹具是 420×1200，一行约 74 → 12 条根本滚不动，
     // 那样这条用例会变成一句永远为真的空话：第一版就是这么写的，把留白改回 96
     // 照样绿）。24 条确保能滚到底。
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(kAnchor);
     for (var i = 0; i < 24; i++) {
       await repo.addEvent(title: '待办 $i', date: today);
     }
@@ -188,7 +190,7 @@ void main() {
   });
 
   testWidgets('宽屏下「＋」按钮跟着内容栏走，手机上位置不变', (tester) async {
-    await repo.addEvent(title: '甲', date: dateOnly(DateTime.now()));
+    await repo.addEvent(title: '甲', date: dateOnly(kAnchor));
 
     // ① 手机：与 `endFloat` 一模一样（右缘 = 屏宽 − 标准边距 16）。
     await mount(tester);

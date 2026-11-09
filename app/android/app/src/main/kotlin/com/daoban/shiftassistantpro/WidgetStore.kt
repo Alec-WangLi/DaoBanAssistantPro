@@ -160,12 +160,21 @@ object WidgetStore {
         }
     }
 
+    /**
+     * 落盘一份快照。**返回真的写成了没有** —— 调用方（`MainActivity` 的
+     * `widgetPushSnapshot`）要把它如实回给 Dart，否则「推失败」这个信号整条链上
+     * 不存在，Dart 侧的重推逻辑就永远不触发。
+     *
+     * ⚠️ 用 `commit()` 而不是 `apply()`：`apply()` 是异步落盘，**拿不到成败**。
+     * 这里多花的那几毫秒只在一次推送里发生（不是每帧），换「失败可观测」值得。
+     */
     @Synchronized
-    fun write(context: Context, json: String) {
-        try {
-            prefs(context).edit().putString(KEY, json).apply()
+    fun write(context: Context, json: String): Boolean {
+        return try {
+            prefs(context).edit().putString(KEY, json).commit()
         } catch (e: Exception) {
             AlarmLog.error(context, "WidgetStore.write 失败: ${e.message}")
+            false
         }
     }
 

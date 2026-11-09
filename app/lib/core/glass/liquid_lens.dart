@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
@@ -331,17 +330,19 @@ class LiquidLensShape implements LiquidLensOutline {
   double get leftRadius => movingRight ? _trailing : _leading;
   double get rightRadius => movingRight ? _leading : _trailing;
 
-  /// 端头圆在**横轴**（`capsuleH` 那一轴）上的实际半径 —— **折边要的是这一对**。
+  /// 端头圆在**横轴**（`capsuleH` 那一轴）上的实际半径 —— **横向档折边要的是这一对**。
   ///
   /// ⚠️ **别拿 [leftRadius] / [rightRadius] 去折边。** 那两个是**沿运动方向那一轴**
   /// 的半径；而在**竖直档**（`宽 <= 高`，即「比宽还高」的那些滴）里它们被
   /// `_cap = min(高, 宽) / 2` 钳住 —— 那道钳位是「两个端头圆不许互相吞掉」的兜底，
-  /// 代价是它**永远够不到胶囊的边**，于是一枚竖直档的滴**折边一次都不会亮**。
-  /// 实际轮廓的横向半高是 `height / 2`（`_verticalStretched` 正是按
-  /// `h / (2 · capV)` 把局部那两个圆拉开的）。
+  /// 代价是它**永远够不到胶囊的边**。
+  ///
+  /// 竖直档那支**不用这一对**：它的凸出量直接由 `(高 − capsuleH) / 2` 给
+  /// （见 [refractedCapsuleEdge]）—— 竖直档的端头圆半径是 `宽 / 2`，而折边那两条
+  /// 边线躺在**竖直轴**的 `capsuleH` 两端，两者本来就不在同一个轴上。
   ///
   /// 横向档下 `_cap` 恰好就等于 `height / 2`（那一档只在 `宽 > 高` 时走到，
-  /// 于是 `min` 取到的总是高），所以换成这一对**对底栏与分段器的渲染一个像素都不变**。
+  /// 于是 `min` 取到的总是高），所以这一对**对底栏与分段器的渲染一个像素都不变**。
   double get leftCrossRadius => movingRight ? _trailingCross : _leadingCross;
   double get rightCrossRadius => movingRight ? _leadingCross : _trailingCross;
 
@@ -422,33 +423,25 @@ class LiquidLensShape implements LiquidLensOutline {
     // 哪些尺寸会掉进来：`itemW + 10·lift <= 52 + 20·lift`，也就是 `itemW` 小于约 62
     // 的窗口。**200×400 那个工装档（itemW 39）在 lift=1 时一半的速度都在死区里。**
     //
-    // 改成**竖直的胶囊**：把上面那套闭式解按目标宽搭好、再**纵向拉伸**到目标高
-    // （见 `_verticalStretched`）。宽度与高度都保住了 —— 于是「按住时凸出胶囊」这个
-    // 信号在窄窗里照样成立，比退成一枚圆团更好（圆团会把高度一起丢掉）。
+    // 改成**竖直的胶囊**：两个圆心落在竖直中轴、半径 = 目标宽 / 2 的**正圆**，
+    // 中间用外公切线连（见 `_verticalCapsule`）。宽度与高度都保住 —— 于是「按住时
+    // 凸出胶囊」这个信号在窄窗里照样成立，比退成一枚圆团更好（圆团会把高度一起丢掉）。
     //
-    // 这条构造**天然带两个半径**，而且前后缘还在**左右**，所以竖直档也读得到
-    // 头大尾轻 —— 上一版是「上圆 + 下圆 + 中矩形」并起来的，那两个半径在那儿
-    // 是算了但没用。
+    // ⚠️ **上一版是「按目标宽搭好、再纵向拉伸」**：那会把两端压成椭圆（开关 1.56 倍、
+    // 药丸 1.91 倍）。用户 2026-11-05 直接点名：「按住拖动变大后形状是椭圆形，不好看。
+    // 我想要它变成正好相切的两个半圆」。所以这里不再交两端半径 —— 正半圆的半径由
+    // 短边定死，方向感交给光谱环。
     //
-    // ⚠️ **上一版并三个子路径还有个更贵的代价**：填色对，**描边会把三段边界全画
-    // 出来**，包括互相重叠的内部接缝。四层光谱全是描边，于是在钮的内部留下横线
-    // 与内侧弧 —— 用户 2026-10-01：「彩边穿到滑块里边了，而且还不规则，也不贴边」。
-    // 转出来的是一条**闭合子路径**，没有这个问题。
+    // ⚠️ **上一版的上一版**并三个子路径还有个更贵的代价：填色对，**描边会把三段
+    // 边界全画出来**，包括互相重叠的内部接缝。四层光谱全是描边，于是在钮的内部留下
+    // 横线与内侧弧 —— 用户 2026-10-01：「彩边穿到滑块里边了，而且还不规则，也不贴边」。
+    // 现在是一条**闭合子路径**，没有这个问题。
     if (width <= height) {
-      // ⚠️ **别直接把 `_cap`（= 宽/2）交给它。** 拉伸**不能**把两端的圆变回来：
-      // 局部那两个圆要是各占满半宽（`rl + rr ≥ 宽`），尾部整个落进头部圆里，
-      // 轮廓退化成**一个圆**、尾巴消失 —— 而且 `mx` 会正好等于 1，踩 `arcTo`
-      // 扫 2π 那个坑。留出尾部收缩的余量，`stretch = 0` 时余量归零（局部是个
-      // 正圆，靠 `_verticalStretched` 里那道 `d` 钳位兜住）。
-      final double capV = width / 2 * (1 - 0.175 * stretch);
-      final double thin = capV * (1 - 0.35 * stretch);
-      return _verticalStretched(
+      return _verticalCapsule(
         centerX: centerX,
         cy: cy,
         w: width,
         h: height,
-        rl: movingRight ? thin : capV,
-        rr: movingRight ? capV : thin,
       );
     }
 
@@ -497,6 +490,7 @@ class LiquidLens extends StatelessWidget {
     this.fill,
     this.showRingCore = true,
     this.showRefractedEdge = true,
+    this.spectral = true,
     this.restEdge = 0,
   });
 
@@ -540,6 +534,22 @@ class LiquidLens extends StatelessWidget {
   /// 宽，那几道弧读起来是乱线。
   final bool showRefractedEdge;
 
+  /// 那几层**画出来的**光谱（彩线 / 两层内晕 / 外溢）开不开。默认开。
+  ///
+  /// 底栏是唯一传 `false` 的地方，理由在 2026-11 那一轮的需求里定死：
+  /// **判据是「对齐 iOS 26」**。真 iOS 的 UI 玻璃几乎没有虹彩 ——
+  /// `liquid_glass_widgets` 给 iOS 26 那档甚至主动把色散校准成 0，它自己的注释写着
+  /// 「真实的 iOS UI 玻璃几乎没有虹彩」；而本 App 的底色是刻意的极简黑白，
+  /// 那圈彩虹只能**画**出来（见 `_paintSpectralRing` 的说明），于是它注定是装饰而
+  /// 不是物理 —— 装饰就该为「像不像 iOS」让路。
+  ///
+  /// 关掉之后底栏那圈彩边的位置由**真折射**接手：`GlassRefract` 在容器边缘做逐像素
+  /// 位移，三波长各偏一点点 —— 那是从背景里算出来的，不是画上去的。
+  ///
+  /// ⚠️ **默认 true，其余几处（分段器 / 开关 / 勾 / 响铃页药丸 / 日历块与水带）
+  /// 一位都不动** —— 它们有「逐像素不变」的验收在，而且不在这轮范围内。
+  final bool spectral;
+
   /// **静止时也画的那一圈边缘高光**（0 = 不画，默认）。
   ///
   /// 光谱那几层全被 `motion` 关着 ——「静止时一个彩色像素都没有」是 v0.10.7 为底栏
@@ -568,7 +578,8 @@ class LiquidLens extends StatelessWidget {
             accent: accent,
             fill: fill,
             showRingCore: showRingCore,
-            showRefractedEdge: showRefractedEdge),
+            showRefractedEdge: showRefractedEdge,
+            spectral: spectral),
       ),
     );
 
@@ -596,7 +607,11 @@ class LiquidLens extends StatelessWidget {
         child: IgnorePointer(
           child: CustomPaint(
             painter: _LensGlowPainter(
-                outline: outline, origin: origin, lift: lift, accent: accent),
+                outline: outline,
+                origin: origin,
+                lift: lift,
+                accent: accent,
+                spectral: spectral),
           ),
         ),
       ),
@@ -708,57 +723,48 @@ Path _roundedRect({
     ..close();
 }
 
-/// **竖直**的两半径胶囊 —— 用的是同一套闭式解，但收尾是**纵向拉伸**，不是旋转。
+/// **竖直**的胶囊 —— 两个圆心落在竖直中轴、半径 = 宽 / 2 的**正圆**，中间用外公切线连。
 ///
-/// ⚠️ **别改成「整体转 90°」。** 转过之后局部坐标的「左右两端」会落到屏幕的上下
-/// 两头去 —— 于是「头大尾轻」变成「上大下小」。用户 2026-10-01 把这一条说得很死：
-/// 「头重脚轻肯定不能是上下的，肯定要左右」。**拉伸**则两样都保住：先在横着的坐标系
-/// 里按**目标宽**搭一枚两半径胶囊（前后缘还在左右），再把它纵向拉长到目标高。
+/// 用户 2026-11-05：「按住拖动变大后，形状是椭圆形，不好看。我想要它变成正好相切的
+/// 两个半圆」。于是这一档**不再纵向拉伸** —— 拉伸会把两端压成椭圆，拉伸系数
+/// `h / w`（开关 42/27 = 1.56、响铃药丸 84/44 = 1.91），肉眼一眼就读出来。
 ///
-/// 落在屏幕上就是「两枚高低不同的椭圆 + 外公切线」：静止（两半径相等）时是一枚
-/// **竖着的椭圆**，拖动时一端粗一端细 —— 上下拉长与左右头重脚轻同时成立。
+/// ⚠️ **这一档因此不再表达「头大尾轻」。** 正半圆的半径被短边（宽）定死，两端必然
+/// 同半径 —— 方向感交给光谱环（`motionAngleDeg` + 「一动就满」的 `motion`）。
+/// 这是用户与独立审查都认过的代价，不是遗漏。
 ///
-/// 另一条好处：线性拉伸出来的路径 `getBounds()` 是紧的（旋转那版会松一截 —— 同一份
-/// 构造在**横向**档上也是松的，见 `test/liquid_lens_vertical_test.dart` 的说明）。
-Path _verticalStretched({
+/// 边界：
+///   · `宽 == 高` 时 `capY == 0`，两段半圆拼成一枚**正圆** —— 两条 `arcTo` 各扫 π，
+///     不碰「`arcTo` 扫 2π 什么都不画」那个坑（见 [toPath] 顶上那段）。
+///   · 200×400 小窗那档（`itemW 39`）也跟着从椭圆变胶囊：它是兜底档，
+///     `test/alarm_ringing_liquid_test.dart` 的小窗用例重跑过。
+Path _verticalCapsule({
   required double centerX,
   required double cy,
   required double w,
   required double h,
-  required double rl,
-  required double rr,
 }) {
-  // 局部坐标系：**竖直中轴在 y = 0**（这样拉伸之后才不用再挪一次），横向铺满 [0, w]。
-  final Offset c1 = Offset(rl, 0);
-  final Offset c2 = Offset(w - rr, 0);
-  // ⚠️ **圆心距要钳一个正的下限。** 两个**等半径**的圆、圆心距又恰好等于 `2r` 时
-  // （局部是个正圆）`d = 0`，而 `(rl − rr) / d` 就是 `0 / 0`。钳住之后
-  // `mx = 0`、`my = 1`、`theta = π/2`：外公切线是一条竖直线、两端圆弧各扫 π ——
-  // 精确，也不碰 `arcTo` 扫过 2π 那个坑（见 `toPath()` 顶上那段）。
-  final double d = math.max(0.01, c2.dx - c1.dx);
-  final double mx = ((rl - rr) / d).clamp(-1.0, 1.0);
-  final double my = math.sqrt(math.max(0.0, 1 - mx * mx));
-  final double theta = math.atan2(my, mx);
-
-  final Path p = Path()
-    ..moveTo(c1.dx + rl * mx, -rl * my)
-    ..lineTo(c2.dx + rr * mx, -rr * my)
-    ..arcTo(Rect.fromCircle(center: c2, radius: rr), -theta, 2 * theta, false)
-    ..lineTo(c1.dx + rl * mx, rl * my)
-    ..arcTo(Rect.fromCircle(center: c1, radius: rl), theta,
-        2 * (math.pi - theta), false)
+  final double r = w / 2;
+  // 这一档的前提是 `h >= w`，所以 `capY >= 0`；等于 0 时两圆重合成正圆。
+  final double capY = math.max(0.0, h / 2 - r);
+  final Offset top = Offset(centerX, cy - capY);
+  final Offset bottom = Offset(centerX, cy + capY);
+  return Path()
+    // 上圆的**左切点**，沿左边直边下去
+    ..moveTo(centerX - r, cy - capY)
+    ..lineTo(centerX - r, cy + capY)
+    // 绕过下端：π → 0，**负向扫 π**（途中经过 π/2 = 最下点）
+    //
+    // ⚠️ **这里必须负向扫。** `dart:ui` 的弧长方向是「角度增大 = 朝 +y」，也就是
+    // 屏幕上**顺时针**；从 π 正向扫到 2π 会绕到**上端**去（那是下端圆的顶部），
+    // 路径于是塌成两条直边加两段内部弧，包围盒只有 `2·capY` 高 —— 2026-11-05
+    // 实测踩过（探针：`bounds=(4, 5.5, 27, 24.5)`，而标称高 42）。
+    ..arcTo(Rect.fromCircle(center: bottom, radius: r), math.pi, -math.pi, false)
+    // 右切点，沿右边直边上来
+    ..lineTo(centerX + r, cy - capY)
+    // 绕过上端：0 → −π，途中经过 −π/2 = 最上点
+    ..arcTo(Rect.fromCircle(center: top, radius: r), 0, -math.pi, false)
     ..close();
-
-  // 纵向拉长到目标高，再搬到透镜中心。局部 (x, y) → 屏幕
-  // (centerX − w/2 + x, cy + sy·y)。
-  final double capV = math.max(rl, rr);
-  final double sy = h / (2 * capV);
-  return p.transform(Float64List.fromList(<double>[
-    1, 0, 0, 0, //
-    0, sy, 0, 0, //
-    0, 0, 1, 0, //
-    centerX - w / 2, cy, 0, 1,
-  ]));
 }
 
 class _LensClipper extends CustomClipper<Path> {
@@ -825,6 +831,7 @@ class _LensGlowPainter extends CustomPainter {
     required this.origin,
     required this.lift,
     required this.accent,
+    required this.spectral,
   });
 
   final LiquidLensOutline outline;
@@ -832,8 +839,12 @@ class _LensGlowPainter extends CustomPainter {
   final double lift;
   final Color accent;
 
+  /// 见 [LiquidLens.spectral]。`false` 时这一层整个不存在（不是画一层透明的）。
+  final bool spectral;
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (!spectral) return;
     if (outline.motion <= 0.05) return;
     final Path p = outline.paintPath(origin);
     final double k = outline.rimScale;
@@ -862,6 +873,13 @@ class _LensGlowPainter extends CustomPainter {
       old.lift != lift ||
       old.accent != accent ||
       old.origin != origin ||
+      // 彩边开不开**运行期会变**（底栏那圈是折射的替身：折射活不活着由
+      // `liquidRefractionEnabled` 实时决定）。⚠️ 这条是**防御性正确**，不是被
+      // 像素用例守着的那一类：这层光晕与本体在**同一个图层**里，本体一重绘整幅
+      // picture 就重录了，所以删掉这一行没有任何用例会红（我试过）。留着是因为
+      // 「painter 的每个入参都要进 shouldRepaint」这条纪律本身值钱 —— 哪天有人给
+      // 光晕套一层 RepaintBoundary（比如为了单独做混合模式），它就是唯一的守门。
+      old.spectral != spectral ||
       old.outline.outlineStamp != outline.outlineStamp ||
       old.outline.motion != outline.motion ||
       // 亮峰换了一侧也要重画：几何一模一样、光的方向在转（日历那枚块滑行时）。
@@ -880,21 +898,18 @@ class _LensGlowPainter extends CustomPainter {
 /// 也就是说这个效果**只在「按住而且手指不动」时存在**，恰好是唯一不会去拖的状态。
 ///
 /// 现在两处都改成连续的：
-///   · 门开在「**至少一端**够到」（`reach = max(rl, rr) − cy > 0`）；
+///   · 门开在「**至少一端**够到」（`reach = (高 − capsuleH) / 2 > 0`）；
 ///   · 够不到的那一端把半径**钳到刚好相切**，交点连续地退化成 0，而不是整条不画；
 ///   · 再按 [AppTokens.lensEdgeFade] 让不透明度**随凸出量淡入** —— 于是它既不会
 ///     在高速下开天窗，也不会「啪」地出现或消失。
 ({double xL, double xR, double bow, double fade})? refractedCapsuleEdge(
     LiquidLensShape shape) {
   final double cy = shape.centerY;
-  // **横轴的半径**，不是 `leftRadius` / `rightRadius`（那两个是沿运动轴的）——
-  // 胶囊的两条边就躺在横轴上，而在竖直档里那一对被钳住、够不到边。
-  // 详见 `LiquidLensShape.leftCrossRadius` 的说明。
-  final double rl = shape.leftCrossRadius;
-  final double rr = shape.rightCrossRadius;
-
-  // 凸出量取**较大的那一端**：前缘总是先够到，后缘因为被压扁会晚一步。
-  final double reach = math.max(rl, rr) - cy;
+  // 凸出量 = 透镜每侧越过胶囊边界多少。**两个轴上是同一个数**：
+  // 横向档的端头半径就是 `高 / 2`、竖直档的沿轴半高也是 `高 / 2`，两边都减
+  // 胶囊半高 `capsuleH / 2`。写成一条是为了让两档不再各拿各的量算（竖直档原先
+  // 借的是 `leftCrossRadius`，那是横向轴上的数，只是数值恰好相等）。
+  final double reach = (shape.height - shape.capsuleH) / 2;
   if (reach <= 0) return null;
 
   // 钳到相切：`r = cy` 时 `sqrt(r² − cy²) = 0`，端点落在端头圆的竖直切线上。
@@ -902,19 +917,25 @@ class _LensGlowPainter extends CustomPainter {
   final double xL;
   final double xR;
   if (shape.width <= shape.height) {
-    // **竖直档**：局部那枚滴其实是个**椭圆** —— `_verticalStretched` 把半径为
-    // `宽 / 2` 的正圆纵向拉开了 `h / w` 倍。它在边线（`y = 0` / `capsuleH`）上的
-    // 弦长 = `宽 · √(1 − (2·cy / h)²)`，两端对称于中轴。
+    // **竖直档**：一枚两端半径 = `宽 / 2` 的**真胶囊**（`_verticalCapsule`）。
+    // 边线（局部的 `y = 0` / `capsuleH`，距透镜中心 `cy`）切在哪儿：
+    //   · 还没越过头顶那个圆的圆心（`cy <= (高 − 宽) / 2`）→ 切到的是**直边**，
+    //     半宽就是 `宽 / 2`；
+    //   · 越过去了 → 切在上/下正圆上，半宽 = `√(r² − d²)`，`d` = 越过圆心的量。
     //
-    // ⚠️ **横向档那套算式在这里不成立，而且失败方式很隐蔽**：那里的圆心是
-    // `centerX ± (宽/2 − r)`，而竖直档里 `r`（= `h / 2`）比 `宽 / 2` 还大 ——
-    // 两个圆心会**跑到对方的另一侧**，算出来的 xL / xR 挤在中间变成一小段弓，
-    // 画出来是滴正中间一道莫名其妙的短弧，而不是「边被折了」。
-    final double k = (2 * cy / shape.height).clamp(0.0, 1.0);
-    final double half = shape.width / 2 * math.sqrt(math.max(0, 1 - k * k));
+    // ⚠️ **别再用椭圆那条 `宽 · √(1 − (2·cy / 高)²)`**：形状已经不是拉伸出来的
+    // 椭圆了，那条算式会给出比实际窄一截的弦（药丸上 11.3，实际 15.1），折边
+    // 就画在空气里。同理也不能用横向档那套：那里的圆心是 `centerX ± (宽/2 − r)`，
+    // 而竖直档的半径比 `宽 / 2` 还大，两个圆心会跑到对方的另一侧。
+    final double r = shape.width / 2;
+    final double capY = math.max(0.0, (shape.height - shape.width) / 2);
+    final double d = (cy - capY).clamp(0.0, r);
+    final double half = math.sqrt(math.max(0, r * r - d * d));
     xL = shape.centerX - half;
     xR = shape.centerX + half;
   } else {
+    final double rl = shape.leftCrossRadius;
+    final double rr = shape.rightCrossRadius;
     final double sL = math.sqrt(math.max(0, rl * rl - cy * cy));
     final double sR = math.sqrt(math.max(0, rr * rr - cy * cy));
     xL = shape.centerX - shape.width / 2 + rl - sL;
@@ -946,11 +967,15 @@ class _LensBodyPainter extends CustomPainter {
     required this.fill,
     required this.showRingCore,
     required this.showRefractedEdge,
+    required this.spectral,
   });
 
   final List<Color>? fill;
   final bool showRingCore;
   final bool showRefractedEdge;
+
+  /// 见 [LiquidLens.spectral]。
+  final bool spectral;
 
   final LiquidLensOutline outline;
   final Offset origin;
@@ -973,7 +998,10 @@ class _LensBodyPainter extends CustomPainter {
     );
     // 静止时**连画都不画**：不是「画一层透明的」，而是这一整趟省掉。
     // 门用 `motion`（「在动」）而不是 `stretch`（「多快」）—— 见 `motion` 的说明。
-    if (outline.motion > 0.05) {
+    //
+    // 底栏传 `spectral: false`：那圈彩虹是**画**出来的装饰，真 iOS 的玻璃没有它，
+    // 而底栏这一档的真折射已经由 `GlassRefract` 接手（见 [LiquidLens.spectral]）。
+    if (spectral && outline.motion > 0.05) {
       // 顺序要紧：**光晕在下、彩线在上**。反过来的话那条细线会浮在光晕外面，
       // 又读回「贴了一层彩带」。
       _paintHalo(canvas, p);
@@ -1038,7 +1066,8 @@ class _LensBodyPainter extends CustomPainter {
       old.accent != accent ||
       !listEquals(old.fill, fill) ||
       old.showRingCore != showRingCore ||
-      old.showRefractedEdge != showRefractedEdge;
+      old.showRefractedEdge != showRefractedEdge ||
+      old.spectral != spectral;
   /// **折射光晕**：同一条扫掠渐变，画得又宽又糊 —— 这是「光晕」而不是「彩带」的
   /// 全部来源。
   ///

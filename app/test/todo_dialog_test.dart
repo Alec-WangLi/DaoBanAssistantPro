@@ -156,6 +156,45 @@ void main() {
     await _dispose(tester);
   });
 
+  // 用户 2026-10-21：「编辑待办事项的那个标题框，能不能多显示几行？现在只有
+  // 一行，有时候想修改前面的内容比较费劲。」—— 一行时后半段被滚出视野，光标
+  // 一落在末尾，前面写了什么就看不见了。两个弹窗都要 1~3 行自动长高。
+  testWidgets('标题框：添加与编辑弹窗都能折行，且真的越长越高', (tester) async {
+    final db = await _pumpTodos(tester);
+
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+    final addField = tester.widget<TextField>(find.descendant(
+        of: find.byType(GlassDialog), matching: find.byType(TextField)));
+    expect(addField.minLines, 1);
+    expect(addField.maxLines, 3);
+    await tester.tap(find.text(L10n.cancel));
+    await _settle(tester);
+
+    await AppRepository(db).addEvent(
+      title: '交体检报告',
+      date: dateOnly(DateTime.now()),
+      timeMinute: 14 * 60,
+    );
+    await _settle(tester);
+    await _openEdit(tester, '交体检报告');
+
+    final editField = tester.widget<TextField>(find.descendant(
+        of: find.byType(GlassDialog), matching: find.byType(TextField)));
+    expect(editField.minLines, 1);
+    expect(editField.maxLines, 3, reason: '编辑弹窗同样要能折行');
+
+    // 行为判据：写三行字，输入框真的长高（只断言 maxLines 的话，
+    // 某个上层约束把它钉死一行也能过）。
+    final before = tester.getSize(find.byType(TextField)).height;
+    await tester.enterText(find.byType(TextField), '第一行\n第二行\n第三行');
+    await _settle(tester);
+    final after = tester.getSize(find.byType(TextField)).height;
+    expect(after, greaterThan(before), reason: '多行标题要把输入框撑高');
+
+    await _dispose(tester);
+  });
+
   testWidgets('联动闹钟开关：开时补「准时」，选「不设」时自动关', (tester) async {
     final db = await _pumpTodos(tester);
     await AppRepository(db).addEvent(

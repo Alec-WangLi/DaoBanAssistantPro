@@ -55,6 +55,7 @@ Future<AppDatabase> _openV12(
   final raw = sqlite3.sqlite3.openInMemory();
   raw.execute(_v12ScheduleTable);
   raw.execute(_v12CustomTemplates);
+  raw.execute(_v11RecurringTable);
   for (final (name, from, to, current) in rows) {
     raw.execute(
       'INSERT INTO shift_schedule_rows '
@@ -90,6 +91,28 @@ Future<List<(int, int?, int?)>> _spans(AppDatabase db) async {
       ),
   ];
 }
+
+/// v11 起的 `recurring_series_rows`（v15 之前的样子：单日 `month_day`）。
+///
+/// 本条迁移不碰它，但 v14→v15 会给它加两列、删一列 —— 迁移分支按**倒序**跑，
+/// 从 v11 / v12 升上来时那一段同样会执行，所以真实老库里有的表 fixture 也得有
+/// （与当年给更早 fixture 补 `schedule_events` 是同一条规矩）。
+const _v11RecurringTable = '''
+CREATE TABLE recurring_series_rows (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  time_minute INTEGER NULL,
+  advance_remind_minutes INTEGER NULL,
+  alarm_enabled INTEGER NOT NULL DEFAULT 0,
+  repeat_type INTEGER NOT NULL DEFAULT 0,
+  weekdays INTEGER NOT NULL DEFAULT 0,
+  month_day INTEGER NOT NULL DEFAULT 1,
+  start_date INTEGER NOT NULL,
+  skip_through INTEGER NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+)
+''';
 
 void main() {
   test('A 一直持续 + B 从 7/1 起 → A 截到 6/30', () async {

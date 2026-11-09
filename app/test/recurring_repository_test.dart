@@ -9,10 +9,13 @@
 //  ③ 把一条待办挂上系列 / 摘下来，`seriesId` 真的落库；
 //  ④ `clearAll` 要把新表也清掉（AGENTS 里那条「清空要连带删」的老规矩）。
 import 'package:drift/native.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
+import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'support/fixed_clock.dart';
 
 void main() {
   late AppDatabase db;
@@ -47,7 +50,7 @@ void main() {
     expect(s.enabled, isTrue);
     expect(s.skipThrough, isNull);
     expect(s.alarmEnabled, isFalse);
-    expect(s.monthDay, 1);
+    expect(s.monthDays, 1);
   });
 
   test('updateRecurringTodo 覆盖全部字段（含把提醒改回「不提醒」）', () async {
@@ -60,13 +63,13 @@ void main() {
       title: '周例会',
       repeat: RecurRepeat.monthly,
       startDate: s.startDate,
-      monthDay: 15,
+      monthDays: 1 << 14,
       advanceRemindMinutes: null,
     ));
     final after = (await repo.listRecurringTodos()).single;
     expect(after.title, '周例会');
     expect(after.repeat, RecurRepeat.monthly);
-    expect(after.monthDay, 15);
+    expect(after.monthDays, 1 << 14);
     expect(after.advanceRemindMinutes, isNull, reason: '要能真的清成 null');
   });
 
@@ -159,6 +162,133 @@ void main() {
     expect(e.advanceRemindMinutes, 15);
     expect(e.alarmEnabled, isTrue);
     expect(e.seriesId, id);
+  });
+
+
+  test('按班次与每月多选：写进去、读回来都是原值', () async {
+    final id = await repo.addRecurringTodo(
+      title: '带工牌',
+      repeat: RecurRepeat.shift,
+      startDate: DateTime.utc(2026, 10, 1),
+      monthDays: (1 << 0) | (1 << 14),
+      shiftNames: const ['上夜班', '下夜班'],
+    );
+    final s = (await repo.listRecurringTodos()).single;
+    expect(s.id, id);
+    expect(s.monthDays, (1 << 0) | (1 << 14));
+    expect(s.shiftNames, ['上夜班', '下夜班']);
+  });
+
+  test('按班次：那天上夜班就生成当前这一次', () async {
+    await repo.saveSchedule(
+      name: '固定夜班',
+      anchorDate: DateTime.utc(2026, 10, 1),
+      classes: const [
+        ShiftClass(
+            name: '上夜班', abbr: '夜', startMinute: 1200, endMinute: 480),
+        ShiftClass(name: '休班', abbr: '休', isRest: true),
+      ],
+      cycle: const [0],
+    );
+    final id = await repo.addRecurringTodo(
+      title: '带工牌',
+      repeat: RecurRepeat.shift,
+      startDate: DateTime.utc(2026, 10, 1),
+      shiftNames: const ['上夜班'],
+    );
+    final today = DateTime.utc(2026, 10, 22);
+    await repo.advanceRecurringTodos(today: today);
+    final live = (await repo.listEvents()).where((e) => e.seriesId == id);
+    expect(live.length, 1);
+    expect(dayNumber(live.single.date), dayNumber(today));
+  });
+
+  test('按班次：排班改成休班后不再生成新行，已有行留在原地', () async {
+    final schedId = await repo.saveSchedule(
+      name: '固定夜班',
+      anchorDate: DateTime.utc(2026, 10, 1),
+      classes: const [
+        ShiftClass(
+            name: '上夜班', abbr: '夜', startMinute: 1200, endMinute: 480),
+        ShiftClass(name: '休班', abbr: '休', isRest: true),
+      ],
+      cycle: const [0],
+    );
+    final id = await repo.addRecurringTodo(
+      title: '带工牌',
+      repeat: RecurRepeat.shift,
+      startDate: DateTime.utc(2026, 10, 1),
+      shiftNames: const ['上夜班'],
+    );
+    final today = DateTime.utc(2026, 10, 22);
+    await repo.advanceRecurringTodos(today: today);
+    final kept = (await repo.listEvents()).where((e) => e.seriesId == id).single;
+
+    // 同一天从「上夜班」整段改成「休班」（生成器只往前、不回退）。
+    await repo.saveSchedule(
+      scheduleId: schedId,
+      name: '固定夜班',
+      anchorDate: DateTime.utc(2026, 10, 1),
+      classes: const [
+        ShiftClass(
+            name: '上夜班', abbr: '夜', startMinute: 1200, endMinute: 480),
+        ShiftClass(name: '休班', abbr: '休', isRest: true),
+      ],
+      cycle: const [1],
+    );
+    await repo.advanceRecurringTodos(today: DateTime.utc(2026, 10, 23));
+    final rows = (await repo.listEvents()).where((e) => e.seriesId == id);
+    expect(rows.length, 1, reason: '不生成 10/23 的新行');
+    expect(dayNumber(rows.single.id == kept.id ? rows.single.date : kept.date),
+        dayNumber(today), reason: '已有行留在原地，不被拽到更早的班次日');
+  });
+
+
+  test('按天调班：把今天改成上夜班 → 按班次的待办出现', () async {
+    final today = dateOnly(kAnchor);
+    await repo.saveSchedule(
+      name: '白班表',
+      anchorDate: today,
+      classes: const [
+        ShiftClass(name: '白班', abbr: '白'),
+        ShiftClass(name: '上夜班', abbr: '夜'),
+        ShiftClass(name: '休班', abbr: '休', isRest: true),
+      ],
+      cycle: const [0],
+    );
+    final id = await repo.addRecurringTodo(
+      title: '带工牌',
+      repeat: RecurRepeat.shift,
+      startDate: today,
+      shiftNames: const ['上夜班'],
+    );
+    await repo.advanceRecurringTodos(today: today);
+    expect((await repo.listEvents()).where((e) => e.seriesId == id), isEmpty,
+        reason: '每天白班 → 夜班规则今天没有发生日');
+
+    final active = await repo.getActiveSchedules();
+    final nightId = active!.chain
+        .scheduleOn(today)!
+        .classes
+        .firstWhere((c) => c.name == '上夜班')
+        .id!;
+    await repo.setDayOverrides([today], classId: nightId);
+    await repo.advanceRecurringTodos(today: today);
+
+    final rows = (await repo.listEvents()).where((e) => e.seriesId == id);
+    expect(rows.length, 1, reason: '调班之后那天就是「上夜班」，规则该命中');
+    expect(dayNumber(rows.single.date), dayNumber(today));
+  });
+
+  test('recurringPanelProvider：系列与当前链都在', () async {
+    await addSeries();
+    final container = ProviderContainer(overrides: [
+      databaseProvider.overrideWithValue(db),
+    ]);
+    addTearDown(container.dispose);
+    final data = await container.read(recurringPanelProvider.future);
+    expect(data.series.length, 1);
+    expect(data.chain, isA<ScheduleChain>());
   });
 
   test('clearAll 把新表也清掉', () async {

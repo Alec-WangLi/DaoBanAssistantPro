@@ -94,7 +94,7 @@ void main() {
     addTearDown(db.close);
 
     // 一路升到**最新**（迁移分支全部倒序跑过），所以这里跟的是当前 schemaVersion。
-    expect(db.schemaVersion, 14);
+    expect(db.schemaVersion, 15);
 
     // ① 方案行原样 —— 注意中间被 `TableMigration` 重建过一次
     final rows = await db.select(db.shiftScheduleRows).get();

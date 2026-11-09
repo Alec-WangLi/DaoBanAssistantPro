@@ -12,13 +12,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:shiftassistantpro/core/clock.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
-
+import 'package:shiftassistantpro/core/clock.dart';
 import 'support/fixed_clock.dart';
 
 /// 边界：上半月（1..14）归 A、下半月（15..）归 B。
@@ -112,9 +111,7 @@ Future<void> _longPressDrag(WidgetTester tester, int fromDay, int stepRows) asyn
 }
 
 void main() {
-  // 钉在 2026-10-15：统计行只在装得下的那天画，真实月份未必有那样的日子。
   useFixedNow();
-
   setUpAll(() async {
     await initializeDateFormatting('zh');
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -152,6 +149,10 @@ void main() {
   });
 
   testWidgets('「本月统计」跨方案时按简称合并，加总等于月长', (tester) async {
+    // 统计行只在装得下的日子画；换到没有富余的月份（如 3 月）就一天都画不出来。
+    // 这条钉的是「跨方案按简称合并」，不是月份形状，所以把今天钉到 10 月。
+    appNow = () => DateTime(2026, 10, 15, 9);
+    addTearDown(() => appNow = () => kAnchor);
     await _pumpChainedCalendar(tester);
     final now = appNow();
     final days = DateTime(now.year, now.month + 1, 0).day;

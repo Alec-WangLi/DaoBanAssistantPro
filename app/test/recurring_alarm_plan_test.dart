@@ -6,10 +6,13 @@
 // 那两样都靠界面看不出来。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
+import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
 
 RecurringTodo _s({
   int? id = 1,
+  RecurRepeat repeat = RecurRepeat.weekly,
+  List<String> shiftNames = const [],
   int? timeMinute = 9 * 60,
   int? advance = 0,
   bool enabled = true,
@@ -17,8 +20,9 @@ RecurringTodo _s({
     RecurringTodo(
       id: id,
       title: '周三例会',
-      repeat: RecurRepeat.weekly,
+      repeat: repeat,
       startDate: DateTime.utc(2026, 9, 16),
+      shiftNames: shiftNames,
       weekdays: 1 << 2, // 周三
       timeMinute: timeMinute,
       advanceRemindMinutes: advance,
@@ -78,6 +82,20 @@ void main() {
         isEmpty);
   });
 
+  test('按班次系列：只在接班次的日子排提醒', () {
+    final series = _s(repeat: RecurRepeat.shift, shiftNames: ['上夜班']);
+    const nightShift = ShiftClass(name: '上夜班', startMinute: 1230, endMinute: 1920);
+    const dayShift = ShiftClass(name: '白班', startMinute: 480, endMinute: 1080);
+    ShiftClass? night(DateTime d) =>
+        d.weekday == DateTime.wednesday ? nightShift : dayShift;
+    final plans = planRecurringReminders([series],
+        from: DateTime(2026, 9, 21, 8), shiftOn: night);
+    // 夜班 20:30–次日 08:00 配 09:00：落在下班后 1 小时，比上班前的 11.5 小时近
+    // → 三档落点取**次日**（与班次闹钟同一条判据）。
+    expect(plans.single.fireAt, DateTime(2026, 9, 24, 9));
+    expect(plans.single.repeatTimes.first, DateTime(2026, 10, 1, 9));
+  });
+
   test('计划里的时刻都是「从现在往后」且升序（队首 + 队列一起看）', () {
     final plans =
         planRecurringReminders([_s()], from: DateTime(2026, 9, 23, 15));
@@ -85,5 +103,13 @@ void main() {
     for (var i = 1; i < all.length; i++) {
       expect(all[i].isAfter(all[i - 1]), isTrue);
     }
+  });
+
+  test('skipThrough 覆盖到的那一次不排', () {
+    final s = _s(repeat: RecurRepeat.daily, timeMinute: 9 * 60)
+        .copyWith(skipThrough: dayNumber(DateTime(2026, 9, 23)));
+    final plans = planRecurringReminders([s], from: DateTime(2026, 9, 23, 8));
+    expect(plans.single.fireAt, DateTime(2026, 9, 24, 9),
+        reason: '打勾 / 删掉的那一次不能还被排上');
   });
 }

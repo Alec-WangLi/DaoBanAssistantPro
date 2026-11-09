@@ -35,47 +35,63 @@ class GlassWeekdayPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Wrap(
-      spacing: AppTokens.gapIconText,
-      children: List.generate(7, (i) {
-        final bit = 1 << i;
-        final selected = (value & bit) != 0;
-        return GestureDetector(
-          onTap: () {
-            Haptics.select();
-            onChanged(selected ? value & ~bit : value | bit);
-          },
-          child: AnimatedContainer(
-            duration: AppTokens.durMed,
-            curve: Curves.easeOutBack,
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceSm),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppTokens.radiusL),
+    // **一行七个等宽格子**（v0.12.3 改）：从前是 `Wrap(spacing: 6)`，在弹窗宽度
+    // 下折成 5+2 两行、相邻只隔 6dp —— 用户 2026-10-22 真机反馈「日期格子挨得
+    // 太近」。等分之后每格约 40dp（320dp 宽时），间距固定 4dp。
+    //
+    // 它同时被自定义闹钟的「每周」浮层用着 —— 两处是同一个选择行为，不分成两套。
+    return Row(
+      children: [
+        for (var i = 0; i < 7; i++) ...[
+          if (i > 0) const SizedBox(width: 4),
+          Expanded(child: _cell(context, i, isDark)),
+        ],
+      ],
+    );
+  }
+
+  Widget _cell(BuildContext context, int i, bool isDark) {
+    final bit = 1 << i;
+    final selected = (value & bit) != 0;
+    return GestureDetector(
+      onTap: () {
+        Haptics.select();
+        onChanged(selected ? value & ~bit : value | bit);
+      },
+      child: AnimatedContainer(
+        duration: AppTokens.durMed,
+        curve: Curves.easeOutBack,
+        // 宽度由等分决定、不再用横向内边距撑；纵向内边距保留原值。
+        padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppTokens.radiusL),
+          color: selected
+              ? Theme.of(context).colorScheme.primary
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.white.withValues(alpha: 0.72)),
+          border: Border.all(
+            color: selected
+                ? Theme.of(context).colorScheme.primary
+                : Colors.white.withValues(alpha: isDark ? 0.16 : 0.65),
+          ),
+        ),
+        child: FittedBox(
+          // 窄窗 / 大字号下按宽缩小，不省略、不裁（v0.11.12 的降级顺序）。
+          fit: BoxFit.scaleDown,
+          child: Text(
+            L10n.weekday(i),
+            // 基线 13px：未选中 w500、选中 w700（与 `alarm_screen` 原来那段同值）。
+            style: AppTokens.labelSecondary.copyWith(
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : (isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.white.withValues(alpha: 0.72)),
-              border: Border.all(
-                color: selected
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.white.withValues(alpha: isDark ? 0.16 : 0.65),
-              ),
-            ),
-            child: Text(
-              L10n.weekday(i),
-              // 基线 13px：未选中 w500、选中 w700（与 `alarm_screen` 原来那段同值）。
-              style: AppTokens.labelSecondary.copyWith(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected
-                    ? Colors.white
-                    : Theme.of(context).colorScheme.onSurface,
-              ),
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.onSurface,
             ),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 }

@@ -16,6 +16,7 @@ import '../../domain/monthly_pattern.dart';
 import '../../domain/schedule_template.dart';
 import '../../domain/shift_rotation.dart';
 import '../../domain/shift_templates.dart';
+import '../../core/clock.dart';
 
 /// 选择页的返回值。
 ///
@@ -299,7 +300,18 @@ class _ShiftTemplatePickerScreenState
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    texts,
+                    // 堆叠档以前把箭头整个丢掉，卡片退化成纯信息卡。阈值本来就
+                    // 给它留了宽度（`_chevronWidth` 一直在 `stacked` 的算式里）。
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: texts),
+                        const SizedBox(width: AppTokens.gapIconText),
+                        Icon(Icons.chevron_right_outlined,
+                            key: const Key('template-card-chevron'),
+                            color: muted),
+                      ],
+                    ),
                     const SizedBox(height: AppTokens.spaceMd),
                     _cycleStrip(context, classes: classes, cycle: cycle),
                   ],
@@ -312,7 +324,8 @@ class _ShiftTemplatePickerScreenState
                   _cycleStrip(context, classes: classes, cycle: cycle),
                   const SizedBox(width: 12),
                   Expanded(child: texts),
-                  Icon(Icons.chevron_right_outlined, color: muted),
+                  Icon(Icons.chevron_right_outlined,
+                      key: const Key('template-card-chevron'), color: muted),
                 ],
               );
             }),
@@ -416,14 +429,24 @@ class _ShiftTemplatePickerScreenState
                     title: Text(t.name,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(_savedSubtitle(t)),
-                    trailing: GlassDeleteButton(
-                      compact: true,
-                      onPressed: () {
-                        // 先关掉管理弹窗再弹确认：嵌套两层弹窗时，
-                        // 底下那层的按钮位置会随上面那层开合而跳。
-                        Navigator.of(dialogContext).pop();
-                        _deleteTemplate(context, t);
-                      },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_outlined,
+                            key: const Key('template-edit-hint'),
+                            size: AppTokens.iconSm,
+                            color: AppTokens.inkMuted(dialogContext)),
+                        const SizedBox(width: AppTokens.gapIconText),
+                        GlassDeleteButton(
+                          compact: true,
+                          onPressed: () {
+                            // 先关掉管理弹窗再弹确认：嵌套两层弹窗时，
+                            // 底下那层的按钮位置会随上面那层开合而跳。
+                            Navigator.of(dialogContext).pop();
+                            _deleteTemplate(context, t);
+                          },
+                        ),
+                      ],
                     ),
                     onTap: () {
                       Navigator.of(dialogContext).pop();
@@ -666,7 +689,7 @@ Future<int?> createScheduleFromTemplatePicker(
   if (choice.monthly) {
     return ref.read(appRepositoryProvider).saveSchedule(
           name: L10n.monthlyPattern,
-          anchorDate: dateOnly(DateTime.now()),
+          anchorDate: dateOnly(appNow()),
           classes: d.classes,
           cycle: const [],
           monthly: true,
@@ -688,7 +711,7 @@ Future<int?> createScheduleFromTemplatePicker(
   final teamCount = picked?.teamCount ?? mine?.teamCount ?? d.teamCount;
   return ref.read(appRepositoryProvider).saveSchedule(
         name: mine?.name ?? picked?.subtitle ?? L10n.newSchedule,
-        anchorDate: dateOnly(DateTime.now()),
+        anchorDate: dateOnly(appNow()),
         classes: picked?.classes ?? mine?.classes ?? d.classes,
         cycle: picked?.cycle ?? mine?.cycle ?? d.cycle,
         makeCurrent: makeCurrent,

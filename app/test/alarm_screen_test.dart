@@ -19,13 +19,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 import 'package:shiftassistantpro/core/layout.dart';
 import 'package:shiftassistantpro/core/widgets/glass_button.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
+import 'package:shiftassistantpro/features/alarm/alarm_service.dart'
+    show nextOnceDate;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+
+import 'support/fixed_clock.dart';
 
 /// 有界推进若干帧（不能用 `pumpAndSettle`：页面自己有个 1 分钟的周期定时器）。
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
@@ -60,7 +65,7 @@ Future<AppDatabase> _pumpAlarmScreen(
 
   await AppRepository(db).saveSchedule(
     name: '测试方案',
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(kAnchor),
     classes: [
       ShiftClass(
         name: name,
@@ -110,6 +115,7 @@ Finder _alarmBlock(DateTime date, int k) =>
     find.byKey(Key('alarm-block-${dayNumber(date)}-$k'));
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     drift.driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -135,7 +141,7 @@ void main() {
       ],
     );
 
-    final date = dateOnly(DateTime.now()).add(const Duration(days: 2));
+    final date = dateOnly(kAnchor).add(const Duration(days: 2));
     expect(_dayRow(date), findsOneWidget);
 
     // 两条各自成一行（时间 + 名字）
@@ -163,7 +169,7 @@ void main() {
       ],
     );
 
-    final date = dateOnly(DateTime.now()).add(const Duration(days: 2));
+    final date = dateOnly(kAnchor).add(const Duration(days: 2));
     expect(find.descendant(of: _alarmBlock(date, 0), matching: find.text(L10n.prevDay)),
         findsOneWidget, reason: '23:00 晚于 00:00 上班钟点、又在窗口外 → 前一天');
     expect(find.descendant(of: _alarmBlock(date, 1), matching: find.text(L10n.prevDay)),
@@ -173,11 +179,21 @@ void main() {
   });
 
   // v0.9.3 修的那条（独立审查抓出来的）：**首条已响、后面还有时，整行不能藏**。
-  // 用 24 小时值班的形状，这样两条闹钟无论几点跑都落在「当天」，断言与时刻无关；
+  // 用 24 小时值班的形状，所以两条闹钟都锚在**当天**；
   // 第一条取「一分钟前」（已响）、第二条取「五分钟后」（还等着）。
+  //
+  // ⚠️ **「现在」必须钉死。** 原来这里读 `DateTime.now()`，于是每天
+  // 23:55–23:59 必红：那个钟点 + 5 分钟已经跨到次日 00:0x，而 24 小时值班把闹钟
+  // 锚在**当天**，「五分钟后」那个时刻于是成了「今天已经过去」⇒
+  // `hasPendingShiftAlarm`（`alarm_service.dart:235`）判「没有待响」⇒
+  // `alarm_screen.dart:99` 整行 continue 掉 ⇒ 行没了、`alarm-day-row-*` 找不到。
+  // 审查 2026-11-05 23:56 撞上（一天约 0.35% 的窗口），00:01 同一份代码就绿了。
+  // 锚点取 `kAnchor`（2026-10-15）往后 9 小时 —— 09:00 前后，离午夜足够远。
   testWidgets('首条已响、后面还有 → 那一行仍然在（连已响的那条也还列着）',
       (tester) async {
-    final now = DateTime.now();
+    final DateTime now = kAnchor.add(const Duration(hours: 9));
+    appNow = () => now;
+    addTearDown(() => appNow = DateTime.now);
     final rung = (now.subtract(const Duration(minutes: 1)).hour * 60) +
         now.subtract(const Duration(minutes: 1)).minute;
     final pending = (now.add(const Duration(minutes: 5)).hour * 60) +
@@ -223,7 +239,7 @@ void main() {
       alarms: const [ShiftAlarm(minute: 23 * 60)],
     );
 
-    final date = dateOnly(DateTime.now()).add(const Duration(days: 2));
+    final date = dateOnly(kAnchor).add(const Duration(days: 2));
     expect(find.descendant(of: _alarmBlock(date, 0), matching: find.text(L10n.prevDay)),
         findsOneWidget);
     expect(find.text('前一天'), findsNothing, reason: '英文界面不该出现中文标记');
@@ -283,9 +299,28 @@ void main() {
     final a = alarms.single;
     expect(a.repeatType, 0, reason: '新建的默认重复类型该是一次性');
 
+    // 默认钟点与默认日期必须是**同一个时钟**上的两个分量。原先钟点读的是
+    // `TimeOfDay.now()`（真实时钟），日期读 `dateOnly(appNow())`：两个时钟一旦
+    // 不同步，落点就总在「此刻」之后，下面那条顺延断言会变成碰运气 —— 真跑起来
+    // 还常常是绿的，等于什么都没验。
+    expect(a.hour * 60 + a.minute, appNow().hour * 60 + appNow().minute,
+        reason: '新建闹钟的默认钟点该是 appNow() 的钟点（${appNow()}），'
+            '不是真实时钟的钟点');
+
+    // 前置断言：先证明这一条**每次都在验顺延**。存下来的钟点与锚点同一个时刻，
+    // `nextOnceDate` 就只能走「今天这一支已过 → 顺延一天」。
+    final rolled = nextOnceDate(
+        now: appNow(), chosen: dateOnly(appNow()), hour: a.hour, minute: a.minute);
+    expect(rolled, isNot(dateOnly(appNow())),
+        reason: '这条没验到顺延：默认钟点（${a.hour}:${a.minute}）落在锚点'
+            '（${appNow()}）之后，`nextOnceDate` 走了「今天还没到」那一支，'
+            '「已过 → 顺延一天」根本没走到');
+
     final od = a.onceDate!;
+    expect(dateOnly(od), dateOnly(rolled),
+        reason: '卡上写的日期必须等于 nextOnceDate 算出来的那天');
     final fire = DateTime(od.year, od.month, od.day, a.hour, a.minute);
-    expect(fire.isAfter(DateTime.now()), isTrue,
+    expect(fire.isAfter(appNow()), isTrue,
         reason: '一次性的触发时刻落在过去 = 这一条排不出去、也不会响，'
             '下次进闹钟页还会被 deleteExpiredOnceAlarms 删掉 —— '
             '新建时的默认时间就是此刻，所以这一条必须靠日期顺延兜住');

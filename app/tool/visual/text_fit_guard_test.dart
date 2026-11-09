@@ -21,6 +21,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
+import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 
 import 'visual_harness.dart';
@@ -147,6 +148,39 @@ void main() {
         await db.close();
       });
     }
+  }
+
+  // 班组设置**展开态**：主矩阵渲染的是首屏，班组卡在很下面、根本不会被构建。
+  // 这条滚到展开的班组卡再查两种截断 —— 不给 `initialCrewExpanded` 这条路的话，
+  // 它会在一张永远收起的卡上通过，等于没验。
+  for (final cfg in configs.where((c) => c.strict)) {
+    testWidgets('班组设置展开 · ${cfg.label}', (tester) async {
+      failOnOverflow(tester);
+      useStandardGlassTier();
+      final db = await makeVisualDatabase();
+      await pumpScreen(
+        tester,
+        home: ScheduleEditorScreen(
+          scheduleId: await currentScheduleId(db),
+          initialCrewExpanded: true,
+        ),
+        overrides: <Override>[databaseProvider.overrideWithValue(db)],
+        size: cfg.size,
+        fontSize: cfg.font,
+        language: cfg.lang,
+        extraPrefs: onboardingPrefs,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('crew-name-0')),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      for (final hit in truncatedParagraphs(tester)) {
+        findings.add('67_editor_crew_expanded · ${cfg.label} ▸ $hit');
+      }
+      await teardownVisual(tester);
+      await db.close();
+    });
   }
 
   // 汇总。**声明顺序就是执行顺序**，所以它一定跑在全部屏之后。

@@ -7,13 +7,17 @@
 // 清的就是这类东西。所以按月那一行改印切法摘要。
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_delete_button.dart';
+import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/monthly_pattern.dart';
+import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -125,7 +129,10 @@ void main() {
     await initializeDateFormatting('zh');
     await initializeDateFormatting('en');
   });
-  setUp(() => L10n.locale = 'zh');
+  setUp(() {
+    L10n.locale = 'zh';
+    SharedPreferences.setMockInitialValues({});
+  });
 
   testWidgets('按月那一行印切法摘要，不印基准日；周期那一行照旧', (tester) async {
     await _pump(tester);
@@ -229,4 +236,135 @@ void main() {
       await _dispose(tester);
     });
   }
+
+  // ── 改动排班结构之后必须重排原生闹钟 ──
+  //
+  // 用户 2026-10-18 真机反馈：「今天是白班，晚上 19:30 却响了上夜班的闹钟」。
+  // 根因：排班管理页换「其余时间」/ 增删改时段 / 删方案只写库，**不重排原生
+  // 闹钟** —— 日历立刻跟上（它 watch 着库），旧计划里的班次闹钟却照旧在原定时刻
+  // 响。在真机上复现过：把「全部日子」切到另一套（那天是上夜班）再切回来，日历
+  // 变了、系统里已排的闹钟一条没变。
+  //
+  // 判据落在**真正发往原生的跨端调用**上：`rescheduleAll` 一进来就整段取消再
+  // 重排，`cancelAllNativeAlarms` 是它绕不过去的一步。
+  group('改动排班结构要重排闹钟', () {
+    late Map<String, int> calls;
+
+    void installChannelSpy() {
+      calls = <String, int>{};
+      const settings = MethodChannel('com.daoban.shiftassistantpro/settings');
+      // flutter_local_notifications 的通道也要接上：`rescheduleAll` 第一件事是
+      // `_plugin.cancelAll()`，而 flutter_test 里没人接的通道调用**永远不 resolve**
+      // （`calendar_screen_test` 里记过同一条），重排就卡在那儿、后面的原生取消
+      // 一次都发不出去。
+      const notifications =
+          MethodChannel('dexterous.com/flutter/local_notifications');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(settings, (call) async {
+        calls[call.method] = (calls[call.method] ?? 0) + 1;
+        return null;
+      });
+      messenger.setMockMethodCallHandler(notifications, (call) async => null);
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(settings, null);
+        messenger.setMockMethodCallHandler(notifications, null);
+      });
+    }
+
+    int reschedules() => calls['cancelAllNativeAlarms'] ?? 0;
+
+    testWidgets('换「其余时间」到另一套：立刻重排', (tester) async {
+      installChannelSpy();
+      await _pump(tester);
+      expect(reschedules(), 0, reason: '只是挂着这一页，不该动系统闹钟');
+      calls.clear();
+
+      await tester.tap(find.text(L10n.allDates));
+      await tester.pumpAndSettle();
+      expect(find.byType(GlassDialog), findsOneWidget,
+          reason: '点「全部日子」那行要先真的弹出选择层，选项才点得到');
+      await tester.tap(find.descendant(
+          of: find.byType(GlassDialog), matching: find.text('按月三班倒')));
+      await tester.pumpAndSettle();
+
+      expect(reschedules(), greaterThanOrEqualTo(1),
+          reason: '换完其余时间不重排的话，旧方案里的班次闹钟照旧会在错的晚上响'
+              '（正是用户 2026-10-18 报的那条）');
+      await _dispose(tester);
+    });
+
+
+    testWidgets('换「其余时间」到另一套：按班次的待办也跟着重算', (tester) async {
+      installChannelSpy();
+      final db = await _pump(tester);
+      final repo = AppRepository(db);
+
+      // 加一套「每天都是夜班」的方案，并建一条「每次夜班带工牌」的待办。
+      await repo.saveSchedule(
+        name: '每天夜班',
+        anchorDate: dateOnly(DateTime.now()),
+        classes: const [ShiftClass(name: '夜班', abbr: '夜')],
+        cycle: const [0],
+        makeCurrent: false,
+        teamCount: 1,
+        teamNames: const ['我'],
+        teamOffsets: const [0],
+      );
+      final sid = await repo.addRecurringTodo(
+        title: '带工牌',
+        repeat: RecurRepeat.shift,
+        startDate: dateOnly(DateTime.now()),
+        shiftNames: const ['夜班'],
+      );
+      // 当前是「四班两倒」（每天白班）→ 夜班规则今天没有发生日。
+      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      expect((await repo.listEvents()).where((e) => e.seriesId == sid),
+          isEmpty);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(L10n.allDates));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+          of: find.byType(GlassDialog), matching: find.text('每天夜班')));
+      await tester.pumpAndSettle();
+
+      final rows = (await repo.listEvents()).where((e) => e.seriesId == sid);
+      expect(rows.length, 1,
+          reason: '换完其余时间，按班次的当前这一次要立刻跟上 —— '
+              '只重排闹钟的话列表里什么都不会变');
+      await _dispose(tester);
+    });
+
+    testWidgets('新增排班时段：立刻重排', (tester) async {
+      installChannelSpy();
+      await _pump(tester);
+      calls.clear();
+
+      await tester.tap(find.text(L10n.addSpan));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(L10n.save));
+      await tester.pumpAndSettle();
+
+      expect(reschedules(), greaterThanOrEqualTo(1),
+          reason: '时段一加，「今天归哪套」就变了 —— 闹钟得跟着重排');
+      await _dispose(tester);
+    });
+
+    testWidgets('删除一套排班：立刻重排', (tester) async {
+      installChannelSpy();
+      await _pump(tester);
+      calls.clear();
+
+      await tester.tap(find.byType(GlassDeleteButton).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(L10n.delete));
+      await tester.pumpAndSettle();
+
+      expect(reschedules(), greaterThanOrEqualTo(1),
+          reason: '删掉一套（尤其是正在用的那套）之后，其余日子会交给别的方案，'
+              '旧计划的闹钟必须被撤掉');
+      await _dispose(tester);
+    });
+  });
 }

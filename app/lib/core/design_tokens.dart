@@ -55,6 +55,14 @@ class AppTokens {
   static const double blurCard = 18;
   static const double blurPanel = 24;
 
+  /// 底栏那枚玻璃胶囊的模糊半径（逻辑像素）。
+  ///
+  /// **比 [blurPanel] 小一半是有意的**：胶囊边缘要做真折射，而折射只有在背景
+  /// **还有结构**时才看得见 —— 模糊半径一旦接近或超过折射带宽度，背景先被糊成
+  /// 一张平色纸，位移上去等于没位移（v0.12.8 实测底栏带内最大差只有 10/255）。
+  /// 底栏底下本来就有内容穿过（滚动时那圈边缘会把它们掰弯），这一档把它留住。
+  static const double navRefractSigma = 12;
+
   // ── 时长（非弹簧过渡） ──
   static const Duration durFast = Duration(milliseconds: 120);
   static const Duration durMed = Duration(milliseconds: 220);
@@ -385,6 +393,14 @@ class AppTokens {
   /// ② 底下那 0.50 端让 `teal`/`orange` 这类浅主色上的白字彻底读不出来。
   /// 现在两端都接近不透明，白字在**整条渐变上**都过 AA —— 而且是**按需**过：
   /// 底色的深浅由 [solidAccent] 只压到刚好够，不再多压。
+  ///
+  /// ⚠️ **底端 0.92 这个半透明是刻意留的，不是漏改。** 压上去的文字色由
+  /// [navForeground] / [onSolid] 按**纯 [solidAccent]** 算，实测五种主色两档主题
+  /// 都过 AA（护栏在 `test/design_tokens_test.dart` 的「导航选中项的字色」与
+  /// 「onSolid」两条）。曾经想把它改成「混 8% 黑」让它完全不透明 —— 那会让液态档
+  /// 那枚凸出的透镜变成一块**实心色块**，`test/liquid_lens_test.dart` 的
+  /// 「凸出来的应该还是玻璃」当场变红。玻璃要透，字要够黑够白，两件事分别由
+  /// 这一条与 [onSolid] 负责，不要拿一条去顶另一条。
   static LinearGradient accentGradient(Color accent) {
     final solid = solidAccent(accent);
     return LinearGradient(
@@ -560,6 +576,70 @@ class AppTokens {
   static Color navBorder(bool isDark) => isDark
       ? Colors.white.withValues(alpha: 0.16)
       : inkLight.withValues(alpha: 0.14);
+
+  // ── 胶囊那一圈「厚玻璃」的边光配方（底栏那一档专用，见 `_CapsuleEdgePainter`） ──
+  //
+  // 这一组是**画出来的厚度**：不碰背景、只用控件自己的尺寸，于是与渲染后端无关、
+  // 逐像素可测。层序由外到内：厚度暗边 → 主边光 + 它的光晕 → 冷暖两道色散细边。
+  //
+  // ⚠️ **渐变轴必须是竖直的（上亮下暗），不许用对角轴。** 胶囊是 6:1 的长条，
+  // 对角轴在它上面会退化成「左端纯白、右端 10% 黑」—— 那条教训写在
+  // `glass_tier_test.dart` 的「浅色档：胶囊左右两条边必须是同一个值」里
+  // （用户 2026-10-01 真机报的「左边很浅，几乎看不清胶囊」）。
+  static const double capsuleEdgeShadowDepth = 1.6;
+  static const double capsuleEdgeShadowWidth = 2.4;
+  static const double capsuleEdgeShadowBlur = 2.2;
+  static const double capsuleEdgeRimDepth = 0.8;
+  static const double capsuleEdgeRimWidth = 1.6;
+  static const double capsuleEdgeGlowWidth = 3.0;
+  static const double capsuleEdgeGlowBlur = 3.5;
+  static const double capsuleEdgeWarmDepth = 1.5;
+  static const double capsuleEdgeCoolDepth = 0.2;
+  static const double capsuleEdgeFringeWidth = 0.9;
+
+  /// 主边光在竖直轴两端的白：上端（受光面）几乎纯白、下端收掉。
+  ///
+  /// 亮档下端收成**深墨**而不是更淡的白 —— 白底上白线等于没画，浅色里玻璃的边
+  /// 读作「一圈接触阴影 + 上面一点高光」。
+  ///
+  /// ⚠️ **这是底栏唯一的一层边光**（`LiquidTrack` 在 `refract` 开着时不再叠
+  /// `CapsuleRimPainter` 那一圈，见那里的注释）。别再往底栏上叠第二圈 ——
+  /// v0.12.9 之前两圈是叠着的：这一道白 0.92 压在那圈白 0.62 上，
+  /// `1 − (1 − 0.62)(1 − 0.92) ≈ 0.97` 的白，真机实测上沿 249 压在 47 的底色上
+  /// （差 202 级），用户报的就是「深色底栏边缘太亮、刺眼」。
+  ///
+  /// 深色上端从 0.92 收到 **0.42**。上沿与底色的落差：**202 级 → 122 级**
+  /// （渲染工装 169 对 47；真机 166 对 45，差 121 —— 同一件事，差 1 级是屏幕
+  /// 那边的取整，报告里统一按 **122** 说）。
+  ///
+  /// 浅色那端**不能用白**：0.95 的白压在本就 239 的近白底上读不出来，还把
+  /// 14% 的深色轮廓线盖掉（用户：「浅色尤其上边看不清」，实测改前只有 5~11 级）。
+  /// 改成 ink 0.18 的**暗线**：压暗 **85 级**（渲染工装 239−154，真机 245−158）。
+  /// 浅色玻璃的边靠「接触阴影」读，不靠高光。
+  ///
+  /// 这两个数各有一条护栏：原料在 `test/design_tokens_test.dart`（0.42 / 0.18、
+  /// 浅色必须暗于底色），合成后的像素在 `test/glass_refraction_test.dart`
+  /// （122±4 / 85±4，按真组件渲出来量）。
+  static List<Color> capsuleEdgeRim(bool isDark) => isDark
+      ? [
+          Colors.white.withValues(alpha: 0.42),
+          Colors.white.withValues(alpha: 0.10),
+        ]
+      : [
+          inkLight.withValues(alpha: 0.18),
+          inkLight.withValues(alpha: 0.04),
+        ];
+
+  /// 厚度暗边（内圈那一道很淡的黑，压出「玻璃有厚度」）。
+  static Color capsuleEdgeShadow(bool isDark) =>
+      Colors.black.withValues(alpha: isDark ? 0.22 : 0.08);
+
+  /// 色散：暖端偏琥珀、冷端偏青 —— 玻璃边缘把不同波长折到不同位置。
+  static Color capsuleEdgeWarm(bool isDark) =>
+      const Color(0xFFFFB27A).withValues(alpha: isDark ? 0.20 : 0.26);
+
+  static Color capsuleEdgeCool(bool isDark) =>
+      const Color(0xFF7AD3FF).withValues(alpha: isDark ? 0.20 : 0.22);
 
   /// 胶囊滑块**选中项**的前景（图标与文字）—— 由**它压着的那块底**决定。
   ///

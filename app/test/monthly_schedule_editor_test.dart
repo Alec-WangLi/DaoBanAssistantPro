@@ -20,6 +20,7 @@ import 'package:shiftassistantpro/domain/monthly_pattern.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
+import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 class _Saved {
@@ -179,6 +180,7 @@ Finder _followHolidaySwitch() => find.descendant(
     );
 
 void main() {
+  useFixedNow();
   setUpAll(() async {
     await initializeDateFormatting('zh');
     await initializeDateFormatting('en');
@@ -247,7 +249,7 @@ void main() {
         .where((s) => const ['中', '白', '夜'].contains(s))
         .toList();
 
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(kAnchor);
     final want = [
       for (var i = 0; i < 14; i++)
         domain.shiftOn(DateTime(today.year, today.month, today.day + i))!.shortLabel,
@@ -337,7 +339,7 @@ void main() {
           teamSegOffsets: const [2, 0, 1],
           teamCount: 3,
         ));
-    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.tap(find.text(L10n.teamSettings));
     await tester.pumpAndSettle();
 
     expect(find.text(L10n.crewSegmentStart(3)), findsOneWidget);
@@ -504,7 +506,7 @@ void main() {
           teamSegOffsets: const [2, 2, 1],
           teamCount: 3,
         ));
-    await tester.tap(find.text(L10n.crewSettingsOptional));
+    await tester.tap(find.text(L10n.teamSettings));
     await tester.pumpAndSettle();
     expect(find.text(L10n.crewSegmentStart(3)), findsNWidgets(2), reason: '甲乙都在第 3 段');
 
