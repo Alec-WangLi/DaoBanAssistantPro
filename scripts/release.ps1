@@ -515,3 +515,59 @@ if ($repo) {
         }
     }
 }
+
+# ---------- 9. 部署官网（Cloudflare Pages） ----------
+#
+# 站点同时是「官网」和「APK 国内镜像」：App 的更新检查第一跳就读
+# <siteBase>/latest.json，国内用户不必再碰 github.com。
+#
+# 走本机 wrangler 的 OAuth 凭据（一次 `npx wrangler login` 即可，之后长期有效），
+# 不依赖 GitHub secrets —— 发版本来就在这台机器上跑，主 checkout 里才有 dist/。
+#
+# 与 8b 同一条规矩：这一步跑在 Release 已经建好之后，失败只告警，
+# 绝不把一次成功的发布变成「失败」。
+$siteBase = $null
+$checkerPath = Join-Path $root 'app\lib\core\update_checker.dart'
+if (Test-Path $checkerPath) {
+    # 域名只有一个权威出处：UpdateChecker.siteBase。这里读它，不另抄一份。
+    $hit = Select-String -Path $checkerPath -Pattern "siteBase\s*=\s*'([^']+)'" | Select-Object -First 1
+    if ($hit) { $siteBase = $hit.Matches[0].Groups[1].Value }
+}
+
+if (-not $siteBase) {
+    Write-Warning "[9/9] 没从 update_checker.dart 读到 siteBase，跳过官网部署"
+} else {
+    Write-Host ""
+    Write-Host "[9/9] 部署官网到 $siteBase ..."
+    $siteError = $null
+    $prevEapSite = $ErrorActionPreference
+    try {
+        # python / npx 都会往 stderr 写正常提示，Stop 下会被包成异常抛出来
+        $ErrorActionPreference = 'Continue'
+
+        & python (Join-Path $root 'scripts\build_site.py') --base $siteBase
+        if ($LASTEXITCODE -ne 0) { throw "build_site.py 退出码 $LASTEXITCODE" }
+
+        Push-Location $root
+        try {
+            & npx --yes wrangler@latest pages deploy _site --project-name=daoban-shift --branch=main --commit-dirty=true
+            if ($LASTEXITCODE -ne 0) { throw "wrangler pages deploy 退出码 $LASTEXITCODE" }
+        } finally {
+            Pop-Location
+        }
+    } catch {
+        $siteError = $_
+    } finally {
+        $ErrorActionPreference = $prevEapSite
+    }
+
+    if ($siteError) {
+        Write-Warning "[9/9] 官网部署失败：$siteError"
+        Write-Warning "  发布本身是成功的；手动补这两条即可："
+        Write-Warning "    python scripts\build_site.py --base $siteBase"
+        Write-Warning "    npx wrangler pages deploy _site --project-name=daoban-shift --branch=main"
+        Write-Warning "  若报未登录：先 npx wrangler login"
+    } else {
+        Write-Host "      ✅ 官网已更新：$siteBase"
+    }
+}

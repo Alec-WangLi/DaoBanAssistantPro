@@ -6,6 +6,10 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8087", "--directory", "_site"],
       "port": 8087
+    },
+    {
+      "name": "site-live",
+      "url": "https://daoban-shift.pages.dev"
     }
   ]
 }

@@ -78,8 +78,16 @@ def main() -> int:
         apk = max((p for p in apks if p.name.isascii()),
                   key=lambda p: p.stat().st_mtime, default=None)
     if apk is not None:
+        # Cloudflare Pages 单文件上限 25 MiB。现在 22 MiB 出头，涨到顶会更安静地
+        # 失败在 wrangler 那边 —— 在这里先喊出来，并指明该往哪搬。
+        size = apk.stat().st_size
+        if size > 25 * 1024 * 1024:
+            sys.exit(
+                f"APK {size} 字节超过 Cloudflare Pages 单文件 25 MiB 上限 —— "
+                "改放 Cloudflare R2（免费 10GB 存储 + 零出口费），把下载地址换成 R2 的即可"
+            )
         shutil.copy2(apk, OUT / "download" / apk.name)
-        print(f"带上 APK：{apk.name}")
+        print(f"带上 APK：{apk.name}（{size / 1024 / 1024:.2f} MiB）")
     else:
         print("dist/ 里没有 APK —— 下载按钮会退回 GitHub")
 

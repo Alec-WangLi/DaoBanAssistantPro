@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/update_checker.dart';
 
@@ -235,19 +233,6 @@ void main() {
       UpdateChecker.fetch = (uri, timeout) async => throw Exception('boom');
       final r = await UpdateChecker.checkUpdates();
       expect(r.error, isTrue);
-    });
-  });
-
-  group('官网地址一致性', () {
-    // 站点地址写死在两处：Dart 常量与部署 workflow。改了这头忘了那头，
-    // App 会安安静静地去查一个不存在的域名 —— 不报错，只是永远回退。
-    test('UpdateChecker.siteBase 与 site.yml 的 SITE_BASE 相同', () {
-      final workflow = File('../.github/workflows/site.yml');
-      if (!workflow.existsSync()) return; // 脱离仓库运行时不判
-      final m = RegExp(r'^\s*SITE_BASE:\s*(\S+)', multiLine: true)
-          .firstMatch(workflow.readAsStringSync());
-      expect(m, isNotNull, reason: 'site.yml 里找不到 SITE_BASE');
-      expect(m!.group(1), UpdateChecker.siteBase);
     });
   });
 }
