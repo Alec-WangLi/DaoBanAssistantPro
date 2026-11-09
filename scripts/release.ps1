@@ -552,10 +552,17 @@ if (-not $siteBase) {
         if ($LASTEXITCODE -ne 0) { throw "build_site.py 退出码 $LASTEXITCODE" }
 
         Push-Location $root
+        # wrangler 把登录态存在 %APPDATA%\xdg.config\.wrangler。build-env.ps1 把
+        # APPDATA 重定向到了 toolchain\ —— 那边没有凭据，wrangler 就会要求
+        # CLOUDFLARE_API_TOKEN，非交互环境下直接失败（2026-11-10 发 v0.13.1 时踩到）。
+        # 与 gh 的 GH_CONFIG_DIR 是同一个坑：这里临时指回真实目录。
+        $prevAppData = $env:APPDATA
+        $env:APPDATA = Join-Path $env:USERPROFILE 'AppData\Roaming'
         try {
             & npx --yes wrangler@latest pages deploy _site --project-name=daoban-shift --branch=main --commit-dirty=true
             if ($LASTEXITCODE -ne 0) { throw "wrangler pages deploy 退出码 $LASTEXITCODE" }
         } finally {
+            $env:APPDATA = $prevAppData
             Pop-Location
         }
     } catch {

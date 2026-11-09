@@ -158,7 +158,8 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 - **检查更新（公开仓库）**：`UpdateChecker` 无鉴权，三条通道依次回退：**官网清单**（`siteBase/latest.json`）→ 仓库根目录 `latest.json` → GitHub API `/releases`。官网排第一是因为它才是国内用户的快通道，以前 GitHub 那条先试，国内往往要等满 8 秒超时才回退。**API 不当主通道**：未认证限 60 次/小时/IP，共享出口很容易耗尽（实测常年 403），拿它优先等于大部分时间都在走回退。两条**在不同域名**上，只被墙了一个的网络也兜得住。按语义版本自行计算「最新正式版 + 最新测试版」双通道展示；`downloadApk` 直接经 `browser_download_url` 下载安装。连不上时的提示直说「国内需要开代理或加速器」（`showUpdateFailedDialog`，走弹窗不走 2 秒的 snack）。
 - **官网与下载镜像（2026-11-10 用户选 A 档）**：`site/` 是一页静态官网，和 APK 放在同一个域上 —— `https://daoban-shift.pages.dev`（Cloudflare Pages，项目名 `daoban-shift`）。**APK 不进仓库**（`dist/` 本来就 gitignore），部署时由 `scripts/build_site.py` 从 `dist/` 取一份放进 `_site/download/`。
   - **部署走本机，不走 CI**：`scripts/release.ps1` 第 9 步跑 `build_site.py --base <siteBase> --channel <stable|prerelease>` + `npx wrangler pages deploy _site`。凭据是 `npx wrangler login` 一次之后的 OAuth token（存在 `%APPDATA%\xdg.config\.wrangler\config\default.toml`），**不需要 GitHub secrets**。换机器发版要重新 login。
-  - **两个通道的 APK 都要镜像**：清单里点到名的版本，`dist/` 有就都放进 `_site/download/`（正式版 + 测试版，约 46MB）。只带正式版是不够的 —— 发测试版时 `prerelease` 那条会因为没有文件而退回 GitHub，国内用户又得开代理，正是这套东西要解决的问题。`--channel` 决定哪一端以工作区刚写好的清单为准，另一端取 `origin/main` 的权威值。
+  - ⚠️ **`build-env.ps1` 把 `APPDATA` 重定向到 `toolchain\`，而 wrangler 的登录态在真实的 `%APPDATA%\xdg.config\.wrangler`**。不指回去就报 "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN" 直接失败 —— 2026-11-10 发 v0.13.1 时踩到：发布本身成功，站点没更新。`release.ps1` 第 9 步现在临时把 `APPDATA` 指回真实目录，与 gh 的 `GH_CONFIG_DIR` 是同一类修法。
+  - **两个通道的 APK 都要镜像**：清单里点到名的版本，`dist/` 有就都放进 `_site/download/`（正式版 + 测试版，约 46MB）。只带正式版是不够的 —— 发测试版时 `prerelease` 那条会因为没有文件而退回 GitHub，国内用户又得开代理，正是这套东西要解决的问题。`--channel` 决定哪一端以工作区刚写好的清单为准，另一端取 `origin/main` 的权威值。落盘用清单里的 `asset` 名（ASCII），不是 `dist/` 里的中文文件名。
   - **域名只有一处出处**：`UpdateChecker.siteBase`。`release.ps1` 用正则从那个文件读，`build_site.py --base` 负责把清单里的相对地址拼成绝对地址。改域名 = 改这一个常量 + 在 Pages 里绑好新域名。
   - ⚠️ **Cloudflare 2026 年已把新建 Pages 项目并进 Workers**：`npx wrangler pages project create` 现在建出来的是 **Worker**（域名 `*.workers.dev`），`wrangler pages deploy` 会报 "project does not exist"。本项目那个经典 Pages 项目是用 API 建的（`POST /accounts/<id>/pages/projects`）。**别用 `pages project create` 重建**，会又得到一个 Worker。
   - ⚠️ **Pages 单文件上限 25 MiB，当前 APK 22.05 MiB** —— 再涨约 3 MiB 就超。`build_site.py` 里有 `25 * 1024 * 1024` 的硬闸，超了直接退出并提示改放 Cloudflare R2（免费 10GB 存储 + 零出口费）。
@@ -179,9 +180,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.1(+188) 测试版**：官网与国内下载镜像上线（`https://daoban-shift.pages.dev`，正式版 / 测试版两个 APK 都在站上）；「检查更新」改三通道（官网清单 → 仓库清单 → GitHub API），国内不再先卡满 8 秒超时；官网标明仅支持 Android；发版脚本第 9 步自动同步站点。
 - **v0.13.0(+187) 正式稳定版**：小组件跟随系统深浅色（API 31+ `setColorInt` + `drawable-night`，宿主重新应用；API < 31 烤死）；重复待办行挂发生日 + 旧数据一次性迁移（行与水位线）+ 打勾不再响 + 冷启动重排 + 解绑保时刻；排班管理 / 编辑排班的箭头去掉；README / 配图 / 四张 GIF 重出。
 - **v0.12.11(+186) 测试版**：小组件主题感知渲染 + 运行时接收器兜底；重复待办行日期 / 提醒收口；冷启动改走 `rescheduleAll`。
-- **v0.12.10(+185) 测试版**：底栏边光重新配亮度 + 滑块两端真圆。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）
