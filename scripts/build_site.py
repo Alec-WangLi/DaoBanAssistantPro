@@ -8,11 +8,17 @@ CI 里由 `.github/workflows/site.yml` 做同样的事；这个脚本只是把
     python scripts/build_site.py
     python -m http.server 8087 --directory _site
 
+要交付真站点（Cloudflare 控制台手动上传时用），把地址传进去，
+清单里的下载直链才会写成绝对路径 —— App 读不了相对路径：
+
+    python scripts/build_site.py --base https://daoban-shift.pages.dev
+
 `_site/` 已 gitignore，可随时删掉重建。
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import sys
@@ -35,6 +41,15 @@ def _copy(src: Path, dst: Path) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="组装 _site/")
+    parser.add_argument(
+        "--base",
+        default="",
+        help="站点根地址（如 https://daoban-shift.pages.dev）。留空则写相对路径，只适合本地预览。",
+    )
+    args = parser.parse_args()
+    base = args.base.rstrip("/")
+
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "assets").mkdir(parents=True)
@@ -48,23 +63,38 @@ def main() -> int:
     for name in GIFS:
         _copy(IMAGES / name, OUT / "assets" / name)
 
-    # 发布清单：本地预览把地址改成相对路径，浏览器与 App 都读得懂。
+    # 发布清单（先读 —— 下面挑哪个 APK 要参考它）
     manifest = json.loads((ROOT / "latest.json").read_text(encoding="utf-8"))
-    for channel in ("stable", "prerelease"):
-        node = manifest.get(channel)
-        if not isinstance(node, dict):
-            continue
-        asset = node.get("asset") or f"DaoBanAssistantPro-v{node.get('version')}.apk"
-        node["asset"] = asset
-        node["url"] = f"/download/{asset}"
+    stable = manifest.get("stable") if isinstance(manifest.get("stable"), dict) else None
 
-    # dist/ 里有 APK 就带上，方便点按钮验证下载链路（取最新产出的那份）。
+    # dist/ 里挑 APK：优先按清单里的资产名找，找不到再退回最新的 ASCII 名那份。
+    # dist/ 同时放着中文名与 ASCII 名两份，中文那份不能当 URL 用 ——
+    # 清单里的 asset 是 ASCII 的那个名字。
     apk_dir = ROOT / "dist"
-    apk = max(apk_dir.glob("*.apk"), key=lambda p: p.stat().st_mtime, default=None) \
-        if apk_dir.is_dir() else None
+    apks = sorted(apk_dir.glob("*.apk")) if apk_dir.is_dir() else []
+    wanted = (stable or {}).get("asset") or ""
+    apk = next((p for p in apks if p.name == wanted), None)
+    if apk is None:
+        apk = max((p for p in apks if p.name.isascii()),
+                  key=lambda p: p.stat().st_mtime, default=None)
     if apk is not None:
         shutil.copy2(apk, OUT / "download" / apk.name)
         print(f"带上 APK：{apk.name}")
+    else:
+        print("dist/ 里没有 APK —— 下载按钮会退回 GitHub")
+
+    # 只把**本站确实有那份文件**的通道改成站内地址，其余保持原样（指向 GitHub）。
+    # 否则清单里会挂一条 404。
+    for channel in ("stable", "prerelease"):
+        node = manifest.get(channel)
+        if not isinstance(node, dict) or not node.get("version"):
+            continue
+        asset = node.get("asset") or f"DaoBanAssistantPro-v{node['version']}.apk"
+        node["asset"] = asset
+        if (OUT / "download" / asset).is_file():
+            node["url"] = f"{base}/download/{asset}" if base else f"/download/{asset}"
+        else:
+            print(f"  跳过 {channel} {node['version']}：dist/ 里没有 {asset}，仍指向 GitHub")
 
     (OUT / "latest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
