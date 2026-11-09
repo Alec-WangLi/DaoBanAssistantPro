@@ -1093,7 +1093,31 @@ class AppRepository {
   /// 不是「把我这条待办删了」。已完成的那些历史也解绑成普通待办留着 —— 它们本来
   /// 就是做过的事，列表里一直看得见，用户想清自己删。
   Future<void> unlinkRecurringSeries(int id) async {
+    final seriesRow = await (db.select(db.recurringSeriesRows)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    final chain = (await getActiveSchedules())?.chain;
     await db.transaction(() async {
+      if (seriesRow != null) {
+        final s = seriesRow.toDomain();
+        final liveRows = await (db.select(db.scheduleEvents)
+              ..where((e) => e.seriesId.equals(id) & e.isCompleted.equals(false))
+              ..orderBy([(e) => OrderingTerm.asc(e.date)]))
+            .get();
+        final live = liveRows.isEmpty ? null : liveRows.last;
+        if (live != null && s.repeat == RecurRepeat.shift && s.timeMinute != null) {
+          // 解绑后行变一次性，提醒走 `eventReminderTime`（行日期 + 钟点），
+          // 不再看 `alarmDayAnchor`。把行改到提醒落地日，绝对时刻才不变。
+          final shift = chain?.shiftOn(live.date);
+          final fireDay =
+              legacyDisplayDayForMigration(s, live.date, shift: shift);
+          if (dayNumber(fireDay) != dayNumber(live.date)) {
+            await (db.update(db.scheduleEvents)
+                  ..where((e) => e.id.equals(live.id)))
+                .write(ScheduleEventsCompanion(date: Value(fireDay)));
+          }
+        }
+      }
       await (db.update(db.scheduleEvents)..where((e) => e.seriesId.equals(id)))
           .write(const ScheduleEventsCompanion(seriesId: Value(null)));
       await (db.delete(db.recurringSeriesRows)..where((t) => t.id.equals(id))).go();
