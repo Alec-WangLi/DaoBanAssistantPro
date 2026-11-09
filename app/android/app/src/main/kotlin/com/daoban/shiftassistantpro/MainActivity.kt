@@ -3,8 +3,10 @@ package com.daoban.shiftassistantpro
 import android.app.ActivityManager
 import android.app.AlarmManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioManager
@@ -18,6 +20,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.OpenableColumns
 import android.provider.Settings
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
 import io.flutter.embedding.android.FlutterActivity
@@ -100,10 +103,44 @@ class MainActivity : FlutterActivity() {
     /** 等文件选择器回来的那个 Flutter 回调（同一时刻只允许一个）。 */
     private var pendingRingtoneResult: MethodChannel.Result? = null
 
+    /**
+     * 诊断（2026-11-09）：App 活着时收系统深浅色切换。
+     * 与 manifest 那条对照，判断「运行时接收器」这条路通不通（manifest 那条在
+     * Android 8+ 的隐式广播限制下大概率收不到）。
+     */
+    private var themeProbeReceiver: BroadcastReceiver? = null
+
+    private fun registerThemeProbe() {
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                AlarmLog.info(context, "MainActivity: 运行时收到 ${intent.action}（诊断）")
+                ShiftWidgets.refreshAll(context)
+            }
+        }
+        try {
+            ContextCompat.registerReceiver(
+                this,
+                r,
+                IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            themeProbeReceiver = r
+        } catch (e: Exception) {
+            AlarmLog.error(this, "MainActivity: 主题探针注册失败: ${e.message}")
+        }
+    }
+
     override fun onDestroy() {
         // 响铃自停靠这个引用回来撤锁屏标志：Activity 没了就把它清掉，别让它挂着一个
         // 已经销毁的 Activity（那会把整个 Activity 泄漏到进程结束）。
         instance = null
+        themeProbeReceiver?.let { r ->
+            try {
+                unregisterReceiver(r)
+            } catch (_: Exception) {
+            }
+            themeProbeReceiver = null
+        }
         super.onDestroy()
     }
 
@@ -114,6 +151,7 @@ class MainActivity : FlutterActivity() {
         instance = this
         handleAlarmIntent(intent)
         handleWidgetIntent(intent)
+        registerThemeProbe()
         // 捕获原生未处理异常（含闹钟 receiver 触发时的崩溃），写入日志文件
         val default = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->

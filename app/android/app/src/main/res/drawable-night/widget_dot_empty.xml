@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 今日卡「没班次」圆点的深色档，与 `drawable/widget_dot_empty.xml` 同名。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/wg_empty_dark" />
+</shape>

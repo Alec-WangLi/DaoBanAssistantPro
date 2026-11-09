@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Paint
+import android.os.Build
 import android.util.TypedValue
 import android.widget.RemoteViews
 
@@ -20,8 +21,11 @@ import java.time.LocalDate
  * 四条纪律：
  *  1. Kotlin 侧一个中文字面量都不许有。所有文案都来自快照（Dart 侧 `L10n` 产出）。
  *     唯一的例外是占位态那行应用名，它取自 `applicationInfo.loadLabel()`。
- *  2. 明暗一律**显式选资源**，不依赖 `-night` 限定符 —— `RemoteViews` 由宿主进程
- *     inflate，限定符在宿主进程里的解析顺序各家 ROM 不一致。
+ *  2. 明暗：**API 31+ 走主题感知** —— 文字用 `setColorInt` 日夜双值，背景用同名 +
+ *     `drawable-night`，由宿主在配置变化时重新应用、按当时的 uiMode 解析。
+ *     2026-11-09 真机实测（MIUI / HyperOS）：App 进程被杀后切深浅色，三张卡都会
+ *     自动翻转、且没有本 App 的日志 —— 宿主确实会重新应用。API < 31 没有
+ *     `setColorInt`，仍走**显式选资源**的烤死路径（只翻背景不翻字比不翻更糟）。
  *  3. 布局只用 RemoteViews 白名单里的类：FrameLayout / LinearLayout / RelativeLayout /
  *     GridLayout + TextView / ImageView。**没有 ConstraintLayout**，报的是运行期
  *     `ClassNotFoundException`，不是编译错误。
@@ -422,6 +426,56 @@ object WidgetRenderer {
                 Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     }
 
+    /*
+     * ── 诊断（2026-11-09）：主题感知的渲染 ──
+     *
+     * 现状：颜色在渲染时就被烤成具体 ARGB / 具体 drawable id，而刷新只在跨天、
+     * 班次边界、App 数据变化时发生 —— 系统切深浅色不触发任何一条，于是小组件
+     * 永远停在最后一次渲染的那一档。
+     *
+     * 这两条 helper 让 RemoteViews 自己带上「日/夜两份值」：
+     *   · 文字色走 `setColorInt`（API 31+），宿主**重新应用**时按当时的 uiMode 选；
+     *   · 背景走同名 + `drawable-night` 的两份 drawable，宿主重新应用时按当时的
+     *     配置解析。
+     * `themeMode` 明确选了 light / dark 时仍走原来的烤死路径 —— 那时小组件不该
+     * 跟系统。`API < 31` 没有 `setColorInt`，也退回烤死的那一档。
+     *
+     * ⚠️ 这是**诊断版**：先验证小米桌面到底会不会重新应用，再决定它留在哪儿。
+     */
+    private fun themedColor(
+        rv: RemoteViews,
+        id: Int,
+        system: Boolean,
+        dark: Boolean,
+        light: Int,
+        night: Int,
+    ) {
+        if (system && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            rv.setColorInt(id, "setTextColor", light, night)
+        } else {
+            rv.setTextColor(id, if (dark) night else light)
+        }
+    }
+
+    /** 主题感知只在 API 31+ 成立：`setColorInt` 与 `-night` 必须同进同退。 */
+    private fun auto(system: Boolean): Boolean =
+        system && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+    /** 卡片底：跟随系统时用带了 `-night` 的那一份（诊断）。 */
+    private fun cardBackground(system: Boolean, dark: Boolean): Int =
+        if (auto(system)) R.drawable.widget_card_auto
+        else if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light
+
+    /** 月历面板底：同上。 */
+    private fun pageBackground(system: Boolean, dark: Boolean): Int =
+        if (auto(system)) R.drawable.widget_page_auto
+        else if (dark) R.drawable.widget_page_dark else R.drawable.widget_page_light
+
+    /** 月历格卡底：同上。 */
+    private fun cellBackground(system: Boolean, dark: Boolean): Int =
+        if (auto(system)) R.drawable.widget_cell_auto
+        else if (dark) R.drawable.widget_cell_dark else R.drawable.widget_cell_light
+
     /**
      * 三张卡的分派。**纯渲染**：不写盘、不排闹钟、不读除宿主配置之外的任何系统状态。
      *
@@ -443,7 +497,12 @@ object WidgetRenderer {
         if (todayIndex < 0) {
             // 快照过期：App 两个多月没打开，这份 days 里已经没有今天了。
             AlarmLog.info(context, "WidgetRenderer: 快照已过期，走占位态")
-            return placeholder(context, isDark(context, snap.themeMode), widgetId = widgetId)
+            return placeholder(
+                context,
+                isDark(context, snap.themeMode),
+                widgetId = widgetId,
+                system = snap.themeMode == "system",
+            )
         }
         if (!snap.hasSchedule) return empty(context, snap, widgetId)
         return when (variant) {
@@ -482,15 +541,18 @@ object WidgetRenderer {
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_week_strip)
         val dark = isDark(context, snap.themeMode)
+        val system = snap.themeMode == "system"
         v.setInt(
             R.id.wg_ws_root,
             "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+            cardBackground(system, dark),
         )
         v.setOnClickPendingIntent(R.id.wg_ws_root, launchIntent(context, rootRequestCode(widgetId)))
 
-        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
-        val muted = context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val inkLight = context.getColor(R.color.wg_ink_light)
+        val inkNight = context.getColor(R.color.wg_ink_dark)
+        val mutedLight = context.getColor(R.color.wg_muted_light)
+        val mutedNight = context.getColor(R.color.wg_muted_dark)
 
         val todayEpoch = snap.days[todayIndex].day
         val today = LocalDate.ofEpochDay(todayEpoch)
@@ -559,10 +621,10 @@ object WidgetRenderer {
             c.setTextViewText(R.id.wg_sc_weekday, snap.weekdays.getOrNull(col) ?: d.weekday)
             // 字色一律走中性 —— 块是半透明的**浅底**，`onSolidInk` 在 teal / orange 上
             // 会给白字、读不出来（与月历 `monthCard` 同一条，2026-10-15 踩过）。
-            c.setTextColor(R.id.wg_sc_weekday, muted)
+            themedColor(c, R.id.wg_sc_weekday, system, dark, mutedLight, mutedNight)
             // 日数字：与 App 的格子一样只印「日」，整串「9月19日」在 46dp 宽的列里排不下。
             c.setTextViewText(R.id.wg_sc_day, LocalDate.ofEpochDay(epoch).dayOfMonth.toString())
-            c.setTextColor(R.id.wg_sc_day, ink)
+            themedColor(c, R.id.wg_sc_day, system, dark, inkLight, inkNight)
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块不画）。
             // 不能拿 `wg_empty_*` 顶：`tintedChip` 的 `Paint.setAlpha` 会覆盖颜色字节自带的
@@ -585,7 +647,7 @@ object WidgetRenderer {
                     ),
                 )
                 c.setTextViewText(R.id.wg_sc_abbr, d.shiftAbbr)
-                c.setTextColor(R.id.wg_sc_abbr, ink)
+                themedColor(c, R.id.wg_sc_abbr, system, dark, inkLight, inkNight)
             } else {
                 c.setViewVisibility(R.id.wg_sc_pill, android.view.View.GONE)
                 c.setViewVisibility(R.id.wg_sc_abbr, android.view.View.GONE)
@@ -663,18 +725,21 @@ object WidgetRenderer {
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_month_card)
         val dark = isDark(context, snap.themeMode)
+        val system = snap.themeMode == "system"
         // 面板底**扮 App 的「日历页」**（浅灰 / 深底），42 张白格垫在它上面 ——
         // App 里就是这层关系（白卡垫在 `bgLight #F5F6FA` 上），桌面上没有「页面」
         // 这一层，得让面板去扮，白卡才显出来。见 `widget_page_*.xml`。
         v.setInt(
             R.id.wg_m_root,
             "setBackgroundResource",
-            if (dark) R.drawable.widget_page_dark else R.drawable.widget_page_light,
+            pageBackground(system, dark),
         )
         v.setOnClickPendingIntent(R.id.wg_m_root, launchIntent(context, rootRequestCode(widgetId)))
 
-        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
-        val muted = context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val inkLight = context.getColor(R.color.wg_ink_light)
+        val inkNight = context.getColor(R.color.wg_ink_dark)
+        val mutedLight = context.getColor(R.color.wg_muted_light)
+        val mutedNight = context.getColor(R.color.wg_muted_dark)
         val holiday = context.getColor(R.color.wg_holiday)
 
         val today = LocalDate.now()
@@ -692,19 +757,23 @@ object WidgetRenderer {
         } else {
             v.setViewVisibility(R.id.wg_m_title, android.view.View.VISIBLE)
             v.setTextViewText(R.id.wg_m_title, title.title)
-            v.setTextColor(R.id.wg_m_title, muted)
+            themedColor(v, R.id.wg_m_title, system, dark, mutedLight, mutedNight)
         }
         // **箭头永远设点击**，哪怕那一侧没得翻：`RemoteViews` 的 `reapply` 只重放
         // **新的**动作串，**没有任何办法撤掉上一次设过的点击**（与 v0.9.9 那条
         // `removeAllViews` 同源：宿主会复用已在的那棵视图树）。所以「到头了」由
         // **接收端**判 —— 颜色只作提示：能翻 = ink，翻不动 = muted（与标题同档）。
-        v.setTextColor(
-            R.id.wg_m_prev,
-            if (monthCovered(snap, firstOfMonth.minusMonths(1))) ink else muted,
+        val prevCovered = monthCovered(snap, firstOfMonth.minusMonths(1))
+        val nextCovered = monthCovered(snap, firstOfMonth.plusMonths(1))
+        themedColor(
+            v, R.id.wg_m_prev, system, dark,
+            if (prevCovered) inkLight else mutedLight,
+            if (prevCovered) inkNight else mutedNight,
         )
-        v.setTextColor(
-            R.id.wg_m_next,
-            if (monthCovered(snap, firstOfMonth.plusMonths(1))) ink else muted,
+        themedColor(
+            v, R.id.wg_m_next, system, dark,
+            if (nextCovered) inkLight else mutedLight,
+            if (nextCovered) inkNight else mutedNight,
         )
         v.setOnClickPendingIntent(R.id.wg_m_prev, monthStepIntent(context, widgetId, -1))
         v.setOnClickPendingIntent(R.id.wg_m_next, monthStepIntent(context, widgetId, 1))
@@ -724,7 +793,7 @@ object WidgetRenderer {
             } else {
                 v.setViewVisibility(wdIds[i], android.view.View.VISIBLE)
                 v.setTextViewText(wdIds[i], text)
-                v.setTextColor(wdIds[i], muted)
+                themedColor(v, wdIds[i], system, dark, mutedLight, mutedNight)
             }
         }
 
@@ -793,7 +862,7 @@ object WidgetRenderer {
             c.setInt(
                 R.id.wg_mc_root,
                 "setBackgroundResource",
-                if (dark) R.drawable.widget_cell_dark else R.drawable.widget_cell_light,
+                cellBackground(system, dark),
             )
 
             // ── 「今天」那块**半透明玻璃块**（2026-10-15 从实心改回来）──
@@ -837,7 +906,11 @@ object WidgetRenderer {
             // （静默：默认那颗蓝是对的，只有换到浅主色才现形）。
             // 字重仍然只能靠布局里的 `textStyle`：`TextView` 没有 `setTypeface(int)`，
             // 反射会在宿主进程抛 `ActionException`。
-            c.setTextColor(R.id.wg_mc_day, if (inMonth) ink else muted)
+            themedColor(
+                c, R.id.wg_mc_day, system, dark,
+                if (inMonth) inkLight else mutedLight,
+                if (inMonth) inkNight else mutedNight,
+            )
 
             // 没班次就不画胶囊 —— 与 App 日历格一致（`shift == null` 时那块根本不画）。
             // **相邻月的格照样画**（用户 2026-09-30 选的「日数变灰、胶囊照画」）。
@@ -862,7 +935,7 @@ object WidgetRenderer {
                 )
                 c.setTextViewText(R.id.wg_mc_abbr, d.shiftAbbr)
                 // 字色走中性 `ink`（淡染底 + 近不透明的卡底，两者都够对比度）
-                c.setTextColor(R.id.wg_mc_abbr, ink)
+                themedColor(c, R.id.wg_mc_abbr, system, dark, inkLight, inkNight)
             } else {
                 c.setViewVisibility(R.id.wg_mc_pill, android.view.View.GONE)
                 c.setViewVisibility(R.id.wg_mc_abbr, android.view.View.GONE)
@@ -877,9 +950,10 @@ object WidgetRenderer {
             // 原先 `isToday -> onSolidInk(...)` 是为了压在实心块上读得出来，代价是
             // 「这一天看不出是节假日」。块改回半透明（浅底）之后那条理由没有了，
             // 红字自然回来。
-            c.setTextColor(
-                R.id.wg_mc_lunar,
-                if (d.lunarIsHoliday) holiday else muted,
+            themedColor(
+                c, R.id.wg_mc_lunar, system, dark,
+                if (d.lunarIsHoliday) holiday else mutedLight,
+                if (d.lunarIsHoliday) holiday else mutedNight,
             )
 
             v.addView(slotIds[slot], c)
@@ -938,14 +1012,16 @@ object WidgetRenderer {
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_today_card)
         val dark = isDark(context, snap.themeMode)
+        val system = snap.themeMode == "system"
         v.setOnClickPendingIntent(
             R.id.wg_tc_root,
             launchIntent(context, rootRequestCode(widgetId)),
         )
 
-        val ink = context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light)
-        val muted =
-            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light)
+        val inkLight = context.getColor(R.color.wg_ink_light)
+        val inkNight = context.getColor(R.color.wg_ink_dark)
+        val mutedLight = context.getColor(R.color.wg_muted_light)
+        val mutedNight = context.getColor(R.color.wg_muted_dark)
 
         // 字号按**卡内可用高**缩放（今日卡没有「格子」，用的是整张卡能放内容的那一段）。
         // 可用高 = 宿主给的卡高 − 布局根那 22dp 内边距 × 2。
@@ -983,7 +1059,7 @@ object WidgetRenderer {
             ),
         )
         v.setTextViewText(R.id.wg_tc_date, d.dateShort)
-        v.setTextColor(R.id.wg_tc_date, ink)
+        themedColor(v, R.id.wg_tc_date, system, dark, inkLight, inkNight)
 
         // 「今天」徽章。宽度写死在布局里 —— RemoteViews 量不到文字宽度。
         // 高同样要与布局的 `wg_tc_today_wrap`（24dp）一致：`block` 的 radius 也按
@@ -1025,30 +1101,35 @@ object WidgetRenderer {
         } else {
             v.setViewVisibility(R.id.wg_tc_lunar, android.view.View.VISIBLE)
             v.setTextViewText(R.id.wg_tc_lunar, tc.lunarFull)
-            v.setTextColor(
-                R.id.wg_tc_lunar,
-                if (tc.lunarIsHoliday) {
-                    context.getColor(R.color.wg_holiday)
-                } else {
-                    muted
-                },
+            themedColor(
+                v, R.id.wg_tc_lunar, system, dark,
+                if (tc.lunarIsHoliday) context.getColor(R.color.wg_holiday) else mutedLight,
+                if (tc.lunarIsHoliday) context.getColor(R.color.wg_holiday) else mutedNight,
             )
         }
 
         // ── 3. 班次行 ──
-        v.setImageViewBitmap(
-            R.id.wg_tc_dot,
-            WidgetChip.circle(
-                if (d.hasShift) {
-                    d.color
-                } else {
-                    context.getColor(if (dark) R.color.wg_empty_dark else R.color.wg_empty_light)
-                },
-                dpToPx(context, 12),
-            ),
-        )
+        if (!d.hasShift && auto(system)) {
+            // 圆点的颜色也随深浅色走。位图是烤死的、重新应用时翻不了；
+            // 走资源 id 才能让宿主按当时的 uiMode 解析 `-night` 那一份。
+            v.setImageViewResource(R.id.wg_tc_dot, R.drawable.widget_dot_empty)
+        } else {
+            v.setImageViewBitmap(
+                R.id.wg_tc_dot,
+                WidgetChip.circle(
+                    if (d.hasShift) {
+                        d.color
+                    } else {
+                        context.getColor(
+                            if (dark) R.color.wg_empty_dark else R.color.wg_empty_light,
+                        )
+                    },
+                    dpToPx(context, 12),
+                ),
+            )
+        }
         v.setTextViewText(R.id.wg_tc_shift, if (d.hasShift) d.shiftName else d.weekday)
-        v.setTextColor(R.id.wg_tc_shift, ink)
+        themedColor(v, R.id.wg_tc_shift, system, dark, inkLight, inkNight)
 
         // ── 3b. 班次备注（「休息日 · 不响闹钟」/「闹钟 07:00」） ──
         // 位置与 App 的信息卡一致：**班次名之后、已调班徽章之前**。
@@ -1059,7 +1140,7 @@ object WidgetRenderer {
         } else {
             v.setViewVisibility(R.id.wg_tc_note, android.view.View.VISIBLE)
             v.setTextViewText(R.id.wg_tc_note, d.shiftNote)
-            v.setTextColor(R.id.wg_tc_note, muted)
+            themedColor(v, R.id.wg_tc_note, system, dark, mutedLight, mutedNight)
         }
 
         // 「已调班」徽章：底色跟当天班次色走（与 App 信息卡的 `_adjustedBadge` 同源）。
@@ -1087,7 +1168,7 @@ object WidgetRenderer {
         } else {
             v.setViewVisibility(R.id.wg_tc_time, android.view.View.VISIBLE)
             v.setTextViewText(R.id.wg_tc_time, d.timeRange)
-            v.setTextColor(R.id.wg_tc_time, muted)
+            themedColor(v, R.id.wg_tc_time, system, dark, mutedLight, mutedNight)
         }
 
         // ── 5. 其他班组：跨天就整行隐藏（那是生成那天的） ──
@@ -1103,7 +1184,7 @@ object WidgetRenderer {
             // 行首那个「其他班组」标签。它是一行里的**零号槽位**，所以只设一次，
             // 不参与下面按槽位循环（循环只清 4 个 crew_slot）。
             v.setTextViewText(R.id.wg_tc_crew_label, snap.otherCrews)
-            v.setTextColor(R.id.wg_tc_crew_label, muted)
+            themedColor(v, R.id.wg_tc_crew_label, system, dark, mutedLight, mutedNight)
             for (slot in crewSlots.indices) {
                 // 先清空再填，理由与 `weekStrip` 那处逐字相同。
                 v.removeAllViews(crewSlots[slot])
@@ -1134,7 +1215,7 @@ object WidgetRenderer {
                 // 这里**有意偏离** App 的 `AppTokens.inkFor` —— 那套「按底色算可读色」要
                 // luminance 计算，为一行 11sp 的小字在原生复刻一份不值当，而快照里也没有
                 // 现成的对比色可拿。
-                chip.setTextColor(R.id.wg_cc_text, muted)
+                themedColor(chip, R.id.wg_cc_text, system, dark, mutedLight, mutedNight)
                 v.addView(crewSlots[slot], chip)
             }
         }
@@ -1157,7 +1238,7 @@ object WidgetRenderer {
         } else {
             v.setViewVisibility(R.id.wg_tc_tally, android.view.View.VISIBLE)
             v.setTextViewText(R.id.wg_tc_tally, tally)
-            v.setTextColor(R.id.wg_tc_tally, muted)
+            themedColor(v, R.id.wg_tc_tally, system, dark, mutedLight, mutedNight)
         }
 
         // ── 字号：一律按卡内可用高缩放（`s` 在函数开头算好了） ──
@@ -1192,10 +1273,11 @@ object WidgetRenderer {
     ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_today_standalone)
         val dark = isDark(context, snap.themeMode)
+        val system = snap.themeMode == "system"
         v.setInt(
             R.id.wg_ts_root,
             "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+            cardBackground(system, dark),
         )
         // 整卡点击设**外壳根**上：外壳铺满整个小组件，而内层卡片是 wrap_content 高、
         // 被 `gravity="center_vertical"` 居中 —— 卡底画到了上下那两截留白上，只在卡片上设
@@ -1222,26 +1304,33 @@ object WidgetRenderer {
     private fun empty(context: Context, snap: WidgetStore.Snapshot, widgetId: Int): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_empty)
         val dark = isDark(context, snap.themeMode)
+        val system = snap.themeMode == "system"
         v.setInt(
             R.id.wg_e_root,
             "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+            cardBackground(system, dark),
         )
         v.setOnClickPendingIntent(R.id.wg_e_root, launchIntent(context, rootRequestCode(widgetId)))
         v.setTextViewText(R.id.wg_e_hint, snap.emptyHint)
-        v.setTextColor(
-            R.id.wg_e_hint,
-            context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light),
+        themedColor(
+            v, R.id.wg_e_hint, system, dark,
+            context.getColor(R.color.wg_ink_light),
+            context.getColor(R.color.wg_ink_dark),
         )
         return v
     }
 
-    private fun placeholder(context: Context, dark: Boolean, widgetId: Int): RemoteViews {
+    private fun placeholder(
+        context: Context,
+        dark: Boolean,
+        widgetId: Int,
+        system: Boolean = true,
+    ): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.widget_placeholder)
         v.setInt(
             R.id.wg_ph_root,
             "setBackgroundResource",
-            if (dark) R.drawable.widget_card_dark else R.drawable.widget_card_light,
+            cardBackground(system, dark),
         )
         // 占位态也要能点开 App —— 它多半是「还没有快照」，点进去最该做的是打开
         // App 让它推一份下来。
@@ -1251,18 +1340,20 @@ object WidgetRenderer {
             R.id.wg_ph_label,
             context.applicationInfo.loadLabel(context.packageManager).toString(),
         )
-        v.setTextColor(
-            R.id.wg_ph_label,
-            context.getColor(if (dark) R.color.wg_muted_dark else R.color.wg_muted_light),
+        themedColor(
+            v, R.id.wg_ph_label, system, dark,
+            context.getColor(R.color.wg_muted_light),
+            context.getColor(R.color.wg_muted_dark),
         )
         // 提示那一句用 ink 而不是 muted：它是这块卡**唯一**告诉用户「该做什么」的字，
         // 而应用名只是标识。两者都 11dp，靠颜色分层，不靠字号（4×1 只有 78dp 高）。
         // 文字本身来自 `@string/widget_placeholder_hint`（layout 里设的），
         // 这里只负责按深浅档给色 —— 与上面 label 同一条理由（RemoteViews 读不到
         // 夜间资源切换，颜色必须由渲染侧显式设）。
-        v.setTextColor(
-            R.id.wg_ph_hint,
-            context.getColor(if (dark) R.color.wg_ink_dark else R.color.wg_ink_light),
+        themedColor(
+            v, R.id.wg_ph_hint, system, dark,
+            context.getColor(R.color.wg_ink_light),
+            context.getColor(R.color.wg_ink_dark),
         )
         return v
     }
