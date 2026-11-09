@@ -15,6 +15,17 @@ name: site
 on:
   release:
     types: [published]
+  # GitHub 只从**默认分支**读 `release` 事件的 workflow —— 这条 push 触发是为了
+  # 让 beta 上改站点也能当场部署，不必等下次 stable 发布把 site.yml 带进 main。
+  # 只改站点/截图时触发，改代码不触发。
+  push:
+    branches: [beta, main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/site.yml'
+      - 'docs/images/hero.png'
+      - 'docs/images/shot-*.png'
+      - 'docs/images/v0130-*.gif'
   workflow_dispatch:
 
 permissions:
@@ -54,13 +65,26 @@ jobs:
           # 只挑两张 GIF：整站首屏控制在 ~8MB 内，其余走 GitHub
           cp docs/images/v0130-color.gif docs/images/v0130-monthly.gif _site/assets/
 
+          # ---- 取 main 上的清单当底稿 ----
+          # release 事件是在 release.ps1 建完 Release 的**那一刻**触发的，
+          # 那时仓库里的 latest.json 还没更新（脚本第 8 步在后面）。
+          # 而且 beta 那份的 stable 可能停在旧值 —— main 上的才是权威。
+          if git fetch --no-tags origin main 2>/dev/null \
+             && git show origin/main:latest.json > _base_latest.json 2>/dev/null; then
+            echo "底稿：origin/main:latest.json"
+          else
+            cp latest.json _base_latest.json
+            echo "::warning::取不到 origin/main 的 latest.json，退回当前检出版本（另一通道可能偏旧）"
+          fi
+
           # ---- 本次要发布哪个版本 ----
+          PRE="false"
           if [ "${{ github.event_name }}" = "release" ]; then
             TAG="${{ github.event.release.tag_name }}"
             PRE="${{ github.event.release.prerelease }}"
           else
-            TAG="v$(python3 -c "import json;print(json.load(open('latest.json'))['stable']['version'])")"
-            PRE="false"
+            # push / 手动触发：带的是清单里的最新正式版，不在代码里猜
+            TAG="v$(python3 -c "import json;print(json.load(open('_base_latest.json'))['stable']['version'])")"
           fi
           VERSION="${TAG#v}"
           if [ "$PRE" = "true" ]; then CHANNEL=prerelease; else CHANNEL=stable; fi
@@ -85,19 +109,6 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           # 当前这一步的 shell 也要有，下面的 python 直接读环境变量
           export ASSET VERSION
-
-          # ---- 取 main 上的清单当底稿 ----
-          # release 事件是在 release.ps1 建完 Release 的**那一刻**触发的，
-          # 那时仓库里的 latest.json 还没更新（脚本第 8 步在后面）。
-          # 而且 beta 那份的 stable 可能停在旧值 —— main 上的才是权威。
-          # 所以底稿取 main，随后只重写本次发布那个通道。
-          if git fetch --no-tags origin main 2>/dev/null \
-             && git show origin/main:latest.json > _base_latest.json 2>/dev/null; then
-            echo "底稿：origin/main:latest.json"
-          else
-            cp latest.json _base_latest.json
-            echo "::warning::取不到 origin/main 的 latest.json，退回当前检出版本（另一通道可能偏旧）"
-          fi
 
           # ---- 生成站点自己的发布清单 ----
           export CHANNEL SITE_BASE
