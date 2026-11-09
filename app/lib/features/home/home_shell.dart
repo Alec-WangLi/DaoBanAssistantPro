@@ -377,15 +377,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
     // 可能勾一条去年完成过的待办，在那一刻裁会让它当场消失，连「先划掉再收走」
     // 的那一眼反馈都没有（spec §4 与 `pruneArchivedTodos` 的注释）。
     await repo.pruneArchivedTodos();
-    final overrides = await repo.listShiftAlarmOverrides();
-    // 待办**重新读一次**：上面那个 `events` 是生成**之前**的快照，直接用它排会漏掉
-    // 刚建出来的那几条（重复待办的提醒走另一条链路，但一次性待办的那几条不能少）。
-    AlarmService.reschedule(
-      chain,
-      alarms,
-      overrides: overrides,
-      events: await repo.listEvents(),
-    );
+    // `rescheduleAll` = `reschedule` + `rescheduleRecurringReminders`。
+    // **不能只调 `reschedule`**：它开头会 `cancelAllTodoReminders`（含重复待办
+    // 号段），却只排一次性行 —— 重复待办的提醒会一直缺席，直到用户打开待办页。
+    await AlarmService.rescheduleAll(repo);
   }
 
   @override
