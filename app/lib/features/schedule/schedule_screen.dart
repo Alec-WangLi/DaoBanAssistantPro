@@ -381,6 +381,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                 _fmt(e.timeMinute!)));
     final subtitle = [
       L10n.monthDayWeekday(e.date),
+      // 行挂在班次那天，提醒可能在次日 / 前一天 —— 把班次名写在钟点前面，
+      // 读起来是「这属于上夜班，提醒在次日 02:00」，而不是「日期算错了」。
+      // 四道闸门与钟点标记同源：只有 `markedClock != null` 时才有班次上下文。
+      if (markedClock != null && shift != null) shift.name,
       if (timeText != null) timeText,
       if (e.advanceRemindMinutes != null)
         L10n.remindOptionLabel(e.advanceRemindMinutes!),

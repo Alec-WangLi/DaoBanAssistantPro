@@ -151,6 +151,10 @@ void main() {
           reason: '行挂在班次那天');
       expect(find.textContaining(L10n.clockNextDay('00:00')), findsOneWidget,
           reason: '提醒在次日，行上要写清楚');
+      expect(
+          find.textContaining('夜班 · ${L10n.clockNextDay('00:00')}'),
+          findsOneWidget,
+          reason: '副标题把班次名与提醒落点一起写清楚；标题「夜班写台账」不会匹配到这一段');
       expect(sid, isNotNull);
       await _dispose(tester);
     });
