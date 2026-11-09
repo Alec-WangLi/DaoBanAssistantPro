@@ -8,7 +8,7 @@
 1. **读本文件**（一屏，≤35KB）。
 2. **一条命令拿现场**：`git log --oneline -8 && git tag | tail -5 && git status --short`，再读 `app/pubspec.yaml` 顶部的 `version:`（唯一版本号来源，与 `app/lib/core/app_info.dart` 同步）。
 3. **报技能**（§技能纪律），一句话说清这次用哪几个、为什么。
-4. **读规范层**：写任何代码读 `docs/standards/dev-standards.md`；动 UI / 视觉 / 玻璃 / 触觉再读 `docs/standards/design-principles.md`。**再按任务挑一个 topic 文件**（下表），只读那一个；需要判重时才 `grep` 版本号进 `docs/changelog/`。
+4. **读规范层**：先读 `docs/standards/README.md`（三层分工、守门矩阵、哪条是自守、裁决顺序），写任何代码读 `docs/standards/dev-standards.md`（E1–E17）；动 UI / 视觉 / 玻璃 / 触觉再读 `docs/standards/design-principles.md`（D1–D16）。**再按任务挑一个 topic 文件**（下表），只读那一个；需要判重时才 `grep` 版本号进 `docs/changelog/`。
 5. 之后再开始改代码。
 
 | 你要动的东西 | 读这一个 |
@@ -147,7 +147,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
 - 改表后：`dart run build_runner build`。⚠️ **别再带 `--delete-conflicting-outputs`** —— build_runner 2.15.1 起这个参数已被移除，传了会被静默忽略（日志里只有一句 `These options have been removed and were ignored`），删除冲突输出现在是默认行为。
-- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 **1242** 条，只增不减；CI 的 `EXPECTED_TESTS` 必须同步改）。⚠️ **日历页的「今天」走 `core/clock.dart` 的 `appNow()`**（不要直接写 `DateTime.now()`）：用例用 `test/support/fixed_clock.dart` 的 `useFixedNow()` 把它钉在 2026-10-15，**期望值也一律用 `appNow()` 算** —— 否则用例会随真实月份漂移（2026-11-05 一次红了 10 条）。视觉工装另算：`flutter test tool/visual/`（当前 **1284** 条）。
+- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（条数见 `.github/workflows/ci.yml` 的 `EXPECTED_TESTS`，只增不减、必须同步改；别在文档里另抄一个数）。⚠️ **日历页的「今天」走 `core/clock.dart` 的 `appNow()`**（不要直接写 `DateTime.now()`）：用例用 `test/support/fixed_clock.dart` 的 `useFixedNow()` 把它钉在 2026-10-15，**期望值也一律用 `appNow()` 算** —— 否则用例会随真实月份漂移（2026-11-05 一次红了 10 条）。视觉工装另算：`flutter test tool/visual/`（数量随屏单增长，认尾行 `+N`，别写死）。
 - 构建：`flutter build apk --release --target-platform android-arm64` → `app/build/app/outputs/flutter-apk/app-release.apk`（**切 arm64 单 ABI**，APK 从 ~60MB 降到 ~21MB；仅 64 位设备）。
 - 分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，用 `aapt2 dump badging` 校验 versionName/versionCode 与包名。
 - 一键发布（GitHub Releases）：`scripts/release.ps1`。
@@ -171,10 +171,10 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
-- **v0.12.8(+183) 测试版**：液态玻璃真折射（底栏胶囊边缘开始把背后内容弯过去）+ 只在部分机型发生的 Skia 崩溃修复；`ImageFilter.shader` uniform 0 那条已落进 `docs/decisions/glass.md`。
-- **v0.12.7(+182) 测试版**：收 v0.12.6 独立审查（值行贴右、落点标记两道闸门、帮助与更新日志补第 ② 档）。
-- **v0.12.6(+181) 测试版**：班组卡排版收口（2:1 分宽 + 44dp 值行）+ 重复待办提醒接入三档落点。
-> 全量：`docs/changelog/v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
+- **v0.13.0(+187) 正式稳定版**：小组件跟随系统深浅色（API 31+ `setColorInt` + `drawable-night`，宿主重新应用；API < 31 烤死）；重复待办行挂发生日 + 旧数据一次性迁移（行与水位线）+ 打勾不再响 + 冷启动重排 + 解绑保时刻；排班管理 / 编辑排班的箭头去掉；README / 配图 / 四张 GIF 重出。
+- **v0.12.11(+186) 测试版**：小组件主题感知渲染 + 运行时接收器兜底；重复待办行日期 / 提醒收口；冷启动改走 `rescheduleAll`。
+- **v0.12.10(+185) 测试版**：底栏边光重新配亮度 + 滑块两端真圆。
+> 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）
 - 目标：Windows / iOS / 鸿蒙 多端。Flutter 本身跨端，但**闹钟/通知是 Android 专属**，跨端需按平台重做：
@@ -186,4 +186,4 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 ## 相关文档
 - `README.md`（对外介绍）、`BUILD.md`（构建指南）、`PRODUCT_SPEC.md`（产品规格）、`LICENSE`（MIT）。
 - `docs/changelog/`（版本流水，按大版本）、`docs/decisions/`（逐条决策与坑，按主题）、`docs/release/vX.Y.Z/`（每次发版的酷安稿与配图）。
-- `docs/standards/design-principles.md`（设计理念·规范层）、`docs/standards/dev-standards.md`（开发标准·规范层）。
+- `docs/standards/README.md`（规范层入口·守门矩阵）、`docs/standards/design-principles.md`（设计理念·D1–D16）、`docs/standards/dev-standards.md`（开发标准·E1–E17）。改完规范层跑 `python scripts/standards_check.py`。

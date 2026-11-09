@@ -14,7 +14,7 @@ on:
     - cron: '0 18 * * *'
   workflow_dispatch:
 
-# 不要 push / pull_request：它不该在每次提交上跑（1284 条、约 55 秒、出 356 张 627MB 的图）。
+# 不要 push / pull_request：它不该在每次提交上跑（上千条、约 55 秒、出 300+ 张 600MB+ 的图）。
 concurrency:
   group: visual-${{ github.ref }}
   cancel-in-progress: true
