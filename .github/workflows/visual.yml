@@ -19,6 +19,10 @@ concurrency:
   group: visual-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限：只读仓库内容。上传 artifact 走 actions 自己的 token，不需要 GITHUB_TOKEN 写权限。
+permissions:
+  contents: read
+
 env:
   # 与 ci.yml 同一个版本。视觉断言是按这一版量的，两边不一致等于两把尺子。
   FLUTTER_VERSION: '3.47.2'

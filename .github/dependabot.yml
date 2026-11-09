@@ -1,0 +1,30 @@
+version: 2
+
+# 依赖更新机器人。
+# 只开两个生态：Dart 包（在 app/）与 GitHub Actions。
+# 频率按月 —— 这个项目对依赖版本敏感（闹钟/通知时序踩过坑），
+# 每周一次的 PR 洪流只会让人无脑点合并，反而更危险。
+updates:
+  - package-ecosystem: "pub"
+    directory: "/app"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    # minor / patch 合成一个 PR，减少合并次数；major 单独开，必须逐个看。
+    groups:
+      pub-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]

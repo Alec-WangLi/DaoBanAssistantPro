@@ -11,6 +11,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限：只读仓库内容。这个 workflow 只做 checkout / analyze / test，
+# 不需要写任何东西；不声明就走仓库默认的 GITHUB_TOKEN 权限（可能是读写）。
+permissions:
+  contents: read
+
 env:
   # 卡死版本：视觉断言与字号是按这一版量的。改这里必须同时改 BUILD.md 与 AGENTS.md。
   FLUTTER_VERSION: '3.47.2'
@@ -72,6 +77,11 @@ jobs:
             git --no-pager diff --stat -- lib/data/app_database.g.dart
             exit 1
           fi
+
+      # 文档断链：图片必须全通，相对链接同时认「相对文件」与「相对仓库根」。
+      # 纯 stdlib，不需要额外装依赖。
+      - name: 文档断链
+        run: python3 scripts/link_check.py
 
   test:
     name: flutter test（用例数守卫）

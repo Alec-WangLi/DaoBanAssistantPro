@@ -61,13 +61,12 @@
   **⚠️ 这段（脚本里现标作第 8b 步，从前叫 7b）原先写的是 `git checkout <分支> -- latest.json` —— 把当前分支的整份清单搬到 main，那是错的，2026-10-13 已改成「切到 main 后读 main 自己那份，只写本次发布那个通道的字段」。** 根因：**正式版在 main 上发、测试版在 beta 上发**，而 beta 那份的 `stable` 永远停在它自己上次见到的旧值 —— 于是**每在 beta 发一次测试版，就把 main 上正确的 `stable` 覆盖回去一次**。v0.11.0 就是这么丢的：`8d25b78`（在 main 上）把 stable 写成 0.11.0，紧接着的 `972192f`（v0.11.1 同步 beta）整份搬过来，stable 退回 **0.10.0** 并一直卡在那里 —— Releases 页上 v0.11.0 明明标着 Latest、资产也在，只有 `latest.json` 的 stable 是错的（2026-10-13 由用户发现）。判据记牢：**Release 标得对不对看 Releases 页，`latest.json` 对不对只能 curl 那一份 —— 两者会各自独立地错。** 修完 main 与 beta 两份都补成了 stable=0.11.0。
 - 历史注记：**0.9.1 / 0.9.2 / 0.9.3 三个测试版是直接在 main 上发的**（那时还没定这条规矩）；从这之后的测试版走 beta。
 
-### ⚠️ main 的 CI 现在是红的，这是已知状态，不是新 bug（2026-11-06 记录）
+### main 的 CI：已随 v0.13.0 收敛（2026-11-10 复核，旧结论作废）
 
-main 上最近四次 CI **全红**（`7d6653b` `7c71d17` `9b61a3a` `6c3bab2`），红法都一样：`+1081 -15`，15 条全是「文字放不下 / 找不到 `header-single-row`」这一类。**根因在代码差异，不在数据：** beta 版 `app/tool/visual/visual_harness.dart` 有 `ensureVisualFonts()`，从 `app/test/fonts/` 读仓库内字体、缺了当场抛；**main 那份还是老逻辑**（找不到 `bin/cache/artifacts/material_fonts` 就退到方块继续跑，只打一行 `[visual] 字体缺 …`）。两版差 **148 行**。所以 main 上量字宽类用例量的全是方块，必红。
+2026-11-06 记过「main 连续四次红、根因是比 beta 少 148 行 `ensureVisualFonts()`」。**这条已经不成立：** v0.13.0 把 beta 整体合进了 main，`app/tool/visual/visual_harness.dart` 在 main 与 beta 逐字节相同（`git diff --stat origin/main origin/beta -- app/tool/visual/visual_harness.dart` 空输出），main 最新提交 `449f2d9` 的 CI 是 success。**以后看到 main 的 CI 红，按真 bug 查，别再往这条旧结论上靠。**
 
-- **处置：不动它，等下次发正式版把 beta 整体合进 main 时自动收敛回 1242 条全绿。** 在那之前看到 main 的 CI 红，先想到这一条，别去找代码 bug。
-- **`ci.yml` 的 `EXPECTED_TESTS` 是分支相关项，不是常量**：beta 填 beta 的（当前 1242），main 填 main 的（当前 1096）。同一个文件在两个分支上跑，填错就红，且**红的是守卫本身**——2026-11-06 我按「1242 − 113」推算成 1129，实测 1096，推算值不能当基线。**基线只认 CI 日志里那行「用例数 N」。**
-- 顺带：**`visual.yml`（每日视觉巡场）已于 2026-11-06 手动禁用**（`gh workflow disable visual.yml` → `disabled_manually`）。原因是它 `continue-on-error: true`，字体校验失败也显示 success，前两次跑出 **0 张图**都判绿，等于一个每天绿着骗人的看门狗。字体和许可已经补进 main（`9b61a3a`），**恢复时只需 `gh workflow enable visual.yml`**，但恢复前必须先解决上面那条 148 行的差距，否则它照样只有方块。
+- **`ci.yml` 的 `EXPECTED_TESTS` 仍然是分支相关项，不是常量**：main 与 beta 现在都是 1257（v0.13.0 合并后两边同一份代码），但 beta 下一次加用例后两边会再次分开，改一边要记得另一边。**基线只认 CI 日志里那行「用例数 N」**，推算值不能当基线（2026-11-06 按「1242 − 113」推成 1129，实测 1096）。
+- **`visual.yml`（每日视觉巡场）仍是 `disabled_manually`**：当初禁用的两个理由里，「main 缺字体加载逻辑、只能量方块」已随 v0.13.0 消除；「`continue-on-error` 让 0 张图也判绿」是它的设计取舍，不是 bug。恢复只需 `gh workflow enable visual.yml`，然后**手动 dispatch 一次并去 artifact 里数图** —— 绿不等于出图。
 
 
 ## 目录架构地图（app/lib）
