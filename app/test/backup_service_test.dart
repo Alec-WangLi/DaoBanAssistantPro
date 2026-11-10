@@ -10,6 +10,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiftassistantpro/core/app_info.dart';
 import 'package:shiftassistantpro/data/app_database.dart';
 import 'package:shiftassistantpro/data/seed.dart';
 import 'package:shiftassistantpro/features/backup/backup_format.dart';
@@ -100,6 +101,9 @@ void main() {
     expect(sp.getInt('accentIndex'), 2);
     expect(sp.getBool('liquidGlass'), true);
     expect(sp.getBool('needsAlarmReplan'), true);
+    // 导入后的已读版本必须被写成当前版本，否则重启会先弹更新日志。
+    expect(sp.getString('lastSeenVersion'), appVersion);
+    expect(sp.getBool('onboarded'), true);
 
     final String? ringtoneUri = sp.getString('ringtoneUri');
     expect(ringtoneUri, isNotNull);

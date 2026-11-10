@@ -41,6 +41,10 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.5\n'
+    '· 修：导入备份后点「立即重启」，App 现在会自己重新打开；此前只关闭、不重启，需要手动再点一次图标\n'
+    '· 导入后不会先弹一遍「版本更新」——恢复的数据不该被当成刚升级\n'
+    '\n'
 'v0.13.4\n'
     '· 新增「我的 → 数据备份」：把排班、待办、模板、闹钟与设置导出成一个文件；重装、换机或误清空之后，选这个文件导入就能恢复\n'
     '· 导入会先校验文件、覆盖当前数据，并重启一次 App 生效；导入后闹钟会按恢复的排班重新排\n'
@@ -94,15 +98,13 @@ const String _changelogZh =
     '· 顺着这条，胶囊边缘那圈画出来的彩色收掉了：真玻璃几乎没有虹彩，那圈颜色在咱们这套极简黑白底上只能靠画。方向感现在由上面那层弯折承担\n'
     '· 分段器与开关一个像素都没动 —— 它们小得多，同一套弯折放到 46dp 的开关上会让整颗钮抖起来\n'
     '\n'
-'v0.12.7\n'
-    '· 修：编辑排班的班组卡里，「周期起始日」与箭头现在贴住右边（之前整组停在半路，右边空出一大截）；宽屏 / 横屏下「我的班」芯片也不再漂在卡片中间\n'
-    '· 修：待办行的「次日 00:00」标记只在真的会响时显示 —— 系列停用、或没设提醒时不显示\n'
-    '· 文案：帮助与更新说明里「钟点不在值班时间里」的说法改准 —— 晚于上班时间又不在值班窗口里时落在前一天（上班前），早于上班时间时按离上班 / 下班哪边近来定\n'
-    '· 无障碍：班组卡里那两行值行重新被读成按钮\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.5\n'
+    '· Fix: after importing a backup, "Restart now" actually reopens the app; before, it only closed and left you to tap the icon again\n'
+    '· Importing no longer pops the "what\'s new" dialog first — restored data is not an upgrade\n'
+    '\n'
 'v0.13.4\n'
     '· New My > Data backup: export schedules, todos, templates, alarms and settings into one file; after a reinstall, a new phone or an accidental reset, import that file to restore everything\n'
     '· Import validates the file first, replaces the current data, and restarts the app once; alarms are re-scheduled from the restored schedule\n'
@@ -155,12 +157,6 @@ const String _changelogEn =
     '· The edge of the nav bar capsule now bends the content behind it a little, so it reads as a piece of glass with thickness rather than a sheet of frosted paper. That layer only appears on phones that can render it; everything else looks exactly as before\n'
     '· The painted colour rim along that capsule is gone with it: real glass has almost no iridescence, and on this flat black-and-white background that ring could only ever be drawn. The sense of direction now comes from the bending layer\n'
     '· Segments and switches are unchanged to the pixel - they are far smaller, and the same bending on a 46 dp switch would make the whole knob wobble\n'
-    '\n'
-'v0.12.7\n'
-    '· Fix: in the crew card, the cycle start date and its chevron now sit flush right (the pair used to stop mid-row with a wide gap); on landscape and tablet widths the Set as mine chip no longer floats in the middle of the card\n'
-    '· Fix: the next-day / day-before marker on a todo row now only shows when a reminder can actually fire — a paused series or one with no reminder shows none\n'
-    '· Copy: the help and release notes now describe the landing rule accurately: a moment later than the shift start but outside the window lands on the day before (ahead of the shift); earlier moments go to whichever side is nearer\n'
-    '· Accessibility: the two value rows in the crew card are read as buttons again\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

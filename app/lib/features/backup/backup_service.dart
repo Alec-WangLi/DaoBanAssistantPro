@@ -220,6 +220,11 @@ class BackupService {
     final SharedPreferences sp = await SharedPreferences.getInstance();
     await applyPrefs(sp, prefs, ringtoneUriOverride: ringtoneUri);
 
+    // 备份里的 lastSeenVersion 是导出时的版本。不覆盖的话，导入后第一眼会被
+    // 当成「刚升级」，先弹一遍版本更新日志 —— 导入不是升级，别给这个提示。
+    await sp.setString('lastSeenVersion', appVersion);
+    await sp.setBool('onboarded', true);
+
     if (ringtoneUri == null) {
       // 备份里没有铃声，但 prefs 里可能留着一条指向旧文件的路径：
       // 留着它，闹钟到点会静默失声。清掉，回落到内置铃声。

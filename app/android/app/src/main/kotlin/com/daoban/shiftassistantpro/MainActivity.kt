@@ -15,10 +15,7 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
-import android.os.Process
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.OpenableColumns
@@ -561,15 +558,20 @@ class MainActivity : FlutterActivity() {
                     "restartApp" -> {
                         result.success(null)
                         val launch = packageManager.getLaunchIntentForPackage(packageName)
-                        launch?.addFlags(
-                            Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-                        )
-                        if (launch != null) startActivity(launch)
-                        // 给新 Activity 一点启动时间再杀进程；导入的库在下次 main()
-                        // 里、任何数据库打开之前完成替换。
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            Process.killProcess(Process.myPid())
-                        }, 600)
+                        if (launch != null) {
+                            // **不要杀进程**：Android 14+ 会把「进程已死 + PendingIntent
+                            // 拉起 Activity」判成后台启动并 BAL_BLOCK（真机日志
+                            // `Background activity launch blocked`），App 直接消失。
+                            // 正确做法是清空任务栈、从当前前台 Activity 启一个新任务：
+                            // 旧 Activity 被销毁 → 旧 FlutterEngine 释放 → 新 Activity
+                            // 建新引擎 → Dart main() 再跑一遍，导入的库在打开数据库
+                            // 之前完成替换。整个过程都在前台，不受 BAL 限制。
+                            launch.addFlags(
+                                Intent.FLAG_ACTIVITY_NEW_TASK or
+                                    Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            )
+                            startActivity(launch)
+                        }
                     }
                     "getVolumeLevels" -> {
                         try {
