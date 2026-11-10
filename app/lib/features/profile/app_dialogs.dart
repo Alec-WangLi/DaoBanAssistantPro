@@ -41,6 +41,10 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.10\n'
+    '· 触觉适配更多机型：手机支持更细的振动原语时优先用它（Pixel / 三星这类新机更脆）；Android 8~13 上也按「触摸反馈」归类，不再被当成未知振动\n'
+    '· 「我的 → 查看日志」新增一行振动能力自查：换手机后觉得不震或手感不对，把那行复制给作者就能定位\n'
+    '\n'
 'v0.13.9\n'
     '· 翻月有回音了：日历的 ‹ › 箭头、「今天」和月份选择器，每真的换一个月震一记；已经停在今天就不震\n'
     '· 响铃页不再静音：上滑越过阈值关掉、或点「再睡一会」，各有一记确认震动；上滑没到位弹回去则不震\n'
@@ -81,18 +85,13 @@ const String _changelogZh =
     '· 「检查更新」改成先读官网的发布清单，读不到才回退到 GitHub —— 国内网络下不再先卡满 8 秒超时\n'
     '· 更新日志、截图与下载入口都在官网上，国内打开更快\n'
     '\n'
-'v0.13.0\n'
-    '· 重复待办这一轮整体收口：可以按班次重复（上夜班 / 下夜班那天自动出现）、每月多选几天、随时改规则；提醒按当天值班时间落在前一天 / 当天 / 次日；行回到它属于的班次那天，副标题写「上夜班 · 次日 00:00」；勾掉或删掉之后那一次不再响，勾错了点「撤销」提醒会回来；冷启动也会把提醒重新排上\n'
-    '· 桌面小组件：三张固定尺寸的卡（本周条 / 今日卡 / 整月），现在会跟着系统的深浅色自动切换；同步失败会自己重试，字号不跟系统字号走\n'
-    '· 排班：班组卡排版收口（输入框收窄、周期起始日不再又长又矮）；排班管理与编辑排班里的箭头去掉，整行仍然可点\n'
-    '· 液态玻璃：底栏胶囊的真折射与彩边、开关与分段器的液态档、滑块两端真圆\n'
-    '· 待办：勾完收进「已完成 N 条」，点回勾就回到主列表；行尾的编辑笔去掉\n'
-    '· 外观：字号四档、深色模式、16 种班次色 + 自定义取色\n'
-    '· 修：冷启动后重复待办的提醒会重新排上；签名校验默认硬拦，避免装出「签名冲突」的包\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.10\n'
+    '· Haptics adapt to more phones: where the device offers fine-grained vibration primitives those are used first (crisper on Pixel / Samsung-class devices), and on Android 8-13 taps are classified as touch feedback instead of an unknown vibration\n'
+    '· My > View log now records the vibration capabilities of this phone and which path was used - handy when a new phone feels off\n'
+    '\n'
 'v0.13.9\n'
     '· Month switching clicks now: the ‹ › arrows, Today and the month picker tick once per real change; tapping Today while already there stays silent\n'
     '· The alarm screen is no longer silent: swiping up past the threshold to stop, or tapping Snooze, each give one confirmation tap; a short swipe that snaps back does not\n'
@@ -132,15 +131,6 @@ const String _changelogEn =
     '· A download mirror is live: the APK is also served from a site that is reachable from mainland China, so installing no longer means waiting on github.com\n'
     '· Check for updates now reads the mirror manifest first and only falls back to GitHub when that fails, so it no longer burns the full 8-second timeout on a slow network\n'
     '· The changelog, screenshots and download link all live on the site too\n'
-    '\n'
-'v0.13.0\n'
-    '· Recurring todos are rounded out: repeat by shift (night / late), pick several days of the month, edit the rule any time; reminders land on the previous / same / next day per the shift window; the row sits on its shift day with a subtitle like "Night - next day 00:00"; checking or deleting an occurrence stops its reminder, Undo brings it back, and a cold start re-schedules them\n'
-    '· Home-screen widgets: three fixed-size cards (week strip / today / month) now follow the system light and dark theme; a failed sync retries on its own; the font size does not follow the system setting\n'
-    '· Schedule: the crew card layout is tightened; the arrows in Schedule management and the editor are gone, while the whole row stays tappable\n'
-    '· Liquid glass: real refraction and the colour rim on the nav capsule, liquid segments and switches, round slider ends\n'
-    '· Todos: completed items move into "N completed" and come back when unchecked; the edit pencil is gone\n'
-    '· Appearance: four font sizes, dark mode, 16 shift colours plus a custom picker\n'
-    '· Fixes: recurring reminders are re-scheduled after a cold start; the signature check now fails closed, so a mismatched APK cannot be published\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

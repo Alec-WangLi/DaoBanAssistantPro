@@ -34,6 +34,18 @@ object AlarmLog {
         Log.d(TAG, msg)
     }
 
+    /**
+     * 诊断信息：写文件 + Logcat。
+     *
+     * 与 [info] 的区别是**要落盘** —— 设备能力这类东西用户换机后要能在
+     * 「我的 → 查看日志」里直接看到，不该只在 adb 里可见；与 [error] 的区别是
+     * 它**不是错误**，别让用户看到一屏「错误」以为出事了。
+     */
+    fun diagnostic(context: Context, msg: String) {
+        Log.i(TAG, msg)
+        appendFile(context, msg)
+    }
+
     private fun appendFile(context: Context, msg: String) {
         try {
             val f = File(context.filesDir, "app_log.txt")

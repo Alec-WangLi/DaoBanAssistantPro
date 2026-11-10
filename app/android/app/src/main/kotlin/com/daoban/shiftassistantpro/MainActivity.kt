@@ -320,6 +320,10 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // 把振动能力写进「查看日志」：认不认预定义效果 / 有没有原语 / 走哪一档。
+        // 换品牌排查「为什么不震 / 手感不对」时，这一行就是答案。
+        Haptics.logCapabilities(this)
+
         channel
             .setMethodCallHandler { call, result ->
                 when (call.method) {
