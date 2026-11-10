@@ -5,7 +5,8 @@
    ========================================================================== */
 
 :root {
-  color-scheme: dark;
+  /* 跟随系统。两套语义色都在下面定义，浅色覆盖在后半段的 media query 里。 */
+  color-scheme: light dark;
 
   --bg: #000;
   --lift: #0a0a0e;
@@ -16,7 +17,19 @@
   --line-strong: rgba(255, 255, 255, 0.2);
 
   --accent: #5b6cff;
+  --accent-hover: #6d7dff;
   --accent-soft: #8f9bff;
+
+  --nav-bg: rgba(0, 0, 0, 0.72);
+  --tick: rgba(255, 255, 255, 0.30);
+  --device-shadow: 0 40px 70px rgba(0, 0, 0, 0.85);
+  --device-shadow-soft: 0 30px 50px rgba(0, 0, 0, 0.16);
+  --aura: rgba(91, 108, 255, 0.30);
+  --aura-soft: rgba(91, 108, 255, 0.16);
+  --aura-alt: rgba(160, 108, 255, 0.18);
+  --horizon-line: rgba(160, 172, 255, 0.9);
+  --horizon-bloom: rgba(120, 135, 255, 0.55);
+  --slot: rgba(79, 91, 232, 0.45);
 
   --wide: 1120px;
   --narrow: 760px;
@@ -57,7 +70,7 @@ a { color: inherit; }
   border-radius: 6px;
 }
 
-::selection { background: rgba(91, 108, 255, 0.45); }
+::selection { background: var(--slot); }
 
 /* ---------- 导航 ---------- */
 
@@ -71,7 +84,7 @@ a { color: inherit; }
 }
 
 .nav.is-scrolled {
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--nav-bg);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
   border-bottom-color: var(--line);
@@ -129,7 +142,7 @@ a { color: inherit; }
   transition: background 0.2s;
 }
 
-.nav-cta:hover { background: #6d7dff; }
+.nav-cta:hover { background: var(--accent-hover); }
 
 /* ---------- 首屏 ---------- */
 
@@ -148,8 +161,8 @@ a { color: inherit; }
   height: 120vh;
   transform: translateX(-50%);
   background:
-    radial-gradient(50% 46% at 50% 46%, rgba(91, 108, 255, 0.30), transparent 68%),
-    radial-gradient(34% 30% at 50% 60%, rgba(160, 108, 255, 0.18), transparent 70%);
+    radial-gradient(50% 46% at 50% 46%, var(--aura), transparent 68%),
+    radial-gradient(34% 30% at 50% 60%, var(--aura-alt), transparent 70%);
   pointer-events: none;
 }
 
@@ -215,7 +228,7 @@ a { color: inherit; }
   transition: background 0.2s, transform 0.2s var(--ease);
 }
 
-.btn:hover { background: #6d7dff; transform: translateY(-1px); }
+.btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
 
 .btn-icon { width: 19px; height: 19px; fill: currentColor; flex: none; }
@@ -264,7 +277,7 @@ a { color: inherit; }
   transform: translateX(-50%);
   background-image: repeating-linear-gradient(
     to right,
-    rgba(255, 255, 255, 0.30) 0 1px,
+    var(--tick) 0 1px,
     transparent 1px 4.1667%
   );
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 42%, transparent);
@@ -287,7 +300,7 @@ a { color: inherit; }
 
 .phone {
   width: clamp(128px, 20vw, 292px);
-  filter: drop-shadow(0 40px 70px rgba(0, 0, 0, 0.85));
+  filter: drop-shadow(var(--device-shadow));
 }
 
 .phone-left {
@@ -314,8 +327,8 @@ a { color: inherit; }
   width: min(1120px, 94vw);
   height: 1px;
   transform: translateX(-50%);
-  background: linear-gradient(90deg, transparent, rgba(160, 172, 255, 0.9), transparent);
-  box-shadow: 0 0 24px 2px rgba(120, 135, 255, 0.55);
+  background: linear-gradient(90deg, transparent, var(--horizon-line), transparent);
+  box-shadow: 0 0 24px 2px var(--horizon-bloom);
   pointer-events: none;
 }
 
@@ -326,7 +339,7 @@ a { color: inherit; }
   right: 0;
   top: 0;
   height: 380px;
-  background: radial-gradient(54% 100% at 50% 0%, rgba(91, 108, 255, 0.30), transparent 72%);
+  background: radial-gradient(54% 100% at 50% 0%, var(--aura), transparent 72%);
 }
 
 /* ---------- 章节 ---------- */
@@ -409,7 +422,7 @@ a { color: inherit; }
 
 .stage img {
   width: 100%;
-  filter: drop-shadow(0 50px 90px rgba(0, 0, 0, 0.9));
+  filter: drop-shadow(var(--device-shadow));
 }
 
 .stage::before {
@@ -417,7 +430,7 @@ a { color: inherit; }
   position: absolute;
   inset: -18% -60% -10%;
   z-index: -1;
-  background: radial-gradient(50% 50% at 50% 50%, rgba(91, 108, 255, 0.16), transparent 70%);
+  background: radial-gradient(50% 50% at 50% 50%, var(--aura-soft), transparent 70%);
   pointer-events: none;
 }
 
@@ -459,7 +472,7 @@ a { color: inherit; }
 
 .split-media img {
   width: 100%;
-  filter: drop-shadow(0 40px 70px rgba(0, 0, 0, 0.9));
+  filter: drop-shadow(var(--device-shadow));
 }
 
 .split-media figcaption {
@@ -586,7 +599,7 @@ a { color: inherit; }
   padding: clamp(96px, 13vw, 172px) 24px clamp(80px, 10vw, 130px);
   text-align: center;
   background:
-    radial-gradient(46% 60% at 50% 0%, rgba(91, 108, 255, 0.16), transparent 70%);
+    radial-gradient(46% 60% at 50% 0%, var(--aura-soft), transparent 70%);
   border-top: 1px solid var(--line);
 }
 
@@ -705,6 +718,42 @@ a { color: inherit; }
   .chapter { padding-inline: 20px; }
   .callout { padding: 18px 20px; }
 }
+
+/* ---------- 浅色 ----------
+   只换语义色；版式、字号、间距一个都不动，两套主题的节奏完全一致。 */
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fbfbfd;
+    --lift: #f2f2f5;
+    --ink: #1d1d1f;
+    --muted: #5f5f66;
+    --dim: #7c7c84;
+    --line: rgba(0, 0, 0, 0.12);
+    --line-strong: rgba(0, 0, 0, 0.22);
+
+    --accent: #4f5be8;
+    --accent-hover: #4250dd;
+    --accent-soft: #4a4fd4;
+
+    --nav-bg: rgba(251, 251, 253, 0.72);
+    --tick: rgba(0, 0, 0, 0.18);
+    --device-shadow: 0 30px 50px rgba(0, 0, 0, 0.16);
+
+    --aura: rgba(91, 108, 255, 0.15);
+    --aura-soft: rgba(91, 108, 255, 0.09);
+    --aura-alt: rgba(160, 108, 255, 0.10);
+    --horizon-line: rgba(79, 91, 232, 0.55);
+    --horizon-bloom: rgba(79, 91, 232, 0.18);
+    --slot: rgba(79, 91, 232, 0.22);
+  }
+
+  /* 白底上同样的透明度会淡到看不见，这两处单独提一点 */
+  .hour-rail { opacity: 0.85; }
+  .horizon::after { opacity: 1; }
+}
+
+/* ---------- 减少动态 ---------- */
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
