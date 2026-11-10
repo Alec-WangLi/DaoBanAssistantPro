@@ -78,4 +78,24 @@ void main() {
     expect(url, startsWith('alipays://platformapi/startapp?saId=10000007&qrcode='));
     expect(url, contains(Uri.encodeComponent(alipayQrContent)));
   });
+
+  testWidgets('支付宝唤起失败时回落到二维码', (tester) async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(_settingsChannel, (call) async {
+      if (call.method == 'openUrl') {
+        throw PlatformException(code: 'OPEN_URL_FAILED');
+      }
+      return null;
+    });
+    addTearDown(
+        () => messenger.setMockMethodCallHandler(_settingsChannel, null));
+
+    await _pumpSheet(tester);
+    await tester.tap(find.text(L10n.donateAlipay));
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.donateScanTitle), findsOneWidget);
+    expect(find.text(L10n.donateAmountHint(5)), findsOneWidget);
+  });
 }
