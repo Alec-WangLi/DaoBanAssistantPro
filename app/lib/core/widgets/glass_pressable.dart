@@ -11,10 +11,17 @@ class GlassPressable extends StatefulWidget {
   const GlassPressable({
     super.key,
     required this.child,
+    this.onTap,
     this.pressedScale = 0.97,
   });
 
   final Widget child;
+
+  /// 可选的点击回调。给了它，这一层会自己垫一个 `InkWell`（波纹照样浮在玻璃上）；
+  /// 不给则维持原行为 —— child 自己就是可点件（`ListTile` 等）。**两者别同时给**，
+  /// 否则一次点击会有两层水波纹。
+  final VoidCallback? onTap;
+
   final double pressedScale;
 
   @override
@@ -35,7 +42,9 @@ class _GlassPressableState extends State<GlassPressable> {
         onPointerCancel: (_) => setState(() => _pressed = false),
         child: Material(
           color: Colors.transparent,
-          child: widget.child,
+          child: widget.onTap == null
+              ? widget.child
+              : InkWell(onTap: widget.onTap, child: widget.child),
         ),
       ),
     );

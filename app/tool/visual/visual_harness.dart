@@ -18,6 +18,7 @@
 // setMockInitialValues 会被误报——实际调用方就是 `flutter test`。
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -143,6 +144,36 @@ Future<void> ensureVisualFonts() async {
   // 每个用例各建一个内存库是有意为之（互不污染），drift 的「重复建库」告警
   // 在这个用法下纯属噪音。
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+  // 打赏二维码是 `Image.asset`，解码是异步的；第一张图（浅色）会拍到空白，
+  // 后面的变体因为缓存已热才正常。在 setUpAll 的真异步区里先推进 imageCache，
+  // 让所有变体都直接命中。
+  await _precacheAsset('assets/donate/alipay.png');
+  await _precacheAsset('assets/donate/wechat.png');
+}
+
+/// 把一张 asset 图片预解码进全局 imageCache。
+///
+/// `AssetImage` 的缓存键只含 bundle / 名字 / scale，不含 devicePixelRatio，
+/// 所以这里用 `ImageConfiguration.empty` 解出来的键与 `Image.asset` 在页面里
+/// 用的是同一个 —— 先热一次，后面的 widget 测试就能同步拿到。
+Future<void> _precacheAsset(String key) async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  final completer = Completer<void>();
+  final stream = AssetImage(key).resolve(ImageConfiguration.empty);
+  late final ImageStreamListener listener;
+  listener = ImageStreamListener(
+    (_, __) {
+      if (!completer.isCompleted) completer.complete();
+      stream.removeListener(listener);
+    },
+    onError: (error, stack) {
+      if (!completer.isCompleted) completer.completeError(error, stack);
+      stream.removeListener(listener);
+    },
+  );
+  stream.addListener(listener);
+  await completer.future;
 }
 
 /// 把 CJK 挂到文本样式后面：拉丁仍走 Roboto，缺字时回落到中文字体。

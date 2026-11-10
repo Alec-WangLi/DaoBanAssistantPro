@@ -649,11 +649,18 @@ class AlarmService {
     } catch (_) {}
   }
 
-  /// 用系统浏览器打开 [url]（用于「检查更新」跳转下载页）。
-  static Future<void> openUrl(String url) async {
+  /// 用系统浏览器 / 对应 App 打开 [url]（「关于」页的外链、打赏的支付宝唤起都走它）。
+  ///
+  /// 返回是否成功唤起：原生侧 `startActivity` 在没有匹配应用时会抛
+  /// `OPEN_URL_FAILED`，这里吞掉异常但把成败回给调用方 —— 打赏页要靠它决定
+  /// 是否回落到二维码，不能让「点了没反应」变成静默失败。
+  static Future<bool> openUrl(String url) async {
     try {
       await _settingsChannel.invokeMethod('openUrl', {'url': url});
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// 用系统安装器打开本地 [path] 指向的 APK（走 FileProvider，见 MainActivity.kt）。

@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
-import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
-import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_loading.dart';
@@ -26,7 +23,7 @@ import '../../data/app_repository.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import '../calendar/schedule_management_screen.dart';
-import 'app_dialogs.dart';
+import 'about_section.dart';
 import 'help_center_screen.dart';
 
 /// 「我的」页：外观（主题/主色调）、数据（清空重置）、关于。
@@ -301,76 +298,14 @@ class ProfileScreen extends ConsumerWidget {
             const _PermissionCheck(),
             const SizedBox(height: 16),
             SectionHeading(L10n.sectionAbout),
-            GlassTile(
-              translucentFill: false,
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.info_outlined),
-                    title: Text(L10n.version),
-                    trailing: const Text('v$appVersion'),
-                  ),
-                  GlassPressable(
-                    child: ListTile(
-                      leading: const Icon(Icons.system_update_outlined),
-                      title: Text(L10n.checkUpdate),
-                      subtitle: Text(L10n.checkUpdateSubtitle),
-                      trailing: const Icon(Icons.chevron_right_outlined,
-                          key: Key('profile-chevron-update')),
-                      onTap: () => _checkUpdate(context),
-                    ),
-                  ),
-                  GlassPressable(
-                    child: ListTile(
-                      leading: const Icon(Icons.new_releases_outlined),
-                      title: Text(L10n.changelog),
-                      subtitle: Text(L10n.changelogSubtitle),
-                      trailing: const Icon(Icons.chevron_right_outlined,
-                          key: Key('profile-chevron-changelog')),
-                      onTap: () => showChangelogDialog(context),
-                    ),
-                  ),
-                  GlassPressable(
-                    child: ListTile(
-                      leading: const Icon(Icons.help_outlined),
-                      title: Text(L10n.usageGuide),
-                      subtitle: Text(L10n.usageGuideSubtitle),
-                      trailing: const Icon(Icons.chevron_right_outlined,
-                          key: Key('profile-chevron-help')),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const HelpCenterScreen()),
-                      ),
-                    ),
-                  ),
-                  GlassPressable(
-                    child: ListTile(
-                      leading: const Icon(Icons.bug_report_outlined),
-                      title: Text(L10n.viewLog),
-                      subtitle: Text(L10n.viewLogSubtitle),
-                      trailing: const Icon(Icons.chevron_right_outlined,
-                          key: Key('profile-chevron-log')),
-                      onTap: () => _showLog(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const AboutSection(),
+            const SizedBox(height: 16),
+            SectionHeading(L10n.sectionSupport),
+            const SupportSection(),
           ],
         ),
       )),
     );
-  }
-
-  Future<void> _checkUpdate(BuildContext context) async {
-    final r = await UpdateChecker.checkUpdates();
-    if (!context.mounted) return;
-    if (r.error) {
-      showUpdateFailedDialog(context);
-      return;
-    }
-    showUpdateDialog(context, r);
   }
 
   Future<void> _confirmReset(BuildContext context, WidgetRef ref) async {
@@ -414,48 +349,6 @@ class ProfileScreen extends ConsumerWidget {
         showGlassSnack(context, L10n.resetDone, icon: Icons.check_circle_outlined);
       }
     }
-  }
-
-  Future<void> _showLog(BuildContext context) async {
-    final log = await AlarmService.readLog();
-    if (!context.mounted) return;
-    await showGlassDialog<void>(
-      context: context,
-      builder: (dialogContext) => GlassDialog(
-        title: L10n.log,
-        showClose: true,
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 360,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              log.isEmpty ? L10n.noLog : log,
-              style: AppTokens.microText.copyWith(fontFamily: 'monospace'),
-            ),
-          ),
-        ),
-        actions: [
-          GlassActionButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: log));
-              if (dialogContext.mounted) {
-                showGlassSnack(dialogContext, L10n.logCopied,
-                    icon: Icons.content_copy_outlined);
-              }
-            },
-            label: L10n.copy,
-          ),
-          const SizedBox(width: 8),
-          GlassActionButton(
-            onPressed: () async {
-              await AlarmService.clearLog();
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
-            },
-            label: L10n.clear,
-          ),
-        ],
-      ),
-    );
   }
 
   /// 选择器里「不是铃声 URI」的两个动作。带 `action:` 前缀，不会和系统铃声的

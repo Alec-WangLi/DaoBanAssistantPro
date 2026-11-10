@@ -5,6 +5,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/glass/glass.dart';
+import 'package:shiftassistantpro/core/widgets/section_heading.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pickers.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
@@ -19,7 +22,10 @@ import 'package:shiftassistantpro/features/calendar/shift_color_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/profile/about_screen.dart';
+import 'package:shiftassistantpro/features/profile/about_section.dart';
 import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
+import 'package:shiftassistantpro/features/profile/donate_sheet.dart';
 import 'package:shiftassistantpro/features/profile/help_center_screen.dart';
 import 'package:shiftassistantpro/features/profile/help_faq_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
@@ -602,6 +608,35 @@ final List<VisualScreen> visualScreens = [
     ),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 「关于」整页：作者、官网、仓库、反馈、隐私。
+    slug: '68_about',
+    title: '关于',
+    build: (db) async => const AboutScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 打赏弹层：金额四档 + 支付宝 / 微信两个入口。
+    slug: '69_donate',
+    title: '打赏弹层',
+    build: (db) async => const _DonateSheetHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「我的」页底部的两张卡：关于入口 + 支持入口。整页屏单只拍得到首屏，
+    // 这两节在权限卡下面，单独拍一张。
+    slug: '70_profile_about_cards',
+    title: '我的 · 关于与支持',
+    build: (db) async => const _ProfileAboutCardsHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 打赏的二维码弹窗：白底卡片 + 金额 + 下一步说明。
+    slug: '71_donate_qr',
+    title: '打赏 · 二维码弹窗',
+    build: (db) async => const _DonateQrHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -904,7 +939,7 @@ const Map<String, double> visualScrollDown = {
   // 《使用帮助》整页：九条功能简介之后才是那颗进第二层的入口，而首屏只露得出
   // 前三条。**这一条不加的话，本轮新加的那个入口在任何一张图上都看不到。**
   '18_help_center': 3000,
-  '07_profile': 620, // 权限卡 + 关于
+  '07_profile': 760, // 权限卡 + 关于 + 支持
   '06_alarm': 360, // 自定义闹钟那一段
   '03_management': 280, // 排班列表
   '13_editor_midnight': 900, // 零点班那张班次卡（响铃时间块与它的说明在这下面）
@@ -926,3 +961,78 @@ const Map<String, double> visualScrollDown = {
   // 班组卡在周期表下面；滚到底靠钳位把展开的四行露出来。
   '67_editor_crew_expanded': 2400,
 };
+
+/// 打赏弹层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 弹层是命令式的（`showGlassSheet`），没有可渲染的 widget；这里把同一份
+/// `DonateSheet` 装进 `GlassPanel` 拍一张静态图。视觉上的弹层外壳（遮罩、圆角、
+/// 贴底）由真正的 `showDonateSheet` 负责，工装只验内容本身。
+class _DonateSheetHost extends StatelessWidget {
+  const _DonateSheetHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.all(AppTokens.spaceMd),
+            child: GlassPanel(solid: true, child: DonateSheet()),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「我的」页底部两张卡的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 整页屏单只拍得到首屏，而「关于」「支持」两节在权限卡下面；这里把两张卡
+/// 原样装进一个短列表，专拍这两节的排版与文案。
+class _ProfileAboutCardsHost extends StatelessWidget {
+  const _ProfileAboutCardsHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
+              AppTokens.spaceMd, AppTokens.spaceLg, AppTokens.space2xl),
+          children: [
+            SectionHeading(L10n.sectionAbout),
+            const AboutSection(),
+            const SizedBox(height: AppTokens.spaceLg),
+            SectionHeading(L10n.sectionSupport),
+            const SupportSection(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 打赏二维码弹窗的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 不通过 `showGlassDialog` 弹出来：路由的入场动画与异步图片解码都要等，
+/// 工装截图时容易拍到空白。这里直接把同一个 `DonateQrDialog` 放进居中容器，
+/// 拍到的就是弹窗本身的内容。
+class _DonateQrHost extends StatelessWidget {
+  const _DonateQrHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: Padding(
+          padding: EdgeInsets.all(AppTokens.spaceLg),
+          child: DonateQrDialog(
+            kind: DonatePayKind.wechat,
+            amount: 10,
+          ),
+        ),
+      ),
+    );
+  }
+}

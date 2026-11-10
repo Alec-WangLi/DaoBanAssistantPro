@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.2\n'
+    '· 新增「关于」页：作者、版本、官网、开源仓库与问题反馈都在里面\n'
+    '· 新增打赏入口：支付宝一键打开收款页，微信扫码；金额可选 5 / 10 / 20 元或自定义\n'
+    '· 文案审校：更新检查不再写「国内需要开代理」，帮助页补上官网下载通道的说明\n'
+    '\n'
 'v0.13.1\n'
     '· 官网与国内下载镜像上线：APK 现在有一份放在国内能访问的站点上，不必再走 github.com 慢慢等\n'
     '· 「检查更新」改成先读官网的发布清单，读不到才回退到 GitHub —— 国内网络下不再先卡满 8 秒超时\n'
@@ -97,16 +102,14 @@ const String _changelogZh =
     '· 修：小窗 + 特大字号下，调过班的那天信息卡不再把班次名截成「白…」\n'
     '· 无障碍：弹窗里的值行重新被读成按钮\n'
     '\n'
-'v0.12.4\n'
-    '· 班组名现在看得出来能改了：编辑排班里每个班组是一只有框的输入框（之前是个光秃秃的文本框，读起来像固定的名单）；「班组设置」折叠时也会把当前班组名列出来，并写着「点开可改名」\n'
-    '· 全 app 统一了「哪些东西能点」的提示：铅笔表示点开进入编辑（待办、自定义闹钟、我的模板）；箭头表示点开打开选择器、页面或弹窗（弹窗里的时间与日期、日历信息卡那行班次、排班管理里每套方案、我的页那几个入口、窄屏的模板卡）\n'
-    '· 日历底下那张信息卡与小窗模式都补上了箭头；小窗里的时间改成按宽度缩小，不再被省略号吃掉\n'
-    '· 班组设置的「周期起始日」与「从第 N 段入场」改成箭头；「每月第 N 天起」与「我这组从这个周期开始」也改箭头，铅笔从此只表示「进入编辑」\n'
-    '· 修：窄屏下「周期起始日」那一行加箭头后会横向溢出；现在标签与日期会一起按宽缩小\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.2\n'
+    '· New About page: author, version, official website, source code and issue tracker\n'
+    '· New support entry: Alipay opens the payment page directly; WeChat shows a QR code; ¥5 / ¥10 / ¥20 or a custom amount\n'
+    '· Copy pass: update checks no longer say a proxy is required in mainland China, and the guide explains the official-site download\n'
+    '\n'
 'v0.13.1\n'
     '· A download mirror is live: the APK is also served from a site that is reachable from mainland China, so installing no longer means waiting on github.com\n'
     '· Check for updates now reads the mirror manifest first and only falls back to GitHub when that fails, so it no longer burns the full 8-second timeout on a slow network\n'
@@ -163,13 +166,6 @@ const String _changelogEn =
     '· Fix: in a small window at the largest text size, the info card no longer cuts the shift name to "D…" on an adjusted day\n'
     '· Accessibility: value rows in dialogs are announced as buttons again\n'
     '\n'
-'v0.12.4\n'
-    '· Crew names now look editable: each crew in the editor is a labelled input field, where it used to be a bare text box that read like a fixed list. The Crews section also lists the current crew names while collapsed, with "tap to rename"\n'
-    '· One rule now tells you what can be tapped: a pencil opens an editor (todos, custom alarms, my templates); an arrow opens a picker, a page or a dialog (times and dates in dialogs, the shift row on the calendar info card, each schedule in Schedule management, the entries on Me, and template cards on narrow screens)\n'
-    '· The calendar info card and the small-window card both gained the arrow; the time in the small-window card now shrinks to fit instead of being cut off with an ellipsis\n'
-    '· Crew cycle start and segment start now use arrows; so do "from day N of each month" and "my crew starts this cycle on", leaving the pencil to mean "opens an editor" only\n'
-    '· Fix: on narrow screens the crew cycle-start row overflowed once it had an arrow; the label and date now shrink together\n'
-    '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
@@ -209,7 +205,7 @@ void showUpdateDialog(BuildContext context, UpdateCheckResult result) {
   );
 }
 
-/// 检查更新失败的提示：说清「连不上 GitHub、国内要开代理」。
+/// 检查更新失败的提示：三条通道（官网清单 / 仓库清单 / GitHub API）都失败才会出现。
 ///
 /// 走弹窗而不是 snack —— snack 只停 2 秒，这条提示却要用户读完再去做一件事。
 void showUpdateFailedDialog(BuildContext context) {

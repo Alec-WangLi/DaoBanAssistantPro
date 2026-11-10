@@ -1,7 +1,7 @@
 name: shiftassistantpro
 description: 倒班助手Pro — Flutter 倒班排班助手（本地离线，液态玻璃设计）
 publish_to: 'none'
-version: 0.13.1+188
+version: 0.13.2+189
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -45,6 +45,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # 打赏二维码。缺图由 `test/donate_assets_test.dart` 拦在 CI 上，
+    # 不让空目录或占位图跟着发版。
+    - assets/donate/
   shaders:
     # 玻璃容器边缘的逐像素折射（BackdropFilter 滤镜链的最后一段）。
     # 加载失败时 GlassRefraction 会静默关掉这一层，画面回落到纯模糊。

@@ -26,6 +26,11 @@ class L10n {
 
   static String t(String zh, String en) => isEn ? en : zh;
 
+  /// 品牌名。**这是唯一一处**：`app.dart` 的标题、关于页与 Android 的
+  /// `android:label` 三处共享同一个显示名（Android 那份在 strings.xml 里，
+  /// 跟随系统语言，属于平台资源，不经过这里）。
+  static String get appName => t('倒班助手Pro', 'Shift Assistant Pro');
+
   // ── 日期格式化器的记忆化 ────────────────────────────────────────────────
   //
   // `DateFormat(pattern, locale)` 每次构造都要把模式串**解析一遍**，而下面那几处
@@ -64,6 +69,7 @@ class L10n {
   static String get sectionData => t('数据', 'Data');
   static String get sectionPermission => t('权限', 'Permissions');
   static String get sectionAbout => t('关于', 'About');
+  static String get sectionSupport => t('支持', 'Support');
 
   // 按天改班（换班 / 请假覆盖）
   static String get adjustShift => t('调整班次', 'Adjust shift');
@@ -174,10 +180,10 @@ class L10n {
 
   /// 「我的 → 桌面」那一行（打开的是小组件说明弹层）。
   static String get widgetEntrySubtitle => t(
-      '说明在《使用帮助》里，小米机型在二级分类里',
-      'Explained in the usage guide; Xiaomi hides them in a sub-menu');
+      '添加方法与常见问题见《使用帮助》；小米机型在二级分类里',
+      'How to add it and common questions are in the usage guide; Xiaomi hides it one level down');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
-  static String get ringtoneSubtitle => t('选择内置、系统、你的铃声，或「仅震动」', 'Choose a built-in, system, or your own ringtone, or vibrate only');
+  static String get ringtoneSubtitle => t('选择内置、系统或自己的铃声，或「仅震动」', 'Choose a built-in, system or your own ringtone — or vibrate only');
   static String get snoozeDuration => t('贪睡时长', 'Snooze length');
   static String snoozeDurationSubtitle(int minutes) => t(
       '「再睡一会」之后隔 $minutes 分钟重新响铃',
@@ -192,14 +198,14 @@ class L10n {
       t('这一版改了什么，含最近十版', 'What changed in this version, plus the last ten');
   static String get checkUpdate => t('检查更新', 'Check for update');
   static String get checkUpdateSubtitle => t(
-      '检查最新正式版 / 测试版（国内网络需开代理）',
-      'Check for the latest stable / beta build (some networks in China need a proxy)');
+      '检查最新正式版 / 测试版；国内可直连官网下载',
+      'Check the latest stable / beta build — direct download from the official site');
   static String get alreadyLatest => t('已是最新', 'Up to date');
-  // 连不上 GitHub 不要笼统说「网络异常」—— 国内用户看到这句只会反复重试，
-  // 得直接告诉他要开代理。
+  // 三条通道（官网清单 → 仓库清单 → GitHub API）都失败才会走到这句。
+  // 不要再写成「连不上 GitHub」：下载直链可能来自官网，失败原因也可能只是断网。
   static String get updateCheckFailed => t(
-      '检查更新失败：连不上 GitHub 服务器。若你在国内，通常需要开启代理或加速器后重试。',
-      'Update check failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
+      '检查更新失败：官网与 GitHub 都连不上。请检查网络后重试；也可以直接到官网下载最新版。',
+      'Update check failed: neither the official site nor GitHub responded. Check your network and try again — or download the latest version from the official site.');
   static String get stableChannel => t('正式版', 'Stable');
   static String get testChannel => t('测试版', 'Beta');
   // 渠道没有发布时的占位。不要复用 `none`（「不设」，说的是「这个可选字段留空」）——
@@ -212,15 +218,16 @@ class L10n {
   static String get download => t('去下载', 'Download');
   static String get downloadingUpdate => t('正在下载新版本', 'Downloading update');
   static String get downloadFailed => t(
-      '下载失败：连不上 GitHub 服务器。若你在国内，通常需要开启代理或加速器后重试。',
-      'Download failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
+      '下载失败：网络中断或下载地址没有响应，请检查网络后重试。',
+      'Download failed: the connection dropped or the server did not respond. Check your network and try again.');
   static String get jumpToMonth => t('跳转月份', 'Jump to month');
   static String get usageGuide => t('使用帮助', 'Usage guide');
   static String get usageGuideSubtitle => t(
       '每个功能在哪、怎么用；遇到问题也能进来查',
       'Where each feature lives, how to use it — and what to do when something looks wrong');
   static String get viewLog => t('查看日志', 'View log');
-  static String get viewLogSubtitle => t('排错时把这里的内容复制给我', 'Copy the log here for debugging');
+  static String get viewLogSubtitle =>
+      t('反馈问题时把这里的内容复制过去', 'Copy this when reporting a problem');
   static String get confirmResetTitle => t('确认清空重置？', 'Clear & reset?');
   static String get confirmResetContent => t(
       '软件会回到刚安装的样子，清掉：\n'
@@ -265,6 +272,70 @@ class L10n {
       'That file is too large (32 MB max), pick a smaller one');
   static String get ringtoneCopyFailed =>
       t('没能读取这个文件，换一个试试', "Couldn't read that file, try another one");
+
+  // 「关于」页
+  static String get aboutTitle => t('关于', 'About');
+  static String get aboutApp => t('关于倒班助手Pro', 'About Shift Assistant Pro');
+  static String aboutAppSubtitle(String version) => t(
+      'v$version · 作者、官网与开源地址',
+      'v$version · Author, website and source');
+  static String get aboutTagline => t(
+      '为倒班的人做的排班日历、班次闹钟与待办日程',
+      'Shift calendar, alarms and todos, built for shift workers');
+  static String get aboutDeveloper => t('开发者', 'Developer');
+  static String get aboutDeveloperName => 'Alec Wang';
+  static String get aboutLicense => t('开源许可', 'License');
+  static String get aboutLicenseValue => 'MIT';
+  static String get aboutWebsite => t('官方网站', 'Website');
+  static String get aboutRepository => t('开源仓库', 'Source code');
+  static String get aboutIssues => t('问题反馈', 'Feedback');
+  static String get aboutIssuesValue => 'GitHub Issues';
+  static String get aboutPrivacyTitle => t('隐私', 'Privacy');
+  static String get aboutPrivacyBody => t(
+      '无账号、无广告、无后端。排班、待办与设置只存在这台手机上，不会上传。',
+      'No account, no ads, no server. Schedules, todos and settings live on this phone only and are never uploaded.');
+  static String get aboutOpenFailed => t(
+      '没能打开链接，请检查是否安装了浏览器',
+      'Could not open the link — check that a browser is installed');
+
+  // 打赏
+  static String get supportDeveloper => t('请我喝杯奶茶', 'Buy me a milk tea');
+  static String get supportDeveloperSubtitle => t(
+      '没有广告，也不收订阅费；觉得好用可以支持一下',
+      'No ads, no subscription — chip in if it helps');
+  static String get donateTitle => t('请我喝杯奶茶', 'Buy me a milk tea');
+  static String get donateIntro => t(
+      '倒班助手Pro 没有广告，也没有订阅。它帮到你的话，可以请作者喝杯奶茶。',
+      'Shift Assistant Pro has no ads and no subscription. If it helps, you can buy the author a milk tea.');
+  static String get donateAmount => t('金额', 'Amount');
+  static String donateAmountLabel(int yuan) => '¥$yuan';
+  static String get donateCustom => t('自定义', 'Custom');
+  static String get donateCustomTitle => t('自定义金额', 'Custom amount');
+  static String get donateCustomHint => t('输入金额（元）', 'Amount in yuan');
+  static String get donateCustomInvalid =>
+      t('请输入 1–2000 之间的整数金额', 'Enter a whole amount between 1 and 2000');
+  static String get donateAlipay => t('支付宝', 'Alipay');
+  static String get donateWechat => t('微信', 'WeChat');
+  static String get donateAlipayHint => t(
+      '点一下直接打开支付宝收款页；没装支付宝时会显示二维码',
+      'Opens the Alipay payment page; if Alipay is not installed, the QR code is shown');
+  static String get donateWechatHint => t(
+      '微信个人收款不能直接唤起付款页：截图后用「扫一扫」里的「相册」识别',
+      'WeChat personal payments cannot open the pay page directly: screenshot it, then pick it from Albums in WeChat Scan');
+  static String get donateScanTitle => t('扫码支持', 'Scan to support');
+  static String get donateScanAlipay => t(
+      '用支付宝「扫一扫」，或截图后从相册识别',
+      'Scan it in Alipay, or screenshot it and pick it from Albums');
+  static String get donateScanWechat => t(
+      '截图后用微信「扫一扫」里的「相册」识别，或让另一台设备扫',
+      'Screenshot it, then pick it from Albums in WeChat Scan, or scan with another device');
+  static String donateAmountHint(int yuan) =>
+      t('付款时填 ¥$yuan', 'Enter ¥$yuan when paying');
+  static String get donateQrMissing => t('二维码还没配置', 'QR code not configured');
+  static String get donateOpenAlipay => t('打开支付宝', 'Open Alipay');
+  static String get donateOpenFailed => t(
+      '没能打开支付宝，请用支付宝扫下面的二维码',
+      'Could not open Alipay — scan the QR code below instead');
 
   // 待办（日程）
   static String get noEvents => t('还没有待办事项，点右下角添加', 'No todos yet, tap + to add');
@@ -1060,6 +1131,8 @@ class L10n {
   static List<String> get guideUpdateDesc => [
         t('「我的 → 检查更新」查看最新正式版 / 测试版',
             'Me → Check for updates shows the latest stable / beta builds'),
+        t('国内可直连官网下载；官网连不上时自动回退 GitHub',
+            'Downloads work directly from the official site in mainland China, with GitHub as a fallback'),
         t('应用内下载并自动拉起安装', 'Download and install in-app'),
       ];
 

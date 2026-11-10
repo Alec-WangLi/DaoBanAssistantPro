@@ -37,8 +37,8 @@ class UpdateCheckResult {
 /// 检查最新正式版（0.X.0）与最新测试版（预发布）。
 ///
 /// 三条通道，按国内可访问性从好到差排：
-/// 1. **官网清单**（Cloudflare Pages 上的 `latest.json`，由
-///    `.github/workflows/site.yml` 每次发版生成）。APK 也在同一个域上，
+/// 1. **官网清单**（Cloudflare Pages 上的 `latest.json`，由 `scripts/release.ps1`
+///    第 9 步调用 `scripts/build_site.py` 生成并部署）。APK 也在同一个域上，
 ///    国内不必碰 `github.com`；
 /// 2. **仓库清单**（`raw.githubusercontent.com` 静态直读，不占限额，由
 ///    `scripts/release.ps1` 同步到 main）；
@@ -57,9 +57,15 @@ class UpdateChecker {
   static const _repo = 'DaoBanAssistantPro';
   static const _timeout = Duration(seconds: 8);
 
-  /// 官网根地址。改这里必须同时改 `.github/workflows/site.yml` 的 `SITE_BASE`，
-  /// 由 `update_checker_test.dart` 的「域名与 workflow 一致」用例盯着。
+  /// 官网根地址。**域名只有这一处出处**：`release.ps1` 用正则从本文件读它，
+  /// `build_site.py --base` 再把清单里的相对地址拼成绝对地址。改这里就是改整站。
   static const siteBase = 'https://daoban-shift.pages.dev';
+
+  /// 仓库与「关于」页用的三个外链。与 [_owner] / [_repo] 同源，不在界面里重抄。
+  static const repoUrl = 'https://github.com/$_owner/$_repo';
+  static const issuesUrl = '$repoUrl/issues';
+  static const licenseUrl = '$repoUrl/blob/main/LICENSE';
+
 
   static final _siteManifestUri = Uri.parse('$siteBase/latest.json');
   static final _manifestUri = Uri.parse(
