@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.7\n'
+    '· 触觉不再是「嗡嗡」的一段长震：开关、胶囊段、确认按钮改用系统自己调好的短促「咔哒」，与桌面按图标是同一种波形；不支持这套波形的机型自动回退，不会没声音\n'
+    '· 「关于」页的开发者名写全了：Alexander Wang（简称 Alec）\n'
+    '· 高刷屏已核对：120Hz 机型滑动与切换动画时跑满 120 帧，静止后由系统回落 60Hz，动态高刷也照此跟随\n'
+    '\n'
 'v0.13.6\n'
     '· 文案校对：官网「更新日志」补到最新版本；「我的 → 使用帮助」补上「数据备份」；README、产品规格与构建文档里的过时数字、以及规格里「不做数据导入导出」的旧说法一并更正\n'
     '\n'
@@ -89,16 +94,14 @@ const String _changelogZh =
     '· 底栏那圈边光重新配了亮度：深色档下不再白得发亮，浅色档下那条细边也终于看得清 —— 以前它几乎融进底色里\n'
     '· 按住开关拖动、上滑关闹钟的时候，那颗圆钮的两头一直是真圆了：之前会被拉成一头尖一头胖的椭圆\n'
     '\n'
-'v0.12.9\n'
-    '· 底栏那圈彩色边缘回来了 —— 上一版把它让给了「弯折」那层，可那层只有部分机型画得出来，于是没轮到的人看到的是一枚既没有颜色、也没有弯折的胶囊。现在彩边一直画着，弯折在支持的机型上叠在上面，两者不再互相顶掉\n'
-    '· 桌面小组件不再是白块：同步没成功时它自己重试两次，还不行就在你下次打开 App 时提示一次；实在拿不到数据时写「打开 App 同步排班」，而不是一片空白\n'
-    '· 极端字号下月历格每行只差一两个像素时，不再因此多出一条滚动条（差得多时照样会滚，格子的最小高度没让步）\n'
-    '· 待办行右边那颗铅笔去掉了 —— 整行本来就能点开编辑，那颗图标只会让人以为这里有两件事\n'
-    '· 夜班的重复待办挂到了它真正要提醒的那天 —— 比如 20:30 上班、提醒设在 0 点，以前行在上班当天就冒出来，现在跟提醒一起落在次日；行上那条「次日 00:00」的小字也随之不再需要\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.7\n'
+    '· Haptics no longer hum: switches, segments and confirm buttons use the crisp click the system tuned for the device - the same waveform the launcher uses for icons - with an automatic fallback on phones that lack it\n'
+    '· The About page spells out the developer name: Alexander Wang (Alec)\n'
+    '· High-refresh displays verified: 120Hz phones render at 120 while animating and settle back to 60 when idle; dynamic refresh is followed the same way\n'
+    '\n'
 'v0.13.6\n'
     '· Copy pass: the website changelog is current again, the in-app guide covers Data backup, and stale numbers plus the old "no data export" note in the README, product spec and build guide are fixed\n'
     '\n'
@@ -146,13 +149,6 @@ const String _changelogEn =
 'v0.12.10\n'
     '· The rim along the nav bar has been re-lit: in the dark theme it no longer glows white, and in the light theme the thin edge is finally visible - it used to blend into the background\n'
     '· Hold and drag the switch, or swipe up to stop an alarm, and the knob now stays properly round at both ends instead of being pulled into a lopsided oval\n'
-    '\n'
-'v0.12.9\n'
-    '· The colour rim on the nav bar capsule is back. The last version handed that job to the bending layer, but that layer only exists on some phones - everyone else got a capsule with neither colour nor bending. The rim is drawn again, always, and the bending stacks on top where it is available\n'
-    '· The home-screen widget no longer goes blank: a failed sync retries twice on its own and then says so once the next time you open the app; when there is really no data it reads "Open the app to sync" instead of an empty card\n'
-    '· At very large text sizes the calendar no longer grows a scrollbar over a one- or two-pixel shortfall per row (a larger shortfall still scrolls - the minimum cell height is unchanged)\n'
-    '· The pencil on todo rows is gone - the whole row already opens the editor, and the icon only suggested there were two things to tap\n'
-    '· A recurring todo on a night shift now sits on the day it really reminds you: with a 20:30 shift and a 00:00 reminder the row used to appear on the shift day and now appears with the reminder on the next day. The small "next day 00:00" label on such rows is gone with it\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

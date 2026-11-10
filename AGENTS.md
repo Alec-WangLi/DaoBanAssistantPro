@@ -80,7 +80,7 @@ features/home/glass_nav_bar.dart  底栏；**两条档位各一棵树**（`_buil
 core/l10n.dart               L10n 静态 i18n（locale 'zh'/'en'，t(zh,en)，isEn，日期格式 helper）
 core/app_info.dart           const appVersion（与 pubspec 同步，由 test/app_info_test.dart 把关）
 core/design_tokens.dart      设计语言唯一来源：按**角色**命名的排版 / 明度 / 间距 / 图标 / 圆角 / 时长令牌（界面层只写角色名，不写字面量；由 test/design_tokens_test.dart 守门）
-core/haptics.dart            触觉词汇表：三档 `Haptics.select()/commit()/modeEnter()` + 模块级 `hapticsDisabled`（与 `liquidGlassEnabled` 同路，一处赋值全 app 生效）；挂动作不挂按压；除本文件外不许调 `HapticFeedback.*`，由 test/haptics_guard_test.dart 守门
+core/haptics.dart            触觉词汇表：三档 `Haptics.select()/commit()/modeEnter()` + 模块级 `hapticsDisabled`（与 `liquidGlassEnabled` 同路，一处赋值全 app 生效）；挂动作不挂按压；除本文件外不许调 `HapticFeedback.*`，由 test/haptics_guard_test.dart 守门；Android 上它只管路由，出声的是 `android/.../Haptics.kt`（预定义 click，见 `docs/decisions/ui-rules.md`）
 core/widgets/                共享玻璃组件（见下）
 domain/shift_rotation.dart   轮换引擎（纯 Dart 可单测）+ dayNumber()/dateOnly()
 domain/lunar_info.dart       农历（lunar_plus）
@@ -184,9 +184,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.7(+194) 测试版**：触觉改走原生通道点播设备自己的预定义效果（`EFFECT_CLICK` / `EFFECT_HEAVY_CLICK`），不再用 Flutter 那条会被小米 HAL 回退成 70ms TICK 的路径；「关于」页开发者名写全为 Alexander Wang（简称 Alec）；真机核对高刷自适应（120Hz 机型动画时跑满 120、静止回落 60）。单测 1284 → 1287。
 - **v0.13.6(+193) 测试版**：文案校对 —— 官网更新日志补到最新、帮助页补「数据备份」、README / 产品规格 / BUILD 的过时说法同步；新增 `site_copy_test` 护栏（App 版本号必须出现在 `site/index.html`）。
 - **v0.13.5(+192) 测试版**：修导入备份后「立即重启」只杀进程、不重新拉起（Android 14+ 对「进程已死 + PendingIntent 拉起 Activity」判 `BAL_BLOCK`；改为不杀进程，`NEW_TASK|CLEAR_TASK` 起新任务，让新 FlutterEngine 重跑 `main()`）；导入后把 `lastSeenVersion` 写成当前版本，避免先弹更新日志。
-- **v0.13.4(+191) 测试版**：新增「我的 → 数据备份」（导出 / 导入 `.dshbackup`：排班、待办、模板、闹钟、设置与自选铃声；导入先校验、覆盖后冷重启生效，并按新库重排闹钟）；单测 1273 → **1282**。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）

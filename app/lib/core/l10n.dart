@@ -326,7 +326,7 @@ class L10n {
       '为倒班的人做的排班日历、班次闹钟与待办日程',
       'Shift calendar, alarms and todos, built for shift workers');
   static String get aboutDeveloper => t('开发者', 'Developer');
-  static String get aboutDeveloperName => 'Alec Wang';
+  static String get aboutDeveloperName => 'Alexander Wang';
   static String get aboutLicense => t('开源许可', 'License');
   static String get aboutLicenseValue => 'MIT';
   static String get aboutWebsite => t('官方网站', 'Website');

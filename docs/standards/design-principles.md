@@ -93,7 +93,7 @@
 ### D6. 触觉三档、挂动作不挂按压、共享组件不重复震
 - **原则**：只三档——`select()`（选中变了）/ `commit()`（动作落实）/ `modeEnter()`（进入模式）；
   普通点击、列表行、滚动、滚轮一律不震；共享组件已自动震过的，调用点绝不再补。
-- **落到哪**：`core/haptics.dart`（唯一许出现 `HapticFeedback.` 的地方）。
+- **落到哪**：`core/haptics.dart`（唯一许出现 `HapticFeedback.` 的地方；Android 上它只做路由，真正出声的是原生 `android/.../Haptics.kt` —— 点播设备自己的 `EFFECT_CLICK` / `EFFECT_HEAVY_CLICK`，理由见 `docs/decisions/ui-rules.md` 的 v0.13.7 那条）。
 - **谁守门**：`haptics_guard_test`（全 `lib/` 除 `haptics.dart` 不许出现 `HapticFeedback.`）+
   `haptics_commit_points_test`（"不重复震"的常驻用例）——**机器拦**。
 - **例外与豁免**：无。要加第四档就改 `haptics.dart` 并同步本条与矩阵。

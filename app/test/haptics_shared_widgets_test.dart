@@ -14,6 +14,11 @@ import 'package:shiftassistantpro/core/widgets/glass_pickers.dart';
 import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/core/widgets/glass_switch.dart';
 
+/// 触觉原生通道名，与 `MainActivity.kt` 的 `hapticsChannel` 一致。
+const MethodChannel _hapticsChannel =
+    MethodChannel('com.daoban.shiftassistantpro/haptics');
+
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -24,14 +29,14 @@ void main() {
   setUp(() {
     fired = [];
     hapticsDisabled = false;
-    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+    messenger.setMockMethodCallHandler(_hapticsChannel, (call) async {
+      if (call.method == 'play') fired.add(call.arguments);
       return null;
     });
   });
 
   tearDown(() {
-    messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+    messenger.setMockMethodCallHandler(_hapticsChannel, null);
     hapticsDisabled = false;
   });
 
@@ -49,7 +54,7 @@ void main() {
     ));
     await tester.tap(find.byType(GlassSwitch));
     await tester.pumpAndSettle();
-    expect(fired, ['HapticFeedbackType.selectionClick']);
+    expect(fired, ['select']);
   });
 
   testWidgets('GlassSegment 选中项变了才震；点当前段不震', (tester) async {

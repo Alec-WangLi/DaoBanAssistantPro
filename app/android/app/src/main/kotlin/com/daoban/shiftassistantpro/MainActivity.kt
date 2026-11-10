@@ -98,6 +98,12 @@ class MainActivity : FlutterActivity() {
     }
 
     private val settingsChannel = "com.daoban.shiftassistantpro/settings"
+
+    /**
+     * 触觉专用通道。与 settings 分开，是因为它有自己的原生实现
+     * （`Haptics.kt`）与一条测试侧的回落链（见 `lib/core/haptics.dart`）。
+     */
+    private val hapticsChannel = "com.daoban.shiftassistantpro/haptics"
     private var flutterChannel: MethodChannel? = null
     private var playingRingtone: android.media.Ringtone? = null
     private var alarmPlayer: MediaPlayer? = null
@@ -294,6 +300,26 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, settingsChannel)
         flutterChannel = channel
+
+        // 触觉：Dart 侧 `core/haptics.dart` 的三档语义 → 设备自己调好的
+        // 预定义效果（CLICK / HEAVY_CLICK）。为什么不用 Flutter 自带的
+        // `HapticFeedback.*`，见 Haptics.kt 的文件头。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            hapticsChannel,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "play" -> {
+                    val decor = window?.decorView
+                    if (decor != null) {
+                        Haptics.play(decor, call.arguments as? String ?: Haptics.SELECT)
+                    }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         channel
             .setMethodCallHandler { call, result ->
                 when (call.method) {

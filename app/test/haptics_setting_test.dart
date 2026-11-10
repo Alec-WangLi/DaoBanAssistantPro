@@ -49,21 +49,22 @@ Finder _hapticsSwitch() => find.descendant(
       matching: find.byType(GlassSwitch),
     );
 
-/// 在平台通道上拦触觉，返回**活的**收集列表。
+/// 在**触觉原生通道**上拦触觉，返回**活的**收集列表。
 ///
-/// 触觉走 `SystemChannels.platform` 的 `HapticFeedback.vibrate`，参数就是那一档
-/// 的字符串（`HapticFeedbackType.*`）。返回的 list 由调用方自己 `clear()` / 读，
+/// `core/haptics.dart` 在 Android 上走 `com.daoban.shiftassistantpro/haptics`
+/// 的 `play`，参数是语义档位（`select` / `commit` / `modeEnter`）；波形由原生侧
+/// 按设备能力挑（见 `Haptics.kt`）。返回的 list 由调用方自己 `clear()` / 读，
 /// 所以同一个测试里可以在关键动作**前后**分别计数。拆卸由 `addTearDown` 兜。
 List<Object?> _captureHaptics() {
   final fired = <Object?>[];
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-    if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+  const channel = MethodChannel('com.daoban.shiftassistantpro/haptics');
+  messenger.setMockMethodCallHandler(channel, (call) async {
+    if (call.method == 'play') fired.add(call.arguments);
     return null;
   });
-  addTearDown(() =>
-      messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+  addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
   return fired;
 }
 
@@ -142,7 +143,7 @@ void main() {
     //
     // 它同时钉住**排序**：若 `Haptics.select()` 被挪到 `hapticsDisabled = !value`
     // **之上**，那一记会在标志仍为 true 时被 `_fire` 吞掉，这里就一记都没有。
-    expect(fired, ['HapticFeedbackType.selectionClick'],
+    expect(fired, ['select'],
         reason: '打开时补一记确认震（关闭时不补：那一记由开关自己在标志翻面前发出）');
     expect(hapticsDisabled, isFalse, reason: '补震之后标志要真的落到「开」');
     n.dispose();
@@ -186,7 +187,7 @@ void main() {
     expect(tester.widget<GlassSwitch>(_hapticsSwitch()).value, isFalse);
     expect(hapticsDisabled, isTrue,
         reason: '拨一下要落到 `hapticsDisabled` 上，否则开关就是个摆设');
-    expect(fired, ['HapticFeedbackType.selectionClick'],
+    expect(fired, ['select'],
         reason: '关掉时**恰好**开关自己那一记；多一记就是「关掉触觉」反而双震');
 
     // 收尾：主动拆树，让 drift 取消查询流时排的那个零时长定时器跑掉

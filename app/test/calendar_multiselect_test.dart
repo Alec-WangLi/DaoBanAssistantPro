@@ -19,6 +19,11 @@ import 'package:shiftassistantpro/core/clock.dart';
 import 'support/fixed_clock.dart';
 import 'support/calendar_test_support.dart';
 
+/// 触觉原生通道名，与 `MainActivity.kt` 的 `hapticsChannel` 一致。
+const MethodChannel _hapticsChannel =
+    MethodChannel('com.daoban.shiftassistantpro/haptics');
+
+
 void main() {
   useFixedNow();
   setUpAll(() async {
@@ -156,19 +161,19 @@ void main() {
     final fired = <Object?>[];
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+    messenger.setMockMethodCallHandler(_hapticsChannel, (call) async {
+      if (call.method == 'play') fired.add(call.arguments);
       return null;
     });
-    addTearDown(() => messenger
-        .setMockMethodCallHandler(SystemChannels.platform, null));
+    addTearDown(() =>
+        messenger.setMockMethodCallHandler(_hapticsChannel, null));
 
     await longPressDragCell(tester, rangeFirstDay, 1, midDrag: () async {
       expect(rangeTintCount(tester), 0, reason: '空白表下长按不该画范围淡染');
       expect(blockScale(tester), 1.0, reason: '空白表下这一下也不该点亮玻璃块');
     });
 
-    expect(fired, isNot(contains('HapticFeedbackType.mediumImpact')),
+    expect(fired, isNot(contains('modeEnter')),
         reason: '空白表下压根没进入多选态，不该发 modeEnter 那记强震');
 
     expect(find.textContaining('$rangeSpan 天'), findsNothing,
@@ -278,19 +283,19 @@ void main() {
   // 那一下要「更明显」（`modeEnter`），之后每进一格再轻震一下（`select`）——
   // 用户在两档里选了「进入时震 + 每进一格再轻震」。
   //
-  // 拦截平台通道来断言：三档触觉都走 `SystemChannels.platform` 的
-  // `HapticFeedback.vibrate`，只是参数字符串不同（与 `haptics_test.dart` 同一招）。
+  // 拦截原生通道来断言：三档触觉都走 `com.daoban.shiftassistantpro/haptics`
+  // 的 `play`，参数就是语义档位（`select` / `commit` / `modeEnter`）。
 
   testWidgets('长按进入多选态震一次，每进一格再震一次', (tester) async {
     final fired = <Object?>[];
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+    messenger.setMockMethodCallHandler(_hapticsChannel, (call) async {
+      if (call.method == 'play') fired.add(call.arguments);
       return null;
     });
-    addTearDown(() => messenger
-        .setMockMethodCallHandler(SystemChannels.platform, null));
+    addTearDown(() =>
+        messenger.setMockMethodCallHandler(_hapticsChannel, null));
 
     await pumpCalendar(tester, 'day_night_rest_rest');
     fired.clear(); // 建树过程本身不该有触觉
@@ -310,8 +315,8 @@ void main() {
     // （把选中挪到按下的那格，真的变了、该响），紧接着是 `modeEnter`。此后
     // **只数 move 的贡献**，断言就不依赖「今天是不是正好 8 号」这种日期脸色。
     final selBefore =
-        fired.where((f) => f == 'HapticFeedbackType.selectionClick').length;
-    expect(fired.where((f) => f == 'HapticFeedbackType.mediumImpact'), hasLength(1),
+        fired.where((f) => f == 'select').length;
+    expect(fired.where((f) => f == 'modeEnter'), hasLength(1),
         reason: '进入多选态在起手那一刻发一记 modeEnter');
 
     await gesture.moveBy(Offset(0, cellH)); // 8 → 15
@@ -325,10 +330,10 @@ void main() {
     // 时依然由起手那记 select 满足 —— 于是「长按拖选每进一格」这个落点没有任何
     // 东西看着（正是 spec 警告过的「两个落点别只改一个」的镜像）。
     final selAfter =
-        fired.where((f) => f == 'HapticFeedbackType.selectionClick').length;
+        fired.where((f) => f == 'select').length;
     expect(selAfter - selBefore, 2,
         reason: '长按拖过两格 → 恰好两记 select：每进一格一记，多一下少一下都说明落点不对');
-    expect(fired.where((f) => f == 'HapticFeedbackType.mediumImpact'), hasLength(1),
+    expect(fired.where((f) => f == 'modeEnter'), hasLength(1),
         reason: '整场手势只该进入一次多选态');
 
     await disposeCalendar(tester);
@@ -339,12 +344,12 @@ void main() {
     final fired = <Object?>[];
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+    messenger.setMockMethodCallHandler(_hapticsChannel, (call) async {
+      if (call.method == 'play') fired.add(call.arguments);
       return null;
     });
-    addTearDown(() => messenger
-        .setMockMethodCallHandler(SystemChannels.platform, null));
+    addTearDown(() =>
+        messenger.setMockMethodCallHandler(_hapticsChannel, null));
 
     await pumpCalendar(tester, 'day_night_rest_rest');
     fired.clear();
@@ -397,7 +402,7 @@ void main() {
     await tester.tapAt(
         tester.getCenter(find.byKey(const ValueKey('day-card-9'))));
     await tester.pumpAndSettle();
-    expect(fired, ['HapticFeedbackType.selectionClick'],
+    expect(fired, ['select'],
         reason: '点按换了格：恰好一记 select（多一记少一记都说明点选落点不对）');
 
     await disposeCalendar(tester);
