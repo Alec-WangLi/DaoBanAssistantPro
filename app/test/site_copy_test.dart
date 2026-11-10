@@ -19,4 +19,13 @@ void main() {
       reason: '发版后忘了把 site/index.html 的「更新日志」补到当前版本',
     );
   });
+
+  test('README 与产品规格包含当前版本', () {
+    final String readme = File('../README.md').readAsStringSync();
+    final String spec = File('../PRODUCT_SPEC.md').readAsStringSync();
+    expect(readme, contains('v$appVersion'),
+        reason: 'README 的版本 / 下载行忘了更新到当前版本');
+    expect(spec, contains('v$appVersion'),
+        reason: 'PRODUCT_SPEC 的抬头忘了更新到当前版本');
+  });
 }

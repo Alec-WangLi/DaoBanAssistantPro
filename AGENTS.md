@@ -66,7 +66,7 @@
 
 2026-11-06 记过「main 连续四次红、根因是比 beta 少 148 行 `ensureVisualFonts()`」。**这条已经不成立：** v0.13.0 把 beta 整体合进了 main，`app/tool/visual/visual_harness.dart` 在 main 与 beta 逐字节相同（`git diff --stat origin/main origin/beta -- app/tool/visual/visual_harness.dart` 空输出），main 的 CI 已是 success。**以后看到 main 的 CI 红，按真 bug 查，别再往这条旧结论上靠。**
 
-- **`ci.yml` 的 `EXPECTED_TESTS` 仍然是分支相关项，不是常量**：2026-11-10 时 beta **1283**、main **1257**（v0.13.0 之后 beta 加了用例），改一边要记得另一边。**基线只认 CI 日志里那行「用例数 N」**，推算值不能当基线（2026-11-06 按「1242 − 113」推成 1129，实测 1096）。
+- **`ci.yml` 的 `EXPECTED_TESTS` 仍然是分支相关项，不是常量**：2026-11-10 时 beta **1284**、main **1257**（v0.13.0 之后 beta 加了用例），改一边要记得另一边。**基线只认 CI 日志里那行「用例数 N」**，推算值不能当基线（2026-11-06 按「1242 − 113」推成 1129，实测 1096）。
 - **`visual.yml`（每日视觉巡场）已于 2026-11-10 恢复**（`gh workflow enable visual.yml` + 手动 dispatch 一次，run `42652960542`）：**1284 条断言全过、写出 337 张图、artifact 89.9 MB**，不是当初那种 0 张图的假绿。判绿**不能只看结论** —— `continue-on-error: true` 是设计取舍，结论永远是 success。**数图不用下载 89 MB 的 artifact**：`gh run view <id> --log | grep -aoE 'build/visual/[^ ]+\.png' | sort -u | wc -l`，出图那一步逐张打了路径。
 
 
@@ -170,6 +170,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 - `dist/`、`*.apk`、`*.aab` 均 gitignore，不进仓库。
 
 ## 工作流
+- **辅助信息随版本走（测试版也一样，不要等用户提醒）**：每次升版本或改 UI，同一次提交里同步 `site/index.html` 的更新日志、README 的版本与功能文案、`PRODUCT_SPEC.md` 抬头与能力、帮助页；`BUILD.md` / 规范文档不写死用例数（统一指向 `ci.yml` 的 `EXPECTED_TESTS`）。改 UI 后重跑 promo 图（至少正式版必须）。`app/test/site_copy_test.dart` 检查 site / README / SPEC 是否含当前版本号，漏了 CI 直接红。
 - **正式版（末位 `Z=0`）发布前必须过一遍「仓库门面」** —— 用户提过两次，别再漏：
   1. `README.md` 的**文案**：版本号、功能清单逐条对着当前实现核（每次都会过时几处，例：0.8.0 那轮核出「月视图仍写按颜色区分」「铃声仍写只有内置与系统」「schemaVersion 还停在 6」）。
   2. `README.md` 的**配图**：`docs/images/` 里的 `hero.png` 与 `shot-*.png` 全是生成物，**改了 UI 就得重跑** `toolchain/flutter/bin/flutter test tool/promo/render_promo_test.dart` → `python scripts/make_promo_images.py`。只改文字不换图 = README 上挂的还是几个版本前的界面（0.8.0 那轮就漏了，图停在 v0.7.0）。
