@@ -22,6 +22,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/app_repository.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
+import '../backup/backup_screen.dart';
 import '../calendar/schedule_management_screen.dart';
 import 'about_section.dart';
 import 'help_center_screen.dart';
@@ -282,16 +283,34 @@ class ProfileScreen extends ConsumerWidget {
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
-              child: GlassPressable(
-                child: ListTile(
-                  leading: const Icon(Icons.delete_sweep_outlined,
-                      color: AppTokens.danger),
-                  title: Text(L10n.clearReset),
-                  subtitle: Text(L10n.clearResetSubtitle),
-                  trailing: const Icon(Icons.chevron_right_outlined,
-                      key: Key('profile-chevron-reset')),
-                  onTap: () => _confirmReset(context, ref),
-                ),
+              child: Column(
+                children: <Widget>[
+                  GlassPressable(
+                    child: ListTile(
+                      leading: const Icon(Icons.backup_outlined),
+                      title: Text(L10n.dataBackup),
+                      subtitle: Text(L10n.dataBackupSubtitle),
+                      trailing: const Icon(Icons.chevron_right_outlined,
+                          key: Key('profile-chevron-backup')),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const BackupScreen()),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  GlassPressable(
+                    child: ListTile(
+                      leading: const Icon(Icons.delete_sweep_outlined,
+                          color: AppTokens.danger),
+                      title: Text(L10n.clearReset),
+                      subtitle: Text(L10n.clearResetSubtitle),
+                      trailing: const Icon(Icons.chevron_right_outlined,
+                          key: Key('profile-chevron-reset')),
+                      onTap: () => _confirmReset(context, ref),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),

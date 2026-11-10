@@ -324,8 +324,11 @@ class AppDatabase extends _$AppDatabase {
   /// 测试专用：接外部注入的 QueryExecutor（内存库 / 迁移 fixture）。
   AppDatabase.forTesting(super.e);
 
+  /// 当前 schema 版本（备份导入时用来拒绝「来自更新版本」的库）。
+  static const int schemaVersionNumber = 15;
+
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => schemaVersionNumber;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(

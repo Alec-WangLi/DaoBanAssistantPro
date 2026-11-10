@@ -20,6 +20,7 @@
 | 液态玻璃 / 着色器 / 共享玻璃件 | `docs/decisions/glass.md` |
 | 桌面小组件 / RemoteViews | `docs/decisions/widget.md` |
 | 颜色 / 布局 / 弹窗 / 触觉 / 字号 / 视觉工装 | `docs/decisions/ui-rules.md` |
+| 性能测量 / 装测试包 / 动包名 | `docs/decisions/perf-testing.md` |
 
 ## 技能纪律（2026-11-06 用户拍板；此前多次「该用没用」，靠记忆汇报）
 
@@ -119,6 +120,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 10. **扫文档/源码的正则或链接校验，必须先剥掉围栏代码块与行内代码** —— 否则「举例说明」会被当成真问题（2026-11-06 一次误报 6 条：`docs/changelog` 2 条、`docs/superpowers` 4 条，全是 `[文字](链接)` 这种被人故意写出来讲解 markdown 的写法）。工具见 `scripts/link_check.py`。
 11. **同一台机器上不许同时跑两份 `flutter test`** —— 两个进程抢同一个 `app/build/test_cache/`，表现**不是报错，而是某几条用例莫名其妙地红**（2026-11-06：一份全套从 38 秒变成 10 分 4 秒、`calendar_day_cell_test.dart` 两条挂掉，单跑又全绿）。跑之前先数进程（`dart.exe` / `dartvm` / `flutter_tester` 应为 0）；**任何 `job_kill`、超时、异常中断之后都要再数一次** —— 父进程没了，它派生的 `dart.exe` / `dartaotruntime.exe` 可能还挂着缓存，`job_output` 里看不出来。**一条红的用例，先排除「当时是不是有人在并发跑」才值得去查。**
 12. **清点用例条数不许用 `grep -c '^  testWidgets('`** —— 缩进是 2 格还是 4 格（`group()` 里）不一，会数出 0 或漏一半（2026-11-06 我按 2 格缩进数 `calendar_liquid_test.dart` 得到 0，实际 18）。要么用 `^ +(testWidgets|test)\(`，要么直接看 `flutter test` 尾行的 `+N`。
+13. **测性能装包前先保住用户数据** —— `flutter drive` 收尾按 **manifest 包名（namespace）** 卸载，不是 `applicationId`。只改 `applicationId` 做「独立测量包」会把手机上正式安装的包连同 `/data/data` 一起卸掉（2026-11-10 真机事故，数据永久丢失）。改包名必须 `namespace` + `applicationId` 一起改或用独立工程；装前确认备份，装完立刻核对正式包还在。详见 `docs/decisions/perf-testing.md`。
 
 ## 症状索引（用户报的现象 → 该读哪一条）
 
@@ -181,9 +183,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.4(+191) 测试版**：新增「我的 → 数据备份」（导出 / 导入 `.dshbackup`：排班、待办、模板、闹钟、设置与自选铃声；导入先校验、覆盖后冷重启生效，并按新库重排闹钟）；单测 1273 → **1282**。
 - **v0.13.3(+190) 测试版**：打赏后解锁「支持者专属」——自报「我已完成支付」+ 本地状态，首期是一封支持者来信（以后的新内容继续放这一页）；「我的 → 支持」变两行（打赏 / 支持者专属），清空重置保留支持者状态。
 - **v0.13.2(+189) 测试版**：新增「关于」整页（作者 / 版本 / 官网 / 开源仓库 / Issues / 隐私）与「支持」打赏（支付宝一键、微信扫码；5 / 10 / 20 元或自定义）；文案审校去掉「国内需开代理」「连不上 GitHub」等已过时的更新检查说明；屏单加 `68_about` / `69_donate` / `70_profile_about_cards` / `71_donate_qr`。
-- **v0.13.1(+188) 测试版**：官网与国内下载镜像上线（`https://daoban-shift.pages.dev`，正式版 / 测试版两个 APK 都在站上）；「检查更新」改三通道（官网清单 → 仓库清单 → GitHub API），国内不再先卡满 8 秒超时；官网标明仅支持 Android；发版脚本第 9 步自动同步站点。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）

@@ -92,6 +92,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       if (AlarmService.openTodoRequested.value) _openTodoPage();
       _maybeShowLaunchDialogs();
       _maybeAutoCheckUpdate();
+      _maybeReplanAfterRestore();
       // 冷启动由桌面小组件拉起：读一次「要跳到哪天」。
       WidgetService.consumeLaunchDay();
       // 首帧推一次快照，桌面上的卡片立刻与 App 对齐（去抖之后 340ms 发出去）。
@@ -122,6 +123,21 @@ class _HomeShellState extends ConsumerState<HomeShell>
   ///
   /// 首启弹的是**精简版**（三条），不是完整的「使用帮助」—— 见
   /// `showGettingStartedDialog` 的说明。
+  /// 导入备份后的首次启动：库已经换了，系统里按旧库排的闹钟必须按新库重排。
+  ///
+  /// `main()` 在打开数据库之前完成了替换并留下这个标记；这里只消费一次。
+  Future<void> _maybeReplanAfterRestore() async {
+    try {
+      final SharedPreferences sp = await SharedPreferences.getInstance();
+      if (sp.getBool('needsAlarmReplan') != true) return;
+      await sp.remove('needsAlarmReplan');
+      await AlarmService.replanAfterScheduleChange(
+          ref.read(appRepositoryProvider));
+    } catch (_) {
+      // 重排失败不该影响界面；下一次改排班时还会再排。
+    }
+  }
+
   Future<void> _maybeShowLaunchDialogs() async {
     final sp = await SharedPreferences.getInstance();
     final onboarded = sp.getBool('onboarded') ?? false;

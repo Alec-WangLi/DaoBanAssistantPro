@@ -15,7 +15,10 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
+import android.os.Process
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.OpenableColumns
@@ -83,6 +86,8 @@ class MainActivity : FlutterActivity() {
 
         /** 自选铃声请求码 —— 与插件占用的请求码区分开。 */
         private const val REQ_PICK_RINGTONE = 40071
+        private const val REQ_SAVE_BACKUP = 40072
+        private const val REQ_PICK_BACKUP = 40073
 
         /** 自选铃声在私有目录里的子目录名（`filesDir/ringtone/`）。 */
         const val RINGTONE_DIR = "ringtone"
@@ -92,6 +97,7 @@ class MainActivity : FlutterActivity() {
          * 的整轨音频会白白占掉存储、还拖慢那次选择；给个上限并在界面上说清楚。
          */
         private const val MAX_RINGTONE_BYTES = 32L * 1024 * 1024
+        private const val MAX_BACKUP_BYTES = 200L * 1024 * 1024
     }
 
     private val settingsChannel = "com.daoban.shiftassistantpro/settings"
@@ -102,6 +108,9 @@ class MainActivity : FlutterActivity() {
 
     /** 等文件选择器回来的那个 Flutter 回调（同一时刻只允许一个）。 */
     private var pendingRingtoneResult: MethodChannel.Result? = null
+    private var pendingSaveBackupResult: MethodChannel.Result? = null
+    private var pendingSaveBackupSource: String? = null
+    private var pendingPickBackupResult: MethodChannel.Result? = null
 
     /**
      * App 活着时收系统深浅色切换。
@@ -499,6 +508,69 @@ class MainActivity : FlutterActivity() {
                             result.error("CLEAR_RINGTONE_FAILED", e.message, null)
                         }
                     }
+                    "saveBackupFile" -> {
+                        // Dart 侧先把 zip 写到缓存目录，这里只负责让用户选保存位置
+                        // 并把文件复制过去 —— 大块字节不走 MethodChannel。
+                        val name = call.argument<String>("name")
+                            ?: "shiftassistant-backup.dshbackup"
+                        val source = call.argument<String>("sourcePath") ?: ""
+                        if (pendingSaveBackupResult != null || pendingPickBackupResult != null) {
+                            result.error("BACKUP_PICKER_BUSY", "已有文件选择器在等待", null)
+                        } else if (source.isEmpty() || !File(source).exists()) {
+                            result.error("BACKUP_SOURCE_MISSING", "备份文件不存在", null)
+                        } else {
+                            pendingSaveBackupResult = result
+                            pendingSaveBackupSource = source
+                            try {
+                                startActivityForResult(
+                                    Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        type = "application/octet-stream"
+                                        putExtra(Intent.EXTRA_TITLE, name)
+                                    },
+                                    REQ_SAVE_BACKUP
+                                )
+                            } catch (e: Exception) {
+                                pendingSaveBackupResult = null
+                                pendingSaveBackupSource = null
+                                result.error("SAVE_BACKUP_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                    "pickBackupFile" -> {
+                        if (pendingSaveBackupResult != null || pendingPickBackupResult != null) {
+                            result.error("BACKUP_PICKER_BUSY", "已有文件选择器在等待", null)
+                        } else {
+                            pendingPickBackupResult = result
+                            try {
+                                startActivityForResult(
+                                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        // 自定义扩展名没有标准 MIME，用 */* 让文件管理器
+                                        // 能选到它；格式校验在 Dart 侧做。
+                                        type = "*/*"
+                                    },
+                                    REQ_PICK_BACKUP
+                                )
+                            } catch (e: Exception) {
+                                pendingPickBackupResult = null
+                                result.error("PICK_BACKUP_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                    "restartApp" -> {
+                        result.success(null)
+                        val launch = packageManager.getLaunchIntentForPackage(packageName)
+                        launch?.addFlags(
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+                        )
+                        if (launch != null) startActivity(launch)
+                        // 给新 Activity 一点启动时间再杀进程；导入的库在下次 main()
+                        // 里、任何数据库打开之前完成替换。
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            Process.killProcess(Process.myPid())
+                        }, 600)
+                    }
                     "getVolumeLevels" -> {
                         try {
                             val audio = getSystemService(AUDIO_SERVICE) as AudioManager
@@ -783,6 +855,14 @@ class MainActivity : FlutterActivity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_SAVE_BACKUP) {
+            handleSaveBackupResult(resultCode, data)
+            return
+        }
+        if (requestCode == REQ_PICK_BACKUP) {
+            handlePickBackupResult(resultCode, data)
+            return
+        }
         if (requestCode != REQ_PICK_RINGTONE) return
         val result = pendingRingtoneResult
         pendingRingtoneResult = null
@@ -814,6 +894,70 @@ class MainActivity : FlutterActivity() {
                     else -> result?.success(
                         mapOf("name" to copied.first, "uri" to copied.second)
                     )
+                }
+            }
+        }.start()
+    }
+
+    private fun handleSaveBackupResult(resultCode: Int, data: Intent?) {
+        val result = pendingSaveBackupResult
+        val sourcePath = pendingSaveBackupSource
+        pendingSaveBackupResult = null
+        pendingSaveBackupSource = null
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null || sourcePath == null) {
+            result?.success(null)
+            return
+        }
+        Thread {
+            val ok = try {
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    File(sourcePath).inputStream().use { input -> input.copyTo(out) }
+                } != null
+            } catch (e: Exception) {
+                AlarmLog.error(this, "backup: 写入失败 ${e.javaClass.name}: ${e.message}")
+                false
+            }
+            runOnUiThread {
+                if (ok) {
+                    result?.success(mapOf("uri" to uri.toString()))
+                } else {
+                    result?.error("SAVE_BACKUP_FAILED", "写入备份文件失败", null)
+                }
+            }
+        }.start()
+    }
+
+    private fun handlePickBackupResult(resultCode: Int, data: Intent?) {
+        val result = pendingPickBackupResult
+        pendingPickBackupResult = null
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) {
+            result?.success(null)
+            return
+        }
+        Thread {
+            var tooLarge = false
+            val dest = File(cacheDir, "backup_import.dshbackup")
+            val ok = try {
+                val size = queryFileSize(uri)
+                if (size != null && size > MAX_BACKUP_BYTES) {
+                    tooLarge = true
+                    false
+                } else {
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        dest.outputStream().use { out -> input.copyTo(out) }
+                    } != null
+                }
+            } catch (e: Exception) {
+                AlarmLog.error(this, "backup: 读取失败 ${e.javaClass.name}: ${e.message}")
+                false
+            }
+            runOnUiThread {
+                when {
+                    tooLarge -> result?.error("BACKUP_TOO_LARGE", "备份文件太大", null)
+                    !ok -> result?.error("READ_BACKUP_FAILED", "读取备份文件失败", null)
+                    else -> result?.success(mapOf("path" to dest.absolutePath))
                 }
             }
         }.start()

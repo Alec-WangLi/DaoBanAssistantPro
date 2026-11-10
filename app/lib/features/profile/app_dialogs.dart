@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.4\n'
+    '· 新增「我的 → 数据备份」：把排班、待办、模板、闹钟与设置导出成一个文件；重装、换机或误清空之后，选这个文件导入就能恢复\n'
+    '· 导入会先校验文件、覆盖当前数据，并重启一次 App 生效；导入后闹钟会按恢复的排班重新排\n'
+    '· 备份里也带着你保存的铃声；文件可以放到网盘或电脑，建议每次大改排班后导出一份\n'
+    '\n'
 'v0.13.3\n'
     '· 打赏后可解锁「支持者专属」：首期是一封写给支持者的信，以后的新内容也会放在这一页\n'
     '· 解锁是自报的：个人收款码没有支付回调，点「我已完成支付」并确认即可；未支付也不影响任何功能\n'
@@ -95,15 +100,14 @@ const String _changelogZh =
     '· 文案：帮助与更新说明里「钟点不在值班时间里」的说法改准 —— 晚于上班时间又不在值班窗口里时落在前一天（上班前），早于上班时间时按离上班 / 下班哪边近来定\n'
     '· 无障碍：班组卡里那两行值行重新被读成按钮\n'
     '\n'
-'v0.12.6\n'
-    '· 重复待办的「按班次」提醒现在按当天的值班时间算落在哪天：上夜班（20:30–次日 08:30）配凌晨 0 点的提醒，会落在次日 0 点，不再是上班当天凌晨；钟点晚于上班时间、又不在值班窗口里时落在前一天（上班前），早于上班时间时按离上班还是离下班近来定\n'
-    '· 待办列表那一行会标出落点（「次日 00:00」/「前一天 23:00」），与闹钟列表同一套说法\n'
-    '· 「按班次」规则的说明里补了一句落点规则\n'
-    '· 编辑排班 → 班组设置：「班组名」输入框不再占掉大半行；「周期起始日」那一行加高了（约 44dp），点起来不再发虚\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.4\n'
+    '· New My > Data backup: export schedules, todos, templates, alarms and settings into one file; after a reinstall, a new phone or an accidental reset, import that file to restore everything\n'
+    '· Import validates the file first, replaces the current data, and restarts the app once; alarms are re-scheduled from the restored schedule\n'
+    '· The backup includes your saved ringtone; keep the file in a cloud drive or on your computer - exporting after big schedule changes is a good habit\n'
+    '\n'
 'v0.13.3\n'
     '· A tip now unlocks "For supporters": the first item is a short letter, and future extras will live on the same page\n'
     '· The unlock is self-reported: personal payment codes have no callback, so tap "I\'ve paid" and confirm; nothing is locked behind a payment\n'
@@ -157,12 +161,6 @@ const String _changelogEn =
     '· Fix: the next-day / day-before marker on a todo row now only shows when a reminder can actually fire — a paused series or one with no reminder shows none\n'
     '· Copy: the help and release notes now describe the landing rule accurately: a moment later than the shift start but outside the window lands on the day before (ahead of the shift); earlier moments go to whichever side is nearer\n'
     '· Accessibility: the two value rows in the crew card are read as buttons again\n'
-    '\n'
-'v0.12.6\n'
-    '· Reminders on shift-based repeating todos now follow the shift\'s working hours: a 00:00 reminder on a night shift (20:30 to 08:30 next morning) lands at 00:00 the next day instead of the small hours of the shift\'s starting day; moments later than the shift start but outside the window land on the day before, ahead of the shift; earlier moments go to whichever side is nearer\n'
-    '· The todo row now marks that landing (next-day 00:00 / day-before 23:00), the same wording the alarm list uses\n'
-    '· The By shift hint now says how the landing is decided\n'
-    '· Edit schedule > crew settings: the name field no longer takes most of the row, and the cycle start date row is taller (about 44 dp), so it reads as tappable\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

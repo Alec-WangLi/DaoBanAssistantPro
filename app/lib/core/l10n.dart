@@ -192,6 +192,49 @@ class L10n {
   static String get clearResetSubtitle => t(
       '排班、日程、闹钟与模板全清掉，回到刚安装的样子',
       'Clear schedules, events, alarms and templates — back to a fresh install');
+  static String get dataBackup => t('数据备份', 'Data backup');
+  static String get dataBackupSubtitle => t(
+      '导出排班、待办与设置；重装或换机后导入',
+      'Export schedules, todos and settings; import after a reinstall or on a new phone');
+  static String get backupIntro => t(
+      '备份文件包含：排班与班次、按天改班、日程与待办、模板、自定义闹钟、外观设置，以及你保存的铃声。',
+      'The backup contains schedules and shifts, per-day overrides, events and todos, templates, custom alarms, appearance settings and any saved ringtone.');
+  static String get backupExport => t('导出备份', 'Export backup');
+  static String get backupExportSubtitle => t(
+      '保存为 .dshbackup 文件，可放到网盘或电脑',
+      'Save a .dshbackup file to your cloud drive or computer');
+  static String get backupImport => t('导入备份', 'Import backup');
+  static String get backupImportSubtitle => t(
+      '从 .dshbackup 文件恢复，会覆盖当前数据',
+      'Restore from a .dshbackup file; current data will be replaced');
+  static String get backupExporting => t('正在生成备份…', 'Creating backup…');
+  static String get backupImporting => t('正在读取备份…', 'Reading backup…');
+  static String get backupSaved => t('备份已保存', 'Backup saved');
+  static String get backupCanceled => t('已取消', 'Canceled');
+  static String get backupConfirmTitle => t('导入这份备份？', 'Import this backup?');
+  static String backupConfirmContent(String version, String time) => t(
+      '备份来自 v$version，导出时间 $time。\n导入会覆盖当前所有排班、待办、模板、闹钟与设置，且无法撤销。',
+      'The backup is from v$version, exported $time.\nImporting replaces all current schedules, todos, templates, alarms and settings. This cannot be undone.');
+  static String get backupConfirmAction => t('导入', 'Import');
+  static String get backupInvalid =>
+      t('这不是有效的备份文件', 'This is not a valid backup file');
+  static String get backupTooNew => t('备份来自更新版本的 App，请先升级',
+      'The backup comes from a newer version — update the app first');
+  static String get backupTooLarge =>
+      t('备份文件太大，无法导入', 'The backup file is too large to import');
+  static String get backupFailed =>
+      t('备份失败，请重试', 'Backup failed, please try again');
+  static String get backupRestartTitle => t('导入完成', 'Import complete');
+  static String get backupRestartContent => t(
+      'App 需要重启一次才能应用导入的数据。现在重启？',
+      'The app needs to restart once to apply the imported data. Restart now?');
+  static String get backupRestartNow => t('立即重启', 'Restart now');
+  static String get backupLater => t('稍后', 'Later');
+  static String get backupRestartManually => t('已暂存；下次打开 App 时生效',
+      'Saved; it will take effect the next time you open the app');
+  static String get backupHint => t(
+      '建议在每次大改排班后导出一份，并保存到手机之外（网盘 / 电脑）。',
+      'Export after big schedule changes and keep a copy off the phone (cloud drive / computer).');
   static String get version => t('版本', 'Version');
   static String get changelog => t('版本更新', "What's new");
   static String get changelogSubtitle =>

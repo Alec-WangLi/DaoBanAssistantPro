@@ -10,9 +10,17 @@ import 'core/glass/glass.dart';
 import 'core/glass/glass_refraction.dart';
 import 'core/l10n.dart';
 import 'features/alarm/alarm_service.dart';
+import 'features/backup/backup_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 导入的备份要在**任何数据库打开之前**替换库文件（见 backup_service.dart）。
+  // 失败不能拖垮启动：保留旧库，照常进入 App，用户可以在「我的 → 数据备份」重试。
+  try {
+    await BackupService.applyPendingRestore();
+  } catch (e, s) {
+    debugPrint('BackupService: 应用待恢复备份失败：$e\n$s');
+  }
   // 关键：初始化 intl 中文 locale，否则 DateFormat(..., 'zh') 运行期抛异常导致整屏空白
   await initializeDateFormatting('zh');
   // 语言必须在**任何落库之前**定下来：首启播种（seedIfEmpty → defaultSchedule）
