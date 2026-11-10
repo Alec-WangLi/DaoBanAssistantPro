@@ -16,6 +16,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/clock.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
+import '../../core/haptics.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/widgets/glass_action_button.dart';
@@ -143,6 +144,9 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         sourcePath: temp.path,
       );
       if (!mounted) return;
+      // 只有真的存出去了才算「动作落实」；用户在系统选择器里取消（uri == null）
+      // 什么都没发生，不该震。
+      if (uri != null) Haptics.commit();
       showGlassSnack(
         context,
         uri == null ? L10n.backupCanceled : L10n.backupSaved,
@@ -218,6 +222,9 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       });
       await BackupService(db: ref.read(databaseProvider)).stageRestore(bytes);
       if (!mounted) return;
+      // 走到这里说明备份已经校验通过、写进待恢复目录 —— 导入真正落实了。
+      // 后面那个「立即重启」只是生效方式，震在这里而不是按钮上。
+      Haptics.commit();
       setState(() => _busy = false);
 
       final bool? restart = await showGlassDialog<bool>(

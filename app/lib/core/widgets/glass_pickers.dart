@@ -418,7 +418,10 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                                 return Expanded(
                                   child: GestureDetector(
                                     onTap: () {
-                                      Haptics.select();
+                                      // 这里**故意不震**：月份格是「从弹层里选一个
+                                      // 月份」，调用方（日历）拿到结果后会走
+                                      // `_setMonth()`，那一步才发 `select()`。
+                                      // 两处都挂就是一次操作两响。
                                       Navigator.pop(
                                           context, DateTime(_year, month, 1));
                                     },

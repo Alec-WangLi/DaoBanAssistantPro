@@ -486,6 +486,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
 
   /// 换月都要走这里：定方向 + 换月。月份没变就什么都不做（`_today` 在本月内点
   /// 一下不该触发一次动画）。
+  ///
+  /// **触觉也挂在这一处**（2026-11-11 用户点名要的「翻月一记」）：‹ › 箭头与
+  /// 月份选择器都汇到这里，一次翻月恰好一记 `select()`。月份选择器里原来自己
+  /// 那记**已经删掉** —— 留着就是一次操作两响（选中 → 弹层关 → 再走这里）。
   void _setMonth(DateTime m) {
     final next = DateTime(m.year, m.month, 1);
     if (next == _month) return;
@@ -493,18 +497,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       _monthRoll = next.isAfter(_month) ? 1 : -1;
       _month = next;
     });
+    Haptics.select();
   }
 
   void _prev() => _setMonth(DateTime(_month.year, _month.month - 1, 1));
   void _next() => _setMonth(DateTime(_month.year, _month.month + 1, 1));
   void _today() {
     final n = appNow();
+    final today = dateOnly(n);
+    final thisMonth = DateTime(n.year, n.month, 1);
+    // 本月内点「今天」：月份没变、只有选中日回到今天 —— 那也是一次「选中变了」，
+    // 该响；已经停在今天就什么都不响（没携带任何信息）。
+    final changed = thisMonth != _month || today != _selected;
     setState(() {
       // 今天跳回本月要不要滑、往哪边滑，同样按前后关系定。
-      _monthRoll = DateTime(n.year, n.month, 1).isAfter(_month) ? 1 : -1;
-      _month = DateTime(n.year, n.month, 1);
-      _selected = dateOnly(n);
+      _monthRoll = thisMonth.isAfter(_month) ? 1 : -1;
+      _month = thisMonth;
+      _selected = today;
     });
+    if (changed) Haptics.select();
   }
 
   Future<void> _showMonthPicker() async {

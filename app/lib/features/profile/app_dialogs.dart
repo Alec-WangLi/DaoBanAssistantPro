@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.9\n'
+    '· 翻月有回音了：日历的 ‹ › 箭头、「今天」和月份选择器，每真的换一个月震一记；已经停在今天就不震\n'
+    '· 响铃页不再静音：上滑越过阈值关掉、或点「再睡一会」，各有一记确认震动；上滑没到位弹回去则不震\n'
+    '· 备份导出 / 导入成功时震一记\n'
+    '\n'
 'v0.13.8\n'
     '· 时间轮盘跟手了：新建闹钟、改班、重复待办里滚动时 / 分轮盘，每换一格震一记「咔哒」；年月选择器的年份轮盘同样\n'
     '\n'
@@ -85,17 +90,14 @@ const String _changelogZh =
     '· 外观：字号四档、深色模式、16 种班次色 + 自定义取色\n'
     '· 修：冷启动后重复待办的提醒会重新排上；签名校验默认硬拦，避免装出「签名冲突」的包\n'
     '\n'
-'v0.12.11\n'
-    '· 桌面小组件现在会跟着系统的深浅色自动切换了：App 里选「跟随系统」时，系统切到深色 / 浅色，三张卡当场换色，不用再打开 App\n'
-    '· 重复待办的行回到它属于的那个班次那天：上夜班 20:30–次日 08:30 配 02:00 的待办，行挂在上夜班那天，提醒仍在次日 02:00；副标题把「上夜班 · 次日 02:00」一起写出来\n'
-    '· 修：勾选（或删掉）重复待办之后，那一次的提醒不再弹出 —— 以前打勾了，到点还会响\n'
-    '· 修：勾错了点「撤销」，那一次的提醒会跟着回来\n'
-    '· 修：App 冷启动后会重新排上重复待办的提醒 —— 以前要打开待办页才回来\n'
-    '· 说明：旧版跨午夜的重复待办在升级后会挪回班次那天；极少数旧系列在升级后可能少出现一次，再下一次就恢复正常\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.9\n'
+    '· Month switching clicks now: the ‹ › arrows, Today and the month picker tick once per real change; tapping Today while already there stays silent\n'
+    '· The alarm screen is no longer silent: swiping up past the threshold to stop, or tapping Snooze, each give one confirmation tap; a short swipe that snaps back does not\n'
+    '· A tap when a backup is exported or imported successfully\n'
+    '\n'
 'v0.13.8\n'
     '· The time wheels click now: scrolling the hour / minute wheel in a new alarm, a schedule edit or a repeating todo ticks once per item; the year wheel in the month picker does the same\n'
     '\n'
@@ -139,14 +141,6 @@ const String _changelogEn =
     '· Todos: completed items move into "N completed" and come back when unchecked; the edit pencil is gone\n'
     '· Appearance: four font sizes, dark mode, 16 shift colours plus a custom picker\n'
     '· Fixes: recurring reminders are re-scheduled after a cold start; the signature check now fails closed, so a mismatched APK cannot be published\n'
-    '\n'
-'v0.12.11\n'
-    '· The home-screen widgets now follow the system light / dark theme: with the app set to Follow system, all three cards switch as soon as the system does, without opening the app\n'
-    '· A recurring todo now sits on the shift day it belongs to: a 02:00 todo on a 20:30-08:30 night shift lives on the shift day, while its reminder still fires at 02:00 the next day; the subtitle spells out "Night - next day 02:00"\n'
-    '· Fix: checking off (or deleting) a recurring todo now stops that occurrence from ringing - it used to fire anyway\n'
-    '· Fix: tapping Undo after a mistaken check restores that reminder\n'
-    '· Fix: a cold start now re-schedules recurring reminders - before, they only came back after opening the todo page\n'
-    '· Note: existing cross-midnight todos move back to their shift day on upgrade; a rare old series may skip one occurrence once, then continue normally\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
