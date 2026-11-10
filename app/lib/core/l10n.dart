@@ -1160,6 +1160,15 @@ class L10n {
         t('选中的那天有待办时，日历底栏信息卡会显示「N 项待办」',
             'When the selected day has todos, the calendar\'s info card shows "N todos"'),
       ];
+  static String get guideBackupTitle => t('数据备份', 'Data backup');
+  static List<String> get guideBackupDesc => [
+        t('「我的 → 数据备份」把排班、待办、模板、闹钟、外观设置与自选铃声导出成一个 .dshbackup 文件',
+            'Me → Data backup exports schedules, todos, templates, alarms, appearance settings and your ringtone into one .dshbackup file'),
+        t('重装、换机或误清空后，选这个文件导入就能恢复；导入会覆盖当前数据并重启一次 App',
+            'After a reinstall, a new phone or an accidental reset, import that file to restore it; importing replaces current data and restarts the app once'),
+        t('导入后闹钟会按恢复的排班重新排；备份文件建议放到网盘或电脑',
+            'Alarms are re-scheduled from the restored data; keep the backup file in a cloud drive or on your computer'),
+      ];
   static String get guideAppearanceTitle => t('外观', 'Appearance');
   static List<String> get guideAppearanceDesc => [
         t('「我的 → 外观」可切跟随系统 / 浅色 / 深色，选 5 种主色调，中英文切换',

@@ -30,7 +30,7 @@
 ```bash
 cd app
 flutter pub get
-flutter test          # 1242 条
+flutter test          # 全套用例（条数以 ci.yml 的 EXPECTED_TESTS 为准）
 flutter analyze       # 必须 No issues found
 ```
 

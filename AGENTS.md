@@ -64,9 +64,9 @@
 
 ### main 的 CI：已随 v0.13.0 收敛（2026-11-10 复核，旧结论作废）
 
-2026-11-06 记过「main 连续四次红、根因是比 beta 少 148 行 `ensureVisualFonts()`」。**这条已经不成立：** v0.13.0 把 beta 整体合进了 main，`app/tool/visual/visual_harness.dart` 在 main 与 beta 逐字节相同（`git diff --stat origin/main origin/beta -- app/tool/visual/visual_harness.dart` 空输出），main 最新提交 `449f2d9` 的 CI 是 success。**以后看到 main 的 CI 红，按真 bug 查，别再往这条旧结论上靠。**
+2026-11-06 记过「main 连续四次红、根因是比 beta 少 148 行 `ensureVisualFonts()`」。**这条已经不成立：** v0.13.0 把 beta 整体合进了 main，`app/tool/visual/visual_harness.dart` 在 main 与 beta 逐字节相同（`git diff --stat origin/main origin/beta -- app/tool/visual/visual_harness.dart` 空输出），main 的 CI 已是 success。**以后看到 main 的 CI 红，按真 bug 查，别再往这条旧结论上靠。**
 
-- **`ci.yml` 的 `EXPECTED_TESTS` 仍然是分支相关项，不是常量**：main 与 beta 现在都是 1257（v0.13.0 合并后两边同一份代码），但 beta 下一次加用例后两边会再次分开，改一边要记得另一边。**基线只认 CI 日志里那行「用例数 N」**，推算值不能当基线（2026-11-06 按「1242 − 113」推成 1129，实测 1096）。
+- **`ci.yml` 的 `EXPECTED_TESTS` 仍然是分支相关项，不是常量**：2026-11-10 时 beta **1283**、main **1257**（v0.13.0 之后 beta 加了用例），改一边要记得另一边。**基线只认 CI 日志里那行「用例数 N」**，推算值不能当基线（2026-11-06 按「1242 − 113」推成 1129，实测 1096）。
 - **`visual.yml`（每日视觉巡场）已于 2026-11-10 恢复**（`gh workflow enable visual.yml` + 手动 dispatch 一次，run `42652960542`）：**1284 条断言全过、写出 337 张图、artifact 89.9 MB**，不是当初那种 0 张图的假绿。判绿**不能只看结论** —— `continue-on-error: true` 是设计取舍，结论永远是 success。**数图不用下载 89 MB 的 artifact**：`gh run view <id> --log | grep -aoE 'build/visual/[^ ]+\.png' | sort -u | wc -l`，出图那一步逐张打了路径。
 
 
@@ -183,9 +183,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.6(+193) 测试版**：文案校对 —— 官网更新日志补到最新、帮助页补「数据备份」、README / 产品规格 / BUILD 的过时说法同步；新增 `site_copy_test` 护栏（App 版本号必须出现在 `site/index.html`）。
 - **v0.13.5(+192) 测试版**：修导入备份后「立即重启」只杀进程、不重新拉起（Android 14+ 对「进程已死 + PendingIntent 拉起 Activity」判 `BAL_BLOCK`；改为不杀进程，`NEW_TASK|CLEAR_TASK` 起新任务，让新 FlutterEngine 重跑 `main()`）；导入后把 `lastSeenVersion` 写成当前版本，避免先弹更新日志。
 - **v0.13.4(+191) 测试版**：新增「我的 → 数据备份」（导出 / 导入 `.dshbackup`：排班、待办、模板、闹钟、设置与自选铃声；导入先校验、覆盖后冷重启生效，并按新库重排闹钟）；单测 1273 → **1282**。
-- **v0.13.3(+190) 测试版**：打赏后解锁「支持者专属」——自报「我已完成支付」+ 本地状态，首期是一封支持者来信（以后的新内容继续放这一页）；「我的 → 支持」变两行（打赏 / 支持者专属），清空重置保留支持者状态。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）

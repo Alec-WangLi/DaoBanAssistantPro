@@ -41,6 +41,9 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.6\n'
+    '· 文案校对：官网「更新日志」补到最新版本；「我的 → 使用帮助」补上「数据备份」；README、产品规格与构建文档里的过时数字、以及规格里「不做数据导入导出」的旧说法一并更正\n'
+    '\n'
 'v0.13.5\n'
     '· 修：导入备份后点「立即重启」，App 现在会自己重新打开；此前只关闭、不重启，需要手动再点一次图标\n'
     '· 导入后不会先弹一遍「版本更新」——恢复的数据不该被当成刚升级\n'
@@ -93,14 +96,12 @@ const String _changelogZh =
     '· 待办行右边那颗铅笔去掉了 —— 整行本来就能点开编辑，那颗图标只会让人以为这里有两件事\n'
     '· 夜班的重复待办挂到了它真正要提醒的那天 —— 比如 20:30 上班、提醒设在 0 点，以前行在上班当天就冒出来，现在跟提醒一起落在次日；行上那条「次日 00:00」的小字也随之不再需要\n'
     '\n'
-'v0.12.8\n'
-    '· 底栏那枚玻璃胶囊的边缘现在会把背后的内容轻轻「弯」过去一点 —— 它读起来像一块有厚度的玻璃，而不是一张磨砂纸。这一层只在给得住它的手机上出现，别的机型与以前一模一样\n'
-    '· 顺着这条，胶囊边缘那圈画出来的彩色收掉了：真玻璃几乎没有虹彩，那圈颜色在咱们这套极简黑白底上只能靠画。方向感现在由上面那层弯折承担\n'
-    '· 分段器与开关一个像素都没动 —— 它们小得多，同一套弯折放到 46dp 的开关上会让整颗钮抖起来\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.6\n'
+    '· Copy pass: the website changelog is current again, the in-app guide covers Data backup, and stale numbers plus the old "no data export" note in the README, product spec and build guide are fixed\n'
+    '\n'
 'v0.13.5\n'
     '· Fix: after importing a backup, "Restart now" actually reopens the app; before, it only closed and left you to tap the icon again\n'
     '· Importing no longer pops the "what\'s new" dialog first — restored data is not an upgrade\n'
@@ -152,11 +153,6 @@ const String _changelogEn =
     '· At very large text sizes the calendar no longer grows a scrollbar over a one- or two-pixel shortfall per row (a larger shortfall still scrolls - the minimum cell height is unchanged)\n'
     '· The pencil on todo rows is gone - the whole row already opens the editor, and the icon only suggested there were two things to tap\n'
     '· A recurring todo on a night shift now sits on the day it really reminds you: with a 20:30 shift and a 00:00 reminder the row used to appear on the shift day and now appears with the reminder on the next day. The small "next day 00:00" label on such rows is gone with it\n'
-    '\n'
-'v0.12.8\n'
-    '· The edge of the nav bar capsule now bends the content behind it a little, so it reads as a piece of glass with thickness rather than a sheet of frosted paper. That layer only appears on phones that can render it; everything else looks exactly as before\n'
-    '· The painted colour rim along that capsule is gone with it: real glass has almost no iridescence, and on this flat black-and-white background that ring could only ever be drawn. The sense of direction now comes from the bending layer\n'
-    '· Segments and switches are unchanged to the pixel - they are far smaller, and the same bending on a 46 dp switch would make the whole knob wobble\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

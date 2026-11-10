@@ -128,7 +128,7 @@
 ### E11. 测试条数只增不减；EXPECTED_TESTS 同步
 - **原则**：`flutter test`（即 `app/test/`）条数只增不减；改了条数同步 `.github/workflows/ci.yml` 的
   `EXPECTED_TESTS`（beta 填 beta 的值、main 填 main 的值）。
-- **落到哪**：`.github/workflows/ci.yml:22`（beta `'1242'`；main `1096`）。
+- **落到哪**：`.github/workflows/ci.yml` 的 `EXPECTED_TESTS`（beta / main 各有一个值，随分支变化；改一边记得另一边）。
 - **谁守门**：CI 守卫——统计法 `:133-147`：`set -o pipefail` → `flutter test --reporter expanded 2>&1 | tee` →
   取 `^[0-9]{2}:[0-9]{2} \+[0-9]+` 的最后一条 → 严格相等比较——**机器拦**。
 - **例外与豁免**：删测试必须同时下调 `EXPECTED_TESTS` 并在提交信息里写为什么删（"只增不减"是默认，不是铁律）。

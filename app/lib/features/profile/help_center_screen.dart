@@ -78,7 +78,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     );
   }
 
-  /// 九条功能块简介。
+  /// 十条功能块简介。
   ///
   /// **每条必须是一个 widget 而不是数据行** —— 「桌面小组件」那一条要挂
   /// [GlobalKey]（[scrollToWidgets] 的落点），而 key 是建 widget 时给的。
@@ -100,6 +100,10 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
           icon: Icons.event_note_outlined,
           title: L10n.guideTodoTitle,
           lines: L10n.guideTodoDesc),
+      HelpEntry(
+          icon: Icons.backup_outlined,
+          title: L10n.guideBackupTitle,
+          lines: L10n.guideBackupDesc),
       HelpEntry(
           key: _widgetsKey,
           icon: Icons.widgets_outlined,
