@@ -5,8 +5,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/features/profile/donate_sheet.dart';
+import 'package:shiftassistantpro/features/profile/supporter_store.dart';
 
 const _settingsChannel = MethodChannel('com.daoban.shiftassistantpro/settings');
 
@@ -97,5 +99,37 @@ void main() {
 
     expect(find.text(L10n.donateScanTitle), findsOneWidget);
     expect(find.text(L10n.donateAmountHint(5)), findsOneWidget);
+  });
+
+  testWidgets('我已完成支付后写入解锁状态并关掉弹层', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const Scaffold(body: DonateSheet()),
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.donatePaidUnlock));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.donateUnlockConfirm));
+    await tester.pumpAndSettle();
+
+    expect(await readSupporterUnlocked(), isTrue);
+    // 弹层这一层已经关掉，回到宿主。
+    expect(find.text('open'), findsOneWidget);
   });
 }

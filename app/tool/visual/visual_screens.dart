@@ -29,6 +29,7 @@ import 'package:shiftassistantpro/features/profile/donate_sheet.dart';
 import 'package:shiftassistantpro/features/profile/help_center_screen.dart';
 import 'package:shiftassistantpro/features/profile/help_faq_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
+import 'package:shiftassistantpro/features/profile/supporter_screen.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_series_editor.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
@@ -58,6 +59,10 @@ Map<String, Object> screenExtraPrefs(String slug) => switch (slug) {
       '47_ringing_liquid' ||
       '48_calendar_lens' =>
         const <String, Object>{'liquidGlass': true},
+      // 支持者已解锁态：SupportSection 在 initState 里读 prefs，靠这一行
+      // 让工装拍到「信」而不是「锁」。
+      '73_support_unlocked' =>
+        const <String, Object>{'supporterUnlocked': true},
       _ => const <String, Object>{},
     };
 
@@ -637,6 +642,20 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const _DonateQrHost(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 支持者专属：第一封来信 + 以后继续加内容的留坑说明。
+    slug: '72_supporter',
+    title: '支持者专属',
+    build: (db) async => const SupporterScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「我的 → 支持」的已解锁态（默认那张 70 是锁定态）。
+    slug: '73_support_unlocked',
+    title: '我的 · 支持者已解锁',
+    build: (db) async => const _SupportUnlockedHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -1031,6 +1050,27 @@ class _DonateQrHost extends StatelessWidget {
             kind: DonatePayKind.wechat,
             amount: 10,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「我的 → 支持」已解锁态的宿主 —— **只为工装存在，不进 `lib/`**。
+class _SupportUnlockedHost extends StatelessWidget {
+  const _SupportUnlockedHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
+              AppTokens.spaceMd, AppTokens.spaceLg, AppTokens.space2xl),
+          children: [
+            SectionHeading(L10n.sectionSupport),
+            const SupportSection(),
+          ],
         ),
       ),
     );

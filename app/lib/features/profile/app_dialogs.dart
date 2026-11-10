@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.3\n'
+    '· 打赏后可解锁「支持者专属」：首期是一封写给支持者的信，以后的新内容也会放在这一页\n'
+    '· 解锁是自报的：个人收款码没有支付回调，点「我已完成支付」并确认即可；未支付也不影响任何功能\n'
+    '· 「清空重置」会保留支持者状态\n'
+    '\n'
 'v0.13.2\n'
     '· 新增「关于」页：作者、版本、官网、开源仓库与问题反馈都在里面\n'
     '· 新增打赏入口：支付宝一键打开收款页，微信扫码；金额可选 5 / 10 / 20 元或自定义\n'
@@ -96,15 +101,14 @@ const String _changelogZh =
     '· 「按班次」规则的说明里补了一句落点规则\n'
     '· 编辑排班 → 班组设置：「班组名」输入框不再占掉大半行；「周期起始日」那一行加高了（约 44dp），点起来不再发虚\n'
     '\n'
-'v0.12.5\n'
-    '· 修：弹窗里的值行（待办的时间与提醒、闹钟的时间与日期）右侧的值与箭头现在贴齐右边；200dp 小窗下标签与值改成上下两行，标签不再被截掉\n'
-    '· 修：班组设置折叠时那行班组名，8 个长名字装不下会改成「N 个班组 · 点开可改名」，不再把字裁掉；清空的班组名也不会留下「 · 二班」这种空段\n'
-    '· 修：小窗 + 特大字号下，调过班的那天信息卡不再把班次名截成「白…」\n'
-    '· 无障碍：弹窗里的值行重新被读成按钮\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.3\n'
+    '· A tip now unlocks "For supporters": the first item is a short letter, and future extras will live on the same page\n'
+    '· The unlock is self-reported: personal payment codes have no callback, so tap "I\'ve paid" and confirm; nothing is locked behind a payment\n'
+    '· Clear & reset keeps your supporter status\n'
+    '\n'
 'v0.13.2\n'
     '· New About page: author, version, official website, source code and issue tracker\n'
     '· New support entry: Alipay opens the payment page directly; WeChat shows a QR code; ¥5 / ¥10 / ¥20 or a custom amount\n'
@@ -159,12 +163,6 @@ const String _changelogEn =
     '· The todo row now marks that landing (next-day 00:00 / day-before 23:00), the same wording the alarm list uses\n'
     '· The By shift hint now says how the landing is decided\n'
     '· Edit schedule > crew settings: the name field no longer takes most of the row, and the cycle start date row is taller (about 44 dp), so it reads as tappable\n'
-    '\n'
-'v0.12.5\n'
-    '· Fix: value rows in dialogs (todo time and reminder, alarm time and date) now put the value and arrow flush right; at 200 dp the label and value stack into two lines instead of the label being clipped\n'
-    '· Fix: the collapsed crew subtitle falls back to "N crews · tap to rename" when eight long custom names do not fit, instead of clipping; an emptied name no longer leaves a stray separator\n'
-    '· Fix: in a small window at the largest text size, the info card no longer cuts the shift name to "D…" on an adjusted day\n'
-    '· Accessibility: value rows in dialogs are announced as buttons again\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

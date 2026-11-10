@@ -21,10 +21,12 @@ import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_input.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../alarm/alarm_service.dart';
+import 'supporter_store.dart';
 
 /// 支付宝收款码里的链接（从用户提供的 `assets/donate/alipay.png` 解出）。
 /// 只用于 `alipays://` 唤起，不在界面上展示。
@@ -34,8 +36,11 @@ const String alipayQrContent = 'https://qr.alipay.com/fkx19195ffwze9uwenx5maa';
 const List<int> donatePresetAmounts = [5, 10, 20];
 
 /// 打开打赏弹层。入口在「我的 → 支持」。
-void showDonateSheet(BuildContext context) {
-  showGlassSheet<void>(
+///
+/// 返回 `true` = 用户在这层里完成了「我已完成支付」并解锁了支持者专属内容；
+/// 调用方据此决定要不要直接把信推给他看。
+Future<bool?> showDonateSheet(BuildContext context) {
+  return showGlassSheet<bool>(
     context: context,
     builder: (_) => const GlassPanel(
       solid: true,
@@ -68,6 +73,9 @@ class _DonateSheetState extends State<DonateSheet> {
   /// 上一次唤起支付宝失败了。失败的二维码弹窗里不再放「打开支付宝」，
   /// 否则用户每点一次就又走一遍同样的失败路径、叠一层弹窗。
   bool _alipayFailed = false;
+
+  /// 「我已完成支付」正在走确认 / 写 prefs，防止连点叠两个确认弹窗。
+  bool _unlockBusy = false;
 
   int get _selectedIndex => _custom
       ? donatePresetAmounts.length
@@ -110,6 +118,51 @@ class _DonateSheetState extends State<DonateSheet> {
   }
 
   void _payWechat() => _showQr(DonatePayKind.wechat);
+
+  /// 「我已完成支付」：个人收款码没有回调，只能自报。确认后写本地状态，
+  /// 然后把这一层关掉并回传 `true`，让「我的」页直接把支持者信推给用户。
+  Future<void> _confirmUnlock() async {
+    if (_unlockBusy) return;
+    _unlockBusy = true;
+    try {
+      final confirmed = await showGlassDialog<bool>(
+        context: context,
+        builder: (dialogContext) => GlassDialog(
+          title: L10n.donateUnlockTitle,
+          content: Text(
+            L10n.donateUnlockContent,
+            style: AppTokens.rowSecondary.copyWith(height: 1.45),
+          ),
+          actions: [
+            GlassActionButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              label: L10n.donateUnlockCancel,
+            ),
+            const SizedBox(width: AppTokens.spaceSm),
+            GlassActionButton(
+              variant: GlassActionVariant.primary,
+              onPressed: () => Navigator.pop(dialogContext, true),
+              label: L10n.donateUnlockConfirm,
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      try {
+        await unlockSupporter();
+      } catch (_) {
+        // 写 prefs 失败极少见；不静默 —— 用户点了「已完成」却没解锁，要告诉他。
+        if (!mounted) return;
+        showGlassSnack(context, L10n.donateUnlockFailed,
+            icon: Icons.error_outline);
+        return;
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } finally {
+      _unlockBusy = false;
+    }
+  }
 
   void _showQr(DonatePayKind kind) {
     showGlassDialog<void>(
@@ -196,6 +249,32 @@ class _DonateSheetState extends State<DonateSheet> {
                 Text(
                   L10n.donateWechatHint,
                   style: AppTokens.microText.copyWith(color: muted),
+                ),
+                const SizedBox(height: AppTokens.spaceLg),
+                Center(
+                  child: IntrinsicWidth(
+                    child: GlassPill(
+                      onTap: _confirmUnlock,
+                      height: 36,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.lock_open_outlined,
+                                size: AppTokens.iconSm,
+                                color: Theme.of(context).colorScheme.primary),
+                            const SizedBox(width: AppTokens.gapIconText),
+                            Text(
+                              L10n.donatePaidUnlock,
+                              style: AppTokens.labelSecondary.copyWith(
+                                  color: Theme.of(context).colorScheme.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),

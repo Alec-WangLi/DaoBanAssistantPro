@@ -24,6 +24,8 @@ import 'about_screen.dart';
 import 'app_dialogs.dart';
 import 'donate_sheet.dart';
 import 'help_center_screen.dart';
+import 'supporter_screen.dart';
+import 'supporter_store.dart';
 
 /// 「关于」卡：关于页入口 + 检查更新 + 版本更新 + 使用帮助 + 查看日志。
 class AboutSection extends StatelessWidget {
@@ -152,25 +154,93 @@ class AboutSection extends StatelessWidget {
   }
 }
 
-/// 「支持」卡：打赏入口。放在「关于」后面单独一节，是因为它不是设置项，
-/// 而是一个明确的「愿意支持就支持」的动作。
-class SupportSection extends StatelessWidget {
+/// 「支持」卡：打赏入口 + 支持者专属入口。
+///
+/// 支持者专属当前是「打赏后自报解锁」：个人收款码没有支付回调，App 不可能
+/// 知道钱到没到账，所以只认用户在打赏弹层里点的「我已完成支付」。这是有意
+/// 的取舍 —— 打赏是自愿的，未支付也不影响任何功能，这一行只决定显示锁还是信。
+class SupportSection extends StatefulWidget {
   const SupportSection({super.key});
+
+  @override
+  State<SupportSection> createState() => _SupportSectionState();
+}
+
+class _SupportSectionState extends State<SupportSection> {
+  bool _unlocked = false;
+
+  /// 打赏弹层开着 / 刚解锁正在推信 —— 防止连点叠两层。
+  bool _opening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final unlocked = await readSupporterUnlocked();
+    if (!mounted) return;
+    setState(() => _unlocked = unlocked);
+  }
+
+  Future<void> _openDonate() async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      final unlocked = await showDonateSheet(context);
+      if (!mounted) return;
+      await _load();
+      if (unlocked != true || !mounted) return;
+      showGlassSnack(context, L10n.donateUnlocked,
+          icon: Icons.favorite_outline);
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SupporterScreen()),
+      );
+    } finally {
+      _opening = false;
+    }
+  }
+
+  void _openSupporter() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SupporterScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return GlassTile(
       translucentFill: false,
       padding: EdgeInsets.zero,
-      child: GlassPressable(
-        child: ListTile(
-          leading: const Icon(Icons.local_cafe_outlined),
-          title: Text(L10n.supportDeveloper),
-          subtitle: Text(L10n.supportDeveloperSubtitle),
-          trailing: const Icon(Icons.chevron_right_outlined,
-              key: Key('profile-chevron-donate')),
-          onTap: () => showDonateSheet(context),
-        ),
+      child: Column(
+        children: [
+          GlassPressable(
+            child: ListTile(
+              leading: const Icon(Icons.local_cafe_outlined),
+              title: Text(L10n.supportDeveloper),
+              subtitle: Text(L10n.supportDeveloperSubtitle),
+              trailing: const Icon(Icons.chevron_right_outlined,
+                  key: Key('profile-chevron-donate')),
+              onTap: _openDonate,
+            ),
+          ),
+          const Divider(height: 1),
+          GlassPressable(
+            child: ListTile(
+              leading: Icon(_unlocked
+                  ? Icons.workspace_premium_outlined
+                  : Icons.lock_outline),
+              title: Text(L10n.supporterOnly),
+              subtitle: Text(_unlocked
+                  ? L10n.supportUnlockedHint
+                  : L10n.supportUnlockHint),
+              trailing: const Icon(Icons.chevron_right_outlined,
+                  key: Key('profile-chevron-supporter')),
+              onTap: _unlocked ? _openSupporter : _openDonate,
+            ),
+          ),
+        ],
       ),
     );
   }

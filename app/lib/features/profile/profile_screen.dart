@@ -25,6 +25,7 @@ import '../alarm/alarm_service.dart';
 import '../calendar/schedule_management_screen.dart';
 import 'about_section.dart';
 import 'help_center_screen.dart';
+import 'supporter_store.dart';
 
 /// 「我的」页：外观（主题/主色调）、数据（清空重置）、关于。
 class ProfileScreen extends ConsumerWidget {
@@ -341,7 +342,11 @@ class ProfileScreen extends ConsumerWidget {
       await repo.clearAll();
       await AlarmService.clearRingtoneFile();
       final sp = await SharedPreferences.getInstance();
+      // 支持者解锁状态是**唯一保留项**：打赏是自愿的，但用户不该因为一次
+      // 「清空重置」丢掉自己支持过的记录。清完 prefs 再把它写回去。
+      final wasSupporter = sp.getBool(kSupporterUnlockedKey) ?? false;
       await sp.clear();
+      if (wasSupporter) await sp.setBool(kSupporterUnlockedKey, true);
       ref.read(appSettingsProvider.notifier).resetToDefaults();
       // **放在清 prefs 之后**：这一步会把上面几样一起算进推给桌面的快照里。
       await AlarmService.rescheduleAll(repo);

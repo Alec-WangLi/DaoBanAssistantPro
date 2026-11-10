@@ -337,6 +337,41 @@ class L10n {
       '没能打开支付宝，请用支付宝扫下面的二维码',
       'Could not open Alipay — scan the QR code below instead');
 
+  // 支持者专属（打赏后自报解锁）
+  static String get supporterOnly => t('支持者专属', 'For supporters');
+  static String get supportUnlockHint =>
+      t('打赏后解锁 · 首期是一封信', 'Unlocks after a tip — the first is a letter');
+  static String get supportUnlockedHint =>
+      t('一封写给支持者的信', 'A letter to supporters');
+  static String get donatePaidUnlock => t('我已完成支付', "I've paid");
+  static String get donateUnlockTitle => t('已完成支付？', 'Payment complete?');
+  static String get donateUnlockContent => t(
+      '打赏是自愿的，未支付也不影响使用。确认你已完成支付，就能解锁支持者专属内容。',
+      'Tips are optional and nothing is locked behind them. Confirm you have paid to unlock the supporter content.');
+  static String get donateUnlockCancel => t('还没有', 'Not yet');
+  static String get donateUnlockConfirm => t('已完成', 'Done');
+  static String get donateUnlocked =>
+      t('已解锁支持者专属内容', 'Supporter content unlocked');
+  static String get donateUnlockFailed =>
+      t('没能保存解锁状态，请重试', 'Could not save the unlock — try again');
+  static String get supporterTitle => t('支持者专属', 'For supporters');
+  static String get supporterLetterTitle =>
+      t('第一封支持者来信', 'The first letter');
+  static String get supporterLetterBody => t(
+      '谢谢你愿意为这个 App 花一杯奶茶的钱。\n\n'
+      '倒班助手Pro 没有广告，没有会员，也没有后台。它只是把倒班的人每天要算的那几件事 —— 今天什么班、几点该起、交班要记住什么 —— 老老实实做好。\n\n'
+      '你的支持不会解锁更多功能：该有的功能本来就会给所有人。它只是让我知道，这件事值得继续做下去。\n\n'
+      '以后这里会放一些只给支持者的小东西 —— 也许是一封更新手记，也许是一个提前体验的新版本。现在先欠着。\n\n'
+      '—— Alec',
+      'Thank you for spending the price of a milk tea on this app.\n\n'
+      'Shift Assistant Pro has no ads, no membership and no server. It just does the few things a shift worker needs to work out every day — which shift today, when to get up, what to hand over — as plainly as it can.\n\n'
+      'Your support does not unlock more features; everything the app should do is available to everyone. It just tells me this is worth continuing.\n\n'
+      'One day there will be small things here for supporters only — a note with an update, perhaps an early look at a new version. For now, I owe you one.\n\n'
+      '— Alec');
+  static String get supporterMoreComing => t(
+      '以后的支持者专属内容会继续放在这一页。',
+      'More supporter-only things will land on this page.');
+
   // 待办（日程）
   static String get noEvents => t('还没有待办事项，点右下角添加', 'No todos yet, tap + to add');
 
