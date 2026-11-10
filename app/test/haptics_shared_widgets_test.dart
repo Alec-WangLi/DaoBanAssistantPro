@@ -102,9 +102,13 @@ void main() {
     expect(fired, hasLength(1));
   });
 
-  testWidgets('时间选择器：拨滚轮不震，点确定才震一次', (tester) async {
-    // 这一条是 spec §6.3 点名的「滚轮不震」，也是这套设计最容易犯的错 ——
-    // 把触觉挂到 `onSelectedItemChanged` 上，拨一次滚轮会连震十几下。
+  testWidgets('时间选择器：每换一格震一次，点确定再一记', (tester) async {
+    // 2026-11-10 用户拍板改的口径：旧版是「滚轮一律不震」，现在改成
+    // **吸附到新的一格就震一记**（iOS 时间轮盘那种「哒、哒、哒」）。
+    //
+    // 两者的分界不是「震不震」，而是**震在哪**：挂在 `onSelectedItemChanged`
+    // 上 = 选中项真的变了才响；挂在滚动过程（每帧）上 = 拨一次连震十几下，
+    // 那件事仍然禁止 —— 所以这条用例钉的是「格数 == 次数」，不是「有震就行」。
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Builder(
@@ -121,16 +125,20 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    // 拨滚轮：一格都不该震
     final wheel = find.byType(ListWheelScrollView);
     expect(wheel, findsWidgets, reason: '时间选择器应该是滚轮');
+
+    // 拨滚轮：换过几格就该有几记（80px / 每格 40px，至少一格）
     await tester.drag(wheel.first, const Offset(0, 80));
     await tester.pumpAndSettle();
-    expect(fired, isEmpty, reason: '滚动不是提交，绝不能震');
+    expect(fired, isNotEmpty, reason: '滚轮每换一格都该有一记「咔哒」');
+    final ticks = fired.length;
+    expect(ticks, greaterThanOrEqualTo(1));
 
-    // 点确定：一次
+    // 点确定：提交那一记单独加，不合并、也不重复
     await tester.tap(find.text(L10n.confirm));
     await tester.pumpAndSettle();
-    expect(fired, hasLength(1), reason: '确定那一处才是提交点');
+    expect(fired, hasLength(ticks + 1),
+        reason: '确定是提交点，单独一记，与滚轮的格数无关');
   });
 }

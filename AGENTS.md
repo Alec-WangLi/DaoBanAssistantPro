@@ -184,9 +184,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.8(+195) 测试版**：选择器滚轮换格震一记 `select`（时/分轮盘 + 年月选择器的年份轮盘），口径从「滚轮一律不震」改成「只在选中项真的变了时震」；用例与 D6 同步。
 - **v0.13.7(+194) 测试版**：触觉改走原生通道点播设备自己的预定义效果（`EFFECT_CLICK` / `EFFECT_HEAVY_CLICK`），不再用 Flutter 那条会被小米 HAL 回退成 70ms TICK 的路径；「关于」页开发者名写全为 Alexander Wang（简称 Alec）；真机核对高刷自适应（120Hz 机型动画时跑满 120、静止回落 60）。单测 1284 → 1287。
 - **v0.13.6(+193) 测试版**：文案校对 —— 官网更新日志补到最新、帮助页补「数据备份」、README / 产品规格 / BUILD 的过时说法同步；新增 `site_copy_test` 护栏（App 版本号必须出现在 `site/index.html`）。
-- **v0.13.5(+192) 测试版**：修导入备份后「立即重启」只杀进程、不重新拉起（Android 14+ 对「进程已死 + PendingIntent 拉起 Activity」判 `BAL_BLOCK`；改为不杀进程，`NEW_TASK|CLEAR_TASK` 起新任务，让新 FlutterEngine 重跑 `main()`）；导入后把 `lastSeenVersion` 写成当前版本，避免先弹更新日志。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）

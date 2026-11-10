@@ -46,7 +46,16 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
     return CupertinoPicker(
       scrollController: FixedExtentScrollController(initialItem: initialItem),
       itemExtent: 40,
-      onSelectedItemChanged: onChanged,
+      // 每吸附到新的一格震一记「咔哒」（2026-11-10 用户拍板）。
+      //
+      // 旧版这里是「滚轮一律不震」，怕的是把触觉挂到滚动**过程**上 —— 那会拨
+      // 一次连震十几下。`onSelectedItemChanged` 不是那个东西：它只在**选中项
+      // 真的变了**时回调一次，手感正是 iOS 时间轮盘那种「哒、哒、哒」。滚动
+      // 过程中每一帧都震才是要避免的，那件事仍然禁止。
+      onSelectedItemChanged: (i) {
+        Haptics.select();
+        onChanged(i);
+      },
       selectionOverlay: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppTokens.radiusM),
@@ -366,8 +375,11 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                       scrollController: FixedExtentScrollController(
                           initialItem: _year - _minYear),
                       itemExtent: 40,
-                      onSelectedItemChanged: (i) =>
-                          setState(() => _year = _minYear + i),
+                      onSelectedItemChanged: (i) {
+                        // 与时间轮盘同一口径：换了一年才震，滚动过程不震。
+                        Haptics.select();
+                        setState(() => _year = _minYear + i);
+                      },
                       selectionOverlay: Container(
                         decoration: BoxDecoration(
                           borderRadius:

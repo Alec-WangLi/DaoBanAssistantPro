@@ -41,6 +41,9 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.8\n'
+    '· 时间轮盘跟手了：新建闹钟、改班、重复待办里滚动时 / 分轮盘，每换一格震一记「咔哒」；年月选择器的年份轮盘同样\n'
+    '\n'
 'v0.13.7\n'
     '· 触觉不再是「嗡嗡」的一段长震：开关、胶囊段、确认按钮改用系统自己调好的短促「咔哒」，与桌面按图标是同一种波形；不支持这套波形的机型自动回退，不会没声音\n'
     '· 「关于」页的开发者名写全了：Alexander Wang（简称 Alec）\n'
@@ -90,13 +93,12 @@ const String _changelogZh =
     '· 修：App 冷启动后会重新排上重复待办的提醒 —— 以前要打开待办页才回来\n'
     '· 说明：旧版跨午夜的重复待办在升级后会挪回班次那天；极少数旧系列在升级后可能少出现一次，再下一次就恢复正常\n'
     '\n'
-'v0.12.10\n'
-    '· 底栏那圈边光重新配了亮度：深色档下不再白得发亮，浅色档下那条细边也终于看得清 —— 以前它几乎融进底色里\n'
-    '· 按住开关拖动、上滑关闹钟的时候，那颗圆钮的两头一直是真圆了：之前会被拉成一头尖一头胖的椭圆\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.8\n'
+    '· The time wheels click now: scrolling the hour / minute wheel in a new alarm, a schedule edit or a repeating todo ticks once per item; the year wheel in the month picker does the same\n'
+    '\n'
 'v0.13.7\n'
     '· Haptics no longer hum: switches, segments and confirm buttons use the crisp click the system tuned for the device - the same waveform the launcher uses for icons - with an automatic fallback on phones that lack it\n'
     '· The About page spells out the developer name: Alexander Wang (Alec)\n'
@@ -145,10 +147,6 @@ const String _changelogEn =
     '· Fix: tapping Undo after a mistaken check restores that reminder\n'
     '· Fix: a cold start now re-schedules recurring reminders - before, they only came back after opening the todo page\n'
     '· Note: existing cross-midnight todos move back to their shift day on upgrade; a rare old series may skip one occurrence once, then continue normally\n'
-    '\n'
-'v0.12.10\n'
-    '· The rim along the nav bar has been re-lit: in the dark theme it no longer glows white, and in the light theme the thin edge is finally visible - it used to blend into the background\n'
-    '· Hold and drag the switch, or swipe up to stop an alarm, and the knob now stays properly round at both ends instead of being pulled into a lopsided oval\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
