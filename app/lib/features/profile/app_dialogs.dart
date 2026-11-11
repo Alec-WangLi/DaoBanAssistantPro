@@ -41,6 +41,10 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.11\n'
+    '· 修：Android 8~10 的手机（荣耀 10、畅享 20 Pro 这类 HarmonyOS 3 机型）装上上一版后一开就闪退；振动能力自查收紧了系统版本判断，老系统上不再调用它没有的接口\n'
+    '· 顺带：Android 8 / 9 上点按的触觉改用 20ms 单次波形，不再落到最弱的兜底档\n'
+    '\n'
 'v0.13.10\n'
     '· 触觉适配更多机型：手机支持更细的振动原语时优先用它（Pixel / 三星这类新机更脆）；Android 8~13 上也按「触摸反馈」归类，不再被当成未知振动\n'
     '· 「我的 → 查看日志」新增一行振动能力自查：换手机后觉得不震或手感不对，把那行复制给作者就能定位\n'
@@ -80,14 +84,13 @@ const String _changelogZh =
     '· 新增打赏入口：支付宝一键打开收款页，微信扫码；金额可选 5 / 10 / 20 元或自定义\n'
     '· 文案审校：更新检查不再写「国内需要开代理」，帮助页补上官网下载通道的说明\n'
     '\n'
-'v0.13.1\n'
-    '· 官网与国内下载镜像上线：APK 现在有一份放在国内能访问的站点上，不必再走 github.com 慢慢等\n'
-    '· 「检查更新」改成先读官网的发布清单，读不到才回退到 GitHub —— 国内网络下不再先卡满 8 秒超时\n'
-    '· 更新日志、截图与下载入口都在官网上，国内打开更快\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.11\n'
+    '· Fix: phones on Android 8-10 (Honor 10, Changxiang 20 Pro and other HarmonyOS 3 devices) crashed on launch with the previous build; the vibration capability check now respects the system version and no longer calls APIs those systems lack\n'
+    '· Android 8 / 9 now use a 20 ms one-shot for taps instead of the weakest fallback\n'
+    '\n'
 'v0.13.10\n'
     '· Haptics adapt to more phones: where the device offers fine-grained vibration primitives those are used first (crisper on Pixel / Samsung-class devices), and on Android 8-13 taps are classified as touch feedback instead of an unknown vibration\n'
     '· My > View log now records the vibration capabilities of this phone and which path was used - handy when a new phone feels off\n'
@@ -126,11 +129,6 @@ const String _changelogEn =
     '· New About page: author, version, official website, source code and issue tracker\n'
     '· New support entry: Alipay opens the payment page directly; WeChat shows a QR code; ¥5 / ¥10 / ¥20 or a custom amount\n'
     '· Copy pass: update checks no longer say a proxy is required in mainland China, and the guide explains the official-site download\n'
-    '\n'
-'v0.13.1\n'
-    '· A download mirror is live: the APK is also served from a site that is reachable from mainland China, so installing no longer means waiting on github.com\n'
-    '· Check for updates now reads the mirror manifest first and only falls back to GitHub when that fails, so it no longer burns the full 8-second timeout on a slow network\n'
-    '· The changelog, screenshots and download link all live on the site too\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

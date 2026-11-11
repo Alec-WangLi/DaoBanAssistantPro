@@ -193,9 +193,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.11(+198) 测试版**：修 HarmonyOS 3.0（荣耀 10 / 畅享 20 Pro，底子 Android 10 / API 29）装上一版后冷启动闪退 —— 启动期的振动能力探测无门槛调了 API 30 的 `areEffectsSupported`，抛 `NoSuchMethodError`（`Error`，`catch (Exception)` 接不住）。门槛改按 `api-versions.xml` 逐条写，所有 `catch` 改抓 `Throwable`；Android 8/9 补 20ms 单次。单测 1294 不变。
 - **v0.13.10(+197) 测试版**：触觉三档能力阶梯（原语 → 预定义 → performHapticFeedback 兜底），26~33 用 AudioAttributes 归到硬件反馈；启动时把振动能力与实走路径写进「查看日志」。单测 1294 不变。
 - **v0.13.9(+196) 测试版**：翻月（箭头/今天/月份选择器）、响铃上滑关闭与贪睡、备份导出导入各补一记触觉；判据「真的变了才震」，底栏不做。单测 1287 → 1294。
-- **v0.13.8(+195) 测试版**：选择器滚轮换格震一记（时/分 + 年份轮盘）；口径从「滚轮一律不震」改成「选中项真的变了才震」，用例与 D6 同步。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）
