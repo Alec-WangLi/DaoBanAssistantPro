@@ -97,7 +97,7 @@
 - **触觉改走原生预定义效果**（v0.13.7）：三档语义改由 `com.daoban.shiftassistantpro/haptics` 通道交给原生 `Haptics.kt`，按设备能力点播 `EFFECT_CLICK` / `EFFECT_HEAVY_CLICK`（预定义效果由 HAL 按机型调好）；系统「触摸时振动」关掉时不发。背景：Flutter 的 `selectionClick` 走 `CLOCK_TICK → TEXTURE_TICK`，小米机不支持而回退成 70ms 的 TICK，手感是转子长震（`dumpsys vibrator_manager` 实测）。同版把「关于」页开发者名写全为 Alexander Wang（简称 Alec），并核对高刷屏自适应（滑动/动画 120Hz、静止回落 60Hz）。
 - **选择器滚轮换格震一记**（v0.13.8）：时/分轮盘与年月选择器的年份轮盘在 `onSelectedItemChanged` 里发 `Haptics.select()` ——「选中项真的变了」才响一次，不是滚动过程每帧；口径变更见 `docs/decisions/ui-rules.md` 的触觉条。
 - **触觉补到翻月 / 响铃 / 备份**（v0.13.9）：日历翻月（‹ ›、「今天」、月份选择器；统一挂在 `_setMonth` / `_today`，月份选择器里原来那记已删去重）、响铃页上滑关闭与贪睡（`commit`）、备份导出/导入成功（`commit`）。判据统一为「真的变了才震」：没换月、上滑没过阈值、导出取消都不震。
-- **触觉跨品牌三档能力阶梯**（v0.13.10）：`Haptics.kt` 不写任何厂商判断，按设备能力依次尝试 ① Composition 原语（API 31+，Pixel/三星这类新机最脆）→ ② 预定义效果（各品牌 HAL 自己调好的波形）→ ③ `performHapticFeedback(LONG_PRESS)` 兜底；API 34+ 带 `VibrationAttributes.USAGE_TOUCH`，26~33 用 `AudioAttributes.USAGE_ASSISTANCE_SONIFICATION` 归到硬件反馈。启动时把能力与实走路径写进「查看日志」。
+- **触觉跨品牌三档能力阶梯**（v0.13.10）：`Haptics.kt` 不写任何厂商判断，按设备能力依次尝试 ① Composition 原语（**API 30+**，Pixel/三星这类新机最脆；`PRIMITIVE_THUD` 才是 31）→ ② 预定义效果（各品牌 HAL 自己调好的波形）→ ③ `performHapticFeedback(LONG_PRESS)` 兜底；API 34+ 带 `VibrationAttributes.USAGE_TOUCH`，26~33 用 `AudioAttributes.USAGE_ASSISTANCE_SONIFICATION` 归到硬件反馈。启动时把能力与实走路径写进「查看日志」。
 - **修 Android 8~10 冷启动闪退**（v0.13.11）：v0.13.10 的启动期振动能力探测无门槛调用了 API 30 的 `Vibrator.areEffectsSupported`，在 HarmonyOS 3.0（底子 Android 10 / API 29）上抛 `NoSuchMethodError`（属 `Error`，`catch (Exception)` 接不住），表现为白屏闪退。改为按 `api-versions.xml` 的 `since` 逐条设门槛、所有 `catch` 抓 `Throwable`；Android 8 / 9 的点按触觉补上 20ms 单次波形。
 
 > 逐条细节与「为什么这么改」在 `docs/changelog/`（按版本）与 `docs/decisions/`（按主题），本节只留对规格有影响的那一层。
