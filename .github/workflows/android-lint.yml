@@ -1,0 +1,87 @@
+name: android-lint
+
+# Kotlin/Java 侧的「API 等级」这类错，`flutter analyze` 与 `flutter test` 都看不见，
+# 只有 Android Lint 的 NewApi 能拦住：v0.13.10 在启动路径上无门槛调用了 API 30 的
+# `Vibrator.areEffectsSupported`，Android 10（API 29）上抛 NoSuchMethodError、冷启动
+# 白屏闪退，两台真机报了才被发现。2026-11-11 起每次推送都跑一遍。
+#
+# 为什么单开一个 workflow 而不是塞进 ci.yml：这边要 JDK + Android SDK + Gradle 依赖，
+# 和那边「Ubuntu 上只跑 flutter analyze / test」不是一个量级；分开跑，红的归因也更清楚。
+
+on:
+  push:
+    branches: [beta, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # 与 ci.yml 同一版；改一处要同时改另一处。
+  FLUTTER_VERSION: '3.47.2'
+
+jobs:
+  lint:
+    name: Android Lint（NewApi 等）
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      # 显式装 compileSdk / build-tools：不装的话 AGP 会在跑 lint 时自己下载，
+      # 失败信息又埋在 Gradle 日志里，不如在这里一次说清。
+      - name: Android SDK 组件
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: pub 缓存
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('app/pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - name: gradle 缓存
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/android/**/*.gradle*', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: flutter pub get
+        working-directory: app
+        run: flutter pub get
+
+      # 两件必须现场生成的东西：`local.properties`（读 flutter.sdk / sdk.dir）与
+      # `gradlew` + `gradle-wrapper.jar`。后者被 `app/android/.gitignore` 排除了（Flutter
+      # 的默认做法），仓库里没有，直接 `./gradlew` 会 command not found。
+      # 平时它们由 `flutter build` 生成；`--config-only` 只生成这些配置、不产出 APK，
+      # 是能拿到它们的代价最小的一条路。
+      - name: 生成 Android 构建配置
+        working-directory: app
+        run: flutter build apk --config-only --debug
+
+      # NewApi 是 error 级：任何无门槛的 API 30+ 调用都会让这一步红。
+      # 用的就是开发者本地同一条命令（`cd app/android && ./gradlew :app:lintDebug`）。
+      - name: Android Lint
+        working-directory: app/android
+        run: ./gradlew :app:lintDebug --console=plain
