@@ -38,12 +38,19 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
-
-      # 显式装 compileSdk / build-tools：不装的话 AGP 会在跑 lint 时自己下载，
-      # 失败信息又埋在 Gradle 日志里，不如在这里一次说清。
+      # 不用 android-actions/setup-android：它的 v3 会先跑 `sdkmanager tools`，
+      # 而 `tools` 这个包已经从 SDK 仓库里下架，直接 "Failed to find package 'tools'"
+      # 把整个 job 打红（2026-11-12 第一次跑就栽在这）。GitHub 的 ubuntu-latest
+      # 本来就带 Android SDK 与 ANDROID_HOME，只补我们缺的 compileSdk / build-tools。
       - name: Android SDK 组件
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+        shell: bash
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SM" ] || SM="$(command -v sdkmanager)"
+          echo "sdkmanager: $SM"
+          yes | "$SM" --licenses > /dev/null || true
+          "$SM" "platforms;android-36" "build-tools;36.0.0"
 
       - uses: subosito/flutter-action@v2
         with:
