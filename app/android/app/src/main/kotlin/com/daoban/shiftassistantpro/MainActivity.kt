@@ -509,15 +509,23 @@ class MainActivity : FlutterActivity() {
                         // 重启或系统清理后被回收，闹钟到点会读不到 —— 而失败发生
                         // 在响铃那一刻，用户听不到任何错误提示。复制进私有目录就
                         // 没有这个问题，也不需要申请任何存储权限。
+                        //
+                        // **用 ACTION_GET_CONTENT 而不是 ACTION_OPEN_DOCUMENT**
+                        // （2026-11-15 改）：我们要的是「导入一份副本」，不是长期
+                        // 持有一个文档 —— 持久授权用不上，而 GET_CONTENT 是各厂商
+                        // 文件管理器实现得最全的那一个。OPEN_DOCUMENT 在个别 OEM
+                        // 选择器上回传协议不完整（只填 clipData 不填 data），表现
+                        // 就是「选完返回，App 一声不响」。
                         if (pendingRingtoneResult != null) {
                             result.error("PICK_IN_PROGRESS", "已有选择器在等待", null)
                         } else {
                             pendingRingtoneResult = result
                             try {
                                 startActivityForResult(
-                                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                    Intent(Intent.ACTION_GET_CONTENT).apply {
                                         addCategory(Intent.CATEGORY_OPENABLE)
                                         type = "audio/*"
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     },
                                     REQ_PICK_RINGTONE
                                 )
@@ -898,12 +906,29 @@ class MainActivity : FlutterActivity() {
         if (requestCode != REQ_PICK_RINGTONE) return
         val result = pendingRingtoneResult
         pendingRingtoneResult = null
-        val uri = data?.data
-        if (resultCode != RESULT_OK || uri == null) {
-            // 用户按返回取消了：不是错误，回 null 让界面什么都不做。
+        // 「用户按返回取消了」与「选了但没给 URI」**必须分开**（2026-11-15）。
+        // 以前两者都走 `success(null)` → Dart 静默返回，界面上**一声不响** ——
+        // 真机反馈就是「选完返回，铃声没出现」，日志里也什么都没有。
+        if (resultCode != RESULT_OK) {
+            AlarmLog.info(this, "ringtone pick: 用户取消（code=$resultCode）")
             result?.success(null)
             return
         }
+        val uri = resolvePickedUri(data)
+        if (uri == null) {
+            // 各家文件管理器的回传方式不一致：标准是 data.data，多选语义的选择器
+            // （真机视频里那台就是「已选择 1 项 / 选择」）常见只填 clipData。
+            AlarmLog.error(
+                this,
+                "ringtone pick: 拿到 RESULT_OK 但没有 URI（${describePickIntent(data)}）"
+            )
+            result?.error("PICK_NO_URI", "选择器没有返回文件", null)
+            return
+        }
+        AlarmLog.info(
+            this,
+            "ringtone pick: ${uri.scheme}://${uri.authority}（${describePickIntent(data)}）"
+        )
         // 复制是磁盘 I/O（一个音频文件可能十几 MB），放后台线程，拷完回主线程。
         Thread {
             var tooLarge = false
@@ -1001,7 +1026,16 @@ class MainActivity : FlutterActivity() {
      */
     private fun copyRingtoneIntoPrivateDir(uri: Uri): Pair<String, String>? {
         return try {
-            val name = queryDisplayName(uri) ?: "ringtone"
+            // 没有扩展名就按 MIME 补一个：MediaPlayer 认格式靠容器 + 扩展名两条
+            // 线索，个别机型上缺扩展名的文件会起不来 —— 那时闹钟照常震动、却
+            // 一声不响，是最难查的一类。
+            val rawName = queryDisplayName(uri) ?: "ringtone"
+            val name = if (rawName.contains('.')) {
+                rawName
+            } else {
+                val ext = mimeToExtension(contentResolver.getType(uri))
+                if (ext == null) rawName else "$rawName.$ext"
+            }
             val size = queryFileSize(uri)
             if (size != null && size > MAX_RINGTONE_BYTES) {
                 throw RingtoneTooLargeException(size)
@@ -1020,10 +1054,59 @@ class MainActivity : FlutterActivity() {
         } catch (e: RingtoneTooLargeException) {
             AlarmLog.error(this, "ringtone: 文件太大，拒绝复制 ${e.bytes} 字节")
             throw e
+        } catch (e: SecurityException) {
+            // 选择器没把读权限带给我们就返回了 —— 单独记一条，
+            // 与「文件坏了」区分得开（日志里一眼能看出来）。
+            AlarmLog.error(
+                this,
+                "ringtone: 没有读取权限 ${uri.scheme}://${uri.authority}"
+            )
+            null
         } catch (e: Exception) {
             AlarmLog.error(this, "ringtone: 复制失败 ${e.javaClass.name}: ${e.message}")
             null
         }
+    }
+
+    /**
+     * 从选择器的返回意图里取 URI，**三种回传方式都认**：
+     * `data` → `clipData` 第一项 → `EXTRA_STREAM`。
+     *
+     * 只认 `data` 是不够的：部分 OEM 文件管理器（尤其多选语义的选择器）把结果
+     * 放在 clipData 里，`data` 为 null。那时旧代码会把它当成「用户取消」，
+     * 界面上一声不响 —— 2026-11-15 的真机反馈就是这种。
+     */
+    @Suppress("DEPRECATION")
+    private fun resolvePickedUri(data: Intent?): Uri? {
+        if (data == null) return null
+        data.data?.let { return it }
+        val clip = data.clipData
+        if (clip != null && clip.itemCount > 0) {
+            clip.getItemAt(0)?.uri?.let { return it }
+        }
+        (data.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri)?.let { return it }
+        return null
+    }
+
+    /** 日志里那半截现场：意图里到底带了什么（不写文件名，够定位就行）。 */
+    private fun describePickIntent(data: Intent?): String {
+        if (data == null) return "intent=null"
+        val u = data.data
+        val clip = data.clipData?.itemCount ?: 0
+        return "data=${u?.scheme}://${u?.authority} clip=$clip"
+    }
+
+    /** 音频 MIME → 扩展名。只列选择器实际会给的那几种。 */
+    private fun mimeToExtension(mime: String?): String? = when (mime) {
+        "audio/mpeg", "audio/mp3", "audio/x-mp3" -> "mp3"
+        "audio/mp4", "audio/m4a", "audio/x-m4a" -> "m4a"
+        "audio/aac", "audio/x-aac" -> "aac"
+        "audio/ogg", "application/ogg" -> "ogg"
+        "audio/flac", "audio/x-flac" -> "flac"
+        "audio/wav", "audio/x-wav", "audio/wave" -> "wav"
+        "audio/amr", "audio/3gpp" -> "amr"
+        "audio/midi", "audio/x-midi" -> "mid"
+        else -> null
     }
 
     /** 文件选择器里那一项的显示名（`OpenableColumns.DISPLAY_NAME`）。 */

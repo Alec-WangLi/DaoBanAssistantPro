@@ -315,6 +315,25 @@ class L10n {
       'That file is too large (32 MB max), pick a smaller one');
   static String get ringtoneCopyFailed =>
       t('没能读取这个文件，换一个试试', "Couldn't read that file, try another one");
+  // 选择器自己没把文件交回来（不是用户取消）。要指名「换个文件管理器」——
+  // 这一条几乎只出现在第三方 / 非系统文件管理器上，重试同一个入口没有用。
+  static String get ringtoneNoUri => t(
+      '文件管理器没有把选中的文件交回来，换一个文件管理器再试',
+      'The file manager did not hand the file back. Try a different file manager.');
+
+  // 法定节假日数据（自动更新 + 手动兜底）
+  static String get holidayDataTitle =>
+      t('更新法定节假日数据', 'Update public holiday data');
+  static String holidayDataCovered(int year) =>
+      t('已覆盖至 $year 年', 'Covers through $year');
+  static String get holidayDataEmpty => t('暂无数据', 'No data yet');
+  static String get holidayDataUpdating => t('正在更新…', 'Updating…');
+  static String get holidayDataUpdated =>
+      t('节假日数据已更新', 'Holiday data updated');
+  static String get holidayDataAlreadyNewest =>
+      t('已是最新数据', 'Already up to date');
+  static String get holidayDataFailed =>
+      t('连不上服务器，稍后再试', 'Cannot reach the server, try again later');
 
   // 「关于」页
   static String get aboutTitle => t('关于', 'About');

@@ -331,11 +331,8 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ],
             ),
           ),
-          Icon(Icons.edit_outlined,
-              key: const Key('alarm-edit-hint'),
-              size: AppTokens.iconSm,
-              color: AppTokens.inkMuted(context)),
-          const SizedBox(width: AppTokens.gapIconText),
+          // **不画编辑笔**（2026-11-15 用户定）：整行本来就点得开编辑弹窗，铅笔只是
+          // 把「可点」又说了一遍 —— 与待办行同一条理由、同一种处理（D7 的例外清单）。
           GlassDeleteButton(
             // 与待办列表同理：行尾用紧凑形态，别让一屏几行的列表挂满红圆。
             compact: true,

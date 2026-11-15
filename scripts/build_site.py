@@ -17,6 +17,9 @@
 退回 GitHub —— 国内用户又得开代理，正是这套东西要解决的问题。
 
 `_site/` 已 gitignore，可随时删掉重建。
+
+另外会带上一份 `holidays.json`（法定节假日数据）：App 冷启动时从站点根目录拉它，
+一年一更新、**不需要发版**。
 """
 
 from __future__ import annotations
@@ -118,6 +121,10 @@ def main() -> int:
         html.replace("__SITE_BASE__", base), encoding="utf-8"
     )
     _copy(SRC / "styles.css", OUT / "styles.css")
+
+    # 法定节假日数据（`core/holiday_sync.dart` 的第一个通道就是这里）。
+    # 年度维护只改仓库根的 holidays.json → 重新部署站点 + 推到 main，**不用发版**。
+    _copy(ROOT / "holidays.json", OUT / "holidays.json")
 
     for name in PNGS + SHOTS:
         _copy(IMAGES / name, OUT / "assets" / name)

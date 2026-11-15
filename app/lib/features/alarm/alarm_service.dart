@@ -23,6 +23,12 @@ class RingtonePickException implements Exception {
   final String code;
 
   bool get isTooLarge => code == 'RINGTONE_TOO_LARGE';
+
+  /// 选择器回来了、但没把文件 URI 交出来（`PICK_NO_URI`）。
+  ///
+  /// 与「用户取消」是两件事：取消是用户自己的决定，不该提示；这一条是选择器
+  /// 的回传方式不标准，必须说一句，否则用户只会觉得「点了没反应」。
+  bool get isNoUri => code == 'PICK_NO_URI';
 }
 
 /// 正在响铃的闹钟要显示的内容：主标题 +（可选的）说明。

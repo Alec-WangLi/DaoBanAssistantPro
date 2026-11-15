@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'core/glass/glass.dart';
 import 'core/glass/glass_refraction.dart';
+import 'core/holiday_sync.dart';
 import 'core/l10n.dart';
 import 'features/alarm/alarm_service.dart';
 import 'features/backup/backup_service.dart';
@@ -32,8 +33,11 @@ Future<void> main() async {
   try {
     final sp = await SharedPreferences.getInstance();
     L10n.locale = sp.getString('language') ?? 'zh';
+    // 法定节假日表：先把上次缓存的远程数据装上去（**同步、不联网**），联网刷新
+    // 在首帧之后由 HomeShell 在后台做 —— 启动路径上不能多等一次网络。
+    HolidaySync.installCached(sp);
   } catch (_) {
-    // 读取失败就用默认中文，与加这段之前的行为一致
+    // 读取失败就用默认中文、内置节假日表，与加这段之前的行为一致
   }
   await AlarmService.init();
   // 低端机（物理内存 < 4GB）关闭全局玻璃模糊，避免 BackdropFilter 拖垮 GPU。

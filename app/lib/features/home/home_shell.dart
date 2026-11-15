@@ -8,10 +8,12 @@ import 'glass_nav_bar.dart';
 
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
+import '../../core/holiday_sync.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/update_checker.dart';
 import '../../data/app_repository.dart';
+import '../../domain/lunar_info.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_ringing_screen.dart';
@@ -92,6 +94,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       if (AlarmService.openTodoRequested.value) _openTodoPage();
       _maybeShowLaunchDialogs();
       _maybeAutoCheckUpdate();
+      _maybeSyncHolidays();
       _maybeReplanAfterRestore();
       // 冷启动由桌面小组件拉起：读一次「要跳到哪天」。
       WidgetService.consumeLaunchDay();
@@ -116,6 +119,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
     // （eventsProvider）此前**没有任何推送触发** —— 勾掉一条待办之后桌面上的
     // 数字会一整天不动，直到改排班/改外观/下次冷启动。（冷启动那次重复推送无害。）
     ref.listenManual(eventsProvider, (_, __) => _scheduleWidgetPush());
+    // 法定节假日数据换了（自动同步或「关于」页里的手动更新）：快照里带
+    // `lunarIsHoliday`，不重推的话桌面那张卡还挂着旧的红标。
+    holidayDataRevision.addListener(_onHolidayDataChanged);
     WidgetService.widgetLaunchRequested.addListener(_onWidgetDayRequested);
   }
 
@@ -170,12 +176,33 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
+  /// 冷启动静默同步法定节假日数据：同一天最多一次，全程不打扰用户。
+  ///
+  /// 拿到新表时 `HolidaySync` 会清农历缓存并 bump `holidayDataRevision` ——
+  /// 日历页与桌面小组件快照都听那个 notifier，这里不用再手动推一次。
+  Future<void> _maybeSyncHolidays() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final r = await HolidaySync.refreshIfStale(sp);
+      if (r != HolidayRefreshResult.updated) return;
+      await AlarmService.appendLog(
+          'holiday: 节假日数据已更新（覆盖至 ${installedHolidayTable.latestYear} 年）');
+    } catch (e) {
+      // 自动更新失败不该在任何地方制造噪音：内置表照常工作。
+      await AlarmService.appendLog('holiday: 刷新失败 $e');
+    }
+  }
+
+  /// 节假日表换了 → 重推桌面快照（日历页自己听同一个 notifier）。
+  void _onHolidayDataChanged() => _scheduleWidgetPush();
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     AlarmService.ringingAlarm.removeListener(_onRingingChanged);
     AlarmService.openTodoRequested.removeListener(_onTodoRequested);
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetDayRequested);
+    holidayDataRevision.removeListener(_onHolidayDataChanged);
     _pushDebounce?.cancel();
     // 重试那个计时器也必须取消：留着的话 widget 测试会报
     // 「A Timer is still pending after the widget tree was disposed」，

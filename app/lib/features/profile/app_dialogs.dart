@@ -41,6 +41,12 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.12\n'
+    '· 法定节假日数据会自己更新了：每次冷启动在后台拉一次（一天最多一次），国务院发布新一年的放假安排后不用等发版；离线或被墙时照旧用 App 内置的那份\n'
+    '· 「我的 → 关于」多了一行「更新法定节假日数据」，副标题写着已覆盖到哪一年，点一下立刻重拉\n'
+    '· 自定义闹钟那一行的编辑笔去掉了：整行点开就是编辑，与待办一致\n'
+    '· 修：用某些文件管理器（比如安卓原生那个）选铃声时，选完返回什么都没有；现在几种回传方式都认，真失败也会说清原因\n'
+    '\n'
 'v0.13.11\n'
     '· 修：Android 8~10 的手机（荣耀 10、畅享 20 Pro 这类 HarmonyOS 3 机型）装上上一版后一开就闪退；振动能力自查收紧了系统版本判断，老系统上不再调用它没有的接口\n'
     '· 顺带：Android 8 / 9 上点按的触觉改用 20ms 单次波形，不再落到最弱的兜底档\n'
@@ -79,14 +85,15 @@ const String _changelogZh =
     '· 解锁是自报的：个人收款码没有支付回调，点「我已完成支付」并确认即可；未支付也不影响任何功能\n'
     '· 「清空重置」会保留支持者状态\n'
     '\n'
-'v0.13.2\n'
-    '· 新增「关于」页：作者、版本、官网、开源仓库与问题反馈都在里面\n'
-    '· 新增打赏入口：支付宝一键打开收款页，微信扫码；金额可选 5 / 10 / 20 元或自定义\n'
-    '· 文案审校：更新检查不再写「国内需要开代理」，帮助页补上官网下载通道的说明\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.12\n'
+    '· Public holiday data now updates itself: a background fetch on each cold start (at most once a day), so a new year\'s arrangement no longer waits for an app release; offline or blocked networks keep using the built-in table\n'
+    '· About gains an "Update public holiday data" row whose subtitle says which year the data covers; tap it to fetch immediately\n'
+    '· The pencil on custom alarm rows is gone: tapping the row opens the editor, same as todos\n'
+    '· Fix: picking a ringtone through some file managers (the stock Android one, for instance) returned to the app with nothing happening; all common result shapes are handled now, and a real failure says why\n'
+    '\n'
 'v0.13.11\n'
     '· Fix: phones on Android 8-10 (Honor 10, Changxiang 20 Pro and other HarmonyOS 3 devices) crashed on launch with the previous build; the vibration capability check now respects the system version and no longer calls APIs those systems lack\n'
     '· Android 8 / 9 now use a 20 ms one-shot for taps instead of the weakest fallback\n'
@@ -124,11 +131,6 @@ const String _changelogEn =
     '· A tip now unlocks "For supporters": the first item is a short letter, and future extras will live on the same page\n'
     '· The unlock is self-reported: personal payment codes have no callback, so tap "I\'ve paid" and confirm; nothing is locked behind a payment\n'
     '· Clear & reset keeps your supporter status\n'
-    '\n'
-'v0.13.2\n'
-    '· New About page: author, version, official website, source code and issue tracker\n'
-    '· New support entry: Alipay opens the payment page directly; WeChat shows a QR code; ¥5 / ¥10 / ¥20 or a custom amount\n'
-    '· Copy pass: update checks no longer say a proxy is required in mainland China, and the guide explains the official-site download\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

@@ -14,7 +14,7 @@
 | 你要动的东西 | 读这一个 |
 |---|---|
 | Drift 表 / 迁移 / Riverpod / 查询 | `docs/decisions/data.md` |
-| 排班模型 / 时段 / 覆盖 / 空白表 / 解析 | `docs/decisions/schedule.md` |
+| 排班模型 / 时段 / 覆盖 / 空白表 / 解析 / 法定节假日数据 | `docs/decisions/schedule.md` |
 | 闹钟 / 响铃 / 原生侧 | `docs/decisions/alarm.md` |
 | 待办 / 重复待办 / 归档 | `docs/decisions/todo.md` |
 | 液态玻璃 / 着色器 / 共享玻璃件 | `docs/decisions/glass.md` |
@@ -193,9 +193,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.12(+199) 测试版**：法定节假日数据不再只随版本走 —— 冷启动后台拉 `holidays.json`（官网 → 仓库 raw，一天最多一次，5s 超时），校验失败整份丢弃、离线照旧用内置表；「我的 → 关于」加「更新法定节假日数据」（副标题写已覆盖到哪一年）。自定义闹钟行的编辑笔去掉（整行可点，与待办一致）。修：某些文件管理器选铃声返回后毫无反应 —— 原来只认 `data.data`、拿不到就当成「用户取消」静默 return；现在认 `data` / `clipData` / `EXTRA_STREAM` 三种回传，改用 `ACTION_GET_CONTENT`（导入副本的语义），并且「没拿到 URI」有独立错误码 `PICK_NO_URI`、全程写日志。单测 1294 → 1317。
 - **v0.13.11(+198) 测试版**：修 HarmonyOS 3.0（荣耀 10 / 畅享 20 Pro，底子 Android 10 / API 29）装上一版后冷启动闪退 —— 启动期的振动能力探测无门槛调了 API 30 的 `areEffectsSupported`，抛 `NoSuchMethodError`（`Error`，`catch (Exception)` 接不住）。门槛改按 `api-versions.xml` 逐条写，所有 `catch` 改抓 `Throwable`；Android 8/9 补 20ms 单次。单测 1294 不变。
 - **v0.13.10(+197) 测试版**：触觉三档能力阶梯（原语 → 预定义 → performHapticFeedback 兜底），26~33 用 AudioAttributes 归到硬件反馈；启动时把振动能力与实走路径写进「查看日志」。单测 1294 不变。
-- **v0.13.9(+196) 测试版**：翻月（箭头/今天/月份选择器）、响铃上滑关闭与贪睡、备份导出导入各补一记触觉；判据「真的变了才震」，底栏不做。单测 1287 → 1294。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）

@@ -7,6 +7,7 @@ import '../../core/clock.dart';
 import '../../core/design_tokens.dart';
 import '../../core/frame_notifier.dart';
 import '../../core/haptics.dart';
+import '../../core/holiday_sync.dart';
 import '../../core/glass/glass.dart';
 import '../../core/glass/liquid_lens.dart';
 import '../../core/layout.dart';
@@ -439,6 +440,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     _month = DateTime(n.year, n.month, 1);
     _selected = dateOnly(n);
     WidgetService.widgetLaunchRequested.addListener(_onWidgetLaunchRequested);
+    // 法定节假日数据在后台更新完成时（`HolidaySync` 会 bump 它）：农历缓存已经
+    // 被清掉，这里只要重建一遍，格子颜色 / 「班」标记 / 信息卡徽章就都跟上。
+    holidayDataRevision.addListener(_onHolidayDataChanged);
     // 冷启动 / 小组件点击时本页尚未挂载（HomeShell 先 `jumpToPage(0)`、下一帧才建出
     // 本页）：那一刻的通知没人接，值会滞留在 notifier 上。这里补一次同步读取，
     // 把「已经落在 notifier 里的跳转意图」落到网格上 —— 否则热启动从别的 tab 切回
@@ -455,11 +459,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   @override
   void dispose() {
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetLaunchRequested);
+    holidayDataRevision.removeListener(_onHolidayDataChanged);
     _lensCenter.dispose();
     _blockFrame.dispose();
     _interacting.dispose();
     _ticker?.dispose();
     super.dispose();
+  }
+
+  /// 后台把法定节假日表换掉了（一年一两次）：`LunarInfo` 缓存已被清，这里重建
+  /// 一次就够 —— 格子颜色、「班」标记、信息卡上的法定节假日徽章全都读它。
+  void _onHolidayDataChanged() {
+    if (mounted) setState(() {});
   }
 
   /// 用户在桌面小组件上点了某一天。

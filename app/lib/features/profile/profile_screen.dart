@@ -604,11 +604,16 @@ class ProfileScreen extends ConsumerWidget {
             icon: Icons.music_note_outlined);
       }
     } on RingtonePickException catch (e) {
-      // 「太大」和「读不出来」要说成两句不同的话，否则用户只会反复重试同一个文件。
+      // 「太大」「没读出来」「选择器没交回文件」要说成三句不同的话，否则用户只会
+      // 反复重试同一条路。
       if (!context.mounted) return;
       showGlassSnack(
         context,
-        e.isTooLarge ? L10n.ringtoneTooLarge : L10n.ringtoneCopyFailed,
+        e.isTooLarge
+            ? L10n.ringtoneTooLarge
+            : e.isNoUri
+                ? L10n.ringtoneNoUri
+                : L10n.ringtoneCopyFailed,
         icon: Icons.error_outline,
       );
     }

@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'net.dart';
+
 /// 更新信息：版本号 + 下载直链 + 是否测试版（预发布）+ APK 资源文件名。
 class UpdateInfo {
   const UpdateInfo({
@@ -68,10 +70,14 @@ class UpdateChecker {
 
 
   static final _siteManifestUri = Uri.parse('$siteBase/latest.json');
-  static final _manifestUri = Uri.parse(
-      'https://raw.githubusercontent.com/$_owner/$_repo/main/latest.json');
+  static final _manifestUri = repoRaw('latest.json');
   static final _releasesUri = Uri.parse(
       'https://api.github.com/repos/$_owner/$_repo/releases?per_page=100');
+
+  /// 仓库 raw 地址（main 分支）。**owner / repo 只在这一处写死** ——
+  /// `latest.json` 与 `holidays.json` 都从这里拼。
+  static Uri repoRaw(String path) =>
+      Uri.parse('https://raw.githubusercontent.com/$_owner/$_repo/main/$path');
 
   /// 取数的接缝：测试换成假的就能完全脱离网络。返回 null 表示网络异常。
   @visibleForTesting
@@ -123,23 +129,10 @@ class UpdateChecker {
 
   /// 真实取数：GET [uri]，返回状态码与正文。
   ///
-  /// 两个通道共用这一个函数，因此不设通道专属请求头 —— 发往
-  /// `raw.githubusercontent.com` 的请求头越干净越不容易被挡。
+  /// 实现搬到 `core/net.dart`：节假日数据那条通道也要用，失败口径必须一致。
   static Future<({int status, String body})?> _httpGetText(
-      Uri uri, Duration timeout) async {
-    final client = HttpClient()..connectionTimeout = timeout;
-    try {
-      final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.userAgentHeader, 'DaoBanAssistantPro');
-      final res = await req.close();
-      final body = await res.transform(utf8.decoder).join();
-      return (status: res.statusCode, body: body);
-    } catch (_) {
-      return null;
-    } finally {
-      client.close(force: true);
-    }
-  }
+          Uri uri, Duration timeout) =>
+      httpGetText(uri, timeout);
 
   /// 解析发布清单：`stable` / `prerelease` 两个节点各取版本号、直链与资产名。
   ///
