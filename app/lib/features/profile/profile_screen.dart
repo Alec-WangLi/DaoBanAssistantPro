@@ -528,16 +528,39 @@ class ProfileScreen extends ConsumerWidget {
       await sp.remove('ringtoneTitle');
     } else if (_isFileRingtone(selection)) {
       await sp.setString('ringtoneUri', selection);
-    } else {
-      // 其余两种：系统铃声 URI（`content://`）与「仅震动」哨兵（见
-      // `AlarmService.vibrateOnlyRingtone`）。两者都是「直接把这个值存进去」——
-      // 原生侧认的是同一个键，不需要在这里分叉。同样清掉自选文件。
-      //
-      // **哨兵这一档别写成 `remove('ringtoneUri')`**：删掉这个键的含义是「内置铃声」，
-      // 用户选了静音、闹钟反而响起来。
+    } else if (selection == AlarmService.vibrateOnlyRingtone) {
+      // 「仅震动」哨兵：直接存这个值（**不能写成 remove** —— 删键的含义是
+      // 「内置铃声」，用户选了静音、闹钟反而响起来）。同样清掉自选文件。
       await AlarmService.clearRingtoneFile();
       await sp.setString('ringtoneUri', selection);
       await sp.remove('ringtoneTitle');
+    } else {
+      // 系统铃声（`content://media/...`）：**也复制一份进私有目录**（2026-11-16）。
+      //
+      // 以前这里是直接存 URI。问题是 RingtoneManager 给的这种 URI 在响铃那一刻
+      // 可能打不开（后台服务没有媒体读取权限 / 那条媒体已经不在了），于是
+      // `AlarmSound` 静默回落到内置铃声 —— 用户设了自定义铃声，半夜响的还是「叮咚」，
+      // 而这条失败路径没有任何界面能提示。复制成 `file://` 之后与「从文件中选择」
+      // 走同一条路，不依赖任何权限或媒体库条目。
+      //
+      // **不要在这里再调 `clearRingtoneFile`**：原生侧复制新文件之前已经把旧的删了，
+      // 再清一次会把刚复制进来的这个也删掉（与 `_pickRingtoneFile` 同一条）。
+      final ({String name, String uri}) imported;
+      try {
+        imported = await AlarmService.importRingtone(selection);
+      } on RingtonePickException catch (e) {
+        if (!context.mounted) return;
+        showGlassSnack(
+          context,
+          e.isTooLarge ? L10n.ringtoneTooLarge : L10n.ringtoneCopyFailed,
+          icon: Icons.error_outline,
+        );
+        // 失败就保持原设置：存一个用不了的 URI 只会让闹钟静默回落，
+        // 用户还以为设好了。
+        return;
+      }
+      await sp.setString('ringtoneUri', imported.uri);
+      await sp.setString('ringtoneTitle', imported.name);
     }
     await _rescheduleAlarms(ref);
     if (context.mounted) {

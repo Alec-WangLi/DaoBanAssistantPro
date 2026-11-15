@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.13\n'
+    '· 修：在「系统铃声」里选中自己加过的铃声（比如把某首歌设成了系统铃声）之后，闹钟响的还是内置那一声 —— 现在选中就把它复制进应用内部，不再依赖系统的媒体权限\n'
+    '· 之前存过的旧设置会在启动时自动修一次：能读的复制进来，读不到的退回内置铃声（日志里写明原因）\n'
+    '· 铃声选择和响铃失败的原因现在都会写进「我的 → 查看日志」，报障时能直接看到是哪一步出了问题\n'
+    '\n'
 'v0.13.12\n'
     '· 法定节假日数据会自己更新了：每次冷启动在后台拉一次（一天最多一次），国务院发布新一年的放假安排后不用等发版；离线或被墙时照旧用 App 内置的那份\n'
     '· 「我的 → 关于」多了一行「更新法定节假日数据」，副标题写着已覆盖到哪一年，点一下立刻重拉\n'
@@ -80,14 +85,14 @@ const String _changelogZh =
     '· 导入会先校验文件、覆盖当前数据，并重启一次 App 生效；导入后闹钟会按恢复的排班重新排\n'
     '· 备份里也带着你保存的铃声；文件可以放到网盘或电脑，建议每次大改排班后导出一份\n'
     '\n'
-'v0.13.3\n'
-    '· 打赏后可解锁「支持者专属」：首期是一封写给支持者的信，以后的新内容也会放在这一页\n'
-    '· 解锁是自报的：个人收款码没有支付回调，点「我已完成支付」并确认即可；未支付也不影响任何功能\n'
-    '· 「清空重置」会保留支持者状态\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.13\n'
+    '· Fix: after choosing one of your own ringtones from the system ringtone list (a song you had set as a system ringtone, say), the alarm still played the built-in sound — the pick is now copied into the app instead of relying on system media permissions\n'
+    '· Settings saved by older versions repair themselves once at launch: readable ones get copied in, unreadable ones fall back to the built-in ringtone (with the reason in the log)\n'
+    '· Ringtone pick and playback failures now land in My > View log, so a report shows exactly which step failed\n'
+    '\n'
 'v0.13.12\n'
     '· Public holiday data now updates itself: a background fetch on each cold start (at most once a day), so a new year\'s arrangement no longer waits for an app release; offline or blocked networks keep using the built-in table\n'
     '· About gains an "Update public holiday data" row whose subtitle says which year the data covers; tap it to fetch immediately\n'
@@ -126,11 +131,6 @@ const String _changelogEn =
     '· New My > Data backup: export schedules, todos, templates, alarms and settings into one file; after a reinstall, a new phone or an accidental reset, import that file to restore everything\n'
     '· Import validates the file first, replaces the current data, and restarts the app once; alarms are re-scheduled from the restored schedule\n'
     '· The backup includes your saved ringtone; keep the file in a cloud drive or on your computer - exporting after big schedule changes is a good habit\n'
-    '\n'
-'v0.13.3\n'
-    '· A tip now unlocks "For supporters": the first item is a short letter, and future extras will live on the same page\n'
-    '· The unlock is self-reported: personal payment codes have no callback, so tap "I\'ve paid" and confirm; nothing is locked behind a payment\n'
-    '· Clear & reset keeps your supporter status\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

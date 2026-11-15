@@ -535,6 +535,42 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     }
+                    "importRingtone" -> {
+                        // 把**已有的**一个音源 URI 复制进应用私有目录（2026-11-16）。
+                        //
+                        // 用处：「系统铃声」那一栏列出来的是 `RingtoneManager` 给的
+                        // `content://media/...` URI，旧代码直接把它存进 prefs —— 而
+                        // 这种 URI 在响铃那一刻（后台服务、没有媒体读取权限）可能
+                        // 打不开，表现是「设了铃声，闹钟响的还是内置那声」。改成
+                        // 选中就复制一份 `file://`，与「从文件中选择」同一条路。
+                        val raw = call.argument<String>("uri") ?: ""
+                        if (raw.isEmpty()) {
+                            result.error("RINGTONE_UNREADABLE", "缺少 uri", null)
+                        } else {
+                            Thread {
+                                var tooLarge = false
+                                val copied = try {
+                                    copyRingtoneIntoPrivateDir(Uri.parse(raw))
+                                } catch (e: RingtoneTooLargeException) {
+                                    tooLarge = true
+                                    null
+                                }
+                                runOnUiThread {
+                                    when {
+                                        tooLarge -> result.error(
+                                            "RINGTONE_TOO_LARGE", "铃声文件太大", null
+                                        )
+                                        copied == null -> result.error(
+                                            "RINGTONE_UNREADABLE", "读不到这条铃声", null
+                                        )
+                                        else -> result.success(
+                                            mapOf("name" to copied.first, "uri" to copied.second)
+                                        )
+                                    }
+                                }
+                            }.start()
+                        }
+                    }
                     "clearRingtoneFile" -> {
                         try {
                             File(filesDir, RINGTONE_DIR).listFiles()?.forEach { it.delete() }
@@ -910,7 +946,7 @@ class MainActivity : FlutterActivity() {
         // 以前两者都走 `success(null)` → Dart 静默返回，界面上**一声不响** ——
         // 真机反馈就是「选完返回，铃声没出现」，日志里也什么都没有。
         if (resultCode != RESULT_OK) {
-            AlarmLog.info(this, "ringtone pick: 用户取消（code=$resultCode）")
+            AlarmLog.diagnostic(this, "ringtone pick: 用户取消（code=$resultCode）")
             result?.success(null)
             return
         }
@@ -925,7 +961,10 @@ class MainActivity : FlutterActivity() {
             result?.error("PICK_NO_URI", "选择器没有返回文件", null)
             return
         }
-        AlarmLog.info(
+        // **必须落盘**（`diagnostic` 而不是 `info`）：报障时用户能给的只有
+        // 「查看日志」里那一份，`info` 只进 Logcat —— 2026-11-15 那次就是因为
+        // 这一行没落盘，用户贴来的日志里看不到任何 pick 记录，无从判断。
+        AlarmLog.diagnostic(
             this,
             "ringtone pick: ${uri.scheme}://${uri.authority}（${describePickIntent(data)}）"
         )
@@ -1049,7 +1088,7 @@ class MainActivity : FlutterActivity() {
                 if (input == null) return null
                 dest.outputStream().use { out -> input.copyTo(out) }
             }
-            AlarmLog.info(this, "ringtone: 已复制 $name（$size 字节）到 $dest")
+            AlarmLog.diagnostic(this, "ringtone: 已复制 $name（$size 字节）到 $dest")
             name to Uri.fromFile(dest).toString()
         } catch (e: RingtoneTooLargeException) {
             AlarmLog.error(this, "ringtone: 文件太大，拒绝复制 ${e.bytes} 字节")

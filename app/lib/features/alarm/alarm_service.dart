@@ -780,6 +780,31 @@ class AlarmService {
     }
   }
 
+  /// 把一个**已有的**音源 URI 复制进应用私有目录，返回 `(显示名, file:// URI)`。
+  ///
+  /// 「系统铃声」那一栏列的是 `RingtoneManager` 给的 `content://media/...`，那种
+  /// URI 在响铃那一刻（前台服务、没有媒体读取权限）**可能打不开** —— 表现是
+  /// 「明明设了铃声，闹钟响的还是内置那一声」，而且只在半夜发生、没有界面能报错
+  /// （2026-11-16 真机：`AlarmSound: 自选铃声用不了，回落到内置铃声: content://media/
+  /// external/audio/media/12837?title=Go%20Time&canonical=1`）。所以选系统铃声时
+  /// 也走这条「复制一份」的路，与「从文件中选择」同源。
+  ///
+  /// 失败抛 [RingtonePickException]（`isTooLarge` / 其余 = 读不到）。
+  static Future<({String name, String uri})> importRingtone(String uri) async {
+    try {
+      final raw = await _settingsChannel
+          .invokeMethod('importRingtone', {'uri': uri}) as Map?;
+      final fileUri = raw?['uri'] as String? ?? '';
+      if (fileUri.isEmpty) throw RingtonePickException('RINGTONE_UNREADABLE');
+      return (name: raw?['name'] as String? ?? '', uri: fileUri);
+    } on PlatformException catch (e) {
+      throw RingtonePickException(e.code);
+    } catch (e) {
+      if (e is RingtonePickException) rethrow;
+      throw RingtonePickException('RINGTONE_UNREADABLE');
+    }
+  }
+
   /// 删掉复制进私有目录的自选铃声文件（换回内置/系统铃声时用，不留垃圾）。
   static Future<void> clearRingtoneFile() async {
     try {

@@ -95,6 +95,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _maybeShowLaunchDialogs();
       _maybeAutoCheckUpdate();
       _maybeSyncHolidays();
+      _repairLegacyRingtone();
       _maybeReplanAfterRestore();
       // 冷启动由桌面小组件拉起：读一次「要跳到哪天」。
       WidgetService.consumeLaunchDay();
@@ -195,6 +196,39 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   /// 节假日表换了 → 重推桌面快照（日历页自己听同一个 notifier）。
   void _onHolidayDataChanged() => _scheduleWidgetPush();
+
+  /// 把旧版本留下的「系统铃声 URI」搬进私有目录，修不了就退回内置铃声。
+  ///
+  /// 2026-11-16 之前，选「系统铃声」是**直接把 `content://media/...` 存进设置**的。
+  /// 那种 URI 在响铃那一刻可能打不开（后台服务没有媒体读取权限、或者那条媒体已经
+  /// 不在媒体库里），`AlarmSound` 只能静默回落到内置铃声 —— 用户以为自己设好了，
+  /// 半夜听到的还是「叮咚」。这条迁移把能读的搬成 `file://`，读不了的就**删掉这个
+  /// 键**（＝内置铃声），并在日志里留一行，别让设置里继续挂着一个永远不会响的值。
+  ///
+  /// 只跑一次：迁移后要么是 `file://`、要么是哨兵、要么没这个键。
+  Future<void> _repairLegacyRingtone() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final uri = sp.getString('ringtoneUri');
+      if (uri == null || uri.isEmpty) return;
+      if (uri == AlarmService.vibrateOnlyRingtone) return;
+      if (uri.startsWith('file://')) return;
+      try {
+        final imported = await AlarmService.importRingtone(uri);
+        await sp.setString('ringtoneUri', imported.uri);
+        await sp.setString('ringtoneTitle', imported.name);
+        await AlarmService.appendLog(
+            'ringtone: 旧的系统铃声已复制进应用（${imported.name}）');
+      } catch (_) {
+        await sp.remove('ringtoneUri');
+        await sp.remove('ringtoneTitle');
+        await AlarmService.appendLog(
+            'ringtone: 旧的自选铃声读不到，已退回内置铃声（原值 ${uri.length > 80 ? uri.substring(0, 80) : uri}）');
+      }
+    } catch (_) {
+      // 迁移失败不该影响启动。
+    }
+  }
 
   @override
   void dispose() {
