@@ -37,6 +37,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/app_theme.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/monthly_pattern.dart';
+import 'package:shiftassistantpro/domain/day_extra.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -306,7 +307,7 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
   final triShift = [
     const ShiftClass(name: '白班', abbr: '白', startMinute: 480, endMinute: 1080, color: 0xFF4C8DFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 420)]),
     const ShiftClass(name: '中班', abbr: '中', startMinute: 1080, endMinute: 1320, color: 0xFFFF9F0A),
-    const ShiftClass(name: '夜班', abbr: '夜', startMinute: 1230, endMinute: 1920, color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 1170)]),
+    const ShiftClass(name: '夜班', abbr: '夜', startMinute: 1230, endMinute: 1920, isNight: true, color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 1170)]),
     const ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
   ];
   final currentId = await repo.saveSchedule(
@@ -414,6 +415,14 @@ Future<void> seedTodayOverride(AppDatabase db) async {
   final classId = schedule.classes.first.id;
   if (classId == null) return;
   await repo.setDayOverrides([dateOnly(DateTime.now())], classId: classId);
+}
+
+/// 给「今天」记一条请假 + 一条加班 —— 统计页与日历标记的出图样本。
+Future<void> seedTodayDayExtra(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final today = dayNumber(dateOnly(DateTime.now()));
+  await repo.setDayExtra(today, DayExtraKind.leave, 240);
+  await repo.setDayExtra(today, DayExtraKind.overtime, 120);
 }
 
 /// 把一套「零点班」设为当前方案：夜班 00:00 上班、23:00 响铃。

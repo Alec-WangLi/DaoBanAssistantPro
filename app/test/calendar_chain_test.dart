@@ -205,10 +205,14 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  testWidgets('顶栏那颗按钮点开是**只读**的排班时段总览，今天所在那段打勾', (tester) async {
+  testWidgets('统计页头部「使用中」点开是**只读**的排班时段总览，今天所在那段打勾',
+      (tester) async {
     await _pumpChainedCalendar(tester);
 
-    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    // 顶栏那颗按钮现在是「统计」；时段总览从统计页头部进（2026-11-16 起）。
+    await tester.tap(find.byTooltip(L10n.statistics));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('stats-schedule-link')));
     await tester.pumpAndSettle();
 
     // 只读：**没有**「点一行就切过去」这件事，只有一句说明 + 一条时间线 + 跳转。

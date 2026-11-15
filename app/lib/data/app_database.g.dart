@@ -848,6 +848,16 @@ class $ShiftClassRowsTable extends ShiftClassRows
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("is_rest" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _isNightMeta =
+      const VerificationMeta('isNight');
+  @override
+  late final GeneratedColumn<bool> isNight = GeneratedColumn<bool>(
+      'is_night', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_night" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _colorMeta = const VerificationMeta('color');
   @override
   late final GeneratedColumn<int> color = GeneratedColumn<int>(
@@ -875,6 +885,7 @@ class $ShiftClassRowsTable extends ShiftClassRows
         startMinute,
         endMinute,
         isRest,
+        isNight,
         color,
         alarmEnabled
       ];
@@ -929,6 +940,10 @@ class $ShiftClassRowsTable extends ShiftClassRows
       context.handle(_isRestMeta,
           isRest.isAcceptableOrUnknown(data['is_rest']!, _isRestMeta));
     }
+    if (data.containsKey('is_night')) {
+      context.handle(_isNightMeta,
+          isNight.isAcceptableOrUnknown(data['is_night']!, _isNightMeta));
+    }
     if (data.containsKey('color')) {
       context.handle(
           _colorMeta, color.isAcceptableOrUnknown(data['color']!, _colorMeta));
@@ -964,6 +979,8 @@ class $ShiftClassRowsTable extends ShiftClassRows
           .read(DriftSqlType.int, data['${effectivePrefix}end_minute']),
       isRest: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_rest'])!,
+      isNight: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_night'])!,
       color: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}color'])!,
       alarmEnabled: attachedDatabase.typeMapping
@@ -988,6 +1005,12 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
   final int? startMinute;
   final int? endMinute;
   final bool isRest;
+
+  /// 算不算夜班（统计页「夜班天数」的唯一判据）。
+  ///
+  /// 不从名字或「跨不跨午夜」推断：24 小时值班也跨午夜。内置模板按角色自动标，
+  /// 用户自建班次在编辑器里手动开；老库升级后一律 0。
+  final bool isNight;
   final int color;
   final bool alarmEnabled;
   const ShiftClassRow(
@@ -999,6 +1022,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       this.startMinute,
       this.endMinute,
       required this.isRest,
+      required this.isNight,
       required this.color,
       required this.alarmEnabled});
   @override
@@ -1018,6 +1042,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       map['end_minute'] = Variable<int>(endMinute);
     }
     map['is_rest'] = Variable<bool>(isRest);
+    map['is_night'] = Variable<bool>(isNight);
     map['color'] = Variable<int>(color);
     map['alarm_enabled'] = Variable<bool>(alarmEnabled);
     return map;
@@ -1037,6 +1062,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
           ? const Value.absent()
           : Value(endMinute),
       isRest: Value(isRest),
+      isNight: Value(isNight),
       color: Value(color),
       alarmEnabled: Value(alarmEnabled),
     );
@@ -1054,6 +1080,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       startMinute: serializer.fromJson<int?>(json['startMinute']),
       endMinute: serializer.fromJson<int?>(json['endMinute']),
       isRest: serializer.fromJson<bool>(json['isRest']),
+      isNight: serializer.fromJson<bool>(json['isNight']),
       color: serializer.fromJson<int>(json['color']),
       alarmEnabled: serializer.fromJson<bool>(json['alarmEnabled']),
     );
@@ -1070,6 +1097,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
       'startMinute': serializer.toJson<int?>(startMinute),
       'endMinute': serializer.toJson<int?>(endMinute),
       'isRest': serializer.toJson<bool>(isRest),
+      'isNight': serializer.toJson<bool>(isNight),
       'color': serializer.toJson<int>(color),
       'alarmEnabled': serializer.toJson<bool>(alarmEnabled),
     };
@@ -1084,6 +1112,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
           Value<int?> startMinute = const Value.absent(),
           Value<int?> endMinute = const Value.absent(),
           bool? isRest,
+          bool? isNight,
           int? color,
           bool? alarmEnabled}) =>
       ShiftClassRow(
@@ -1095,6 +1124,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
         startMinute: startMinute.present ? startMinute.value : this.startMinute,
         endMinute: endMinute.present ? endMinute.value : this.endMinute,
         isRest: isRest ?? this.isRest,
+        isNight: isNight ?? this.isNight,
         color: color ?? this.color,
         alarmEnabled: alarmEnabled ?? this.alarmEnabled,
       );
@@ -1110,6 +1140,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
           data.startMinute.present ? data.startMinute.value : this.startMinute,
       endMinute: data.endMinute.present ? data.endMinute.value : this.endMinute,
       isRest: data.isRest.present ? data.isRest.value : this.isRest,
+      isNight: data.isNight.present ? data.isNight.value : this.isNight,
       color: data.color.present ? data.color.value : this.color,
       alarmEnabled: data.alarmEnabled.present
           ? data.alarmEnabled.value
@@ -1128,6 +1159,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
           ..write('startMinute: $startMinute, ')
           ..write('endMinute: $endMinute, ')
           ..write('isRest: $isRest, ')
+          ..write('isNight: $isNight, ')
           ..write('color: $color, ')
           ..write('alarmEnabled: $alarmEnabled')
           ..write(')'))
@@ -1136,7 +1168,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
 
   @override
   int get hashCode => Object.hash(id, scheduleId, order, name, abbr,
-      startMinute, endMinute, isRest, color, alarmEnabled);
+      startMinute, endMinute, isRest, isNight, color, alarmEnabled);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1149,6 +1181,7 @@ class ShiftClassRow extends DataClass implements Insertable<ShiftClassRow> {
           other.startMinute == this.startMinute &&
           other.endMinute == this.endMinute &&
           other.isRest == this.isRest &&
+          other.isNight == this.isNight &&
           other.color == this.color &&
           other.alarmEnabled == this.alarmEnabled);
 }
@@ -1162,6 +1195,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
   final Value<int?> startMinute;
   final Value<int?> endMinute;
   final Value<bool> isRest;
+  final Value<bool> isNight;
   final Value<int> color;
   final Value<bool> alarmEnabled;
   const ShiftClassRowsCompanion({
@@ -1173,6 +1207,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
     this.startMinute = const Value.absent(),
     this.endMinute = const Value.absent(),
     this.isRest = const Value.absent(),
+    this.isNight = const Value.absent(),
     this.color = const Value.absent(),
     this.alarmEnabled = const Value.absent(),
   });
@@ -1185,6 +1220,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
     this.startMinute = const Value.absent(),
     this.endMinute = const Value.absent(),
     this.isRest = const Value.absent(),
+    this.isNight = const Value.absent(),
     this.color = const Value.absent(),
     this.alarmEnabled = const Value.absent(),
   })  : scheduleId = Value(scheduleId),
@@ -1199,6 +1235,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
     Expression<int>? startMinute,
     Expression<int>? endMinute,
     Expression<bool>? isRest,
+    Expression<bool>? isNight,
     Expression<int>? color,
     Expression<bool>? alarmEnabled,
   }) {
@@ -1211,6 +1248,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
       if (startMinute != null) 'start_minute': startMinute,
       if (endMinute != null) 'end_minute': endMinute,
       if (isRest != null) 'is_rest': isRest,
+      if (isNight != null) 'is_night': isNight,
       if (color != null) 'color': color,
       if (alarmEnabled != null) 'alarm_enabled': alarmEnabled,
     });
@@ -1225,6 +1263,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
       Value<int?>? startMinute,
       Value<int?>? endMinute,
       Value<bool>? isRest,
+      Value<bool>? isNight,
       Value<int>? color,
       Value<bool>? alarmEnabled}) {
     return ShiftClassRowsCompanion(
@@ -1236,6 +1275,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
       startMinute: startMinute ?? this.startMinute,
       endMinute: endMinute ?? this.endMinute,
       isRest: isRest ?? this.isRest,
+      isNight: isNight ?? this.isNight,
       color: color ?? this.color,
       alarmEnabled: alarmEnabled ?? this.alarmEnabled,
     );
@@ -1268,6 +1308,9 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
     if (isRest.present) {
       map['is_rest'] = Variable<bool>(isRest.value);
     }
+    if (isNight.present) {
+      map['is_night'] = Variable<bool>(isNight.value);
+    }
     if (color.present) {
       map['color'] = Variable<int>(color.value);
     }
@@ -1288,6 +1331,7 @@ class ShiftClassRowsCompanion extends UpdateCompanion<ShiftClassRow> {
           ..write('startMinute: $startMinute, ')
           ..write('endMinute: $endMinute, ')
           ..write('isRest: $isRest, ')
+          ..write('isNight: $isNight, ')
           ..write('color: $color, ')
           ..write('alarmEnabled: $alarmEnabled')
           ..write(')'))
@@ -3425,6 +3469,234 @@ class ShiftDayOverridesCompanion extends UpdateCompanion<ShiftDayOverride> {
   }
 }
 
+class $ShiftDayExtrasTable extends ShiftDayExtras
+    with TableInfo<$ShiftDayExtrasTable, ShiftDayExtra> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ShiftDayExtrasTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<int> day = GeneratedColumn<int>(
+      'day', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<int> kind = GeneratedColumn<int>(
+      'kind', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _minutesMeta =
+      const VerificationMeta('minutes');
+  @override
+  late final GeneratedColumn<int> minutes = GeneratedColumn<int>(
+      'minutes', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [day, kind, minutes];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shift_day_extras';
+  @override
+  VerificationContext validateIntegrity(Insertable<ShiftDayExtra> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('day')) {
+      context.handle(
+          _dayMeta, day.isAcceptableOrUnknown(data['day']!, _dayMeta));
+    } else if (isInserting) {
+      context.missing(_dayMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+          _kindMeta, kind.isAcceptableOrUnknown(data['kind']!, _kindMeta));
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('minutes')) {
+      context.handle(_minutesMeta,
+          minutes.isAcceptableOrUnknown(data['minutes']!, _minutesMeta));
+    } else if (isInserting) {
+      context.missing(_minutesMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {day, kind};
+  @override
+  ShiftDayExtra map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ShiftDayExtra(
+      day: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}day'])!,
+      kind: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}kind'])!,
+      minutes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}minutes'])!,
+    );
+  }
+
+  @override
+  $ShiftDayExtrasTable createAlias(String alias) {
+    return $ShiftDayExtrasTable(attachedDatabase, alias);
+  }
+}
+
+class ShiftDayExtra extends DataClass implements Insertable<ShiftDayExtra> {
+  final int day;
+  final int kind;
+  final int minutes;
+  const ShiftDayExtra(
+      {required this.day, required this.kind, required this.minutes});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['day'] = Variable<int>(day);
+    map['kind'] = Variable<int>(kind);
+    map['minutes'] = Variable<int>(minutes);
+    return map;
+  }
+
+  ShiftDayExtrasCompanion toCompanion(bool nullToAbsent) {
+    return ShiftDayExtrasCompanion(
+      day: Value(day),
+      kind: Value(kind),
+      minutes: Value(minutes),
+    );
+  }
+
+  factory ShiftDayExtra.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ShiftDayExtra(
+      day: serializer.fromJson<int>(json['day']),
+      kind: serializer.fromJson<int>(json['kind']),
+      minutes: serializer.fromJson<int>(json['minutes']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'day': serializer.toJson<int>(day),
+      'kind': serializer.toJson<int>(kind),
+      'minutes': serializer.toJson<int>(minutes),
+    };
+  }
+
+  ShiftDayExtra copyWith({int? day, int? kind, int? minutes}) => ShiftDayExtra(
+        day: day ?? this.day,
+        kind: kind ?? this.kind,
+        minutes: minutes ?? this.minutes,
+      );
+  ShiftDayExtra copyWithCompanion(ShiftDayExtrasCompanion data) {
+    return ShiftDayExtra(
+      day: data.day.present ? data.day.value : this.day,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      minutes: data.minutes.present ? data.minutes.value : this.minutes,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftDayExtra(')
+          ..write('day: $day, ')
+          ..write('kind: $kind, ')
+          ..write('minutes: $minutes')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(day, kind, minutes);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ShiftDayExtra &&
+          other.day == this.day &&
+          other.kind == this.kind &&
+          other.minutes == this.minutes);
+}
+
+class ShiftDayExtrasCompanion extends UpdateCompanion<ShiftDayExtra> {
+  final Value<int> day;
+  final Value<int> kind;
+  final Value<int> minutes;
+  final Value<int> rowid;
+  const ShiftDayExtrasCompanion({
+    this.day = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.minutes = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ShiftDayExtrasCompanion.insert({
+    required int day,
+    required int kind,
+    required int minutes,
+    this.rowid = const Value.absent(),
+  })  : day = Value(day),
+        kind = Value(kind),
+        minutes = Value(minutes);
+  static Insertable<ShiftDayExtra> custom({
+    Expression<int>? day,
+    Expression<int>? kind,
+    Expression<int>? minutes,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (day != null) 'day': day,
+      if (kind != null) 'kind': kind,
+      if (minutes != null) 'minutes': minutes,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ShiftDayExtrasCompanion copyWith(
+      {Value<int>? day,
+      Value<int>? kind,
+      Value<int>? minutes,
+      Value<int>? rowid}) {
+    return ShiftDayExtrasCompanion(
+      day: day ?? this.day,
+      kind: kind ?? this.kind,
+      minutes: minutes ?? this.minutes,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (day.present) {
+      map['day'] = Variable<int>(day.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<int>(kind.value);
+    }
+    if (minutes.present) {
+      map['minutes'] = Variable<int>(minutes.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftDayExtrasCompanion(')
+          ..write('day: $day, ')
+          ..write('kind: $kind, ')
+          ..write('minutes: $minutes, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $CustomTemplatesTable extends CustomTemplates
     with TableInfo<$CustomTemplatesTable, CustomTemplate> {
   @override
@@ -4635,6 +4907,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ShiftAlarmOverridesTable(this);
   late final $ShiftDayOverridesTable shiftDayOverrides =
       $ShiftDayOverridesTable(this);
+  late final $ShiftDayExtrasTable shiftDayExtras = $ShiftDayExtrasTable(this);
   late final $CustomTemplatesTable customTemplates =
       $CustomTemplatesTable(this);
   late final $RecurringSeriesRowsTable recurringSeriesRows =
@@ -4654,6 +4927,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         customAlarms,
         shiftAlarmOverrides,
         shiftDayOverrides,
+        shiftDayExtras,
         customTemplates,
         recurringSeriesRows
       ];
@@ -5069,6 +5343,7 @@ typedef $$ShiftClassRowsTableCreateCompanionBuilder = ShiftClassRowsCompanion
   Value<int?> startMinute,
   Value<int?> endMinute,
   Value<bool> isRest,
+  Value<bool> isNight,
   Value<int> color,
   Value<bool> alarmEnabled,
 });
@@ -5082,6 +5357,7 @@ typedef $$ShiftClassRowsTableUpdateCompanionBuilder = ShiftClassRowsCompanion
   Value<int?> startMinute,
   Value<int?> endMinute,
   Value<bool> isRest,
+  Value<bool> isNight,
   Value<int> color,
   Value<bool> alarmEnabled,
 });
@@ -5118,6 +5394,9 @@ class $$ShiftClassRowsTableFilterComposer
 
   ColumnFilters<bool> get isRest => $composableBuilder(
       column: $table.isRest, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isNight => $composableBuilder(
+      column: $table.isNight, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get color => $composableBuilder(
       column: $table.color, builder: (column) => ColumnFilters(column));
@@ -5159,6 +5438,9 @@ class $$ShiftClassRowsTableOrderingComposer
   ColumnOrderings<bool> get isRest => $composableBuilder(
       column: $table.isRest, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get isNight => $composableBuilder(
+      column: $table.isNight, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get color => $composableBuilder(
       column: $table.color, builder: (column) => ColumnOrderings(column));
 
@@ -5199,6 +5481,9 @@ class $$ShiftClassRowsTableAnnotationComposer
 
   GeneratedColumn<bool> get isRest =>
       $composableBuilder(column: $table.isRest, builder: (column) => column);
+
+  GeneratedColumn<bool> get isNight =>
+      $composableBuilder(column: $table.isNight, builder: (column) => column);
 
   GeneratedColumn<int> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
@@ -5242,6 +5527,7 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             Value<int?> startMinute = const Value.absent(),
             Value<int?> endMinute = const Value.absent(),
             Value<bool> isRest = const Value.absent(),
+            Value<bool> isNight = const Value.absent(),
             Value<int> color = const Value.absent(),
             Value<bool> alarmEnabled = const Value.absent(),
           }) =>
@@ -5254,6 +5540,7 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             startMinute: startMinute,
             endMinute: endMinute,
             isRest: isRest,
+            isNight: isNight,
             color: color,
             alarmEnabled: alarmEnabled,
           ),
@@ -5266,6 +5553,7 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             Value<int?> startMinute = const Value.absent(),
             Value<int?> endMinute = const Value.absent(),
             Value<bool> isRest = const Value.absent(),
+            Value<bool> isNight = const Value.absent(),
             Value<int> color = const Value.absent(),
             Value<bool> alarmEnabled = const Value.absent(),
           }) =>
@@ -5278,6 +5566,7 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             startMinute: startMinute,
             endMinute: endMinute,
             isRest: isRest,
+            isNight: isNight,
             color: color,
             alarmEnabled: alarmEnabled,
           ),
@@ -6489,6 +6778,150 @@ typedef $$ShiftDayOverridesTableProcessedTableManager = ProcessedTableManager<
     ),
     ShiftDayOverride,
     PrefetchHooks Function()>;
+typedef $$ShiftDayExtrasTableCreateCompanionBuilder = ShiftDayExtrasCompanion
+    Function({
+  required int day,
+  required int kind,
+  required int minutes,
+  Value<int> rowid,
+});
+typedef $$ShiftDayExtrasTableUpdateCompanionBuilder = ShiftDayExtrasCompanion
+    Function({
+  Value<int> day,
+  Value<int> kind,
+  Value<int> minutes,
+  Value<int> rowid,
+});
+
+class $$ShiftDayExtrasTableFilterComposer
+    extends Composer<_$AppDatabase, $ShiftDayExtrasTable> {
+  $$ShiftDayExtrasTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get kind => $composableBuilder(
+      column: $table.kind, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get minutes => $composableBuilder(
+      column: $table.minutes, builder: (column) => ColumnFilters(column));
+}
+
+class $$ShiftDayExtrasTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShiftDayExtrasTable> {
+  $$ShiftDayExtrasTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get kind => $composableBuilder(
+      column: $table.kind, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get minutes => $composableBuilder(
+      column: $table.minutes, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ShiftDayExtrasTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShiftDayExtrasTable> {
+  $$ShiftDayExtrasTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
+
+  GeneratedColumn<int> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<int> get minutes =>
+      $composableBuilder(column: $table.minutes, builder: (column) => column);
+}
+
+class $$ShiftDayExtrasTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ShiftDayExtrasTable,
+    ShiftDayExtra,
+    $$ShiftDayExtrasTableFilterComposer,
+    $$ShiftDayExtrasTableOrderingComposer,
+    $$ShiftDayExtrasTableAnnotationComposer,
+    $$ShiftDayExtrasTableCreateCompanionBuilder,
+    $$ShiftDayExtrasTableUpdateCompanionBuilder,
+    (
+      ShiftDayExtra,
+      BaseReferences<_$AppDatabase, $ShiftDayExtrasTable, ShiftDayExtra>
+    ),
+    ShiftDayExtra,
+    PrefetchHooks Function()> {
+  $$ShiftDayExtrasTableTableManager(
+      _$AppDatabase db, $ShiftDayExtrasTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ShiftDayExtrasTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ShiftDayExtrasTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ShiftDayExtrasTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> day = const Value.absent(),
+            Value<int> kind = const Value.absent(),
+            Value<int> minutes = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ShiftDayExtrasCompanion(
+            day: day,
+            kind: kind,
+            minutes: minutes,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required int day,
+            required int kind,
+            required int minutes,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ShiftDayExtrasCompanion.insert(
+            day: day,
+            kind: kind,
+            minutes: minutes,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ShiftDayExtrasTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ShiftDayExtrasTable,
+    ShiftDayExtra,
+    $$ShiftDayExtrasTableFilterComposer,
+    $$ShiftDayExtrasTableOrderingComposer,
+    $$ShiftDayExtrasTableAnnotationComposer,
+    $$ShiftDayExtrasTableCreateCompanionBuilder,
+    $$ShiftDayExtrasTableUpdateCompanionBuilder,
+    (
+      ShiftDayExtra,
+      BaseReferences<_$AppDatabase, $ShiftDayExtrasTable, ShiftDayExtra>
+    ),
+    ShiftDayExtra,
+    PrefetchHooks Function()>;
 typedef $$CustomTemplatesTableCreateCompanionBuilder = CustomTemplatesCompanion
     Function({
   Value<int> id,
@@ -7055,6 +7488,8 @@ class $AppDatabaseManager {
       $$ShiftAlarmOverridesTableTableManager(_db, _db.shiftAlarmOverrides);
   $$ShiftDayOverridesTableTableManager get shiftDayOverrides =>
       $$ShiftDayOverridesTableTableManager(_db, _db.shiftDayOverrides);
+  $$ShiftDayExtrasTableTableManager get shiftDayExtras =>
+      $$ShiftDayExtrasTableTableManager(_db, _db.shiftDayExtras);
   $$CustomTemplatesTableTableManager get customTemplates =>
       $$CustomTemplatesTableTableManager(_db, _db.customTemplates);
   $$RecurringSeriesRowsTableTableManager get recurringSeriesRows =>

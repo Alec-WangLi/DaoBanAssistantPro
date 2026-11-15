@@ -743,6 +743,20 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             Row(
               children: [
                 Expanded(
+                  child: Text(L10n.nightShift,
+                      style: AppTokens.rowPrimary),
+                ),
+                GlassSwitch(
+                  key: Key('shift-night-switch-$index'),
+                  value: c.isNight,
+                  onChanged: (v) => setState(() => _classes[index] =
+                      _editClass(_classes[index], isNight: v)),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
                   child: Text(L10n.linkedAlarm,
                       style: AppTokens.rowPrimary),
                 ),
@@ -2341,6 +2355,7 @@ ShiftClass _editClass(
   int? endMinute,
   bool clearTimes = false,
   bool? isRest,
+  bool? isNight,
   int? color,
   bool? alarmEnabled,
   List<ShiftAlarm>? alarms,
@@ -2356,6 +2371,7 @@ ShiftClass _editClass(
     startMinute: clearTimes ? null : (startMinute ?? c.startMinute),
     endMinute: clearTimes ? null : (endMinute ?? c.endMinute),
     isRest: isRest ?? c.isRest,
+    isNight: isNight ?? c.isNight,
     color: color ?? c.color,
     alarmEnabled: alarmEnabled ?? c.alarmEnabled,
     alarms: clearAlarms ? const [] : (alarms ?? c.alarms),

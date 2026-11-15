@@ -47,10 +47,10 @@ void main() {
     final db = await pumpCalendar(tester, 'day_night_rest_rest');
     expect(await scheduleCount(db), 1, reason: '进入前只有种子方案');
 
-    // 顶栏那颗按钮现在是**只读**的「排班时段」总览（v0.9.14 起不再「切换」——
-    // 它改的只是「没被时段覆盖时的兜底」，时段盖满之后点它什么也不会变），
-    // 底部一个「管理排班时段」跳到排班管理页；新增排班在那页上。
-    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    // 顶栏那颗按钮现在是「统计」；时段总览从统计页头部进（2026-11-16 起）。
+    await tester.tap(find.byTooltip(L10n.statistics));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('stats-schedule-link')));
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.manageTimeline));
     await tester.pumpAndSettle();
@@ -75,7 +75,9 @@ void main() {
       (tester) async {
     final db = await pumpCalendar(tester, 'day_night_rest_rest');
 
-    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    await tester.tap(find.byTooltip(L10n.statistics));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('stats-schedule-link')));
     await tester.pumpAndSettle();
     await tester.tap(find.text(L10n.manageTimeline));
     await tester.pumpAndSettle();
@@ -116,7 +118,9 @@ void main() {
       (tester) async {
     await pumpCalendar(tester, 'day_night_rest_rest');
 
-    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
+    await tester.tap(find.byTooltip(L10n.statistics));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('stats-schedule-link')));
     await tester.pumpAndSettle();
 
     final sheet = find.byType(GlassSheetHeader);

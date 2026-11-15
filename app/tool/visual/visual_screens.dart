@@ -12,10 +12,12 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pickers.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
+import 'package:shiftassistantpro/domain/day_extra.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/features/calendar/day_extra_sheet.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
 import 'package:shiftassistantpro/features/calendar/shift_color_picker.dart';
@@ -33,6 +35,7 @@ import 'package:shiftassistantpro/features/profile/supporter_screen.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_series_editor.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
+import 'package:shiftassistantpro/features/stats/stats_screen.dart';
 
 import 'visual_harness.dart';
 
@@ -656,7 +659,77 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const _SupportUnlockedHost(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 统计页月视图 + 今天有一条请假 / 一条加班：主数字、四格指标、班次分布。
+    slug: '74_stats_month',
+    title: '统计 · 月',
+    build: (db) async {
+      await seedTodayDayExtra(db);
+      return const StatsScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 年视图：12 个月的下钻行是另一套布局，没有交互钩子拍不到。
+    slug: '75_stats_year',
+    title: '统计 · 年',
+    build: (db) async {
+      await seedTodayDayExtra(db);
+      return const StatsScreen(initialYearMode: true);
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 空白表（跟随法定节假日）：工时不可算，但请假 / 加班照常显示。
+    slug: '76_stats_blank',
+    title: '统计 · 法定班次',
+    build: (db) async {
+      await seedBlankSchedule(db);
+      return const StatsScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 请假 / 加班时长弹层：快捷档 + 30 分钟加减 + 动作行。
+    slug: '77_day_extra_sheet',
+    title: '请假 / 加班时长',
+    build: (db) async => const _DayExtraSheetHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
+
+/// 「请假 / 加班时长」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 与 `_OverridePickerHost` 同一套路：`showDayExtraSheet` 是命令式的，首帧后
+/// 把它弹出来，`build` 只交一个空 `Scaffold`。
+class _DayExtraSheetHost extends StatefulWidget {
+  const _DayExtraSheetHost();
+
+  @override
+  State<_DayExtraSheetHost> createState() => _DayExtraSheetHostState();
+}
+
+class _DayExtraSheetHostState extends State<_DayExtraSheetHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final today = dateOnly(DateTime.now());
+      showDayExtraSheet(
+        context,
+        kind: DayExtraKind.leave,
+        from: today,
+        to: today,
+        dayCount: 1,
+        fullDayMinutes: 720,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
 ///

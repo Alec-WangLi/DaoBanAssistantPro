@@ -104,8 +104,8 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('这天我请假、或者跟同事换了班',
                 'I am taking a day off, or swapping with a colleague'),
             answer: L10nText(
-              '在日历上点底栏那张信息卡里的班次那一行；要改连着好几天，就长按某一天往旁边拖，把一段日子圈出来。',
-              'In the calendar, tap the shift row on the info card at the bottom. To change several days in a row, long-press one day and drag sideways to ring a stretch of dates.',
+              '在日历上点底栏那张信息卡里的班次那一行：选择层里可以换一个班次，也可以选「请假」「加班」并填时长。要改连着好几天，就长按某一天往旁边拖，把一段日子圈出来。',
+              'In the calendar, tap the shift row on the info card at the bottom: the sheet lets you pick another shift, or choose Leave / Overtime and set the duration. To change several days in a row, long-press one day and drag sideways to ring a stretch of dates.',
             ),
           ),
           (
@@ -113,6 +113,26 @@ const List<HelpFaqGroup> helpFaqGroups = [
             answer: L10nText(
               '再点一次那几天，选择层最上面有「恢复轮转」。',
               'Tap those days again — "Restore rotation" is at the top of the picker.',
+            ),
+          ),
+        ],
+      ),
+      (
+        heading: L10nText('统计', 'Statistics'),
+        items: [
+          (
+            question: L10nText('我想看这个月上了多少小时',
+                'I want to see how many hours I worked this month'),
+            answer: L10nText(
+              '点日历右上角那颗统计按钮，默认打开本月：实际上班工时、正常工时、平均每班、上班与休息天数，往下还有请假、加班、法定节假日上班、夜班天数与最长连班 / 连休。上面切到「年」可以看全年和 12 个月，点一行就跳到那个月。请假与加班在「调整班次」里记，记完会自动算进去。',
+              'Tap the statistics button at the top right of the calendar. It opens this month by default: actual hours worked, regular hours, average per shift, and work / rest days, followed by leave, overtime, holiday work, night shifts and the longest work / rest streaks. Switch to Year at the top for the whole year and all 12 months; tap a row to jump to that month. Leave and overtime are recorded in "Adjust shift" and counted automatically.',
+            ),
+          ),
+          (
+            question: L10nText('夜班天数一直是 0', 'The night-shift count stays at 0'),
+            answer: L10nText(
+              '夜班是班次上的一个标记，不是按名字猜的。去「我的 → 排班管理」打开那套班表，在班次卡里把「夜班」开关打开，统计就会跟上。',
+              'Night shift is a marker on the shift rather than something guessed from its name. Open the schedule under Me → Schedule management and turn on the "Night shift" switch on that shift card; the statistics will follow.',
             ),
           ),
         ],

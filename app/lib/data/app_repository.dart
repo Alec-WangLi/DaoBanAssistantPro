@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/day_extra.dart';
 import '../domain/monthly_pattern.dart';
 import '../domain/recurring_todo.dart';
 import '../domain/schedule_chain.dart';
@@ -19,6 +20,25 @@ import '../core/migration_flags.dart';
 export 'app_database.dart';
 
 List<String> parseTeamNames(String s) => s.split(',');
+
+/// `shift_day_extras` 的行 → `day → DayExtra`。
+///
+/// kind 越界（脏数据 / 将来新增的种类）直接忽略那一行：读不懂的一条记录不该让
+/// 整个统计页崩掉。同一天两条记录合并成一个值（请假 + 加班可以同时存在）。
+Map<int, DayExtra> dayExtrasFromRows(List<ShiftDayExtra> rows) {
+  final out = <int, DayExtra>{};
+  for (final r in rows) {
+    final cur = out[r.day] ?? const DayExtra();
+    if (r.kind == DayExtraKind.leave.index) {
+      out[r.day] =
+          DayExtra(leaveMinutes: r.minutes, overtimeMinutes: cur.overtimeMinutes);
+    } else if (r.kind == DayExtraKind.overtime.index) {
+      out[r.day] = DayExtra(
+          leaveMinutes: cur.leaveMinutes, overtimeMinutes: r.minutes);
+    }
+  }
+  return out;
+}
 
 String joinTeamNames(List<String> names) => names.join(',');
 
@@ -161,6 +181,7 @@ extension ShiftClassRowX on ShiftClassRow {
         startMinute: startMinute,
         endMinute: endMinute,
         isRest: isRest,
+        isNight: isNight,
         color: color,
         alarmEnabled: alarmEnabled,
         alarms: alarms,
@@ -393,6 +414,8 @@ class AppRepository {
     await db.transaction(() async {
       await db.delete(db.scheduleEvents).go();
       await db.delete(db.shiftAlarmOverrides).go();
+      // 日级请假 / 加班是全局表，与方案无关；重置时一并清掉。
+      await db.delete(db.shiftDayExtras).go();
       // 按天改班覆盖引用班次定义的 id，是班次的子表：与周期一样先于班次删。
       await db.delete(db.shiftDayOverrides).go();
       // 班次闹钟同理：+`class_id` 指着班次定义。
@@ -743,6 +766,7 @@ class AppRepository {
             startMinute: Value(c.startMinute),
             endMinute: Value(c.endMinute),
             isRest: Value(c.isRest),
+            isNight: Value(c.isNight),
             color: Value(c.color),
             alarmEnabled: Value(c.alarmEnabled),
           ));
@@ -757,6 +781,7 @@ class AppRepository {
                   startMinute: Value(c.startMinute),
                   endMinute: Value(c.endMinute),
                   isRest: Value(c.isRest),
+                  isNight: Value(c.isNight),
                   color: Value(c.color),
                   alarmEnabled: Value(c.alarmEnabled),
                 ),
@@ -1374,6 +1399,30 @@ class AppRepository {
     return {for (final r in rows) r.day: r.enabled};
   }
 
+  /// 写入 / 覆盖某天的请假或加班时长；[minutes] <= 0 等于清除。
+  ///
+  /// `day` 走 `dayNumber` 口径，与闹钟按天覆盖同一套。
+  Future<void> setDayExtra(int day, DayExtraKind kind, int minutes) async {
+    if (minutes <= 0) return clearDayExtra(day, kind);
+    await db.into(db.shiftDayExtras).insertOnConflictUpdate(
+          ShiftDayExtrasCompanion.insert(
+            day: day,
+            kind: kind.index,
+            minutes: minutes,
+          ),
+        );
+  }
+
+  Future<void> clearDayExtra(int day, DayExtraKind kind) {
+    return (db.delete(db.shiftDayExtras)
+          ..where((r) => r.day.equals(day) & r.kind.equals(kind.index)))
+        .go();
+  }
+
+  /// 一次性读取全部日级记录（闹钟重排与统计页装配用）。
+  Future<Map<int, DayExtra>> listDayExtras() async =>
+      dayExtrasFromRows(await db.select(db.shiftDayExtras).get());
+
   /// 当前方案的行 id；没有当前方案时返回 null。
   Future<int?> currentScheduleId() async {
     final row = await (db.select(db.shiftScheduleRows)
@@ -1587,4 +1636,10 @@ final shiftAlarmOverridesProvider = StreamProvider<Map<int, bool>>((ref) {
       .select(db.shiftAlarmOverrides)
       .watch()
       .map((rows) => {for (final r in rows) r.day: r.enabled});
+});
+
+/// 日级请假 / 加班（day → DayExtra）。日历标记、统计页、调班弹层都读它。
+final dayExtrasProvider = StreamProvider<Map<int, DayExtra>>((ref) {
+  final db = ref.watch(databaseProvider);
+  return db.select(db.shiftDayExtras).watch().map(dayExtrasFromRows);
 });

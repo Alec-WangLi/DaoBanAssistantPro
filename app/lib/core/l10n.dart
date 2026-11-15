@@ -748,6 +748,9 @@ class L10n {
   static String get end => t('结束', 'End');
   static String get crossesMidnight => t('（结束早于开始，或晚于 24:00 = 跨午夜）', '(ends before start, or past 24:00 = crosses midnight)');
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
+
+  /// 班次编辑器里的「夜班」标记 —— 统计页的夜班天数只认它。
+  static String get nightShift => t('夜班', 'Night shift');
   static String get alarmTime => t('响铃', 'Alarm');
 
   static String get addAlarm => t('添加闹钟', 'Add alarm');
@@ -1067,6 +1070,98 @@ class L10n {
   static String get monthTally => t('本月', 'This month');
   static String get savedAndRescheduled => t('已保存并重排闹钟', 'Saved & alarms rescheduled');
   static String switchedTo(String name) => isEn ? 'Switched to $name' : '已切换到 $name';
+
+  // ── 日级请假 / 加班 ──
+  static String get leave => t('请假', 'Leave');
+  static String get overtime => t('加班', 'Overtime');
+  static String get leaveHint =>
+      t('整天请假会同时取消这天的班次闹钟', 'A full-day leave also cancels that day\'s shift alarm');
+  static String get overtimeHint =>
+      t('加班时长叠加在当天工时上', 'Overtime is added on top of the day\'s hours');
+  static String get fullDay => t('整天', 'Full day');
+  static String get halfDay => t('半天', 'Half day');
+  static String get dayExtraExisting => t('已有记录', 'Existing record');
+
+  /// 分钟数 → 「4小时30分」/「4h 30m」；整小时不写「0分」。
+  static String durationText(int minutes) {
+    final m = minutes < 0 ? 0 : minutes;
+    final h = m ~/ 60, r = m % 60;
+    if (h == 0 && r == 0) return isEn ? '0h' : '0小时';
+    if (h == 0) return isEn ? '${r}m' : '$r分';
+    if (r == 0) return isEn ? '${h}h' : '$h小时';
+    return isEn ? '${h}h ${r}m' : '$h小时$r分';
+  }
+
+  static String extraLeaveLine(int minutes) =>
+      isEn ? 'Leave ${durationText(minutes)}' : '请假 ${durationText(minutes)}';
+  static String extraOvertimeLine(int minutes) =>
+      isEn ? 'Overtime ${durationText(minutes)}' : '加班 ${durationText(minutes)}';
+
+  /// 「请假 4小时 · 加班 2小时」—— 只列有值的那几项。
+  static String? dayExtraLine(int leaveMinutes, int overtimeMinutes) {
+    final parts = <String>[
+      if (leaveMinutes > 0) extraLeaveLine(leaveMinutes),
+      if (overtimeMinutes > 0) extraOvertimeLine(overtimeMinutes),
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  static String dayExtraSaved(String range, String kind, String duration) => isEn
+      ? 'Saved $kind $duration on $range'
+      : '已记录 $range $kind $duration';
+
+  static String dayExtraCleared(String range, String kind) =>
+      isEn ? 'Cleared $kind on $range' : '已清除 $range 的$kind';
+
+  // ── 统计页 ──
+  static String get statistics => t('统计', 'Statistics');
+  static String get statsMonth => t('月', 'Month');
+  static String get statsYear => t('年', 'Year');
+  static String get statsThisMonth => t('本月', 'This month');
+  static String get statsThisYear => t('今年', 'This year');
+  static String get statsActual => t('实际在岗', 'Hours worked');
+  static String get statsNormal => t('正常', 'Regular');
+  static String get statsWorkDays => t('上班', 'Work days');
+  static String get statsRestDays => t('休息', 'Rest days');
+  static String get statsLeave => t('请假', 'Leave');
+  static String get statsOvertime => t('加班', 'Overtime');
+  static String get statsAverage => t('平均', 'Average');
+  static String get statsBreakdown => t('班次分布', 'By shift');
+  static String get statsHolidayWork => t('法定节假日上班', 'Worked on holidays');
+  static String get statsNightShifts => t('夜班', 'Night shifts');
+  static String get statsLongestWork => t('最长连班', 'Longest work streak');
+  static String get statsLongestRest => t('最长连休', 'Longest rest streak');
+  static String get statsUnscheduled => t('未排班', 'Unscheduled');
+  static String get statsBlankDays => t('无班次', 'No shifts');
+  static String get statsNoSchedule => t('这段时间还没有排班', 'No schedule for this period');
+  static String get statsBlankHint => t(
+      '这套班表没有班次（跟随法定节假日），无法统计工时',
+      'This schedule has no shifts (follows public holidays), so hours cannot be calculated');
+  static String statsDays(int n) => isEn ? '$n d' : '$n天';
+  static String statsMissingTime(int n) => isEn
+      ? '$n work day(s) have no times set and were counted as 0 h'
+      : '$n 天班次未设时间，未计入工时';
+  static String statsAverageValue(double hours) => isEn
+      ? '${hours.toStringAsFixed(1)} h / shift'
+      : '${hours.toStringAsFixed(1)} 小时 / 班';
+  static String statsUsingSchedule(String name) =>
+      isEn ? 'Using $name' : '使用中：$name';
+  static String statsYearLabel(int year) => isEn ? '$year' : '$year年';
+  static String statsMonthShort(int month) => isEn
+      ? const [
+          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ][month - 1]
+      : '$month月';
+  static String statsBreakdownLine(int normal, int overtime, int leave) {
+    final parts = <String>[
+      '${L10n.statsNormal} ${durationText(normal)}',
+      if (overtime > 0) '${L10n.statsOvertime} ${durationText(overtime)}',
+      if (leave > 0) '${L10n.statsLeave} ${durationText(leave)}',
+    ];
+    return parts.join(' · ');
+  }
+
   static List<String> get weekdays => isEn
       ? const ['M', 'T', 'W', 'T', 'F', 'S', 'S']
       : const ['一', '二', '三', '四', '五', '六', '日'];

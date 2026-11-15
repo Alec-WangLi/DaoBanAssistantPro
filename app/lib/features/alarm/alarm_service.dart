@@ -7,6 +7,7 @@ import '../../core/l10n.dart';
 import '../../data/app_repository.dart';
 import '../../domain/recurring_todo.dart';
 import '../../domain/shift_rotation.dart';
+import '../../domain/shift_stats.dart';
 import '../widget/widget_service.dart';
 import '../../core/clock.dart';
 
@@ -134,6 +135,7 @@ List<ShiftAlarmPlan> planShiftAlarms(
   required DateTime from,
   required int days,
   Map<int, bool> overrides = const {},
+  Map<int, int> leaveMinutes = const {},
 }) {
   // ⚠️ 从**昨天**起算，不是今天。次日档的闹钟（16:30–次日 00:30 的 00:15、夜班的
   // 上午时段）属于**昨天那个班次**、却在今天响 —— 而 `reschedule` 开头会把
@@ -153,6 +155,12 @@ List<ShiftAlarmPlan> planShiftAlarms(
     }
     // 按天覆盖：该天被单独关闭则跳过
     if (overrides[dayNumber(date)] == false) continue;
+    // 整天请假：那天不在岗，班次闹钟不排。部分请假照常排（差一分钟也要上班）。
+    // 判据放在这里而不是让界面顺手写一条按天关闹钟 —— 否则「请了假、又在闹钟页
+    // 把那天的开关打开」会变成两个开关打架。
+    final leave = leaveMinutes[dayNumber(date)] ?? 0;
+    final duration = shiftDurationMinutes(t);
+    if (leave > 0 && duration != null && leave >= duration) continue;
 
     for (var i = 0; i < t.alarms.length; i++) {
       final alarm = t.alarms[i];
@@ -988,6 +996,10 @@ class AlarmService {
       schedules.chain,
       await repo.listCustomAlarms(),
       overrides: await repo.listShiftAlarmOverrides(),
+      leaveMinutes: {
+        for (final e in (await repo.listDayExtras()).entries)
+          if (e.value.leaveMinutes > 0) e.key: e.value.leaveMinutes,
+      },
       events: await repo.listEvents(),
     );
     // 重复待办的提醒走独立号段，与上面那条链路互不影响（`reschedule` 里的
@@ -1009,6 +1021,7 @@ class AlarmService {
     List<CustomAlarm> customAlarms, {
     int days = _shiftDaysHorizon,
     Map<int, bool> overrides = const {},
+    Map<int, int> leaveMinutes = const {},
     List<ScheduleEvent> events = const [],
   }) async {
     // id 算式是 `序号 × _shiftDaysHorizon + 天数偏移`：`days` 一旦超过天数窗口，
@@ -1041,7 +1054,10 @@ class AlarmService {
     // 「哪些天要排、各排几点」由 [planShiftAlarms] 这个纯函数决定（可单测）；
     // 这里只负责把决策落成原生闹钟。id 仍是 `_shiftBaseId + 天数偏移`。
     final List<ShiftAlarmPlan> shiftPlans = planShiftAlarms(source,
-        from: appNow(), days: days, overrides: overrides);
+        from: appNow(),
+        days: days,
+        overrides: overrides,
+        leaveMinutes: leaveMinutes);
     for (final plan in shiftPlans) {
       try {
         await scheduleNativeAlarm(

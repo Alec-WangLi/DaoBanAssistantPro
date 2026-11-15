@@ -73,6 +73,12 @@ class ShiftClassRows extends Table {
   IntColumn get startMinute => integer().nullable()();
   IntColumn get endMinute => integer().nullable()();
   BoolColumn get isRest => boolean().withDefault(const Constant(false))();
+
+  /// 算不算夜班（统计页「夜班天数」的唯一判据）。
+  ///
+  /// 不从名字或「跨不跨午夜」推断：24 小时值班也跨午夜。内置模板按角色自动标，
+  /// 用户自建班次在编辑器里手动开；老库升级后一律 0。
+  BoolColumn get isNight => boolean().withDefault(const Constant(false))();
   IntColumn get color => integer().withDefault(const Constant(0xFF5B7FFF))();
   BoolColumn get alarmEnabled => boolean().withDefault(const Constant(false))();
   // `alarm_minute` 在 v10 迁进 `ShiftClassAlarms` 后从本表删掉了（见 onUpgrade
@@ -212,6 +218,23 @@ class ShiftDayOverrides extends Table {
   Set<Column> get primaryKey => {scheduleId, day};
 }
 
+/// 日级「请假 / 加班」：**全局按天记，不挂在某套方案上**。
+///
+/// 与 [ShiftDayOverrides] 有意不同：那条表达的是「那天上哪个班」，必须依附于
+/// 某套方案的班次定义；这条表达的是「那天我不在 / 多干了」，换班表也成立
+/// （与 [ShiftAlarmOverrides] 全局按天同一条理由）。
+///
+/// 主键 `{day, kind}`：一天最多一条请假 + 一条加班（上午请假、晚上加班是正常
+/// 排法）。`minutes` 是分钟数，<= 0 视为没有（写入侧直接删行）。
+class ShiftDayExtras extends Table {
+  IntColumn get day => integer()();
+  IntColumn get kind => integer()();
+  IntColumn get minutes => integer()();
+
+  @override
+  Set<Column> get primaryKey => {day, kind};
+}
+
 /// 「我的模板」表：把一套方案的**结构**（班次定义 + 周期 + 班组错位）存成快照，
 /// 新建排班时可以再选它。见 `domain/schedule_template.dart`（那边的值类型与
 /// 编解码是纯函数，可直接单测）。
@@ -315,6 +338,7 @@ class RecurringSeriesRows extends Table {
   CustomAlarms,
   ShiftAlarmOverrides,
   ShiftDayOverrides,
+  ShiftDayExtras,
   CustomTemplates,
   RecurringSeriesRows,
 ])
@@ -325,7 +349,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   /// 当前 schema 版本（备份导入时用来拒绝「来自更新版本」的库）。
-  static const int schemaVersionNumber = 15;
+  static const int schemaVersionNumber = 16;
 
   @override
   int get schemaVersion => schemaVersionNumber;
@@ -334,6 +358,17 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 16) {
+            // 统计页：日级请假 / 加班表 + 班次的「夜班」标记。两样都是纯新增。
+            await m.createTable(shiftDayExtras);
+            // ⚠️ **只有 v6 及以后才有 `shift_class_rows`**（它是 `from < 6` 那段
+            // 建的，而那段排在后面跑）。从 v5 及更早升上来时，表由 `from < 6`
+            // 按**当前 schema** 建出来，新列自带默认值 —— 硬加会抛
+            // `no such table: shift_class_rows`（照 v9→v10 / v12→v13 两次先例）。
+            if (from >= 6) {
+              await m.addColumn(shiftClassRows, shiftClassRows.isNight);
+            }
+          }
           if (from < 15) {
             // 重复待办：每月从「单日」改成「多选几天」（位掩码），并加一列按班次
             // 选择的**班次名字**。旧的 `month_day` 迁完就删（不留死列，照 v10 删

@@ -170,6 +170,7 @@ class ShiftClass {
     this.startMinute,
     this.endMinute,
     this.isRest = false,
+    this.isNight = false,
     this.color = 0xFF5B7FFF,
     this.alarmEnabled = false,
     this.alarms = const [],
@@ -197,6 +198,13 @@ class ShiftClass {
 
   /// 是否休息日（不响联动闹钟）。
   final bool isRest;
+
+  /// 这个班次算不算夜班 —— **统计页的「夜班天数」只认它**。
+  ///
+  /// 不从名字或「跨不跨午夜」推断：24 小时值班也跨午夜、早班也可能跨午夜，
+  /// 而「算不算夜班」是工作安排本身的一部分。内置模板按 `ShiftRole.night`
+  /// 自动标；用户自己建的班次在编辑器里手动开。
+  final bool isNight;
 
   /// 日历格子的 ARGB 颜色。
   final int color;
@@ -248,6 +256,7 @@ class ShiftClass {
     int? startMinute,
     int? endMinute,
     bool? isRest,
+    bool? isNight,
     int? color,
     bool? alarmEnabled,
     List<ShiftAlarm>? alarms,
@@ -259,6 +268,7 @@ class ShiftClass {
       startMinute: startMinute ?? this.startMinute,
       endMinute: endMinute ?? this.endMinute,
       isRest: isRest ?? this.isRest,
+      isNight: isNight ?? this.isNight,
       color: color ?? this.color,
       alarmEnabled: alarmEnabled ?? this.alarmEnabled,
       alarms: alarms ?? this.alarms,
@@ -274,13 +284,14 @@ class ShiftClass {
       other.startMinute == startMinute &&
       other.endMinute == endMinute &&
       other.isRest == isRest &&
+      other.isNight == isNight &&
       other.color == color &&
       other.alarmEnabled == alarmEnabled &&
       _sameAlarms(other.alarms, alarms);
 
   @override
   int get hashCode => Object.hash(id, name, abbr, startMinute, endMinute,
-      isRest, color, alarmEnabled, Object.hashAll(alarms));
+      isRest, isNight, color, alarmEnabled, Object.hashAll(alarms));
 
   @override
   String toString() => 'ShiftClass($name, rest=$isRest)';
@@ -617,6 +628,8 @@ ShiftSchedule defaultSchedule() {
         abbr: L10n.t('夜', 'N'),
         startMinute: 20 * 60 + 30,
         endMinute: 8 * 60 + 30,
+        // 统计页的「夜班天数」靠这个标记；内置默认表里它就是夜班。
+        isNight: true,
         color: 0xFF7A5CFF,
         alarmEnabled: true,
         alarms: const [ShiftAlarm(minute: 19 * 60 + 30)],

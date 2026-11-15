@@ -17,6 +17,8 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+import 'support/migration_fixtures.dart';
+
 /// v10 形态的方案表（只差 v12 加的那两列与 v14 加的两列）。
 const _v10ScheduleTable = '''
 CREATE TABLE shift_schedule_rows (
@@ -65,6 +67,8 @@ Future<AppDatabase> _openV10() async {
   raw.execute(_v10ScheduleTable);
   raw.execute(_v10ScheduleEvents);
   raw.execute(_v10CustomTemplates);
+  // `from < 16` 会给班次表加 `is_night`，而迁移分支按倒序跑 —— 这张表必须存在。
+  raw.execute(v10ShiftClassRowsDdl);
 
   raw.execute(
     'INSERT INTO shift_schedule_rows '
@@ -94,7 +98,7 @@ void main() {
     addTearDown(db.close);
 
     // 一路升到**最新**（迁移分支全部倒序跑过），所以这里跟的是当前 schemaVersion。
-    expect(db.schemaVersion, 15);
+    expect(db.schemaVersion, 16);
 
     // ① 方案行原样 —— 注意中间被 `TableMigration` 重建过一次
     final rows = await db.select(db.shiftScheduleRows).get();

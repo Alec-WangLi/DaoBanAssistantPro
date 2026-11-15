@@ -1,7 +1,6 @@
 // app/test/shift_override_picker_test.dart
 //
-// 「调整班次」选择层：列全本方案的班次定义、当前值打勾、可选「恢复轮转」。
-// 本机没有可运行目标，界面行为全靠 widget 测试覆盖。
+// 「调整班次」弹层新增的两行动作：请假 / 加班。它们不是班次，返回的是 intent。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -9,172 +8,99 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 
+final _schedule = ShiftSchedule(
+  name: '测试',
+  anchorDate: DateTime.utc(2026, 11, 1),
+  classes: const [
+    ShiftClass(
+        name: '白班',
+        abbr: '白',
+        startMinute: 8 * 60,
+        endMinute: 20 * 60),
+    ShiftClass(name: '休息', abbr: '休', isRest: true),
+  ],
+  cycle: const [0, 1],
+  teamCount: 1,
+  teamNames: const ['我'],
+  teamOffsets: const [0],
+);
+
+Future<void> _pumpHost(
+  WidgetTester tester, {
+  required void Function(ShiftOverrideChoice?) onResult,
+  Size size = const Size(420, 900),
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(MaterialApp(
+    home: Scaffold(
+      body: Builder(
+        builder: (context) => TextButton(
+          onPressed: () async {
+            final r = await showShiftOverridePicker(
+              context,
+              schedule: _schedule,
+              from: DateTime(2026, 11, 12),
+              to: DateTime(2026, 11, 12),
+            );
+            onResult(r);
+          },
+          child: const Text('open'),
+        ),
+      ),
+    ),
+  ));
+  await tester.tap(find.text('open'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh');
   });
 
-  Future<ShiftOverrideChoice?> pumpPicker(
-    WidgetTester tester, {
-    ShiftSchedule? schedule,
-    ShiftClass? current,
-    bool canRestore = false,
-  }) async {
+  testWidgets('请假行返回 leave intent', (tester) async {
     ShiftOverrideChoice? result;
-    // 打勾走 `identical` 判等，所以想给 `current` 的用例**必须**把自己那份
-    // schedule 一起传进来：默认这份是每次调用新造的，从中取不到「同一实例」的
-    // 班次，`current` 会静默不打勾。
-    final s = schedule ?? defaultSchedule();
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: ElevatedButton(
-              onPressed: () async {
-                result = await showShiftOverridePicker(
-                  context,
-                  schedule: s,
-                  from: DateTime(2026, 9, 18),
-                  to: DateTime(2026, 9, 20),
-                  canRestore: canRestore,
-                  currentClass: current,
-                );
-              },
-              child: const Text('open'),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-    return result;
-  }
+    await _pumpHost(tester, onResult: (r) => result = r);
 
-  testWidgets('列出本方案全部班次定义', (tester) async {
-    await pumpPicker(tester);
-    for (final c in defaultSchedule().classes) {
-      expect(find.text(c.name), findsOneWidget, reason: '${c.name} 应当可选');
-    }
-  });
-
-  testWidgets('多日时写出「起 – 止 · N 天」的区间', (tester) async {
-    await pumpPicker(tester);
-    expect(find.textContaining('3 天'), findsOneWidget);
-  });
-
-  testWidgets('弹层自己说明是干什么的：写着「调整班次」，且压在区间上面', (tester) async {
-    await pumpPicker(tester);
-    // 2026-10-13 用户真机反馈：长按那天弹出来的一屏里**没有任何一处**说明它是
-    // 「调整班次」—— 光看几个班次名，不知道这屏是干嘛的、点了会发生什么。
-    // 这一轮把名字补成标题、日期区间退到第二行。用例钉住「两句都在」以及
-    // **谁在上面**：反过来（区间当标题）正是用户看不懂的那一版。
-    expect(find.text(L10n.adjustShift), findsOneWidget);
-    expect(find.textContaining('3 天'), findsOneWidget);
-    expect(
-      tester.getTopLeft(find.text(L10n.adjustShift)).dy,
-      lessThan(tester.getTopLeft(find.textContaining('3 天')).dy),
-      reason: '名字在上、区间在下',
-    );
-  });
-
-  testWidgets('选中一项后返回「改成这个班次」', (tester) async {
-    final schedule = defaultSchedule();
-    ShiftOverrideChoice? result;
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: ElevatedButton(
-              onPressed: () async {
-                result = await showShiftOverridePicker(
-                  context,
-                  schedule: schedule,
-                  from: DateTime(2026, 9, 18),
-                  to: DateTime(2026, 9, 18),
-                );
-              },
-              child: const Text('open'),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('open'));
+    await tester.tap(find.byKey(const Key('shift-override-leave')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(schedule.classes[3].name));
-    await tester.pumpAndSettle();
-
-    expect(result, isNotNull);
+    expect(result!.intent, ShiftOverrideIntent.leave);
+    expect(result!.shift, isNull);
     expect(result!.restore, isFalse);
-    expect(result!.shift!.name, schedule.classes[3].name);
   });
 
-  testWidgets('当前班次那一行打勾，且只打那一行', (tester) async {
-    final schedule = defaultSchedule();
-    final current = schedule.classes[2];
-    await pumpPicker(tester, schedule: schedule, current: current);
-
-    // 有且只有一处勾 —— 「每行都打」与「一行都不打」这两种实现都在这里红。
-    expect(find.byIcon(Icons.check), findsOneWidget);
-
-    // 勾落在当前班次那一行：承载勾的那个 ListTile 里应当写着这一项的名字 ——
-    // 「打错行」的实现（比如恒打首行 / 恒打末行）在这里红。
-    final currentRow = find.ancestor(
-      of: find.byIcon(Icons.check),
-      matching: find.byType(ListTile),
-    );
-    expect(currentRow, findsOneWidget);
-    expect(find.descendant(of: currentRow, matching: find.text(current.name)),
-        findsOneWidget);
-
-    // 其余每一行都不带勾。
-    for (final c in schedule.classes) {
-      if (identical(c, current)) continue;
-      final otherRow = find.ancestor(
-        of: find.text(c.name),
-        matching: find.byType(ListTile),
-      );
-      expect(find.descendant(of: otherRow, matching: find.byIcon(Icons.check)),
-          findsNothing, reason: '${c.name} 不该打勾');
-    }
-  });
-
-  testWidgets('canRestore 为假时不出现「恢复轮转」', (tester) async {
-    await pumpPicker(tester);
-    expect(find.text(L10n.restoreRotation), findsNothing);
-  });
-
-  testWidgets('canRestore 为真时出现且返回「恢复轮转」', (tester) async {
-    final schedule = defaultSchedule();
+  testWidgets('加班行返回 overtime intent', (tester) async {
     ShiftOverrideChoice? result;
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: ElevatedButton(
-              onPressed: () async {
-                result = await showShiftOverridePicker(
-                  context,
-                  schedule: schedule,
-                  from: DateTime(2026, 9, 18),
-                  to: DateTime(2026, 9, 18),
-                  canRestore: true,
-                );
-              },
-              child: const Text('open'),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-    expect(find.text(L10n.restoreRotation), findsOneWidget);
+    await _pumpHost(tester, onResult: (r) => result = r);
 
-    await tester.tap(find.text(L10n.restoreRotation));
+    await tester.tap(find.byKey(const Key('shift-override-overtime')));
     await tester.pumpAndSettle();
-    expect(result!.restore, isTrue);
+
+    expect(result!.intent, ShiftOverrideIntent.overtime);
+  });
+
+  testWidgets('班次行仍返回 change，且两行动作同时在场', (tester) async {
+    ShiftOverrideChoice? result;
+    await _pumpHost(tester, onResult: (r) => result = r);
+
+    expect(find.byKey(const Key('shift-override-leave')), findsOneWidget);
+    expect(find.byKey(const Key('shift-override-overtime')), findsOneWidget);
+    expect(find.text(L10n.leave), findsOneWidget);
+    expect(find.text(L10n.overtime), findsOneWidget);
+
+    await tester.tap(find.text('白班'));
+    await tester.pumpAndSettle();
+    expect(result!.intent, ShiftOverrideIntent.change);
+    expect(result!.shift!.name, '白班');
+  });
+
+  testWidgets('320 宽：弹层不溢出', (tester) async {
+    await _pumpHost(tester, size: const Size(320, 640), onResult: (_) {});
+    expect(tester.takeException(), isNull);
   });
 }

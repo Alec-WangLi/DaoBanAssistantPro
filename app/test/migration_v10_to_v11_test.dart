@@ -19,6 +19,8 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+import 'support/migration_fixtures.dart';
+
 /// v10 形态的 `schedule_events`（DDL 与 v10 生成代码逐列一致）。
 /// drift 默认把 `DateTime` 存成 **unix 秒**，所以时间列都是整数。
 const _v10ScheduleEvents = '''
@@ -73,6 +75,8 @@ void main() {
     raw.execute(_v10ScheduleEvents);
     raw.execute(_v10ScheduleTable);
     raw.execute(_v10CustomTemplates);
+    // `from < 16` 会给班次表加 `is_night`，而迁移分支按倒序跑 —— 这张表必须存在。
+    raw.execute(v10ShiftClassRowsDdl);
     // 两条老待办：一条未完成、一条已完成，值都写全（迁移把值吞了才看得出来）
     raw.execute(
       'INSERT INTO schedule_events '
@@ -103,7 +107,7 @@ void main() {
     addTearDown(db.close);
     // 从 v10 升上来会一路跑到**最新**的 schema（迁移分支按倒序全部执行），
     // 所以这里跟的是当前的 `schemaVersion`，不是 11 —— 每加一版 schema 都要回来改。
-    expect(db.schemaVersion, 15);
+    expect(db.schemaVersion, 16);
 
     // ① 老待办原样保留，且新列取到的是 null
     final events = await db.select(db.scheduleEvents).get();

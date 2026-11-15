@@ -15,18 +15,18 @@ import '../../core/l10n.dart';
 import '../../core/theme/animated_background.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/empty_state.dart';
-import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
-import '../../core/widgets/glass_sheet_header.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
+import '../../domain/day_extra.dart';
 import '../../domain/day_summary.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
+import '../../domain/shift_stats.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
 import '../widget/widget_service.dart';
@@ -35,9 +35,9 @@ import 'calendar_lens.dart';
 import 'lens_warp_scope.dart';
 import 'calendar_range_band.dart';
 import 'range_band.dart';
-import 'schedule_management_screen.dart';
-import 'schedule_span_label.dart';
 import 'shift_override_picker.dart';
+import 'day_extra_sheet.dart';
+import '../stats/stats_screen.dart';
 
 /// 月历主界面：简约灰白背景 + 磨砂卡片日期格 + 农历 + 可拖拽玻璃选择块 + 底部信息卡。
 /// 一行文字在给定样式与缩放下的**自然行高**。
@@ -802,6 +802,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         freezeWhenBlurDisabled: true,
         child: SafeArea(child: Builder(builder: (context) {
           final layout = AppLayout.of(context);
+          final dayExtras = ref.watch(dayExtrasProvider).valueOrNull ??
+              const <int, DayExtra>{};
           final grid = Expanded(
             // 给下面两支宽屏的几何用例一个抓手。
             key: const Key('calendar-grid'),
@@ -815,7 +817,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                       child: _monthSlide(
                         month: _month,
                         tag: 'grid',
-                        child: _buildGrid(context, chain, c.maxHeight),
+                        child: _buildGrid(
+                            context, chain, c.maxHeight, dayExtras),
                       ),
                     ),
             ),
@@ -1023,8 +1026,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             const SizedBox(height: narrowGap),
             Row(
               children: [
-                _circleIcon(context, Icons.timeline, L10n.scheduleTimeline,
-                    _showTimeline, size: narrowSide),
+                _circleIcon(context, Icons.insights_outlined, L10n.statistics,
+                    _openStats, size: narrowSide),
                 const Spacer(),
                 GlassPill(
                   onTap: _today,
@@ -1083,8 +1086,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               context, Icons.chevron_right_outlined, L10n.nextMonth, _next),
           const SizedBox(width: AppTokens.gapIconText),
           // 切换排班：纯图标圆形钮（省宽，保证年月完整显示）
-          _circleIcon(context, Icons.timeline, L10n.scheduleTimeline,
-              _showTimeline),
+          _circleIcon(context, Icons.insights_outlined, L10n.statistics,
+              _openStats),
           const SizedBox(width: AppTokens.gapIconText),
           GlassPill(
             onTap: _today,
@@ -1233,6 +1236,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     );
     if (choice == null || !mounted) return;
 
+    // 请假 / 加班：不是「换个班次」，走日级记录那条路。
+    if (choice.intent == ShiftOverrideIntent.leave ||
+        choice.intent == ShiftOverrideIntent.overtime) {
+      await _applyDayExtra(
+        kind: choice.intent == ShiftOverrideIntent.leave
+            ? DayExtraKind.leave
+            : DayExtraKind.overtime,
+        chain: chain,
+        from: from,
+        to: to,
+        days: days,
+        current: current,
+      );
+      return;
+    }
+
     final repo = ref.read(appRepositoryProvider);
     if (choice.restore) {
       await repo.clearDayOverrides(days);
@@ -1252,166 +1271,82 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     );
   }
 
-  /// 「排班时段」只读总览。
+  /// 写某段日子的请假 / 加班记录。
   ///
-  /// **只读是有意的**：原来那个「切换排班」点一行就把 `isCurrent` 换过去，可它改的
-  /// 只是「没被时段覆盖时的兜底」—— 时段盖满之后点它什么也不会变，用户以为按钮
-  /// 坏了（那正是这一轮重做的起因）。现在它只回答「这段时间在用哪套、今天在哪一
-  /// 段」，要改就去排班管理页那条时间线。
-  Future<void> _showTimeline() async {
-    final schedules = await ref.read(schedulesProvider.future);
-    final spans = await ref.read(scheduleSpansProvider.future);
-    if (!mounted) return;
-    final current = ref.read(activeScheduleProvider).valueOrNull;
-    final remaining = current?.current;
-    final today = dayNumber(dateOnly(appNow()));
-
-    // 今天落在哪一段上（段之间不重叠，所以至多一段）—— 给那一行打勾。
-    int? todaySpanId;
-    for (final s in spans) {
-      final from = s.startDate == null ? null : dayNumber(s.startDate!);
-      final to = s.endDate == null ? null : dayNumber(s.endDate!);
-      if ((from == null || today >= from) && (to == null || today <= to)) {
-        todaySpanId = s.id;
-        break;
-      }
+  /// 「整天」按**每天各自的班次时长**写库：区间里各天时长不同也各自算；某天没有
+  /// 班次（空白表 / 未排班）时整天算不出分钟数，跳过那天而不是写一条 0 记录。
+  /// 写库后必须重排闹钟：整天请假要让那天的班次闹钟不再排（见 `planShiftAlarms`）。
+  Future<void> _applyDayExtra({
+    required DayExtraKind kind,
+    required ScheduleChain chain,
+    required DateTime from,
+    required DateTime to,
+    required List<DateTime> days,
+    required ShiftClass? current,
+  }) async {
+    final extras =
+        ref.read(dayExtrasProvider).valueOrNull ?? const <int, DayExtra>{};
+    int existingOf(DateTime d) {
+      final e = extras[dayNumber(d)];
+      if (e == null) return 0;
+      return kind == DayExtraKind.leave ? e.leaveMinutes : e.overtimeMinutes;
     }
-    final byId = {for (final s in schedules) s.id: s};
-    final hasPeriods = spans.isNotEmpty;
 
-    await showGlassSheet<void>(
-      context: context,
-      builder: (sheetContext) => GlassPanel(
-        solid: true,
-        margin: const EdgeInsets.all(12),
-        borderRadius:
-            const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            // **`stretch` 而不是 `start`。** 头部下面那块内容自带一圈
-            // `Padding(all: 16)`，而 `start` 给子件的是**松宽度约束** —— ListView
-            // （视口）会一路撑到 `maxWidth`、Padding 再给它加出左右各 16，直接横向
-            // 溢出。`stretch` 给的是紧宽度，Padding 减掉 32 之后才是 ListView 该有的宽。
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 头部走共享件（把手 + 主色竖条 + 标题 + 分隔线）。
-              //
-              // ⚠️ **那圈 16 的 padding 只能包住头部以下的内容，不能包住整个
-              // Column**（本轮修的就是它）。原来它包在最外层，于是 `GlassSheetHeader`
-              // 被**二次内缩**：分隔线比另外四个弹层窄 16dp、把手低 16dp、标题也跟着
-              // 与下面的行错开 —— 「五处统一头部」只成四成不算成。
-              //
-              // 标题是 `titleStrong`（16）—— 与另外四个弹层同角色。
-              // ⚠️ 这行注释此前写着「底部弹层标题走 `dialogTitle`，与其它弹层同
-              // 角色」，那是**错的**：另外四个弹层一直走 `titleStrong`，只有这里
-              // 用了 `dialogTitle`（20）。v0.12.0 统一到 16。
-              GlassSheetHeader(
-                title: L10n.scheduleTimeline,
-                // 说法与排班管理页那条时间线**同源**：一个段都没有时不说「其余
-                // 时间」（没有「这一段」，「其余」就没有着落），整行写「全部
-                // 日子」。两处各写一份的话，同一个状态会有两种解释。
-                subtitle: hasPeriods
-                    ? L10n.remainingHint
-                    : (remaining == null
-                        ? L10n.allDatesNoneHint
-                        : L10n.allDatesHint),
-              ),
-              const SizedBox(height: AppTokens.spaceSm),
-              Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppTokens.spaceLg),
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      _timelineLine(
-                        sheetContext,
-                        label: hasPeriods ? L10n.remainingTime : L10n.allDates,
-                        value: remaining?.schedule.name ?? L10n.remainingNone,
-                        mutedValue: remaining == null,
-                        // 今天没落在任何段上 → 今天归「其余时间」。
-                        isToday: todaySpanId == null,
-                      ),
-                      for (final s in spans)
-                        _timelineLine(
-                          sheetContext,
-                          label: spanRangeLabel(s.startDate, s.endDate),
-                          value: byId[s.scheduleId]?.name ?? L10n.remainingNone,
-                          mutedValue: byId[s.scheduleId] == null,
-                          isToday: s.id == todaySpanId,
-                        ),
-                      const Divider(height: 1),
-                      GlassPressable(
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(L10n.manageTimeline),
-                          trailing: const Icon(Icons.chevron_right_outlined,
-                              key: Key('manage-timeline-chevron')),
-                          onTap: () {
-                            Navigator.pop(sheetContext);
-                            Navigator.of(context).push(MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    const ScheduleManagementScreen()));
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final existing = days.length == 1 ? existingOf(days.single) : null;
+    final hasExisting = days.any((d) => existingOf(d) > 0);
+    final selection = await showDayExtraSheet(
+      context,
+      kind: kind,
+      from: from,
+      to: to,
+      dayCount: days.length,
+      existingMinutes: existing == null || existing <= 0 ? null : existing,
+      fullDayMinutes:
+          current == null ? null : shiftDurationMinutes(current),
+      hasExisting: hasExisting,
+    );
+    if (selection == null || !mounted) return;
+
+    final repo = ref.read(appRepositoryProvider);
+    for (final d in days) {
+      final n = dayNumber(d);
+      if (selection.clear) {
+        await repo.clearDayExtra(n, kind);
+        continue;
+      }
+      final dayShift = chain.shiftOn(d) ?? current;
+      final minutes = selection.isFullDay
+          ? (dayShift == null ? 0 : (shiftDurationMinutes(dayShift) ?? 0))
+          : selection.minutes;
+      if (minutes > 0) await repo.setDayExtra(n, kind, minutes);
+    }
+    Haptics.commit();
+    await AlarmService.replanAfterScheduleChange(repo);
+    if (!mounted) return;
+
+    final range = days.length == 1
+        ? L10n.monthDay(from)
+        : '${L10n.monthDay(days.first)} – ${L10n.monthDay(days.last)}';
+    final kindLabel = kind == DayExtraKind.leave ? L10n.leave : L10n.overtime;
+    showGlassSnack(
+      context,
+      selection.clear
+          ? L10n.dayExtraCleared(range, kindLabel)
+          : L10n.dayExtraSaved(
+              range,
+              kindLabel,
+              selection.isFullDay
+                  ? L10n.fullDay
+                  : L10n.durationText(selection.minutes),
+            ),
     );
   }
 
-  /// 总览里的一行：左边的勾（今天所在的那一段）+ 日期 / 「其余时间」 + 方案名。
-  ///
-  /// 两边都是 flex、各自省略号 —— 与排班管理页那一节同一套写法（`ListTile` 的
-  /// `trailing` 在 200dp 小窗下会横向溢出）。
-  Widget _timelineLine(
-    BuildContext context, {
-    required String label,
-    required String value,
-    required bool mutedValue,
-    required bool isToday,
-  }) {
-    final muted = AppTokens.inkMuted(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
-      child: Row(
-        children: [
-          SizedBox(
-            width: AppTokens.iconMd,
-            child: isToday
-                ? AppIcon(Icons.check_circle_outlined,
-                    size: AppTokens.iconMd,
-                    color: Theme.of(context).colorScheme.primary)
-                : null,
-          ),
-          const SizedBox(width: AppTokens.gapIconText),
-          Expanded(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTokens.rowPrimary),
-          ),
-          const SizedBox(width: AppTokens.spaceSm),
-          Flexible(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: mutedValue
-                  ? AppTokens.rowSecondary.copyWith(color: muted)
-                  : AppTokens.labelStrong,
-            ),
-          ),
-        ],
-      ),
-    );
+  /// 打开统计页。顶栏那颗按钮从「排班时段」换成它之后，时段总览仍在
+  /// `我的 → 排班管理 → 排班时段`；统计页头部也留着入口。
+  void _openStats() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const StatsScreen()));
   }
 
   /// 网格 + （整月都没排班时）一层指路。
@@ -1419,9 +1354,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// **指路那一层必须 `IgnorePointer`**：不加的话它会吃掉网格的手势 —— 点日期、
   /// 长按拖选全失灵，而「盖了一层透明东西导致交互没了」在 widget 测试里默认照不
   /// 出来（除非专门去点一下）。用例里就是**真的点某天**再断言信息卡变了。
-  Widget _buildGrid(
-      BuildContext context, ScheduleChain? chain, double availHeight) {
-    final body = _gridBody(context, chain, availHeight);
+  Widget _buildGrid(BuildContext context, ScheduleChain? chain,
+      double availHeight, Map<int, DayExtra> extras) {
+    final body = _gridBody(context, chain, availHeight, extras);
     if (!_factsFor(chain).hasNoSchedule) return body;
     return Stack(
       children: [
@@ -1481,8 +1416,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     return true;
   }
 
-  Widget _gridBody(
-      BuildContext context, ScheduleChain? chain, double availHeight) {
+  Widget _gridBody(BuildContext context, ScheduleChain? chain,
+      double availHeight, Map<int, DayExtra> extras) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cellW = (constraints.maxWidth - _hPad * 2) / 7;
@@ -1728,7 +1663,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                   child: Column(
                     children: [
                       _weekdayRow(context, cellW),
-                      ..._dayRows(context, cellW, cellH, chain),
+                      ..._dayRows(context, cellW, cellH, chain, extras),
                     ],
                   ),
                 ),
@@ -1810,8 +1745,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     );
   }
 
-  List<Widget> _dayRows(
-      BuildContext context, double cellW, double cellH, ScheduleChain? chain) {
+  List<Widget> _dayRows(BuildContext context, double cellW, double cellH,
+      ScheduleChain? chain, Map<int, DayExtra> extras) {
     // 比「同一天」用 `isSameDay` 而不是 `==`：`dateOnly` 是 UTC 日期、这里的
     // `date` 是本地日期，`DateTime.==` 连 `isUtc` 一起比，`==` 恒为假
     // （「今天」的日期因此一直没加粗过）。
@@ -1852,6 +1787,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               _inSelectedRange(date),
           // 液态档才有：这一格的内容听那个「挤压场中心」自己变。
           // 标准档传 null ⇒ **一个 LensWarpScope 都不挂**，那棵树与今天逐字节相同。
+          extra: extras[dayNumber(date)],
           warpCenter: liquidGlassActive.value ? cellCenter : null));
     }
     final rows = <Widget>[];
@@ -1890,7 +1826,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   /// 「一枚玻璃压过去」。`Transform` 只改绘制、不改布局，所以字的排版不会跟着变。
   Widget _dayCell(BuildContext context, DateTime date, ShiftClass? shift,
       LunarInfo lunar, double cellW, double cellH, bool isToday, bool solid,
-      bool adjusted, bool inRange, {Offset? warpCenter}) {
+      bool adjusted, bool inRange, {DayExtra? extra, Offset? warpCenter}) {
     final lunarColor = lunar.isLegalHoliday
         ? AppTokens.holiday
         : AppTokens.inkMuted(context);
@@ -1951,6 +1887,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                   // 调休日的「班」标记：与农历同一角色，转主色 + 加粗区分。
                   // 单行写法是守门测试的要求：`fontWeight` 字面量只有与
                   // `copyWith` 同行才豁免。
+                  style: lunarStyle
+                      .copyWith(color: primary, fontWeight: FontWeight.w700),
+                ),
+              // 请假 / 加班的标记：与「班」同一位置、同一手法。请假优先（一天
+              // 两样都有时至少先看见「假」）；两样都进这一行的原因是格子高度
+              // 由日历定死，多一行会把字挤小，而这里只是前缀两个字。
+              if (extra != null && extra.leaveMinutes > 0)
+                TextSpan(
+                  text: '假 ',
+                  style: lunarStyle
+                      .copyWith(color: primary, fontWeight: FontWeight.w700),
+                )
+              else if (extra != null && extra.overtimeMinutes > 0)
+                TextSpan(
+                  text: '加 ',
                   style: lunarStyle
                       .copyWith(color: primary, fontWeight: FontWeight.w700),
                 ),
@@ -2420,6 +2371,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   Widget _infoCard(BuildContext context, ScheduleChain? chain,
       {bool inSidePane = false, bool compact = false}) {
     final lunar = lunarOf(_selected);
+    // 这天的请假 / 加班（全局日级记录）。没有记录时整块不画。
+    final extra =
+        ref.watch(dayExtrasProvider).valueOrNull?[dayNumber(_selected)];
     // 这一屏讲的是**选中那天**，所以取那天所属的方案；下面「班次行 / 已调班 /
     // 空白表 / 其他班组」四处全用它。跨时段之后**不能再认「当前方案」** ——
     // 「今天归哪套」是链才知道的事。
@@ -2589,6 +2543,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                                       style: AppTokens.labelSecondary,
                                     ),
                                   ),
+                                ),
+                              ],
+                              if (extra != null && !extra.isEmpty) ...[
+                                const SizedBox(height: AppTokens.gapHair),
+                                Text(
+                                  L10n.dayExtraLine(extra.leaveMinutes,
+                                          extra.overtimeMinutes) ??
+                                      '',
+                                  key: const Key('compact-day-extra'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTokens.microText
+                                      .copyWith(color: primary),
                                 ),
                               ],
                             ],
@@ -2783,6 +2750,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                             style:
                                 AppTokens.rowSecondary.copyWith(color: muted),
                           ),
+                          // 请假 / 加班与班次名、时间、闹钟同属**一段**富文本：
+                          // 这样它跟着 `FittedBox` 一起缩，不改变卡片的定高模型。
+                          if (extra != null && extra.leaveMinutes > 0)
+                            TextSpan(
+                              text:
+                                  '   ${L10n.extraLeaveLine(extra.leaveMinutes)}',
+                              style: AppTokens.rowSecondary
+                                  .copyWith(color: primary),
+                            ),
+                          if (extra != null && extra.overtimeMinutes > 0)
+                            TextSpan(
+                              text:
+                                  '   ${L10n.extraOvertimeLine(extra.overtimeMinutes)}',
+                              style: AppTokens.rowSecondary
+                                  .copyWith(color: primary),
+                            ),
                         ],
                       ),
                       maxLines: 1,

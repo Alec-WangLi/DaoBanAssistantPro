@@ -524,7 +524,10 @@ void main() {
       home: const CalendarScreen(),
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
       beforeCapture: (t) async {
-        await t.tap(find.byIcon(Icons.timeline));
+        // 顶栏那颗按钮现在是「统计」；时段总览从统计页头部进（2026-11-16 起）。
+        await t.tap(find.byIcon(Icons.insights_outlined));
+        await settleVisual(t);
+        await t.tap(find.byKey(const Key('stats-schedule-link')));
         await settleVisual(t);
       },
     );

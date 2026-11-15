@@ -16,13 +16,29 @@ import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_sheet_header.dart';
 import '../../domain/shift_rotation.dart';
 
-/// 选择层的结果：改成某个班次，或恢复轮转。
+/// 选择层的结果：改成某个班次、恢复轮转，或「请假 / 加班」这两种日级动作。
+enum ShiftOverrideIntent { change, restore, leave, overtime }
+
 class ShiftOverrideChoice {
-  const ShiftOverrideChoice.change(ShiftClass this.shift) : restore = false;
-  const ShiftOverrideChoice.restore() : shift = null, restore = true;
+  const ShiftOverrideChoice.change(ShiftClass this.shift)
+      : restore = false,
+        intent = ShiftOverrideIntent.change;
+  const ShiftOverrideChoice.restore()
+      : shift = null,
+        restore = true,
+        intent = ShiftOverrideIntent.restore;
+  const ShiftOverrideChoice.leave()
+      : shift = null,
+        restore = false,
+        intent = ShiftOverrideIntent.leave;
+  const ShiftOverrideChoice.overtime()
+      : shift = null,
+        restore = false,
+        intent = ShiftOverrideIntent.overtime;
 
   final ShiftClass? shift;
   final bool restore;
+  final ShiftOverrideIntent intent;
 }
 
 /// 班次的时间区间文本。
@@ -157,17 +173,33 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
                 ],
               ),
             ),
-            if (canRestore) ...[
-              // **与班次列表分开。** 不分开的话它长得和上面几个班次一模一样、
-              // 只是少一行时间，读起来像「又一个班次」而不是一个动作。
-              // 一条细分隔线加次要文字色就够了，不必再来一个按钮。
-              const SizedBox(height: AppTokens.spaceXs),
-              // 分隔线用**全 app 那个配方**（`const Divider(height: 1)`，
-              // `profile_screen.dart` 里用了五处）。这里原本我自作主张挑了
-              // `AppTokens.glassBorder` —— 那是玻璃的**白色高光**，画在白面板上
-              // 就是白上白，出图采样证实它一个像素都没画出来。
-              const Divider(height: 1),
-              const SizedBox(height: AppTokens.spaceXs),
+            // **与班次列表分开。** 不分开的话它们长得和上面几个班次一模一样、
+            // 只是少一行时间，读起来像「又一个班次」而不是一个动作。
+            // 一条细分隔线加次要文字色就够了，不必再来一个按钮。
+            const SizedBox(height: AppTokens.spaceXs),
+            // 分隔线用**全 app 那个配方**（`const Divider(height: 1)`，
+            // `profile_screen.dart` 里用了五处）。这里原本我自作主张挑了
+            // `AppTokens.glassBorder` —— 那是玻璃的**白色高光**，画在白面板上
+            // 就是白上白，出图采样证实它一个像素都没画出来。
+            const Divider(height: 1),
+            const SizedBox(height: AppTokens.spaceXs),
+            // 请假 / 加班：它们不是「换个班次」，所以放在分隔线以下、与
+            // 「恢复轮转」同一段；图标与文字都用次要色，读起来是动作而不是班次。
+            _extraAction(
+              sheetContext,
+              key: 'shift-override-leave',
+              icon: Icons.event_busy_outlined,
+              label: L10n.leave,
+              choice: const ShiftOverrideChoice.leave(),
+            ),
+            _extraAction(
+              sheetContext,
+              key: 'shift-override-overtime',
+              icon: Icons.more_time_outlined,
+              label: L10n.overtime,
+              choice: const ShiftOverrideChoice.overtime(),
+            ),
+            if (canRestore)
               GlassPressable(
                 child: ListTile(
                   dense: true,
@@ -189,10 +221,36 @@ Future<ShiftOverrideChoice?> showShiftOverridePicker(
                       sheetContext, const ShiftOverrideChoice.restore()),
                 ),
               ),
-            ],
           ],
         ),
       ),
+    ),
+  );
+}
+
+/// 「请假 / 加班」那种动作行：图标 + 次要色文字，读起来是动作而不是班次。
+Widget _extraAction(
+  BuildContext context, {
+  required String key,
+  required IconData icon,
+  required String label,
+  required ShiftOverrideChoice choice,
+}) {
+  final muted = AppTokens.inkMuted(context);
+  return GlassPressable(
+    child: ListTile(
+      key: Key(key),
+      dense: true,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: AppTokens.spaceMd),
+      minLeadingWidth: 12,
+      horizontalTitleGap: AppTokens.gapIconText,
+      leading: AppIcon(icon, size: AppTokens.iconMd, color: muted),
+      title: Text(label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTokens.rowSecondary.copyWith(color: muted)),
+      onTap: () => Navigator.pop(context, choice),
     ),
   );
 }

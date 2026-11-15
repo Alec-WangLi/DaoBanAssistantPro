@@ -41,6 +41,12 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.14\n'
+    '· 新增「统计」页：日历右上角那颗按钮点开就是它，可以按月 / 按年看实际上班工时、正常工时、平均每班、上班与休息天数\n'
+    '· 统计里还有请假、加班、法定节假日上班、夜班天数、最长连班 / 最长连休；年视图列出 12 个月，点一行就跳到那个月\n'
+    '· 「调整班次」弹层新增「请假」「加班」：时长可以选整天 / 半天或按小时记；整天请假会自动取消那天的班次闹钟，日历格子和信息卡上会标「假 / 加」\n'
+    '· 班次编辑里新增「夜班」开关，统计的夜班天数只认这个标记；内置模板的夜班已自动标好\n'
+    '\n'
 'v0.13.13\n'
     '· 修：在「系统铃声」里选中自己加过的铃声（比如把某首歌设成了系统铃声）之后，闹钟响的还是内置那一声 —— 现在选中就把它复制进应用内部，不再依赖系统的媒体权限\n'
     '· 之前存过的旧设置会在启动时自动修一次：能读的复制进来，读不到的退回内置铃声（日志里写明原因）\n'
@@ -80,14 +86,15 @@ const String _changelogZh =
     '· 修：导入备份后点「立即重启」，App 现在会自己重新打开；此前只关闭、不重启，需要手动再点一次图标\n'
     '· 导入后不会先弹一遍「版本更新」——恢复的数据不该被当成刚升级\n'
     '\n'
-'v0.13.4\n'
-    '· 新增「我的 → 数据备份」：把排班、待办、模板、闹钟与设置导出成一个文件；重装、换机或误清空之后，选这个文件导入就能恢复\n'
-    '· 导入会先校验文件、覆盖当前数据，并重启一次 App 生效；导入后闹钟会按恢复的排班重新排\n'
-    '· 备份里也带着你保存的铃声；文件可以放到网盘或电脑，建议每次大改排班后导出一份\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.14\n'
+    '· New Statistics page: the calendar top-right button opens it, with month / year views of actual hours worked, regular hours, average per shift, and work / rest days\n'
+    '· It also covers leave, overtime, holiday work, night shifts and the longest work / rest streaks; the year view lists all 12 months and a tap jumps to that month\n'
+    '· The Adjust shift sheet gains Leave and Overtime: record a full day, half day or any number of hours; a full-day leave also cancels that day\'s shift alarm, and the calendar cell and info card show a leave / overtime mark\n'
+    '· The shift editor gains a Night shift switch — the night-shift count uses only this marker; built-in templates already set it\n'
+    '\n'
 'v0.13.13\n'
     '· Fix: after choosing one of your own ringtones from the system ringtone list (a song you had set as a system ringtone, say), the alarm still played the built-in sound — the pick is now copied into the app instead of relying on system media permissions\n'
     '· Settings saved by older versions repair themselves once at launch: readable ones get copied in, unreadable ones fall back to the built-in ringtone (with the reason in the log)\n'
@@ -126,11 +133,6 @@ const String _changelogEn =
 'v0.13.5\n'
     '· Fix: after importing a backup, "Restart now" actually reopens the app; before, it only closed and left you to tap the icon again\n'
     '· Importing no longer pops the "what\'s new" dialog first — restored data is not an upgrade\n'
-    '\n'
-'v0.13.4\n'
-    '· New My > Data backup: export schedules, todos, templates, alarms and settings into one file; after a reinstall, a new phone or an accidental reset, import that file to restore everything\n'
-    '· Import validates the file first, replaces the current data, and restarts the app once; alarms are re-scheduled from the restored schedule\n'
-    '· The backup includes your saved ringtone; keep the file in a cloud drive or on your computer - exporting after big schedule changes is a good habit\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
