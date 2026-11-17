@@ -138,6 +138,13 @@ class L10n {
       'Off: the alarm rings without popping up while the phone is locked');
   static String get permBattery => t('电池优化', 'Battery optimization');
   static String get permBatteryHint => t('设为「不限制」，否则后台可能不响', 'Set "Unrestricted", or alarms may not fire');
+  // 三星 / One UI 的「睡眠应用」「深度休眠应用」会把 App 的闹钟**一起取消**，
+  // 症状正是「几天偶尔漏一次」。系统不提供查询接口，所以这一行永远是「去查看」。
+  static String get permSamsungSleep =>
+      t('休眠应用（三星）', 'Sleeping apps (Samsung)');
+  static String get permSamsungSleepHint => t(
+      '电池 → 后台使用限制：把本 App 从「睡眠应用」和「深度休眠应用」里去掉，否则闹钟会被系统取消',
+      'Battery → Background usage limits: remove this app from "Sleeping apps" and "Deep sleeping apps", or the system cancels its alarms');
   static String get enabled => t('已开启', 'Enabled');
   static String get goEnable => t('去开启', 'Enable');
   static String get goSettings => t('去设置', 'Settings');

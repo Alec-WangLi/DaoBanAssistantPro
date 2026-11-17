@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -240,6 +241,43 @@ class MainActivity : FlutterActivity() {
         false
     }
 
+    /**
+     * 三星「设备维护 → 电池 → 后台使用限制」那一页。
+     *
+     * 它管着「睡眠应用 / 深度休眠应用」两份名单：进了名单的 App，**系统会把它
+     * 已排好的闹钟一起取消**，表现是「几天偶尔漏响一次」。One UI 8.5 / Android 16
+     * 上仍然没有公开的查询接口，只能把用户送过去。
+     *
+     * 两个包名都试：新机型是 `com.samsung.android.lool`，老机型（One UI 早期）
+     * 是 `com.samsung.android.sm`，两个都解析不到就不是三星，界面不显示这一行。
+     */
+    private fun samsungBatteryPage(): Intent? {
+        val candidates = listOf(
+            "com.samsung.android.lool" to "com.samsung.android.sm.ui.battery.BatteryActivity",
+            "com.samsung.android.sm" to "com.samsung.android.sm.ui.battery.BatteryActivity"
+        )
+        for ((pkg, cls) in candidates) {
+            val i = Intent().apply {
+                component = ComponentName(pkg, cls)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val found = try {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    packageManager.resolveActivity(
+                        i, PackageManager.ResolveInfoFlags.of(0L)
+                    ) != null
+                } else {
+                    @Suppress("DEPRECATION")
+                    (packageManager.resolveActivity(i, 0) != null)
+                }
+            } catch (_: Exception) {
+                false
+            }
+            if (found) return i
+        }
+        return null
+    }
+
     private fun handleAlarmIntent(intent: Intent?) {
         val label = intent?.getStringExtra("alarm_label")
         val detail = intent?.getStringExtra("alarm_detail")
@@ -353,6 +391,26 @@ class MainActivity : FlutterActivity() {
                             AlarmLog.error(
                                 this,
                                 "打开小米权限页失败: ${e.javaClass.name}: ${e.message}"
+                            )
+                            result.success(false)
+                        }
+                    }
+                    "checkSamsungBatteryPage" -> {
+                        result.success(samsungBatteryPage() != null)
+                    }
+                    "openSamsungBatteryPage" -> {
+                        try {
+                            val i = samsungBatteryPage()
+                            if (i == null) {
+                                result.success(false)
+                            } else {
+                                startActivity(i)
+                                result.success(true)
+                            }
+                        } catch (e: Exception) {
+                            AlarmLog.error(
+                                this,
+                                "打开三星电池页失败: ${e.javaClass.name}: ${e.message}"
                             )
                             result.success(false)
                         }

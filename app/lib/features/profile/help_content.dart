@@ -291,8 +291,8 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('闹钟到点只响、不弹响铃界面',
                 'The alarm rings but no full-screen alarm appears'),
             answer: L10nText(
-              '去「我的 → 权限」逐项开齐。小米手机还要单独开「后台弹出界面」和「锁屏显示」这两项，不开的话系统会拦掉响铃界面。',
-              'Open Me → Permissions and turn everything on. On Xiaomi phones also turn on "Background pop-up (MIUI)" and "Show on Lock screen (MIUI)" — without those the system blocks the alarm screen.',
+              '去「我的 → 权限」逐项开齐。小米手机还要单独开「后台弹出界面」和「锁屏显示」这两项，不开的话系统会拦掉响铃界面。三星手机要看「休眠应用」那一项。',
+              'Open Me → Permissions and turn everything on. On Xiaomi phones also turn on "Background pop-up (MIUI)" and "Show on Lock screen (MIUI)" — without those the system blocks the alarm screen. On Samsung phones check "Sleeping apps".',
             ),
           ),
           (
@@ -300,6 +300,23 @@ const List<HelpFaqGroup> helpFaqGroups = [
             answer: L10nText(
               '「我的 → 权限」里的「自启动」没开。开着它，重启后闹钟才排得回来。',
               '"Auto-start" under Me → Permissions is off. With it on, the alarms are scheduled again after a restart.',
+            ),
+          ),
+          (
+            question: L10nText('闹钟偶尔有一两次不响',
+                'An alarm now and then does not go off'),
+            answer: L10nText(
+              '多半是厂商的省电策略把 App 的闹钟取消了，不是 App 自己漏排。'
+                  '三星：设置 → 电池 → 后台使用限制，把「倒班助手Pro」从「睡眠应用」和「深度休眠应用」里去掉；'
+                  '小米：我的 → 权限 → 自启动，并把「电池优化」设为不限制。'
+                  '还是漏的话，去「我的 → 查看日志」看漏响那一刻有没有「AlarmReceiver.onReceive」这一行：'
+                  '没有就是系统没把闹钟递过来；有的话再看紧跟着的「AlarmRingService」与「AlarmSound」两行，'
+                  '就能分出是响铃界面被拦还是音源出问题。',
+              'Usually the vendor power-saving policy cancels the app\'s alarms — not the app skipping them. '
+                  'Samsung: Settings → Battery → Background usage limits, remove the app from "Sleeping apps" and "Deep sleeping apps". '
+                  'Xiaomi: Me → Permissions → Auto-start, and set Battery optimization to Unrestricted. '
+                  'If it still happens, open Me → View log and look for an "AlarmReceiver.onReceive" line at that time: '
+                  'no line means the system never delivered the alarm; if there is one, the "AlarmRingService" and "AlarmSound" lines right after it tell you whether the screen was blocked or the sound failed.',
             ),
           ),
           (

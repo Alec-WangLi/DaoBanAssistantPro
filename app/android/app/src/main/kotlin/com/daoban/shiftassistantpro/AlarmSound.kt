@@ -88,6 +88,13 @@ object AlarmSound {
             )
             mp.prepare()
             mp.start()
+            // 「响铃链路走到哪一步」的第三条证据（前两条在 AlarmReceiver 与
+            // AlarmRingService）：有这一行 = 声音真的出声了，没有 = 音源或音频
+            // 通道的问题。落盘才查得到，见 AlarmReceiver 那段的三种结果。
+            AlarmLog.diagnostic(
+                context,
+                "AlarmSound: 开始播放 ${uri.scheme}://${uri.authority}"
+            )
             mp
         } catch (e: Exception) {
             // **把原因写进日志文件**（2026-11-16）：以前这里一声不响地吞掉，

@@ -511,6 +511,30 @@ class AlarmService {
     }
   }
 
+  /// 这台机器上有没有三星「后台使用限制」那一页（非三星机型解析不到）。
+  ///
+  /// 与小米那两项同一条理由：它是厂商私有的页面，没有公开 API。区别是它管的是
+  /// 「睡眠应用 / 深度休眠应用」—— **进了名单的 App，系统会把它已排好的闹钟一起
+  /// 取消**，症状正是「几天偶尔漏响一次」（2026-11-17 三星 One UI 8.5 用户反馈）。
+  static Future<bool> checkSamsungBatteryPage() async {
+    try {
+      return await _settingsChannel.invokeMethod('checkSamsungBatteryPage') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 打开三星「设备维护 → 电池」页；打不开返回 false，由调用方落回「应用信息」。
+  static Future<bool> openSamsungBatteryPage() async {
+    try {
+      return await _settingsChannel.invokeMethod('openSamsungBatteryPage') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 本应用是否已被忽略电池优化（后台闹钟可靠运行的关键）。
   static Future<bool> checkBatteryOptimization() async {
     try {

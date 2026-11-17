@@ -22,7 +22,14 @@ class AlarmReceiver : BroadcastReceiver() {
         val minute = intent.getIntExtra("minute", 0)
         val weekdays = intent.getIntExtra("weekdays", 0)
 
-        AlarmLog.info(
+        // **这一行必须落盘**：用户报「闹钟没响」时，第一件要判断的事就是
+        // 「那一刻系统到底有没有把闹钟递过来」。从前它是 `info`（只进 Logcat），
+        // 于是报障贴来的日志里一个字都没有 —— 2026-11-17 三星用户那条
+        // 「偶发不响」就卡在这里。落盘的三种结果分得开：
+        //   · 没有这条 → 系统把闹钟取消了（休眠 / 电池策略 / 被清理）；
+        //   · 有这条、没有下一条 → 前台服务没起来（后台启动限制）；
+        //   · 有这两条、没有「开始播放」→ 音源问题（见 AlarmSound）。
+        AlarmLog.diagnostic(
             context,
             "AlarmReceiver.onReceive: id=$id, label=$label, repeatType=$repeatType, ${AlarmLog.deviceState(context)}"
         )

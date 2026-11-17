@@ -41,12 +41,25 @@ class AlarmRingService : Service() {
         val label = intent?.getStringExtra("label") ?: "闹钟"
         val detail = intent?.getStringExtra("detail")
         val uriStr = intent?.getStringExtra("uri")
-        AlarmLog.info(
+        AlarmLog.diagnostic(
             this,
             "AlarmRingService.onStartCommand: label=$label, ${AlarmLog.deviceState(this)}"
         )
-        startForeground(1, buildNotification(label, detail))
-        AlarmLog.info(this, "AlarmRingService: startForeground 完成，通知已带 fullScreenIntent + CATEGORY_ALARM")
+        try {
+            startForeground(1, buildNotification(label, detail))
+            AlarmLog.diagnostic(
+                this,
+                "AlarmRingService: 前台通知已建（fullScreenIntent + CATEGORY_ALARM）"
+            )
+        } catch (t: Throwable) {
+            // Android 14+ 的 FGS 类型校验、后台启动限制都在这里炸。**从前没有
+            // try**：抛出去就是服务没起来、一声不响 —— 而这条 error 是「收到了
+            // 闹钟却没响」唯一能落盘的证据。
+            AlarmLog.error(
+                this,
+                "AlarmRingService: startForeground 失败: ${t.javaClass.name}: ${t.message}"
+            )
+        }
         wakeScreen()
         startSound(uriStr)
         // **重新计时**：每次 onStartCommand 都排一次。`onStartCommand` 会因为

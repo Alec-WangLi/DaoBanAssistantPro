@@ -251,11 +251,12 @@ object Haptics {
     }
 
     /**
-     * 把这台机器的振动能力写进「我的 → 查看日志」。
+     * 把这台机器的振动能力写进 Logcat。
      *
-     * 换品牌排查时最想知道的就是这些：认不认预定义效果、有没有 Composition
-     * 原语、有没有振幅控制 —— 它们共同决定 [play] 实际走到哪一档。写文件而不是
-     * 只打 Logcat，是因为用户换机后不一定有 adb。
+     * **只有「没有振动器」那一条落盘**（v0.13.15 收窄）：它是唯一会让用户
+     * 察觉到的问题，其余能力项只是换机排查时的参考，而它每次都跑在冷启动的
+     * 必经之路上 —— 每次都往「查看日志」里塞一行长串，用户报障时真正要紧的
+     * 那几行反而被顶走（2026-11-17 用户要求把早先这轮排查的残留清掉）。
      *
      * **整段兜 `Throwable`**：它在 `configureFlutterEngine` 里同步跑，也就是
      * **冷启动的必经之路**。诊断信息再有用，也不值得让 App 起不来 ——
@@ -276,7 +277,7 @@ object Haptics {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
                 sb.append(", 预定义=未知（低于 API 30，未探测）")
                 sb.append(", 实际路径=预定义效果（API 29）/ 20ms 单次（26~28）")
-                AlarmLog.diagnostic(context, sb.toString())
+                AlarmLog.info(context, sb.toString())
                 return
             }
 
@@ -296,7 +297,7 @@ object Haptics {
                 else -> "performHapticFeedback 兜底"
             }
             sb.append(", 实际路径=$path")
-            AlarmLog.diagnostic(context, sb.toString())
+            AlarmLog.info(context, sb.toString())
         } catch (t: Throwable) {
             // 诊断本身失败不该影响任何功能，更不该影响启动。
             AlarmLog.error(

@@ -807,6 +807,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
   bool? _fsi;
   bool? _battery;
   bool? _miui;
+  bool? _samsung;
 
   @override
   void initState() {
@@ -833,6 +834,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
     final fsi = await AlarmService.checkFullScreenIntentPermission();
     final battery = await AlarmService.checkBatteryOptimization();
     final miui = await AlarmService.checkMiuiPermissionPage();
+    final samsung = await AlarmService.checkSamsungBatteryPage();
     if (!mounted) return;
     setState(() {
       _notif = notif;
@@ -841,6 +843,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
       _fsi = fsi;
       _battery = battery;
       _miui = miui;
+      _samsung = samsung;
     });
   }
 
@@ -862,6 +865,13 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
   /// 万一页面打不开（非小米或 ROM 拦了），落回系统「应用信息」页。
   Future<void> _openMiuiPermissionPage() async {
     final ok = await AlarmService.openMiuiPermissionPage();
+    if (!ok) await AlarmService.openAppSettings();
+  }
+
+  /// 三星那项「后台使用限制」同样读不到状态，只能送到页面；打不开就退回
+  /// 系统「应用信息」页，用户至少能自己翻到电池那一栏。
+  Future<void> _openSamsungBattery() async {
+    final ok = await AlarmService.openSamsungBatteryPage();
     if (!ok) await AlarmService.openAppSettings();
   }
 
@@ -985,6 +995,21 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
                   enabled: _battery!,
                   onOpen: _openBattery,
                 ),
+                // 只在三星机型出现（同小米那两行：厂商私有页面，别家没有）。
+                // 「睡眠应用 / 深度休眠应用」会把 App 的闹钟**一起取消** ——
+                // 这是「几天偶尔漏响一次」最常见的成因，而它在系统里藏得比
+                // 「电池优化」深一层，不提用户根本不会去看。
+                if (_samsung == true) ...[
+                  const Divider(height: 1),
+                  _permTile(
+                    icon: Icons.bedtime_outlined,
+                    title: L10n.permSamsungSleep,
+                    subtitle: L10n.permSamsungSleepHint,
+                    enabled: null,
+                    onOpen: _openSamsungBattery,
+                    actionLabel: L10n.goCheck,
+                  ),
+                ],
               ],
             ),
     );

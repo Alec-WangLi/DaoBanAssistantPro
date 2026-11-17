@@ -33,7 +33,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val now = System.currentTimeMillis()
         val entries = AlarmStore.all(context)
-        AlarmLog.info(
+        AlarmLog.diagnostic(
             context,
             "BootReceiver.onReceive: action=${intent.action}，清单 ${entries.size} 条"
         )
@@ -99,7 +99,7 @@ class BootReceiver : BroadcastReceiver() {
                 )
             }
         }
-        AlarmLog.info(context, "BootReceiver: 重排完成，$rescheduled 条")
+        AlarmLog.diagnostic(context, "BootReceiver: 重排完成，$rescheduled 条")
 
         // 安静提醒（待办提醒那条链路）：规则与闹钟一致 —— 还没到点的排回去，
         // 关机期间**已经错过的不补发**。一次重启冒出一串「你几小时前该交体检报告」

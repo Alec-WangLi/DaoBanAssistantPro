@@ -41,6 +41,12 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.15\n'
+    '· 修：编辑重复待办时把「从这天起」改到别的日子，它当天照样提醒 —— 那一行只挪了当前这一条，系列的起点没跟着走（提醒正是按起点算的）\n'
+    '· 「我的 → 权限」新增「休眠应用（三星）」：电池 → 后台使用限制里把本 App 从「睡眠应用 / 深度休眠应用」去掉。进了名单的 App，系统会连闹钟一起取消，症状就是几天偶尔漏响一次\n'
+    '· 闹钟链路的关键步骤现在都写进「我的 → 查看日志」：收到闹钟、响铃服务起来、声音真的开始放。漏响时看有没有「AlarmReceiver.onReceive」那一行，就能分出是系统没递过来、还是响铃界面被拦、还是音源的问题\n'
+    '· 日志瘦身：冷启动不再每次往日志里塞一行振动能力探针（没有振动器这类真问题照旧记）\n'
+    '\n'
 'v0.13.14\n'
     '· 新增「统计」页：日历右上角那颗按钮点开就是它，可以按月 / 按年看实际上班工时、正常工时、平均每班、上班与休息天数\n'
     '· 统计里还有请假、加班、法定节假日上班、夜班天数、最长连班 / 最长连休；年视图列出 12 个月，点一行就跳到那个月\n'
@@ -82,13 +88,15 @@ const String _changelogZh =
 'v0.13.6\n'
     '· 文案校对：官网「更新日志」补到最新版本；「我的 → 使用帮助」补上「数据备份」；README、产品规格与构建文档里的过时数字、以及规格里「不做数据导入导出」的旧说法一并更正\n'
     '\n'
-'v0.13.5\n'
-    '· 修：导入备份后点「立即重启」，App 现在会自己重新打开；此前只关闭、不重启，需要手动再点一次图标\n'
-    '· 导入后不会先弹一遍「版本更新」——恢复的数据不该被当成刚升级\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.15\n'
+    '· Fix: editing a repeating todo and moving "Starts on" to another day still reminded you on the old day - only the current row moved, the series start (which drives reminders) did not\n'
+    '· Me > Permissions gains "Sleeping apps (Samsung)": remove the app from Sleeping / Deep sleeping apps under Battery > Background usage limits. Apps on those lists have their alarms cancelled by the system, which shows up as an alarm missing every few days\n'
+    '· The alarm chain now logs each key step to Me > View log: alarm received, ring service started, sound actually playing. When one goes missing, look for the "AlarmReceiver.onReceive" line to tell "the system never delivered it" from "the screen was blocked" and "the sound failed"\n'
+    '· Less log noise: the cold-start vibration capability probe no longer writes a line every launch (a real "no vibrator" finding still does)\n'
+    '\n'
 'v0.13.14\n'
     '· New Statistics page: the calendar top-right button opens it, with month / year views of actual hours worked, regular hours, average per shift, and work / rest days\n'
     '· It also covers leave, overtime, holiday work, night shifts and the longest work / rest streaks; the year view lists all 12 months and a tap jumps to that month\n'
@@ -129,10 +137,6 @@ const String _changelogEn =
     '\n'
 'v0.13.6\n'
     '· Copy pass: the website changelog is current again, the in-app guide covers Data backup, and stale numbers plus the old "no data export" note in the README, product spec and build guide are fixed\n'
-    '\n'
-'v0.13.5\n'
-    '· Fix: after importing a backup, "Restart now" actually reopens the app; before, it only closed and left you to tap the icon again\n'
-    '· Importing no longer pops the "what\'s new" dialog first — restored data is not an upgrade\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

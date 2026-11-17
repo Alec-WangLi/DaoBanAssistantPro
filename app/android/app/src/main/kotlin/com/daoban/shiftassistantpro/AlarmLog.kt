@@ -76,12 +76,16 @@ object AlarmLog {
         try { File(context.filesDir, "app_log.txt").delete() } catch (_: Throwable) {}
     }
 
-    /** 关键设备状态，用于排查「锁屏不自动弹全屏」：权限 + 屏幕/锁屏状态。 */
+    /** 关键设备状态，用于排查「锁屏不自动弹全屏」与「闹钟没响」。 */
     fun deviceState(context: Context): String {
         val sb = StringBuilder("sdk=${Build.VERSION.SDK_INT}")
+        // 机型：「闹钟偶尔不响」几乎都是厂商的休眠 / 电池策略，先要知道是哪一家。
+        sb.append(", device=${Build.MANUFACTURER}/${Build.MODEL}")
         try {
             val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             sb.append(", interactive=${pm.isInteractive}")
+            // 没被排除出电池优化时，系统可以把闹钟压成非精确甚至整段吞掉。
+            sb.append(", ignoreBatteryOpt=${pm.isIgnoringBatteryOptimizations(context.packageName)}")
         } catch (_: Throwable) {}
         try {
             val km = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
@@ -93,6 +97,7 @@ object AlarmLog {
             if (Build.VERSION.SDK_INT >= 34) {
                 sb.append(", canUseFullScreenIntent=${nm.canUseFullScreenIntent()}")
             }
+            sb.append(", notifications=${nm.areNotificationsEnabled()}")
         } catch (_: Throwable) {}
         try {
             sb.append(", canDrawOverlays=${Settings.canDrawOverlays(context)}")
