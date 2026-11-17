@@ -421,8 +421,10 @@ Future<void> seedTodayOverride(AppDatabase db) async {
 Future<void> seedTodayDayExtra(AppDatabase db) async {
   final repo = AppRepository(db);
   final today = dayNumber(dateOnly(DateTime.now()));
-  await repo.setDayExtra(today, DayExtraKind.leave, 240);
-  await repo.setDayExtra(today, DayExtraKind.overtime, 120);
+  await repo.setDayExtra(today, DayExtraKind.leave, 240,
+      leaveKind: 'annual', note: '上午去医院');
+  await repo.setDayExtra(today, DayExtraKind.overtime, 120,
+      note: '替同事值晚班');
 }
 
 /// 把一套「零点班」设为当前方案：夜班 00:00 上班、23:00 响铃。

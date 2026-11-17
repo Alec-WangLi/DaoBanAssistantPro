@@ -393,6 +393,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       BuildContext context, ScheduleChain? chain, double cardOuterWidth) {
     final bool hasTodoHint = _monthHasPendingTodos;
     final bool hasOverrideHint = _monthHasOverrideHint(chain);
+    final extras =
+        ref.read(dayExtrasProvider).valueOrNull ?? const <int, DayExtra>{};
     final key = [
       _month.year,
       _month.month,
@@ -408,6 +410,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       hasTodoHint,
       // 这个月有被按天调过的日子时，班次行要给「已调班」胶囊留高度，也按月。
       hasOverrideHint,
+      // 请假 / 加班 / 备注会多占行（见 `info_card_metrics` 那两段）—— 记录变了
+      // 高度就得重量，否则卡片会按旧高度渲染、备注被底边裁掉。
+      _extrasSignature(extras),
     ].join('|');
     if (key == _cardMetricsKey && _cardMetrics != null) return _cardMetrics!;
     final m = measureBottomInfoCardHeight(
@@ -417,10 +422,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       month: _month,
       hasTodoHint: hasTodoHint,
       hasOverrideHint: hasOverrideHint,
+      extras: extras,
     );
     _cardMetricsKey = key;
     _cardMetrics = m;
     return m;
+  }
+
+  /// 本月日级记录（请假 / 加班 / 类型 / 备注）的指纹，参与卡片高度的缓存键。
+  String _extrasSignature(Map<int, DayExtra> extras) {
+    final b = StringBuffer();
+    final days = DateTime(_month.year, _month.month + 1, 0).day;
+    for (var d = 1; d <= days; d++) {
+      final e = extras[dayNumber(DateTime(_month.year, _month.month, d))];
+      if (e == null) continue;
+      b.write('$d:${e.leaveMinutes},${e.overtimeMinutes},'
+          '${e.leaveKind ?? ''},${e.leaveNote ?? ''},${e.overtimeNote ?? ''};');
+    }
+    return b.toString();
   }
 
   /// 信息卡最后那行「本月 早12 · 午8 · 夜8 · 休6」：**整个月**各上几天什么班。
@@ -1026,9 +1045,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             const SizedBox(height: narrowGap),
             Row(
               children: [
-                _circleIcon(context, Icons.insights_outlined, L10n.statistics,
-                    _openStats, size: narrowSide),
                 const Spacer(),
+                // 统计入口与「今天」同一组、靠右：两行档里它原来孤零零挂在
+                // 最左边，读起来像另一个月历控件（v0.13.17 用户反馈）。
+                _circleIcon(context, Icons.pie_chart_outline, L10n.statistics,
+                    _openStats, size: narrowSide),
+                const SizedBox(width: narrowGap),
                 GlassPill(
                   onTap: _today,
                   accent: true,
@@ -1085,8 +1107,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           _circleIcon(
               context, Icons.chevron_right_outlined, L10n.nextMonth, _next),
           const SizedBox(width: AppTokens.gapIconText),
-          // 切换排班：纯图标圆形钮（省宽，保证年月完整显示）
-          _circleIcon(context, Icons.insights_outlined, L10n.statistics,
+          // 统计入口：纯图标圆形钮（省宽，保证年月完整显示）。
+          // 图标用饼图而不是 insights —— 它与旁边两颗翻月箭头太像了（v0.13.17）。
+          _circleIcon(context, Icons.pie_chart_outline, L10n.statistics,
               _openStats),
           const SizedBox(width: AppTokens.gapIconText),
           GlassPill(
@@ -1294,6 +1317,23 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
 
     final existing = days.length == 1 ? existingOf(days.single) : null;
     final hasExisting = days.any((d) => existingOf(d) > 0);
+    // 多天区间里各天的类型 / 备注可能不同：只有所有天一致时才预填，否则留空 ——
+    // 预填「其实是某一天的值」比空着更容易误导。
+    String? existingKind;
+    String? existingNote;
+    if (kind == DayExtraKind.leave) {
+      final kinds = <String?>{
+        for (final d in days) extras[dayNumber(d)]?.leaveKind,
+      };
+      if (kinds.length == 1) existingKind = kinds.first;
+    }
+    final notes = <String?>{
+      for (final d in days)
+        kind == DayExtraKind.leave
+            ? extras[dayNumber(d)]?.leaveNote
+            : extras[dayNumber(d)]?.overtimeNote,
+    };
+    if (notes.length == 1) existingNote = notes.first;
     final selection = await showDayExtraSheet(
       context,
       kind: kind,
@@ -1304,6 +1344,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       fullDayMinutes:
           current == null ? null : shiftDurationMinutes(current),
       hasExisting: hasExisting,
+      initialLeaveKind:
+          kind == DayExtraKind.leave ? existingKind : null,
+      initialNote: existingNote,
+      customLeaveTypes: ref.read(appSettingsProvider).customLeaveTypes,
+      onCustomLeaveTypesChanged: (types) => ref
+          .read(appSettingsProvider.notifier)
+          .setCustomLeaveTypes(types),
     );
     if (selection == null || !mounted) return;
 
@@ -1318,7 +1365,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       final minutes = selection.isFullDay
           ? (dayShift == null ? 0 : (shiftDurationMinutes(dayShift) ?? 0))
           : selection.minutes;
-      if (minutes > 0) await repo.setDayExtra(n, kind, minutes);
+      if (minutes > 0) {
+        await repo.setDayExtra(
+          n,
+          kind,
+          minutes,
+          leaveKind:
+              kind == DayExtraKind.leave ? selection.leaveKind : null,
+          note: selection.note,
+        );
+      }
     }
     Haptics.commit();
     await AlarmService.replanAfterScheduleChange(repo);
@@ -1327,7 +1383,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     final range = days.length == 1
         ? L10n.monthDay(from)
         : '${L10n.monthDay(days.first)} – ${L10n.monthDay(days.last)}';
-    final kindLabel = kind == DayExtraKind.leave ? L10n.leave : L10n.overtime;
+    // 有类型时把类型写进提示里（「已记录 11月17日 年假 整天」），否则退回「请假」。
+    final kindLabel = kind == DayExtraKind.leave
+        ? (L10n.leaveKindLabel(selection.leaveKind) ?? L10n.leave)
+        : L10n.overtime;
     showGlassSnack(
       context,
       selection.clear
@@ -1343,7 +1402,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   }
 
   /// 打开统计页。顶栏那颗按钮从「排班时段」换成它之后，时段总览仍在
-  /// `我的 → 排班管理 → 排班时段`；统计页头部也留着入口。
+  /// `我的 → 排班管理 → 排班时段`（统计页不再重复放这个入口）。
   void _openStats() {
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const StatsScreen()));
@@ -1895,7 +1954,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               // 由日历定死，多一行会把字挤小，而这里只是前缀两个字。
               if (extra != null && extra.leaveMinutes > 0)
                 TextSpan(
-                  text: '假 ',
+                  // 有类型时显示类型首字（年 / 事 / 病 / 调 / 其），没类型仍是「假」。
+                  text: '${L10n.leaveKindShort(extra.leaveKind)} ',
                   style: lunarStyle
                       .copyWith(color: primary, fontWeight: FontWeight.w700),
                 )
@@ -2549,7 +2609,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                                 const SizedBox(height: AppTokens.gapHair),
                                 Text(
                                   L10n.dayExtraLine(extra.leaveMinutes,
-                                          extra.overtimeMinutes) ??
+                                          extra.overtimeMinutes,
+                                          leaveKind: extra.leaveKind) ??
                                       '',
                                   key: const Key('compact-day-extra'),
                                   maxLines: 1,
@@ -2755,7 +2816,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                           if (extra != null && extra.leaveMinutes > 0)
                             TextSpan(
                               text:
-                                  '   ${L10n.extraLeaveLine(extra.leaveMinutes)}',
+                                  '   ${L10n.extraLeaveLine(extra.leaveMinutes, kind: extra.leaveKind)}',
                               style: AppTokens.rowSecondary
                                   .copyWith(color: primary),
                             ),
@@ -2802,6 +2863,30 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         else if (daySchedule == null)
           Text(L10n.noSchedule,
               style: AppTokens.rowSecondary.copyWith(color: muted)),
+        // 没有班次可挂的那天，请假 / 加班摘要单独占一行 —— 它本来在班次那行
+        // 富文本尾巴上，没有班次时就没地方显示了。完整换行，不省略。
+        if (shift == null &&
+            extra != null &&
+            (extra.leaveMinutes > 0 || extra.overtimeMinutes > 0)) ...[
+          const SizedBox(height: AppTokens.spaceXs),
+          Text(
+            L10n.dayExtraLine(extra.leaveMinutes, extra.overtimeMinutes,
+                    leaveKind: extra.leaveKind) ??
+                '',
+            key: const Key('info-card-extra-line'),
+            style: AppTokens.rowSecondary.copyWith(color: primary),
+          ),
+        ],
+        // 备注：单独一行、完整折行（不省略）。这行只在有备注时出现，高度由
+        // `info_card_metrics` 逐日量进去 —— 定高模型不认「凭空多一行」。
+        if (extra != null && extra.hasNote) ...[
+          const SizedBox(height: AppTokens.spaceXs),
+          Text(
+            L10n.dayExtraNoteLine(extra.leaveNote, extra.overtimeNote) ?? '',
+            key: const Key('info-card-extra-note'),
+            style: AppTokens.microText.copyWith(color: primary),
+          ),
+        ],
         if (daySchedule != null && daySchedule.teamCount > 1) ...[
           const SizedBox(height: AppTokens.spaceMd),
           // 标签与色块同一行：标签独占一行要白占 12 + 16 + 6 = 34dp，而

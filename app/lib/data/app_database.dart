@@ -231,6 +231,16 @@ class ShiftDayExtras extends Table {
   IntColumn get kind => integer()();
   IntColumn get minutes => integer()();
 
+  /// 请假类型**键**（见 `domain/day_extra.dart` 顶部）：内置五类用英文键，
+  /// 自定义存 `custom:<名字>`。加班行这一列恒为 null。
+  ///
+  /// 存键而不是外键表：类型是「写这条记录时的事实」，用户以后删掉自定义类型，
+  /// 历史记录也得照样读得出来 —— 外键会把它变成空白。
+  TextColumn get leaveKind => text().nullable()();
+
+  /// 备注（请假 / 加班各自一行各一份）。v17 新增。
+  TextColumn get note => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {day, kind};
 }
@@ -349,7 +359,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   /// 当前 schema 版本（备份导入时用来拒绝「来自更新版本」的库）。
-  static const int schemaVersionNumber = 16;
+  static const int schemaVersionNumber = 17;
 
   @override
   int get schemaVersion => schemaVersionNumber;
@@ -358,6 +368,18 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 17) {
+            // 请假类型 + 备注：纯新增两列。
+            //
+            // ⚠️ **只有 v16 及以后才有这张表**（它是 `from < 16` 那段建的，而
+            // 那段排在**后面**跑）。从 v15 及更早升上来时，表由那段按**当前
+            // schema** 建出来，新列自带 —— 这里硬加会抛 `no such table`（照
+            // v9→v10「只有 v6 及以后才有 shift_class_rows」的先例）。
+            if (from >= 16) {
+              await m.addColumn(shiftDayExtras, shiftDayExtras.leaveKind);
+              await m.addColumn(shiftDayExtras, shiftDayExtras.note);
+            }
+          }
           if (from < 16) {
             // 统计页：日级请假 / 加班表 + 班次的「夜班」标记。两样都是纯新增。
             await m.createTable(shiftDayExtras);

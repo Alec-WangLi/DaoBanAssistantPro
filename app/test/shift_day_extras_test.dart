@@ -66,4 +66,53 @@ void main() {
     expect(values.last.single.minutes, 240);
     expect(values.last.single.kind, DayExtraKind.leave.index);
   });
+
+  test('请假类型与备注随行写入；传 null 会真的覆盖回 null', () async {
+    await repo.setDayExtra(
+      day,
+      DayExtraKind.leave,
+      240,
+      leaveKind: 'sick',
+      note: '发烧',
+    );
+    await repo.setDayExtra(
+      day,
+      DayExtraKind.overtime,
+      120,
+      note: '替班',
+    );
+
+    final both = (await repo.listDayExtras())[day]!;
+    expect(both.leaveKind, 'sick');
+    expect(both.leaveNote, '发烧');
+    expect(both.overtimeNote, '替班');
+
+    // 加班行不接受请假类型：就算传了也不写；整行覆盖，这次没传备注就不保留旧备注
+    // （界面每次都会把已有备注预填回去，所以正常路径不会丢）。
+    await repo.setDayExtra(
+      day,
+      DayExtraKind.overtime,
+      120,
+      leaveKind: 'annual',
+    );
+    final overwritten = (await repo.listDayExtras())[day]!;
+    expect(overwritten.leaveKind, 'sick');
+    expect(overwritten.overtimeNote, isNull);
+
+    await repo.setDayExtra(day, DayExtraKind.leave, 240);
+    final cleared = (await repo.listDayExtras())[day]!;
+    expect(cleared.leaveKind, isNull);
+    expect(cleared.leaveNote, isNull);
+    expect(cleared.overtimeMinutes, 120);
+  });
+
+  test('自定义类型：键里带着名字，历史记录读得回来', () async {
+    final key = customLeaveKindKey('育儿假');
+    await repo.setDayExtra(day, DayExtraKind.leave, 480, leaveKind: key);
+
+    final row = (await repo.listDayExtras())[day]!;
+    expect(row.leaveKind, key);
+    expect(customLeaveKindName(row.leaveKind), '育儿假');
+    expect(isBuiltInLeaveKind(row.leaveKind), isFalse);
+  });
 }

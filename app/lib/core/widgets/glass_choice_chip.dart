@@ -17,6 +17,7 @@ class GlassChoiceChip extends StatelessWidget {
     required this.color,
     required this.selected,
     required this.onTap,
+    this.onLongPress,
     this.semanticsLabel,
   });
 
@@ -27,6 +28,9 @@ class GlassChoiceChip extends StatelessWidget {
 
   final bool selected;
   final VoidCallback onTap;
+
+  /// 长按（目前只有请假类型的自定义项用它来删除）。缺省不响应。
+  final VoidCallback? onLongPress;
 
   /// 读屏用的完整标签；缺省时用 [label]。
   final String? semanticsLabel;
@@ -56,6 +60,12 @@ class GlassChoiceChip extends StatelessWidget {
             Haptics.select();
             onTap();
           },
+          onLongPress: onLongPress == null
+              ? null
+              : () {
+                  Haptics.select();
+                  onLongPress!();
+                },
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: _hitPad),
             child: Container(
@@ -84,16 +94,21 @@ class GlassChoiceChip extends StatelessWidget {
                     ),
                     const SizedBox(width: AppTokens.spaceSm),
                   ],
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.rowSecondary.copyWith(
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected
-                          ? AppTokens.onSolid(color)
-                          : AppTokens.inkMuted(context),
+                  // `Flexible` + 省略号：chip 在窄窗里会被 Wrap 夹到比文字还窄，
+                  // 不给弹性的话内部 Row 直接横向溢出（200dp 小窗实测 3.5px）。
+                  // 宽屏下 Wrap 给的是内容宽度，这一层不改变任何像素。
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTokens.rowSecondary.copyWith(
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected
+                            ? AppTokens.onSolid(color)
+                            : AppTokens.inkMuted(context),
+                      ),
                     ),
                   ),
                 ],

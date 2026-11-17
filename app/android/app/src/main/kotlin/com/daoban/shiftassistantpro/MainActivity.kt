@@ -638,11 +638,16 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     "saveBackupFile" -> {
-                        // Dart 侧先把 zip 写到缓存目录，这里只负责让用户选保存位置
+                        // Dart 侧先把文件写到缓存目录，这里只负责让用户选保存位置
                         // 并把文件复制过去 —— 大块字节不走 MethodChannel。
+                        //
+                        // 统计导出（CSV）复用这条通道，只多带一个 `mime` 参数：
+                        // 用 text/csv 让文件管理器和 Excel 认得出来。
                         val name = call.argument<String>("name")
                             ?: "shiftassistant-backup.dshbackup"
                         val source = call.argument<String>("sourcePath") ?: ""
+                        val mime = call.argument<String>("mime")
+                            ?: "application/octet-stream"
                         if (pendingSaveBackupResult != null || pendingPickBackupResult != null) {
                             result.error("BACKUP_PICKER_BUSY", "已有文件选择器在等待", null)
                         } else if (source.isEmpty() || !File(source).exists()) {
@@ -654,7 +659,7 @@ class MainActivity : FlutterActivity() {
                                 startActivityForResult(
                                     Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                                         addCategory(Intent.CATEGORY_OPENABLE)
-                                        type = "application/octet-stream"
+                                        type = mime
                                         putExtra(Intent.EXTRA_TITLE, name)
                                     },
                                     REQ_SAVE_BACKUP

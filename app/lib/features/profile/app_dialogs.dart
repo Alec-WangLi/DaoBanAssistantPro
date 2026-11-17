@@ -41,6 +41,14 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.17\n'
+    '· 统计页更好看也更好用了：班次分布换成环形图，新增「出勤构成」分段条与年视图的月度工时柱状图；底部多了一张「统计口径」，点开就能看到每个数字是怎么算的\n'
+    '· 统计页去掉了「排班时段」入口；要看时段总览仍可从「我的 → 排班管理」进\n'
+    '· 统计入口的图标换成饼图，不再和翻月箭头长得像；顶栏排成两行时，它与「今天」在同一侧\n'
+    '· 新增「导出统计数据」：任选起止日期、勾选要的字段（日期 / 班次 / 工时 / 请假类型 / 请假时长 / 加班 / 备注等），生成 CSV，Excel 直接能打开\n'
+    '· 请假现在能选类型：年假、事假、病假、调休、其他，也能自己加类型；长按自定义类型可删除，已有记录会保留原来的名字\n'
+    '· 请假 / 加班都能写备注，日历信息卡上多一行「请假备注：…」；统计页新增「请假构成」，按类型列出时长\n'
+    '\n'
 'v0.13.16\n'
     '· 修：重复待办还在起点之前就出现在列表里 —— 上一版把第一条直接建在「新起点之后的第一次」上，于是「每月 17 号、从 11/21 起」在建好的当下就躺进了列表。现在重复待办要到它那一天才出现，上一版留下的那几条会在打开待办页时自动收走\n'
     '· 打赏收款码换成经营码：支付宝与微信两张都换了，支付宝的「打开支付宝」也指向新码\n'
@@ -84,14 +92,16 @@ const String _changelogZh =
 'v0.13.8\n'
     '· 时间轮盘跟手了：新建闹钟、改班、重复待办里滚动时 / 分轮盘，每换一格震一记「咔哒」；年月选择器的年份轮盘同样\n'
     '\n'
-'v0.13.7\n'
-    '· 触觉不再是「嗡嗡」的一段长震：开关、胶囊段、确认按钮改用系统自己调好的短促「咔哒」，与桌面按图标是同一种波形；不支持这套波形的机型自动回退，不会没声音\n'
-    '· 「关于」页的开发者名写全了：Alexander Wang（简称 Alec）\n'
-    '· 高刷屏已核对：120Hz 机型滑动与切换动画时跑满 120 帧，静止后由系统回落 60Hz，动态高刷也照此跟随\n'
-    '\n'
     ;
-
 const String _changelogEn =
+'v0.13.17\n'
+    '· The Statistics page looks and reads better: by-shift is now a donut chart, day composition is a segmented bar, and the year view gains monthly hour bars; a new "How it is calculated" card at the bottom spells out every number\n'
+    '· The schedule-timeline entry is gone from Statistics; the overview still lives under Me > Schedule management\n'
+    '· The Statistics icon is now a pie chart, no longer confusable with the month arrows; in the two-row header it sits next to Today\n'
+    '· New "Export statistics": pick any date range and fields (date / shift / hours / leave type / leave hours / overtime / note, ...), create a CSV that opens directly in Excel\n'
+    '· Leave now has a type: annual, personal, sick, time off in lieu, other, plus your own custom types; long-press a custom type to delete it, and existing records keep the old name\n'
+    '· Leave and overtime both take a note, shown as an extra line on the calendar info card; Statistics gains "Leave by type" with hours per type\n'
+    '\n'
 'v0.13.16\n'
     '· Fix: a repeating todo showed up before its start date - the previous build created the first row on "the first occurrence after the new start", so a monthly todo starting 11/21 was already in the list. Repeating todos now appear on their own day, and rows left behind by the previous build are removed when the todo page opens\n'
     '· Donation QR codes replaced with the new merchant codes (Alipay and WeChat); the "Open Alipay" action points at the new code too\n'
@@ -134,11 +144,6 @@ const String _changelogEn =
     '\n'
 'v0.13.8\n'
     '· The time wheels click now: scrolling the hour / minute wheel in a new alarm, a schedule edit or a repeating todo ticks once per item; the year wheel in the month picker does the same\n'
-    '\n'
-'v0.13.7\n'
-    '· Haptics no longer hum: switches, segments and confirm buttons use the crisp click the system tuned for the device - the same waveform the launcher uses for icons - with an automatic fallback on phones that lack it\n'
-    '· The About page spells out the developer name: Alexander Wang (Alec)\n'
-    '· High-refresh displays verified: 120Hz phones render at 120 while animating and settle back to 60 when idle; dynamic refresh is followed the same way\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

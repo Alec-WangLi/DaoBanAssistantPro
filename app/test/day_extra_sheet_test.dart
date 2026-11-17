@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
+import 'package:shiftassistantpro/core/widgets/glass_dialog.dart';
 import 'package:shiftassistantpro/domain/day_extra.dart';
 import 'package:shiftassistantpro/features/calendar/day_extra_sheet.dart';
 
@@ -18,6 +19,10 @@ Future<void> _pumpHost(
   int? existingMinutes,
   int? fullDayMinutes = 720,
   bool hasExisting = false,
+  String? initialLeaveKind,
+  String? initialNote,
+  List<String> customLeaveTypes = const <String>[],
+  ValueChanged<List<String>>? onCustomTypesChanged,
   Size size = const Size(420, 900),
 }) async {
   tester.view.physicalSize = size;
@@ -39,6 +44,10 @@ Future<void> _pumpHost(
               existingMinutes: existingMinutes,
               fullDayMinutes: fullDayMinutes,
               hasExisting: hasExisting,
+              initialLeaveKind: initialLeaveKind,
+              initialNote: initialNote,
+              customLeaveTypes: customLeaveTypes,
+              onCustomLeaveTypesChanged: onCustomTypesChanged,
             );
             onResult(r);
           },
@@ -110,5 +119,86 @@ void main() {
     await _pumpHost(tester,
         size: const Size(320, 640), onResult: (_) {});
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('选请假类型 + 填备注，随结果一起回传', (tester) async {
+    DayExtraSelection? result;
+    await _pumpHost(tester, onResult: (r) => result = r);
+
+    await tester.tap(find.text(L10n.leaveKindLabel('annual')!));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '  家里有事  ');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    expect(result!.leaveKind, 'annual');
+    expect(result!.note, '家里有事', reason: '备注要 trim 掉首尾空格');
+  });
+
+  testWidgets('再点一次已选中的类型 = 取消选择', (tester) async {
+    DayExtraSelection? result;
+    await _pumpHost(tester,
+        initialLeaveKind: 'annual', onResult: (r) => result = r);
+
+    await tester.tap(find.text(L10n.leaveKindLabel('annual')!));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    expect(result!.leaveKind, isNull);
+  });
+
+  testWidgets('自定义类型：起名后出现在选择条并选中，回调带回列表', (tester) async {
+    DayExtraSelection? result;
+    List<String>? changed;
+    await _pumpHost(tester,
+        onResult: (r) => result = r,
+        onCustomTypesChanged: (v) => changed = v);
+
+    await tester.tap(find.text(L10n.leaveKindAdd));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+          of: find.byType(GlassDialog), matching: find.byType(TextField)),
+      '育儿假',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+        of: find.byType(GlassDialog), matching: find.text(L10n.confirm)));
+    await tester.pumpAndSettle();
+
+    expect(changed, ['育儿假']);
+    expect(find.text('育儿假'), findsOneWidget);
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+    expect(result!.leaveKind, customLeaveKindKey('育儿假'));
+  });
+
+  testWidgets('长按自定义类型可删除；已有记录的名字不跟着没', (tester) async {
+    List<String>? changed;
+    await _pumpHost(tester,
+        customLeaveTypes: const ['育儿假'],
+        onResult: (_) {},
+        onCustomTypesChanged: (v) => changed = v);
+
+    await tester.longPress(find.text('育儿假'));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.leaveKindDeleteTitle), findsOneWidget);
+    await tester.tap(find.text(L10n.delete));
+    await tester.pumpAndSettle();
+
+    expect(changed, isNotNull);
+    expect(changed, isEmpty);
+    expect(find.text('育儿假'), findsNothing);
+    // 删除后弹层还在，没被一起关掉。
+    expect(find.text(L10n.leaveKindTitle), findsWidgets);
+  });
+
+  testWidgets('备注会预填已有值（单日编辑）', (tester) async {
+    await _pumpHost(tester,
+        initialNote: '上次的备注', onResult: (_) {});
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller!.text, '上次的备注');
   });
 }

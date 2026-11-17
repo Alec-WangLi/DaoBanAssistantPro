@@ -35,6 +35,7 @@ import 'package:shiftassistantpro/features/profile/supporter_screen.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_series_editor.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
+import 'package:shiftassistantpro/features/stats/export_sheet.dart';
 import 'package:shiftassistantpro/features/stats/stats_screen.dart';
 
 import 'visual_harness.dart';
@@ -690,10 +691,29 @@ final List<VisualScreen> visualScreens = [
     needsOnboardingPrefs: false,
   ),
   (
-    // 请假 / 加班时长弹层：快捷档 + 30 分钟加减 + 动作行。
+    // 请假 / 加班时长弹层：类型条（内置 + 自定义）+ 备注 + 动作行。
     slug: '77_day_extra_sheet',
     title: '请假 / 加班时长',
     build: (db) async => const _DayExtraSheetHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 统计导出弹层：自定义区间 + 字段勾选。窄窗里字段 chip 会折很多行，
+    // 这正是需要眼睛看着的那一档。
+    slug: '78_stats_export',
+    title: '统计 · 导出',
+    build: (db) async => const _StatsExportHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 日历 + 今天的请假（年假）与加班（带备注）：格子里「假」变成「年」、
+    // 信息卡多一行备注。定高模型要真的装得下这两行。
+    slug: '79_calendar_day_extra',
+    title: '日历 · 请假类型与备注',
+    build: (db) async {
+      await seedTodayDayExtra(db);
+      return const CalendarScreen();
+    },
     needsOnboardingPrefs: false,
   ),
 ];
@@ -723,6 +743,38 @@ class _DayExtraSheetHostState extends State<_DayExtraSheetHost> {
         to: today,
         dayCount: 1,
         fullDayMinutes: 720,
+        initialLeaveKind: 'annual',
+        initialNote: '上午去医院',
+        customLeaveTypes: const ['育儿假'],
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 统计导出弹层的宿主 —— 只为工装存在。
+class _StatsExportHost extends StatefulWidget {
+  const _StatsExportHost();
+
+  @override
+  State<_StatsExportHost> createState() => _StatsExportHostState();
+}
+
+class _StatsExportHostState extends State<_StatsExportHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final today = dateOnly(DateTime.now());
+      showStatsExportSheet(
+        context,
+        chain: null,
+        extras: const {},
+        from: DateTime(today.year, today.month, 1),
+        to: DateTime(today.year, today.month + 1, 0),
       );
     });
   }

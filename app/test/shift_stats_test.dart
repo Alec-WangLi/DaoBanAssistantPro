@@ -238,4 +238,24 @@ void main() {
     expect(r.workDays, 0);
     expect(r.averageMinutesPerWorkDay, 0);
   });
+
+  test('请假按类型汇总；没类型的旧记录归「未分类」', () {
+    final s = _sched([_work('白班', abbr: '白')], const [0]);
+    final extras = {
+      dayNumber(_d(2026, 11, 2)):
+          const DayExtra(leaveMinutes: 240, leaveKind: 'annual'),
+      dayNumber(_d(2026, 11, 3)):
+          const DayExtra(leaveMinutes: 120, leaveKind: 'personal'),
+      dayNumber(_d(2026, 11, 4)): const DayExtra(leaveMinutes: 60),
+    };
+
+    final r = _stats(_chain(s),
+        from: _d(2026, 11, 1), to: _d(2026, 11, 5), extras: extras);
+
+    expect(r.leaveMinutes, 420);
+    expect(r.leaveMinutesByKind['annual'], 240);
+    expect(r.leaveMinutesByKind['personal'], 120);
+    expect(r.leaveMinutesByKind[kUnspecifiedLeaveKind], 60);
+    expect(r.leaveMinutesByKind.length, 3);
+  });
 }

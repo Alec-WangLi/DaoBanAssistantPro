@@ -1,5 +1,8 @@
+import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:intl/intl.dart';
+
+import '../domain/day_extra.dart';
 
 /// 一段双语文案的持有者。
 ///
@@ -1089,6 +1092,53 @@ class L10n {
   static String get halfDay => t('半天', 'Half day');
   static String get dayExtraExisting => t('已有记录', 'Existing record');
 
+  // ── 请假类型 / 备注（v0.13.17） ──
+
+  /// 请假类型那一行的标题。
+  static String get leaveKindTitle => t('请假类型', 'Leave type');
+
+  /// 类型可以不选 —— 这句说明为什么可以空着。
+  static String get leaveKindHint =>
+      t('可不选；选了以后回看时能分清是什么假', 'Optional — pick one so you can tell later');
+
+  static String get leaveKindAdd => t('＋ 自定义', '+ Custom');
+  static String get leaveKindAddTitle => t('自定义请假类型', 'Custom leave type');
+  static String get leaveKindNameHint => t('最多 8 个字', 'Max 8 characters');
+  static String get leaveKindDeleteTitle => t('删除这个类型？', 'Delete this type?');
+  static String get leaveKindDeleteBody => t(
+      '已有记录会保留原来的名字，只是不再出现在选择列表里。',
+      'Existing records keep the name; it only disappears from the picker.');
+  static String get leaveKindLongPressHint =>
+      t('长按自定义类型可删除', 'Long-press a custom type to delete');
+
+  /// 类型键 → 显示名。内置走双语，自定义取记录里存的名字，空值返回 null。
+  static String? leaveKindLabel(String? key) {
+    if (key == null || key.isEmpty) return null;
+    final custom = customLeaveKindName(key);
+    if (custom != null) return custom;
+    return switch (key) {
+      'annual' => t('年假', 'Annual leave'),
+      'personal' => t('事假', 'Personal leave'),
+      'sick' => t('病假', 'Sick leave'),
+      'compensatory' => t('调休', 'Time off in lieu'),
+      'other' => t('其他', 'Other'),
+      // 以后新增的内置键：读得懂就显示原文，也不让统计页崩掉。
+      _ => key,
+    };
+  }
+
+  /// 日历格子里用的首字：年 / 事 / 病 / 调 / 其 /（自定义类型首字）。
+  static String leaveKindShort(String? key) {
+    final label = leaveKindLabel(key);
+    if (label == null || label.isEmpty) return t('假', 'L');
+    return label.characters.first;
+  }
+
+  static String get note => t('备注', 'Note');
+  static String get noteHint =>
+      t('例如：家里有事、去医院', 'e.g. family matter');
+
+
   /// 分钟数 → 「4小时30分」/「4h 30m」；整小时不写「0分」。
   static String durationText(int minutes) {
     final m = minutes < 0 ? 0 : minutes;
@@ -1099,16 +1149,31 @@ class L10n {
     return isEn ? '${h}h ${r}m' : '$h小时$r分';
   }
 
-  static String extraLeaveLine(int minutes) =>
-      isEn ? 'Leave ${durationText(minutes)}' : '请假 ${durationText(minutes)}';
+  static String extraLeaveLine(int minutes, {String? kind}) {
+    final name = leaveKindLabel(kind) ?? leave;
+    return '$name ${durationText(minutes)}';
+  }
+
   static String extraOvertimeLine(int minutes) =>
       isEn ? 'Overtime ${durationText(minutes)}' : '加班 ${durationText(minutes)}';
 
   /// 「请假 4小时 · 加班 2小时」—— 只列有值的那几项。
-  static String? dayExtraLine(int leaveMinutes, int overtimeMinutes) {
+  static String? dayExtraLine(int leaveMinutes, int overtimeMinutes,
+      {String? leaveKind}) {
     final parts = <String>[
-      if (leaveMinutes > 0) extraLeaveLine(leaveMinutes),
+      if (leaveMinutes > 0) extraLeaveLine(leaveMinutes, kind: leaveKind),
       if (overtimeMinutes > 0) extraOvertimeLine(overtimeMinutes),
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  /// 信息卡上的备注行：「请假备注：xxx · 加班备注：yyy」。两条都空时返回 null。
+  static String? dayExtraNoteLine(String? leaveNote, String? overtimeNote) {
+    final parts = <String>[
+      if (leaveNote != null && leaveNote.isNotEmpty)
+        isEn ? 'Leave note: $leaveNote' : '请假备注：$leaveNote',
+      if (overtimeNote != null && overtimeNote.isNotEmpty)
+        isEn ? 'Overtime note: $overtimeNote' : '加班备注：$overtimeNote',
     ];
     return parts.isEmpty ? null : parts.join(' · ');
   }
@@ -1151,8 +1216,6 @@ class L10n {
   static String statsAverageValue(double hours) => isEn
       ? '${hours.toStringAsFixed(1)} h / shift'
       : '${hours.toStringAsFixed(1)} 小时 / 班';
-  static String statsUsingSchedule(String name) =>
-      isEn ? 'Using $name' : '使用中：$name';
   static String statsYearLabel(int year) => isEn ? '$year' : '$year年';
   static String statsMonthShort(int month) => isEn
       ? const [
@@ -1168,6 +1231,91 @@ class L10n {
     ];
     return parts.join(' · ');
   }
+
+  // ── 统计页的图 / 口径 / 导出（v0.13.17） ──
+
+  /// 「出勤构成」分段条。
+  static String get statsComposition => t('出勤构成', 'Day composition');
+
+  /// 100% 分段条里「整天请假」那一段。
+  static String get statsFullLeave => t('整天请假', 'Full-day leave');
+
+  /// 环形图中心那一行的小字。
+  static String get statsWorkDaysCenter => t('上班', 'Work');
+
+  /// 请假构成（按类型）。
+  static String get statsLeaveKinds => t('请假构成', 'Leave by type');
+  static String get statsLeaveUnspecified => t('未分类', 'Unspecified');
+
+  /// 年视图顶部那张 12 根柱的图。
+  static String get statsMonthlyHours => t('月度工时', 'Monthly hours');
+
+  /// 底部可展开的「统计口径」卡。
+  static String get statsMethod => t('统计口径', 'How it is calculated');
+  static List<String> get statsMethodLines => isEn
+      ? const [
+          'Hours worked = regular hours + overtime. Overtime never offsets leave.',
+          'One shift = end − start. A night shift crossing midnight counts entirely on the day it starts.',
+          'Full-day leave is not counted as a work day; partial leave is subtracted from that day\'s hours.',
+          'A no-shift schedule (follows public holidays) never invents work or rest days — those days count as "no shifts".',
+          'Average per shift = regular hours ÷ work days (overtime excluded).',
+        ]
+      : const [
+          '实际在岗 = 正常工时 + 加班工时；加班单列，不与请假抵扣。',
+          '单班时长 = 结束 − 开始；跨午夜的夜班整段算在上班开始那天。',
+          '整天请假不计上班天数；半天请假从当天工时里扣。',
+          '空白表（跟随法定节假日）不合成上班 / 休息，只计「无班次」。',
+          '平均每班 = 正常工时 ÷ 上班天数（不含加班）。',
+        ];
+
+  // ── 统计数据导出（CSV） ──
+  static String get statsExport => t('导出', 'Export');
+  static String get exportTitle => t('导出统计数据', 'Export statistics');
+  static String get exportRange => t('导出区间', 'Date range');
+  static String get exportStart => t('开始', 'Start');
+  static String get exportEnd => t('结束', 'End');
+  static String get exportFields => t('导出字段', 'Fields');
+  static String get exportAll => t('全选', 'All');
+  static String get exportGenerate => t('生成 CSV', 'Create CSV');
+  static String get exportDone => t('已生成 CSV', 'CSV saved');
+  static String get exportCancelled => t('已取消导出', 'Export cancelled');
+  static String get exportFailed => t('导出失败', 'Export failed');
+  static String get exportEmpty =>
+      t('区间内没有可导出的数据', 'Nothing to export in this range');
+
+  static String get exportFieldDate => t('日期', 'Date');
+  static String get exportFieldWeekday => t('星期', 'Weekday');
+  static String get exportFieldStatus => t('状态', 'Status');
+  static String get exportFieldShift => t('班次', 'Shift');
+  static String get exportFieldTimes => t('起止时间', 'Start–end');
+  static String get exportFieldHours => t('工时（小时）', 'Hours');
+  static String get exportFieldLeaveKind => t('请假类型', 'Leave type');
+  static String get exportFieldLeave => t('请假（小时）', 'Leave (h)');
+  static String get exportFieldOvertime => t('加班（小时）', 'Overtime (h)');
+  static String get exportFieldNight => t('夜班', 'Night shift');
+  static String get exportFieldHoliday => t('法定节假日', 'Public holiday');
+  static String get exportFieldNote => t('备注', 'Note');
+
+  static String get exportStatusWork => t('上班', 'Work');
+  static String get exportStatusRest => t('休息', 'Rest');
+  static String get exportStatusFullLeave => t('整天请假', 'Full-day leave');
+  static String get exportStatusBlank => t('无班次', 'No shifts');
+  static String get exportStatusUnscheduled => t('未排班', 'Unscheduled');
+  static String get exportYes => t('是', 'Yes');
+  static String get exportNo => t('否', 'No');
+
+  /// 星期几的短名（CSV 一列用）。
+  static String weekdayShort(DateTime d) {
+    const zh = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    const en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return (isEn ? en : zh)[d.weekday - 1];
+  }
+
+  /// `yyyy-MM-dd`，CSV 与文件名共用。
+  static String isoDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   static List<String> get weekdays => isEn
       ? const ['M', 'T', 'W', 'T', 'F', 'S', 'S']

@@ -3491,8 +3491,19 @@ class $ShiftDayExtrasTable extends ShiftDayExtras
   late final GeneratedColumn<int> minutes = GeneratedColumn<int>(
       'minutes', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _leaveKindMeta =
+      const VerificationMeta('leaveKind');
   @override
-  List<GeneratedColumn> get $columns => [day, kind, minutes];
+  late final GeneratedColumn<String> leaveKind = GeneratedColumn<String>(
+      'leave_kind', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+      'note', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [day, kind, minutes, leaveKind, note];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3521,6 +3532,14 @@ class $ShiftDayExtrasTable extends ShiftDayExtras
     } else if (isInserting) {
       context.missing(_minutesMeta);
     }
+    if (data.containsKey('leave_kind')) {
+      context.handle(_leaveKindMeta,
+          leaveKind.isAcceptableOrUnknown(data['leave_kind']!, _leaveKindMeta));
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+          _noteMeta, note.isAcceptableOrUnknown(data['note']!, _noteMeta));
+    }
     return context;
   }
 
@@ -3536,6 +3555,10 @@ class $ShiftDayExtrasTable extends ShiftDayExtras
           .read(DriftSqlType.int, data['${effectivePrefix}kind'])!,
       minutes: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}minutes'])!,
+      leaveKind: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}leave_kind']),
+      note: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}note']),
     );
   }
 
@@ -3549,14 +3572,34 @@ class ShiftDayExtra extends DataClass implements Insertable<ShiftDayExtra> {
   final int day;
   final int kind;
   final int minutes;
+
+  /// 请假类型**键**（见 `domain/day_extra.dart` 顶部）：内置五类用英文键，
+  /// 自定义存 `custom:<名字>`。加班行这一列恒为 null。
+  ///
+  /// 存键而不是外键表：类型是「写这条记录时的事实」，用户以后删掉自定义类型，
+  /// 历史记录也得照样读得出来 —— 外键会把它变成空白。
+  final String? leaveKind;
+
+  /// 备注（请假 / 加班各自一行各一份）。v17 新增。
+  final String? note;
   const ShiftDayExtra(
-      {required this.day, required this.kind, required this.minutes});
+      {required this.day,
+      required this.kind,
+      required this.minutes,
+      this.leaveKind,
+      this.note});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['day'] = Variable<int>(day);
     map['kind'] = Variable<int>(kind);
     map['minutes'] = Variable<int>(minutes);
+    if (!nullToAbsent || leaveKind != null) {
+      map['leave_kind'] = Variable<String>(leaveKind);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
     return map;
   }
 
@@ -3565,6 +3608,10 @@ class ShiftDayExtra extends DataClass implements Insertable<ShiftDayExtra> {
       day: Value(day),
       kind: Value(kind),
       minutes: Value(minutes),
+      leaveKind: leaveKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(leaveKind),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
     );
   }
 
@@ -3575,6 +3622,8 @@ class ShiftDayExtra extends DataClass implements Insertable<ShiftDayExtra> {
       day: serializer.fromJson<int>(json['day']),
       kind: serializer.fromJson<int>(json['kind']),
       minutes: serializer.fromJson<int>(json['minutes']),
+      leaveKind: serializer.fromJson<String?>(json['leaveKind']),
+      note: serializer.fromJson<String?>(json['note']),
     );
   }
   @override
@@ -3584,19 +3633,31 @@ class ShiftDayExtra extends DataClass implements Insertable<ShiftDayExtra> {
       'day': serializer.toJson<int>(day),
       'kind': serializer.toJson<int>(kind),
       'minutes': serializer.toJson<int>(minutes),
+      'leaveKind': serializer.toJson<String?>(leaveKind),
+      'note': serializer.toJson<String?>(note),
     };
   }
 
-  ShiftDayExtra copyWith({int? day, int? kind, int? minutes}) => ShiftDayExtra(
+  ShiftDayExtra copyWith(
+          {int? day,
+          int? kind,
+          int? minutes,
+          Value<String?> leaveKind = const Value.absent(),
+          Value<String?> note = const Value.absent()}) =>
+      ShiftDayExtra(
         day: day ?? this.day,
         kind: kind ?? this.kind,
         minutes: minutes ?? this.minutes,
+        leaveKind: leaveKind.present ? leaveKind.value : this.leaveKind,
+        note: note.present ? note.value : this.note,
       );
   ShiftDayExtra copyWithCompanion(ShiftDayExtrasCompanion data) {
     return ShiftDayExtra(
       day: data.day.present ? data.day.value : this.day,
       kind: data.kind.present ? data.kind.value : this.kind,
       minutes: data.minutes.present ? data.minutes.value : this.minutes,
+      leaveKind: data.leaveKind.present ? data.leaveKind.value : this.leaveKind,
+      note: data.note.present ? data.note.value : this.note,
     );
   }
 
@@ -3605,37 +3666,47 @@ class ShiftDayExtra extends DataClass implements Insertable<ShiftDayExtra> {
     return (StringBuffer('ShiftDayExtra(')
           ..write('day: $day, ')
           ..write('kind: $kind, ')
-          ..write('minutes: $minutes')
+          ..write('minutes: $minutes, ')
+          ..write('leaveKind: $leaveKind, ')
+          ..write('note: $note')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(day, kind, minutes);
+  int get hashCode => Object.hash(day, kind, minutes, leaveKind, note);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ShiftDayExtra &&
           other.day == this.day &&
           other.kind == this.kind &&
-          other.minutes == this.minutes);
+          other.minutes == this.minutes &&
+          other.leaveKind == this.leaveKind &&
+          other.note == this.note);
 }
 
 class ShiftDayExtrasCompanion extends UpdateCompanion<ShiftDayExtra> {
   final Value<int> day;
   final Value<int> kind;
   final Value<int> minutes;
+  final Value<String?> leaveKind;
+  final Value<String?> note;
   final Value<int> rowid;
   const ShiftDayExtrasCompanion({
     this.day = const Value.absent(),
     this.kind = const Value.absent(),
     this.minutes = const Value.absent(),
+    this.leaveKind = const Value.absent(),
+    this.note = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ShiftDayExtrasCompanion.insert({
     required int day,
     required int kind,
     required int minutes,
+    this.leaveKind = const Value.absent(),
+    this.note = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : day = Value(day),
         kind = Value(kind),
@@ -3644,12 +3715,16 @@ class ShiftDayExtrasCompanion extends UpdateCompanion<ShiftDayExtra> {
     Expression<int>? day,
     Expression<int>? kind,
     Expression<int>? minutes,
+    Expression<String>? leaveKind,
+    Expression<String>? note,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (day != null) 'day': day,
       if (kind != null) 'kind': kind,
       if (minutes != null) 'minutes': minutes,
+      if (leaveKind != null) 'leave_kind': leaveKind,
+      if (note != null) 'note': note,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3658,11 +3733,15 @@ class ShiftDayExtrasCompanion extends UpdateCompanion<ShiftDayExtra> {
       {Value<int>? day,
       Value<int>? kind,
       Value<int>? minutes,
+      Value<String?>? leaveKind,
+      Value<String?>? note,
       Value<int>? rowid}) {
     return ShiftDayExtrasCompanion(
       day: day ?? this.day,
       kind: kind ?? this.kind,
       minutes: minutes ?? this.minutes,
+      leaveKind: leaveKind ?? this.leaveKind,
+      note: note ?? this.note,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3679,6 +3758,12 @@ class ShiftDayExtrasCompanion extends UpdateCompanion<ShiftDayExtra> {
     if (minutes.present) {
       map['minutes'] = Variable<int>(minutes.value);
     }
+    if (leaveKind.present) {
+      map['leave_kind'] = Variable<String>(leaveKind.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3691,6 +3776,8 @@ class ShiftDayExtrasCompanion extends UpdateCompanion<ShiftDayExtra> {
           ..write('day: $day, ')
           ..write('kind: $kind, ')
           ..write('minutes: $minutes, ')
+          ..write('leaveKind: $leaveKind, ')
+          ..write('note: $note, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -6783,6 +6870,8 @@ typedef $$ShiftDayExtrasTableCreateCompanionBuilder = ShiftDayExtrasCompanion
   required int day,
   required int kind,
   required int minutes,
+  Value<String?> leaveKind,
+  Value<String?> note,
   Value<int> rowid,
 });
 typedef $$ShiftDayExtrasTableUpdateCompanionBuilder = ShiftDayExtrasCompanion
@@ -6790,6 +6879,8 @@ typedef $$ShiftDayExtrasTableUpdateCompanionBuilder = ShiftDayExtrasCompanion
   Value<int> day,
   Value<int> kind,
   Value<int> minutes,
+  Value<String?> leaveKind,
+  Value<String?> note,
   Value<int> rowid,
 });
 
@@ -6810,6 +6901,12 @@ class $$ShiftDayExtrasTableFilterComposer
 
   ColumnFilters<int> get minutes => $composableBuilder(
       column: $table.minutes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get leaveKind => $composableBuilder(
+      column: $table.leaveKind, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnFilters(column));
 }
 
 class $$ShiftDayExtrasTableOrderingComposer
@@ -6829,6 +6926,12 @@ class $$ShiftDayExtrasTableOrderingComposer
 
   ColumnOrderings<int> get minutes => $composableBuilder(
       column: $table.minutes, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get leaveKind => $composableBuilder(
+      column: $table.leaveKind, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnOrderings(column));
 }
 
 class $$ShiftDayExtrasTableAnnotationComposer
@@ -6848,6 +6951,12 @@ class $$ShiftDayExtrasTableAnnotationComposer
 
   GeneratedColumn<int> get minutes =>
       $composableBuilder(column: $table.minutes, builder: (column) => column);
+
+  GeneratedColumn<String> get leaveKind =>
+      $composableBuilder(column: $table.leaveKind, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
 }
 
 class $$ShiftDayExtrasTableTableManager extends RootTableManager<
@@ -6880,24 +6989,32 @@ class $$ShiftDayExtrasTableTableManager extends RootTableManager<
             Value<int> day = const Value.absent(),
             Value<int> kind = const Value.absent(),
             Value<int> minutes = const Value.absent(),
+            Value<String?> leaveKind = const Value.absent(),
+            Value<String?> note = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               ShiftDayExtrasCompanion(
             day: day,
             kind: kind,
             minutes: minutes,
+            leaveKind: leaveKind,
+            note: note,
             rowid: rowid,
           ),
           createCompanionCallback: ({
             required int day,
             required int kind,
             required int minutes,
+            Value<String?> leaveKind = const Value.absent(),
+            Value<String?> note = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               ShiftDayExtrasCompanion.insert(
             day: day,
             kind: kind,
             minutes: minutes,
+            leaveKind: leaveKind,
+            note: note,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0

@@ -512,27 +512,6 @@ void main() {
     );
   });
 
-  // 顶栏那颗按钮点开的**排班时段只读总览**。弹层是命令式的、没有可渲染的
-  // widget，所以只能首帧之后真点一次那个入口 —— 与上面那张空态同一条路子。
-  visualTest('日历 · 排班时段总览', (tester) async {
-    failOnOverflow(tester);
-    final db = await freshDb();
-    await seedScheduleChain(db);
-    await renderScreen(
-      tester,
-      name: '28_calendar_timeline',
-      home: const CalendarScreen(),
-      overrides: <Override>[databaseProvider.overrideWithValue(db)],
-      beforeCapture: (t) async {
-        // 顶栏那颗按钮现在是「统计」；时段总览从统计页头部进（2026-11-16 起）。
-        await t.tap(find.byIcon(Icons.insights_outlined));
-        await settleVisual(t);
-        await t.tap(find.byKey(const Key('stats-schedule-link')));
-        await settleVisual(t);
-      },
-    );
-  });
-
   // 底栏 · 液态 · 按住拖到一半。
   //
   // **静止帧拍不到这一档的全部** —— 凸出胶囊、沿运动方向拉伸、光谱环与那条被折射的

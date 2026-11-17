@@ -67,4 +67,30 @@ void main() {
 
     await disposeCalendar(tester);
   });
+
+  testWidgets('选「年假」+ 填备注：落库带类型与备注，信息卡跟着显示', (tester) async {
+    final db = await pumpCalendar(tester, 'day_night_rest_rest');
+    final day = dayNumber(DateTime(2026, 10, 15));
+
+    await _openLeave(tester);
+    await tester.tap(find.text(L10n.leaveKindLabel('annual')!));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '家里有事');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    final extra = (await AppRepository(db).listDayExtras())[day]!;
+    expect(extra.leaveKind, 'annual');
+    expect(extra.leaveNote, '家里有事');
+
+    // 班次行里显示的是「年假 12小时」，不再是笼统的「请假」。
+    expect(_shiftLine(tester),
+        contains(L10n.extraLeaveLine(720, kind: 'annual')));
+    // 备注自占一行（定高模型按逐日量的结果留了位置）。
+    expect(find.byKey(const Key('info-card-extra-note')), findsOneWidget);
+    expect(find.textContaining('家里有事'), findsWidgets);
+
+    await disposeCalendar(tester);
+  });
 }

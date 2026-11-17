@@ -21,6 +21,18 @@ class AppTokens {
   static const Color success = Color(0xFF4ADE80);
   static const Color holiday = Color(0xFFE53935);
 
+  // ── 统计图表（v0.13.17） ──
+  //
+  // 「上班」用主题主色、「休息」用 `inkMuted` —— 那两档跟着主题走，不另立常量。
+  // 这三颗是只在图表里出现的语义色：请假（暖）、无班次（中性深）、未排班（中性浅）。
+  // 写进令牌而不是在 `features/stats` 里内联 `Color(0x…)`（D1）。
+  static const Color chartLeave = Color(0xFFF2A93B);
+  static const Color chartBlank = Color(0xFF8A8FA3);
+  static const Color chartUnscheduled = Color(0xFFB9BDCC);
+
+  /// 环形图的环宽。与 132 的外径配着看（内径约 96，中间足够放两行字）。
+  static const double chartRing = 18;
+
   // ── 圆角 ──
   static const double radiusS = 12;
   static const double radiusM = 16;

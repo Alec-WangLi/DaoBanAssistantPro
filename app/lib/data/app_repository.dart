@@ -30,11 +30,21 @@ Map<int, DayExtra> dayExtrasFromRows(List<ShiftDayExtra> rows) {
   for (final r in rows) {
     final cur = out[r.day] ?? const DayExtra();
     if (r.kind == DayExtraKind.leave.index) {
-      out[r.day] =
-          DayExtra(leaveMinutes: r.minutes, overtimeMinutes: cur.overtimeMinutes);
+      out[r.day] = DayExtra(
+        leaveMinutes: r.minutes,
+        overtimeMinutes: cur.overtimeMinutes,
+        leaveKind: r.leaveKind,
+        leaveNote: r.note,
+        overtimeNote: cur.overtimeNote,
+      );
     } else if (r.kind == DayExtraKind.overtime.index) {
       out[r.day] = DayExtra(
-          leaveMinutes: cur.leaveMinutes, overtimeMinutes: r.minutes);
+        leaveMinutes: cur.leaveMinutes,
+        overtimeMinutes: r.minutes,
+        leaveKind: cur.leaveKind,
+        leaveNote: cur.leaveNote,
+        overtimeNote: r.note,
+      );
     }
   }
   return out;
@@ -1422,13 +1432,25 @@ class AppRepository {
   /// 写入 / 覆盖某天的请假或加班时长；[minutes] <= 0 等于清除。
   ///
   /// `day` 走 `dayNumber` 口径，与闹钟按天覆盖同一套。
-  Future<void> setDayExtra(int day, DayExtraKind kind, int minutes) async {
+  ///
+  /// [leaveKind] 只对请假有意义（内置键 / `custom:<名字>`，见
+  /// `domain/day_extra.dart`）；[note] 两类都能写。**每次都整行覆盖**：清除某项
+  /// 元数据时传 null 才会真的写回 null，而不是留着旧值。
+  Future<void> setDayExtra(
+    int day,
+    DayExtraKind kind,
+    int minutes, {
+    String? leaveKind,
+    String? note,
+  }) async {
     if (minutes <= 0) return clearDayExtra(day, kind);
     await db.into(db.shiftDayExtras).insertOnConflictUpdate(
           ShiftDayExtrasCompanion.insert(
             day: day,
             kind: kind.index,
             minutes: minutes,
+            leaveKind: Value(kind == DayExtraKind.leave ? leaveKind : null),
+            note: Value(note),
           ),
         );
   }

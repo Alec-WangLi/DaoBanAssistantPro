@@ -308,19 +308,6 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('时段弹层：「管理排班时段」有箭头', (tester) async {
-    await _pumpVisual(tester, const CalendarScreen());
-    // 时段总览现在从统计页头部进（顶栏那颗按钮换成了「统计」）。
-    await tester.tap(find.byIcon(Icons.insights_outlined));
-    await _settle(tester);
-    await tester.tap(find.byKey(const Key('stats-schedule-link')));
-    await _settle(tester);
-
-    expect(find.byKey(const Key('manage-timeline-chevron')), findsOneWidget);
-
-    await _dispose(tester);
-  });
-
   testWidgets('窄屏模板卡（堆叠版式）也有箭头', (tester) async {
     await _pump(tester, const ShiftTemplatePickerScreen(),
         size: const Size(200, 400), seed: (db) => seedMyTemplates(db));

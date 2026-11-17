@@ -11,13 +11,21 @@ class BackupIo {
 
   /// 让用户选保存位置并把 [sourcePath] 复制过去。
   /// 用户取消返回 null；失败抛 [PlatformException]。
+  ///
+  /// [mime] 只影响系统文件选择器的默认类型（备份是 `application/octet-stream`，
+  /// 统计导出是 `text/csv`）；文件本身照原样复制。
   static Future<String?> save({
     required String suggestedName,
     required String sourcePath,
+    String mime = 'application/octet-stream',
   }) async {
     final Map<dynamic, dynamic>? raw = await _channel.invokeMethod<Map>(
       'saveBackupFile',
-      <String, Object?>{'name': suggestedName, 'sourcePath': sourcePath},
+      <String, Object?>{
+        'name': suggestedName,
+        'sourcePath': sourcePath,
+        'mime': mime,
+      },
     );
     return raw?['uri'] as String?;
   }

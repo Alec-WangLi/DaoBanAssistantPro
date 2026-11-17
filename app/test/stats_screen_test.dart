@@ -17,6 +17,7 @@ import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/day_extra.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
+import 'package:shiftassistantpro/features/stats/stats_charts.dart';
 import 'package:shiftassistantpro/features/stats/stats_screen.dart';
 
 import 'support/fixed_clock.dart';
@@ -165,6 +166,83 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('图形统计：环形图 + 出勤构成条 + 年视图柱状图', (tester) async {
+    final db = await _seed(tester);
+    await _pump(tester, db);
+
+    expect(find.byType(ShiftDonut), findsOneWidget);
+    expect(find.byType(CompositionBar), findsOneWidget);
+    expect(find.textContaining('%'), findsWidgets,
+        reason: '图例要带占比');
+    expect(find.text(L10n.statsComposition), findsOneWidget);
+
+    await tester.tap(find.descendant(
+        of: find.byType(GlassSegment),
+        matching: find.text(L10n.statsYear)));
+    await tester.pumpAndSettle();
+    expect(find.byType(MonthlyHoursBars), findsOneWidget);
+    expect(find.text(L10n.statsMonthlyHours), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('请假构成按类型列出；没类型的旧记录归「未分类」', (tester) async {
+    final db = await _seed(tester);
+    final repo = AppRepository(db);
+    await repo.setDayExtra(
+      dayNumber(DateTime.utc(2026, 10, 15)),
+      DayExtraKind.leave,
+      240,
+      leaveKind: 'annual',
+    );
+    await repo.setDayExtra(
+      dayNumber(DateTime.utc(2026, 10, 16)),
+      DayExtraKind.leave,
+      120,
+    );
+    await _pump(tester, db);
+
+    expect(find.text(L10n.statsLeaveKinds), findsOneWidget);
+    expect(find.text(L10n.leaveKindLabel('annual')!), findsOneWidget);
+    expect(find.text(L10n.statsLeaveUnspecified), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('统计口径卡默认收起，点开后列出规则', (tester) async {
+    final db = await _seed(tester);
+    await _pump(tester, db);
+
+    expect(find.text(L10n.statsMethod), findsOneWidget);
+    expect(find.text(L10n.statsMethodLines.first), findsNothing);
+
+    await tester.tap(find.byKey(const Key('stats-method-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining(L10n.statsMethodLines.first), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('不再有「排班时段」入口；导出按钮可打开导出弹层', (tester) async {
+    final db = await _seed(tester);
+    await _pump(tester, db);
+
+    expect(find.byKey(const Key('stats-schedule-link')), findsNothing,
+        reason: '2026-11-17 用户拍板：统计页不再保留排班时段入口');
+    expect(find.text(L10n.statsExport), findsOneWidget);
+
+    await tester.tap(find.text(L10n.statsExport));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.exportTitle), findsOneWidget);
+    expect(find.text(L10n.exportGenerate), findsOneWidget);
+
+    // 关掉弹层（取消），别让后面清树时还有一层路由。
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
 
     await _dispose(tester);
   });

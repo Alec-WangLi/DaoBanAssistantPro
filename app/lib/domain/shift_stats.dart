@@ -47,6 +47,7 @@ class ShiftStats {
     this.longestWorkStreak = 0,
     this.longestRestStreak = 0,
     this.classDayCounts = const {},
+    this.leaveMinutesByKind = const {},
   });
 
   /// 出勤天数（整天请假不算）。
@@ -83,6 +84,10 @@ class ShiftStats {
 
   /// 班次简称 → 天数，与信息卡「本月统计」同口径。
   final Map<String, int> classDayCounts;
+
+  /// 请假类型键 → 请假分钟数。没选类型的旧记录归到
+  /// [kUnspecifiedLeaveKind]（见 `domain/day_extra.dart`）。
+  final Map<String, int> leaveMinutesByKind;
 
   /// 实际在岗 = 正常 + 加班。
   int get totalMinutes => normalMinutes + overtimeMinutes;
@@ -134,6 +139,7 @@ ShiftStats shiftStatsFor({
   var longestWork = 0;
   var longestRest = 0;
   final classDayCounts = <String, int>{};
+  final leaveMinutesByKind = <String, int>{};
   // `holidayNameOf` 返回的是假期名字（String?），这里要的是布尔。
   final bool Function(DateTime) holidayOf =
       isHoliday ?? (DateTime d) => holidayNameOf(d) != null;
@@ -148,6 +154,11 @@ ShiftStats shiftStatsFor({
     final overtime = extra?.overtimeMinutes ?? 0;
     leaveMinutes += leave;
     overtimeMinutes += overtime;
+    if (leave > 0) {
+      final typeKey = extra?.leaveKind ?? kUnspecifiedLeaveKind;
+      leaveMinutesByKind.update(typeKey, (v) => v + leave,
+          ifAbsent: () => leave);
+    }
 
     final shift = chain?.shiftOn(date);
     if (shift == null) {
@@ -215,5 +226,7 @@ ShiftStats shiftStatsFor({
     longestWorkStreak: longestWork,
     longestRestStreak: longestRest,
     classDayCounts: Map<String, int>.unmodifiable(classDayCounts),
+    leaveMinutesByKind:
+        Map<String, int>.unmodifiable(leaveMinutesByKind),
   );
 }
