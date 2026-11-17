@@ -840,16 +840,19 @@ class _EventFields {
     }
 
     if (existing == null) {
-      await repo.addEvent(
-        title: title,
-        // 重复项的第一条挂在「从这天起」上（就是用户刚选的那天）；一次性待办
-        // 挂在 [date] 上。[date] 本身不代表起点，见 [seriesStart] 的注释。
-        date: repeat == null ? date : (seriesStart ?? date),
-        timeMinute: timeMinute,
-        advanceRemindMinutes: advance,
-        alarmEnabled: alarm,
-        seriesId: sid,
-      );
+      // **重复项不在这里建行**：那一行由生成器按「不晚于今天的最近一次发生日」
+      // 补出来（见下面那段）。在这里建就等于替用户把「未来的那一次」提前摆进
+      // 列表 —— v0.13.15 头一版就是这么做的，用户当天就否掉了。
+      if (repeat == null) {
+        await repo.addEvent(
+          title: title,
+          date: date,
+          timeMinute: timeMinute,
+          advanceRemindMinutes: advance,
+          alarmEnabled: alarm,
+          seriesId: sid,
+        );
+      }
     } else {
       await repo.updateEvent(
         existing,
@@ -862,45 +865,35 @@ class _EventFields {
       );
     }
 
-    // 改完周期要把「当前这一次」对齐到新规则的最近一次发生日（spec §4.2 末段）。
+    // 改完周期 / 起点之后，系列里**只允许有一条「当前这一次」**。
     //
-    // **这一步生成器不会替我们做**：它只往前顺延、永不回退（用户手工把这一次
-    // 挪到别的日子时不许被拽回来），而「把每周三改成每周五」恰恰需要回退。
-    // 两条路径的分工写在这里，免得后人把哪一边当成 bug 去改。
+    // 三条分工，缺一条就会留下一条不该存在的行：
+    //   ① 有当前这一次（不晚于今天的最近一次发生日）→ 把未完成的行对齐到它。
+    //      **生成器不会替我们做这一步**：它只往前顺延、永不回退（用户手工把这一次
+    //      挪到别的日子时不许被拽回来），而「把每周三改成每周五」恰恰需要回退。
+    //   ② 起点还在未来 → 一条都不留。用户 2026-11-17 明确要求：「每月 17 号、
+    //      从 11/21 起」就该 12/17 才出现在列表里。（规则本身是脏数据、`occ`
+    //      因此为 null 时不删 —— 那行是用户要做的一件事，替他删就是数据丢失。）
+    //   ③ 补：新建的重复待办这时还没有行，交给生成器按同一条判据补出来。
     if (sid != null) {
+      final today = dateOnly(appNow());
       final s = (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
       final chain = (await repo.getActiveSchedules())?.chain;
-      // **起点被改过**：那一条行也得跟着走。
-      //
-      // 起点是系列的属性，行是它的「当前这一次」；只改起点不改行，用户就会在旧
-      // 日子上继续看见它。落点取「新起点之后的第一次」而不是原样留在新起点那一天
-      // ——「每周三」配上用户随手点的一个周四，规则要的是那个周三。
-      //
-      // 起点在未来时 `firstOccurrenceOnOrAfter` 仍会给出那一天（每周/每月/每天都
-      // 一样），于是列表里留一条「还没到点」的待办，而不是整条消失。
-      if (dateChanged) {
-        final start = dateOnly(s.startDate);
-        final first = firstOccurrenceOnOrAfter(s, start,
-            shiftOn: chain?.shiftOn);
-        for (final r in (await repo.listEvents())
-            .where((e) => e.seriesId == sid && !e.isCompleted)) {
-          if (first == null) {
-            // 规则在新起点之后无解（按班次且 400 天内没有那个班）：留着就是一条
-            // 永远不会发生、却一直提醒的行。
-            await repo.deleteEvent(r);
-          } else if (!isSameDay(r.date, first)) {
-            await repo.setEventDate(r.id, first);
-          }
+      final occ = occurrenceOnOrBefore(s, today, shiftOn: chain?.shiftOn);
+      final notStarted =
+          occ == null && daysBetween(today, dateOnly(s.startDate)) > 0;
+      final live = (await repo.listEvents())
+          .where((e) => e.seriesId == sid && !e.isCompleted)
+          .toList();
+      for (final r in live) {
+        if (notStarted) {
+          // 起点搬到未来了：这条行是「旧起点上的这一次」，收走。
+          await repo.deleteEvent(r);
+        } else if (occ != null && !isSameDay(r.date, occ)) {
+          await repo.setEventDate(r.id, occ);
         }
       }
-      final occ = occurrenceOnOrBefore(s, dateOnly(appNow()),
-          shiftOn: chain?.shiftOn);
-      if (occ != null) {
-        for (final r in (await repo.listEvents())
-            .where((e) => e.seriesId == sid && !e.isCompleted)) {
-          if (!isSameDay(r.date, occ)) await repo.setEventDate(r.id, occ);
-        }
-      }
+      await repo.advanceRecurringTodos(today: today);
     }
     return true;
   }

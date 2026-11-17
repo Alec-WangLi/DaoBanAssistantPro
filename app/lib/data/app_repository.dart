@@ -1189,7 +1189,27 @@ class AppRepository {
         if (!s.enabled) continue;
 
         final occ = occurrenceOnOrBefore(s, today, shiftOn: shiftOn);
-        if (occ == null) continue; // 还没到起始日
+        if (occ == null) {
+          // 还没到起始日（或规则在起始日之后无解）：**这个系列一条行都不该有**。
+          //
+          // v0.13.15 头一版把「新建重复待办」的第一条直接建在「新起点之后的第一次」
+          // 上，于是「每月 17 号、从 11/21 起」在建好的当下就躺进列表（日期写的是
+          // 12/17），用户 2026-11-17 明确否掉了：**重复待办要到它那一天的才出现**。
+          // 这里顺手把那种行清掉 —— 老版本留下的也一并收走，不必等用户再编辑一次。
+          //
+          // **只在「起点确实还在未来」时清**：规则本身是脏数据（月日掩码为空、
+          // 班次名对不上）时 `occ` 同样是 null，那种情况下用户手上那条行是他要做的
+          // 事，替他删掉就是数据丢失。
+          if (daysBetween(dateOnly(s.startDate), today) < 0) {
+            for (final r in rows
+                .where((r) => r.seriesId == s.id && !r.isCompleted)) {
+              await (db.delete(db.scheduleEvents)
+                    ..where((e) => e.id.equals(r.id)))
+                  .go();
+            }
+          }
+          continue;
+        }
         // 「这次不要了」：跳过标记与 occurrence 都是「自 epoch 天数」。
         // 直接拿 DateTime 比 int 是拿毫秒去比天数，恒不成立 —— 那正是「删了又回来」。
         if (s.skipThrough != null && dayNumber(occ) <= s.skipThrough!) continue;

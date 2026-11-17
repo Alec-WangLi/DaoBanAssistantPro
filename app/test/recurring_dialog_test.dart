@@ -367,11 +367,8 @@ void main() {
         reason: '起点在未来 → 今天之前没有发生日，也就不该排任何提醒');
 
     final rows = await repo.listEvents();
-    expect(rows.length, 1, reason: '还是那一条，不新建也不留幽灵行');
-    expect(rows.single.id, before.id);
-    expect(dayNumber(dateOnly(rows.single.date)),
-        dayNumber(DateTime(2026, 10, 21)),
-        reason: '行要跟着起点走到「新起点之后的第一次」（10/21 正是周三）');
+    expect(rows, isEmpty,
+        reason: '起点搬到未来 → 那条行也得收走，列表里一条都不该有');
     await _dispose(tester);
   });
 
@@ -399,7 +396,10 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('新建时选未来日期 → 系列起点就是那天', (tester) async {
+  testWidgets('新建时选未来日期 → 系列起点是那天，列表里**还没有**待办',
+      (tester) async {
+    // 用户 2026-11-17：「每月 17 号、从 11/21 起」就该 12/17 才出现，
+    // 而不是建好的当下就躺在列表里（日期写着 12/17）。
     await mount(tester);
     await tester.tap(find.byIcon(Icons.add_outlined));
     await _settle(tester);
@@ -416,6 +416,8 @@ void main() {
     final series = (await repo.listRecurringTodos()).single;
     expect(dayNumber(dateOnly(series.startDate)),
         dayNumber(DateTime(2026, 10, 21)));
+    expect(await repo.listEvents(), isEmpty,
+        reason: '重复待办要到它那一天才出现，起点还在未来时一条都不该有');
     await _dispose(tester);
   });
 }

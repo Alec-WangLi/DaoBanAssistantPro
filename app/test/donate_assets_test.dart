@@ -5,6 +5,7 @@
 // 空目录、被误删、换成 0 字节文件都会直接红。
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/features/profile/donate_sheet.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -17,5 +18,14 @@ void main() {
       final data = await rootBundle.load(path);
       expect(data.lengthInBytes, greaterThan(1024), reason: path);
     }
+  });
+
+  // 支付宝那一张是「图片 + 常量」两半拼起来的：图片给人扫，常量给 `alipays://`
+  // 唤起用。**换码必须同时换**，只换图片不改常量，点「打开支付宝」唤起的就是那个
+  // 已经作废的旧码（2026-11-17 作者把个人收款码换成经营码，就是这一次）。
+  // 这条用例钉住常量本身：改它必须同时确认 `assets/donate/alipay.png` 解出来
+  // 也是这串（解不开就去解，别照着旧值抄）。
+  test('支付宝唤起链接与当前收款码一致', () {
+    expect(alipayQrContent, 'https://qr.alipay.com/2m6133750jrvc86p0ktkh2d');
   });
 }

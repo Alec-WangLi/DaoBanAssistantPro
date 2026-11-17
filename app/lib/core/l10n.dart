@@ -389,8 +389,8 @@ class L10n {
       '点一下直接打开支付宝收款页；没装支付宝时会显示二维码',
       'Opens the Alipay payment page; if Alipay is not installed, the QR code is shown');
   static String get donateWechatHint => t(
-      '微信个人收款不能直接唤起付款页：截图后用「扫一扫」里的「相册」识别',
-      'WeChat personal payments cannot open the pay page directly: screenshot it, then pick it from Albums in WeChat Scan');
+      '微信收款不能直接唤起付款页：截图后用「扫一扫」里的「相册」识别',
+      'WeChat payments cannot open the pay page directly: screenshot it, then pick it from Albums in WeChat Scan');
   static String get donateScanTitle => t('扫码支持', 'Scan to support');
   static String get donateScanAlipay => t(
       '用支付宝「扫一扫」，或截图后从相册识别',

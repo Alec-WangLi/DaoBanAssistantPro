@@ -41,6 +41,10 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.16\n'
+    '· 修：重复待办还在起点之前就出现在列表里 —— 上一版把第一条直接建在「新起点之后的第一次」上，于是「每月 17 号、从 11/21 起」在建好的当下就躺进了列表。现在重复待办要到它那一天才出现，上一版留下的那几条会在打开待办页时自动收走\n'
+    '· 打赏收款码换成经营码：支付宝与微信两张都换了，支付宝的「打开支付宝」也指向新码\n'
+    '\n'
 'v0.13.15\n'
     '· 修：编辑重复待办时把「从这天起」改到别的日子，它当天照样提醒 —— 那一行只挪了当前这一条，系列的起点没跟着走（提醒正是按起点算的）\n'
     '· 「我的 → 权限」新增「休眠应用（三星）」：电池 → 后台使用限制里把本 App 从「睡眠应用 / 深度休眠应用」去掉。进了名单的 App，系统会连闹钟一起取消，症状就是几天偶尔漏响一次\n'
@@ -85,12 +89,13 @@ const String _changelogZh =
     '· 「关于」页的开发者名写全了：Alexander Wang（简称 Alec）\n'
     '· 高刷屏已核对：120Hz 机型滑动与切换动画时跑满 120 帧，静止后由系统回落 60Hz，动态高刷也照此跟随\n'
     '\n'
-'v0.13.6\n'
-    '· 文案校对：官网「更新日志」补到最新版本；「我的 → 使用帮助」补上「数据备份」；README、产品规格与构建文档里的过时数字、以及规格里「不做数据导入导出」的旧说法一并更正\n'
-    '\n'
     ;
 
 const String _changelogEn =
+'v0.13.16\n'
+    '· Fix: a repeating todo showed up before its start date - the previous build created the first row on "the first occurrence after the new start", so a monthly todo starting 11/21 was already in the list. Repeating todos now appear on their own day, and rows left behind by the previous build are removed when the todo page opens\n'
+    '· Donation QR codes replaced with the new merchant codes (Alipay and WeChat); the "Open Alipay" action points at the new code too\n'
+    '\n'
 'v0.13.15\n'
     '· Fix: editing a repeating todo and moving "Starts on" to another day still reminded you on the old day - only the current row moved, the series start (which drives reminders) did not\n'
     '· Me > Permissions gains "Sleeping apps (Samsung)": remove the app from Sleeping / Deep sleeping apps under Battery > Background usage limits. Apps on those lists have their alarms cancelled by the system, which shows up as an alarm missing every few days\n'
@@ -134,9 +139,6 @@ const String _changelogEn =
     '· Haptics no longer hum: switches, segments and confirm buttons use the crisp click the system tuned for the device - the same waveform the launcher uses for icons - with an automatic fallback on phones that lack it\n'
     '· The About page spells out the developer name: Alexander Wang (Alec)\n'
     '· High-refresh displays verified: 120Hz phones render at 120 while animating and settle back to 60 when idle; dynamic refresh is followed the same way\n'
-    '\n'
-'v0.13.6\n'
-    '· Copy pass: the website changelog is current again, the in-app guide covers Data backup, and stale numbers plus the old "no data export" note in the README, product spec and build guide are fixed\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

@@ -30,7 +30,12 @@ import 'supporter_store.dart';
 
 /// 支付宝收款码里的链接（从用户提供的 `assets/donate/alipay.png` 解出）。
 /// 只用于 `alipays://` 唤起，不在界面上展示。
-const String alipayQrContent = 'https://qr.alipay.com/fkx19195ffwze9uwenx5maa';
+///
+/// **换码时必须同步改这里**：2026-11-17 作者换成了支付宝**经营码**（旧的个人收款码
+/// 作废），图片与这串链接是同一个码的两半 —— 只换图片不改这里，点「打开支付宝」会
+/// 唤起那个已经作废的旧码。判据：拿 `assets/donate/alipay.png` 重新解一次二维码，
+/// 结果必须与这串逐字符相同。
+const String alipayQrContent = 'https://qr.alipay.com/2m6133750jrvc86p0ktkh2d';
 
 /// 默认金额。自定义档的值不进这个列表。
 const List<int> donatePresetAmounts = [5, 10, 20];
