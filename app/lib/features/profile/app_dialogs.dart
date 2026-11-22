@@ -41,6 +41,13 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.18\n'
+    '· 修：个别机型（三星这类）偶尔有某一条班次闹钟不响。根因是重排闹钟时先清空系统里已排的那一批、再一条条排回来，中间有几秒一条闹钟都没有；而每次闹钟响都会拉起 App 重排一轮，这时 App 若被划掉或被系统清理，就停在「撤完了、还没排上」\n'
+    '· 现在顺序反过来了：先把新的一批排上、再撤多余的。重排过程中系统里始终有一批闹钟（升级后的首次清扫是唯一的一次例外）\n'
+    '· 新增闹钟巡检：每 6 小时照排班把系统里缺的补回来。厂商把 App 的闹钟整条取消时（三星「休眠应用」就是这样），靠它补回，不必等下次打开 App\n'
+    '· 日志现在能一眼定位：进程启动只写一次设备与权限，之后每条都短；每条「收到闹钟」后面跟一行「下一跳是几月几日几点、哪个 id」——报障时把日志复制过来，就能分清是系统没递过来、还是 App 根本没排它。铃声那一行也不再打出让人误解的「file://」\n'
+    '· 重排本身也快了：一次只走一次原生调用、只落一次盘（原来是每条闹钟各来一次），冷启动不再卡\n'
+    '\n'
 'v0.13.17\n'
     '· 统计页更好看也更好用了：班次分布换成环形图，新增「出勤构成」分段条与年视图的月度工时柱状图；底部多了一张「统计口径」，点开就能看到每个数字是怎么算的\n'
     '· 统计页去掉了「排班时段」入口；要看时段总览仍可从「我的 → 排班管理」进\n'
@@ -89,11 +96,15 @@ const String _changelogZh =
     '· 响铃页不再静音：上滑越过阈值关掉、或点「再睡一会」，各有一记确认震动；上滑没到位弹回去则不震\n'
     '· 备份导出 / 导入成功时震一记\n'
     '\n'
-'v0.13.8\n'
-    '· 时间轮盘跟手了：新建闹钟、改班、重复待办里滚动时 / 分轮盘，每换一格震一记「咔哒」；年月选择器的年份轮盘同样\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.18\n'
+    '· Fix: on some devices (Samsung among them) an occasional shift alarm did not ring. Alarms were re-planned by clearing everything already scheduled and then adding them back one by one, leaving a few seconds with no alarm at all; and every alarm that rings brings the app up for a full re-plan, so if the app is swiped away or cleaned up meanwhile it stays at "cleared, not yet re-added"\n'
+    '· The order is reversed: the new batch is scheduled first, then the leftovers are cancelled. A full set of alarms stays scheduled throughout a re-plan (the one-time sweep after upgrading is the only exception)\n'
+    '· New alarm check-up every 6 hours re-adds whatever the system dropped. When an OEM cancels an app\'s alarms outright (Samsung\'s sleeping apps do), this brings them back without waiting for the next app launch\n'
+    '· The log now pinpoints the problem at a glance: device and permissions are written once per process and later lines are short; every "alarm received" line is followed by "next up: date, time, id" - paste the log and it is clear whether the system never delivered it or the app never scheduled it. The ringtone line no longer prints a misleading "file://"\n'
+    '· Re-planning is faster too: one native call and one disk write per batch instead of one per alarm, so cold starts no longer stall\n'
+    '\n'
 'v0.13.17\n'
     '· The Statistics page looks and reads better: by-shift is now a donut chart, day composition is a segmented bar, and the year view gains monthly hour bars; a new "How it is calculated" card at the bottom spells out every number\n'
     '· The schedule-timeline entry is gone from Statistics; the overview still lives under Me > Schedule management\n'
@@ -141,9 +152,6 @@ const String _changelogEn =
     '· Month switching clicks now: the ‹ › arrows, Today and the month picker tick once per real change; tapping Today while already there stays silent\n'
     '· The alarm screen is no longer silent: swiping up past the threshold to stop, or tapping Snooze, each give one confirmation tap; a short swipe that snaps back does not\n'
     '· A tap when a backup is exported or imported successfully\n'
-    '\n'
-'v0.13.8\n'
-    '· The time wheels click now: scrolling the hour / minute wheel in a new alarm, a schedule edit or a repeating todo ticks once per item; the year wheel in the month picker does the same\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

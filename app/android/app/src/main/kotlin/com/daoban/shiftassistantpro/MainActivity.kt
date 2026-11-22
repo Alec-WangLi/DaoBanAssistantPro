@@ -163,6 +163,15 @@ class MainActivity : FlutterActivity() {
         applyShowWhenLocked(intent)
         super.onCreate(savedInstanceState)
         instance = this
+        // **进程启动一行**：用户贴日志时，这一行给出「哪个版本、什么机型、几项权限
+        // 开没开」。设备那串每进程只带一次（与 `AlarmReceiver` 共用同一个 key）——
+        // 否则闹钟先响、Activity 后起，同一份日志里就有两条 200 字设备信息
+        // （2026-11-22 反馈：4 行日志 3 行是设备信息）。
+        val state = AlarmLog.deviceStateOnce(this, "device-state")
+        AlarmLog.diagnostic(
+            this,
+            "进程启动：v${versionName()}" + (if (state.isEmpty()) "" else " $state"),
+        )
         handleAlarmIntent(intent)
         handleWidgetIntent(intent)
         registerThemeReceiver()
@@ -825,9 +834,13 @@ class MainActivity : FlutterActivity() {
                                 repeatType, hour, minute, weekdays, detail,
                                 longArrayArg(call, "repeatTimes")
                             )
-                            AlarmLog.info(
+                            // 单条排定（贪睡 / 测试闹钟）也要落盘：用户报「没响」时
+                            // 日志里得看得见它什么时候该响、排在了哪个 id 上。
+                            AlarmLog.diagnostic(
                                 this,
-                                "scheduleNativeAlarm 成功: id=$id, millis=$millis, label=$label, repeatType=$repeatType, ${AlarmLog.deviceState(this)}"
+                                "scheduleNativeAlarm: id=$id label=$label " +
+                                    "触发 ${AlarmScheduler.formatAt(millis)} " +
+                                    "repeatType=$repeatType"
                             )
                             result.success(null)
                         } catch (e: Exception) {
@@ -846,7 +859,59 @@ class MainActivity : FlutterActivity() {
                             result.error("CANCEL_ALARM_FAILED", e.message, null)
                         }
                     }
+                    // 一整批重排：**先排、后撤**，一次跨端、一次落盘。
+                    // 放后台线程：几百条 `setAlarmClock` + 一次清单写入，主线程上会
+                    // 把正播着的响铃界面卡住（冷启动那次就是闹钟刚响的时刻）。
+                    "reconcileNativeAlarms" -> {
+                        Thread {
+                            try {
+                                AlarmScheduler.reconcile(
+                                    this,
+                                    alarmSpecs(call.argument<List<*>>("alarms")),
+                                    quietSpecs(call.argument<List<*>>("quiets")),
+                                    intArrayArg(call, "cancelIds"),
+                                    rangesArg(call.argument<List<*>>("ranges")),
+                                )
+                                result.success(null)
+                            } catch (e: Exception) {
+                                AlarmLog.error(
+                                    this,
+                                    "reconcileNativeAlarms 失败: ${e.javaClass.name}: ${e.message}"
+                                )
+                                result.error("RECONCILE_FAILED", e.message, null)
+                            }
+                        }.start()
+                    }
+                    // 落盘清单里当前记着的全部 id —— Dart 侧据此算差集。读失败回空，
+                    // 调用方据此一条都不撤（不知道系统里有什么的时候，盲撤更危险）。
+                    "nativeAlarmStoreIds" -> {
+                        try {
+                            result.success(AlarmStore.allIds(this))
+                        } catch (e: Exception) {
+                            AlarmLog.error(this, "nativeAlarmStoreIds 失败: ${e.message}")
+                            result.success(emptyList<Int>())
+                        }
+                    }
+                    "appendDiagnostic" -> {
+                        try {
+                            AlarmLog.diagnostic(this, call.argument<String>("msg") ?: "")
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("APPEND_DIAG_FAILED", e.message, null)
+                        }
+                    }
+                    // 一次性历史清扫的标记。留在原生这份 prefs 里：出厂重置会清空
+                    // Flutter 那份，而重置之后不需要再盲扫（空库重排的差集已经撤干净）。
+                    "legacySweepDone" -> result.success(AlarmStore.legacySwept(this))
+                    "markLegacySweepDone" -> {
+                        AlarmStore.markLegacySwept(this)
+                        result.success(null)
+                    }
                     "cancelAllNativeAlarms" -> {
+                        // `keepStore`：升级后的一次性清扫用 —— 只撤系统里的，
+                        // **不动落盘清单**。清单留给随后那次整批重排改写：清扫与重排
+                        // 之间进程若被杀，清单里还留着旧的一批，开机重排能排回去。
+                        val keepStore = call.argument<Boolean>("keepStore") ?: false
                         // 后台线程执行，避免 ~1600 次 cancel 卡住主线程（重排时开关动画会卡顿）
                         Thread {
                             try {
@@ -856,7 +921,7 @@ class MainActivity : FlutterActivity() {
                                 for (id in 99990..100000) am.cancel(nativePendingIntent(id))
                                 // 清单一起清空：随后 Dart 会把要留的重新排一遍，
                                 // 两份清单因此始终一致。
-                                AlarmStore.clear(this)
+                                if (!keepStore) AlarmStore.clear(this)
                                 result.success(null)
                             } catch (e: Exception) {
                                 result.error("CANCEL_ALL_ALARM_FAILED", e.message, null)
@@ -945,9 +1010,11 @@ class MainActivity : FlutterActivity() {
                         // 放后台：现在它按落盘清单逐个撤（几百到几千次 PendingIntent
                         // 操作），再加上一小段旧号段的盲扫兜底 —— 在主线程上会把
                         // 重排时正播着的开关动画卡住。
+                        // `keepStore` 同上：一次性清扫只撤系统里的，清单留给重排改写。
+                        val keepStore = call.argument<Boolean>("keepStore") ?: false
                         Thread {
                             try {
-                                AlarmScheduler.cancelTodoReminders(this)
+                                AlarmScheduler.cancelTodoReminders(this, keepStore)
                                 result.success(null)
                             } catch (e: Exception) {
                                 result.error("CANCEL_TODO_FAILED", e.message, null)
@@ -1237,6 +1304,13 @@ class MainActivity : FlutterActivity() {
 
     private fun readLog(): String = AlarmLog.read(this)
 
+    /** 版本号（日志里那行「进程启动」用）。读不到就给个占位，绝不让它影响启动。 */
+    private fun versionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+    } catch (_: Exception) {
+        "?"
+    }
+
     private fun clearLog() = AlarmLog.clear(this)
 
     private fun stopAlarmInternal() {
@@ -1294,4 +1368,63 @@ private fun longArrayArg(call: MethodCall, key: String): LongArray {
     val raw = call.argument<List<*>>(key) ?: return LongArray(0)
     return raw.mapNotNull { (it as? Number)?.toLong() }.toLongArray()
 }
+
+/** Dart 侧 `[from, to, ...]` 的 int 列表 → `IntArray`（空 / 错类型一律给空）。 */
+private fun intArrayArg(call: MethodCall, key: String): IntArray {
+    val raw = call.argument<List<*>>(key) ?: return IntArray(0)
+    return raw.mapNotNull { (it as? Number)?.toInt() }.toIntArray()
+}
+
+/**
+ * Dart 侧 `NativeAlarm` 的 Map → [AlarmScheduler.AlarmSpec]。
+ *
+ * 缺 `id` / `millis` 的条目直接跳过：这两样缺了没法排，排一个 id=0 的闹钟出去
+ * 反而会顶掉别人的槽位。
+ */
+private fun alarmSpecs(raw: List<*>?): List<AlarmScheduler.AlarmSpec> =
+    (raw ?: emptyList<Any>()).mapNotNull { item ->
+        val m = item as? Map<*, *> ?: return@mapNotNull null
+        val id = (m["id"] as? Number)?.toInt() ?: return@mapNotNull null
+        val millis = (m["millis"] as? Number)?.toLong() ?: return@mapNotNull null
+        AlarmScheduler.AlarmSpec(
+            id = id,
+            millis = millis,
+            label = m["label"] as? String ?: "闹钟",
+            repeatType = (m["repeatType"] as? Number)?.toInt() ?: 0,
+            hour = (m["hour"] as? Number)?.toInt() ?: 0,
+            minute = (m["minute"] as? Number)?.toInt() ?: 0,
+            weekdays = (m["weekdays"] as? Number)?.toInt() ?: 0,
+            detail = m["detail"] as? String,
+            repeatTimes = (m["repeatTimes"] as? List<*>)
+                ?.mapNotNull { (it as? Number)?.toLong() }
+                ?.toLongArray() ?: LongArray(0),
+        )
+    }
+
+/** Dart 侧 `NativeQuiet` 的 Map → [AlarmScheduler.QuietSpec]（缺参同样跳过）。 */
+private fun quietSpecs(raw: List<*>?): List<AlarmScheduler.QuietSpec> =
+    (raw ?: emptyList<Any>()).mapNotNull { item ->
+        val m = item as? Map<*, *> ?: return@mapNotNull null
+        val id = (m["id"] as? Number)?.toInt() ?: return@mapNotNull null
+        val millis = (m["millis"] as? Number)?.toLong() ?: return@mapNotNull null
+        AlarmScheduler.QuietSpec(
+            id = id,
+            millis = millis,
+            title = m["title"] as? String ?: "",
+            body = m["body"] as? String ?: "",
+            repeatTimes = (m["repeatTimes"] as? List<*>)
+                ?.mapNotNull { (it as? Number)?.toLong() }
+                ?.toLongArray() ?: LongArray(0),
+        )
+    }
+
+/** Dart 侧 `[[from, to], ...]` → 号段列表。格式不对的整条丢掉（宁可少一段）。 */
+private fun rangesArg(raw: List<*>?): List<IntArray> =
+    (raw ?: emptyList<Any>()).mapNotNull { item ->
+        val pair = item as? List<*> ?: return@mapNotNull null
+        if (pair.size < 2) return@mapNotNull null
+        val from = (pair[0] as? Number)?.toInt() ?: return@mapNotNull null
+        val to = (pair[1] as? Number)?.toInt() ?: return@mapNotNull null
+        intArrayOf(from, to)
+    }
 

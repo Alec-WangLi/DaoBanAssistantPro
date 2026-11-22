@@ -239,6 +239,168 @@ List<RecurringAlarmPlan> planRecurringReminders(
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// 原生排定的「请求」：一次重排算成一整批交给原生
+// ---------------------------------------------------------------------------
+//
+// 为什么从「逐条跨端 + 每条一次全量落盘」改成「一批一次」：
+//
+// 2026-11-22 一位三星用户报「早上 6 点的没响」，日志里 4:00 那条全链路正常、
+// 6:00 **连 `AlarmReceiver.onReceive` 都没有** —— 那一刻系统里没有这条闹钟。
+//
+// 旧的重排是「先按固定区间盲扫全撤 + 清空落盘清单，再一条条排回来」，中间还夹着
+// 待办那段几千次 `PendingIntent` 操作，整段窗口有**几秒**。而**每次闹钟响都会
+// 冷启动 App → 每次都整链重排**：用户关掉 4:00 那个闹钟之后随手把 App 划掉
+// （或厂商清理），进程死在这个窗口里，就停在「已清空、还没排完」，此后所有闹钟
+// 全哑，直到下次打开 App（`BootReceiver` 只在开机时跑）。
+//
+// 现在改成：先拿「落盘清单里已有」与「新计划」算差集 → **先排新的、再撤多余的**，
+// 任何瞬间都不存在「一条闹钟都没有」的状态；一批只跨一次端、只落一次盘。
+// 差集是纯函数（[staleNativeIds]），顺序也有用例钉着。
+
+/// 一条要交给原生排定的**响铃闹钟**。
+///
+/// [repeatTimes] 非空时一律按「时刻表驱动」（`repeatType == 3`）递过去 —— 弹队首、
+/// 续队尾，规则只在 Dart 侧算（与 `Reschedule` 里的老约定一致）。
+class NativeAlarm {
+  const NativeAlarm({
+    required this.id,
+    required this.fireAt,
+    required this.label,
+    this.detail,
+    this.repeatType = 0,
+    this.hour = 0,
+    this.minute = 0,
+    this.weekdays = 0,
+    this.repeatTimes = const [],
+  });
+
+  final int id;
+  final DateTime fireAt;
+  final String label;
+  final String? detail;
+  final int repeatType;
+  final int hour;
+  final int minute;
+  final int weekdays;
+  final List<DateTime> repeatTimes;
+
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'millis': fireAt.millisecondsSinceEpoch,
+        'label': label,
+        'detail': detail,
+        'repeatType': repeatTimes.isEmpty ? repeatType : 3,
+        'hour': hour,
+        'minute': minute,
+        'weekdays': weekdays,
+        'repeatTimes': [for (final t in repeatTimes) t.millisecondsSinceEpoch],
+      };
+
+  @override
+  String toString() => 'NativeAlarm($id, $fireAt, $label)';
+}
+
+/// 一条要交给原生排定的**安静提醒**（待办提醒那条链路，只弹通知）。
+class NativeQuiet {
+  const NativeQuiet({
+    required this.id,
+    required this.fireAt,
+    required this.title,
+    required this.body,
+    this.repeatTimes = const [],
+  });
+
+  final int id;
+  final DateTime fireAt;
+  final String title;
+  final String body;
+  final List<DateTime> repeatTimes;
+
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'millis': fireAt.millisecondsSinceEpoch,
+        'title': title,
+        'body': body,
+        'repeatTimes': [for (final t in repeatTimes) t.millisecondsSinceEpoch],
+      };
+
+  @override
+  String toString() => 'NativeQuiet($id, $fireAt, $title)';
+}
+
+/// 本 App 拥有的原生 id 号段，闭开区间 `[from, to)`。
+///
+/// **这就是从前 Kotlin 侧三段盲扫（`0..600` / `10000..11000` / `99990..100000`）
+/// 与待办那段盲扫的等价物**，只是现在由 Dart 传给原生、按号段筛选差集，
+/// 不再每次开机扫几千次 `PendingIntent`。改号段要同时看 `AlarmService` 的几个
+/// `*BaseId` 常量与 `AlarmScheduler` 的注释。
+const List<(int, int)> nativeFullRanges = [
+  (0, 600), // 班次闹钟：序号 × 60 + 天数偏移
+  (10000, 11000), // 自定义闹钟
+  (20000, 42000), // 待办行 20000.. 与重复待办系列 40000..
+  (99990, 100000), // 贪睡 99998 / 测试 99999
+];
+
+/// 只重排待办时拥有的号段（[AlarmService.rescheduleTodoReminders]）。
+///
+/// 前端「按班次」的闹钟与自定义闹钟都在号段之外，所以改待办**碰不到**它们 ——
+/// 这是「勾一条待办不该把几百条班次闹钟全撤重排」那条规矩的结构化版本。
+const List<(int, int)> nativeTodoRanges = [(20000, 42000)];
+
+/// 「落盘清单里已有、但新计划里没有」的 id —— **只撤号段内的**。
+///
+/// 这是「先排后清」的那一半：撤的只能是**确认不再需要**的，新计划里的 id 无论
+/// 怎样都不会出现在返回值里（用例钉着）。
+///
+/// 号段筛选不是为了性能，是为了**隔离**：`rescheduleTodoReminders` 只拿得到待办
+/// 那一批请求，没有号段它会把班次闹钟一起撤掉。
+List<int> staleNativeIds({
+  required Iterable<int> armed,
+  required Iterable<int> desired,
+  required List<(int, int)> ranges,
+}) {
+  final keep = desired.toSet();
+  final out = <int>[];
+  for (final id in armed.toSet()) {
+    if (keep.contains(id)) continue;
+    if (!ranges.any((r) => id >= r.$1 && id < r.$2)) continue;
+    out.add(id);
+  }
+  out.sort();
+  return out;
+}
+
+String _two(int v) => v.toString().padLeft(2, '0');
+
+/// 一批请求里**最近**那一跳的日志写法：`11-23 06:30 id=125`（没有则为 `无`）。
+///
+/// 响铃闹钟与安静提醒一起比：用户贴日志时最想知道的是「App 认为下一条是什么」，
+/// 与它走哪条链路无关。
+String nativeNextDigest({
+  required List<NativeAlarm> alarms,
+  required List<NativeQuiet> quiets,
+}) {
+  DateTime? at;
+  int? id;
+  void consider(DateTime t, int i) {
+    if (at == null || t.isBefore(at!)) {
+      at = t;
+      id = i;
+    }
+  }
+
+  for (final a in alarms) {
+    consider(a.fireAt, a.id);
+  }
+  for (final q in quiets) {
+    consider(q.fireAt, q.id);
+  }
+  final t = at;
+  if (t == null) return '无';
+  return '${_two(t.month)}-${_two(t.day)} ${_two(t.hour)}:${_two(t.minute)} id=$id';
+}
+
 /// 某天这个班次**还有没有没响过的**闹钟 —— 闹钟页「未来 30 天」那一行留不留。
 ///
 /// **不能只看第一条**（那是只有一个闹钟时的口径）：首条已响、后面还有时
@@ -606,9 +768,13 @@ class AlarmService {
   }
 
   /// 取消全部原生闹钟。
-  static Future<void> cancelAllNativeAlarms() async {
+  ///
+  /// [keepStore]：**升级后的一次性清扫**用 —— 只撤系统里的，不动落盘清单。
+  /// 清单留着，清扫与随后那次整批重排之间进程若被杀，开机重排还能把旧的一批排回去。
+  static Future<void> cancelAllNativeAlarms({bool keepStore = false}) async {
     try {
-      await _settingsChannel.invokeMethod('cancelAllNativeAlarms');
+      await _settingsChannel.invokeMethod(
+          'cancelAllNativeAlarms', {'keepStore': keepStore});
     } catch (_) {}
   }
 
@@ -953,9 +1119,38 @@ class AlarmService {
   }
 
   /// 取消全部待办提醒（按 id 区间扫，见 `_eventBaseId`）。
-  static Future<void> cancelAllTodoReminders() async {
+  static Future<void> cancelAllTodoReminders({bool keepStore = false}) async {
     try {
-      await _settingsChannel.invokeMethod('cancelAllTodoReminders');
+      await _settingsChannel
+          .invokeMethod('cancelAllTodoReminders', {'keepStore': keepStore});
+    } catch (_) {}
+  }
+
+  /// 原生落盘清单里当前记着的全部 id（响铃闹钟 + 安静提醒，两份合并）。
+  ///
+  /// 重排前用它算差集（[staleNativeIds]）。**读失败返回空** —— 调用方据此一条
+  /// 都不撤：不知道系统里有什么的时候，盲撤比留着更危险。
+  static Future<List<int>> nativeAlarmStoreIds() async {
+    try {
+      final raw = await _settingsChannel.invokeMethod('nativeAlarmStoreIds');
+      if (raw is List) {
+        return [
+          for (final v in raw)
+            if (v is int) v,
+        ];
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  /// 追加一条**诊断信息**到原生日志文件（落盘，「我的 → 查看日志」可复制）。
+  ///
+  /// 与 [appendLog] 的区别：那个走 `AlarmLog.error`，日志里看着像出了错；这个是
+  /// 「给作者看的现场」，正常路径也要留。排障时用户贴来的就是这种行。
+  static Future<void> appendDiagnostic(String msg) async {
+    try {
+      await _settingsChannel
+          .invokeMethod('appendDiagnostic', {'msg': msg});
     } catch (_) {}
   }
 
@@ -1025,19 +1220,24 @@ class AlarmService {
           if (e.value.leaveMinutes > 0) e.key: e.value.leaveMinutes,
       },
       events: await repo.listEvents(),
-    );
-    // 重复待办的提醒走独立号段，与上面那条链路互不影响（`reschedule` 里的
-    // 待办那一段会跳过带 `seriesId` 的行）。
-    await rescheduleRecurringReminders(
-      await repo.listRecurringTodos(),
+      // 重复待办与一次性待办同一次交给原生：一条 [reconcileNative] 把「响铃」
+      // 与「安静提醒」两批一起排，落盘清单一次写完（从前是逐条写、O(n²)）。
+      recurring: await repo.listRecurringTodos(),
       shiftOn: schedules.chain.shiftOn,
     );
   }
 
-  /// 清除并按 [source] + [customAlarms] + [events] + [overrides] 重排所有闹钟。
+  /// 按 [source] + [customAlarms] + [events] + [recurring] + [overrides] 重排所有闹钟。
+  ///
+  /// **先排后清**：整批交给原生 [reconcileNative] —— 它先把新计划全部排上，再撤掉
+  /// 「落盘清单里有、新计划里没有」的那些。旧实现是「先全撤、再逐条排」，中间有
+  /// 几秒系统里一条闹钟都没有；而每次闹钟响都会冷启动 App 并整链重排，进程死在
+  /// 那个窗口里就全哑了（见 [NativeAlarm] 上面那段说明）。
   ///
   /// [overrides] 为按天覆盖（dayNumber → enabled）；值为 false 的日期跳过班次闹钟。
   /// [events] 是要排提醒的待办（`advanceRemindMinutes` 为 null 的跳过）。
+  /// [recurring] 是重复待办的系列 —— 时刻由 [planRecurringReminders] 算，与一次性
+  /// 待办一起交给原生（两条链路都在 2xxxx/4xxxx 号段）。
   ///
   /// [source] 是 [ShiftSource] 而不是 `ShiftSchedule`，理由见 [planShiftAlarms]。
   static Future<void> reschedule(
@@ -1047,6 +1247,8 @@ class AlarmService {
     Map<int, bool> overrides = const {},
     Map<int, int> leaveMinutes = const {},
     List<ScheduleEvent> events = const [],
+    List<RecurringTodo> recurring = const [],
+    ShiftClass? Function(DateTime day)? shiftOn,
   }) async {
     // id 算式是 `序号 × _shiftDaysHorizon + 天数偏移`：`days` 一旦超过天数窗口，
     // 「某天的第 2 个闹钟」就会撞上「更晚那天的第 1 个闹钟」。今天两个调用点都走
@@ -1056,7 +1258,8 @@ class AlarmService {
     await logInfo(
         'reschedule: 开始，排班=${source.label}，自定义闹钟=${customAlarms.length} 个');
     final Stopwatch sw = Stopwatch()..start();
-    // 先清掉可能已损坏的排定缓存，再 cancelAll（否则会抛 Missing type parameter）
+    // 通知插件自己的缓存先清掉（它排过的 TZ 型通知与本链路无关，但顺手清干净；
+    // 缓存损坏时 cancelAll 会抛 Missing type parameter）。
     try {
       await _plugin.cancelAll();
     } catch (e) {
@@ -1068,172 +1271,249 @@ class AlarmService {
         await appendLog('reschedule: cancelAll 二次仍异常: $e2');
       }
     }
-    // 按 id 兜底取消所有通知闹钟 + 原生闹钟 + 待办提醒，清理历史累积（避免 500 上限）
-    await cancelAllNotificationAlarms();
-    await cancelAllNativeAlarms();
-    await cancelAllTodoReminders();
+    // 升级上来的机器可能残留「系统里有、落盘清单里没有」的孤儿 id —— 差集撤不到
+    // 它们，所以升级后跑一次盲扫，之后不再扫（见 [_sweepLegacyOnce]）。
+    await _sweepLegacyOnce();
 
-    // 1) 排班联动闹钟：未来 days 天
-    //
-    // 「哪些天要排、各排几点」由 [planShiftAlarms] 这个纯函数决定（可单测）；
-    // 这里只负责把决策落成原生闹钟。id 仍是 `_shiftBaseId + 天数偏移`。
-    final List<ShiftAlarmPlan> shiftPlans = planShiftAlarms(source,
-        from: appNow(),
-        days: days,
-        overrides: overrides,
-        leaveMinutes: leaveMinutes);
-    for (final plan in shiftPlans) {
-      try {
-        await scheduleNativeAlarm(
-            _shiftBaseId + plan.alarmIndex * _shiftDaysHorizon + plan.offset,
-            plan.fireAt,
-            L10n.shiftAlarmTitle(plan.shift.name, plan.alarm.label));
-      } catch (e) {
-        await appendLog('reschedule: 排班闹钟排定失败: $e');
-      }
-    }
-
-    // 2) 自定义闹钟：原生 setAlarmClock 只排「下一次」；每天/每周在触发后由
-    //    AlarmReceiver 用同一 id 自动续排，因此每个重复闹钟始终只有一条待触发记录。
     final now = appNow();
-    for (final a in customAlarms) {
-      if (!a.enabled) continue;
-      final alarmId = _customBaseId + a.id;
-      try {
-        switch (a.repeatType) {
-          case 0: // 一次性
-            final od = a.onceDate;
-            if (od == null) break;
-            final fire = DateTime(od.year, od.month, od.day, a.hour, a.minute);
-            if (fire.isAfter(now)) {
-              await scheduleNativeAlarm(alarmId, fire, '自定义闹钟');
-            }
-            break;
-          case 2: // 每周
-            final fire = _nextWeekly(now, a.weekdays, a.hour, a.minute);
-            if (fire != null) {
-              await scheduleNativeAlarm(
-                alarmId,
-                fire,
-                '自定义闹钟',
-                repeatType: 2,
-                hour: a.hour,
-                minute: a.minute,
-                weekdays: a.weekdays,
-              );
-            }
-            break;
-          default: // 每天
-            final fire = _nextDaily(now, a.hour, a.minute);
-            await scheduleNativeAlarm(
-              alarmId,
-              fire,
-              '自定义闹钟',
-              repeatType: 1,
-              hour: a.hour,
-              minute: a.minute,
-            );
-        }
-      } catch (e) {
-        await appendLog('reschedule: 自定义闹钟排定失败: $e');
-      }
-    }
+    // 1) 排班联动闹钟：未来 days 天。「哪些天要排、各排几点」由纯函数
+    //    [planShiftAlarms] 决定（可单测），这里只把决策落成请求。
+    final List<ShiftAlarmPlan> shiftPlans = planShiftAlarms(source,
+        from: now, days: days, overrides: overrides, leaveMinutes: leaveMinutes);
+    // 2) 自定义闹钟 / 3) 一次性待办 / 4) 重复待办
+    final event = _eventRequests(events, now: now);
+    final recurringReq = _recurringRequests(
+        recurring, planRecurringReminders(recurring, from: now, shiftOn: shiftOn));
 
-    // 3) 待办提醒：普通通知，不进闹钟那套（全屏 + 循环响铃对一条待办太重）。
-    //    每条待办只有一个日期、没有重复，所以一次排完就是全部。
-    await rescheduleEventReminders(events);
-    // 一条汇总顶掉从前「每排一条闹钟跟一条日志」那一批（跨端调用因此从 99 降到 53，
-    // 见 `alarm_reschedule_budget_test.dart` 与规格 §2）。
-    await logInfo('reschedule: 完成 —— 班次闹钟 ${shiftPlans.length} 条、'
-        '自定义 ${customAlarms.where((a) => a.enabled).length} 个（启用）、'
-        '待办事件 ${events.length} 条，耗时 ${sw.elapsedMilliseconds}ms');
+    await reconcileNative(
+      alarms: [
+        for (final p in shiftPlans)
+          NativeAlarm(
+            id: _shiftBaseId + p.alarmIndex * _shiftDaysHorizon + p.offset,
+            fireAt: p.fireAt,
+            label: L10n.shiftAlarmTitle(p.shift.name, p.alarm.label),
+          ),
+        ..._customAlarmRequests(customAlarms, now: now),
+        ...event.alarms,
+        ...recurringReq.alarms,
+      ],
+      quiets: [...event.quiets, ...recurringReq.quiets],
+      ranges: nativeFullRanges,
+      stopwatch: sw,
+      detail: '班次 ${shiftPlans.length} / 自定义 '
+          '${customAlarms.where((a) => a.enabled).length} / 待办 ${events.length}',
+    );
   }
 
-  /// 只重排待办提醒（待办增删改之后调用）。
-  ///
-  /// 待办页的增删改**不**走 [rescheduleAll]：那会把上千条班次闹钟全部取消再
-  /// 重排一遍，而勾一个复选框其实只需要改这一条待办的通知。
-  ///
-  /// 一条待办按 `alarmEnabled` **二选一**：联动闹钟（全屏 + 循环铃声）或普通
-  /// 通知。两者用的是同一个 id（`_eventBaseId + e.id`），但目标组件不同
-  /// （`AlarmReceiver` / `TodoReminderReceiver`），所以取消时两种都要扫。
-  static Future<void> rescheduleEventReminders(
-      List<ScheduleEvent> events) async {
-    await cancelAllTodoReminders();
-    final now = appNow();
+  /// 自定义闹钟 → 请求。**只排「下一次」**：每天/每周在触发后由原生用同一 id
+  /// 自动续排，因此每个重复闹钟始终只有一条待触发记录。
+  static List<NativeAlarm> _customAlarmRequests(
+      List<CustomAlarm> alarms, {required DateTime now}) {
+    final out = <NativeAlarm>[];
+    for (final a in alarms) {
+      if (!a.enabled) continue;
+      final id = _customBaseId + a.id;
+      switch (a.repeatType) {
+        case 0: // 一次性
+          final od = a.onceDate;
+          if (od == null) break;
+          final fire = DateTime(od.year, od.month, od.day, a.hour, a.minute);
+          if (fire.isAfter(now)) {
+            out.add(NativeAlarm(id: id, fireAt: fire, label: '自定义闹钟'));
+          }
+          break;
+        case 2: // 每周
+          final fire = _nextWeekly(now, a.weekdays, a.hour, a.minute);
+          if (fire != null) {
+            out.add(NativeAlarm(
+              id: id,
+              fireAt: fire,
+              label: '自定义闹钟',
+              repeatType: 2,
+              hour: a.hour,
+              minute: a.minute,
+              weekdays: a.weekdays,
+            ));
+          }
+          break;
+        default: // 每天
+          out.add(NativeAlarm(
+            id: id,
+            fireAt: _nextDaily(now, a.hour, a.minute),
+            label: '自定义闹钟',
+            repeatType: 1,
+            hour: a.hour,
+            minute: a.minute,
+          ));
+      }
+    }
+    return out;
+  }
+
+  /// 一次性待办 → 请求。联动闹钟走响铃链路、关掉走安静提醒，**同一个 id 二选一**。
+  static ({List<NativeAlarm> alarms, List<NativeQuiet> quiets}) _eventRequests(
+      List<ScheduleEvent> events, {required DateTime now}) {
+    final alarms = <NativeAlarm>[];
+    final quiets = <NativeQuiet>[];
     for (final e in events) {
       // **重复待办的「某一次」不在这里排**：它的提醒由系列那一条负责
-      // （`rescheduleRecurringReminders`）。两处都排的话同一次会响两声。
+      // （[_recurringRequests]）。两处都排的话同一次会响两声。
       if (e.seriesId != null) continue;
       final fireAt = eventReminderTime(e);
       if (fireAt == null || !fireAt.isAfter(now)) continue;
-      try {
-        if (e.alarmEnabled) {
-          await scheduleNativeAlarm(_eventBaseId + e.id, fireAt, e.title,
-              detail: eventReminderBody(e));
-        } else {
-          await scheduleTodoReminder(
-            _eventBaseId + e.id,
-            fireAt,
+      final id = _eventBaseId + e.id;
+      if (e.alarmEnabled) {
+        alarms.add(NativeAlarm(
+            id: id,
+            fireAt: fireAt,
+            label: e.title,
+            detail: eventReminderBody(e)));
+      } else {
+        quiets.add(NativeQuiet(
+            id: id,
+            fireAt: fireAt,
             title: e.title,
-            body: eventReminderBody(e),
-          );
-        }
-      } catch (err) {
-        await appendLog('rescheduleEventReminders: 排定失败: $err');
+            body: eventReminderBody(e)));
       }
+    }
+    return (alarms: alarms, quiets: quiets);
+  }
+
+  /// 重复待办 → 请求。规则全在 Dart 侧算好（[planRecurringReminders]），原生只做
+  /// 「弹队首、续队尾」。
+  static ({List<NativeAlarm> alarms, List<NativeQuiet> quiets}) _recurringRequests(
+      List<RecurringTodo> series, List<RecurringAlarmPlan> plans) {
+    final alarms = <NativeAlarm>[];
+    final quiets = <NativeQuiet>[];
+    final byId = {for (final s in series) if (s.id != null) s.id!: s};
+    for (final p in plans) {
+      final s = byId[p.seriesId];
+      if (s == null) continue;
+      final id = _recurringBaseId + p.seriesId;
+      if (s.alarmEnabled) {
+        alarms.add(NativeAlarm(
+            id: id,
+            fireAt: p.fireAt,
+            label: s.title,
+            detail: s.ruleWithTime,
+            repeatTimes: p.repeatTimes));
+      } else {
+        quiets.add(NativeQuiet(
+            id: id,
+            fireAt: p.fireAt,
+            title: s.title,
+            body: s.ruleWithTime,
+            repeatTimes: p.repeatTimes));
+      }
+    }
+    return (alarms: alarms, quiets: quiets);
+  }
+
+  /// 把一整批请求交给原生：**先排、后撤**，一次跨端、一次落盘。
+  ///
+  /// 差集只在 Dart 侧算（[staleNativeIds]，有用例）。原生拿到的 `cancelIds` 就是
+  /// 「确认不再需要」的那一个集合 —— 它不会再自行撤任何别的 id。
+  static Future<void> reconcileNative({
+    required List<NativeAlarm> alarms,
+    required List<NativeQuiet> quiets,
+    required List<(int, int)> ranges,
+    Stopwatch? stopwatch,
+    String? detail,
+  }) async {
+    final sw = stopwatch ?? (Stopwatch()..start());
+    // 最近的那条排在最前：万一进程在这一批里被打断，也先保住马上要响的。
+    final sorted = [...alarms]..sort((a, b) {
+        final c = a.fireAt.compareTo(b.fireAt);
+        return c != 0 ? c : a.id.compareTo(b.id);
+      });
+    // 快照读不到 → 空 → 差集为空 → **一条都不撤**。不知道系统里有什么的时候，
+    // 盲撤比留着更危险（留下的最坏是旧闹钟多响一次）。
+    final armed = await nativeAlarmStoreIds();
+    final stale = staleNativeIds(
+      armed: armed,
+      desired: [for (final a in sorted) a.id, for (final q in quiets) q.id],
+      ranges: ranges,
+    );
+    try {
+      await _settingsChannel.invokeMethod('reconcileNativeAlarms', {
+        'alarms': [for (final a in sorted) a.toMap()],
+        'quiets': [for (final q in quiets) q.toMap()],
+        'cancelIds': stale,
+        'ranges': [
+          for (final r in ranges) [r.$1, r.$2]
+        ],
+      });
+    } catch (e) {
+      await appendLog('reconcileNativeAlarms 失败: $e');
+      return;
+    }
+    await appendDiagnostic(
+        'alarm: 重排完成 —— 响铃 ${sorted.length} 条 / 提醒 ${quiets.length} 条 / '
+        '撤旧 ${stale.length} 条，${sw.elapsedMilliseconds}ms'
+        '${detail == null ? '' : '（$detail）'}；'
+        '下一跳 ${nativeNextDigest(alarms: sorted, quiets: quiets)}');
+  }
+
+  /// 一次性历史清扫：把**不在落盘清单里**的孤儿 id 清掉。
+  ///
+  /// 旧版本每次启动都盲扫 `0..600` / `10000..11000` / `99990..100000` 与待办两段；
+  /// 现在差集只撤清单里记着的 id，扫不到「系统里有、清单里没有」的残留。那类残留
+  /// 只会出现在升级前（落盘清单是 v0.6 才有的），所以升级后跑一次就够。
+  ///
+  /// 标记存在**原生那份 prefs** 里（`AlarmStore`）：出厂重置会清空 Flutter 那份，
+  /// 而重置之后不需要再扫 —— 空库重排的差集已经把所有旧 id 精确撤掉了。
+  ///
+  /// **失败不设标记** —— 下一次启动会再试一次。
+  static Future<void> _sweepLegacyOnce() async {
+    try {
+      if (await _legacySweepDone()) return;
+      // **清单留着**：清扫只撤系统里的那些孤儿 id，落盘清单交给随后那次整批重排
+      // 改写。否则「清扫完、重排还没跑」这一两秒里系统与清单同时是空的，进程被杀
+      // 就一路哑到用户下次主动打开 App —— 正是这一版要消灭的那种静默。
+      await cancelAllNotificationAlarms();
+      await cancelAllNativeAlarms(keepStore: true);
+      await cancelAllTodoReminders(keepStore: true);
+      await _settingsChannel.invokeMethod('markLegacySweepDone');
+      await appendLog('alarm: 一次性历史清扫完成（升级残留的孤儿 id）');
+    } catch (e) {
+      await appendLog('alarm: 一次性历史清扫失败（下次启动再试）: $e');
     }
   }
 
-  /// 重排全部重复待办的提醒（与 [rescheduleEventReminders] 分工，见那里的说明）。
-  ///
-  /// 每次都把整条时刻表**重新算一遍**再排：`cancelTodoReminders` 已经把这一段
-  /// 清空了，所以这里排的就是全部 —— 停了、删了的系列自然不会再排上。
-  static Future<void> rescheduleRecurringReminders(
-      List<RecurringTodo> series,
-      {ShiftClass? Function(DateTime day)? shiftOn}) async {
-    final plans = planRecurringReminders(series,
-        from: appNow(), shiftOn: shiftOn);
-    for (final p in plans) {
-      final s = series.firstWhere((x) => x.id == p.seriesId);
-      final id = _recurringBaseId + p.seriesId;
-      try {
-        if (s.alarmEnabled) {
-          await scheduleNativeAlarm(
-            id,
-            p.fireAt,
-            s.title,
-            detail: s.ruleWithTime,
-            repeatTimes: p.repeatTimes,
-          );
-        } else {
-          await scheduleTodoReminder(
-            id,
-            p.fireAt,
-            title: s.title,
-            // 正文写**规则**不写日期：同一条提醒会跨很多次，写死日期第二次就是错的。
-            body: s.ruleWithTime,
-            repeatTimes: p.repeatTimes,
-          );
-        }
-      } catch (e) {
-        await appendLog('rescheduleRecurringReminders: 排定失败: $e');
-      }
+  static Future<bool> _legacySweepDone() async {
+    try {
+      return await _settingsChannel.invokeMethod('legacySweepDone') == true;
+    } catch (_) {
+      // 读不到就当「没扫过」：多扫一次是安全的（它只撤不再需要的 id），
+      // 少扫一次会留下孤儿闹钟。
+      return false;
     }
   }
 
   /// 待办页增删改之后的**一次**重排：一次性提醒 + 重复待办提醒。
   ///
-  /// 从前这里只排一次性提醒，而重复系列的提醒只在冷启动等 `rescheduleAll`
-  /// 路径上才排得上 —— 新建一个重复待办可能当天该响却不响。两条一起排，
-  /// 号段互不重叠（`cancelAllTodoReminders` 会把两段都清掉）。
+  /// 只碰待办号段（[nativeTodoRanges]）—— 勾一条待办不该把几百条班次闹钟全撤
+  /// 重排一遍。两条一起排：从前这里只排一次性提醒，而重复系列的提醒只在冷启动
+  /// 等 `rescheduleAll` 路径上才排得上 —— 新建一个重复待办可能当天该响却不响。
+  ///
+  /// 一条待办按 `alarmEnabled` **二选一**：联动闹钟（全屏 + 循环铃声）或普通
+  /// 通知。两者用同一个 id（`_eventBaseId + e.id`），但目标组件不同
+  /// （`AlarmReceiver` / `TodoReminderReceiver`）—— 重排交给原生时按「响铃/提醒」
+  /// 两批分开递，取消则由差集按 id 一次撤掉两种。
   static Future<void> rescheduleTodoReminders(AppRepository repo) async {
     final active = await repo.getActiveSchedules();
     final shiftOn = active?.chain.shiftOn;
-    await rescheduleEventReminders(await repo.listEvents());
-    await rescheduleRecurringReminders(
-      await repo.listRecurringTodos(),
-      shiftOn: shiftOn,
+    final events = await repo.listEvents();
+    final series = await repo.listRecurringTodos();
+    final now = appNow();
+    final event = _eventRequests(events, now: now);
+    final recurring = _recurringRequests(
+        series, planRecurringReminders(series, from: now, shiftOn: shiftOn));
+    await reconcileNative(
+      alarms: [...event.alarms, ...recurring.alarms],
+      quiets: [...event.quiets, ...recurring.quiets],
+      ranges: nativeTodoRanges,
+      detail: '待办 ${events.length} / 重复系列 ${series.length}',
     );
   }
 

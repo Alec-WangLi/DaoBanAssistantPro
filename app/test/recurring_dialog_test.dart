@@ -189,9 +189,11 @@ void main() {
     await tester.tap(find.text(L10n.add));
     await _settle(tester);
 
+    // 提醒走「一整批重排」，重复待办的安静提醒就在这一批的 quiets 里。
     final scheduled = calls
-        .where((c) => c.method == 'scheduleTodoReminder')
-        .map((c) => (c.arguments as Map)['id'] as int)
+        .where((c) => c.method == 'reconcileNativeAlarms')
+        .expand((c) => ((c.arguments as Map)['quiets'] as List? ?? const []))
+        .map((q) => (q as Map)['id'] as int)
         .toList();
     // 重复待办的提醒号段是 40000 + 系列 id。
     expect(scheduled.any((id) => id >= 40000), isTrue,

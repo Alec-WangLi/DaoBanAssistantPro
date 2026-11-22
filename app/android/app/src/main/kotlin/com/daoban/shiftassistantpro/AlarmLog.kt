@@ -8,8 +8,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -21,7 +22,22 @@ object AlarmLog {
     private const val MAX_BYTES = 256L * 1024L // 超过则裁剪
     private const val KEEP_CHARS = 42_000 // 约等于 128KB（中文按 3 字节估算）
 
-    private val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+    /**
+     * 时间戳格式器。
+     *
+     * **必须是线程安全的**：写日志的点遍布主线程（`AlarmReceiver`）与工作线程
+     * （`AlarmScheduler.reconcile`、`AlarmWatchdogReceiver`）。`SimpleDateFormat`
+     * 内部有可变状态，并发用会打出乱码、甚至抛 `ArrayIndexOutOfBoundsException`
+     * —— 那会让「用户贴来的日志」正好在关键时刻变成一坨。`DateTimeFormatter`
+     * 不可变，天然可以共用。
+     */
+    private val fmt: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+
+    private fun stamp(): String =
+        Instant.ofEpochMilli(System.currentTimeMillis())
+            .atZone(ZoneId.systemDefault())
+            .format(fmt)
 
     /** 错误/崩溃：写文件 + Logcat。 */
     fun error(context: Context, msg: String) {
@@ -46,10 +62,31 @@ object AlarmLog {
         appendFile(context, msg)
     }
 
+    /**
+     * 同一个 [key] 在本**进程**内只落一次盘。
+     *
+     * 用途是那串很长的设备能力（`deviceState` 约 200 字）：每个进程的第一条闹钟
+     * 日志带上一次就够了，后面每行都带会把整份日志撑满，用户复制时也看不过来
+     * （2026-11-22 反馈里那 4 行日志被设备信息占了 3 行）。
+     */
+    fun diagnosticOnce(context: Context, key: String, msg: String) {
+        if (!onceKeys.add(key)) return
+        diagnostic(context, msg)
+    }
+
+    /** [deviceState] 的「每进程一次」形态：已经出现过就返回空串。 */
+    fun deviceStateOnce(context: Context, key: String): String {
+        if (!onceKeys.add(key)) return ""
+        return deviceState(context)
+    }
+
+    /** 本进程内已经落过盘的键。进程重启会重置 —— 正是要的粒度。 */
+    private val onceKeys = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
     private fun appendFile(context: Context, msg: String) {
         try {
             val f = File(context.filesDir, "app_log.txt")
-            f.appendText("[${fmt.format(Date())}] $msg\n")
+            f.appendText("[${stamp()}] $msg\n")
             trim(f)
         } catch (_: Throwable) {
         }

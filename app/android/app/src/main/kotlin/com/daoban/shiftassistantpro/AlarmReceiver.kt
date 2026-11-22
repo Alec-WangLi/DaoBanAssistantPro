@@ -29,14 +29,19 @@ class AlarmReceiver : BroadcastReceiver() {
         //   · 没有这条 → 系统把闹钟取消了（休眠 / 电池策略 / 被清理）；
         //   · 有这条、没有下一条 → 前台服务没起来（后台启动限制）；
         //   · 有这两条、没有「开始播放」→ 音源问题（见 AlarmSound）。
+        //
+        // 设备能力那串每个进程只带一次：每行都带会把日志撑满，复制出来看不完。
+        val state = AlarmLog.deviceStateOnce(context, "device-state")
         AlarmLog.diagnostic(
             context,
-            "AlarmReceiver.onReceive: id=$id, label=$label, repeatType=$repeatType, ${AlarmLog.deviceState(context)}"
+            "AlarmReceiver.onReceive: id=$id label=$label repeatType=$repeatType" +
+                (if (state.isEmpty()) "" else " $state")
         )
 
         // 1) 前台服务：响铃 + 震动
         try {
             val serviceIntent = Intent(context, AlarmRingService::class.java).apply {
+                putExtra("id", id)
                 putExtra("label", label)
                 putExtra("detail", detail)
                 putExtra("uri", uri)
@@ -89,6 +94,11 @@ class AlarmReceiver : BroadcastReceiver() {
                     repeatType, hour, minute, weekdays, detail, pending.second
                 )
             }
+            AlarmLog.diagnostic(
+                context,
+                "AlarmReceiver: 续排完成，下一跳 " +
+                    AlarmScheduler.nextDigest(context, System.currentTimeMillis())
+            )
             return
         }
 
@@ -111,5 +121,12 @@ class AlarmReceiver : BroadcastReceiver() {
                 AlarmStore.remove(context, id)
             }
         }
+        // 「App 认为下一条是什么」：这一行和上面那行收着看，就能分清
+        // 「系统丢了某条闹钟」与「App 本来就没排它」——2026-11-22 那次缺的正是这个。
+        AlarmLog.diagnostic(
+            context,
+            "AlarmReceiver: 处理完毕，下一跳 " +
+                AlarmScheduler.nextDigest(context, System.currentTimeMillis())
+        )
     }
 }

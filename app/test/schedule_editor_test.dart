@@ -969,8 +969,11 @@ void main() {
     final labels = <String>[];
     tester.binding.defaultBinaryMessenger
         .setMockMethodCallHandler(settings, (call) async {
-      if (call.method == 'scheduleNativeAlarm') {
-        labels.add(((call.arguments as Map)['label']) as String);
+      // 重排走一整批（`reconcileNativeAlarms`），标题就在这批的 alarms 里。
+      if (call.method == 'reconcileNativeAlarms') {
+        for (final a in ((call.arguments as Map)['alarms'] as List? ?? const [])) {
+          labels.add(((a as Map)['label']) as String);
+        }
       }
       return null;
     });

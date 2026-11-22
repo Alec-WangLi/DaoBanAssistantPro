@@ -38,12 +38,14 @@ class AlarmRingService : Service() {
     private val autoStopRunnable = Runnable { autoStop() }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val id = intent?.getIntExtra("id", -1) ?: -1
         val label = intent?.getStringExtra("label") ?: "闹钟"
         val detail = intent?.getStringExtra("detail")
         val uriStr = intent?.getStringExtra("uri")
+        // 设备能力那串由 `AlarmReceiver` 每进程带一次（这里再带就重复了）。
         AlarmLog.diagnostic(
             this,
-            "AlarmRingService.onStartCommand: label=$label, ${AlarmLog.deviceState(this)}"
+            "AlarmRingService.onStartCommand: id=$id label=$label"
         )
         try {
             startForeground(1, buildNotification(label, detail))
