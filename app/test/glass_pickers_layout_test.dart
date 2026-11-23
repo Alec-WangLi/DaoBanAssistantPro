@@ -77,6 +77,18 @@ void main() {
     expect(find.text(L10n.jumpToMonth), findsOneWidget);
   });
 
+  testWidgets('年份选择器：小窗也不溢出', (tester) async {
+    await _open(
+      tester,
+      const Size(360, 360),
+      (c) => showGlassYearPicker(c, initialYear: 2026),
+    );
+    expect(tester.takeException(), isNull, reason: '小窗下弹层不该溢出');
+    expect(find.text(L10n.jumpToYear), findsOneWidget);
+    // 滚轮把当前年摆在选中的那一格 —— 打开就能看见自己在哪一年。
+    expect(find.text('2026'), findsWidgets);
+  });
+
   testWidgets('日期选择器：横屏也不溢出', (tester) async {
     await _open(
       tester,

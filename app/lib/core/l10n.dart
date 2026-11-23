@@ -274,6 +274,9 @@ class L10n {
       '下载失败：网络中断或下载地址没有响应，请检查网络后重试。',
       'Download failed: the connection dropped or the server did not respond. Check your network and try again.');
   static String get jumpToMonth => t('跳转月份', 'Jump to month');
+
+  /// 只挑年份的弹层标题（统计页年视图，v0.13.19）。
+  static String get jumpToYear => t('跳转年份', 'Jump to year');
   static String get usageGuide => t('使用帮助', 'Usage guide');
   static String get usageGuideSubtitle => t(
       '每个功能在哪、怎么用；遇到问题也能进来查',
@@ -1250,6 +1253,12 @@ class L10n {
   /// 年视图顶部那张 12 根柱的图。
   static String get statsMonthlyHours => t('月度工时', 'Monthly hours');
 
+  /// 年视图里 12 个月的下钻列表。
+  static String get statsByMonth => t('按月查看', 'By month');
+
+  /// 出勤亮点卡（法定节假日 / 夜班 / 最长连班 / 最长连休）。
+  static String get statsFacts => t('出勤亮点', 'Highlights');
+
   /// 底部可展开的「统计口径」卡。
   static String get statsMethod => t('统计口径', 'How it is calculated');
   static List<String> get statsMethodLines => isEn
@@ -1259,6 +1268,7 @@ class L10n {
           'Full-day leave is not counted as a work day; partial leave is subtracted from that day\'s hours.',
           'A no-shift schedule (follows public holidays) never invents work or rest days — those days count as "no shifts".',
           'Average per shift = regular hours ÷ work days (overtime excluded).',
+          'The monthly average line only counts months with hours > 0.',
         ]
       : const [
           '实际在岗 = 正常工时 + 加班工时；加班单列，不与请假抵扣。',
@@ -1266,6 +1276,7 @@ class L10n {
           '整天请假不计上班天数；半天请假从当天工时里扣。',
           '空白表（跟随法定节假日）不合成上班 / 休息，只计「无班次」。',
           '平均每班 = 正常工时 ÷ 上班天数（不含加班）。',
+          '月度工时的均值线只统计工时 > 0 的月份。',
         ];
 
   // ── 统计数据导出（CSV） ──

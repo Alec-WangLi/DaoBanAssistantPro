@@ -41,6 +41,14 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.19\n'
+    '· 统计页年视图：点年份直接弹出年份选择器，跨十年不用再点十下箭头\n'
+    '· 翻月 / 翻年 / 「今天」，以及年视图点某个月，都会震一记；已经停在本月 / 今年时不震\n'
+    '· 期间条那三颗玻璃钮亮了一档；左右箭头的颜色也修了 —— 深色下它们原本被画成黑色，你看到的「有点暗」就是它\n'
+    '· 统计页统一「图标在前」：月 / 年分段、四格指标、每张卡片的分节标题、出勤亮点的四行，都带上了语义色图标\n'
+    '· 图表精修：环图加了底轨、圆头分段与真实缝隙（只有一天的小段也不会消失）；出勤构成条分段留缝；月度工时柱改成底轨 + 顶圆角渐变柱 + 均值虚线（只统计有工时的月份）+ 当月高亮，切年时从基线长出来\n'
+    '· 请假构成每个类型多了一条占比细条；统计口径补了一条「月度均值线只统计工时 > 0 的月份」\n'
+    '\n'
 'v0.13.18\n'
     '· 修：个别机型（三星这类）偶尔有某一条班次闹钟不响。根因是重排闹钟时先清空系统里已排的那一批、再一条条排回来，中间有几秒一条闹钟都没有；而每次闹钟响都会拉起 App 重排一轮，这时 App 若被划掉或被系统清理，就停在「撤完了、还没排上」\n'
     '· 现在顺序反过来了：先把新的一批排上、再撤多余的。重排过程中系统里始终有一批闹钟（升级后的首次清扫是唯一的一次例外）\n'
@@ -91,13 +99,16 @@ const String _changelogZh =
     '· 触觉适配更多机型：手机支持更细的振动原语时优先用它（Pixel / 三星这类新机更脆）；Android 8~13 上也按「触摸反馈」归类，不再被当成未知振动\n'
     '· 「我的 → 查看日志」新增一行振动能力自查：换手机后觉得不震或手感不对，把那行复制给作者就能定位\n'
     '\n'
-'v0.13.9\n'
-    '· 翻月有回音了：日历的 ‹ › 箭头、「今天」和月份选择器，每真的换一个月震一记；已经停在今天就不震\n'
-    '· 响铃页不再静音：上滑越过阈值关掉、或点「再睡一会」，各有一记确认震动；上滑没到位弹回去则不震\n'
-    '· 备份导出 / 导入成功时震一记\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.19\n'
+    '· Statistics, year view: tap the year to open a year picker - no more ten arrow taps to cross a decade\n'
+    '· Month / year switching, Today, and tapping a month in the year view each tick once; tapping Today while already there stays silent\n'
+    '· The three glass buttons on the period bar are a notch brighter; the arrow colour is fixed too - in dark mode they were drawn black, which is the "looks dim" you saw\n'
+    '· Statistics now leads with icons: the month / year segment, the four metric tiles, every card header and the four highlight rows all carry a semantic-coloured icon\n'
+    '· Charts refined: the donut gains a track, round segment caps and real gaps (a one-day segment no longer vanishes); the composition bar has gaps between segments; monthly hours become track + rounded gradient bars + a dashed average line (months with hours only) + current-month highlight, growing from the baseline when the year changes\n'
+    '· Leave by type gains a share bar per row; "How it is calculated" explains that the monthly average line only counts months with hours > 0\n'
+    '\n'
 'v0.13.18\n'
     '· Fix: on some devices (Samsung among them) an occasional shift alarm did not ring. Alarms were re-planned by clearing everything already scheduled and then adding them back one by one, leaving a few seconds with no alarm at all; and every alarm that rings brings the app up for a full re-plan, so if the app is swiped away or cleaned up meanwhile it stays at "cleared, not yet re-added"\n'
     '· The order is reversed: the new batch is scheduled first, then the leftovers are cancelled. A full set of alarms stays scheduled throughout a re-plan (the one-time sweep after upgrading is the only exception)\n'
@@ -147,11 +158,6 @@ const String _changelogEn =
 'v0.13.10\n'
     '· Haptics adapt to more phones: where the device offers fine-grained vibration primitives those are used first (crisper on Pixel / Samsung-class devices), and on Android 8-13 taps are classified as touch feedback instead of an unknown vibration\n'
     '· My > View log now records the vibration capabilities of this phone and which path was used - handy when a new phone feels off\n'
-    '\n'
-'v0.13.9\n'
-    '· Month switching clicks now: the ‹ › arrows, Today and the month picker tick once per real change; tapping Today while already there stays silent\n'
-    '· The alarm screen is no longer silent: swiping up past the threshold to stop, or tapping Snooze, each give one confirmation tap; a short swipe that snaps back does not\n'
-    '· A tap when a backup is exported or imported successfully\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

@@ -716,6 +716,14 @@ final List<VisualScreen> visualScreens = [
     },
     needsOnboardingPrefs: false,
   ),
+  (
+    // 统计页的年份弹层（v0.13.19）：年视图点年份弹出来的滚轮。
+    // 命令式弹层没有静态入口，只能用一个首帧后弹出的宿主拍它。
+    slug: '80_stats_year_picker',
+    title: '统计 · 年份选择',
+    build: (db) async => const _StatsYearPickerHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「请假 / 加班时长」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -783,12 +791,33 @@ class _StatsExportHostState extends State<_StatsExportHost> {
   Widget build(BuildContext context) => const Scaffold();
 }
 
+/// 统计年份选择弹层的宿主 —— 只为工装存在。
+class _StatsYearPickerHost extends StatefulWidget {
+  const _StatsYearPickerHost();
+
+  @override
+  State<_StatsYearPickerHost> createState() => _StatsYearPickerHostState();
+}
+
+class _StatsYearPickerHostState extends State<_StatsYearPickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showGlassYearPicker(context, initialYear: DateTime.now().year);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
 ///
 /// 与 `_DialogHost` 同一个套路，差别只在它是 `ConsumerStatefulWidget`：
 /// `showSpanEditor` 要一个 `WidgetRef`。
-class _SpanEditorHost extends ConsumerStatefulWidget {
-  const _SpanEditorHost();
+class _SpanEditorHost extends ConsumerStatefulWidget {  const _SpanEditorHost();
 
   @override
   ConsumerState<_SpanEditorHost> createState() => _SpanEditorHostState();
@@ -1104,6 +1133,10 @@ const Map<String, double> visualScrollDown = {
   '58_template_picker_monthly': 4000,
   // 班组卡在周期表下面；滚到底靠钳位把展开的四行露出来。
   '67_editor_crew_expanded': 2400,
+  // 统计页的图表、年月列表与「统计口径」都在首屏之下：不滚就只能看到一张
+  // 大数字卡。环图/柱图是这一版的主视觉，必须真的被眼睛看过（2026-11-23）。
+  '74_stats_month': 900,
+  '75_stats_year': 1400,
 };
 
 /// 打赏弹层的宿主 —— **只为工装存在，不进 `lib/`**。

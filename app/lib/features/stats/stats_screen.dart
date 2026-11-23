@@ -11,7 +11,6 @@
 // 「统计口径」说明，并支持按自定义区间 / 字段导出 CSV（`export_sheet.dart`）。
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,15 +19,13 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/clock.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
+import '../../core/haptics.dart';
 import '../../core/l10n.dart';
-import '../../core/layout.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
 import '../../core/widgets/glass_loading.dart';
 import '../../core/widgets/glass_pickers.dart';
-import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
-import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../data/app_repository.dart';
 import '../../domain/day_extra.dart';
@@ -38,6 +35,9 @@ import '../../domain/shift_stats.dart';
 import '../backup/backup_io.dart';
 import 'export_sheet.dart';
 import 'stats_charts.dart';
+import 'stats_period_header.dart';
+import 'stats_section_header.dart';
+import 'stats_summary.dart';
 
 class StatsScreen extends ConsumerStatefulWidget {
   const StatsScreen({super.key, this.initialYearMode = false});
@@ -68,34 +68,63 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     _yearMode = widget.initialYearMode;
   }
 
-  void _prev() => setState(() {
-        if (_yearMode) {
-          _year--;
-        } else {
-          _month = DateTime(_month.year, _month.month - 1, 1);
-        }
-      });
+  /// 期间切换的**唯一入口**：翻月 / 翻年 / 「今天」/ 两个选择器全部汇到这里。
+  ///
+  /// **触觉挂在这一处**（与日历的 `_setMonth` 同一条裁决）：一次期间变化恰好
+  /// 一记 `select()`。箭头、选择器、今天各自都不许再补 —— 两处都挂就是一次
+  /// 操作两响（D6）。没变（例如在 10 月点「本月」、或选择器里选回原月份）
+  /// 就什么都不发生，也不震：那一步没携带任何新信息。
+  void _setPeriod({DateTime? month, int? year}) {
+    final changed = year != null ? year != _year : month != _month;
+    if (!changed) return;
+    setState(() {
+      if (year != null) {
+        _year = year;
+      } else {
+        _month = month!;
+      }
+    });
+    Haptics.select();
+  }
 
-  void _next() => setState(() {
-        if (_yearMode) {
-          _year++;
-        } else {
-          _month = DateTime(_month.year, _month.month + 1, 1);
-        }
-      });
+  void _prev() {
+    if (_yearMode) {
+      _setPeriod(year: _year - 1);
+    } else {
+      _setPeriod(month: DateTime(_month.year, _month.month - 1, 1));
+    }
+  }
+
+  void _next() {
+    if (_yearMode) {
+      _setPeriod(year: _year + 1);
+    } else {
+      _setPeriod(month: DateTime(_month.year, _month.month + 1, 1));
+    }
+  }
 
   void _today() {
     final n = appNow();
+    final month = DateTime(n.year, n.month, 1);
+    if (month == _month && n.year == _year) return;
     setState(() {
-      _month = DateTime(n.year, n.month, 1);
+      _month = month;
       _year = n.year;
     });
+    Haptics.select();
   }
 
   Future<void> _pickMonth() async {
     final picked = await showGlassMonthPicker(context, initialMonth: _month);
     if (picked == null || !mounted) return;
-    setState(() => _month = DateTime(picked.year, picked.month, 1));
+    _setPeriod(month: DateTime(picked.year, picked.month, 1));
+  }
+
+  /// 年视图里点年份：弹年份滚轮。从前这里只有 ‹ › 两条路，跨十年要点十下。
+  Future<void> _pickYear() async {
+    final picked = await showGlassYearPicker(context, initialYear: _year);
+    if (picked == null || !mounted) return;
+    _setPeriod(year: picked);
   }
 
   void _switchMode(int index) {
@@ -105,8 +134,19 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     });
   }
 
+  /// 年视图里点某个月：切回月视图并落到那个月。与 `_setPeriod` 同一口径 ——
+  /// 一次期间变化一记 `select()`（从前这里是裸 `setState`，买了震动却没卖）。
+  void _drillToMonth(int month) {
+    setState(() {
+      _yearMode = false;
+      _month = DateTime(_year, month, 1);
+    });
+    Haptics.select();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final now = appNow();
     final schedules = ref.watch(activeScheduleProvider);
     final extras =
         ref.watch(dayExtrasProvider).valueOrNull ?? const <int, DayExtra>{};
@@ -153,11 +193,25 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                   MediaQuery.paddingOf(context).bottom + 24,
                 ),
                 children: [
-                  _periodSelector(context),
+                  StatsPeriodHeader(
+                    yearMode: _yearMode,
+                    title: _yearMode
+                        ? L10n.statsYearLabel(_year)
+                        : L10n.yearMonth(_month),
+                    onModeChanged: _switchMode,
+                    onPrev: _prev,
+                    onNext: _next,
+                    onPickPeriod: _yearMode ? _pickYear : _pickMonth,
+                    onExport: _openExport,
+                    onToday: _today,
+                  ),
                   const SizedBox(height: AppTokens.spaceMd),
-                  _summaryCard(context, chain, stats),
+                  StatsSummaryCard(
+                    stats: stats,
+                    hasSchedule: chain != null && chain.hasAnySchedule,
+                  ),
                   const SizedBox(height: AppTokens.spaceMd),
-                  _metricGrid(context, stats),
+                  StatsMetricGrid(stats: stats),
                   const SizedBox(height: AppTokens.spaceMd),
                   _compositionCard(context, stats),
                   if (_leaveKinds(stats).isNotEmpty) ...[
@@ -168,7 +222,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                   _distributionCard(context, chain, stats),
                   if (_yearMode) ...[
                     const SizedBox(height: AppTokens.spaceMd),
-                    _monthlyHoursCard(context, months),
+                    _monthlyHoursCard(context, months,
+                        now.year == _year ? now.month : null),
                     const SizedBox(height: AppTokens.spaceMd),
                     _monthsCard(context, months),
                   ],
@@ -180,101 +235,6 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _periodSelector(BuildContext context) {
-    final title = _yearMode ? L10n.statsYearLabel(_year) : L10n.yearMonth(_month);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        GlassSegment(
-          count: 2,
-          selectedIndex: _yearMode ? 1 : 0,
-          onSelected: _switchMode,
-          itemBuilder: (i, selected) => Center(
-            child: Text(
-              i == 0 ? L10n.statsMonth : L10n.statsYear,
-              style: AppTokens.labelSecondary.copyWith(
-                color: selected
-                    ? Colors.white
-                    : AppTokens.inkMuted(context),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppTokens.spaceSm),
-        Row(
-          children: [
-            GlassPill(
-              onTap: _prev,
-              child: const AppIcon(Icons.chevron_left_outlined),
-            ),
-            const SizedBox(width: AppTokens.spaceSm),
-            Expanded(
-              child: GlassPill(
-                onTap: _yearMode ? null : _pickMonth,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(title, style: AppTokens.titleStrong),
-                ),
-              ),
-            ),
-            const SizedBox(width: AppTokens.spaceSm),
-            GlassPill(
-              onTap: _next,
-              child: const AppIcon(Icons.chevron_right_outlined),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppTokens.spaceSm),
-        // 靠右用 `Row` + `mainAxisAlignment.end`，**不要用 `Wrap` / `Align`**：
-        // 它们给子件的是**有界宽度**，而 `GlassPill` 里的 Container 带 `alignment`、
-        // 在有界约束下会撑满整行（出图里那颗「导出」就这样成了一条通栏按钮，
-        // 2026-11-17 出图当场看见）。Row 给非 flex 子件无界宽度，pill 才会按内容
-        // 收缩；窄屏（<360）把「导出」的文字也收掉，只留图标 —— 与「今天」同理。
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Tooltip(
-              message: L10n.statsExport,
-              child: GlassPill(
-                onTap: _openExport,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AppIcon(Icons.file_download_outlined,
-                        size: AppTokens.iconMd,
-                        color: AppTokens.inkMuted(context)),
-                    if (!AppLayout.of(context).isNarrow) ...[
-                      const SizedBox(width: AppTokens.spaceXs),
-                      Text(L10n.statsExport, style: AppTokens.labelStrong),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: AppTokens.spaceSm),
-            GlassPill(
-              accent: true,
-              onTap: _today,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const AppIcon(Icons.today_outlined,
-                      size: AppTokens.iconMd, color: Colors.white),
-                  const SizedBox(width: 4),
-                  Text(
-                    _yearMode ? L10n.statsThisYear : L10n.statsThisMonth,
-                    style: AppTokens.labelStrong.copyWith(color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -318,105 +278,6 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     }
   }
 
-  Widget _summaryCard(
-      BuildContext context, ScheduleChain? chain, ShiftStats stats) {
-    final narrow = AppLayout.of(context).isNarrow;
-    final muted = AppTokens.inkMuted(context);
-    return GlassTile(
-      padding: EdgeInsets.all(narrow ? AppTokens.spaceMd : AppTokens.spaceLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(L10n.statsActual,
-              style: AppTokens.rowSecondary.copyWith(color: muted)),
-          const SizedBox(height: AppTokens.spaceXs),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              L10n.durationText(stats.totalMinutes),
-              key: const Key('stats-total-hours'),
-              style: AppTokens.bigNumber,
-            ),
-          ),
-          const SizedBox(height: AppTokens.spaceXs),
-          Text(
-            L10n.statsBreakdownLine(
-                stats.normalMinutes, stats.overtimeMinutes, stats.leaveMinutes),
-            maxLines: 2,
-            style: AppTokens.microText.copyWith(color: muted),
-          ),
-          if (chain == null || !chain.hasAnySchedule) ...[
-            const SizedBox(height: AppTokens.spaceXs),
-            Text(L10n.statsNoSchedule,
-                style: AppTokens.microText.copyWith(color: muted)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _metricGrid(BuildContext context, ShiftStats stats) {
-    final tiles = <(String, String)>[
-      (L10n.statsWorkDays, L10n.statsDays(stats.workDays)),
-      (L10n.statsRestDays, L10n.statsDays(stats.restDays)),
-      (L10n.statsLeave, L10n.durationText(stats.leaveMinutes)),
-      (L10n.statsOvertime, L10n.durationText(stats.overtimeMinutes)),
-    ];
-    return LayoutBuilder(
-      builder: (context, c) {
-        final cols = c.maxWidth >= 520 ? 4 : 2;
-        const gap = AppTokens.spaceSm;
-        final rows = <Widget>[];
-        for (var i = 0; i < tiles.length; i += cols) {
-          final end = math.min(i + cols, tiles.length);
-          rows.add(Padding(
-            padding: EdgeInsets.only(top: i == 0 ? 0 : gap),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var j = 0; j < cols; j++) ...[
-                    if (j > 0) const SizedBox(width: gap),
-                    Expanded(
-                      child: j < end - i
-                          ? _metricTile(context, tiles[i + j])
-                          : const SizedBox.shrink(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ));
-        }
-        return Column(children: rows);
-      },
-    );
-  }
-
-  Widget _metricTile(BuildContext context, (String, String) tile) {
-    final muted = AppTokens.inkMuted(context);
-    return GlassTile(
-      padding: const EdgeInsets.all(AppTokens.spaceMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(tile.$1,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTokens.microText.copyWith(color: muted)),
-          const SizedBox(height: AppTokens.spaceXs),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(tile.$2, style: AppTokens.sectionTitle),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// 出勤构成：上班 / 休息 / 整天请假 / 无班次 / 未排班。
   ///
   /// 这五项**刚好把区间里的每一天分完**（判据见 `shift_stats.dart` 的逐日分支），
@@ -450,7 +311,11 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(L10n.statsComposition, style: AppTokens.titleStrong),
+          StatsSectionHeader(
+            icon: Icons.percent,
+            title: L10n.statsComposition,
+            iconColor: primary,
+          ),
           const SizedBox(height: AppTokens.spaceMd),
           CompositionBar(segments: segments),
         ],
@@ -468,37 +333,76 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
   Widget _leaveKindsCard(BuildContext context, ShiftStats stats) {
     final muted = AppTokens.inkMuted(context);
     final entries = _leaveKinds(stats);
+    final maxMinutes = entries.isEmpty ? 0 : entries.first.value;
     return GlassTile(
       padding: const EdgeInsets.all(AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(L10n.statsLeaveKinds, style: AppTokens.titleStrong),
+          StatsSectionHeader(
+            icon: Icons.event_note_outlined,
+            title: L10n.statsLeaveKinds,
+            iconColor: AppTokens.chartLeave,
+          ),
           const SizedBox(height: AppTokens.spaceSm),
           for (final e in entries)
             Padding(
-              padding: const EdgeInsets.only(top: AppTokens.gapHair),
-              child: Row(
+              padding: const EdgeInsets.only(top: AppTokens.spaceSm),
+              child: Column(
                 children: [
-                  Container(
-                    width: AppTokens.spaceSm,
-                    height: AppTokens.spaceSm,
-                    decoration: const BoxDecoration(
-                        color: AppTokens.chartLeave, shape: BoxShape.circle),
+                  Row(
+                    children: [
+                      Container(
+                        width: AppTokens.spaceSm,
+                        height: AppTokens.spaceSm,
+                        decoration: const BoxDecoration(
+                            color: AppTokens.chartLeave, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: AppTokens.gapIconText),
+                      Expanded(
+                        child: Text(
+                          e.key == kUnspecifiedLeaveKind
+                              ? L10n.statsLeaveUnspecified
+                              : (L10n.leaveKindLabel(e.key) ?? e.key),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTokens.rowSecondary.copyWith(color: muted),
+                        ),
+                      ),
+                      Text(
+                        L10n.durationText(e.value),
+                        style: AppTokens.labelSecondary
+                            .copyWith(fontFeatures: AppTokens.tabularFigures),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppTokens.gapIconText),
-                  Expanded(
-                    child: Text(
-                      e.key == kUnspecifiedLeaveKind
-                          ? L10n.statsLeaveUnspecified
-                          : (L10n.leaveKindLabel(e.key) ?? e.key),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTokens.rowSecondary.copyWith(color: muted),
+                  const SizedBox(height: AppTokens.spaceXs),
+                  // 占比细条：同一档琥珀色只按长度说话，不按类型再分颜色。
+                  ClipRRect(
+                    borderRadius: AppTokens.pillOf(AppTokens.spaceXs),
+                    child: SizedBox(
+                      height: AppTokens.spaceXs,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: ColoredBox(
+                                color: AppTokens.chartTrack(context)),
+                          ),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: maxMinutes == 0
+                                  ? 0
+                                  : e.value / maxMinutes,
+                              heightFactor: 1,
+                              child: const ColoredBox(
+                                  color: AppTokens.chartLeave),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  Text(L10n.durationText(e.value),
-                      style: AppTokens.labelSecondary),
                 ],
               ),
             ),
@@ -513,15 +417,21 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
       padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.spaceMd, vertical: AppTokens.spaceSm),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(top: AppTokens.spaceSm),
+            child: StatsSectionHeader(
+              icon: Icons.calendar_month_outlined,
+              title: L10n.statsByMonth,
+              iconColor: Theme.of(context).colorScheme.primary,
+            ),
+          ),
           for (var m = 1; m <= 12; m++)
             GlassPressable(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => setState(() {
-                  _yearMode = false;
-                  _month = DateTime(_year, m, 1);
-                }),
+                onTap: () => _drillToMonth(m),
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(vertical: AppTokens.spaceSm),
@@ -541,7 +451,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                               key: Key('stats-month-hours-$m'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTokens.labelStrong,
+                              style: AppTokens.labelStrong.copyWith(
+                                  fontFeatures: AppTokens.tabularFigures),
                             ),
                           ),
                           const SizedBox(width: AppTokens.spaceXs),
@@ -571,16 +482,39 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
 
   /// 年视图的 12 根柱。只展示，点月份走下面那张列表（D15：12 根柱挤不出一颗
   /// 44dp 的命中区）。
-  Widget _monthlyHoursCard(BuildContext context, List<ShiftStats> months) {
+  Widget _monthlyHoursCard(
+      BuildContext context, List<ShiftStats> months, int? highlightIndex) {
+    final muted = AppTokens.inkMuted(context);
+    final positive = [for (final m in months) m.totalMinutes]
+        .where((v) => v > 0)
+        .toList();
+    final average = positive.isEmpty
+        ? 0
+        : (positive.reduce((a, b) => a + b) / positive.length).round();
     return GlassTile(
       padding: const EdgeInsets.all(AppTokens.spaceLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(L10n.statsMonthlyHours, style: AppTokens.titleStrong),
+          StatsSectionHeader(
+            icon: Icons.bar_chart_rounded,
+            title: L10n.statsMonthlyHours,
+            iconColor: Theme.of(context).colorScheme.primary,
+            // 均值虚线的口径就写在这一行：只统计工时 > 0 的月份（空月不拉低均值）。
+            trailing: positive.isEmpty
+                ? null
+                : Text(
+                    '${L10n.statsAverage} ${L10n.durationText(average)}',
+                    style: AppTokens.microText.copyWith(
+                      color: muted,
+                      fontFeatures: AppTokens.tabularFigures,
+                    ),
+                  ),
+          ),
           const SizedBox(height: AppTokens.spaceMd),
           MonthlyHoursBars(
             minutes: [for (final m in months) m.totalMinutes],
+            highlightIndex: highlightIndex,
           ),
         ],
       ),
@@ -606,14 +540,13 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
         ),
     ];
     final legend = entries.map((e) {
-      final pct = total == 0 ? 0.0 : e.value * 100 / total;
       return Padding(
         padding: const EdgeInsets.only(top: AppTokens.gapHair),
         child: Row(
           children: [
             Container(
-              width: 10,
-              height: 10,
+              width: AppTokens.spaceSm,
+              height: AppTokens.spaceSm,
               decoration: BoxDecoration(
                 color: Color(colors[e.key] ?? AppTokens.chartBlank.toARGB32()),
                 shape: BoxShape.circle,
@@ -629,8 +562,11 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
             const SizedBox(width: AppTokens.spaceXs),
             Text(
               '${L10n.statsDays(e.value)} · '
-              '${pct >= 10 ? '${pct.round()}%' : '${pct.toStringAsFixed(1)}%'}',
-              style: AppTokens.microText.copyWith(color: muted),
+              '${statsPercentText(e.value, total)}',
+              style: AppTokens.microText.copyWith(
+                color: muted,
+                fontFeatures: AppTokens.tabularFigures,
+              ),
             ),
           ],
         ),
@@ -642,7 +578,11 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(L10n.statsBreakdown, style: AppTokens.titleStrong),
+          StatsSectionHeader(
+            icon: Icons.donut_small,
+            title: L10n.statsBreakdown,
+            iconColor: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(height: AppTokens.spaceSm),
           if (entries.isEmpty)
             Text(L10n.statsNoSchedule,
@@ -690,33 +630,48 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     return GlassTile(
       padding: const EdgeInsets.all(AppTokens.spaceLg),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _factRow(context, L10n.statsHolidayWork,
+          StatsSectionHeader(
+            icon: Icons.insights,
+            title: L10n.statsFacts,
+            iconColor: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: AppTokens.spaceSm),
+          _factRow(context, Icons.celebration_outlined, L10n.statsHolidayWork,
               L10n.statsDays(stats.holidayWorkDays)),
-          _factRow(
-              context, L10n.statsNightShifts, L10n.statsDays(stats.nightShiftDays)),
-          _factRow(context, L10n.statsLongestWork,
+          _factRow(context, Icons.nightlight_outlined, L10n.statsNightShifts,
+              L10n.statsDays(stats.nightShiftDays)),
+          _factRow(context, Icons.trending_up, L10n.statsLongestWork,
               L10n.statsDays(stats.longestWorkStreak)),
-          _factRow(context, L10n.statsLongestRest,
+          _factRow(context, Icons.trending_down, L10n.statsLongestRest,
               L10n.statsDays(stats.longestRestStreak)),
         ],
       ),
     );
   }
 
-  Widget _factRow(BuildContext context, String label, String value) {
+  Widget _factRow(
+      BuildContext context, IconData icon, String label, String value) {
     final muted = AppTokens.inkMuted(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppTokens.gapHair),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(top: AppTokens.gapHair),
+            child: AppIcon(icon, size: AppTokens.iconSm, color: muted),
+          ),
+          const SizedBox(width: AppTokens.gapIconText),
           Expanded(
             child: Text(label,
                 maxLines: 2, style: AppTokens.rowSecondary.copyWith(color: muted)),
           ),
           const SizedBox(width: AppTokens.spaceSm),
-          Text(value, style: AppTokens.labelStrong),
+          Text(value,
+              style: AppTokens.labelStrong
+                  .copyWith(fontFeatures: AppTokens.tabularFigures)),
         ],
       ),
     );
@@ -734,24 +689,28 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => setState(() => _showMethod = !_showMethod),
-              child: Row(
-                key: const Key('stats-method-toggle'),
-                children: [
-                  AppIcon(Icons.info_outline,
-                      size: AppTokens.iconSm, color: muted),
-                  const SizedBox(width: AppTokens.gapIconText),
-                  Expanded(
-                    child: Text(L10n.statsMethod,
-                        style: AppTokens.rowSecondary.copyWith(color: muted)),
-                  ),
-                  AppIcon(
-                    _showMethod
-                        ? Icons.expand_less
-                        : Icons.expand_more,
-                    size: AppTokens.iconSm,
-                    color: muted,
-                  ),
-                ],
+              // 整行补到 44 的命中区（D15）—— 从前只有一行字高，点起来偏窄。
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Row(
+                  key: const Key('stats-method-toggle'),
+                  children: [
+                    AppIcon(Icons.info_outline,
+                        size: AppTokens.iconSm, color: muted),
+                    const SizedBox(width: AppTokens.gapIconText),
+                    Expanded(
+                      child: Text(L10n.statsMethod,
+                          style: AppTokens.titleStrong),
+                    ),
+                    const SizedBox(width: AppTokens.spaceSm),
+                    AnimatedRotation(
+                      turns: _showMethod ? 0.5 : 0,
+                      duration: AppTokens.durFast,
+                      child: AppIcon(Icons.expand_more,
+                          size: AppTokens.iconSm, color: muted),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

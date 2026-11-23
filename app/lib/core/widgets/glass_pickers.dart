@@ -43,35 +43,41 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
     required int initialItem,
     required ValueChanged<int> onChanged,
   }) {
-    return CupertinoPicker(
-      scrollController: FixedExtentScrollController(initialItem: initialItem),
-      itemExtent: 40,
-      // 每吸附到新的一格震一记「咔哒」（2026-11-10 用户拍板）。
-      //
-      // 旧版这里是「滚轮一律不震」，怕的是把触觉挂到滚动**过程**上 —— 那会拨
-      // 一次连震十几下。`onSelectedItemChanged` 不是那个东西：它只在**选中项
-      // 真的变了**时回调一次，手感正是 iOS 时间轮盘那种「哒、哒、哒」。滚动
-      // 过程中每一帧都震才是要避免的，那件事仍然禁止。
-      onSelectedItemChanged: (i) {
-        Haptics.select();
-        onChanged(i);
-      },
-      selectionOverlay: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppTokens.radiusM),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.25),
+    return _wheelWithAppFont(
+      context,
+      CupertinoPicker(
+        scrollController: FixedExtentScrollController(initialItem: initialItem),
+        itemExtent: 40,
+        // 每吸附到新的一格震一记「咔哒」（2026-11-10 用户拍板）。
+        //
+        // 旧版这里是「滚轮一律不震」，怕的是把触觉挂到滚动**过程**上 —— 那会拨
+        // 一次连震十几下。`onSelectedItemChanged` 不是那个东西：它只在**选中项
+        // 真的变了**时回调一次，手感正是 iOS 时间轮盘那种「哒、哒、哒」。滚动
+        // 过程中每一帧都震才是要避免的，那件事仍然禁止。
+        onSelectedItemChanged: (i) {
+          Haptics.select();
+          onChanged(i);
+        },
+        selectionOverlay: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTokens.radiusM),
+            border: Border.all(
+              color: Theme.of(context)
+                  .colorScheme
+                  .primary
+                  .withValues(alpha: 0.25),
+            ),
           ),
         ),
+        children: List.generate(itemCount, (i) {
+          return Center(
+            child: Text(
+              '$i'.padLeft(2, '0'),
+              style: AppTokens.dialogTitle,
+            ),
+          );
+        }),
       ),
-      children: List.generate(itemCount, (i) {
-        return Center(
-          child: Text(
-            '$i'.padLeft(2, '0'),
-            style: AppTokens.dialogTitle,
-          ),
-        );
-      }),
     );
   }
 
@@ -314,6 +320,37 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
   }
 }
 
+/// 年月选择器与年份选择器共用的年份区间。
+///
+/// **一份常量、两处引用**：两个弹层都在 2000–2100 里滚，口径必须一致 ——
+/// 分开写两个数，改一处就漏一处（E19「同一算式只许一处」）。
+const int _pickerMinYear = 2000;
+const int _pickerMaxYear = 2100;
+
+/// 让 Cupertino 滚轮跟随**应用字体**。
+///
+/// Cupertino 默认的 `pickerTextStyle` 用的是 `CupertinoSystemDisplay` —— 这套字体
+/// 只在 iOS 上存在。Android 真机靠系统字体回落看不出来，但**渲染工装里没有它**，
+/// 数字会渲成一排实心方块（2026-11-23 年份弹层第一次进屏单时当场看到）。
+///
+/// 只替换字体族：字号 / 字重 / 颜色 / 字距仍由每一格的样式与 Cupertino 的默认值
+/// 决定，真机观感不变。
+Widget _wheelWithAppFont(BuildContext context, Widget child) {
+  final base = Theme.of(context).textTheme.bodyMedium;
+  final theme = CupertinoTheme.of(context);
+  return CupertinoTheme(
+    data: theme.copyWith(
+      textTheme: theme.textTheme.copyWith(
+        pickerTextStyle: theme.textTheme.pickerTextStyle.copyWith(
+          fontFamily: base?.fontFamily,
+          fontFamilyFallback: base?.fontFamilyFallback,
+        ),
+      ),
+    ),
+    child: child,
+  );
+}
+
 /// 玻璃年月选择器：底部玻璃弹层 + 年份滚轮 + 4×3 月份网格（点选即返回）。
 Future<DateTime?> showGlassMonthPicker(
   BuildContext context, {
@@ -336,8 +373,6 @@ class _GlassMonthPickerSheet extends StatefulWidget {
 }
 
 class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
-  static const _minYear = 2000;
-  static const _maxYear = 2100;
   late int _year = widget.initialMonth.year;
 
   @override
@@ -371,31 +406,35 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
                   // 年份滚轮
                   SizedBox(
                     height: yearH,
-                    child: CupertinoPicker(
-                      scrollController: FixedExtentScrollController(
-                          initialItem: _year - _minYear),
-                      itemExtent: 40,
-                      onSelectedItemChanged: (i) {
-                        // 与时间轮盘同一口径：换了一年才震，滚动过程不震。
-                        Haptics.select();
-                        setState(() => _year = _minYear + i);
-                      },
-                      selectionOverlay: Container(
-                        decoration: BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(AppTokens.radiusM),
-                          border:
-                              Border.all(color: accent.withValues(alpha: 0.25)),
-                        ),
-                      ),
-                      children: List.generate(_maxYear - _minYear + 1, (i) {
-                        return Center(
-                          child: Text(
-                            '${_minYear + i}',
-                            style: AppTokens.dialogTitle,
+                    child: _wheelWithAppFont(
+                      context,
+                      CupertinoPicker(
+                        scrollController: FixedExtentScrollController(
+                            initialItem: _year - _pickerMinYear),
+                        itemExtent: 40,
+                        onSelectedItemChanged: (i) {
+                          // 与时间轮盘同一口径：换了一年才震，滚动过程不震。
+                          Haptics.select();
+                          setState(() => _year = _pickerMinYear + i);
+                        },
+                        selectionOverlay: Container(
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                BorderRadius.circular(AppTokens.radiusM),
+                            border: Border.all(
+                                color: accent.withValues(alpha: 0.25)),
                           ),
-                        );
-                      }),
+                        ),
+                        children: List.generate(
+                            _pickerMaxYear - _pickerMinYear + 1, (i) {
+                          return Center(
+                            child: Text(
+                              '${_pickerMinYear + i}',
+                              style: AppTokens.dialogTitle,
+                            ),
+                          );
+                        }),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -469,6 +508,124 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// 玻璃年份选择器：底部玻璃弹层 + 年份滚轮（按下「确定」才返回）。
+///
+/// 与 [showGlassMonthPicker] 同族，只挑年份 —— 统计页的年视图里跨十年不该点
+/// 十下箭头（2026-11-23 用户反馈：年份只能左右切）。
+///
+/// **触觉分两处、各一记**：滚轮换格自己发 `select()`（与时间轮盘同口径）；
+/// 「确定」**不发** —— 调用方拿到年份后走统一的期间切换，那一步才是「选中变了」。
+/// 两处都挂就是一次操作两响（与月份选择器里月份格同一条理由）。
+Future<int?> showGlassYearPicker(
+  BuildContext context, {
+  required int initialYear,
+}) {
+  return showGlassSheet<int>(
+    context: context,
+    // 与时间 / 年月选择器同理：不开这个开关，弹层会被压到屏幕的 9/16。
+    isScrollControlled: true,
+    builder: (context) => _GlassYearPickerSheet(initialYear: initialYear),
+  );
+}
+
+class _GlassYearPickerSheet extends StatefulWidget {
+  const _GlassYearPickerSheet({required this.initialYear});
+
+  final int initialYear;
+
+  @override
+  State<_GlassYearPickerSheet> createState() => _GlassYearPickerSheetState();
+}
+
+class _GlassYearPickerSheetState extends State<_GlassYearPickerSheet> {
+  /// 夹进滚轮区间：调用方传 1999 / 2101 时滚轮也不该越界。
+  late int _year =
+      widget.initialYear.clamp(_pickerMinYear, _pickerMaxYear).toInt();
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return GlassPanel(
+      solid: true,
+      margin: const EdgeInsets.all(12),
+      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(L10n.jumpToYear, style: AppTokens.titleStrong),
+                const SizedBox(height: 8),
+                SizedBox(
+                  // 预算与时间选择器同一份：内边距 28 + 标题 22 + 间距 12 + 按钮行 44。
+                  height: (constraints.maxHeight - 106).clamp(96.0, 180.0),
+                  child: _wheelWithAppFont(
+                    context,
+                    CupertinoPicker(
+                      scrollController: FixedExtentScrollController(
+                          initialItem: _year - _pickerMinYear),
+                      itemExtent: 40,
+                      onSelectedItemChanged: (i) {
+                        // 换了一年才震，滚动过程不震（与上面那个年份滚轮同口径）。
+                        Haptics.select();
+                        setState(() => _year = _pickerMinYear + i);
+                      },
+                      selectionOverlay: Container(
+                        decoration: BoxDecoration(
+                          borderRadius:
+                              BorderRadius.circular(AppTokens.radiusM),
+                          border: Border.all(
+                              color: accent.withValues(alpha: 0.25)),
+                        ),
+                      ),
+                      children: List.generate(
+                        _pickerMaxYear - _pickerMinYear + 1,
+                        (i) => Center(
+                          child: Text(
+                            '${_pickerMinYear + i}',
+                            style: AppTokens.dialogTitle,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // **Flexible 是 200 宽小窗的兜底**：两颗按钮的自然宽度
+                    // 加起来比弹层内宽（约 102）宽 23px，不 flex 就横溢；
+                    // `GlassActionButton` 内部是 `FittedBox(scaleDown)`，给了
+                    // 上限之后是「按宽缩小」，不是裁字（与那件自己的注释同一口径）。
+                    Flexible(
+                      child: GlassActionButton(
+                        onPressed: () => Navigator.pop(context),
+                        label: L10n.cancel,
+                      ),
+                    ),
+                    const SizedBox(width: AppTokens.spaceSm),
+                    Flexible(
+                      child: GlassActionButton(
+                        variant: GlassActionVariant.primary,
+                        // 不震：调用方应用年份时自己发 `select()`（见函数注释）。
+                        onPressed: () => Navigator.pop(context, _year),
+                        label: L10n.confirm,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

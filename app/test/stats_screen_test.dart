@@ -7,7 +7,9 @@
 // 15 天休息；再在 10/15 记 4 小时请假 → 正常工时 16×12h − 4h = 188h。
 import 'package:drift/drift.dart' as drift show driftRuntimeOptions;
 import 'package:drift/native.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -21,6 +23,10 @@ import 'package:shiftassistantpro/features/stats/stats_charts.dart';
 import 'package:shiftassistantpro/features/stats/stats_screen.dart';
 
 import 'support/fixed_clock.dart';
+
+/// 触觉原生通道名，与 `MainActivity.kt` 的 `hapticsChannel` 一致。
+const MethodChannel _hapticsChannel =
+    MethodChannel('com.daoban.shiftassistantpro/haptics');
 
 Future<AppDatabase> _seed(WidgetTester tester) async {
   final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -243,6 +249,71 @@ void main() {
     // 关掉弹层（取消），别让后面清树时还有一层路由。
     await tester.tap(find.text(L10n.cancel));
     await tester.pumpAndSettle();
+
+    await _dispose(tester);
+  });
+
+  testWidgets('年视图点年份弹出年份选择器，拨一年确认后切到该年', (tester) async {
+    final db = await _seed(tester);
+    await _pump(tester, db);
+    await tester.tap(find.descendant(
+        of: find.byType(GlassSegment),
+        matching: find.text(L10n.statsYear)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(L10n.statsYearLabel(2026)));
+    await tester.pumpAndSettle();
+    expect(find.text(L10n.jumpToYear), findsOneWidget,
+        reason: '2026-11-23 用户反馈：年份不该只能靠左右箭头切');
+
+    // 滚轮往上拨一格 = 下一年（itemExtent 40）。
+    await tester.drag(find.byType(CupertinoPicker), const Offset(0, -40));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(L10n.confirm));
+    await tester.pumpAndSettle();
+
+    expect(find.text(L10n.statsYearLabel(2027)), findsWidgets,
+        reason: '确认后页头应该换到 2027 年');
+    expect(find.byKey(const Key('stats-month-hours-1')), findsOneWidget);
+
+    await _dispose(tester);
+  });
+
+  testWidgets('翻月 / 跳今天：一次操作恰好一记 select，原地不动不震', (tester) async {
+    final fired = <Object?>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(_hapticsChannel, (call) async {
+      if (call.method == 'play') fired.add(call.arguments);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(_hapticsChannel, null));
+
+    final db = await _seed(tester);
+    await _pump(tester, db);
+
+    await tester.tap(find.byIcon(Icons.chevron_right_outlined));
+    await tester.pumpAndSettle();
+    expect(fired, ['select'], reason: '翻到 11 月：一次期间变化一记');
+
+    await tester.tap(find.byIcon(Icons.chevron_left_outlined));
+    await tester.pumpAndSettle();
+    expect(fired, ['select', 'select'], reason: '翻回 10 月：仍是每操作一记');
+
+    // 已经在 10 月，点「本月」不携带新信息 —— 不许震（与日历 ``_today`` 同一条）。
+    await tester.tap(find.text(L10n.statsThisMonth));
+    await tester.pumpAndSettle();
+    expect(fired, ['select', 'select'], reason: '原地跳今天不该震');
+
+    // 年视图点某个月下钻：从前这里是裸 setState（不震），现在也走一记 select。
+    await tester.tap(find.descendant(
+        of: find.byType(GlassSegment),
+        matching: find.text(L10n.statsYear)));
+    await tester.pumpAndSettle();
+    final afterMode = fired.length; // GlassSegment 自己那一记
+    await tester.tap(find.byKey(const Key('stats-month-hours-3')));
+    await tester.pumpAndSettle();
+    expect(fired.length, afterMode + 1, reason: '下钻到某月恰好一记 select');
 
     await _dispose(tester);
   });

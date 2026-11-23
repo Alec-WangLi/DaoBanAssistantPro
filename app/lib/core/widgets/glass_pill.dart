@@ -30,7 +30,9 @@ class GlassPill extends StatelessWidget {
     this.onTap,
     required this.child,
     this.accent = false,
+    this.emphasis = false,
     this.height = 40,
+    this.padding = const EdgeInsets.symmetric(horizontal: 8),
   });
 
   final VoidCallback? onTap;
@@ -39,7 +41,17 @@ class GlassPill extends StatelessWidget {
   /// 实心主色（强调）还是白玻璃（次要）。
   final bool accent;
 
+  /// 白玻璃里的**亮一档**（见 [AppTokens.glassTintEmphasis]）。
+  ///
+  /// 统计页的期间条用它：深色下默认档压成暗灰，用户报过「颜色看着有点暗」。
+  /// 与 [accent] 互斥语义（那个是实心主色），同时给以 [accent] 为准。
+  final bool emphasis;
+
   final double height;
+
+  /// 内容内边距。给期间条的圆形箭头钮用 `symmetric(horizontal: spaceMd)`
+  /// —— 20 的图标 + 12×2 = 44，正好是 D15 的命中区，不必新立一枚圆钮件。
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
@@ -73,18 +85,22 @@ class GlassPill extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: isDark
-                  ? [
-                      Colors.white.withValues(alpha: 0.22),
-                      Colors.white.withValues(alpha: 0.06),
-                    ]
-                  : [
-                      Colors.white.withValues(alpha: 0.95),
-                      Colors.white.withValues(alpha: 0.55),
-                    ],
+              colors: emphasis
+                  ? AppTokens.glassTintEmphasis(isDark)
+                  : isDark
+                      ? [
+                          Colors.white.withValues(alpha: 0.22),
+                          Colors.white.withValues(alpha: 0.06),
+                        ]
+                      : [
+                          Colors.white.withValues(alpha: 0.95),
+                          Colors.white.withValues(alpha: 0.55),
+                        ],
             ),
             border: Border.all(
-              color: Colors.white.withValues(alpha: isDark ? 0.28 : 0.95),
+              color: emphasis
+                  ? AppTokens.glassBorderEmphasis(isDark)
+                  : Colors.white.withValues(alpha: isDark ? 0.28 : 0.95),
             ),
             boxShadow: [
               BoxShadow(
@@ -102,7 +118,7 @@ class GlassPill extends StatelessWidget {
         onTap: onTap,
         child: Container(
           height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: padding,
           alignment: Alignment.center,
           decoration: decoration,
           child: child,
