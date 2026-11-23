@@ -552,17 +552,22 @@ if (-not $siteBase) {
         if ($LASTEXITCODE -ne 0) { throw "build_site.py 退出码 $LASTEXITCODE" }
 
         Push-Location $root
-        # wrangler 把登录态存在 %APPDATA%\xdg.config\.wrangler。build-env.ps1 把
-        # APPDATA 重定向到了 toolchain\ —— 那边没有凭据，wrangler 就会要求
-        # CLOUDFLARE_API_TOKEN，非交互环境下直接失败（2026-11-10 发 v0.13.1 时踩到）。
-        # 与 gh 的 GH_CONFIG_DIR 是同一个坑：这里临时指回真实目录。
+        # wrangler 把登录态存在 %APPDATA%\xdg.config\.wrangler，npx 的包缓存则在
+        # %LOCALAPPDATA%\npm-cache —— build-env.ps1 把两个都重定向到了 toolchain\。
+        # APPDATA 那边没有凭据（2026-11-10 发 v0.13.1 时踩到）；LOCALAPPDATA 那边
+        # 会让 npx 把 wrangler 依赖装歪 —— 实测拉到 `workerd-linux-64`，npm 11 在
+        # dedupe 时抛 `Invalid Version: `（2026-11-23 发 v0.13.19 时踩到，用真实
+        # 缓存在同一台机器上手动部署成功）。两个都临时指回真实目录。
         $prevAppData = $env:APPDATA
+        $prevLocalAppData = $env:LOCALAPPDATA
         $env:APPDATA = Join-Path $env:USERPROFILE 'AppData\Roaming'
+        $env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData\Local'
         try {
             & npx --yes wrangler@latest pages deploy _site --project-name=daoban-shift --branch=main --commit-dirty=true
             if ($LASTEXITCODE -ne 0) { throw "wrangler pages deploy 退出码 $LASTEXITCODE" }
         } finally {
             $env:APPDATA = $prevAppData
+            $env:LOCALAPPDATA = $prevLocalAppData
             Pop-Location
         }
     } catch {
