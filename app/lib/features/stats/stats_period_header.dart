@@ -4,7 +4,9 @@
 //
 // 2026-11-23 用户三条反馈里两条落在这块：
 //   ① 年视图的年份只能点箭头切 → 标题本身变成可点入口（月视图开月份弹层、
-//      年视图开年份弹层，尾部给一颗 expand_more 作 D7 的「点开」暗示）；
+//      年视图开年份弹层）。v0.13.20 起**尾部那颗 expand_more 去掉了** ——
+//      用户反馈那颗小箭头看着像「还有个没展开的东西」；可点性由强调档胶囊
+//      与按下反馈承担。
 //   ② 箭头没有触觉、颜色发暗 → 触觉统一挂在 `_StatsScreenState._setPeriod`
 //      （一次期间变化恰好一记），箭头改成 44dp 的强调档玻璃钮并**显式给图标色**。
 //
@@ -104,9 +106,10 @@ class StatsPeriodHeader extends StatelessWidget {
                         child: Text(title, style: AppTokens.titleStrong),
                       ),
                     ),
-                    const SizedBox(width: AppTokens.spaceXs),
-                    AppIcon(Icons.expand_more,
-                        size: AppTokens.iconSm, color: muted),
+                    // 这颗 `expand_more` 在 v0.13.20 去掉（用户要求）：年月份
+                    // 那一行下面挂一个小箭头，看着像还有一个没展开的东西。
+                    // 胶囊本身仍然可点（打开月份 / 年份弹层），可点性由强调档
+                    // 胶囊与按下反馈承担。
                   ],
                 ),
               ),

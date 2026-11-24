@@ -395,6 +395,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     final bool hasOverrideHint = _monthHasOverrideHint(chain);
     final extras =
         ref.read(dayExtrasProvider).valueOrNull ?? const <int, DayExtra>{};
+    final dayNotes =
+        ref.read(dayNotesProvider).valueOrNull ?? const <int, String>{};
     final key = [
       _month.year,
       _month.month,
@@ -413,6 +415,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       // 请假 / 加班 / 备注会多占行（见 `info_card_metrics` 那两段）—— 记录变了
       // 高度就得重量，否则卡片会按旧高度渲染、备注被底边裁掉。
       _extrasSignature(extras),
+      // 调班备注同理：它也是一行、也参与定高。
+      _dayNotesSignature(dayNotes),
     ].join('|');
     if (key == _cardMetricsKey && _cardMetrics != null) return _cardMetrics!;
     final m = measureBottomInfoCardHeight(
@@ -423,6 +427,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       hasTodoHint: hasTodoHint,
       hasOverrideHint: hasOverrideHint,
       extras: extras,
+      dayNotes: dayNotes,
     );
     _cardMetricsKey = key;
     _cardMetrics = m;
@@ -430,14 +435,28 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   }
 
   /// 本月日级记录（请假 / 加班 / 类型 / 备注）的指纹，参与卡片高度的缓存键。
-  String _extrasSignature(Map<int, DayExtra> extras) {
-    final b = StringBuffer();
+  String _extrasSignature(Map<int, DayExtra> extras) {    final b = StringBuffer();
     final days = DateTime(_month.year, _month.month + 1, 0).day;
     for (var d = 1; d <= days; d++) {
       final e = extras[dayNumber(DateTime(_month.year, _month.month, d))];
       if (e == null) continue;
       b.write('$d:${e.leaveMinutes},${e.overtimeMinutes},'
           '${e.leaveKind ?? ''},${e.leaveNote ?? ''},${e.overtimeNote ?? ''};');
+    }
+    return b.toString();
+  }
+
+  /// 本月调班备注的指纹，与 [_extrasSignature] 同一个用途。
+  ///
+  /// 只把**这个月里真有备注的那几天**串进来：备注是全库一张表，拿整张表的哈希当
+  /// 缓存键的话，别处加一条备注也会让本月卡片重量一次（重量不便宜）。
+  String _dayNotesSignature(Map<int, String> notes) {
+    final b = StringBuffer();
+    final days = DateTime(_month.year, _month.month + 1, 0).day;
+    for (var d = 1; d <= days; d++) {
+      final n = notes[dayNumber(DateTime(_month.year, _month.month, d))];
+      if (n == null || n.isEmpty) continue;
+      b.write('$d:$n;');
     }
     return b.toString();
   }
@@ -1248,6 +1267,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         days.any((d) => schedule.dayOverrides.containsKey(dayNumber(d)));
     final current =
         days.length == 1 ? schedule.shiftOn(days.single) : null;
+    // 调班备注的预填：单日直接取；多天只在「各天一致且非空」时预填，否则留空 ——
+    // 与请假备注同一条纪律（预填「其实是某一天的值」比空着更容易误导）。
+    final dayNotes =
+        ref.read(dayNotesProvider).valueOrNull ?? const <int, String>{};
+    String? initialNote;
+    if (days.length == 1) {
+      initialNote = dayNotes[dayNumber(days.single)];
+    } else {
+      final notes = <String>{for (final d in days) dayNotes[dayNumber(d)] ?? ''};
+      if (notes.length == 1 && notes.first.isNotEmpty) initialNote = notes.first;
+    }
 
     final choice = await showShiftOverridePicker(
       context,
@@ -1256,6 +1286,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       to: to,
       currentClass: hasOverride ? current : null,
       canRestore: hasOverride,
+      initialNote: initialNote,
     );
     if (choice == null || !mounted) return;
 
@@ -1278,8 +1309,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     final repo = ref.read(appRepositoryProvider);
     if (choice.restore) {
       await repo.clearDayOverrides(days);
+      // 班都恢复成轮转了，那天「为什么调班」的备注就没有意义了 —— 一并清掉。
+      for (final d in days) {
+        await repo.setDayNote(dayNumber(d), null);
+      }
     } else {
       await repo.setDayOverrides(days, classId: choice.shift!.id!);
+      // **只在用户动过备注框时写**：多天区间里各天的备注可能不同，弹层里预填的是
+      // 空值，照「空即删除」写库会把那些天的备注一起抹掉。
+      if (choice.noteChanged) {
+        for (final d in days) {
+          await repo.setDayNote(dayNumber(d), choice.note);
+        }
+      }
     }
     // 「应用改班 / 恢复轮转」落在写库之后 ——「改班」是词汇表里点名的 commit
     // 语义（`haptics.dart` 的 `commit()` 文档）。写失败就走不到这一步。
@@ -2434,6 +2476,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // 这天的请假 / 加班（全局日级记录）。没有记录时整块不画。
     final extra =
         ref.watch(dayExtrasProvider).valueOrNull?[dayNumber(_selected)];
+    // 这天的**调班备注**（「跟张三换了班」这类）。与请假 / 加班备注分开存，
+    // 但显示在同一个位置、同一套样式。
+    final shiftNote =
+        ref.watch(dayNotesProvider).valueOrNull?[dayNumber(_selected)];
     // 这一屏讲的是**选中那天**，所以取那天所属的方案；下面「班次行 / 已调班 /
     // 空白表 / 其他班组」四处全用它。跨时段之后**不能再认「当前方案」** ——
     // 「今天归哪套」是链才知道的事。
@@ -2884,6 +2930,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           Text(
             L10n.dayExtraNoteLine(extra.leaveNote, extra.overtimeNote) ?? '',
             key: const Key('info-card-extra-note'),
+            style: AppTokens.microText.copyWith(color: primary),
+          ),
+        ],
+        // 调班备注（v0.13.20）：同样自占一行、完整折行。高度由
+        // `info_card_metrics` 逐日量进去 —— 渲染与度量两处必须一一对应。
+        if (shiftNote != null && shiftNote.isNotEmpty) ...[
+          const SizedBox(height: AppTokens.spaceXs),
+          Text(
+            L10n.shiftNoteLine(shiftNote),
+            key: const Key('info-card-shift-note'),
             style: AppTokens.microText.copyWith(color: primary),
           ),
         ],

@@ -261,6 +261,40 @@ object AlarmStore {
     }
 
     /**
+     * 诊断包用：把落盘清单原样导成可 JSON 化的结构。
+     *
+     * 这份清单是「App 认为系统里应该躺着哪些闹钟」的唯一记录 —— 用户报「没响」时，
+     * 有它才分得清「App 根本没排」还是「排了、被系统丢了」。
+     */
+    @Synchronized
+    fun dump(context: Context): List<Map<String, Any?>> {
+        val out = ArrayList<Map<String, Any?>>()
+        for (e in all(context)) {
+            out.add(
+                mapOf(
+                    "id" to e.id,
+                    "millis" to e.millis,
+                    "label" to e.label,
+                    "repeatType" to e.repeatType,
+                    "quiet" to false,
+                )
+            )
+        }
+        for (q in allQuiets(context)) {
+            out.add(
+                mapOf(
+                    "id" to q.id,
+                    "millis" to q.millis,
+                    "label" to q.title,
+                    "repeatType" to 0,
+                    "quiet" to true,
+                )
+            )
+        }
+        return out
+    }
+
+    /**
      * 按 id 区间清闹钟清单。
      *
      * `AlarmScheduler.cancelTodoReminders` 收尾用：那一趟把待办那两段里的提醒都

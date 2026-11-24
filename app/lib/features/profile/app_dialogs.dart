@@ -41,6 +41,14 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.20\n'
+    '· 闹钟页顶部多了一行「下一次响铃」：几月几日几点、哪条班次闹钟，还有几小时几分\n'
+    '· 没有自定义闹钟时那一块不再占半个屏幕：提示贴到底部，未来 30 天的班次闹钟回到整块空间\n'
+    '· 统计页年月份下面那颗小箭头去掉了\n'
+    '· 「调整班次」弹层加了备注：换班、调休写一句，日历信息卡里看得见（本次升级会新建一张表）\n'
+    '· 「查看日志」从弹窗改成整页：按天翻（日志现在按天归档、保留 7 天）、能搜索、能一键导出诊断包（日志 + 设备权限 + 已排闹钟清单 + 未来 7 天计划）\n'
+    '· 报「偶尔没响」时把诊断包发来：里面有 App 认为该响的清单，一眼分得清是没排、还是被系统丢了\n'
+    '\n'
 'v0.13.19\n'
     '· 统计页年视图：点年份直接弹出年份选择器，跨十年不用再点十下箭头\n'
     '· 翻月 / 翻年 / 「今天」，以及年视图点某个月，都会震一记；已经停在本月 / 今年时不震\n'
@@ -95,12 +103,16 @@ const String _changelogZh =
     '· 修：Android 8~10 的手机（荣耀 10、畅享 20 Pro 这类 HarmonyOS 3 机型）装上上一版后一开就闪退；振动能力自查收紧了系统版本判断，老系统上不再调用它没有的接口\n'
     '· 顺带：Android 8 / 9 上点按的触觉改用 20ms 单次波形，不再落到最弱的兜底档\n'
     '\n'
-'v0.13.10\n'
-    '· 触觉适配更多机型：手机支持更细的振动原语时优先用它（Pixel / 三星这类新机更脆）；Android 8~13 上也按「触摸反馈」归类，不再被当成未知振动\n'
-    '· 「我的 → 查看日志」新增一行振动能力自查：换手机后觉得不震或手感不对，把那行复制给作者就能定位\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.20\n'
+    '· The alarm page gains a "Next alarm" line: the date and time, which shift alarm it is, and how long to go\n'
+    '· With no custom alarms, that section no longer takes half the screen - the hint sits at the bottom and the 30-day shift alarms get the whole area\n'
+    '· The little arrow under the year / month title on Statistics is gone\n'
+    '· "Adjust shift" now takes a note: a swap or a day off, one line, shown on the calendar info card (this update adds one table)\n'
+    '· "View log" is now a full page: per-day logs (rotated daily, 7 days kept), search, and a one-tap diagnostics bundle (logs + device permissions + the scheduled alarm list + the next 7 days of plan)\n'
+    '· Reporting "it did not ring": send the bundle - it lists what the app thinks should ring, so it is obvious whether it was never scheduled or dropped by the system\n'
+    '\n'
 'v0.13.19\n'
     '· Statistics, year view: tap the year to open a year picker - no more ten arrow taps to cross a decade\n'
     '· Month / year switching, Today, and tapping a month in the year view each tick once; tapping Today while already there stays silent\n'
@@ -154,10 +166,6 @@ const String _changelogEn =
 'v0.13.11\n'
     '· Fix: phones on Android 8-10 (Honor 10, Changxiang 20 Pro and other HarmonyOS 3 devices) crashed on launch with the previous build; the vibration capability check now respects the system version and no longer calls APIs those systems lack\n'
     '· Android 8 / 9 now use a 20 ms one-shot for taps instead of the weakest fallback\n'
-    '\n'
-'v0.13.10\n'
-    '· Haptics adapt to more phones: where the device offers fine-grained vibration primitives those are used first (crisper on Pixel / Samsung-class devices), and on Android 8-13 taps are classified as touch feedback instead of an unknown vibration\n'
-    '· My > View log now records the vibration capabilities of this phone and which path was used - handy when a new phone feels off\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

@@ -178,6 +178,60 @@ List<ShiftAlarmPlan> planShiftAlarms(
   return plans;
 }
 
+/// 一份日志文件的元信息（按天分段的展示用）。
+class LogFileInfo {
+  const LogFileInfo(
+      {required this.name, required this.day, required this.size});
+
+  /// 原生侧的文件名：`app_log.txt`（当前）或 `app_log-2026-11-23.txt`（归档）。
+  final String name;
+
+  /// 这一份覆盖的日期（`yyyy-MM-dd`）。
+  final String day;
+
+  final int size;
+}
+
+/// 「下一次响铃」是哪一条（闹钟页顶部摘要用）。
+class NextAlarmInfo {  const NextAlarmInfo({required this.fireAt, required this.label});
+
+  final DateTime fireAt;
+
+  /// 响铃标题，与真正响起来时那条完全一致（`shiftAlarmTitle` / 「自定义闹钟」）。
+  final String label;
+}
+
+/// 班次联动闹钟与自定义闹钟里，**最近**的那一条。
+///
+/// **不许另写一份「下次是哪条」的算法**：这里直接复用 [planShiftAlarms] 与
+/// `_customAlarmRequests` —— 也就是 `reschedule` 真正排定时走的那两条路。另起
+/// 一份必然分岔，症状是摘要说 15:00、系统里排的却是别的时间：不报错，比不显示
+/// 更糟。
+///
+/// 取 31 天而不是一两天：连休、空白表、只在上班日才有闹钟的排法，下一条完全
+/// 可能在好几天以后。
+NextAlarmInfo? nextAlarmInfo(
+  ShiftSource source,
+  List<CustomAlarm> alarms, {
+  required DateTime now,
+}) {
+  NextAlarmInfo? best;
+  void consider(DateTime fireAt, String label) {
+    if (!fireAt.isAfter(now)) return;
+    if (best == null || fireAt.isBefore(best!.fireAt)) {
+      best = NextAlarmInfo(fireAt: fireAt, label: label);
+    }
+  }
+
+  for (final p in planShiftAlarms(source, from: now, days: 31)) {
+    consider(p.fireAt, L10n.shiftAlarmTitle(p.shift.name, p.alarm.label));
+  }
+  for (final a in AlarmService._customAlarmRequests(alarms, now: now)) {
+    consider(a.fireAt, L10n.customAlarmTitle);
+  }
+  return best;
+}
+
 /// 一条重复待办提醒的排定计划。
 ///
 /// 队首（[fireAt]）现在排给原生；[repeatTimes] 是它后面还跟着的几次 —— 一起递
@@ -469,6 +523,13 @@ class AlarmService {
 
   /// 测试用只读出口：id 算式是「上限 10」的由来，得能在纯测试里断言。
   static int get shiftDaysHorizonForTesting => _shiftDaysHorizon;
+
+  /// 班次闹钟的原生 id —— **唯一算式出处**：`reschedule` 排定与诊断包导出都走它。
+  ///
+  /// 改算式要同时看 `maxAlarmsPerShift` 与 Kotlin 侧 `cancelAllNativeAlarms` 的
+  /// 扫描上界（`docs/decisions/alarm.md` 那条「三个一起改」）。
+  static int shiftAlarmNativeIdOf(ShiftAlarmPlan p) =>
+      _shiftBaseId + p.alarmIndex * _shiftDaysHorizon + p.offset;
 
   static const _customBaseId = 10000;
 
@@ -846,11 +907,137 @@ class AlarmService {
     }
   }
 
-  /// 清空原生日志文件。
+  /// 清空原生日志文件（当前文件 + 全部按天归档）。
   static Future<void> clearLog() async {
     try {
       await _settingsChannel.invokeMethod('clearLog');
     } catch (_) {}
+  }
+
+  /// 日志文件清单（新的在前）。`day` 是那一份覆盖的日期，界面按它做选择条。
+  static Future<List<LogFileInfo>> listLogFiles() async {
+    try {
+      final raw = await _settingsChannel.invokeMethod<List>('listLogFiles');
+      if (raw == null) return const <LogFileInfo>[];
+      return <LogFileInfo>[
+        for (final e in raw)
+          if (e is Map)
+            LogFileInfo(
+              name: e['name'] as String? ?? '',
+              day: e['day'] as String? ?? '',
+              size: (e['size'] as num?)?.toInt() ?? 0,
+            ),
+      ];
+    } catch (_) {
+      return const <LogFileInfo>[];
+    }
+  }
+
+  /// 读某一份日志（当前文件或某个归档）。
+  static Future<String> readLogFile(String name) async {
+    try {
+      return
+          await _settingsChannel.invokeMethod('readLogFile', {'name': name}) ??
+              '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// 设备与权限快照（诊断包用；键名稳定，不随文案改）。
+  static Future<Map<String, dynamic>> deviceReport() async {
+    try {
+      final raw = await _settingsChannel.invokeMethod<Map>('deviceReport');
+      return raw == null
+          ? <String, dynamic>{}
+          : Map<String, dynamic>.from(raw);
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  /// 原生落盘清单：App 认为系统里应该躺着哪些闹钟。
+  ///
+  /// **这一份是「没响」类报障的分水岭**：清单里有、日志里没有 `onReceive` =
+  /// 系统没递过来；清单里根本没有 = App 本来就没排它。
+  static Future<List<Map<String, dynamic>>> nativeAlarmStore() async {
+    try {
+      final raw = await _settingsChannel.invokeMethod<List>('nativeAlarmStore');
+      if (raw == null) return const <Map<String, dynamic>>[];
+      return <Map<String, dynamic>>[
+        for (final e in raw)
+          if (e is Map) Map<String, dynamic>.from(e),
+      ];
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  /// 诊断包里的「App 认为接下来会响什么」（未来 7 天）。
+  ///
+  /// 与 [reschedule] 走**同一批纯函数**（[planShiftAlarms] / `_customAlarmRequests`
+  /// / `_eventRequests` / `_recurringRequests`）—— 这份计划要是另写一份，排查时
+  /// 「导出包说的」和「真排的」就会分岔，那这份包反而误导人。
+  static Future<Map<String, dynamic>> diagnosticPlan(
+      AppRepository repo) async {
+    final schedules = await repo.getActiveSchedules();
+    final chain = schedules?.chain;
+    final now = appNow();
+    final customAlarms = await repo.listCustomAlarms();
+    final events = await repo.listEvents();
+    final series = await repo.listRecurringTodos();
+    final overrides = await repo.listShiftAlarmOverrides();
+    final leave = <int, int>{
+      for (final e in (await repo.listDayExtras()).entries)
+        if (e.value.leaveMinutes > 0) e.key: e.value.leaveMinutes,
+    };
+    final event = _eventRequests(events, now: now);
+    final recurring = _recurringRequests(
+        series, planRecurringReminders(series, from: now, shiftOn: chain?.shiftOn));
+    return <String, dynamic>{
+      'now': now.toIso8601String(),
+      'schedule': schedules?.current?.schedule.name,
+      'shift': chain == null
+          ? const <Map<String, dynamic>>[]
+          : <Map<String, dynamic>>[
+              for (final p in planShiftAlarms(chain,
+                  from: now, days: 7, overrides: overrides, leaveMinutes: leave))
+                <String, dynamic>{
+                  'id': shiftAlarmNativeIdOf(p),
+                  'at': p.fireAt.toIso8601String(),
+                  'shift': p.shift.name,
+                  'label': p.alarm.label,
+                  'alarmIndex': p.alarmIndex,
+                  'offset': p.offset,
+                },
+            ],
+      'custom': <Map<String, dynamic>>[
+        for (final a in _customAlarmRequests(customAlarms, now: now))
+          <String, dynamic>{
+            'id': a.id,
+            'at': a.fireAt.toIso8601String(),
+            'label': a.label,
+            'repeatType': a.repeatType,
+          },
+      ],
+      'todos': <Map<String, dynamic>>[
+        for (final a in event.alarms)
+          <String, dynamic>{'id': a.id, 'at': a.fireAt.toIso8601String(), 'label': a.label},
+      ],
+      'todoQuiets': <Map<String, dynamic>>[
+        for (final q in event.quiets)
+          <String, dynamic>{'id': q.id, 'at': q.fireAt.toIso8601String(), 'title': q.title},
+      ],
+      'recurring': <Map<String, dynamic>>[
+        for (final a in recurring.alarms)
+          <String, dynamic>{
+            'id': a.id,
+            'at': a.fireAt.toIso8601String(),
+            'label': a.label,
+            'repeatTimes': [for (final t in a.repeatTimes) t.toIso8601String()],
+          },
+      ],
+    };
   }
 
   /// 用系统浏览器 / 对应 App 打开 [url]（「关于」页的外链、打赏的支付宝唤起都走它）。
@@ -1289,7 +1476,7 @@ class AlarmService {
       alarms: [
         for (final p in shiftPlans)
           NativeAlarm(
-            id: _shiftBaseId + p.alarmIndex * _shiftDaysHorizon + p.offset,
+            id: shiftAlarmNativeIdOf(p),
             fireAt: p.fireAt,
             label: L10n.shiftAlarmTitle(p.shift.name, p.alarm.label),
           ),

@@ -8,6 +8,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/layout.dart';
 import '../../core/l10n.dart';
+import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_button.dart';
@@ -100,6 +101,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
         shiftAlarms.add(_ShiftAlarmEntry(date, t, overrides[dayNumber(date)] ?? true));
       }
     }
+    // 下一次响铃：班次联动 + 自定义里最近的一条。空白表 / 一条都没配时为 null，
+    // 那一行不画（不给空表白占一行高度）。
+    final NextAlarmInfo? nextAlarm =
+        chain == null ? null : nextAlarmInfo(chain, alarms, now: now);
 
     return Scaffold(
       body: SafeArea(
@@ -116,23 +121,103 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               ),
             ),
             const SizedBox(height: 12),
+            // 「下一次响铃」摘要：班次闹钟与自定义闹钟里最近的那一条。
+            // 算法与真正排定共用一份（`nextAlarmInfo`），这里只负责画。
+            //
+            // **小窗（又矮又窄）不画**：那种尺寸下这一行会把下面「自定义闹钟」的
+            // 空态挤到 0 高（`text_fit_guard` 的冒烟用例直接量到）。摘要是锦上
+            // 添花，空态是功能缺失 —— 让位给后者。
+            if (nextAlarm != null && !_isTinyWindow(context))
+              _nextAlarmStrip(context, nextAlarm, now),
             _sectionTitleRow(L10n.upcoming30),
             Expanded(child: _shiftAlarmSection(context, chain, shiftAlarms)),
             const SizedBox(height: 8),
             _sectionTitleRow(L10n.customAlarms),
-            Expanded(child: _customAlarmSection(context, alarms)),
-            // 底部按钮条是 floatingActionButton、**悬浮在内容之上**
-            // （见 `AboveCapsuleLocation.bar`），正文不给自己留位置就会被压住：
-            // 小窗里「自定义闹钟」的空状态提示正好落在它下面。
-            // 竖屏内容本来就够短、轮不到压，所以只在小窗/横屏补这块留白。
-            if (AppLayout.of(context).isShort ||
-                AppLayout.of(context).isNarrow)
-              const SizedBox(height: 156),
+            // 没有自定义闹钟时**不占 Expanded**：标题 + 空态压到最下面，把中间的
+            // 空间全给上面的班次列表（50/50 平分时空态白占半个屏）。
+            // 用 `Flexible(loose)` 而不是裸的 `Padding`：极矮的窗（900×420、
+            // 200×400）里这几块加起来会撑破 Column，loose 让它按剩余空间收缩。
+            // 贴底就得给悬浮按钮条让位，否则那句提示正好被压住（老坑）。
+            if (alarms.isEmpty)
+              Flexible(
+                // 与班次列表平分剩余空间，但**内容压在底边**（`Align` 的
+                // bottomCenter）：空间够时提示紧贴按钮条；极矮的窗里这块能被
+                // 压缩，不会把 Column 撑破。
+                //
+                // 反过来写（非 flex 的 Padding）在 200×400 + 特大字号上会溢出；
+                // 不包 Flexible 又会剩一大块空白留在最底下、提示飘在半空
+                // —— 两种都在出图里见过，这个写法两头都占。
+                fit: FlexFit.loose,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    // 少留 `spaceLg`：空态自己还有一圈 16 的内边距，两段相加
+                    // 才是悬浮按钮条的净高度。
+                    padding: const EdgeInsets.only(
+                        bottom: kFloatingActionInset - AppTokens.spaceLg),
+                    child: _customAlarmSection(context, alarms),
+                  ),
+                ),
+              )
+            else
+              Expanded(child: _customAlarmSection(context, alarms)),
+            // 从前这里在小窗/横屏补一块 156 的留白，专为空态兜底。现在空态自己
+            // 带着 `kFloatingActionInset` 贴底（见上），列表那条分支本来也有同值
+            // 的底部内边距 —— 两处同时留白会在 420 高的横屏上撑破 Column。
           ],
         ),
       )),
       floatingActionButtonLocation: const AboveCapsuleLocation.bar(),
       floatingActionButton: _bottomActionBar(context),
+    );
+  }
+
+  /// 小窗（又矮又窄，如 200×400）：这一屏的固定内容放不下，摘要让位给空态。
+  bool _isTinyWindow(BuildContext context) {
+    final AppLayout layout = AppLayout.of(context);
+    return layout.isShort && layout.isNarrow;
+  }
+
+  /// 「下一次响铃」摘要（v0.13.20）。
+  ///
+  /// 一行字：「下一次响铃 · 今天 15:00 · 白班 巡视 · 还有 1 小时 12 分」。
+  /// 页面本来就有每分钟一次的 `Timer`，倒计时跟着走，不需要另起一个。
+  ///
+  /// **不放进胶囊**：这一行会很长（日期 + 班次 + 备注 + 倒计时），而 `GlassPill`
+  /// 在有界宽度下会撑满整行、无界宽度下又量不出省略号 —— 一行朴素的状态文字
+  /// 反而最稳，也和上面的小节标题同一档对齐（左边 16）。
+  Widget _nextAlarmStrip(
+      BuildContext context, NextAlarmInfo info, DateTime now) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, AppTokens.spaceSm),
+      child: Row(
+        key: const Key('alarm-next-summary'),
+        children: [
+          AppIcon(Icons.alarm_on_outlined,
+              size: AppTokens.iconSm, color: primary),
+          const SizedBox(width: AppTokens.gapIconText),
+          Expanded(
+            child: FittedBox(
+              // **单行必须放得下**：这条会很长（日期 + 班次 + 备注 + 倒计时），
+              // 而字被裁掉是这一屏最不能接受的事（`text_fit_guard` 当场就会红）。
+              // 与统计页期间条那颗标题同一个做法：宁可整体缩一点，不截字。
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                L10n.nextAlarmLine(
+                  L10n.alarmDayLabel(info.fireAt, now),
+                  _fmt(info.fireAt.hour * 60 + info.fireAt.minute),
+                  info.label,
+                  L10n.alarmCountdown(info.fireAt.difference(now)),
+                ),
+                maxLines: 1,
+                style: AppTokens.rowSecondary.copyWith(color: primary),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

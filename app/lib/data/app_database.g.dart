@@ -3784,6 +3784,184 @@ class ShiftDayExtrasCompanion extends UpdateCompanion<ShiftDayExtra> {
   }
 }
 
+class $ShiftDayNotesTable extends ShiftDayNotes
+    with TableInfo<$ShiftDayNotesTable, ShiftDayNote> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ShiftDayNotesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<int> day = GeneratedColumn<int>(
+      'day', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+      'note', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [day, note];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shift_day_notes';
+  @override
+  VerificationContext validateIntegrity(Insertable<ShiftDayNote> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('day')) {
+      context.handle(
+          _dayMeta, day.isAcceptableOrUnknown(data['day']!, _dayMeta));
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+          _noteMeta, note.isAcceptableOrUnknown(data['note']!, _noteMeta));
+    } else if (isInserting) {
+      context.missing(_noteMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {day};
+  @override
+  ShiftDayNote map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ShiftDayNote(
+      day: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}day'])!,
+      note: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}note'])!,
+    );
+  }
+
+  @override
+  $ShiftDayNotesTable createAlias(String alias) {
+    return $ShiftDayNotesTable(attachedDatabase, alias);
+  }
+}
+
+class ShiftDayNote extends DataClass implements Insertable<ShiftDayNote> {
+  final int day;
+
+  /// 备注正文（已 trim；写入侧空串直接删行）。
+  final String note;
+  const ShiftDayNote({required this.day, required this.note});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['day'] = Variable<int>(day);
+    map['note'] = Variable<String>(note);
+    return map;
+  }
+
+  ShiftDayNotesCompanion toCompanion(bool nullToAbsent) {
+    return ShiftDayNotesCompanion(
+      day: Value(day),
+      note: Value(note),
+    );
+  }
+
+  factory ShiftDayNote.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ShiftDayNote(
+      day: serializer.fromJson<int>(json['day']),
+      note: serializer.fromJson<String>(json['note']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'day': serializer.toJson<int>(day),
+      'note': serializer.toJson<String>(note),
+    };
+  }
+
+  ShiftDayNote copyWith({int? day, String? note}) => ShiftDayNote(
+        day: day ?? this.day,
+        note: note ?? this.note,
+      );
+  ShiftDayNote copyWithCompanion(ShiftDayNotesCompanion data) {
+    return ShiftDayNote(
+      day: data.day.present ? data.day.value : this.day,
+      note: data.note.present ? data.note.value : this.note,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftDayNote(')
+          ..write('day: $day, ')
+          ..write('note: $note')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(day, note);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ShiftDayNote &&
+          other.day == this.day &&
+          other.note == this.note);
+}
+
+class ShiftDayNotesCompanion extends UpdateCompanion<ShiftDayNote> {
+  final Value<int> day;
+  final Value<String> note;
+  const ShiftDayNotesCompanion({
+    this.day = const Value.absent(),
+    this.note = const Value.absent(),
+  });
+  ShiftDayNotesCompanion.insert({
+    this.day = const Value.absent(),
+    required String note,
+  }) : note = Value(note);
+  static Insertable<ShiftDayNote> custom({
+    Expression<int>? day,
+    Expression<String>? note,
+  }) {
+    return RawValuesInsertable({
+      if (day != null) 'day': day,
+      if (note != null) 'note': note,
+    });
+  }
+
+  ShiftDayNotesCompanion copyWith({Value<int>? day, Value<String>? note}) {
+    return ShiftDayNotesCompanion(
+      day: day ?? this.day,
+      note: note ?? this.note,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (day.present) {
+      map['day'] = Variable<int>(day.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftDayNotesCompanion(')
+          ..write('day: $day, ')
+          ..write('note: $note')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $CustomTemplatesTable extends CustomTemplates
     with TableInfo<$CustomTemplatesTable, CustomTemplate> {
   @override
@@ -4995,6 +5173,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ShiftDayOverridesTable shiftDayOverrides =
       $ShiftDayOverridesTable(this);
   late final $ShiftDayExtrasTable shiftDayExtras = $ShiftDayExtrasTable(this);
+  late final $ShiftDayNotesTable shiftDayNotes = $ShiftDayNotesTable(this);
   late final $CustomTemplatesTable customTemplates =
       $CustomTemplatesTable(this);
   late final $RecurringSeriesRowsTable recurringSeriesRows =
@@ -5015,6 +5194,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         shiftAlarmOverrides,
         shiftDayOverrides,
         shiftDayExtras,
+        shiftDayNotes,
         customTemplates,
         recurringSeriesRows
       ];
@@ -7039,6 +7219,128 @@ typedef $$ShiftDayExtrasTableProcessedTableManager = ProcessedTableManager<
     ),
     ShiftDayExtra,
     PrefetchHooks Function()>;
+typedef $$ShiftDayNotesTableCreateCompanionBuilder = ShiftDayNotesCompanion
+    Function({
+  Value<int> day,
+  required String note,
+});
+typedef $$ShiftDayNotesTableUpdateCompanionBuilder = ShiftDayNotesCompanion
+    Function({
+  Value<int> day,
+  Value<String> note,
+});
+
+class $$ShiftDayNotesTableFilterComposer
+    extends Composer<_$AppDatabase, $ShiftDayNotesTable> {
+  $$ShiftDayNotesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnFilters(column));
+}
+
+class $$ShiftDayNotesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShiftDayNotesTable> {
+  $$ShiftDayNotesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get day => $composableBuilder(
+      column: $table.day, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ShiftDayNotesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShiftDayNotesTable> {
+  $$ShiftDayNotesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+}
+
+class $$ShiftDayNotesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ShiftDayNotesTable,
+    ShiftDayNote,
+    $$ShiftDayNotesTableFilterComposer,
+    $$ShiftDayNotesTableOrderingComposer,
+    $$ShiftDayNotesTableAnnotationComposer,
+    $$ShiftDayNotesTableCreateCompanionBuilder,
+    $$ShiftDayNotesTableUpdateCompanionBuilder,
+    (
+      ShiftDayNote,
+      BaseReferences<_$AppDatabase, $ShiftDayNotesTable, ShiftDayNote>
+    ),
+    ShiftDayNote,
+    PrefetchHooks Function()> {
+  $$ShiftDayNotesTableTableManager(_$AppDatabase db, $ShiftDayNotesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ShiftDayNotesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ShiftDayNotesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ShiftDayNotesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> day = const Value.absent(),
+            Value<String> note = const Value.absent(),
+          }) =>
+              ShiftDayNotesCompanion(
+            day: day,
+            note: note,
+          ),
+          createCompanionCallback: ({
+            Value<int> day = const Value.absent(),
+            required String note,
+          }) =>
+              ShiftDayNotesCompanion.insert(
+            day: day,
+            note: note,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ShiftDayNotesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ShiftDayNotesTable,
+    ShiftDayNote,
+    $$ShiftDayNotesTableFilterComposer,
+    $$ShiftDayNotesTableOrderingComposer,
+    $$ShiftDayNotesTableAnnotationComposer,
+    $$ShiftDayNotesTableCreateCompanionBuilder,
+    $$ShiftDayNotesTableUpdateCompanionBuilder,
+    (
+      ShiftDayNote,
+      BaseReferences<_$AppDatabase, $ShiftDayNotesTable, ShiftDayNote>
+    ),
+    ShiftDayNote,
+    PrefetchHooks Function()>;
 typedef $$CustomTemplatesTableCreateCompanionBuilder = CustomTemplatesCompanion
     Function({
   Value<int> id,
@@ -7607,6 +7909,8 @@ class $AppDatabaseManager {
       $$ShiftDayOverridesTableTableManager(_db, _db.shiftDayOverrides);
   $$ShiftDayExtrasTableTableManager get shiftDayExtras =>
       $$ShiftDayExtrasTableTableManager(_db, _db.shiftDayExtras);
+  $$ShiftDayNotesTableTableManager get shiftDayNotes =>
+      $$ShiftDayNotesTableTableManager(_db, _db.shiftDayNotes);
   $$CustomTemplatesTableTableManager get customTemplates =>
       $$CustomTemplatesTableTableManager(_db, _db.customTemplates);
   $$RecurringSeriesRowsTableTableManager get recurringSeriesRows =>

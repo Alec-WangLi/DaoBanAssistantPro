@@ -311,12 +311,14 @@ const List<HelpFaqGroup> helpFaqGroups = [
                   '小米：我的 → 权限 → 自启动，并把「电池优化」设为不限制。'
                   '还是漏的话，去「我的 → 查看日志」看漏响那一刻有没有「AlarmReceiver.onReceive」这一行：'
                   '没有就是系统没把闹钟递过来；有的话再看紧跟着的「AlarmRingService」与「AlarmSound」两行，'
-                  '就能分出是响铃界面被拦还是音源出问题。',
+                  '就能分出是响铃界面被拦还是音源出问题。'
+                  '日志页底部可以一键「导出诊断包」—— 日志、设备与权限、已排闹钟清单、未来 7 天计划打个包，发给作者最快。',
               'Usually the vendor power-saving policy cancels the app\'s alarms — not the app skipping them. '
                   'Samsung: Settings → Battery → Background usage limits, remove the app from "Sleeping apps" and "Deep sleeping apps". '
                   'Xiaomi: Me → Permissions → Auto-start, and set Battery optimization to Unrestricted. '
                   'If it still happens, open Me → View log and look for an "AlarmReceiver.onReceive" line at that time: '
-                  'no line means the system never delivered the alarm; if there is one, the "AlarmRingService" and "AlarmSound" lines right after it tell you whether the screen was blocked or the sound failed.',
+                  'no line means the system never delivered the alarm; if there is one, the "AlarmRingService" and "AlarmSound" lines right after it tell you whether the screen was blocked or the sound failed. '
+                  'The button at the bottom of the log page exports a diagnostics bundle — logs, device and permissions, the scheduled alarm list and the next 7 days of plan, zipped up for the author.',
             ),
           ),
           (

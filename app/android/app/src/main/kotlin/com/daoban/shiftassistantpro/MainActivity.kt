@@ -540,6 +540,21 @@ class MainActivity : FlutterActivity() {
                         clearLog()
                         result.success(null)
                     }
+                    // 按天分段的日志（v0.13.20）：清单 + 读某一份。
+                    "listLogFiles" -> {
+                        try {
+                            result.success(AlarmLog.listFiles(this))
+                        } catch (e: Exception) {
+                            result.error("LIST_LOG_FAILED", e.message, null)
+                        }
+                    }
+                    "readLogFile" -> {
+                        val name = call.argument<String>("name") ?: ""
+                        result.success(AlarmLog.readFile(this, name))
+                    }
+                    // 诊断包：设备 / 权限快照与原生落盘清单。
+                    "deviceReport" -> result.success(AlarmLog.deviceReport(this))
+                    "nativeAlarmStore" -> result.success(AlarmStore.dump(this))
                     "listRingtones" -> {
                         try {
                             // 用 applicationContext 走 RingtoneManager(Context) 构造：

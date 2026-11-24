@@ -245,6 +245,24 @@ class ShiftDayExtras extends Table {
   Set<Column> get primaryKey => {day, kind};
 }
 
+/// 按天「调班备注」：给被单独调过的那一天写一句说明（「跟张三换了班」）。
+///
+/// **独立成表，不往 [ShiftDayExtras] 里加第三种 kind**：那张表的 `minutes`
+/// 必填，而请假 / 加班分钟数要进统计口径 —— 混进来会把工时算错。
+///
+/// 口径与 [ShiftAlarmOverrides] 相同（自 epoch 天数、全局按天），与
+/// [ShiftDayOverrides] 不同：那条表达「那天上哪个班」、必须挂在某套方案上；
+/// 这条表达「那天为什么调」，换方案也说得通。
+class ShiftDayNotes extends Table {
+  IntColumn get day => integer()();
+
+  /// 备注正文（已 trim；写入侧空串直接删行）。
+  TextColumn get note => text()();
+
+  @override
+  Set<Column> get primaryKey => {day};
+}
+
 /// 「我的模板」表：把一套方案的**结构**（班次定义 + 周期 + 班组错位）存成快照，
 /// 新建排班时可以再选它。见 `domain/schedule_template.dart`（那边的值类型与
 /// 编解码是纯函数，可直接单测）。
@@ -349,6 +367,7 @@ class RecurringSeriesRows extends Table {
   ShiftAlarmOverrides,
   ShiftDayOverrides,
   ShiftDayExtras,
+  ShiftDayNotes,
   CustomTemplates,
   RecurringSeriesRows,
 ])
@@ -359,7 +378,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   /// 当前 schema 版本（备份导入时用来拒绝「来自更新版本」的库）。
-  static const int schemaVersionNumber = 17;
+  static const int schemaVersionNumber = 18;
 
   @override
   int get schemaVersion => schemaVersionNumber;
@@ -368,6 +387,10 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 18) {
+            // 按天调班备注：纯新增一张表，一行既有数据都不碰。
+            await m.createTable(shiftDayNotes);
+          }
           if (from < 17) {
             // 请假类型 + 备注：纯新增两列。
             //

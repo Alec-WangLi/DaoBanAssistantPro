@@ -128,6 +128,7 @@ InfoCardMetrics measureBottomInfoCardHeight({
   required bool hasTodoHint,
   required bool hasOverrideHint,
   Map<int, DayExtra> extras = const <int, DayExtra>{},
+  Map<int, String> dayNotes = const <int, String>{},
 }) {
   final measure = _Measure(
     // 卡片里的 `Text` 用的都是 `AppTokens` 的角色令牌，字体族与其它属性来自
@@ -286,6 +287,17 @@ InfoCardMetrics measureBottomInfoCardHeight({
       dayContent += AppTokens.spaceXs +
           measure
               .text(noteText, AppTokens.microText, maxWidth: contentW)
+              .height;
+    }
+
+    // 调班备注（v0.13.20）：与请假备注同一个形状、同样自占一行、同样完整折行 ——
+    // 渲染侧 `_infoCard` 里那段 `if (shiftNote != null)` 必须与这里一一对应。
+    final String? shiftNote = dayNotes[dayNumber(date)];
+    if (shiftNote != null && shiftNote.isNotEmpty) {
+      dayContent += AppTokens.spaceXs +
+          measure
+              .text(L10n.shiftNoteLine(shiftNote), AppTokens.microText,
+                  maxWidth: contentW)
               .height;
     }
 

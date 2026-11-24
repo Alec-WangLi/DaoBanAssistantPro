@@ -304,6 +304,27 @@ class L10n {
   static String get log => t('日志', 'Log');
   static String get noLog => t('（暂无日志）', '(no log)');
   static String get logCopied => t('日志已复制到剪贴板', 'Log copied to clipboard');
+
+  // ── 日志页（v0.13.20） ──
+  static String get logSearchHint => t('搜索日志…', 'Search log…');
+  static String logLineCount(int total, int shown) => shown == total
+      ? t('共 $total 行', '$total lines')
+      : t('共 $total 行 · 命中 $shown 行', '$total lines · $shown match');
+  static String get logExportBundle => t('导出诊断包', 'Export diagnostics');
+  static String get logExportPrivacy => t(
+      '诊断包含：日志、设备与权限信息、已排闹钟清单、未来 7 天计划。\n'
+      '日志里可能含你写的待办标题与班次备注 —— 分享前确认发给谁。',
+      'The bundle contains logs, device & permission info, the scheduled '
+          'alarm list and the next 7 days of plan.\n'
+          'Logs may contain todo titles and shift notes you wrote — check who '
+          'you are sending it to.');
+  static String get logExported => t('诊断包已导出', 'Diagnostics exported');
+  static String get logExportFailed => t('导出失败：', 'Export failed: ');
+  static String get logClearConfirm => t(
+      '清空后全部日志（含按天归档的 7 天）都会删除，无法恢复。',
+      'This deletes every log file, including the 7 days of archives. '
+          'It cannot be undone.');
+  static String get export => t('导出', 'Export');
   static String get builtinRingtone => t('内置铃声（默认）', 'Built-in (default)');
   static String get builtinRingtoneSubtitle => t('叮咚数字闹钟声', 'Ding-dong digital alarm');
   static String get vibrateOnlyRingtone => t('仅震动', 'Vibrate only');
@@ -609,6 +630,50 @@ class L10n {
   static String get noUpcoming30 => t('近 30 天无班次闹钟', 'No shift alarms in next 30 days');
   static String get testAlarmScheduled => t('已排定测试闹钟，10 秒后响铃', 'Test alarm set, rings in 10s');
   static String get testAlarmFailed => t('测试闹钟排定失败：', 'Test alarm failed: ');
+
+  /// 自定义闹钟在「下一次响铃」摘要里的名字（与原生那批请求里的 label 同一个词）。
+  static String get customAlarmTitle => t('自定义闹钟', 'Custom alarm');
+
+  /// 距下一次响铃还有多久。
+  ///
+  /// 分档只看**人读起来要不要精确**：一分钟内说「马上」，一小时内说分钟，
+  /// 一天内说小时+分，再远只说天+小时 —— 秒数对闹钟没有意义。
+  static String alarmCountdown(Duration d) {
+    final int mins = d.inMinutes;
+    if (mins <= 0) return t('马上响', 'any moment');
+    if (mins < 60) return t('还有 $mins 分钟', 'in $mins min');
+    final int hours = d.inHours;
+    final int remMin = mins - hours * 60;
+    if (hours < 24) {
+      return remMin == 0
+          ? t('还有 $hours 小时', 'in $hours h')
+          : t('还有 $hours 小时 $remMin 分', 'in $hours h $remMin min');
+    }
+    final int days = d.inDays;
+    final int remHours = hours - days * 24;
+    return remHours == 0
+        ? t('还有 $days 天', 'in $days d')
+        : t('还有 $days 天 $remHours 小时', 'in $days d $remHours h');
+  }
+
+  /// 摘要里的日期写法：今天 / 明天 / 11月26日。
+  ///
+  /// 不 import `domain/shift_rotation.dart` 的 `daysBetween`：那个文件反过来要
+  /// 用本文件（`defaultSchedule` 的文案），引入就成环了。这里就地按纯日期算。
+  static String alarmDayLabel(DateTime when, DateTime now) {
+    final int diff = DateTime.utc(when.year, when.month, when.day)
+        .difference(DateTime.utc(now.year, now.month, now.day))
+        .inDays;
+    if (diff == 0) return today;
+    if (diff == 1) return t('明天', 'tomorrow');
+    return monthDay(when);
+  }
+
+  /// 摘要整行：「下一次响铃 · 今天 15:00 · 白班 巡视 · 还有 1 小时 12 分」。
+  static String nextAlarmLine(
+          String day, String clock, String label, String countdown) =>
+      t('下一次响铃 · $day $clock · $label · $countdown',
+          'Next alarm · $day $clock · $label · $countdown');
   static String get editAlarm => t('编辑闹钟', 'Edit alarm');
   static String get time => t('时间', 'Time');
   static String get once => t('一次性', 'Once');
@@ -1180,6 +1245,20 @@ class L10n {
     ];
     return parts.isEmpty ? null : parts.join(' · ');
   }
+
+  /// 「调整班次」弹层里那行备注框的标签。
+  static String get shiftNoteLabel => t('备注（可选）', 'Note (optional)');
+
+  /// 备注框的占位提示 —— 说清楚这行是干嘛用的，别让人以为要写理由。
+  ///
+  /// 英文必须短：320 宽的窗里输入框只剩一百多 dp，长句子会被省略号截掉
+  /// （`text_fit_guard` 会红）。
+  static String get shiftNoteHint =>
+      t('例如：跟张三换了班', 'e.g. shift swap');
+
+  /// 信息卡上的**调班备注**行（与请假 / 加班备注并列，但各存各的）。
+  static String shiftNoteLine(String note) =>
+      isEn ? 'Note: $note' : '备注：$note';
 
   static String dayExtraSaved(String range, String kind, String duration) => isEn
       ? 'Saved $kind $duration on $range'

@@ -8,22 +8,18 @@
 //   2. 检查更新与查看日志本来就只属于「关于」这一块，搬出去之后 profile 只留
 //      外观 / 排班 / 桌面 / 闹钟 / 数据 / 权限六块。
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/app_info.dart';
-import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
-import '../../core/widgets/glass_action_button.dart';
-import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_snackbar.dart';
-import '../alarm/alarm_service.dart';
 import 'about_screen.dart';
 import 'app_dialogs.dart';
 import 'donate_sheet.dart';
 import 'help_center_screen.dart';
+import 'log_screen.dart';
 import 'supporter_screen.dart';
 import 'supporter_store.dart';
 
@@ -112,44 +108,9 @@ class AboutSection extends StatelessWidget {
   }
 
   Future<void> _showLog(BuildContext context) async {
-    final log = await AlarmService.readLog();
-    if (!context.mounted) return;
-    await showGlassDialog<void>(
-      context: context,
-      builder: (dialogContext) => GlassDialog(
-        title: L10n.log,
-        showClose: true,
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 360,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              log.isEmpty ? L10n.noLog : log,
-              style: AppTokens.microText.copyWith(fontFamily: 'monospace'),
-            ),
-          ),
-        ),
-        actions: [
-          GlassActionButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: log));
-              if (dialogContext.mounted) {
-                showGlassSnack(dialogContext, L10n.logCopied,
-                    icon: Icons.content_copy_outlined);
-              }
-            },
-            label: L10n.copy,
-          ),
-          const SizedBox(width: 8),
-          GlassActionButton(
-            onPressed: () async {
-              await AlarmService.clearLog();
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
-            },
-            label: L10n.clear,
-          ),
-        ],
-      ),
+    // v0.13.20：从 360dp 的弹窗升级成整页（按天翻 / 搜索 / 导出诊断包）。
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const LogScreen()),
     );
   }
 }

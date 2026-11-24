@@ -1465,6 +1465,27 @@ class AppRepository {
   Future<Map<int, DayExtra>> listDayExtras() async =>
       dayExtrasFromRows(await db.select(db.shiftDayExtras).get());
 
+  /// 写入 / 覆盖某天的**调班备注**；trim 后为空等于清除。
+  ///
+  /// 与 `setDayExtra` 分开存（见 `ShiftDayNotes` 的类文档）：这条不参与统计口径，
+  /// 只回答「这天为什么跟轮转表不一样」。
+  Future<void> setDayNote(int day, String? note) async {
+    final String text = note?.trim() ?? '';
+    if (text.isEmpty) {
+      await (db.delete(db.shiftDayNotes)..where((r) => r.day.equals(day))).go();
+      return;
+    }
+    await db.into(db.shiftDayNotes).insertOnConflictUpdate(
+          ShiftDayNotesCompanion.insert(day: Value(day), note: text),
+        );
+  }
+
+  /// 一次性读取全部调班备注（日历信息卡与调班弹层预填用）。
+  Future<Map<int, String>> listDayNotes() async {
+    final rows = await db.select(db.shiftDayNotes).get();
+    return <int, String>{for (final r in rows) r.day: r.note};
+  }
+
   /// 当前方案的行 id；没有当前方案时返回 null。
   Future<int?> currentScheduleId() async {
     final row = await (db.select(db.shiftScheduleRows)
@@ -1684,4 +1705,13 @@ final shiftAlarmOverridesProvider = StreamProvider<Map<int, bool>>((ref) {
 final dayExtrasProvider = StreamProvider<Map<int, DayExtra>>((ref) {
   final db = ref.watch(databaseProvider);
   return db.select(db.shiftDayExtras).watch().map(dayExtrasFromRows);
+});
+
+/// 按天调班备注（day → 备注）。日历信息卡与「调整班次」弹层的预填读它。
+final dayNotesProvider = StreamProvider<Map<int, String>>((ref) {
+  final db = ref.watch(databaseProvider);
+  return db
+      .select(db.shiftDayNotes)
+      .watch()
+      .map((rows) => <int, String>{for (final r in rows) r.day: r.note});
 });
