@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.23\n'
+    '· 日期选择（统计导出的起止日期、新建闹钟、添加待办、添加时段）翻月快了：点中间的年月标题直接弹出月份选择，不用再一下一下点箭头\n'
+    '· 同一处的左右箭头换成了玻璃圆钮，与统计页顶栏一套；深色下不再发黑 —— 原来是黑箭头压在深底上，几乎看不见\n'
+    '· 修：这些弹层翻月时高度不再跟着 30 / 31 天跳来跳去，固定按六周排\n'
+    '\n'
 'v0.13.22\n'
     '· 「某条闹钟没响」现在能一眼看出是谁丢的：每次启动都会在重排之前记下「系统认为下一次闹钟是几点」和「我们清单里最早那条」。两边对不上＝记录被系统删了；对得上（哪怕是已经过期的时间）＝广播被拦了下来，闹钟根本没能进来\n'
     '· 同时记下上一次进程是怎么没的：被强行停止 / 一键清理，还是被系统的冻结器杀掉 —— 这两种在日志里原本一模一样\n'
@@ -100,13 +105,13 @@ const String _changelogZh =
     '· 「调整班次」弹层新增「请假」「加班」：时长可以选整天 / 半天或按小时记；整天请假会自动取消那天的班次闹钟，日历格子和信息卡上会标「假 / 加」\n'
     '· 班次编辑里新增「夜班」开关，统计的夜班天数只认这个标记；内置模板的夜班已自动标好\n'
     '\n'
-'v0.13.13\n'
-    '· 修：在「系统铃声」里选中自己加过的铃声（比如把某首歌设成了系统铃声）之后，闹钟响的还是内置那一声 —— 现在选中就把它复制进应用内部，不再依赖系统的媒体权限\n'
-    '· 之前存过的旧设置会在启动时自动修一次：能读的复制进来，读不到的退回内置铃声（日志里写明原因）\n'
-    '· 铃声选择和响铃失败的原因现在都会写进「我的 → 查看日志」，报障时能直接看到是哪一步出了问题\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.23\n'
+    '· Date picking (export range, new alarm, new todo, new shift span) is faster: tap the year-month title to jump straight to a month instead of stepping with the arrows\n'
+    '· The arrows there are now glass step buttons, the same as the Statistics period bar, and no longer turn black in dark mode — they used to be black on a dark sheet, nearly invisible\n'
+    '· Fix: those sheets no longer change height as a month goes from 30 to 31 days — the grid is pinned at six weeks\n'
+    '\n'
 'v0.13.22\n'
     '· "An alarm did not ring" now shows whose fault it was at a glance: on every launch, before any rescheduling, the app records what the system thinks the next alarm is and what its own list says. Mismatch = the system deleted the record; match (even a time already past) = the broadcast was blocked and never reached the app\n'
     '· It also records how the previous process died: force-stopped / cleaned up, or killed by the system freezer - the two used to look identical in the log\n'
@@ -165,11 +170,6 @@ const String _changelogEn =
     '· It also covers leave, overtime, holiday work, night shifts and the longest work / rest streaks; the year view lists all 12 months and a tap jumps to that month\n'
     '· The Adjust shift sheet gains Leave and Overtime: record a full day, half day or any number of hours; a full-day leave also cancels that day\'s shift alarm, and the calendar cell and info card show a leave / overtime mark\n'
     '· The shift editor gains a Night shift switch — the night-shift count uses only this marker; built-in templates already set it\n'
-    '\n'
-'v0.13.13\n'
-    '· Fix: after choosing one of your own ringtones from the system ringtone list (a song you had set as a system ringtone, say), the alarm still played the built-in sound — the pick is now copied into the app instead of relying on system media permissions\n'
-    '· Settings saved by older versions repair themselves once at launch: readable ones get copied in, unreadable ones fall back to the built-in ringtone (with the reason in the log)\n'
-    '· Ringtone pick and playback failures now land in My > View log, so a report shows exactly which step failed\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

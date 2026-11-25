@@ -193,9 +193,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.23(+210) 测试版**：日期选择弹层（issue #7，六个调用点共用一个件）。①年月标题可点，开既有的 `showGlassMonthPicker`（年滚轮 + 12 个月格）直接跳月；②翻月箭头抽成 `core/widgets/glass_step_button.dart`，取色判据收在件内（深色 `onSurface` / 浅色 `solidAccent`），修掉裸 `Icon` 落回纯黑、深色下黑压黑；③网格固定 6 行、空格与日期格共用同一套高度 + 外边距，翻月不再跳高；可用宽 < 240dp 顶栏换上下两排（200×400 小窗一行溢出 6px），日期数字 `FittedBox` 归一。单测 1414 → 1419；工装新增 `81_date_picker`。
 - **v0.13.22(+209) 测试版**：闹钟取证与自愈。①`MainActivity.onCreate` 在 **`super.onCreate` 之前**（引擎起来之前）写「启动快照（重排前）：系统下一跳 / 清单最早（+是否过期）」与「上次退出原因」—— 前者读 `AlarmManager.nextAlarmClock`，两边**同一时刻（哪怕已过期）＝记录还在、投递被拦**，对不上＝记录被删；后者读 `getHistoricalProcessExitReasons`，分 `REASON_USER_REQUESTED(10)` 与 `REASON_FREEZER(14)`（常量值写死，引用字段会被 `NewApi` 拦）。**顺序是命门**：`reschedule` 在启动约 180ms 后就撤掉那条过期记录。②修 `AlarmWatchdog` 真 bug：收尾的 `ensureScheduled`＝`now+6h` 会把已排的更早的那次**覆盖推后**（03:12→09:12 被 08:00/08:18 挤成 14:18），现在记 prefs、只往前挪，`nextTarget = min(now+6h, 最早闹钟-1h)`（下限 `now+10min` 防自激），`BootReceiver` 走 `forceScheduled`。③一加/OPPO「自启动管理」页进「我的 → 权限」（`colorOsStartupPage`＋共用 `resolveFirst`）。④诊断包 README 三分法重写：旧第 2 条在导出时永远不成立（导出必先开 App，开 App 必先重排）。单测 1408 → 1414。
 - **v0.13.21(+208) 测试版**：三处真机反馈 —— 「下一次响铃」补 `overrides`（关掉某天闹钟后摘要会跳到下一条）；自定义闹钟空态改回非 flex（仅高 < 480 的矮窗退回可压缩版本），真正贴底；编辑排班的「夜班」开关补一行说明（只喂统计页「夜班天数」，不参与轮转与闹钟），并与「联动闹钟」拉开 `spaceMd`。单测 1394 → 1408。
-- **v0.13.20(+207) 测试版**：闹钟页顶部「下一次响铃」摘要（`nextAlarmInfo` 复用 `planShiftAlarms`，与本机真正排定同一份算法）；自定义闹钟空态不再平分空间；「调整班次」可写备注（`shift_day_notes`，schema v18）；「查看日志」从弹窗升级成整页（按天归档保留 7 天 / 搜索 / 一键导出诊断包：日志 + `device.json` + `alarms.json` + `plan.json`）。单测 1390 → 1394。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）

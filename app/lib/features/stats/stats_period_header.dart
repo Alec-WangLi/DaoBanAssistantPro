@@ -16,6 +16,10 @@
 // 深色下用 `onSurface`（近白）。
 //
 // 从 `stats_screen.dart` 拆出来是 E14 的要求（那个文件超了 800 行）。
+//
+// 2026-11-25（issue #7）：那两枚箭头钮抽成了 `core/widgets/glass_step_button.dart`，
+// 与日期选择弹层共用 —— 同一条「裸图标落到纯黑」在弹层的翻月箭头上又犯了一次，
+// 抽件之后判据只剩一份（E19）。
 import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
@@ -24,6 +28,7 @@ import '../../core/layout.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_segment.dart';
+import '../../core/widgets/glass_step_button.dart';
 
 class StatsPeriodHeader extends StatelessWidget {
   const StatsPeriodHeader({
@@ -49,11 +54,7 @@ class StatsPeriodHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final muted = AppTokens.inkMuted(context);
-    final arrowInk = isDark
-        ? Theme.of(context).colorScheme.onSurface
-        : AppTokens.solidAccent(Theme.of(context).colorScheme.primary);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -90,7 +91,8 @@ class StatsPeriodHeader extends StatelessWidget {
         const SizedBox(height: AppTokens.spaceSm),
         Row(
           children: [
-            _stepPill(context, Icons.chevron_left_outlined, onPrev, arrowInk),
+            GlassStepButton(
+                icon: Icons.chevron_left_outlined, onTap: onPrev),
             const SizedBox(width: AppTokens.spaceSm),
             Expanded(
               child: GlassPill(
@@ -115,7 +117,8 @@ class StatsPeriodHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppTokens.spaceSm),
-            _stepPill(context, Icons.chevron_right_outlined, onNext, arrowInk),
+            GlassStepButton(
+                icon: Icons.chevron_right_outlined, onTap: onNext),
           ],
         ),
         const SizedBox(height: AppTokens.spaceSm),
@@ -164,25 +167,6 @@ class StatsPeriodHeader extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-
-  /// 左右箭头：20 的图标 + 12×2 的内边距 = 44，命中区正好 44×44（D15）。
-  ///
-  /// 复用 `GlassPill` 而不是新造一枚圆钮件：圆角 `radiusL`(22) 在 44 高处正好是
-  /// 正圆，而新件必然再抄一套玻璃配方（D4 已经有一处「第四套配方」的欠账）。
-  Widget _stepPill(
-    BuildContext context,
-    IconData icon,
-    VoidCallback onTap,
-    Color ink,
-  ) {
-    return GlassPill(
-      onTap: onTap,
-      emphasis: true,
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: AppTokens.spaceMd),
-      child: AppIcon(icon, size: AppTokens.iconMd, color: ink),
     );
   }
 }

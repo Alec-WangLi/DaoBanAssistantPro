@@ -724,6 +724,14 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const _StatsYearPickerHost(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 日期选择弹层（v0.13.23 / issue #7）：翻月箭头取色、标题可点跳月、
+    // 固定 6 行高 —— 三条验收点都在这一个件里，深色那张就是「箭头看得见吗」的眼睛。
+    slug: '81_date_picker',
+    title: '日期 · 选择器',
+    build: (db) async => const _DatePickerHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「请假 / 加班时长」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
@@ -792,8 +800,7 @@ class _StatsExportHostState extends State<_StatsExportHost> {
 }
 
 /// 统计年份选择弹层的宿主 —— 只为工装存在。
-class _StatsYearPickerHost extends StatefulWidget {
-  const _StatsYearPickerHost();
+class _StatsYearPickerHost extends StatefulWidget {  const _StatsYearPickerHost();
 
   @override
   State<_StatsYearPickerHost> createState() => _StatsYearPickerHostState();
@@ -806,6 +813,31 @@ class _StatsYearPickerHostState extends State<_StatsYearPickerHost> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       showGlassYearPicker(context, initialYear: DateTime.now().year);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 日期选择弹层的宿主 —— 只为工装存在。
+///
+/// 用**固定日期**（2026-11-15）而不是 `DateTime.now()`：出图要可复现，
+/// 而 11 月正好是 6 行的月份，能看见「固定 6 行」那一档。
+class _DatePickerHost extends StatefulWidget {
+  const _DatePickerHost();
+
+  @override
+  State<_DatePickerHost> createState() => _DatePickerHostState();
+}
+
+class _DatePickerHostState extends State<_DatePickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showGlassDatePicker(context, initialDate: DateTime(2026, 11, 15));
     });
   }
 

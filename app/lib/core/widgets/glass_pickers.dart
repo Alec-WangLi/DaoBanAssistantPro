@@ -9,8 +9,10 @@ import '../l10n.dart';
 import 'app_icon.dart';
 import 'glass_action_button.dart';
 import 'glass_dialog.dart';
+import 'glass_pill.dart';
 import 'glass_pressable.dart';
 import 'glass_sheet_header.dart';
+import 'glass_step_button.dart';
 
 /// 玻璃时间选择器：底部玻璃弹层 + 时/分滚轮 + Q弹按钮。
 Future<TimeOfDay?> showGlassTimePicker(
@@ -155,6 +157,10 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
 }
 
 /// 玻璃日期选择器：底部玻璃弹层 + 迷你日历网格（点选即返回）。
+///
+/// v0.13.23（issue #7）：年月标题可点跳月、翻月箭头显式取色（裸 `Icon` 在深色下
+/// 落回纯黑）、面板固定 6 行高 —— 三条都在这一个件里，六个调用点一起受益
+/// （统计导出起/止、新建闹钟、添加待办、添加时段、排班编辑两处）。
 Future<DateTime?> showGlassDatePicker(
   BuildContext context, {
   required DateTime initialDate,
@@ -195,6 +201,23 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
     _month = DateTime(widget.initialDate.year, widget.initialDate.month, 1);
   }
 
+  /// 翻月：一次换月 = 「选中变了」，与统计页期间条同口径一记 `select`（D6）。
+  void _stepMonth(int delta) {
+    Haptics.select();
+    setState(() => _month = DateTime(_month.year, _month.month + delta, 1));
+  }
+
+  /// 点年月标题 → 月份弹层（issue #7 第一条：跨几个月只能一下一下点箭头太慢）。
+  ///
+  /// 月份格自己**故意不震**（`showGlassMonthPicker` 里的注释：两处都挂就是
+  /// 一次操作两响），所以由调用方在拿到结果这一步发。
+  Future<void> _pickMonth() async {
+    final picked = await showGlassMonthPicker(context, initialMonth: _month);
+    if (!mounted || picked == null) return;
+    Haptics.select();
+    setState(() => _month = DateTime(picked.year, picked.month, 1));
+  }
+
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
@@ -207,8 +230,16 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
 
     final rows = <Widget>[];
     var rowCells = <Widget>[];
+    // 空格必须与日期格**同一套几何**（高度 + 外边距）：第一版拿裸 `SizedBox`
+    // 补空行，每行差两个 `gapHair`，翻月时面板仍在跳（427 / 431 实测）。
+    Widget emptyCell() => Expanded(
+          child: Container(
+            height: rowH,
+            margin: const EdgeInsets.all(AppTokens.gapHair),
+          ),
+        );
     for (var i = 0; i < leading; i++) {
-      rowCells.add(const Expanded(child: SizedBox()));
+      rowCells.add(emptyCell());
     }
     for (var d = 1; d <= daysInMonth; d++) {
       final date = DateTime(_month.year, _month.month, d);
@@ -233,15 +264,22 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
               color: isSelected ? accent : Colors.transparent,
               borderRadius: BorderRadius.circular(AppTokens.radiusS),
             ),
-            child: Text(
-              '$d',
-              style: AppTokens.rowPrimary.copyWith(
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected
-                    ? Colors.white
-                    : (enabled
-                        ? Theme.of(context).colorScheme.onSurface
-                        : AppTokens.inkFaint(context)),
+            // 日期数字归一到格子里，**不换行**：200×400 小窗里每格只有
+            // 14 宽，「10」会折成「1 / 0」两行（2026-11-25 出图当场看见）。
+            // 与日历页同一条口径（D12：正文禁截断，宁缩不折）。
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '$d',
+                maxLines: 1,
+                style: AppTokens.rowPrimary.copyWith(
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? Colors.white
+                      : (enabled
+                          ? Theme.of(context).colorScheme.onSurface
+                          : AppTokens.inkFaint(context)),
+                ),
               ),
             ),
           ),
@@ -254,9 +292,14 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
     }
     if (rowCells.isNotEmpty) {
       while (rowCells.length < 7) {
-        rowCells.add(const Expanded(child: SizedBox()));
+        rowCells.add(emptyCell());
       }
       rows.add(Row(children: rowCells));
+    }
+    // 固定 6 行：31 天要 6 行、30 天常常 5 行、2 月可能 4 行 ——
+    // 面板高度跟着月份一高一低，正是 issue #7 第三条。
+    while (rows.length < 6) {
+      rows.add(Row(children: List.generate(7, (_) => emptyCell())));
     }
 
     return GlassPanel(
@@ -269,27 +312,62 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left_outlined),
-                    onPressed: () => setState(() => _month = DateTime(
-                        _month.year, _month.month - 1, 1)),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        L10n.yearMonth(_month),
-                        style: AppTokens.titleStrong,
-                      ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final leftBtn = GlassStepButton(
+                    icon: Icons.chevron_left_outlined,
+                    onTap: () => _stepMonth(-1),
+                  );
+                  final rightBtn = GlassStepButton(
+                    icon: Icons.chevron_right_outlined,
+                    onTap: () => _stepMonth(1),
+                  );
+                  // `Flexible` 必须套在 `Row` 里（`GlassPill` 的子件是
+                  // Container，直接给 Flexible 会抛 ParentData 错误）。
+                  // 这是统计页期间条同一条配方的搬运（E19）。
+                  final titlePill = GlassPill(
+                    onTap: _pickMonth,
+                    emphasis: true,
+                    height: 44,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              L10n.yearMonth(_month),
+                              style: AppTokens.titleStrong,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right_outlined),
-                    onPressed: () => setState(() => _month = DateTime(
-                        _month.year, _month.month + 1, 1)),
-                  ),
-                ],
+                  );
+                  // 一行要 44 + 44 + 两个间距 + 一个读得出来的标题；再窄就
+                  // 真的放不下了（200×400 小窗实测一行给标题只剩 2px，还
+                  // 横向溢出 6px）。窄窗改成标题在上、两枚箭头分列下排。
+                  if (constraints.maxWidth < _pickerHeaderOneRowMin) {
+                    return Column(
+                      children: [
+                        titlePill,
+                        const SizedBox(height: AppTokens.spaceXs),
+                        Row(
+                          children: [leftBtn, const Spacer(), rightBtn],
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      leftBtn,
+                      const SizedBox(width: AppTokens.spaceSm),
+                      Expanded(child: Center(child: titlePill)),
+                      const SizedBox(width: AppTokens.spaceSm),
+                      rightBtn,
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 4),
               Row(
@@ -319,6 +397,12 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
     );
   }
 }
+
+/// 日期选择弹层顶栏改成上下两排的宽度阈值（逻辑像素）。
+///
+/// 一行要两枚 44 的步骤钮 + 2×8 间距，标题至少再留 120 才读得出来 ——
+/// 224 取整到 240。200×400 小窗的可用宽只有 102，一行必然横向溢出。
+const double _pickerHeaderOneRowMin = 240;
 
 /// 年月选择器与年份选择器共用的年份区间。
 ///
