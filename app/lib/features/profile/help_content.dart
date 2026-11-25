@@ -104,8 +104,8 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('这天我请假、或者跟同事换了班',
                 'I am taking a day off, or swapping with a colleague'),
             answer: L10nText(
-              '在日历上点底栏那张信息卡里的班次那一行；要改连着好几天，就长按某一天往旁边拖，把一段日子圈出来。',
-              'In the calendar, tap the shift row on the info card at the bottom. To change several days in a row, long-press one day and drag sideways to ring a stretch of dates.',
+              '在日历上点底栏那张信息卡里的班次那一行：选择层里可以换一个班次，也可以选「请假」「加班」并填时长。要改连着好几天，就长按某一天往旁边拖，把一段日子圈出来。',
+              'In the calendar, tap the shift row on the info card at the bottom: the sheet lets you pick another shift, or choose Leave / Overtime and set the duration. To change several days in a row, long-press one day and drag sideways to ring a stretch of dates.',
             ),
           ),
           (
@@ -113,6 +113,34 @@ const List<HelpFaqGroup> helpFaqGroups = [
             answer: L10nText(
               '再点一次那几天，选择层最上面有「恢复轮转」。',
               'Tap those days again — "Restore rotation" is at the top of the picker.',
+            ),
+          ),
+        ],
+      ),
+      (
+        heading: L10nText('统计', 'Statistics'),
+        items: [
+          (
+            question: L10nText('我想看这个月上了多少小时',
+                'I want to see how many hours I worked this month'),
+            answer: L10nText(
+              '点日历右上角那颗统计按钮，默认打开本月：实际上班工时、正常工时、平均每班、上班与休息天数，往下还有请假、加班、法定节假日上班、夜班天数与最长连班 / 连休。上面切到「年」可以看全年和 12 个月，点一行就跳到那个月。请假与加班在「调整班次」里记，记完会自动算进去。',
+              'Tap the statistics button at the top right of the calendar. It opens this month by default: actual hours worked, regular hours, average per shift, and work / rest days, followed by leave, overtime, holiday work, night shifts and the longest work / rest streaks. Switch to Year at the top for the whole year and all 12 months; tap a row to jump to that month. Leave and overtime are recorded in "Adjust shift" and counted automatically.',
+            ),
+          ),
+          (
+            question: L10nText('夜班天数一直是 0', 'The night-shift count stays at 0'),
+            answer: L10nText(
+              '夜班是班次上的一个标记，不是按名字猜的。去「我的 → 排班管理」打开那套班表，在班次卡里把「夜班」开关打开，统计就会跟上。',
+              'Night shift is a marker on the shift rather than something guessed from its name. Open the schedule under Me → Schedule management and turn on the "Night shift" switch on that shift card; the statistics will follow.',
+            ),
+          ),
+          (
+            question: L10nText('想把出勤表拿去算工资',
+                'I want to take the attendance table to payroll'),
+            answer: L10nText(
+              '统计页右上角「导出」：选起止日期，勾上要的字段（日期、班次、工时、请假类型、请假时长、加班、备注等），生成一份 CSV，Excel 直接打开。跨午夜的班次会标「次日」。',
+              'Tap Export at the top right of Statistics: pick the date range, tick the columns you want (date, shift, hours, leave type, leave hours, overtime, note and more) and it writes a CSV that Excel opens directly. Shifts that cross midnight get a " (+1d)" suffix on the time range.',
             ),
           ),
         ],
@@ -253,8 +281,8 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('换了手机，怎么把排班搬过去',
                 'I got a new phone — how do I move my schedule over'),
             answer: L10nText(
-              '目前不支持。数据只存在这台手机上，没有云同步也没有导出，换手机要重新排一遍。',
-              'Not supported yet. Everything lives on this phone only — there is no cloud sync and no export — so a new phone means setting it up again.',
+              '「我的 → 数据备份 → 导出」，存成一个 .dshbackup 文件（可以放到网盘或电脑）。在新手机上装好 App，同一条路径选「导入」，选那个文件、确认覆盖，App 会自己重启一次，排班、待办、模板、闹钟、外观设置和你保存的铃声都回来了。',
+              'Open Me → Backup → Export and save the .dshbackup file somewhere (a cloud drive or your computer). Install the app on the new phone, pick Import on the same screen, choose that file and confirm; the app restarts itself and your schedules, todos, templates, alarms, appearance settings and saved ringtones are all back.',
             ),
           ),
         ],
@@ -271,8 +299,8 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('闹钟到点只响、不弹响铃界面',
                 'The alarm rings but no full-screen alarm appears'),
             answer: L10nText(
-              '去「我的 → 权限」逐项开齐。小米手机还要单独开「后台弹出界面」和「锁屏显示」这两项，不开的话系统会拦掉响铃界面。',
-              'Open Me → Permissions and turn everything on. On Xiaomi phones also turn on "Background pop-up (MIUI)" and "Show on Lock screen (MIUI)" — without those the system blocks the alarm screen.',
+              '去「我的 → 权限」逐项开齐。小米手机还要单独开「后台弹出界面」和「锁屏显示」这两项，不开的话系统会拦掉响铃界面。三星手机要看「休眠应用」那一项。',
+              'Open Me → Permissions and turn everything on. On Xiaomi phones also turn on "Background pop-up (MIUI)" and "Show on Lock screen (MIUI)" — without those the system blocks the alarm screen. On Samsung phones check "Sleeping apps".',
             ),
           ),
           (
@@ -280,6 +308,29 @@ const List<HelpFaqGroup> helpFaqGroups = [
             answer: L10nText(
               '「我的 → 权限」里的「自启动」没开。开着它，重启后闹钟才排得回来。',
               '"Auto-start" under Me → Permissions is off. With it on, the alarms are scheduled again after a restart.',
+            ),
+          ),
+          (
+            question: L10nText('闹钟偶尔有一两次不响',
+                'An alarm now and then does not go off'),
+            answer: L10nText(
+              '多半是厂商的省电策略把 App 的闹钟取消了，不是 App 自己漏排。'
+                  '三星：设置 → 电池 → 后台使用限制，把「倒班助手Pro」从「睡眠应用」和「深度休眠应用」里去掉；'
+                  '小米：我的 → 权限 → 自启动，并把「电池优化」设为不限制；'
+                  '一加 / OPPO：我的 → 权限 → 自启动 / 后台运行，把「允许自启动」和「允许后台运行」都打开。'
+                  '还是漏的话，去「我的 → 查看日志」看漏响那一刻：先找那次启动的「启动快照（重排前）」——'
+                  '「系统下一跳」和「清单最早」对得上（哪怕是个已经过期的时间）就是广播被拦了下来，'
+                  '对不上就是系统把那条记录删了；紧跟着的「上次退出原因」会写明是被强行停止 / 一键清理，'
+                  '还是被系统的冻结器杀掉。'
+                  '日志页底部可以一键「导出诊断包」—— 日志、设备与权限、已排闹钟清单、未来 7 天计划打个包，发给作者最快。',
+              'Usually the vendor power-saving policy cancels the app\'s alarms — not the app skipping them. '
+                  'Samsung: Settings → Battery → Background usage limits, remove the app from "Sleeping apps" and "Deep sleeping apps". '
+                  'Xiaomi: Me → Permissions → Auto-start, and set Battery optimization to Unrestricted. '
+                  'OnePlus / OPPO: Me → Permissions → Auto-launch, and turn on both "Allow auto-launch" and "Allow background activity". '
+                  'If it still happens, open Me → View log at that time and find the "startup snapshot (before rescheduling)" line: '
+                  'if the system\'s next alarm and the earliest entry in our list are the same moment (even one already past), the broadcast was blocked; '
+                  'if they differ, the system deleted the record. The "last exit reason" line right after it says whether the app was force-stopped / cleaned up or killed by the system freezer. '
+                  'The button at the bottom of the log page exports a diagnostics bundle — logs, device and permissions, the scheduled alarm list and the next 7 days of plan, zipped up for the author.',
             ),
           ),
           (

@@ -10,11 +10,11 @@ import 'help_faq_screen.dart';
 
 /// 《使用帮助》第一级：整页。
 ///
-/// 三段 —— **一段整体简介**（这是什么、由哪几块组成，不是目录）、**九条功能块
+/// 三段 —— **一段整体简介**（这是什么、由哪几块组成，不是目录）、**十一条功能块
 /// 简介**（保持简介粒度：说的是「有这么个功能、在哪儿」，怎么用归第二层）、
 /// **一颗进第二层的入口**。
 ///
-/// v0.11.17 之前这一屏是个弹窗。改成整页的理由是它多了整整一层：简介 + 九条 +
+/// v0.11.17 之前这一屏是个弹窗。改成整页的理由是它多了整整一层：简介 + 十一条 +
 /// 入口在窄屏上要滚很长，而「书」本来就该是一页。
 ///
 /// [scrollToWidgets] 给「我的 → 桌面」那一行用：它从前弹出自己那份小组件说明，
@@ -78,7 +78,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     );
   }
 
-  /// 九条功能块简介。
+  /// 十一条功能块简介。
   ///
   /// **每条必须是一个 widget 而不是数据行** —— 「桌面小组件」那一条要挂
   /// [GlobalKey]（[scrollToWidgets] 的落点），而 key 是建 widget 时给的。
@@ -100,6 +100,14 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
           icon: Icons.event_note_outlined,
           title: L10n.guideTodoTitle,
           lines: L10n.guideTodoDesc),
+      HelpEntry(
+          icon: Icons.pie_chart_outline,
+          title: L10n.guideStatsTitle,
+          lines: L10n.guideStatsDesc),
+      HelpEntry(
+          icon: Icons.backup_outlined,
+          title: L10n.guideBackupTitle,
+          lines: L10n.guideBackupDesc),
       HelpEntry(
           key: _widgetsKey,
           icon: Icons.widgets_outlined,

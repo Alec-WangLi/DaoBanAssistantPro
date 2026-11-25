@@ -245,8 +245,9 @@ void main() {
   // 响。在真机上复现过：把「全部日子」切到另一套（那天是上夜班）再切回来，日历
   // 变了、系统里已排的闹钟一条没变。
   //
-  // 判据落在**真正发往原生的跨端调用**上：`rescheduleAll` 一进来就整段取消再
-  // 重排，`cancelAllNativeAlarms` 是它绕不过去的一步。
+  // 判据落在**真正发往原生的跨端调用**上：`rescheduleAll` 走的是
+  // `reconcileNativeAlarms`（一整批先排后清），它是这条链路绕不过去的一步 ——
+  // 从前的判据是 `cancelAllNativeAlarms`，2026-11-23 改成批次接口后换成它。
   group('改动排班结构要重排闹钟', () {
     late Map<String, int> calls;
 
@@ -272,7 +273,7 @@ void main() {
       });
     }
 
-    int reschedules() => calls['cancelAllNativeAlarms'] ?? 0;
+    int reschedules() => calls['reconcileNativeAlarms'] ?? 0;
 
     testWidgets('换「其余时间」到另一套：立刻重排', (tester) async {
       installChannelSpy();

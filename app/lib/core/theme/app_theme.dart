@@ -100,7 +100,11 @@ ThemeData buildLightTheme({Color seed = AppColors.primary}) {
     splashFactory: InkSparkle.splashFactory,
     pageTransitionsTheme: _pageTransitions,
     // 图标三档的基准：没包 AppIcon 的图标也停在 iconLg(24)，而不是裸默认值。
-    iconTheme: const IconThemeData(size: AppTokens.iconLg),
+    // **color 必须给**：只写 size 时 color 是 null，未显式取色的图标会落到
+    // `IconThemeData.fallback()` 的**纯黑** —— 深色下就是黑压黑（2026-11-23
+    // 统计页、2026-11-25「关于」页两次都栽在这）。给 onSurface 让未取色的
+    // 图标跟随正文；压在实心主色面上的图标仍由调用点显式写白（D3）。
+    iconTheme: IconThemeData(size: AppTokens.iconLg, color: scheme.onSurface),
     appBarTheme: const AppBarTheme(
       centerTitle: false,
       elevation: 0,
@@ -138,7 +142,11 @@ ThemeData buildDarkTheme({Color seed = AppColors.primary}) {
     splashFactory: InkSparkle.splashFactory,
     pageTransitionsTheme: _pageTransitions,
     // 图标三档的基准：没包 AppIcon 的图标也停在 iconLg(24)，而不是裸默认值。
-    iconTheme: const IconThemeData(size: AppTokens.iconLg),
+    // **color 必须给**：只写 size 时 color 是 null，未显式取色的图标会落到
+    // `IconThemeData.fallback()` 的**纯黑** —— 深色下就是黑压黑（2026-11-23
+    // 统计页、2026-11-25「关于」页两次都栽在这）。给 onSurface 让未取色的
+    // 图标跟随正文；压在实心主色面上的图标仍由调用点显式写白（D3）。
+    iconTheme: IconThemeData(size: AppTokens.iconLg, color: scheme.onSurface),
     appBarTheme: const AppBarTheme(
       centerTitle: false,
       elevation: 0,

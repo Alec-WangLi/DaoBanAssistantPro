@@ -18,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/data/app_database.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+import 'support/migration_fixtures.dart';
+
 /// v14 形态的 `recurring_series_rows` DDL（与 v14 的生成代码逐列一致）。
 ///
 /// 只有这一张表会被 `from < 15` 那段碰，所以 fixture 只建它 —— 迁移分支按倒序跑，
@@ -44,6 +46,8 @@ int _sec(DateTime d) => d.millisecondsSinceEpoch ~/ 1000;
 Future<AppDatabase> _openV14() async {
   final raw = sqlite3.sqlite3.openInMemory();
   raw.execute(_v14RecurringSchema);
+  // `from < 16` 会给班次表加 `is_night`，而迁移分支按倒序跑 —— 这张表必须存在。
+  raw.execute(v10ShiftClassRowsDdl);
 
   // 每月 15 号 / 每天 / 每周一 三条系列。
   raw.execute(

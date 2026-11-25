@@ -103,6 +103,7 @@ void main() {
     });
 
     final calls = <String>[];
+    final reconciled = <Map<Object?, Object?>>[];
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     for (final name in const [
@@ -111,6 +112,9 @@ void main() {
     ]) {
       messenger.setMockMethodCallHandler(MethodChannel(name), (call) async {
         calls.add(call.method);
+        if (call.method == 'reconcileNativeAlarms') {
+          reconciled.add(Map<Object?, Object?>.from(call.arguments as Map));
+        }
         return null;
       });
       addTearDown(
@@ -167,9 +171,17 @@ void main() {
     expect(sp.getKeys(), isEmpty,
         reason: '不整份清的话，重启后外观又变回来、首启弹窗也不再出现');
 
-    // 原生那边：按空库重排 = 把已排的班次闹钟、通知、待办提醒全撤掉
-    expect(calls, contains('cancelAllNativeAlarms'),
-        reason: '不撤的话重置完到点还会响');
+    // 原生那边：按重置后的库重排 —— 恢复出厂的那套排班照常排，
+    // 但用户自己加的自定义闹钟 / 待办提醒必须一个都不剩。
+    expect(calls, contains('reconcileNativeAlarms'),
+        reason: '不重排的话重置完到点还会响');
+    final ids = [
+      for (final a in (reconciled.last['alarms'] as List? ?? const []))
+        (a as Map)['id'] as int,
+    ];
+    expect(ids.where((id) => id >= 10000), isEmpty,
+        reason: '10000+ 是自定义闹钟与待办提醒的号段，重置后一条都不该有');
+    expect(reconciled.last['quiets'], isEmpty);
   });
 
   testWidgets('界面层：点「取消」什么都不清（返回值被当成确认是迁移最容易丢的一条）',

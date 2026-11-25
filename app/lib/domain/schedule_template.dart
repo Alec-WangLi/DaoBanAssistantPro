@@ -200,6 +200,7 @@ String encodeTemplateClasses(List<ShiftClass> classes) => jsonEncode([
           'startMinute': c.startMinute,
           'endMinute': c.endMinute,
           'isRest': c.isRest,
+          'isNight': c.isNight,
           'color': c.color,
           'alarmEnabled': c.alarmEnabled,
           'alarms': [
@@ -223,6 +224,8 @@ List<ShiftClass> decodeTemplateClasses(String raw) {
             startMinute: (e['startMinute'] as num?)?.toInt(),
             endMinute: (e['endMinute'] as num?)?.toInt(),
             isRest: e['isRest'] == true,
+            // 旧模板没有这个键：按 false 读，行为与升级前一致。
+            isNight: e['isNight'] == true,
             color: (e['color'] as num?)?.toInt() ?? 0xFF5B7FFF,
             alarmEnabled: e['alarmEnabled'] == true,
             alarms: _decodeAlarms(e),

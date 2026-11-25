@@ -221,4 +221,33 @@ void main() {
     expect(rows.length, 2);
     expect(rows.map((r) => r.seriesId).toSet(), {a, b});
   });
+
+  // ── v0.13.16：起点还在未来时，一条行都不许有 ──
+  //
+  // 用户 2026-11-17：「新建一个每月 17 号的重复待办，从 11 月 21 号起，理论上
+  // 不应该出现在待办事项里，应该从 12 月 17 号开始出现。」v0.13.15 头一版把这
+  // 一行直接建在「新起点之后的第一次」上，于是它在建好的当下就躺在列表里。
+  test('起点还在未来 → 一条行都不留（旧版留下的未来行也被清掉）', () async {
+    final id = await repo.addRecurringTodo(
+      title: '每月 17 号',
+      repeat: RecurRepeat.monthly,
+      startDate: DateTime.utc(2026, 11, 21),
+      monthDays: 1 << 16, // 17 号
+    );
+    // 模拟 v0.13.15 头一版的行为：新建时直接在第一次发生日上建了一条行。
+    await repo.addEvent(
+      title: '每月 17 号',
+      date: DateTime.utc(2026, 12, 17),
+      seriesId: id,
+    );
+    await repo.advanceRecurringTodos(today: _wed); // 今天 9/23
+    expect(await repo.listEvents(), isEmpty,
+        reason: '系列还没开始，任何未完成的行都不该存在');
+
+    // 到了第一次发生日，它才出现 —— 而且是生成器补出来的。
+    await repo.advanceRecurringTodos(today: DateTime.utc(2026, 12, 17));
+    final rows = await repo.listEvents();
+    expect(rows.length, 1);
+    expect(dayNumber(rows.single.date), dayNumber(DateTime.utc(2026, 12, 17)));
+  });
 }

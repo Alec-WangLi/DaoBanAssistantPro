@@ -1,0 +1,172 @@
+// app/lib/features/stats/stats_period_header.dart
+//
+// 统计页顶部的期间条：月/年分段器 + ‹ 标题 › + 导出 / 今天。
+//
+// 2026-11-23 用户三条反馈里两条落在这块：
+//   ① 年视图的年份只能点箭头切 → 标题本身变成可点入口（月视图开月份弹层、
+//      年视图开年份弹层）。v0.13.20 起**尾部那颗 expand_more 去掉了** ——
+//      用户反馈那颗小箭头看着像「还有个没展开的东西」；可点性由强调档胶囊
+//      与按下反馈承担。
+//   ② 箭头没有触觉、颜色发暗 → 触觉统一挂在 `_StatsScreenState._setPeriod`
+//      （一次期间变化恰好一记），箭头改成 44dp 的强调档玻璃钮并**显式给图标色**。
+//
+// **「发暗」的根因不是玻璃，是图标色**：根主题的 `iconTheme` 只写了 size，
+// 裸 `AppIcon` 的颜色会落到 `IconThemeData.fallback` 的纯黑 —— 深色下就是黑压黑。
+// 这次所有图标一律显式取色；浅色下用 `solidAccent`（压过的主色，对白玻璃够 3:1），
+// 深色下用 `onSurface`（近白）。
+//
+// 从 `stats_screen.dart` 拆出来是 E14 的要求（那个文件超了 800 行）。
+//
+// 2026-11-25（issue #7）：那两枚箭头钮抽成了 `core/widgets/glass_step_button.dart`，
+// 与日期选择弹层共用 —— 同一条「裸图标落到纯黑」在弹层的翻月箭头上又犯了一次，
+// 抽件之后判据只剩一份（E19）。
+import 'package:flutter/material.dart';
+
+import '../../core/design_tokens.dart';
+import '../../core/l10n.dart';
+import '../../core/layout.dart';
+import '../../core/widgets/app_icon.dart';
+import '../../core/widgets/glass_pill.dart';
+import '../../core/widgets/glass_segment.dart';
+import '../../core/widgets/glass_step_button.dart';
+
+class StatsPeriodHeader extends StatelessWidget {
+  const StatsPeriodHeader({
+    super.key,
+    required this.yearMode,
+    required this.title,
+    required this.onModeChanged,
+    required this.onPrev,
+    required this.onNext,
+    required this.onPickPeriod,
+    required this.onExport,
+    required this.onToday,
+  });
+
+  final bool yearMode;
+  final String title;
+  final ValueChanged<int> onModeChanged;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onPickPeriod;
+  final VoidCallback onExport;
+  final VoidCallback onToday;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = AppTokens.inkMuted(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GlassSegment(
+          count: 2,
+          selectedIndex: yearMode ? 1 : 0,
+          onSelected: onModeChanged,
+          itemBuilder: (i, selected) => Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppIcon(
+                  i == 0
+                      ? Icons.calendar_view_month_outlined
+                      : Icons.date_range_outlined,
+                  size: AppTokens.iconSm,
+                  // GlassSegment 只把**文字**包成白色，图标不跟着变 ——
+                  // 选中格必须显式给白，否则是实心主色块上的灰图标
+                  // （v0.11.21 同类事故，对比度约 1.5:1）。
+                  color: selected ? Colors.white : muted,
+                ),
+                const SizedBox(width: AppTokens.gapIconText),
+                Text(
+                  i == 0 ? L10n.statsMonth : L10n.statsYear,
+                  style: AppTokens.labelSecondary.copyWith(
+                    color: selected ? Colors.white : muted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppTokens.spaceSm),
+        Row(
+          children: [
+            GlassStepButton(
+                icon: Icons.chevron_left_outlined, onTap: onPrev),
+            const SizedBox(width: AppTokens.spaceSm),
+            Expanded(
+              child: GlassPill(
+                onTap: onPickPeriod,
+                emphasis: true,
+                height: 44,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(title, style: AppTokens.titleStrong),
+                      ),
+                    ),
+                    // 这颗 `expand_more` 在 v0.13.20 去掉（用户要求）：年月份
+                    // 那一行下面挂一个小箭头，看着像还有一个没展开的东西。
+                    // 胶囊本身仍然可点（打开月份 / 年份弹层），可点性由强调档
+                    // 胶囊与按下反馈承担。
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppTokens.spaceSm),
+            GlassStepButton(
+                icon: Icons.chevron_right_outlined, onTap: onNext),
+          ],
+        ),
+        const SizedBox(height: AppTokens.spaceSm),
+        // 靠右用 `Row` + `mainAxisAlignment.end`，**不要用 `Wrap` / `Align`**：
+        // 它们给子件的是**有界宽度**，而 `GlassPill` 里的 Container 带 `alignment`、
+        // 在有界约束下会撑满整行（出图里那颗「导出」就这样成了一条通栏按钮，
+        // 2026-11-17 出图当场看见）。Row 给非 flex 子件无界宽度，pill 才会按内容
+        // 收缩；窄屏（<360）把「导出」的文字也收掉，只留图标 —— 与「今天」同理。
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Tooltip(
+              message: L10n.statsExport,
+              child: GlassPill(
+                onTap: onExport,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppIcon(Icons.file_download_outlined,
+                        size: AppTokens.iconMd, color: muted),
+                    if (!AppLayout.of(context).isNarrow) ...[
+                      const SizedBox(width: AppTokens.spaceXs),
+                      Text(L10n.statsExport, style: AppTokens.labelStrong),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppTokens.spaceSm),
+            GlassPill(
+              accent: true,
+              onTap: onToday,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const AppIcon(Icons.today_outlined,
+                      size: AppTokens.iconMd, color: Colors.white),
+                  const SizedBox(width: AppTokens.spaceXs),
+                  Text(
+                    yearMode ? L10n.statsThisYear : L10n.statsThisMonth,
+                    style: AppTokens.labelStrong.copyWith(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}

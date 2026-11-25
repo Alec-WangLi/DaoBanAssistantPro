@@ -73,6 +73,12 @@ class ShiftClassRows extends Table {
   IntColumn get startMinute => integer().nullable()();
   IntColumn get endMinute => integer().nullable()();
   BoolColumn get isRest => boolean().withDefault(const Constant(false))();
+
+  /// 算不算夜班（统计页「夜班天数」的唯一判据）。
+  ///
+  /// 不从名字或「跨不跨午夜」推断：24 小时值班也跨午夜。内置模板按角色自动标，
+  /// 用户自建班次在编辑器里手动开；老库升级后一律 0。
+  BoolColumn get isNight => boolean().withDefault(const Constant(false))();
   IntColumn get color => integer().withDefault(const Constant(0xFF5B7FFF))();
   BoolColumn get alarmEnabled => boolean().withDefault(const Constant(false))();
   // `alarm_minute` 在 v10 迁进 `ShiftClassAlarms` 后从本表删掉了（见 onUpgrade
@@ -212,6 +218,51 @@ class ShiftDayOverrides extends Table {
   Set<Column> get primaryKey => {scheduleId, day};
 }
 
+/// 日级「请假 / 加班」：**全局按天记，不挂在某套方案上**。
+///
+/// 与 [ShiftDayOverrides] 有意不同：那条表达的是「那天上哪个班」，必须依附于
+/// 某套方案的班次定义；这条表达的是「那天我不在 / 多干了」，换班表也成立
+/// （与 [ShiftAlarmOverrides] 全局按天同一条理由）。
+///
+/// 主键 `{day, kind}`：一天最多一条请假 + 一条加班（上午请假、晚上加班是正常
+/// 排法）。`minutes` 是分钟数，<= 0 视为没有（写入侧直接删行）。
+class ShiftDayExtras extends Table {
+  IntColumn get day => integer()();
+  IntColumn get kind => integer()();
+  IntColumn get minutes => integer()();
+
+  /// 请假类型**键**（见 `domain/day_extra.dart` 顶部）：内置五类用英文键，
+  /// 自定义存 `custom:<名字>`。加班行这一列恒为 null。
+  ///
+  /// 存键而不是外键表：类型是「写这条记录时的事实」，用户以后删掉自定义类型，
+  /// 历史记录也得照样读得出来 —— 外键会把它变成空白。
+  TextColumn get leaveKind => text().nullable()();
+
+  /// 备注（请假 / 加班各自一行各一份）。v17 新增。
+  TextColumn get note => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {day, kind};
+}
+
+/// 按天「调班备注」：给被单独调过的那一天写一句说明（「跟张三换了班」）。
+///
+/// **独立成表，不往 [ShiftDayExtras] 里加第三种 kind**：那张表的 `minutes`
+/// 必填，而请假 / 加班分钟数要进统计口径 —— 混进来会把工时算错。
+///
+/// 口径与 [ShiftAlarmOverrides] 相同（自 epoch 天数、全局按天），与
+/// [ShiftDayOverrides] 不同：那条表达「那天上哪个班」、必须挂在某套方案上；
+/// 这条表达「那天为什么调」，换方案也说得通。
+class ShiftDayNotes extends Table {
+  IntColumn get day => integer()();
+
+  /// 备注正文（已 trim；写入侧空串直接删行）。
+  TextColumn get note => text()();
+
+  @override
+  Set<Column> get primaryKey => {day};
+}
+
 /// 「我的模板」表：把一套方案的**结构**（班次定义 + 周期 + 班组错位）存成快照，
 /// 新建排班时可以再选它。见 `domain/schedule_template.dart`（那边的值类型与
 /// 编解码是纯函数，可直接单测）。
@@ -315,6 +366,8 @@ class RecurringSeriesRows extends Table {
   CustomAlarms,
   ShiftAlarmOverrides,
   ShiftDayOverrides,
+  ShiftDayExtras,
+  ShiftDayNotes,
   CustomTemplates,
   RecurringSeriesRows,
 ])
@@ -324,13 +377,43 @@ class AppDatabase extends _$AppDatabase {
   /// 测试专用：接外部注入的 QueryExecutor（内存库 / 迁移 fixture）。
   AppDatabase.forTesting(super.e);
 
+  /// 当前 schema 版本（备份导入时用来拒绝「来自更新版本」的库）。
+  static const int schemaVersionNumber = 18;
+
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => schemaVersionNumber;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 18) {
+            // 按天调班备注：纯新增一张表，一行既有数据都不碰。
+            await m.createTable(shiftDayNotes);
+          }
+          if (from < 17) {
+            // 请假类型 + 备注：纯新增两列。
+            //
+            // ⚠️ **只有 v16 及以后才有这张表**（它是 `from < 16` 那段建的，而
+            // 那段排在**后面**跑）。从 v15 及更早升上来时，表由那段按**当前
+            // schema** 建出来，新列自带 —— 这里硬加会抛 `no such table`（照
+            // v9→v10「只有 v6 及以后才有 shift_class_rows」的先例）。
+            if (from >= 16) {
+              await m.addColumn(shiftDayExtras, shiftDayExtras.leaveKind);
+              await m.addColumn(shiftDayExtras, shiftDayExtras.note);
+            }
+          }
+          if (from < 16) {
+            // 统计页：日级请假 / 加班表 + 班次的「夜班」标记。两样都是纯新增。
+            await m.createTable(shiftDayExtras);
+            // ⚠️ **只有 v6 及以后才有 `shift_class_rows`**（它是 `from < 6` 那段
+            // 建的，而那段排在后面跑）。从 v5 及更早升上来时，表由 `from < 6`
+            // 按**当前 schema** 建出来，新列自带默认值 —— 硬加会抛
+            // `no such table: shift_class_rows`（照 v9→v10 / v12→v13 两次先例）。
+            if (from >= 6) {
+              await m.addColumn(shiftClassRows, shiftClassRows.isNight);
+            }
+          }
           if (from < 15) {
             // 重复待办：每月从「单日」改成「多选几天」（位掩码），并加一列按班次
             // 选择的**班次名字**。旧的 `month_day` 迁完就删（不留死列，照 v10 删

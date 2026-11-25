@@ -8,10 +8,12 @@ import 'glass_nav_bar.dart';
 
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
+import '../../core/holiday_sync.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/update_checker.dart';
 import '../../data/app_repository.dart';
+import '../../domain/lunar_info.dart';
 import '../../domain/shift_rotation.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_ringing_screen.dart';
@@ -92,6 +94,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
       if (AlarmService.openTodoRequested.value) _openTodoPage();
       _maybeShowLaunchDialogs();
       _maybeAutoCheckUpdate();
+      _maybeSyncHolidays();
+      _repairLegacyRingtone();
+      _maybeReplanAfterRestore();
       // 冷启动由桌面小组件拉起：读一次「要跳到哪天」。
       WidgetService.consumeLaunchDay();
       // 首帧推一次快照，桌面上的卡片立刻与 App 对齐（去抖之后 340ms 发出去）。
@@ -115,6 +120,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
     // （eventsProvider）此前**没有任何推送触发** —— 勾掉一条待办之后桌面上的
     // 数字会一整天不动，直到改排班/改外观/下次冷启动。（冷启动那次重复推送无害。）
     ref.listenManual(eventsProvider, (_, __) => _scheduleWidgetPush());
+    // 法定节假日数据换了（自动同步或「关于」页里的手动更新）：快照里带
+    // `lunarIsHoliday`，不重推的话桌面那张卡还挂着旧的红标。
+    holidayDataRevision.addListener(_onHolidayDataChanged);
     WidgetService.widgetLaunchRequested.addListener(_onWidgetDayRequested);
   }
 
@@ -122,6 +130,21 @@ class _HomeShellState extends ConsumerState<HomeShell>
   ///
   /// 首启弹的是**精简版**（三条），不是完整的「使用帮助」—— 见
   /// `showGettingStartedDialog` 的说明。
+  /// 导入备份后的首次启动：库已经换了，系统里按旧库排的闹钟必须按新库重排。
+  ///
+  /// `main()` 在打开数据库之前完成了替换并留下这个标记；这里只消费一次。
+  Future<void> _maybeReplanAfterRestore() async {
+    try {
+      final SharedPreferences sp = await SharedPreferences.getInstance();
+      if (sp.getBool('needsAlarmReplan') != true) return;
+      await sp.remove('needsAlarmReplan');
+      await AlarmService.replanAfterScheduleChange(
+          ref.read(appRepositoryProvider));
+    } catch (_) {
+      // 重排失败不该影响界面；下一次改排班时还会再排。
+    }
+  }
+
   Future<void> _maybeShowLaunchDialogs() async {
     final sp = await SharedPreferences.getInstance();
     final onboarded = sp.getBool('onboarded') ?? false;
@@ -154,12 +177,66 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
+  /// 冷启动静默同步法定节假日数据：同一天最多一次，全程不打扰用户。
+  ///
+  /// 拿到新表时 `HolidaySync` 会清农历缓存并 bump `holidayDataRevision` ——
+  /// 日历页与桌面小组件快照都听那个 notifier，这里不用再手动推一次。
+  Future<void> _maybeSyncHolidays() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final r = await HolidaySync.refreshIfStale(sp);
+      if (r != HolidayRefreshResult.updated) return;
+      await AlarmService.appendLog(
+          'holiday: 节假日数据已更新（覆盖至 ${installedHolidayTable.latestYear} 年）');
+    } catch (e) {
+      // 自动更新失败不该在任何地方制造噪音：内置表照常工作。
+      await AlarmService.appendLog('holiday: 刷新失败 $e');
+    }
+  }
+
+  /// 节假日表换了 → 重推桌面快照（日历页自己听同一个 notifier）。
+  void _onHolidayDataChanged() => _scheduleWidgetPush();
+
+  /// 把旧版本留下的「系统铃声 URI」搬进私有目录，修不了就退回内置铃声。
+  ///
+  /// 2026-11-16 之前，选「系统铃声」是**直接把 `content://media/...` 存进设置**的。
+  /// 那种 URI 在响铃那一刻可能打不开（后台服务没有媒体读取权限、或者那条媒体已经
+  /// 不在媒体库里），`AlarmSound` 只能静默回落到内置铃声 —— 用户以为自己设好了，
+  /// 半夜听到的还是「叮咚」。这条迁移把能读的搬成 `file://`，读不了的就**删掉这个
+  /// 键**（＝内置铃声），并在日志里留一行，别让设置里继续挂着一个永远不会响的值。
+  ///
+  /// 只跑一次：迁移后要么是 `file://`、要么是哨兵、要么没这个键。
+  Future<void> _repairLegacyRingtone() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final uri = sp.getString('ringtoneUri');
+      if (uri == null || uri.isEmpty) return;
+      if (uri == AlarmService.vibrateOnlyRingtone) return;
+      if (uri.startsWith('file://')) return;
+      try {
+        final imported = await AlarmService.importRingtone(uri);
+        await sp.setString('ringtoneUri', imported.uri);
+        await sp.setString('ringtoneTitle', imported.name);
+        await AlarmService.appendLog(
+            'ringtone: 旧的系统铃声已复制进应用（${imported.name}）');
+      } catch (_) {
+        await sp.remove('ringtoneUri');
+        await sp.remove('ringtoneTitle');
+        await AlarmService.appendLog(
+            'ringtone: 旧的自选铃声读不到，已退回内置铃声（原值 ${uri.length > 80 ? uri.substring(0, 80) : uri}）');
+      }
+    } catch (_) {
+      // 迁移失败不该影响启动。
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     AlarmService.ringingAlarm.removeListener(_onRingingChanged);
     AlarmService.openTodoRequested.removeListener(_onTodoRequested);
     WidgetService.widgetLaunchRequested.removeListener(_onWidgetDayRequested);
+    holidayDataRevision.removeListener(_onHolidayDataChanged);
     _pushDebounce?.cancel();
     // 重试那个计时器也必须取消：留着的话 widget 测试会报
     // 「A Timer is still pending after the widget tree was disposed」，

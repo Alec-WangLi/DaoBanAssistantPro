@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'net.dart';
+
 /// 更新信息：版本号 + 下载直链 + 是否测试版（预发布）+ APK 资源文件名。
 class UpdateInfo {
   const UpdateInfo({
@@ -34,15 +36,22 @@ class UpdateCheckResult {
   final bool error;
 }
 
-/// 检查 GitHub 上的最新正式版（0.X.0）与最新测试版（预发布）。
+/// 检查最新正式版（0.X.0）与最新测试版（预发布）。
 ///
-/// 仓库为公开，无需鉴权。**主通道是仓库根目录的 `latest.json` 发布清单**
-/// （`raw.githubusercontent.com` 静态直读，不占任何限额，且由
-/// `scripts/release.ps1` 每次发版后自动同步到 main）；GitHub API 只作兜底。
+/// 三条通道，按国内可访问性从好到差排：
+/// 1. **官网清单**（Cloudflare Pages 上的 `latest.json`，由 `scripts/release.ps1`
+///    第 9 步调用 `scripts/build_site.py` 生成并部署）。APK 也在同一个域上，
+///    国内不必碰 `github.com`；
+/// 2. **仓库清单**（`raw.githubusercontent.com` 静态直读，不占限额，由
+///    `scripts/release.ps1` 同步到 main）；
+/// 3. **GitHub API**（`/releases`）。
 ///
-/// 为什么不是 API 优先：未认证的 `/releases` 限 60 次/小时/IP，共享出口很容易
-/// 耗尽（实测常年 403），拿它当主通道等于大部分时间都在走回退。反过来之后，
-/// 两条通道还留在**不同的域名**上 —— 只被墙了一个的网络也是有的，都留着才兜得住。
+/// 官网排第一是因为它才是国内用户的快通道 —— 以前 github 那条先试，
+/// 国内往往要等满 8 秒超时才能回退。海外的代价只是一次几百毫秒的小请求。
+///
+/// 为什么 API 垫底：未认证的 `/releases` 限 60 次/小时/IP，共享出口很容易
+/// 耗尽（实测常年 403），拿它当主通道等于大部分时间都在走回退。三条通道还在
+/// **三个不同的域名**上 —— 只被墙了一个的网络也是有的，都留着才兜得住。
 class UpdateChecker {
   UpdateChecker._();
 
@@ -50,26 +59,43 @@ class UpdateChecker {
   static const _repo = 'DaoBanAssistantPro';
   static const _timeout = Duration(seconds: 8);
 
-  static final _manifestUri = Uri.parse(
-      'https://raw.githubusercontent.com/$_owner/$_repo/main/latest.json');
+  /// 官网根地址。**域名只有这一处出处**：`release.ps1` 用正则从本文件读它，
+  /// `build_site.py --base` 再把清单里的相对地址拼成绝对地址。改这里就是改整站。
+  static const siteBase = 'https://daoban-shift.pages.dev';
+
+  /// 仓库与「关于」页用的三个外链。与 [_owner] / [_repo] 同源，不在界面里重抄。
+  static const repoUrl = 'https://github.com/$_owner/$_repo';
+  static const issuesUrl = '$repoUrl/issues';
+  static const licenseUrl = '$repoUrl/blob/main/LICENSE';
+
+
+  static final _siteManifestUri = Uri.parse('$siteBase/latest.json');
+  static final _manifestUri = repoRaw('latest.json');
   static final _releasesUri = Uri.parse(
       'https://api.github.com/repos/$_owner/$_repo/releases?per_page=100');
+
+  /// 仓库 raw 地址（main 分支）。**owner / repo 只在这一处写死** ——
+  /// `latest.json` 与 `holidays.json` 都从这里拼。
+  static Uri repoRaw(String path) =>
+      Uri.parse('https://raw.githubusercontent.com/$_owner/$_repo/main/$path');
 
   /// 取数的接缝：测试换成假的就能完全脱离网络。返回 null 表示网络异常。
   @visibleForTesting
   static Future<({int status, String body})?> Function(
       Uri uri, Duration timeout) fetch = _httpGetText;
 
-  /// 检查最新版本：先读发布清单，不通或内容坏了再走 GitHub API。
+  /// 检查最新版本：官网清单 → 仓库清单 → GitHub API，谁先通就用谁。
   static Future<UpdateCheckResult> checkUpdates() async {
-    final viaManifest = await _checkViaManifest();
+    final viaSite = await _checkManifestAt(_siteManifestUri);
+    if (!viaSite.error) return viaSite;
+    final viaManifest = await _checkManifestAt(_manifestUri);
     if (!viaManifest.error) return viaManifest;
     return _checkViaApi();
   }
 
-  /// 主通道：读发布清单。
-  static Future<UpdateCheckResult> _checkViaManifest() async {
-    final body = await _fetchBody(_manifestUri);
+  /// 读一份发布清单。官网与仓库用的是同一种格式，只有地址不同。
+  static Future<UpdateCheckResult> _checkManifestAt(Uri uri) async {
+    final body = await _fetchBody(uri);
     if (body == null) return const UpdateCheckResult(error: true);
     try {
       return parseManifest(body);
@@ -103,23 +129,10 @@ class UpdateChecker {
 
   /// 真实取数：GET [uri]，返回状态码与正文。
   ///
-  /// 两个通道共用这一个函数，因此不设通道专属请求头 —— 发往
-  /// `raw.githubusercontent.com` 的请求头越干净越不容易被挡。
+  /// 实现搬到 `core/net.dart`：节假日数据那条通道也要用，失败口径必须一致。
   static Future<({int status, String body})?> _httpGetText(
-      Uri uri, Duration timeout) async {
-    final client = HttpClient()..connectionTimeout = timeout;
-    try {
-      final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.userAgentHeader, 'DaoBanAssistantPro');
-      final res = await req.close();
-      final body = await res.transform(utf8.decoder).join();
-      return (status: res.statusCode, body: body);
-    } catch (_) {
-      return null;
-    } finally {
-      client.close(force: true);
-    }
-  }
+          Uri uri, Duration timeout) =>
+      httpGetText(uri, timeout);
 
   /// 解析发布清单：`stable` / `prerelease` 两个节点各取版本号、直链与资产名。
   ///

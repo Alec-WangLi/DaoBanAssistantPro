@@ -18,6 +18,7 @@
 // setMockInitialValues 会被误报——实际调用方就是 `flutter test`。
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -36,6 +37,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/theme/app_theme.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/monthly_pattern.dart';
+import 'package:shiftassistantpro/domain/day_extra.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/schedule_template.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -143,6 +145,36 @@ Future<void> ensureVisualFonts() async {
   // 每个用例各建一个内存库是有意为之（互不污染），drift 的「重复建库」告警
   // 在这个用法下纯属噪音。
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+  // 打赏二维码是 `Image.asset`，解码是异步的；第一张图（浅色）会拍到空白，
+  // 后面的变体因为缓存已热才正常。在 setUpAll 的真异步区里先推进 imageCache，
+  // 让所有变体都直接命中。
+  await _precacheAsset('assets/donate/alipay.png');
+  await _precacheAsset('assets/donate/wechat.png');
+}
+
+/// 把一张 asset 图片预解码进全局 imageCache。
+///
+/// `AssetImage` 的缓存键只含 bundle / 名字 / scale，不含 devicePixelRatio，
+/// 所以这里用 `ImageConfiguration.empty` 解出来的键与 `Image.asset` 在页面里
+/// 用的是同一个 —— 先热一次，后面的 widget 测试就能同步拿到。
+Future<void> _precacheAsset(String key) async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  final completer = Completer<void>();
+  final stream = AssetImage(key).resolve(ImageConfiguration.empty);
+  late final ImageStreamListener listener;
+  listener = ImageStreamListener(
+    (_, __) {
+      if (!completer.isCompleted) completer.complete();
+      stream.removeListener(listener);
+    },
+    onError: (error, stack) {
+      if (!completer.isCompleted) completer.completeError(error, stack);
+      stream.removeListener(listener);
+    },
+  );
+  stream.addListener(listener);
+  await completer.future;
 }
 
 /// 把 CJK 挂到文本样式后面：拉丁仍走 Roboto，缺字时回落到中文字体。
@@ -275,7 +307,7 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
   final triShift = [
     const ShiftClass(name: '白班', abbr: '白', startMinute: 480, endMinute: 1080, color: 0xFF4C8DFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 420)]),
     const ShiftClass(name: '中班', abbr: '中', startMinute: 1080, endMinute: 1320, color: 0xFFFF9F0A),
-    const ShiftClass(name: '夜班', abbr: '夜', startMinute: 1230, endMinute: 1920, color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 1170)]),
+    const ShiftClass(name: '夜班', abbr: '夜', startMinute: 1230, endMinute: 1920, isNight: true, color: 0xFF7A5CFF, alarmEnabled: true, alarms: [ShiftAlarm(minute: 1170)]),
     const ShiftClass(name: '休班', abbr: '休', isRest: true, color: 0xFF9AA0B4),
   ];
   final currentId = await repo.saveSchedule(
@@ -383,6 +415,16 @@ Future<void> seedTodayOverride(AppDatabase db) async {
   final classId = schedule.classes.first.id;
   if (classId == null) return;
   await repo.setDayOverrides([dateOnly(DateTime.now())], classId: classId);
+}
+
+/// 给「今天」记一条请假 + 一条加班 —— 统计页与日历标记的出图样本。
+Future<void> seedTodayDayExtra(AppDatabase db) async {
+  final repo = AppRepository(db);
+  final today = dayNumber(dateOnly(DateTime.now()));
+  await repo.setDayExtra(today, DayExtraKind.leave, 240,
+      leaveKind: 'annual', note: '上午去医院');
+  await repo.setDayExtra(today, DayExtraKind.overtime, 120,
+      note: '替同事值晚班');
 }
 
 /// 把一套「零点班」设为当前方案：夜班 00:00 上班、23:00 响铃。

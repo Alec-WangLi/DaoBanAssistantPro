@@ -16,6 +16,8 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+import 'support/migration_fixtures.dart';
+
 /// v11 形态的 `shift_schedule_rows`（DDL 与 v11 生成代码逐列一致）：
 /// 没有 v12 加的那两列，也没有 v13 的段表。
 const _v11ScheduleTable = '''
@@ -73,6 +75,8 @@ void main() {
     raw.execute(_v11ScheduleTable);
     raw.execute(_v11CustomTemplates);
     raw.execute(_v11RecurringTable);
+    // `from < 16` 会给班次表加 `is_night`，而迁移分支按倒序跑 —— 这张表必须存在。
+    raw.execute(v10ShiftClassRowsDdl);
     raw.execute(
       'INSERT INTO shift_schedule_rows '
       '(id, name, anchor_date, is_current, team_count, team_names, '

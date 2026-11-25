@@ -27,16 +27,22 @@ void main() {
     final scheduler = _read('$_dir/AlarmScheduler.kt');
     expect(scheduler.contains('fun nextPending('), true,
         reason: '挑「第一个还没过的时刻」这件事只能有一份实现');
-    // 接收器 / 开机重排里**不许**各自再写一遍筛选逻辑
+    // 需要续排的三处都走同一个函数。开机重排与巡检共用 `AlarmRestorer`，
+    // 所以这里盯的是「AlarmRestorer 里有」+「BootReceiver 没有第二份」。
     for (final f in [
       'TodoReminderReceiver.kt',
       'AlarmReceiver.kt',
-      'BootReceiver.kt'
+      'AlarmRestorer.kt',
     ]) {
       final kt = _read('$_dir/$f');
       expect(kt.contains('AlarmScheduler.nextPending('), true,
           reason: '$f 要用队列续排，就得走同一个函数');
     }
+    final boot = _read('$_dir/BootReceiver.kt');
+    expect(boot.contains('AlarmRestorer.restore('), true,
+        reason: '开机重排与巡检必须是同一份实现');
+    expect(boot.contains('nextPending'), false,
+        reason: 'BootReceiver 不许自己再算一遍 —— 那正是「两份实现迟早分岔」的来源');
   });
 
   test('安静提醒响完要续排，且续排要走 scheduleQuiet（落盘与排定成对）', () {
@@ -75,8 +81,9 @@ void main() {
     expect(dart.contains('repeatTimes.isEmpty ? repeatType : 3'), true,
         reason: '队列优先于自定义闹钟的 nextDaily/nextWeekly 续排');
     expect(_read('$_dir/AlarmReceiver.kt').contains('repeatType == 3'), true);
-    expect(_read('$_dir/BootReceiver.kt').contains('repeatType == 3'), true,
-        reason: '重启后也要按同一条规则重排，否则重启一次就退回按星期重算');
+    final restorer = _read('$_dir/AlarmRestorer.kt');
+    expect(restorer.contains('3 ->') && restorer.contains('e.repeatType'), true,
+        reason: '重启 / 巡检后也要按同一条规则重排，否则会退回按星期重算');
   });
 
   test('号段：待办行在 20000 段、重复系列在 40000 段，且互不重叠', () {
@@ -86,6 +93,27 @@ void main() {
     // 上界：待办段不许伸进系列段
     expect(s.contains('RECURRING_BASE_ID + 2000'), true,
         reason: '取消与清单清理的范围要覆盖到系列段的上界');
+  });
+
+  test('换「联动闹钟」通道：同一 id 另一条链路的闹钟要被撤掉', () {
+    // PendingIntent 的身份 = requestCode + 目标组件。待办的「联动闹钟」开关可以让
+    // 同一个 id 在 AlarmReceiver ↔ TodoReminderReceiver 之间换通道，而差集只回答
+    // 「这个 id 还要不要」—— 换通道时 id 仍在计划里，`cancelIds` 不会包含它。
+    // 不显式撤另一侧，到点就既全屏响铃又弹通知（重复待办两条链路各自续排，永久双响）。
+    final s = _read('$_dir/AlarmScheduler.kt');
+    expect(s.contains('fun cancelOtherChannel('), true,
+        reason: '换通道时另一侧必须显式撤 —— 旧实现靠盲扫顺带治好，差集不扫了就得自己补');
+    final body = s.substring(s.indexOf('fun reconcile('));
+    expect(
+      body.contains(
+              'cancelOtherChannel(context, am, a.id, AlarmReceiver::class.java)') &&
+          body.contains(
+              'cancelOtherChannel(context, am, q.id, TodoReminderReceiver::class.java)'),
+      true,
+      reason: '响铃那批要撤提醒侧那条，提醒那批要撤响铃侧那条（撤反了等于把刚排上的撤掉）',
+    );
+    // 巡检 / 开机重排也要顺手治掉旧版本留下的同一类幽灵。
+    expect(_read('$_dir/AlarmRestorer.kt').contains('cancelOtherChannel('), true);
   });
 
   test('取消改成按落盘清单走，不再盲目扫一大段 id', () {

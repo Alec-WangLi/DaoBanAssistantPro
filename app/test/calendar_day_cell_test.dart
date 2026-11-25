@@ -12,15 +12,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
-import 'package:shiftassistantpro/core/glass/glass.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
-import 'package:shiftassistantpro/core/widgets/glass_sheet_header.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
-import 'package:shiftassistantpro/domain/shift_templates.dart';
 import 'package:shiftassistantpro/features/calendar/info_card_metrics.dart';
-import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/core/clock.dart';
 import 'support/fixed_clock.dart';
 import 'support/calendar_test_support.dart';
@@ -37,111 +33,8 @@ void main() {
 
 
   // ---------------------------------------------------------------------------
-  // 日历 → 切换排班 → 新增排班：必须和「我的 → 排班管理」一样走模板选择页。
-  // 修前这条路径直接 saveSchedule(defaultSchedule()) 并开一个没有 scheduleId 的
-  // 编辑器 —— 从日历进来的用户永远看不到 19 种模板。
+  // 格子班次胶囊
   // ---------------------------------------------------------------------------
-
-  testWidgets('日历 → 排班时段 → 管理排班时段 → 新增排班：弹「选择你的倒班方式」；返回键放弃不建方案',
-      (tester) async {
-    final db = await pumpCalendar(tester, 'day_night_rest_rest');
-    expect(await scheduleCount(db), 1, reason: '进入前只有种子方案');
-
-    // 顶栏那颗按钮现在是**只读**的「排班时段」总览（v0.9.14 起不再「切换」——
-    // 它改的只是「没被时段覆盖时的兜底」，时段盖满之后点它什么也不会变），
-    // 底部一个「管理排班时段」跳到排班管理页；新增排班在那页上。
-    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(L10n.manageTimeline));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(L10n.addSchedule));
-    await tester.pumpAndSettle();
-
-    // 关键：日历这条路径现在也弹模板选择页，而不是直接把默认方案落库
-    expect(find.text(L10n.pickShiftPattern), findsOneWidget);
-
-    // 按返回键放弃 → 不建方案
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(find.text(L10n.pickShiftPattern), findsNothing);
-    expect(await scheduleCount(db), 1,
-        reason: '按返回键放弃后不该凭空多出一套方案');
-
-    await disposeCalendar(tester);
-  });
-
-
-  testWidgets('（同一条新路径）选中的模板真的落库，并进入带 id 的编辑器',
-      (tester) async {
-    final db = await pumpCalendar(tester, 'day_night_rest_rest');
-
-    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(L10n.manageTimeline));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(L10n.addSchedule));
-    await tester.pumpAndSettle();
-    expect(find.text(L10n.pickShiftPattern), findsOneWidget);
-
-    // 选「四班三倒」：周期 8 天，与默认的四班两倒（4 天）不同，能证明用的是模板。
-    final target = findTemplate('four_crew_three_shift')!;
-    await tester.enterText(find.byType(TextField), '四班三倒');
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(target.title));
-    await tester.pumpAndSettle();
-
-    // 新方案按模板落库：名字 = 模板副标题，周期长度 = 模板周期。
-    expect(await scheduleCount(db), 2);
-    final rows = await db.select(db.shiftScheduleRows).get();
-    final created = rows.firstWhere((r) => r.name == target.subtitle);
-    final domain = await AppRepository(db).getScheduleDomain(created.id);
-    expect(domain, isNotNull);
-    expect(domain!.cycleLength, target.cycle.length);
-
-    // 弹层关闭，改用带 scheduleId 的编辑器（不再靠 makeCurrent 的隐式约定）。
-    expect(find.byType(ScheduleEditorScreen), findsOneWidget);
-
-    await disposeCalendar(tester);
-  });
-
-
-  // 「五处弹层统一头部」那条要求：**时段总览这屏的头部必须与另外四处同内缩。**
-  //
-  // 它一度保留着外层 `Padding(all: 16)` 包住整个 `Column`，于是
-  // `GlassSheetHeader` 被**二次内缩** —— 分隔线比另外四个弹层窄 16dp、把手低
-  // 16dp、标题也跟着与下面的行错开（出图量到的）。那种错**任何一条既有用例都照
-  // 不出来**（弹层仍然打得开、内容仍然对），所以按几何钉住：头部那条分隔线要贴到
-  // `GlassPanel` 的内容盒左缘。
-  testWidgets('时段总览：头部与另外四处同内缩（分隔线贴面板内容盒左缘）',
-      (tester) async {
-    await pumpCalendar(tester, 'day_night_rest_rest');
-
-    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
-    await tester.pumpAndSettle();
-
-    final sheet = find.byType(GlassSheetHeader);
-    final panel = find.ancestor(of: sheet, matching: find.byType(GlassPanel));
-    final headerDivider =
-        find.descendant(of: sheet, matching: find.byType(Divider));
-    expect(headerDivider, findsOneWidget);
-
-    // 面板**内容盒**的左缘 = 面板缘 + 12 的 margin + 1 的描边 + `GlassPanel` 自己的
-    // `spaceXl` 内边距。头部那条分隔线要**贴到它** —— 再往里缩 16 就是被外面那圈
-    // padding 二次缩进了（那正是这一屏原来的样子：分隔线比另外四个弹层窄 16、
-    // 把手低 16、标题与下面的行错开）。
-    final panelRect = tester.getRect(panel);
-    final contentLeft =
-        panelRect.left + AppTokens.spaceMd + 1 + AppTokens.spaceXl;
-    final header = tester.getRect(headerDivider);
-    expect(header.left, moreOrLessEquals(contentLeft, epsilon: 1.0),
-        reason: '头部的分隔线要贴面板内容盒的左缘（$contentLeft），实测 ${header.left}；'
-            '多出 16 就是头部被二次内缩了');
-
-    // 关掉弹层：点遮罩。
-    await tester.tapAt(const Offset(10, 10));
-    await tester.pumpAndSettle();
-    await disposeCalendar(tester);
-  });
 
 
   testWidgets('格子班次胶囊：选中那天实心（班次色 100%），其余淡染', (tester) async {

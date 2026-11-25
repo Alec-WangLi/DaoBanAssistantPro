@@ -5,27 +5,38 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiftassistantpro/core/design_tokens.dart';
+import 'package:shiftassistantpro/core/glass/glass.dart';
+import 'package:shiftassistantpro/core/widgets/section_heading.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_pickers.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/recurring_todo.dart';
+import 'package:shiftassistantpro/domain/day_extra.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
+import 'package:shiftassistantpro/features/calendar/day_extra_sheet.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
 import 'package:shiftassistantpro/features/calendar/shift_color_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_override_picker.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/profile/about_screen.dart';
+import 'package:shiftassistantpro/features/profile/about_section.dart';
 import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
+import 'package:shiftassistantpro/features/profile/donate_sheet.dart';
 import 'package:shiftassistantpro/features/profile/help_center_screen.dart';
 import 'package:shiftassistantpro/features/profile/help_faq_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
+import 'package:shiftassistantpro/features/profile/supporter_screen.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_series_editor.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
+import 'package:shiftassistantpro/features/stats/export_sheet.dart';
+import 'package:shiftassistantpro/features/stats/stats_screen.dart';
 
 import 'visual_harness.dart';
 
@@ -52,6 +63,10 @@ Map<String, Object> screenExtraPrefs(String slug) => switch (slug) {
       '47_ringing_liquid' ||
       '48_calendar_lens' =>
         const <String, Object>{'liquidGlass': true},
+      // 支持者已解锁态：SupportSection 在 initState 里读 prefs，靠这一行
+      // 让工装拍到「信」而不是「锁」。
+      '73_support_unlocked' =>
+        const <String, Object>{'supporterUnlocked': true},
       _ => const <String, Object>{},
     };
 
@@ -602,14 +617,239 @@ final List<VisualScreen> visualScreens = [
     ),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 「关于」整页：作者、官网、仓库、反馈、隐私。
+    slug: '68_about',
+    title: '关于',
+    build: (db) async => const AboutScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 打赏弹层：金额四档 + 支付宝 / 微信两个入口。
+    slug: '69_donate',
+    title: '打赏弹层',
+    build: (db) async => const _DonateSheetHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「我的」页底部的两张卡：关于入口 + 支持入口。整页屏单只拍得到首屏，
+    // 这两节在权限卡下面，单独拍一张。
+    slug: '70_profile_about_cards',
+    title: '我的 · 关于与支持',
+    build: (db) async => const _ProfileAboutCardsHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 打赏的二维码弹窗：白底卡片 + 金额 + 下一步说明。
+    slug: '71_donate_qr',
+    title: '打赏 · 二维码弹窗',
+    build: (db) async => const _DonateQrHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 支持者专属：第一封来信 + 以后继续加内容的留坑说明。
+    slug: '72_supporter',
+    title: '支持者专属',
+    build: (db) async => const SupporterScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 「我的 → 支持」的已解锁态（默认那张 70 是锁定态）。
+    slug: '73_support_unlocked',
+    title: '我的 · 支持者已解锁',
+    build: (db) async => const _SupportUnlockedHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 统计页月视图 + 今天有一条请假 / 一条加班：主数字、四格指标、班次分布。
+    slug: '74_stats_month',
+    title: '统计 · 月',
+    build: (db) async {
+      await seedTodayDayExtra(db);
+      return const StatsScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 年视图：12 个月的下钻行是另一套布局，没有交互钩子拍不到。
+    slug: '75_stats_year',
+    title: '统计 · 年',
+    build: (db) async {
+      await seedTodayDayExtra(db);
+      return const StatsScreen(initialYearMode: true);
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 空白表（跟随法定节假日）：工时不可算，但请假 / 加班照常显示。
+    slug: '76_stats_blank',
+    title: '统计 · 法定班次',
+    build: (db) async {
+      await seedBlankSchedule(db);
+      return const StatsScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 请假 / 加班时长弹层：类型条（内置 + 自定义）+ 备注 + 动作行。
+    slug: '77_day_extra_sheet',
+    title: '请假 / 加班时长',
+    build: (db) async => const _DayExtraSheetHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 统计导出弹层：自定义区间 + 字段勾选。窄窗里字段 chip 会折很多行，
+    // 这正是需要眼睛看着的那一档。
+    slug: '78_stats_export',
+    title: '统计 · 导出',
+    build: (db) async => const _StatsExportHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 日历 + 今天的请假（年假）与加班（带备注）：格子里「假」变成「年」、
+    // 信息卡多一行备注。定高模型要真的装得下这两行。
+    slug: '79_calendar_day_extra',
+    title: '日历 · 请假类型与备注',
+    build: (db) async {
+      await seedTodayDayExtra(db);
+      return const CalendarScreen();
+    },
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 统计页的年份弹层（v0.13.19）：年视图点年份弹出来的滚轮。
+    // 命令式弹层没有静态入口，只能用一个首帧后弹出的宿主拍它。
+    slug: '80_stats_year_picker',
+    title: '统计 · 年份选择',
+    build: (db) async => const _StatsYearPickerHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 日期选择弹层（v0.13.23 / issue #7）：翻月箭头取色、标题可点跳月、
+    // 固定 6 行高 —— 三条验收点都在这一个件里，深色那张就是「箭头看得见吗」的眼睛。
+    slug: '81_date_picker',
+    title: '日期 · 选择器',
+    build: (db) async => const _DatePickerHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
+
+/// 「请假 / 加班时长」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 与 `_OverridePickerHost` 同一套路：`showDayExtraSheet` 是命令式的，首帧后
+/// 把它弹出来，`build` 只交一个空 `Scaffold`。
+class _DayExtraSheetHost extends StatefulWidget {
+  const _DayExtraSheetHost();
+
+  @override
+  State<_DayExtraSheetHost> createState() => _DayExtraSheetHostState();
+}
+
+class _DayExtraSheetHostState extends State<_DayExtraSheetHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final today = dateOnly(DateTime.now());
+      showDayExtraSheet(
+        context,
+        kind: DayExtraKind.leave,
+        from: today,
+        to: today,
+        dayCount: 1,
+        fullDayMinutes: 720,
+        initialLeaveKind: 'annual',
+        initialNote: '上午去医院',
+        customLeaveTypes: const ['育儿假'],
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 统计导出弹层的宿主 —— 只为工装存在。
+class _StatsExportHost extends StatefulWidget {
+  const _StatsExportHost();
+
+  @override
+  State<_StatsExportHost> createState() => _StatsExportHostState();
+}
+
+class _StatsExportHostState extends State<_StatsExportHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final today = dateOnly(DateTime.now());
+      showStatsExportSheet(
+        context,
+        chain: null,
+        extras: const {},
+        from: DateTime(today.year, today.month, 1),
+        to: DateTime(today.year, today.month + 1, 0),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 统计年份选择弹层的宿主 —— 只为工装存在。
+class _StatsYearPickerHost extends StatefulWidget {  const _StatsYearPickerHost();
+
+  @override
+  State<_StatsYearPickerHost> createState() => _StatsYearPickerHostState();
+}
+
+class _StatsYearPickerHostState extends State<_StatsYearPickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showGlassYearPicker(context, initialYear: DateTime.now().year);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
+
+/// 日期选择弹层的宿主 —— 只为工装存在。
+///
+/// 用**固定日期**（2026-11-15）而不是 `DateTime.now()`：出图要可复现，
+/// 而 11 月正好是 6 行的月份，能看见「固定 6 行」那一档。
+class _DatePickerHost extends StatefulWidget {
+  const _DatePickerHost();
+
+  @override
+  State<_DatePickerHost> createState() => _DatePickerHostState();
+}
+
+class _DatePickerHostState extends State<_DatePickerHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showGlassDatePicker(context, initialDate: DateTime(2026, 11, 15));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
+}
 
 /// 「添加时段」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
 ///
 /// 与 `_DialogHost` 同一个套路，差别只在它是 `ConsumerStatefulWidget`：
 /// `showSpanEditor` 要一个 `WidgetRef`。
-class _SpanEditorHost extends ConsumerStatefulWidget {
-  const _SpanEditorHost();
+class _SpanEditorHost extends ConsumerStatefulWidget {  const _SpanEditorHost();
 
   @override
   ConsumerState<_SpanEditorHost> createState() => _SpanEditorHostState();
@@ -904,7 +1144,7 @@ const Map<String, double> visualScrollDown = {
   // 《使用帮助》整页：九条功能简介之后才是那颗进第二层的入口，而首屏只露得出
   // 前三条。**这一条不加的话，本轮新加的那个入口在任何一张图上都看不到。**
   '18_help_center': 3000,
-  '07_profile': 620, // 权限卡 + 关于
+  '07_profile': 760, // 权限卡 + 关于 + 支持
   '06_alarm': 360, // 自定义闹钟那一段
   '03_management': 280, // 排班列表
   '13_editor_midnight': 900, // 零点班那张班次卡（响铃时间块与它的说明在这下面）
@@ -925,4 +1165,104 @@ const Map<String, double> visualScrollDown = {
   '58_template_picker_monthly': 4000,
   // 班组卡在周期表下面；滚到底靠钳位把展开的四行露出来。
   '67_editor_crew_expanded': 2400,
+  // 统计页的图表、年月列表与「统计口径」都在首屏之下：不滚就只能看到一张
+  // 大数字卡。环图/柱图是这一版的主视觉，必须真的被眼睛看过（2026-11-23）。
+  '74_stats_month': 900,
+  '75_stats_year': 1400,
 };
+
+/// 打赏弹层的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 弹层是命令式的（`showGlassSheet`），没有可渲染的 widget；这里把同一份
+/// `DonateSheet` 装进 `GlassPanel` 拍一张静态图。视觉上的弹层外壳（遮罩、圆角、
+/// 贴底）由真正的 `showDonateSheet` 负责，工装只验内容本身。
+class _DonateSheetHost extends StatelessWidget {
+  const _DonateSheetHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.all(AppTokens.spaceMd),
+            child: GlassPanel(solid: true, child: DonateSheet()),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「我的」页底部两张卡的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 整页屏单只拍得到首屏，而「关于」「支持」两节在权限卡下面；这里把两张卡
+/// 原样装进一个短列表，专拍这两节的排版与文案。
+class _ProfileAboutCardsHost extends StatelessWidget {
+  const _ProfileAboutCardsHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
+              AppTokens.spaceMd, AppTokens.spaceLg, AppTokens.space2xl),
+          children: [
+            SectionHeading(L10n.sectionAbout),
+            const AboutSection(),
+            const SizedBox(height: AppTokens.spaceLg),
+            SectionHeading(L10n.sectionSupport),
+            const SupportSection(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 打赏二维码弹窗的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 不通过 `showGlassDialog` 弹出来：路由的入场动画与异步图片解码都要等，
+/// 工装截图时容易拍到空白。这里直接把同一个 `DonateQrDialog` 放进居中容器，
+/// 拍到的就是弹窗本身的内容。
+class _DonateQrHost extends StatelessWidget {
+  const _DonateQrHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: Padding(
+          padding: EdgeInsets.all(AppTokens.spaceLg),
+          child: DonateQrDialog(
+            kind: DonatePayKind.wechat,
+            amount: 10,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「我的 → 支持」已解锁态的宿主 —— **只为工装存在，不进 `lib/`**。
+class _SupportUnlockedHost extends StatelessWidget {
+  const _SupportUnlockedHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg,
+              AppTokens.spaceMd, AppTokens.spaceLg, AppTokens.space2xl),
+          children: [
+            SectionHeading(L10n.sectionSupport),
+            const SupportSection(),
+          ],
+        ),
+      ),
+    );
+  }
+}

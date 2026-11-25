@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
-import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
-import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_loading.dart';
@@ -18,6 +15,7 @@ import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_sheet_header.dart';
+import '../../core/widgets/glass_sheet_panel.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/section_heading.dart';
@@ -25,9 +23,11 @@ import '../../core/theme/app_colors.dart';
 import '../../data/app_repository.dart';
 import '../../state/app_settings.dart';
 import '../alarm/alarm_service.dart';
+import '../backup/backup_screen.dart';
 import '../calendar/schedule_management_screen.dart';
-import 'app_dialogs.dart';
+import 'about_section.dart';
 import 'help_center_screen.dart';
+import 'supporter_store.dart';
 
 /// 「我的」页：外观（主题/主色调）、数据（清空重置）、关于。
 class ProfileScreen extends ConsumerWidget {
@@ -284,16 +284,34 @@ class ProfileScreen extends ConsumerWidget {
             GlassTile(
               translucentFill: false,
               padding: EdgeInsets.zero,
-              child: GlassPressable(
-                child: ListTile(
-                  leading: const Icon(Icons.delete_sweep_outlined,
-                      color: AppTokens.danger),
-                  title: Text(L10n.clearReset),
-                  subtitle: Text(L10n.clearResetSubtitle),
-                  trailing: const Icon(Icons.chevron_right_outlined,
-                      key: Key('profile-chevron-reset')),
-                  onTap: () => _confirmReset(context, ref),
-                ),
+              child: Column(
+                children: <Widget>[
+                  GlassPressable(
+                    child: ListTile(
+                      leading: const Icon(Icons.backup_outlined),
+                      title: Text(L10n.dataBackup),
+                      subtitle: Text(L10n.dataBackupSubtitle),
+                      trailing: const Icon(Icons.chevron_right_outlined,
+                          key: Key('profile-chevron-backup')),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const BackupScreen()),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  GlassPressable(
+                    child: ListTile(
+                      leading: const Icon(Icons.delete_sweep_outlined,
+                          color: AppTokens.danger),
+                      title: Text(L10n.clearReset),
+                      subtitle: Text(L10n.clearResetSubtitle),
+                      trailing: const Icon(Icons.chevron_right_outlined,
+                          key: Key('profile-chevron-reset')),
+                      onTap: () => _confirmReset(context, ref),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -301,76 +319,14 @@ class ProfileScreen extends ConsumerWidget {
             const _PermissionCheck(),
             const SizedBox(height: 16),
             SectionHeading(L10n.sectionAbout),
-            GlassTile(
-              translucentFill: false,
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.info_outlined),
-                    title: Text(L10n.version),
-                    trailing: const Text('v$appVersion'),
-                  ),
-                  GlassPressable(
-                    child: ListTile(
-                      leading: const Icon(Icons.system_update_outlined),
-                      title: Text(L10n.checkUpdate),
-                      subtitle: Text(L10n.checkUpdateSubtitle),
-                      trailing: const Icon(Icons.chevron_right_outlined,
-                          key: Key('profile-chevron-update')),
-                      onTap: () => _checkUpdate(context),
-                    ),
-                  ),
-                  GlassPressable(
-                    child: ListTile(
-                      leading: const Icon(Icons.new_releases_outlined),
-                      title: Text(L10n.changelog),
-                      subtitle: Text(L10n.changelogSubtitle),
-                      trailing: const Icon(Icons.chevron_right_outlined,
-                          key: Key('profile-chevron-changelog')),
-                      onTap: () => showChangelogDialog(context),
-                    ),
-                  ),
-                  GlassPressable(
-                    child: ListTile(
-                      leading: const Icon(Icons.help_outlined),
-                      title: Text(L10n.usageGuide),
-                      subtitle: Text(L10n.usageGuideSubtitle),
-                      trailing: const Icon(Icons.chevron_right_outlined,
-                          key: Key('profile-chevron-help')),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const HelpCenterScreen()),
-                      ),
-                    ),
-                  ),
-                  GlassPressable(
-                    child: ListTile(
-                      leading: const Icon(Icons.bug_report_outlined),
-                      title: Text(L10n.viewLog),
-                      subtitle: Text(L10n.viewLogSubtitle),
-                      trailing: const Icon(Icons.chevron_right_outlined,
-                          key: Key('profile-chevron-log')),
-                      onTap: () => _showLog(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const AboutSection(),
+            const SizedBox(height: 16),
+            SectionHeading(L10n.sectionSupport),
+            const SupportSection(),
           ],
         ),
       )),
     );
-  }
-
-  Future<void> _checkUpdate(BuildContext context) async {
-    final r = await UpdateChecker.checkUpdates();
-    if (!context.mounted) return;
-    if (r.error) {
-      showUpdateFailedDialog(context);
-      return;
-    }
-    showUpdateDialog(context, r);
   }
 
   Future<void> _confirmReset(BuildContext context, WidgetRef ref) async {
@@ -406,7 +362,11 @@ class ProfileScreen extends ConsumerWidget {
       await repo.clearAll();
       await AlarmService.clearRingtoneFile();
       final sp = await SharedPreferences.getInstance();
+      // 支持者解锁状态是**唯一保留项**：打赏是自愿的，但用户不该因为一次
+      // 「清空重置」丢掉自己支持过的记录。清完 prefs 再把它写回去。
+      final wasSupporter = sp.getBool(kSupporterUnlockedKey) ?? false;
       await sp.clear();
+      if (wasSupporter) await sp.setBool(kSupporterUnlockedKey, true);
       ref.read(appSettingsProvider.notifier).resetToDefaults();
       // **放在清 prefs 之后**：这一步会把上面几样一起算进推给桌面的快照里。
       await AlarmService.rescheduleAll(repo);
@@ -414,48 +374,6 @@ class ProfileScreen extends ConsumerWidget {
         showGlassSnack(context, L10n.resetDone, icon: Icons.check_circle_outlined);
       }
     }
-  }
-
-  Future<void> _showLog(BuildContext context) async {
-    final log = await AlarmService.readLog();
-    if (!context.mounted) return;
-    await showGlassDialog<void>(
-      context: context,
-      builder: (dialogContext) => GlassDialog(
-        title: L10n.log,
-        showClose: true,
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 360,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              log.isEmpty ? L10n.noLog : log,
-              style: AppTokens.microText.copyWith(fontFamily: 'monospace'),
-            ),
-          ),
-        ),
-        actions: [
-          GlassActionButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: log));
-              if (dialogContext.mounted) {
-                showGlassSnack(dialogContext, L10n.logCopied,
-                    icon: Icons.content_copy_outlined);
-              }
-            },
-            label: L10n.copy,
-          ),
-          const SizedBox(width: 8),
-          GlassActionButton(
-            onPressed: () async {
-              await AlarmService.clearLog();
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
-            },
-            label: L10n.clear,
-          ),
-        ],
-      ),
-    );
   }
 
   /// 选择器里「不是铃声 URI」的两个动作。带 `action:` 前缀，不会和系统铃声的
@@ -473,10 +391,7 @@ class ProfileScreen extends ConsumerWidget {
 
     final selection = await showGlassSheet<String>(
       context: context,
-      builder: (sheetContext) => GlassPanel(
-        solid: true,
-        margin: const EdgeInsets.all(12),
-        borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+      builder: (sheetContext) => GlassSheetPanel(
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -611,16 +526,39 @@ class ProfileScreen extends ConsumerWidget {
       await sp.remove('ringtoneTitle');
     } else if (_isFileRingtone(selection)) {
       await sp.setString('ringtoneUri', selection);
-    } else {
-      // 其余两种：系统铃声 URI（`content://`）与「仅震动」哨兵（见
-      // `AlarmService.vibrateOnlyRingtone`）。两者都是「直接把这个值存进去」——
-      // 原生侧认的是同一个键，不需要在这里分叉。同样清掉自选文件。
-      //
-      // **哨兵这一档别写成 `remove('ringtoneUri')`**：删掉这个键的含义是「内置铃声」，
-      // 用户选了静音、闹钟反而响起来。
+    } else if (selection == AlarmService.vibrateOnlyRingtone) {
+      // 「仅震动」哨兵：直接存这个值（**不能写成 remove** —— 删键的含义是
+      // 「内置铃声」，用户选了静音、闹钟反而响起来）。同样清掉自选文件。
       await AlarmService.clearRingtoneFile();
       await sp.setString('ringtoneUri', selection);
       await sp.remove('ringtoneTitle');
+    } else {
+      // 系统铃声（`content://media/...`）：**也复制一份进私有目录**（2026-11-16）。
+      //
+      // 以前这里是直接存 URI。问题是 RingtoneManager 给的这种 URI 在响铃那一刻
+      // 可能打不开（后台服务没有媒体读取权限 / 那条媒体已经不在了），于是
+      // `AlarmSound` 静默回落到内置铃声 —— 用户设了自定义铃声，半夜响的还是「叮咚」，
+      // 而这条失败路径没有任何界面能提示。复制成 `file://` 之后与「从文件中选择」
+      // 走同一条路，不依赖任何权限或媒体库条目。
+      //
+      // **不要在这里再调 `clearRingtoneFile`**：原生侧复制新文件之前已经把旧的删了，
+      // 再清一次会把刚复制进来的这个也删掉（与 `_pickRingtoneFile` 同一条）。
+      final ({String name, String uri}) imported;
+      try {
+        imported = await AlarmService.importRingtone(selection);
+      } on RingtonePickException catch (e) {
+        if (!context.mounted) return;
+        showGlassSnack(
+          context,
+          e.isTooLarge ? L10n.ringtoneTooLarge : L10n.ringtoneCopyFailed,
+          icon: Icons.error_outline,
+        );
+        // 失败就保持原设置：存一个用不了的 URI 只会让闹钟静默回落，
+        // 用户还以为设好了。
+        return;
+      }
+      await sp.setString('ringtoneUri', imported.uri);
+      await sp.setString('ringtoneTitle', imported.name);
     }
     await _rescheduleAlarms(ref);
     if (context.mounted) {
@@ -687,11 +625,16 @@ class ProfileScreen extends ConsumerWidget {
             icon: Icons.music_note_outlined);
       }
     } on RingtonePickException catch (e) {
-      // 「太大」和「读不出来」要说成两句不同的话，否则用户只会反复重试同一个文件。
+      // 「太大」「没读出来」「选择器没交回文件」要说成三句不同的话，否则用户只会
+      // 反复重试同一条路。
       if (!context.mounted) return;
       showGlassSnack(
         context,
-        e.isTooLarge ? L10n.ringtoneTooLarge : L10n.ringtoneCopyFailed,
+        e.isTooLarge
+            ? L10n.ringtoneTooLarge
+            : e.isNoUri
+                ? L10n.ringtoneNoUri
+                : L10n.ringtoneCopyFailed,
         icon: Icons.error_outline,
       );
     }
@@ -862,6 +805,8 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
   bool? _fsi;
   bool? _battery;
   bool? _miui;
+  bool? _samsung;
+  bool? _colorOs;
 
   @override
   void initState() {
@@ -888,6 +833,8 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
     final fsi = await AlarmService.checkFullScreenIntentPermission();
     final battery = await AlarmService.checkBatteryOptimization();
     final miui = await AlarmService.checkMiuiPermissionPage();
+    final samsung = await AlarmService.checkSamsungBatteryPage();
+    final colorOs = await AlarmService.checkColorOsStartupPage();
     if (!mounted) return;
     setState(() {
       _notif = notif;
@@ -896,6 +843,8 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
       _fsi = fsi;
       _battery = battery;
       _miui = miui;
+      _samsung = samsung;
+      _colorOs = colorOs;
     });
   }
 
@@ -917,6 +866,19 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
   /// 万一页面打不开（非小米或 ROM 拦了），落回系统「应用信息」页。
   Future<void> _openMiuiPermissionPage() async {
     final ok = await AlarmService.openMiuiPermissionPage();
+    if (!ok) await AlarmService.openAppSettings();
+  }
+
+  /// 三星那项「后台使用限制」同样读不到状态，只能送到页面；打不开就退回
+  /// 系统「应用信息」页，用户至少能自己翻到电池那一栏。
+  Future<void> _openSamsungBattery() async {
+    final ok = await AlarmService.openSamsungBatteryPage();
+    if (!ok) await AlarmService.openAppSettings();
+  }
+
+  /// 一加 / OPPO 的「自启动管理」同理：解析得到不等于打得开，失败落回应用信息页。
+  Future<void> _openColorOsStartup() async {
+    final ok = await AlarmService.openColorOsStartupPage();
     if (!ok) await AlarmService.openAppSettings();
   }
 
@@ -1040,6 +1002,36 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
                   enabled: _battery!,
                   onOpen: _openBattery,
                 ),
+                // 只在三星机型出现（同小米那两行：厂商私有页面，别家没有）。
+                // 「睡眠应用 / 深度休眠应用」会把 App 的闹钟**一起取消** ——
+                // 这是「几天偶尔漏响一次」最常见的成因，而它在系统里藏得比
+                // 「电池优化」深一层，不提用户根本不会去看。
+                if (_samsung == true) ...[
+                  const Divider(height: 1),
+                  _permTile(
+                    icon: Icons.bedtime_outlined,
+                    title: L10n.permSamsungSleep,
+                    subtitle: L10n.permSamsungSleepHint,
+                    enabled: null,
+                    onOpen: _openSamsungBattery,
+                    actionLabel: L10n.goCheck,
+                  ),
+                ],
+                // 一加 / OPPO 那一行（同三星：厂商私有页面，别家没有）。
+                // 这一档关掉时**系统连闹钟广播都不投递** —— 2026-11-25 一加用户
+                // 两次「某条闹钟没响」，日志里连 onReceive 都没有、进程在整段时间
+                // 里一次没起来，正是这一档的指纹。
+                if (_colorOs == true) ...[
+                  const Divider(height: 1),
+                  _permTile(
+                    icon: Icons.rocket_launch_outlined,
+                    title: L10n.permColorOsStartup,
+                    subtitle: L10n.permColorOsStartupHint,
+                    enabled: null,
+                    onOpen: _openColorOsStartup,
+                    actionLabel: L10n.goCheck,
+                  ),
+                ],
               ],
             ),
     );

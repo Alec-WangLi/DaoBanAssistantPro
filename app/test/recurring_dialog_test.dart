@@ -189,9 +189,11 @@ void main() {
     await tester.tap(find.text(L10n.add));
     await _settle(tester);
 
+    // 提醒走「一整批重排」，重复待办的安静提醒就在这一批的 quiets 里。
     final scheduled = calls
-        .where((c) => c.method == 'scheduleTodoReminder')
-        .map((c) => (c.arguments as Map)['id'] as int)
+        .where((c) => c.method == 'reconcileNativeAlarms')
+        .expand((c) => ((c.arguments as Map)['quiets'] as List? ?? const []))
+        .map((q) => (q as Map)['id'] as int)
         .toList();
     // 重复待办的提醒号段是 40000 + 系列 id。
     expect(scheduled.any((id) => id >= 40000), isTrue,
@@ -328,6 +330,96 @@ void main() {
         reason: '待办一条都不许删 —— 用户说的是「别再自动出现」，'
             '而这条正是他正在编辑的那一条');
     expect(rows.single.seriesId, isNull);
+    await _dispose(tester);
+  });
+
+  // ── v0.13.15：编辑时改「从这天起」要真的写回系列 ──
+  //
+  // 2026-11-17 用户真机报障：今天是 11/17，把重复待办改成「11 月 19 号开始」，
+  // 它**当天照样提醒**。库里的证据是「系列 start_date = 11/17、它那条行 = 11/19」
+  // —— 只挪了行、没挪起点，而提醒是按系列的起点算的。
+  //
+  // 根因在 `_EventFields.commit` 的编辑分支写死 `startDate: s.startDate`
+  // （那句本是 v0.9.14 防「改周期时把起点拽到今天」的，顺带把用户主动改起点也吞了）。
+  // 下面两条把两个方向都钉住：**动过日期行 → 跟着走**、**没动 → 一个字节都不许变**。
+
+  testWidgets('编辑时把「从这天起」改到未来 → 起点跟着走，今天不再有这一次',
+      (tester) async {
+    await seedSeries();
+    final before = (await repo.listEvents()).single;
+    expect(dayNumber(before.date), dayNumber(DateTime(2026, 10, 14)),
+        reason: '夹具前提：最近一个周三');
+
+    await mount(tester);
+    await tester.tap(find.text('周三例会'));
+    await _settle(tester);
+
+    // 起点改到 10/21（未来）。日期选择器点一格就直接落定。
+    await tester.tap(find.byKey(const Key('todo-date-row')));
+    await _settle(tester);
+    await tester.tap(find.text('21'));
+    await _settle(tester, frames: 6);
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    final series = (await repo.listRecurringTodos()).single;
+    expect(dayNumber(dateOnly(series.startDate)), dayNumber(DateTime(2026, 10, 21)),
+        reason: '「从这天起」是系列属性，必须写回 start_date');
+    expect(occurrenceOnOrBefore(series, dateOnly(kAnchor)), isNull,
+        reason: '起点在未来 → 今天之前没有发生日，也就不该排任何提醒');
+
+    final rows = await repo.listEvents();
+    expect(rows, isEmpty,
+        reason: '起点搬到未来 → 那条行也得收走，列表里一条都不该有');
+    await _dispose(tester);
+  });
+
+  testWidgets('编辑时没动日期行 → 起点一个字节都不许变', (tester) async {
+    // v0.9.14 的教训：拿「当前这一次」的日期去改写 startDate 会让
+    // occurrenceOnOrBefore 的回退对齐整段失效（周三/周四才现形）。所以改标题 /
+    // 改周期时起点必须原样留着 —— 这条是那个修复的回归护栏。
+    await seedSeries();
+    final beforeStart =
+        dayNumber(dateOnly((await repo.listRecurringTodos()).single.startDate));
+
+    await mount(tester);
+    await tester.tap(find.text('周三例会'));
+    await _settle(tester);
+    // 那一行读作「从这天起」，显示的必须是**系列起点**（10/08），不是「当前这一次」
+    // 的日子（10/14）—— 否则用户照着改一遍就把整个系列往前拽了。
+    expect(find.text(L10n.monthDay(DateTime(2026, 10, 8))), findsOneWidget);
+    expect(find.text(L10n.monthDay(DateTime(2026, 10, 14))), findsNothing);
+    await tester.enterText(find.byType(TextField), '周例会');
+    await tester.tap(find.text(L10n.save));
+    await _settle(tester);
+
+    final series = (await repo.listRecurringTodos()).single;
+    expect(dayNumber(dateOnly(series.startDate)), beforeStart);
+    await _dispose(tester);
+  });
+
+  testWidgets('新建时选未来日期 → 系列起点是那天，列表里**还没有**待办',
+      (tester) async {
+    // 用户 2026-11-17：「每月 17 号、从 11/21 起」就该 12/17 才出现，
+    // 而不是建好的当下就躺在列表里（日期写着 12/17）。
+    await mount(tester);
+    await tester.tap(find.byIcon(Icons.add_outlined));
+    await _settle(tester);
+    await tester.enterText(find.byType(TextField), '下月体检');
+    await tester.tap(find.text(L10n.repeatDaily));
+    await _settle(tester, frames: 4);
+    await tester.tap(find.byKey(const Key('todo-date-row')));
+    await _settle(tester);
+    await tester.tap(find.text('21'));
+    await _settle(tester, frames: 6);
+    await tester.tap(find.text(L10n.add));
+    await _settle(tester);
+
+    final series = (await repo.listRecurringTodos()).single;
+    expect(dayNumber(dateOnly(series.startDate)),
+        dayNumber(DateTime(2026, 10, 21)));
+    expect(await repo.listEvents(), isEmpty,
+        reason: '重复待办要到它那一天才出现，起点还在未来时一条都不该有');
     await _dispose(tester);
   });
 }

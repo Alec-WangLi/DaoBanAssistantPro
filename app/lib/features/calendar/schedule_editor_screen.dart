@@ -743,6 +743,34 @@ class _ScheduleEditorScreenState extends ConsumerState<ScheduleEditorScreen> {
             Row(
               children: [
                 Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(L10n.nightShift,
+                          style: AppTokens.rowPrimary),
+                      const SizedBox(height: AppTokens.spaceXs),
+                      // **这颗开关是干嘛的，得由它自己说。** 2026-11-25 用户看到
+                      // 这里多了一颗「夜班」，不知道它管什么 —— 它只喂统计页的
+                      // 「夜班天数」，与轮转顺序、联动闹钟都无关。
+                      Text(L10n.nightShiftHint,
+                          style: AppTokens.microText.copyWith(color: muted)),
+                    ],
+                  ),
+                ),
+                GlassSwitch(
+                  key: Key('shift-night-switch-$index'),
+                  value: c.isNight,
+                  onChanged: (v) => setState(() => _classes[index] =
+                      _editClass(_classes[index], isNight: v)),
+                ),
+              ],
+            ),
+            // 与下面的「联动闹钟」拉开一档：两个开关行贴在一起时，用户会以为
+            // 上面那颗也是闹钟的一部分（2026-11-25 反馈「离得太近」）。
+            const SizedBox(height: AppTokens.spaceMd),
+            Row(
+              children: [
+                Expanded(
                   child: Text(L10n.linkedAlarm,
                       style: AppTokens.rowPrimary),
                 ),
@@ -2341,6 +2369,7 @@ ShiftClass _editClass(
   int? endMinute,
   bool clearTimes = false,
   bool? isRest,
+  bool? isNight,
   int? color,
   bool? alarmEnabled,
   List<ShiftAlarm>? alarms,
@@ -2356,6 +2385,7 @@ ShiftClass _editClass(
     startMinute: clearTimes ? null : (startMinute ?? c.startMinute),
     endMinute: clearTimes ? null : (endMinute ?? c.endMinute),
     isRest: isRest ?? c.isRest,
+    isNight: isNight ?? c.isNight,
     color: color ?? c.color,
     alarmEnabled: alarmEnabled ?? c.alarmEnabled,
     alarms: clearAlarms ? const [] : (alarms ?? c.alarms),

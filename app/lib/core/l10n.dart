@@ -1,5 +1,8 @@
+import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:intl/intl.dart';
+
+import '../domain/day_extra.dart';
 
 /// 一段双语文案的持有者。
 ///
@@ -25,6 +28,11 @@ class L10n {
   static bool get isEn => locale == 'en';
 
   static String t(String zh, String en) => isEn ? en : zh;
+
+  /// 品牌名。**这是唯一一处**：`app.dart` 的标题、关于页与 Android 的
+  /// `android:label` 三处共享同一个显示名（Android 那份在 strings.xml 里，
+  /// 跟随系统语言，属于平台资源，不经过这里）。
+  static String get appName => t('倒班助手Pro', 'Shift Assistant Pro');
 
   // ── 日期格式化器的记忆化 ────────────────────────────────────────────────
   //
@@ -64,6 +72,7 @@ class L10n {
   static String get sectionData => t('数据', 'Data');
   static String get sectionPermission => t('权限', 'Permissions');
   static String get sectionAbout => t('关于', 'About');
+  static String get sectionSupport => t('支持', 'Support');
 
   // 按天改班（换班 / 请假覆盖）
   static String get adjustShift => t('调整班次', 'Adjust shift');
@@ -132,6 +141,21 @@ class L10n {
       'Off: the alarm rings without popping up while the phone is locked');
   static String get permBattery => t('电池优化', 'Battery optimization');
   static String get permBatteryHint => t('设为「不限制」，否则后台可能不响', 'Set "Unrestricted", or alarms may not fire');
+  // 三星 / One UI 的「睡眠应用」「深度休眠应用」会把 App 的闹钟**一起取消**，
+  // 症状正是「几天偶尔漏一次」。系统不提供查询接口，所以这一行永远是「去查看」。
+  static String get permSamsungSleep =>
+      t('休眠应用（三星）', 'Sleeping apps (Samsung)');
+  static String get permSamsungSleepHint => t(
+      '电池 → 后台使用限制：把本 App 从「睡眠应用」和「深度休眠应用」里去掉，否则闹钟会被系统取消',
+      'Battery → Background usage limits: remove this app from "Sleeping apps" and "Deep sleeping apps", or the system cancels its alarms');
+  // 一加 / OPPO（ColorOS / OxygenOS）的「自启动」关掉时，进程起不来 —— 系统
+  // 连闹钟广播都不投递，症状是「某条闹钟没响、日志里连 onReceive 都没有」
+  // （2026-11-25 一加 PLK110 用户）。同样没有查询接口，所以也是「去查看」。
+  static String get permColorOsStartup =>
+      t('自启动 / 后台运行（一加 · OPPO）', 'Auto-launch (OnePlus / OPPO)');
+  static String get permColorOsStartupHint => t(
+      '把本 App 的「允许自启动」「允许后台运行」都打开；关掉时系统可能压根不把闹钟广播递过来',
+      'Turn on both "Allow auto-launch" and "Allow background activity"; otherwise the system may never deliver the alarm broadcast');
   static String get enabled => t('已开启', 'Enabled');
   static String get goEnable => t('去开启', 'Enable');
   static String get goSettings => t('去设置', 'Settings');
@@ -174,10 +198,10 @@ class L10n {
 
   /// 「我的 → 桌面」那一行（打开的是小组件说明弹层）。
   static String get widgetEntrySubtitle => t(
-      '说明在《使用帮助》里，小米机型在二级分类里',
-      'Explained in the usage guide; Xiaomi hides them in a sub-menu');
+      '添加方法与常见问题见《使用帮助》；小米机型在二级分类里',
+      'How to add it and common questions are in the usage guide; Xiaomi hides it one level down');
   static String get ringtone => t('闹钟铃声', 'Alarm ringtone');
-  static String get ringtoneSubtitle => t('选择内置、系统、你的铃声，或「仅震动」', 'Choose a built-in, system, or your own ringtone, or vibrate only');
+  static String get ringtoneSubtitle => t('选择内置、系统或自己的铃声，或「仅震动」', 'Choose a built-in, system or your own ringtone — or vibrate only');
   static String get snoozeDuration => t('贪睡时长', 'Snooze length');
   static String snoozeDurationSubtitle(int minutes) => t(
       '「再睡一会」之后隔 $minutes 分钟重新响铃',
@@ -186,20 +210,63 @@ class L10n {
   static String get clearResetSubtitle => t(
       '排班、日程、闹钟与模板全清掉，回到刚安装的样子',
       'Clear schedules, events, alarms and templates — back to a fresh install');
+  static String get dataBackup => t('数据备份', 'Data backup');
+  static String get dataBackupSubtitle => t(
+      '导出排班、待办与设置；重装或换机后导入',
+      'Export schedules, todos and settings; import after a reinstall or on a new phone');
+  static String get backupIntro => t(
+      '备份文件包含：排班与班次、按天改班、日程与待办、模板、自定义闹钟、外观设置，以及你保存的铃声。',
+      'The backup contains schedules and shifts, per-day overrides, events and todos, templates, custom alarms, appearance settings and any saved ringtone.');
+  static String get backupExport => t('导出备份', 'Export backup');
+  static String get backupExportSubtitle => t(
+      '保存为 .dshbackup 文件，可放到网盘或电脑',
+      'Save a .dshbackup file to your cloud drive or computer');
+  static String get backupImport => t('导入备份', 'Import backup');
+  static String get backupImportSubtitle => t(
+      '从 .dshbackup 文件恢复，会覆盖当前数据',
+      'Restore from a .dshbackup file; current data will be replaced');
+  static String get backupExporting => t('正在生成备份…', 'Creating backup…');
+  static String get backupImporting => t('正在读取备份…', 'Reading backup…');
+  static String get backupSaved => t('备份已保存', 'Backup saved');
+  static String get backupCanceled => t('已取消', 'Canceled');
+  static String get backupConfirmTitle => t('导入这份备份？', 'Import this backup?');
+  static String backupConfirmContent(String version, String time) => t(
+      '备份来自 v$version，导出时间 $time。\n导入会覆盖当前所有排班、待办、模板、闹钟与设置，且无法撤销。',
+      'The backup is from v$version, exported $time.\nImporting replaces all current schedules, todos, templates, alarms and settings. This cannot be undone.');
+  static String get backupConfirmAction => t('导入', 'Import');
+  static String get backupInvalid =>
+      t('这不是有效的备份文件', 'This is not a valid backup file');
+  static String get backupTooNew => t('备份来自更新版本的 App，请先升级',
+      'The backup comes from a newer version — update the app first');
+  static String get backupTooLarge =>
+      t('备份文件太大，无法导入', 'The backup file is too large to import');
+  static String get backupFailed =>
+      t('备份失败，请重试', 'Backup failed, please try again');
+  static String get backupRestartTitle => t('导入完成', 'Import complete');
+  static String get backupRestartContent => t(
+      'App 需要重启一次才能应用导入的数据。现在重启？',
+      'The app needs to restart once to apply the imported data. Restart now?');
+  static String get backupRestartNow => t('立即重启', 'Restart now');
+  static String get backupLater => t('稍后', 'Later');
+  static String get backupRestartManually => t('已暂存；下次打开 App 时生效',
+      'Saved; it will take effect the next time you open the app');
+  static String get backupHint => t(
+      '建议在每次大改排班后导出一份，并保存到手机之外（网盘 / 电脑）。',
+      'Export after big schedule changes and keep a copy off the phone (cloud drive / computer).');
   static String get version => t('版本', 'Version');
   static String get changelog => t('版本更新', "What's new");
   static String get changelogSubtitle =>
       t('这一版改了什么，含最近十版', 'What changed in this version, plus the last ten');
   static String get checkUpdate => t('检查更新', 'Check for update');
   static String get checkUpdateSubtitle => t(
-      '检查最新正式版 / 测试版（国内网络需开代理）',
-      'Check for the latest stable / beta build (some networks in China need a proxy)');
+      '检查最新正式版 / 测试版；国内可直连官网下载',
+      'Check the latest stable / beta build — direct download from the official site');
   static String get alreadyLatest => t('已是最新', 'Up to date');
-  // 连不上 GitHub 不要笼统说「网络异常」—— 国内用户看到这句只会反复重试，
-  // 得直接告诉他要开代理。
+  // 三条通道（官网清单 → 仓库清单 → GitHub API）都失败才会走到这句。
+  // 不要再写成「连不上 GitHub」：下载直链可能来自官网，失败原因也可能只是断网。
   static String get updateCheckFailed => t(
-      '检查更新失败：连不上 GitHub 服务器。若你在国内，通常需要开启代理或加速器后重试。',
-      'Update check failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
+      '检查更新失败：官网与 GitHub 都连不上。请检查网络后重试；也可以直接到官网下载最新版。',
+      'Update check failed: neither the official site nor GitHub responded. Check your network and try again — or download the latest version from the official site.');
   static String get stableChannel => t('正式版', 'Stable');
   static String get testChannel => t('测试版', 'Beta');
   // 渠道没有发布时的占位。不要复用 `none`（「不设」，说的是「这个可选字段留空」）——
@@ -212,15 +279,19 @@ class L10n {
   static String get download => t('去下载', 'Download');
   static String get downloadingUpdate => t('正在下载新版本', 'Downloading update');
   static String get downloadFailed => t(
-      '下载失败：连不上 GitHub 服务器。若你在国内，通常需要开启代理或加速器后重试。',
-      'Download failed: cannot reach GitHub. In mainland China, a proxy or accelerator is usually required.');
+      '下载失败：网络中断或下载地址没有响应，请检查网络后重试。',
+      'Download failed: the connection dropped or the server did not respond. Check your network and try again.');
   static String get jumpToMonth => t('跳转月份', 'Jump to month');
+
+  /// 只挑年份的弹层标题（统计页年视图，v0.13.19）。
+  static String get jumpToYear => t('跳转年份', 'Jump to year');
   static String get usageGuide => t('使用帮助', 'Usage guide');
   static String get usageGuideSubtitle => t(
       '每个功能在哪、怎么用；遇到问题也能进来查',
       'Where each feature lives, how to use it — and what to do when something looks wrong');
   static String get viewLog => t('查看日志', 'View log');
-  static String get viewLogSubtitle => t('排错时把这里的内容复制给我', 'Copy the log here for debugging');
+  static String get viewLogSubtitle =>
+      t('反馈问题时把这里的内容复制过去', 'Copy this when reporting a problem');
   static String get confirmResetTitle => t('确认清空重置？', 'Clear & reset?');
   static String get confirmResetContent => t(
       '软件会回到刚安装的样子，清掉：\n'
@@ -241,6 +312,27 @@ class L10n {
   static String get log => t('日志', 'Log');
   static String get noLog => t('（暂无日志）', '(no log)');
   static String get logCopied => t('日志已复制到剪贴板', 'Log copied to clipboard');
+
+  // ── 日志页（v0.13.20） ──
+  static String get logSearchHint => t('搜索日志…', 'Search log…');
+  static String logLineCount(int total, int shown) => shown == total
+      ? t('共 $total 行', '$total lines')
+      : t('共 $total 行 · 命中 $shown 行', '$total lines · $shown match');
+  static String get logExportBundle => t('导出诊断包', 'Export diagnostics');
+  static String get logExportPrivacy => t(
+      '诊断包含：日志、设备与权限信息、已排闹钟清单、未来 7 天计划。\n'
+      '日志里可能含你写的待办标题与班次备注 —— 分享前确认发给谁。',
+      'The bundle contains logs, device & permission info, the scheduled '
+          'alarm list and the next 7 days of plan.\n'
+          'Logs may contain todo titles and shift notes you wrote — check who '
+          'you are sending it to.');
+  static String get logExported => t('诊断包已导出', 'Diagnostics exported');
+  static String get logExportFailed => t('导出失败：', 'Export failed: ');
+  static String get logClearConfirm => t(
+      '清空后全部日志（含按天归档的 7 天）都会删除，无法恢复。',
+      'This deletes every log file, including the 7 days of archives. '
+          'It cannot be undone.');
+  static String get export => t('导出', 'Export');
   static String get builtinRingtone => t('内置铃声（默认）', 'Built-in (default)');
   static String get builtinRingtoneSubtitle => t('叮咚数字闹钟声', 'Ding-dong digital alarm');
   static String get vibrateOnlyRingtone => t('仅震动', 'Vibrate only');
@@ -265,6 +357,124 @@ class L10n {
       'That file is too large (32 MB max), pick a smaller one');
   static String get ringtoneCopyFailed =>
       t('没能读取这个文件，换一个试试', "Couldn't read that file, try another one");
+  // 选择器自己没把文件交回来（不是用户取消）。要指名「换个文件管理器」——
+  // 这一条几乎只出现在第三方 / 非系统文件管理器上，重试同一个入口没有用。
+  static String get ringtoneNoUri => t(
+      '文件管理器没有把选中的文件交回来，换一个文件管理器再试',
+      'The file manager did not hand the file back. Try a different file manager.');
+
+  // 法定节假日数据（自动更新 + 手动兜底）
+  static String get holidayDataTitle =>
+      t('更新法定节假日数据', 'Update public holiday data');
+  static String holidayDataCovered(int year) =>
+      t('已覆盖至 $year 年', 'Covers through $year');
+  static String get holidayDataEmpty => t('暂无数据', 'No data yet');
+  static String get holidayDataUpdating => t('正在更新…', 'Updating…');
+  static String get holidayDataUpdated =>
+      t('节假日数据已更新', 'Holiday data updated');
+  static String get holidayDataAlreadyNewest =>
+      t('已是最新数据', 'Already up to date');
+  static String get holidayDataFailed =>
+      t('连不上服务器，稍后再试', 'Cannot reach the server, try again later');
+
+  // 「关于」页
+  static String get aboutTitle => t('关于', 'About');
+  static String get aboutApp => t('关于倒班助手Pro', 'About Shift Assistant Pro');
+  static String aboutAppSubtitle(String version) => t(
+      'v$version · 作者、官网与开源地址',
+      'v$version · Author, website and source');
+  static String get aboutTagline => t(
+      '为倒班的人做的排班日历、班次闹钟与待办日程',
+      'Shift calendar, alarms and todos, built for shift workers');
+  static String get aboutDeveloper => t('开发者', 'Developer');
+  static String get aboutDeveloperName => 'Alexander Wang';
+  static String get aboutLicense => t('开源许可', 'License');
+  static String get aboutLicenseValue => 'MIT';
+  static String get aboutWebsite => t('官方网站', 'Website');
+  static String get aboutRepository => t('开源仓库', 'Source code');
+  static String get aboutIssues => t('问题反馈', 'Feedback');
+  static String get aboutIssuesValue => 'GitHub Issues';
+  static String get aboutPrivacyTitle => t('隐私', 'Privacy');
+  static String get aboutPrivacyBody => t(
+      '无账号、无广告、无后端。排班、待办与设置只存在这台手机上，不会上传。',
+      'No account, no ads, no server. Schedules, todos and settings live on this phone only and are never uploaded.');
+  static String get aboutOpenFailed => t(
+      '没能打开链接，请检查是否安装了浏览器',
+      'Could not open the link — check that a browser is installed');
+
+  // 打赏
+  static String get supportDeveloper => t('请我喝杯奶茶', 'Buy me a milk tea');
+  static String get supportDeveloperSubtitle => t(
+      '没有广告，也不收订阅费；觉得好用可以支持一下',
+      'No ads, no subscription — chip in if it helps');
+  static String get donateTitle => t('请我喝杯奶茶', 'Buy me a milk tea');
+  static String get donateIntro => t(
+      '倒班助手Pro 没有广告，也没有订阅。它帮到你的话，可以请作者喝杯奶茶。',
+      'Shift Assistant Pro has no ads and no subscription. If it helps, you can buy the author a milk tea.');
+  static String get donateAmount => t('金额', 'Amount');
+  static String donateAmountLabel(int yuan) => '¥$yuan';
+  static String get donateCustom => t('自定义', 'Custom');
+  static String get donateCustomTitle => t('自定义金额', 'Custom amount');
+  static String get donateCustomHint => t('输入金额（元）', 'Amount in yuan');
+  static String get donateCustomInvalid =>
+      t('请输入 1–2000 之间的整数金额', 'Enter a whole amount between 1 and 2000');
+  static String get donateAlipay => t('支付宝', 'Alipay');
+  static String get donateWechat => t('微信', 'WeChat');
+  static String get donateAlipayHint => t(
+      '点一下直接打开支付宝收款页；没装支付宝时会显示二维码',
+      'Opens the Alipay payment page; if Alipay is not installed, the QR code is shown');
+  static String get donateWechatHint => t(
+      '微信收款不能直接唤起付款页：截图后用「扫一扫」里的「相册」识别',
+      'WeChat payments cannot open the pay page directly: screenshot it, then pick it from Albums in WeChat Scan');
+  static String get donateScanTitle => t('扫码支持', 'Scan to support');
+  static String get donateScanAlipay => t(
+      '用支付宝「扫一扫」，或截图后从相册识别',
+      'Scan it in Alipay, or screenshot it and pick it from Albums');
+  static String get donateScanWechat => t(
+      '截图后用微信「扫一扫」里的「相册」识别，或让另一台设备扫',
+      'Screenshot it, then pick it from Albums in WeChat Scan, or scan with another device');
+  static String donateAmountHint(int yuan) =>
+      t('付款时填 ¥$yuan', 'Enter ¥$yuan when paying');
+  static String get donateQrMissing => t('二维码还没配置', 'QR code not configured');
+  static String get donateOpenAlipay => t('打开支付宝', 'Open Alipay');
+  static String get donateOpenFailed => t(
+      '没能打开支付宝，请用支付宝扫下面的二维码',
+      'Could not open Alipay — scan the QR code below instead');
+
+  // 支持者专属（打赏后自报解锁）
+  static String get supporterOnly => t('支持者专属', 'For supporters');
+  static String get supportUnlockHint =>
+      t('打赏后解锁 · 首期是一封信', 'Unlocks after a tip — the first is a letter');
+  static String get supportUnlockedHint =>
+      t('一封写给支持者的信', 'A letter to supporters');
+  static String get donatePaidUnlock => t('我已完成支付', "I've paid");
+  static String get donateUnlockTitle => t('已完成支付？', 'Payment complete?');
+  static String get donateUnlockContent => t(
+      '打赏是自愿的，未支付也不影响使用。确认你已完成支付，就能解锁支持者专属内容。',
+      'Tips are optional and nothing is locked behind them. Confirm you have paid to unlock the supporter content.');
+  static String get donateUnlockCancel => t('还没有', 'Not yet');
+  static String get donateUnlockConfirm => t('已完成', 'Done');
+  static String get donateUnlocked =>
+      t('已解锁支持者专属内容', 'Supporter content unlocked');
+  static String get donateUnlockFailed =>
+      t('没能保存解锁状态，请重试', 'Could not save the unlock — try again');
+  static String get supporterTitle => t('支持者专属', 'For supporters');
+  static String get supporterLetterTitle =>
+      t('第一封支持者来信', 'The first letter');
+  static String get supporterLetterBody => t(
+      '谢谢你愿意为这个 App 花一杯奶茶的钱。\n\n'
+      '倒班助手Pro 没有广告，没有会员，也没有后台。它只是把倒班的人每天要算的那几件事 —— 今天什么班、几点该起、交班要记住什么 —— 老老实实做好。\n\n'
+      '你的支持不会解锁更多功能：该有的功能本来就会给所有人。它只是让我知道，这件事值得继续做下去。\n\n'
+      '以后这里会放一些只给支持者的小东西 —— 也许是一封更新手记，也许是一个提前体验的新版本。现在先欠着。\n\n'
+      '—— Alec',
+      'Thank you for spending the price of a milk tea on this app.\n\n'
+      'Shift Assistant Pro has no ads, no membership and no server. It just does the few things a shift worker needs to work out every day — which shift today, when to get up, what to hand over — as plainly as it can.\n\n'
+      'Your support does not unlock more features; everything the app should do is available to everyone. It just tells me this is worth continuing.\n\n'
+      'One day there will be small things here for supporters only — a note with an update, perhaps an early look at a new version. For now, I owe you one.\n\n'
+      '— Alec');
+  static String get supporterMoreComing => t(
+      '以后的支持者专属内容会继续放在这一页。',
+      'More supporter-only things will land on this page.');
 
   // 待办（日程）
   static String get noEvents => t('还没有待办事项，点右下角添加', 'No todos yet, tap + to add');
@@ -428,6 +638,50 @@ class L10n {
   static String get noUpcoming30 => t('近 30 天无班次闹钟', 'No shift alarms in next 30 days');
   static String get testAlarmScheduled => t('已排定测试闹钟，10 秒后响铃', 'Test alarm set, rings in 10s');
   static String get testAlarmFailed => t('测试闹钟排定失败：', 'Test alarm failed: ');
+
+  /// 自定义闹钟在「下一次响铃」摘要里的名字（与原生那批请求里的 label 同一个词）。
+  static String get customAlarmTitle => t('自定义闹钟', 'Custom alarm');
+
+  /// 距下一次响铃还有多久。
+  ///
+  /// 分档只看**人读起来要不要精确**：一分钟内说「马上」，一小时内说分钟，
+  /// 一天内说小时+分，再远只说天+小时 —— 秒数对闹钟没有意义。
+  static String alarmCountdown(Duration d) {
+    final int mins = d.inMinutes;
+    if (mins <= 0) return t('马上响', 'any moment');
+    if (mins < 60) return t('还有 $mins 分钟', 'in $mins min');
+    final int hours = d.inHours;
+    final int remMin = mins - hours * 60;
+    if (hours < 24) {
+      return remMin == 0
+          ? t('还有 $hours 小时', 'in $hours h')
+          : t('还有 $hours 小时 $remMin 分', 'in $hours h $remMin min');
+    }
+    final int days = d.inDays;
+    final int remHours = hours - days * 24;
+    return remHours == 0
+        ? t('还有 $days 天', 'in $days d')
+        : t('还有 $days 天 $remHours 小时', 'in $days d $remHours h');
+  }
+
+  /// 摘要里的日期写法：今天 / 明天 / 11月26日。
+  ///
+  /// 不 import `domain/shift_rotation.dart` 的 `daysBetween`：那个文件反过来要
+  /// 用本文件（`defaultSchedule` 的文案），引入就成环了。这里就地按纯日期算。
+  static String alarmDayLabel(DateTime when, DateTime now) {
+    final int diff = DateTime.utc(when.year, when.month, when.day)
+        .difference(DateTime.utc(now.year, now.month, now.day))
+        .inDays;
+    if (diff == 0) return today;
+    if (diff == 1) return t('明天', 'tomorrow');
+    return monthDay(when);
+  }
+
+  /// 摘要整行：「下一次响铃 · 今天 15:00 · 白班 巡视 · 还有 1 小时 12 分」。
+  static String nextAlarmLine(
+          String day, String clock, String label, String countdown) =>
+      t('下一次响铃 · $day $clock · $label · $countdown',
+          'Next alarm · $day $clock · $label · $countdown');
   static String get editAlarm => t('编辑闹钟', 'Edit alarm');
   static String get time => t('时间', 'Time');
   static String get once => t('一次性', 'Once');
@@ -580,6 +834,14 @@ class L10n {
   static String get end => t('结束', 'End');
   static String get crossesMidnight => t('（结束早于开始，或晚于 24:00 = 跨午夜）', '(ends before start, or past 24:00 = crosses midnight)');
   static String get linkedAlarm => t('联动闹钟', 'Linked alarm');
+
+  /// 班次编辑器里的「夜班」标记 —— 统计页的夜班天数只认它。
+  static String get nightShift => t('夜班', 'Night shift');
+
+  /// 「夜班」开关下面那行说明。**它只影响统计** —— 不参与轮转、不影响闹钟。
+  static String get nightShiftHint => t(
+      '只算进统计页的「夜班天数」，不影响轮转与闹钟',
+      'Counts towards night days in Statistics only — no effect on rotation or alarms');
   static String get alarmTime => t('响铃', 'Alarm');
 
   static String get addAlarm => t('添加闹钟', 'Add alarm');
@@ -899,6 +1161,265 @@ class L10n {
   static String get monthTally => t('本月', 'This month');
   static String get savedAndRescheduled => t('已保存并重排闹钟', 'Saved & alarms rescheduled');
   static String switchedTo(String name) => isEn ? 'Switched to $name' : '已切换到 $name';
+
+  // ── 日级请假 / 加班 ──
+  static String get leave => t('请假', 'Leave');
+  static String get overtime => t('加班', 'Overtime');
+  static String get leaveHint =>
+      t('整天请假会同时取消这天的班次闹钟', 'A full-day leave also cancels that day\'s shift alarm');
+  static String get overtimeHint =>
+      t('加班时长叠加在当天工时上', 'Overtime is added on top of the day\'s hours');
+  static String get fullDay => t('整天', 'Full day');
+  static String get halfDay => t('半天', 'Half day');
+  static String get dayExtraExisting => t('已有记录', 'Existing record');
+
+  // ── 请假类型 / 备注（v0.13.17） ──
+
+  /// 请假类型那一行的标题。
+  static String get leaveKindTitle => t('请假类型', 'Leave type');
+
+  /// 类型可以不选 —— 这句说明为什么可以空着。
+  static String get leaveKindHint =>
+      t('可不选；选了以后回看时能分清是什么假', 'Optional — pick one so you can tell later');
+
+  static String get leaveKindAdd => t('＋ 自定义', '+ Custom');
+  static String get leaveKindAddTitle => t('自定义请假类型', 'Custom leave type');
+  static String get leaveKindNameHint => t('最多 8 个字', 'Max 8 characters');
+  static String get leaveKindDeleteTitle => t('删除这个类型？', 'Delete this type?');
+  static String get leaveKindDeleteBody => t(
+      '已有记录会保留原来的名字，只是不再出现在选择列表里。',
+      'Existing records keep the name; it only disappears from the picker.');
+  static String get leaveKindLongPressHint =>
+      t('长按自定义类型可删除', 'Long-press a custom type to delete');
+
+  /// 类型键 → 显示名。内置走双语，自定义取记录里存的名字，空值返回 null。
+  static String? leaveKindLabel(String? key) {
+    if (key == null || key.isEmpty) return null;
+    final custom = customLeaveKindName(key);
+    if (custom != null) return custom;
+    return switch (key) {
+      'annual' => t('年假', 'Annual leave'),
+      'personal' => t('事假', 'Personal leave'),
+      'sick' => t('病假', 'Sick leave'),
+      'compensatory' => t('调休', 'Time off in lieu'),
+      'other' => t('其他', 'Other'),
+      // 以后新增的内置键：读得懂就显示原文，也不让统计页崩掉。
+      _ => key,
+    };
+  }
+
+  /// 日历格子里用的首字：年 / 事 / 病 / 调 / 其 /（自定义类型首字）。
+  static String leaveKindShort(String? key) {
+    final label = leaveKindLabel(key);
+    if (label == null || label.isEmpty) return t('假', 'L');
+    return label.characters.first;
+  }
+
+  static String get note => t('备注', 'Note');
+  static String get noteHint =>
+      t('例如：家里有事、去医院', 'e.g. family matter');
+
+
+  /// 分钟数 → 「4小时30分」/「4h 30m」；整小时不写「0分」。
+  static String durationText(int minutes) {
+    final m = minutes < 0 ? 0 : minutes;
+    final h = m ~/ 60, r = m % 60;
+    if (h == 0 && r == 0) return isEn ? '0h' : '0小时';
+    if (h == 0) return isEn ? '${r}m' : '$r分';
+    if (r == 0) return isEn ? '${h}h' : '$h小时';
+    return isEn ? '${h}h ${r}m' : '$h小时$r分';
+  }
+
+  static String extraLeaveLine(int minutes, {String? kind}) {
+    final name = leaveKindLabel(kind) ?? leave;
+    return '$name ${durationText(minutes)}';
+  }
+
+  static String extraOvertimeLine(int minutes) =>
+      isEn ? 'Overtime ${durationText(minutes)}' : '加班 ${durationText(minutes)}';
+
+  /// 「请假 4小时 · 加班 2小时」—— 只列有值的那几项。
+  static String? dayExtraLine(int leaveMinutes, int overtimeMinutes,
+      {String? leaveKind}) {
+    final parts = <String>[
+      if (leaveMinutes > 0) extraLeaveLine(leaveMinutes, kind: leaveKind),
+      if (overtimeMinutes > 0) extraOvertimeLine(overtimeMinutes),
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  /// 信息卡上的备注行：「请假备注：xxx · 加班备注：yyy」。两条都空时返回 null。
+  static String? dayExtraNoteLine(String? leaveNote, String? overtimeNote) {
+    final parts = <String>[
+      if (leaveNote != null && leaveNote.isNotEmpty)
+        isEn ? 'Leave note: $leaveNote' : '请假备注：$leaveNote',
+      if (overtimeNote != null && overtimeNote.isNotEmpty)
+        isEn ? 'Overtime note: $overtimeNote' : '加班备注：$overtimeNote',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  /// 「调整班次」弹层里那行备注框的标签。
+  static String get shiftNoteLabel => t('备注（可选）', 'Note (optional)');
+
+  /// 备注框的占位提示 —— 说清楚这行是干嘛用的，别让人以为要写理由。
+  ///
+  /// 英文必须短：320 宽的窗里输入框只剩一百多 dp，长句子会被省略号截掉
+  /// （`text_fit_guard` 会红）。
+  static String get shiftNoteHint =>
+      t('例如：跟张三换了班', 'e.g. shift swap');
+
+  /// 信息卡上的**调班备注**行（与请假 / 加班备注并列，但各存各的）。
+  static String shiftNoteLine(String note) =>
+      isEn ? 'Note: $note' : '备注：$note';
+
+  static String dayExtraSaved(String range, String kind, String duration) => isEn
+      ? 'Saved $kind $duration on $range'
+      : '已记录 $range $kind $duration';
+
+  static String dayExtraCleared(String range, String kind) =>
+      isEn ? 'Cleared $kind on $range' : '已清除 $range 的$kind';
+
+  // ── 统计页 ──
+  static String get statistics => t('统计', 'Statistics');
+  static String get statsMonth => t('月', 'Month');
+  static String get statsYear => t('年', 'Year');
+  static String get statsThisMonth => t('本月', 'This month');
+  static String get statsThisYear => t('今年', 'This year');
+  static String get statsActual => t('实际在岗', 'Hours worked');
+  static String get statsNormal => t('正常', 'Regular');
+  static String get statsWorkDays => t('上班', 'Work days');
+  static String get statsRestDays => t('休息', 'Rest days');
+  static String get statsLeave => t('请假', 'Leave');
+  static String get statsOvertime => t('加班', 'Overtime');
+  static String get statsAverage => t('平均', 'Average');
+  static String get statsBreakdown => t('班次分布', 'By shift');
+  static String get statsHolidayWork => t('法定节假日上班', 'Worked on holidays');
+  static String get statsNightShifts => t('夜班', 'Night shifts');
+  static String get statsLongestWork => t('最长连班', 'Longest work streak');
+  static String get statsLongestRest => t('最长连休', 'Longest rest streak');
+  static String get statsUnscheduled => t('未排班', 'Unscheduled');
+  static String get statsBlankDays => t('无班次', 'No shifts');
+  static String get statsNoSchedule => t('这段时间还没有排班', 'No schedule for this period');
+  static String get statsBlankHint => t(
+      '这套班表没有班次（跟随法定节假日），无法统计工时',
+      'This schedule has no shifts (follows public holidays), so hours cannot be calculated');
+  static String statsDays(int n) => isEn ? '$n d' : '$n天';
+  static String statsMissingTime(int n) => isEn
+      ? '$n work day(s) have no times set and were counted as 0 h'
+      : '$n 天班次未设时间，未计入工时';
+  static String statsAverageValue(double hours) => isEn
+      ? '${hours.toStringAsFixed(1)} h / shift'
+      : '${hours.toStringAsFixed(1)} 小时 / 班';
+  static String statsYearLabel(int year) => isEn ? '$year' : '$year年';
+  static String statsMonthShort(int month) => isEn
+      ? const [
+          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ][month - 1]
+      : '$month月';
+  static String statsBreakdownLine(int normal, int overtime, int leave) {
+    final parts = <String>[
+      '${L10n.statsNormal} ${durationText(normal)}',
+      if (overtime > 0) '${L10n.statsOvertime} ${durationText(overtime)}',
+      if (leave > 0) '${L10n.statsLeave} ${durationText(leave)}',
+    ];
+    return parts.join(' · ');
+  }
+
+  // ── 统计页的图 / 口径 / 导出（v0.13.17） ──
+
+  /// 「出勤构成」分段条。
+  static String get statsComposition => t('出勤构成', 'Day composition');
+
+  /// 100% 分段条里「整天请假」那一段。
+  static String get statsFullLeave => t('整天请假', 'Full-day leave');
+
+  /// 环形图中心那一行的小字。
+  static String get statsWorkDaysCenter => t('上班', 'Work');
+
+  /// 请假构成（按类型）。
+  static String get statsLeaveKinds => t('请假构成', 'Leave by type');
+  static String get statsLeaveUnspecified => t('未分类', 'Unspecified');
+
+  /// 年视图顶部那张 12 根柱的图。
+  static String get statsMonthlyHours => t('月度工时', 'Monthly hours');
+
+  /// 年视图里 12 个月的下钻列表。
+  static String get statsByMonth => t('按月查看', 'By month');
+
+  /// 出勤亮点卡（法定节假日 / 夜班 / 最长连班 / 最长连休）。
+  static String get statsFacts => t('出勤亮点', 'Highlights');
+
+  /// 底部可展开的「统计口径」卡。
+  static String get statsMethod => t('统计口径', 'How it is calculated');
+  static List<String> get statsMethodLines => isEn
+      ? const [
+          'Hours worked = regular hours + overtime. Overtime never offsets leave.',
+          'One shift = end − start. A night shift crossing midnight counts entirely on the day it starts.',
+          'Full-day leave is not counted as a work day; partial leave is subtracted from that day\'s hours.',
+          'A no-shift schedule (follows public holidays) never invents work or rest days — those days count as "no shifts".',
+          'Average per shift = regular hours ÷ work days (overtime excluded).',
+          'The monthly average line only counts months with hours > 0.',
+        ]
+      : const [
+          '实际在岗 = 正常工时 + 加班工时；加班单列，不与请假抵扣。',
+          '单班时长 = 结束 − 开始；跨午夜的夜班整段算在上班开始那天。',
+          '整天请假不计上班天数；半天请假从当天工时里扣。',
+          '空白表（跟随法定节假日）不合成上班 / 休息，只计「无班次」。',
+          '平均每班 = 正常工时 ÷ 上班天数（不含加班）。',
+          '月度工时的均值线只统计工时 > 0 的月份。',
+        ];
+
+  // ── 统计数据导出（CSV） ──
+  static String get statsExport => t('导出', 'Export');
+  static String get exportTitle => t('导出统计数据', 'Export statistics');
+  static String get exportRange => t('导出区间', 'Date range');
+  static String get exportStart => t('开始', 'Start');
+  static String get exportEnd => t('结束', 'End');
+  static String get exportFields => t('导出字段', 'Fields');
+  static String get exportAll => t('全选', 'All');
+  static String get exportGenerate => t('生成 CSV', 'Create CSV');
+  static String get exportDone => t('已生成 CSV', 'CSV saved');
+  static String get exportCancelled => t('已取消导出', 'Export cancelled');
+  static String get exportFailed => t('导出失败', 'Export failed');
+  static String get exportEmpty =>
+      t('区间内没有可导出的数据', 'Nothing to export in this range');
+
+  static String get exportFieldDate => t('日期', 'Date');
+  static String get exportFieldWeekday => t('星期', 'Weekday');
+  static String get exportFieldStatus => t('状态', 'Status');
+  static String get exportFieldShift => t('班次', 'Shift');
+  static String get exportFieldTimes => t('起止时间', 'Start–end');
+  static String get exportFieldHours => t('工时（小时）', 'Hours');
+  static String get exportFieldLeaveKind => t('请假类型', 'Leave type');
+  static String get exportFieldLeave => t('请假（小时）', 'Leave (h)');
+  static String get exportFieldOvertime => t('加班（小时）', 'Overtime (h)');
+  static String get exportFieldNight => t('夜班', 'Night shift');
+  static String get exportFieldHoliday => t('法定节假日', 'Public holiday');
+  static String get exportFieldNote => t('备注', 'Note');
+
+  static String get exportStatusWork => t('上班', 'Work');
+  static String get exportStatusRest => t('休息', 'Rest');
+  static String get exportStatusFullLeave => t('整天请假', 'Full-day leave');
+  static String get exportStatusBlank => t('无班次', 'No shifts');
+  static String get exportStatusUnscheduled => t('未排班', 'Unscheduled');
+  static String get exportYes => t('是', 'Yes');
+  static String get exportNo => t('否', 'No');
+
+  /// 星期几的短名（CSV 一列用）。
+  static String weekdayShort(DateTime d) {
+    const zh = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    const en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return (isEn ? en : zh)[d.weekday - 1];
+  }
+
+  /// `yyyy-MM-dd`，CSV 与文件名共用。
+  static String isoDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
   static List<String> get weekdays => isEn
       ? const ['M', 'T', 'W', 'T', 'F', 'S', 'S']
       : const ['一', '二', '三', '四', '五', '六', '日'];
@@ -926,9 +1447,9 @@ class L10n {
   static String get gettingStartedMore => t('完整说明在「我的 → 使用帮助」，随时能看',
       'The full guide lives under Me → Usage guide, whenever you need it');
 
-  // 使用帮助 · 第一级（整页：简介 + 九条功能简介 + 进第二层的入口）
+  // 使用帮助 · 第一级（整页：简介 + 十一条功能简介 + 进第二层的入口）
   //
-  // **简介只讲「这是什么、由哪几块组成」**，不是目录 —— 目录是下面那九条的事。
+  // **简介只讲「这是什么、由哪几块组成」**，不是目录 —— 目录是下面那十一条的事。
   static String get helpIntro => t(
       '倒班助手Pro 是一个纯离线的排班助手：班表设一次，它替你算好每天什么班、什么时候响闹钟，还能放到手机桌面上随时看。底部四个页面各管一件事——日历看班、闹钟管响铃、待办记事情、我的做设置。',
       'Shift Assistant Pro is an offline scheduling helper. Set your shift pattern once and it works out every day for you, rings when it should, and keeps a card on your home screen. The four tabs each do one job — Calendar for shifts, Alarm for ringing, Todo for notes, Me for settings.');
@@ -1011,6 +1532,24 @@ class L10n {
         t('选中的那天有待办时，日历底栏信息卡会显示「N 项待办」',
             'When the selected day has todos, the calendar\'s info card shows "N todos"'),
       ];
+  static String get guideStatsTitle => t('统计', 'Statistics');
+  static List<String> get guideStatsDesc => [
+        t('日历右上角的按钮打开统计页：月 / 年两种视图，实际在岗、正常工时、上班与休息天数一眼看全',
+            'The button at the top right of the calendar opens Statistics: month and year views show hours actually worked, regular hours and work / rest days at a glance'),
+        t('往下还有请假、加班、法定节假日上班、夜班天数与最长连班 / 连休；请假与加班在「调整班次」里记，整天请假会自动取消那天的班次闹钟',
+            'Below that: leave, overtime, holiday work, night shifts and the longest work / rest streak. Leave and overtime are recorded under "Adjust shift"; a full-day leave also cancels that day\'s shift alarm'),
+        t('右上角「导出」把出勤表存成 CSV，Excel 直接打开；跨午夜的班次会标「次日」',
+            'Export at the top right writes the attendance table to CSV for Excel; shifts that cross midnight are marked " (+1d)"'),
+      ];
+  static String get guideBackupTitle => t('数据备份', 'Data backup');
+  static List<String> get guideBackupDesc => [
+        t('「我的 → 数据备份」把排班、待办、模板、闹钟、外观设置与自选铃声导出成一个 .dshbackup 文件',
+            'Me → Data backup exports schedules, todos, templates, alarms, appearance settings and your ringtone into one .dshbackup file'),
+        t('重装、换机或误清空后，选这个文件导入就能恢复；导入会覆盖当前数据并重启一次 App',
+            'After a reinstall, a new phone or an accidental reset, import that file to restore it; importing replaces current data and restarts the app once'),
+        t('导入后闹钟会按恢复的排班重新排；备份文件建议放到网盘或电脑',
+            'Alarms are re-scheduled from the restored data; keep the backup file in a cloud drive or on your computer'),
+      ];
   static String get guideAppearanceTitle => t('外观', 'Appearance');
   static List<String> get guideAppearanceDesc => [
         t('「我的 → 外观」可切跟随系统 / 浅色 / 深色，选 5 种主色调，中英文切换',
@@ -1060,6 +1599,8 @@ class L10n {
   static List<String> get guideUpdateDesc => [
         t('「我的 → 检查更新」查看最新正式版 / 测试版',
             'Me → Check for updates shows the latest stable / beta builds'),
+        t('国内可直连官网下载；官网连不上时自动回退 GitHub',
+            'Downloads work directly from the official site in mainland China, with GitHub as a fallback'),
         t('应用内下载并自动拉起安装', 'Download and install in-app'),
       ];
 

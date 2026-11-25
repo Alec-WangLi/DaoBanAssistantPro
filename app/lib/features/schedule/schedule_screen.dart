@@ -630,9 +630,23 @@ class _EventFields {
     this.seriesId,
     this.shiftChoices = const [],
     this.fallbackShiftName,
+    this.seriesStart,
   });
 
   DateTime date;
+
+  /// 系列的「从这天起」；null = 还没定过（新建 / 从一次性改成重复时都走 [date]）。
+  ///
+  /// **与 [date] 分开是必须的**：重复项的日期那一行读作「从这天起」，它编的是
+  /// *系列*；而 [date] 是「当前这一次」的落点，编辑既有行时必须留给那条行，
+  /// 拿它去改起点会把一次无关的编辑变成「把整个系列往前拽」。
+  DateTime? seriesStart;
+
+  /// 用户是否**真的动过**「日期 / 从这天起」那一行。
+  ///
+  /// 只给「编辑既有系列」那条路径用：日期行在重复待办里读作「从这天起」，用户
+  /// 改它就是要换系列的起点；没动过则必须原样保留（见 [commit] 里那段注释）。
+  bool dateChanged = false;
 
   /// 分钟自午夜；null = 没设时间。
   int? timeMinute;
@@ -694,16 +708,33 @@ class _EventFields {
         key: const Key('todo-date-row'),
         // 重复项那一行不叫「日期」：它的意思是「从哪天开始生效」，之后的日期由
         // 规则算出来，用户改不了单次（想改就改这一次那条行本身）。
+        //
+        // **它显示的是系列起点**（没定过时才退回 [date]）：编辑一个早就开始的
+        // 系列时，[date] 是「当前这一次」的日子，拿它当「从这天起」显示等于在
+        // 骗人 —— 用户照着改一遍，就会把整个系列往前拽。
         label: repeat == null ? L10n.date : L10n.startsOn,
-        value: L10n.monthDay(date),
+        value: L10n.monthDay(repeat == null ? date : (seriesStart ?? date)),
         onTap: () async {
+          final current = repeat == null ? date : (seriesStart ?? date);
           final p = await showGlassDatePicker(
             context,
-            initialDate: date,
+            initialDate: current,
             firstDate: DateTime(2000),
             lastDate: DateTime(2100),
           );
-          if (p != null) setState(() => date = dateOnly(p));
+          if (p != null) {
+            setState(() {
+              if (repeat == null) {
+                date = dateOnly(p);
+              } else {
+                seriesStart = dateOnly(p);
+                // **只记「用户真的动过」**，不拿「当前值是几号」去猜：编辑弹窗里
+                // 那一行的初值是系列的起点，而「没动过」时它必须原样留着
+                // （v0.9.14 的回归，见 `commit` 的注释）。
+                dateChanged = true;
+              }
+            });
+          }
         },
       ),
       // 时间 / 提醒 / 联动闹钟这三行同样走共享件（系列编辑器用同一份）——
@@ -759,7 +790,7 @@ class _EventFields {
       sid = await repo.addRecurringTodo(
         title: title,
         repeat: repeat!,
-        startDate: date,
+        startDate: seriesStart ?? date,
         timeMinute: timeMinute,
         advanceRemindMinutes: advance,
         alarmEnabled: alarm,
@@ -777,8 +808,10 @@ class _EventFields {
         id: s.id,
         title: title,
         repeat: repeat!,
-        // **起点原样带过去，不要写成 `date`**：`date` 是「当前这一次」的日子，
-        // 拿它当起点会让下面那步对齐整个失效 —— `occurrenceOnOrBefore` 有一道
+        // **只有用户动过日期行时才写新起点**：没动过就原样带过去。
+        //
+        // 为什么不能无条件写 `date`：`date` 的初值是「当前这一次」的日子，拿它当
+        // 起点会让下面那步对齐整个失效 —— `occurrenceOnOrBefore` 有一道
         // `daysBetween(start, 候选) >= 0` 的闸门（它本来是给生成器用的：不许造出
         // 起始日之前的行），而「把每周三改成每周五」要回退到**本周之前的那个
         // 周五**，起点一变成今天，那个周五就早于起点、被判定为「不合法」→ 返回
@@ -787,7 +820,13 @@ class _EventFields {
         // 症状是**按星期几现形**的：今天若是周三或周四，「最近一个周五」落在
         // 起点之前，这条路径整天失灵（2026-09-30 跑全套测试时逮到 —— 用例
         // `recurring_dialog_test` 那条「改成每周五」在周三/周四必红，其余五天绿）。
-        startDate: s.startDate,
+        //
+        // 但反过来「永不写」也是错的：那一行对重复项读作「从这天起」，用户改它
+        // 就是要换起点，吞掉之后**提醒仍按旧起点排** —— 2026-11-17 真机报障
+        // 「今天 11/17，我选的是 11/19 开始，它还是提醒」，库里的证据是
+        // 「start_date = 11/17、那一条行 = 11/19」。所以由 `dateChanged` 分叉：
+        // 用户动过才写，没动过保持 v0.9.14 的老行为。
+        startDate: dateChanged ? (seriesStart ?? date) : s.startDate,
         timeMinute: timeMinute,
         advanceRemindMinutes: advance,
         alarmEnabled: alarm,
@@ -801,14 +840,19 @@ class _EventFields {
     }
 
     if (existing == null) {
-      await repo.addEvent(
-        title: title,
-        date: date,
-        timeMinute: timeMinute,
-        advanceRemindMinutes: advance,
-        alarmEnabled: alarm,
-        seriesId: sid,
-      );
+      // **重复项不在这里建行**：那一行由生成器按「不晚于今天的最近一次发生日」
+      // 补出来（见下面那段）。在这里建就等于替用户把「未来的那一次」提前摆进
+      // 列表 —— v0.13.15 头一版就是这么做的，用户当天就否掉了。
+      if (repeat == null) {
+        await repo.addEvent(
+          title: title,
+          date: date,
+          timeMinute: timeMinute,
+          advanceRemindMinutes: advance,
+          alarmEnabled: alarm,
+          seriesId: sid,
+        );
+      }
     } else {
       await repo.updateEvent(
         existing,
@@ -821,22 +865,35 @@ class _EventFields {
       );
     }
 
-    // 改完周期要把「当前这一次」对齐到新规则的最近一次发生日（spec §4.2 末段）。
+    // 改完周期 / 起点之后，系列里**只允许有一条「当前这一次」**。
     //
-    // **这一步生成器不会替我们做**：它只往前顺延、永不回退（用户手工把这一次
-    // 挪到别的日子时不许被拽回来），而「把每周三改成每周五」恰恰需要回退。
-    // 两条路径的分工写在这里，免得后人把哪一边当成 bug 去改。
+    // 三条分工，缺一条就会留下一条不该存在的行：
+    //   ① 有当前这一次（不晚于今天的最近一次发生日）→ 把未完成的行对齐到它。
+    //      **生成器不会替我们做这一步**：它只往前顺延、永不回退（用户手工把这一次
+    //      挪到别的日子时不许被拽回来），而「把每周三改成每周五」恰恰需要回退。
+    //   ② 起点还在未来 → 一条都不留。用户 2026-11-17 明确要求：「每月 17 号、
+    //      从 11/21 起」就该 12/17 才出现在列表里。（规则本身是脏数据、`occ`
+    //      因此为 null 时不删 —— 那行是用户要做的一件事，替他删就是数据丢失。）
+    //   ③ 补：新建的重复待办这时还没有行，交给生成器按同一条判据补出来。
     if (sid != null) {
+      final today = dateOnly(appNow());
       final s = (await repo.listRecurringTodos()).firstWhere((x) => x.id == sid);
       final chain = (await repo.getActiveSchedules())?.chain;
-      final occ = occurrenceOnOrBefore(s, dateOnly(appNow()),
-          shiftOn: chain?.shiftOn);
-      if (occ != null) {
-        for (final r in (await repo.listEvents())
-            .where((e) => e.seriesId == sid && !e.isCompleted)) {
-          if (!isSameDay(r.date, occ)) await repo.setEventDate(r.id, occ);
+      final occ = occurrenceOnOrBefore(s, today, shiftOn: chain?.shiftOn);
+      final notStarted =
+          occ == null && daysBetween(today, dateOnly(s.startDate)) > 0;
+      final live = (await repo.listEvents())
+          .where((e) => e.seriesId == sid && !e.isCompleted)
+          .toList();
+      for (final r in live) {
+        if (notStarted) {
+          // 起点搬到未来了：这条行是「旧起点上的这一次」，收走。
+          await repo.deleteEvent(r);
+        } else if (occ != null && !isSameDay(r.date, occ)) {
+          await repo.setEventDate(r.id, occ);
         }
       }
+      await repo.advanceRecurringTodos(today: today);
     }
     return true;
   }
@@ -890,6 +947,8 @@ Future<void> showEditEventDialog(
     seriesId: e.seriesId,
     shiftChoices: choices,
     fallbackShiftName: todayShift,
+    // 「从这天起」显示系列的起点，不是这一条行的日子（见 [seriesStart]）。
+    seriesStart: series?.startDate,
   );
 
   if (!context.mounted) return;

@@ -53,6 +53,11 @@
             </intent-filter>
         </receiver>
         <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <!-- 闹钟巡检：6 小时一次，照落盘清单把被系统 / 厂商丢掉的闹钟补回来
+             （三星「休眠应用 / 深度休眠应用」会把已排闹钟整条取消）。
+             必须显式声明：release 构建 isMinifyEnabled = true，只被 PendingIntent
+             隐式引用的类会被 R8 裁掉。 -->
+        <receiver android:name=".AlarmWatchdogReceiver" android:exported="false" />
         <!-- 开机重排：setAlarmClock 的记录重启即清空，靠 AlarmStore 那份落盘清单
              把闹钟排回去（见 BootReceiver 的说明）。只用到 RECEIVE_BOOT_COMPLETED，
              上面已声明。不 directBootAware：有锁屏密码时 BOOT_COMPLETED 要等首次

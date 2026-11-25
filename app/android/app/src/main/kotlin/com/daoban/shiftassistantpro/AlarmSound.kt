@@ -75,6 +75,19 @@ object AlarmSound {
         return mp
     }
 
+    /**
+     * 日志里的音源写法。
+     *
+     * 不用 `scheme://authority`：`file` 与 `android.resource` 都没有 authority，
+     * 打出来是 `file://` / `android.resource://`，读日志的人会以为音源是空的
+     * （2026-11-22 那条报障日志里正是「开始播放 file://」）。
+     */
+    private fun describe(uri: Uri): String = when (uri.scheme) {
+        "android.resource" -> "内置"
+        "file" -> "自选 ${uri.lastPathSegment ?: uri}"
+        else -> "${uri.scheme}://${uri.authority}"
+    }
+
     private fun tryCreate(context: Context, uri: Uri): MediaPlayer? {
         val mp = MediaPlayer()
         return try {
@@ -88,8 +101,24 @@ object AlarmSound {
             )
             mp.prepare()
             mp.start()
+            // 「响铃链路走到哪一步」的第三条证据（前两条在 AlarmReceiver 与
+            // AlarmRingService）：有这一行 = 声音真的出声了，没有 = 音源或音频
+            // 通道的问题。落盘才查得到，见 AlarmReceiver 那段的三种结果。
+            //
+            // 写法用 [describe] 而不是 `scheme://authority`：后者对自选铃声只会打出
+            // 一句 `file://`（file 没有 authority），看着像坏了 —— 2026-11-22 那条
+            // 报障日志里就是这么一行，读的人以为音源是空的。
+            AlarmLog.diagnostic(context, "AlarmSound: 开始播放 ${describe(uri)}")
             mp
         } catch (e: Exception) {
+            // **把原因写进日志文件**（2026-11-16）：以前这里一声不响地吞掉，
+            // 于是「自选铃声用不了」在用户端只剩一句没有下文的提示 —— 分不清是
+            // 没权限读、文件被删、还是格式不支持。用 `error` 而不是 `info`：
+            // 这两处都会落盘，「查看日志」里才看得见。
+            AlarmLog.error(
+                context,
+                "AlarmSound: 音源打不开 ${describe(uri)}：${e.javaClass.simpleName}: ${e.message}"
+            )
             // 半路失败的 MediaPlayer 不能复用，也不能就这么丢掉（会泄漏一个
             // native 播放器），release 掉再让调用方回落。
             try {

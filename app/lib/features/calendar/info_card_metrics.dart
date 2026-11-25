@@ -32,6 +32,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
+import '../../domain/day_extra.dart';
 import '../../domain/lunar_info.dart';
 import '../../domain/schedule_chain.dart';
 import '../../domain/shift_rotation.dart';
@@ -126,6 +127,8 @@ InfoCardMetrics measureBottomInfoCardHeight({
   required DateTime month,
   required bool hasTodoHint,
   required bool hasOverrideHint,
+  Map<int, DayExtra> extras = const <int, DayExtra>{},
+  Map<int, String> dayNotes = const <int, String>{},
 }) {
   final measure = _Measure(
     // 卡片里的 `Text` 用的都是 `AppTokens` 的角色令牌，字体族与其它属性来自
@@ -256,6 +259,48 @@ InfoCardMetrics measureBottomInfoCardHeight({
 
     var dayContent =
         dateH + _gapAfterDate + lunarH + _gapBetweenSections + rowH;
+
+    // 请假 / 加班 / 备注两行（v0.13.17）。渲染侧（`calendar_screen.dart` 的
+    // `_infoCard`）与这里的条件必须一一对应：
+    //  · 有班次那天，请假 / 加班挤在班次行的富文本尾巴上，**不多占行**；
+    //  · 没有班次那天，摘要自占一行（否则它没地方显示）；
+    //  · 备注永远自占一行，且完整折行 —— 所以这里按真实宽度、不设 maxLines 量。
+    final extra = extras[dayNumber(date)];
+    if (dayShift == null &&
+        extra != null &&
+        (extra.leaveMinutes > 0 || extra.overtimeMinutes > 0)) {
+      dayContent += AppTokens.spaceXs +
+          measure
+              .text(
+                L10n.dayExtraLine(extra.leaveMinutes, extra.overtimeMinutes,
+                        leaveKind: extra.leaveKind) ??
+                    '',
+                AppTokens.rowSecondary,
+                maxWidth: contentW,
+              )
+              .height;
+    }
+    final noteText = extra == null
+        ? null
+        : L10n.dayExtraNoteLine(extra.leaveNote, extra.overtimeNote);
+    if (noteText != null) {
+      dayContent += AppTokens.spaceXs +
+          measure
+              .text(noteText, AppTokens.microText, maxWidth: contentW)
+              .height;
+    }
+
+    // 调班备注（v0.13.20）：与请假备注同一个形状、同样自占一行、同样完整折行 ——
+    // 渲染侧 `_infoCard` 里那段 `if (shiftNote != null)` 必须与这里一一对应。
+    final String? shiftNote = dayNotes[dayNumber(date)];
+    if (shiftNote != null && shiftNote.isNotEmpty) {
+      dayContent += AppTokens.spaceXs +
+          measure
+              .text(L10n.shiftNoteLine(shiftNote), AppTokens.microText,
+                  maxWidth: contentW)
+              .height;
+    }
+
     if (badgeH > 0) dayContent += badgeH + _gapAfterBadge;
     if (showChips) dayContent += _gapBetweenSections + chipsH;
 

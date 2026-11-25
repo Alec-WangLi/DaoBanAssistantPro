@@ -42,6 +42,10 @@ import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'support/fixed_clock.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+/// 触觉原生通道名，与 `MainActivity.kt` 的 `hapticsChannel` 一致。
+const MethodChannel _hapticsChannel =
+    MethodChannel('com.daoban.shiftassistantpro/haptics');
+
 /// 有界推进若干帧。
 ///
 /// **不用 `pumpAndSettle`**：它要等到「没有待调度的帧」才返回，页面上只要有一个
@@ -115,17 +119,17 @@ void main() {
     L10n.locale = 'zh';
     SharedPreferences.setMockInitialValues({});
     _stubPluginChannels();
-    // 平台通道的 mock 与上面那两条插件通道**抢同一个 messenger**，
-    // 但 `SystemChannels.platform` 是两个插件通道之外的另一个 channel，
-    // 各自设各自的 handler，互不覆盖。
-    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'HapticFeedback.vibrate') fired.add(call.arguments);
+    // 触觉走自己的原生通道（`com.daoban.shiftassistantpro/haptics`），
+    // 与上面那两条插件通道互不覆盖。拦在这里记的是**语义档位**
+    // （`select` / `commit` / `modeEnter`），波形由 `Haptics.kt` 按设备挑。
+    messenger.setMockMethodCallHandler(_hapticsChannel, (call) async {
+      if (call.method == 'play') fired.add(call.arguments);
       return null;
     });
   });
 
   tearDown(() {
-    messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+    messenger.setMockMethodCallHandler(_hapticsChannel, null);
     hapticsDisabled = false;
   });
 
@@ -141,7 +145,7 @@ void main() {
     ));
     await tester.tap(find.byType(GlassActionButton));
     await tester.pumpAndSettle();
-    expect(fired, ['HapticFeedbackType.lightImpact']);
+    expect(fired, ['commit']);
   });
 
   testWidgets('非危险的同类按钮不震（普通按钮点击一律不震）', (tester) async {
@@ -201,7 +205,7 @@ void main() {
     // 且**到此为止**。`commit()` 半个都不许有 —— 一个开关翻转只携带一条信息，
     // 叠一档「动作落实」就是每拨一下震两下，正是这套设计要消灭的噪音。
     // 谁把 `Haptics.commit()` 加回 `onChanged`，这条立刻红。
-    expect(fired, ['HapticFeedbackType.selectionClick'],
+    expect(fired, ['select'],
         reason: '待办勾选是 §4.1 覆盖过的控件：只该有 select，commit 不能回来');
 
     await _dispose(tester);

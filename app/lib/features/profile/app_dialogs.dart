@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
+import '../../core/haptics.dart';
 import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_loading.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../alarm/alarm_service.dart';
 import 'help_entry.dart';
 
@@ -14,8 +16,10 @@ import 'help_entry.dart';
 void showAppInfoDialog(
   BuildContext context, {
   required String title,
-  required String content,
+  String? content,
+  Widget? body,
 }) {
+  assert(content != null || body != null, '正文总得给一份');
   showGlassDialog<void>(
     context: context,
     builder: (dialogContext) => GlassDialog(
@@ -25,10 +29,14 @@ void showAppInfoDialog(
       // 第二个、更小的视口，正文仍然在它自己的底边被切断（而且切在按钮上方一点点，
       // 看着还是像有块板子）。`GlassDialog` 现在自己就是「整块面板高的滚动区 +
       // 浮在上面的动作行」，交给它就行。
-      content: Text(
-        content,
-        style: AppTokens.rowSecondary.copyWith(height: 1.55),
-      ),
+      //
+      // `body` 给需要自己管状态/排版的正文（更新日志的「展开更早的」）；
+      // 其余调用点还是传字符串，样式在这里统一。
+      content: body ??
+          Text(
+            content!,
+            style: AppTokens.rowSecondary.copyWith(height: 1.55),
+          ),
       actions: [
         GlassActionButton(
           variant: GlassActionVariant.primary,
@@ -41,144 +49,238 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
-'v0.13.0\n'
-    '· 重复待办这一轮整体收口：可以按班次重复（上夜班 / 下夜班那天自动出现）、每月多选几天、随时改规则；提醒按当天值班时间落在前一天 / 当天 / 次日；行回到它属于的班次那天，副标题写「上夜班 · 次日 00:00」；勾掉或删掉之后那一次不再响，勾错了点「撤销」提醒会回来；冷启动也会把提醒重新排上\n'
-    '· 桌面小组件：三张固定尺寸的卡（本周条 / 今日卡 / 整月），现在会跟着系统的深浅色自动切换；同步失败会自己重试，字号不跟系统字号走\n'
-    '· 排班：班组卡排版收口（输入框收窄、周期起始日不再又长又矮）；排班管理与编辑排班里的箭头去掉，整行仍然可点\n'
-    '· 液态玻璃：底栏胶囊的真折射与彩边、开关与分段器的液态档、滑块两端真圆\n'
-    '· 待办：勾完收进「已完成 N 条」，点回勾就回到主列表；行尾的编辑笔去掉\n'
-    '· 外观：字号四档、深色模式、16 种班次色 + 自定义取色\n'
-    '· 修：冷启动后重复待办的提醒会重新排上；签名校验默认硬拦，避免装出「签名冲突」的包\n'
+'v0.14.0\n'
+    '· 统计页（新）：月 / 年两种视图，实际在岗、正常工时、上班 / 休息天数、请假、加班、夜班、最长连班 / 连休都算好了；环形图、出勤构成条、月度工时柱；点年月标题直接跳\n'
+    '· 请假与加班：日历上任意一天记时长、类型（也能自己起名）和备注；整天请假会自动压掉那天的班次闹钟。出勤表可以导出 CSV，拿去算工资或交班\n'
+    '· 数据备份：「我的 → 数据备份」导出 .dshbackup（排班 + 待办 + 模板 + 闹钟 + 设置 + 自己的铃声），换机或重装后导入即恢复\n'
+    '· 闹钟这一轮的重点是「不丢」：重排改成先排后清，不再有几秒钟一条闹钟都没有；每 6 小时巡检一次，被系统清掉的自动补回；闹钟页顶部多一行「下一次响铃」\n'
+    '· 「查看日志」从弹窗改成整页：按天翻（保留 7 天）、能搜索、能一键导出诊断包\n'
+    '· 权限页按品牌给入口：三星「休眠应用」、一加 / OPPO「自启动」，直接跳到系统的设置页\n'
+    '· 顺带的一批：法定节假日自动更新（「关于」页也能手动刷一次）；「调整班次」能写备注；触觉走设备自己的预定义效果；选择器顶上都补了下拉短横，日期弹层点年月标题直接跳月，深色下箭头看得见了；深色下不再有黑压压的图标；底栏滑块跟手；「版本更新」先给最近三版\n'
+    '· 「我的」新增「关于」整页（版本 / 开源地址 / 隐私说明）与打赏入口，打赏后可解锁「支持者专属」里的一封信\n'
+    '· 修：HarmonyOS 3.0（荣耀 10、畅享 20 Pro 一类）一开就闪退；用系统文件管理器选铃声返回后没反应；重复待办改「从这天起」不生效；导入备份后点重启拉不起来\n'
     '\n'
-'v0.12.11\n'
-    '· 桌面小组件现在会跟着系统的深浅色自动切换了：App 里选「跟随系统」时，系统切到深色 / 浅色，三张卡当场换色，不用再打开 App\n'
-    '· 重复待办的行回到它属于的那个班次那天：上夜班 20:30–次日 08:30 配 02:00 的待办，行挂在上夜班那天，提醒仍在次日 02:00；副标题把「上夜班 · 次日 02:00」一起写出来\n'
-    '· 修：勾选（或删掉）重复待办之后，那一次的提醒不再弹出 —— 以前打勾了，到点还会响\n'
-    '· 修：勾错了点「撤销」，那一次的提醒会跟着回来\n'
-    '· 修：App 冷启动后会重新排上重复待办的提醒 —— 以前要打开待办页才回来\n'
-    '· 说明：旧版跨午夜的重复待办在升级后会挪回班次那天；极少数旧系列在升级后可能少出现一次，再下一次就恢复正常\n'
+'v0.13.27\n'
+    '· 「版本更新」这个弹窗现在先给最近三版，更早的点下面的「展开更早的」再看 —— 十条长文一次画出来，对老机型是实打实的压力：有用户反复开关三四次之后，弹窗里的字碎成一片、接着整页上下翻转（重启就恢复）。收起来之后，这一屏也读得清爽些\n'
     '\n'
-'v0.12.10\n'
-    '· 底栏那圈边光重新配了亮度：深色档下不再白得发亮，浅色档下那条细边也终于看得清 —— 以前它几乎融进底色里\n'
-    '· 按住开关拖动、上滑关闹钟的时候，那颗圆钮的两头一直是真圆了：之前会被拉成一头尖一头胖的椭圆\n'
+'v0.13.26\n'
+    '· 修：快速滑动底栏滑块时，它总落后手指一截、跟不上 —— 现在透镜与手指的位置 1:1（分段器、开关同样受益）\n'
+    '· 恢复上一版误改的「滑动时不提起」：滑动时仍会像以前一样鼓起来（上一版判断错了，问题在跟手，不在鼓起）\n'
     '\n'
-'v0.12.9\n'
-    '· 底栏那圈彩色边缘回来了 —— 上一版把它让给了「弯折」那层，可那层只有部分机型画得出来，于是没轮到的人看到的是一枚既没有颜色、也没有弯折的胶囊。现在彩边一直画着，弯折在支持的机型上叠在上面，两者不再互相顶掉\n'
-    '· 桌面小组件不再是白块：同步没成功时它自己重试两次，还不行就在你下次打开 App 时提示一次；实在拿不到数据时写「打开 App 同步排班」，而不是一片空白\n'
-    '· 极端字号下月历格每行只差一两个像素时，不再因此多出一条滚动条（差得多时照样会滚，格子的最小高度没让步）\n'
-    '· 待办行右边那颗铅笔去掉了 —— 整行本来就能点开编辑，那颗图标只会让人以为这里有两件事\n'
-    '· 夜班的重复待办挂到了它真正要提醒的那天 —— 比如 20:30 上班、提醒设在 0 点，以前行在上班当天就冒出来，现在跟提醒一起落在次日；行上那条「次日 00:00」的小字也随之不再需要\n'
+'v0.13.25\n'
+    '· 修：底栏滑块（分段器、开关也一样）一滑就鼓成一枚球、顶出胶囊 —— 现在只有「按住」才鼓起来，普通滑动只在轨道里跟着走\n'
     '\n'
-'v0.12.8\n'
-    '· 底栏那枚玻璃胶囊的边缘现在会把背后的内容轻轻「弯」过去一点 —— 它读起来像一块有厚度的玻璃，而不是一张磨砂纸。这一层只在给得住它的手机上出现，别的机型与以前一模一样\n'
-    '· 顺着这条，胶囊边缘那圈画出来的彩色收掉了：真玻璃几乎没有虹彩，那圈颜色在咱们这套极简黑白底上只能靠画。方向感现在由上面那层弯折承担\n'
-    '· 分段器与开关一个像素都没动 —— 它们小得多，同一套弯折放到 46dp 的开关上会让整颗钮抖起来\n'
+'v0.13.24\n'
+    '· 每个从下面滑上来的弹层，顶上都有那只「往下拖」的小短横了 —— 时间 / 日期 / 月份 / 年份选择器以前漏了它，和别的弹层对不上\n'
+    '· 修：深色模式下还有些图标是黑的 —— 根因是主题没给图标兜底色，没单独取色的图标一律被画成纯黑；现在跟随正文（深色下近白），「关于」页、我的页那些列表图标都恢复可见\n'
+    '· 修：时间 / 年份选择器在小窗里会差几个像素溢出；滚轮高度改成按剩余空间自适应\n'
     '\n'
-'v0.12.7\n'
-    '· 修：编辑排班的班组卡里，「周期起始日」与箭头现在贴住右边（之前整组停在半路，右边空出一大截）；宽屏 / 横屏下「我的班」芯片也不再漂在卡片中间\n'
-    '· 修：待办行的「次日 00:00」标记只在真的会响时显示 —— 系列停用、或没设提醒时不显示\n'
-    '· 文案：帮助与更新说明里「钟点不在值班时间里」的说法改准 —— 晚于上班时间又不在值班窗口里时落在前一天（上班前），早于上班时间时按离上班 / 下班哪边近来定\n'
-    '· 无障碍：班组卡里那两行值行重新被读成按钮\n'
+'v0.13.23\n'
+    '· 日期选择（统计导出的起止日期、新建闹钟、添加待办、添加时段）翻月快了：点中间的年月标题直接弹出月份选择，不用再一下一下点箭头\n'
+    '· 同一处的左右箭头换成了玻璃圆钮，与统计页顶栏一套；深色下不再发黑 —— 原来是黑箭头压在深底上，几乎看不见\n'
+    '· 修：这些弹层翻月时高度不再跟着 30 / 31 天跳来跳去，固定按六周排\n'
     '\n'
-'v0.12.6\n'
-    '· 重复待办的「按班次」提醒现在按当天的值班时间算落在哪天：上夜班（20:30–次日 08:30）配凌晨 0 点的提醒，会落在次日 0 点，不再是上班当天凌晨；钟点晚于上班时间、又不在值班窗口里时落在前一天（上班前），早于上班时间时按离上班还是离下班近来定\n'
-    '· 待办列表那一行会标出落点（「次日 00:00」/「前一天 23:00」），与闹钟列表同一套说法\n'
-    '· 「按班次」规则的说明里补了一句落点规则\n'
-    '· 编辑排班 → 班组设置：「班组名」输入框不再占掉大半行；「周期起始日」那一行加高了（约 44dp），点起来不再发虚\n'
+'v0.13.22\n'
+    '· 「某条闹钟没响」现在能一眼看出是谁丢的：每次启动都会在重排之前记下「系统认为下一次闹钟是几点」和「我们清单里最早那条」。两边对不上＝记录被系统删了；对得上（哪怕是已经过期的时间）＝广播被拦了下来，闹钟根本没能进来\n'
+    '· 同时记下上一次进程是怎么没的：被强行停止 / 一键清理，还是被系统的冻结器杀掉 —— 这两种在日志里原本一模一样\n'
+    '· 修：巡检（给被丢掉的闹钟兜底的那条闹钟）会被每次重排往后推 6 小时，等于一直没按时跑过；现在只往前挪，并且提前到最早那条闹钟前 1 小时\n'
+    '· 一加 / OPPO 机型在「我的 → 权限」里多了一行「自启动 / 后台运行」，可以直接跳到系统的自启动管理页\n'
+    '· 诊断包里的说明重写了：先看「启动快照」那两行，再看「重排完成 … 撤 N 条」\n'
     '\n'
-'v0.12.5\n'
-    '· 修：弹窗里的值行（待办的时间与提醒、闹钟的时间与日期）右侧的值与箭头现在贴齐右边；200dp 小窗下标签与值改成上下两行，标签不再被截掉\n'
-    '· 修：班组设置折叠时那行班组名，8 个长名字装不下会改成「N 个班组 · 点开可改名」，不再把字裁掉；清空的班组名也不会留下「 · 二班」这种空段\n'
-    '· 修：小窗 + 特大字号下，调过班的那天信息卡不再把班次名截成「白…」\n'
-    '· 无障碍：弹窗里的值行重新被读成按钮\n'
+'v0.13.21\n'
+    '· 修：闹钟页「下一次响铃」关掉某一天的闹钟后不跟着跳 —— 它没看「按天开关」。现在关掉哪条就跳到下一条\n'
+    '· 修：没有自定义闹钟时，那一块终于真的贴到底部（上一版它和上面的班次列表平分剩余空间，提示停在屏幕中间）\n'
+    '· 编辑排班里的「夜班」开关下面加了一行说明：它只算进统计页的「夜班天数」，不影响轮转与闹钟；与「联动闹钟」之间也拉开了\n'
     '\n'
-'v0.12.4\n'
-    '· 班组名现在看得出来能改了：编辑排班里每个班组是一只有框的输入框（之前是个光秃秃的文本框，读起来像固定的名单）；「班组设置」折叠时也会把当前班组名列出来，并写着「点开可改名」\n'
-    '· 全 app 统一了「哪些东西能点」的提示：铅笔表示点开进入编辑（待办、自定义闹钟、我的模板）；箭头表示点开打开选择器、页面或弹窗（弹窗里的时间与日期、日历信息卡那行班次、排班管理里每套方案、我的页那几个入口、窄屏的模板卡）\n'
-    '· 日历底下那张信息卡与小窗模式都补上了箭头；小窗里的时间改成按宽度缩小，不再被省略号吃掉\n'
-    '· 班组设置的「周期起始日」与「从第 N 段入场」改成箭头；「每月第 N 天起」与「我这组从这个周期开始」也改箭头，铅笔从此只表示「进入编辑」\n'
-    '· 修：窄屏下「周期起始日」那一行加箭头后会横向溢出；现在标签与日期会一起按宽缩小\n'
+'v0.13.20\n'
+    '· 闹钟页顶部多了一行「下一次响铃」：几月几日几点、哪条班次闹钟，还有几小时几分\n'
+    '· 没有自定义闹钟时那一块不再占半个屏幕：提示贴到底部，未来 30 天的班次闹钟回到整块空间\n'
+    '· 统计页年月份下面那颗小箭头去掉了\n'
+    '· 「调整班次」弹层加了备注：换班、调休写一句，日历信息卡里看得见（本次升级会新建一张表）\n'
+    '· 「查看日志」从弹窗改成整页：按天翻（日志现在按天归档、保留 7 天）、能搜索、能一键导出诊断包（日志 + 设备权限 + 已排闹钟清单 + 未来 7 天计划）\n'
+    '· 报「偶尔没响」时把诊断包发来：里面有 App 认为该响的清单，一眼分得清是没排、还是被系统丢了\n'
     '\n'
-'v0.12.3\n'
-    '· 重复待办新增「按班次」：从排班表的班次里多选（比如上夜班、下夜班），到这些班次那天自动出现。它按班次名字匹配，换排班表后只要新表里有同名班次就继续生效；名字对不上时「重复待办」面板会明确写出来\n'
-    '· 「每月」现在能多选几天：比如每月 1 号、15 号各签一次记录；小月没有的日期落在当月最后一天，同一天只出现一次\n'
-    '· 新建待办选「每周」时，七个星期格子排成一行等宽，不再挤成两行\n'
-    '· 「重复待办」面板行尾的小铅笔去掉了 —— 整行点进去本来就是编辑\n'
-    '· 修：在待办页新建的重复待办现在会立刻排上提醒，不用等下次打开 App\n'
+'v0.13.19\n'
+    '· 统计页年视图：点年份直接弹出年份选择器，跨十年不用再点十下箭头\n'
+    '· 翻月 / 翻年 / 「今天」，以及年视图点某个月，都会震一记；已经停在本月 / 今年时不震\n'
+    '· 期间条那三颗玻璃钮亮了一档；左右箭头的颜色也修了 —— 深色下它们原本被画成黑色，你看到的「有点暗」就是它\n'
+    '· 统计页统一「图标在前」：月 / 年分段、四格指标、每张卡片的分节标题、出勤亮点的四行，都带上了语义色图标\n'
+    '· 图表精修：环图加了底轨、圆头分段与真实缝隙（只有一天的小段也不会消失）；出勤构成条分段留缝；月度工时柱改成底轨 + 顶圆角渐变柱 + 均值虚线（只统计有工时的月份）+ 当月高亮，切年时从基线长出来\n'
+    '· 请假构成每个类型多了一条占比细条；统计口径补了一条「月度均值线只统计工时 > 0 的月份」\n'
     '\n'
     ;
-
 const String _changelogEn =
-'v0.13.0\n'
-    '· Recurring todos are rounded out: repeat by shift (night / late), pick several days of the month, edit the rule any time; reminders land on the previous / same / next day per the shift window; the row sits on its shift day with a subtitle like "Night - next day 00:00"; checking or deleting an occurrence stops its reminder, Undo brings it back, and a cold start re-schedules them\n'
-    '· Home-screen widgets: three fixed-size cards (week strip / today / month) now follow the system light and dark theme; a failed sync retries on its own; the font size does not follow the system setting\n'
-    '· Schedule: the crew card layout is tightened; the arrows in Schedule management and the editor are gone, while the whole row stays tappable\n'
-    '· Liquid glass: real refraction and the colour rim on the nav capsule, liquid segments and switches, round slider ends\n'
-    '· Todos: completed items move into "N completed" and come back when unchecked; the edit pencil is gone\n'
-    '· Appearance: four font sizes, dark mode, 16 shift colours plus a custom picker\n'
-    '· Fixes: recurring reminders are re-scheduled after a cold start; the signature check now fails closed, so a mismatched APK cannot be published\n'
+'v0.14.0\n'
+    '· Statistics (new): monthly and yearly views for hours on duty, normal hours, work / rest days, leave, overtime, night shifts and the longest work / rest streak, with a donut, an attendance bar and monthly hour columns; tap the year-month title to jump\n'
+    '· Leave and overtime: record hours, a type (you can name your own) and a note on any calendar day; a full-day leave also cancels that day shift alarm. The attendance table exports to CSV for payroll or handover\n'
+    '· Backup: My > Backup exports a .dshbackup file (schedules + todos + templates + alarms + settings + your own ringtones); import it after a reinstall or on a new phone and everything is back\n'
+    '· Alarms this round are about not losing one: re-planning schedules the new batch before cancelling the old, a check-up every 6 hours restores whatever the system dropped, and the alarm page gains a next-alarm line\n'
+    '· View log is now a full page: per-day logs (7 days kept), search, and a one-tap diagnostics bundle\n'
+    '· Permissions gains brand entries: Samsung Sleeping apps, OnePlus / OPPO Auto-launch, each opening the right system screen\n'
+    '· Along the way: public holidays update themselves (About can refresh them by hand too); Adjust shift takes a note; haptics use the built-in predefined effects; every sheet has the drag handle, date sheets jump to a month from their title and their arrows are visible in dark mode; no more black icons in dark mode; the sliders track your finger; the update log opens with the latest three versions\n'
+    '· My gains a full About page (version / source / privacy) and a tip entry; tipping unlocks a letter under Supporter\n'
+    '· Fix: instant crash on HarmonyOS 3.0 (Honor 10, Enjoy 20 Pro and the like); picking a ringtone with the system file manager did nothing on return; changing a recurring to-do starting day had no effect; tapping restart after a backup import brought nothing back\n'
     '\n'
-'v0.12.11\n'
-    '· The home-screen widgets now follow the system light / dark theme: with the app set to Follow system, all three cards switch as soon as the system does, without opening the app\n'
-    '· A recurring todo now sits on the shift day it belongs to: a 02:00 todo on a 20:30-08:30 night shift lives on the shift day, while its reminder still fires at 02:00 the next day; the subtitle spells out "Night - next day 02:00"\n'
-    '· Fix: checking off (or deleting) a recurring todo now stops that occurrence from ringing - it used to fire anyway\n'
-    '· Fix: tapping Undo after a mistaken check restores that reminder\n'
-    '· Fix: a cold start now re-schedules recurring reminders - before, they only came back after opening the todo page\n'
-    '· Note: existing cross-midnight todos move back to their shift day on upgrade; a rare old series may skip one occurrence once, then continue normally\n'
+'v0.13.27\n'
+    '· The update log now opens with the latest three versions; tap "Show earlier versions" underneath for the rest. Drawing ten long entries at once is real pressure on older phones - one user saw the text break into fragments and then the whole page flip, three or four opens in a row (a restart clears it). It also reads more clearly this way\n'
     '\n'
-'v0.12.10\n'
-    '· The rim along the nav bar has been re-lit: in the dark theme it no longer glows white, and in the light theme the thin edge is finally visible - it used to blend into the background\n'
-    '· Hold and drag the switch, or swipe up to stop an alarm, and the knob now stays properly round at both ends instead of being pulled into a lopsided oval\n'
+'v0.13.26\n'
+    '· Fix: when swiping the bottom slider quickly it lagged behind your finger - the lens now sits 1:1 under your finger (same for the segmented control and switches)\n'
+    '· Restored the previous build\'s accidental change: the lens lifts while sliding again, as it always did (that diagnosis was wrong - the problem was tracking, not the lift)\n'
     '\n'
-'v0.12.9\n'
-    '· The colour rim on the nav bar capsule is back. The last version handed that job to the bending layer, but that layer only exists on some phones - everyone else got a capsule with neither colour nor bending. The rim is drawn again, always, and the bending stacks on top where it is available\n'
-    '· The home-screen widget no longer goes blank: a failed sync retries twice on its own and then says so once the next time you open the app; when there is really no data it reads "Open the app to sync" instead of an empty card\n'
-    '· At very large text sizes the calendar no longer grows a scrollbar over a one- or two-pixel shortfall per row (a larger shortfall still scrolls - the minimum cell height is unchanged)\n'
-    '· The pencil on todo rows is gone - the whole row already opens the editor, and the icon only suggested there were two things to tap\n'
-    '· A recurring todo on a night shift now sits on the day it really reminds you: with a 20:30 shift and a 00:00 reminder the row used to appear on the shift day and now appears with the reminder on the next day. The small "next day 00:00" label on such rows is gone with it\n'
+'v0.13.25\n'
+    '· Fix: the bottom slider (and the segmented control / switches) ballooned out of its track as soon as you swiped - now it only lifts while you press and hold, and a normal slide just travels inside the track\n'
     '\n'
-'v0.12.8\n'
-    '· The edge of the nav bar capsule now bends the content behind it a little, so it reads as a piece of glass with thickness rather than a sheet of frosted paper. That layer only appears on phones that can render it; everything else looks exactly as before\n'
-    '· The painted colour rim along that capsule is gone with it: real glass has almost no iridescence, and on this flat black-and-white background that ring could only ever be drawn. The sense of direction now comes from the bending layer\n'
-    '· Segments and switches are unchanged to the pixel - they are far smaller, and the same bending on a 46 dp switch would make the whole knob wobble\n'
+'v0.13.24\n'
+    '· Every sheet that slides up from the bottom now has the little drag handle at the top — the time / date / month / year pickers were missing it and looked different from the rest\n'
+    '· Fix: some icons were still black in dark mode — the theme never set a fallback icon colour, so every icon without an explicit colour was drawn pure black; icons now follow the body ink (near white in dark), bringing back the row icons on About, My and elsewhere\n'
+    '· Fix: the time / year pickers could overflow by a few pixels in small windows; the wheel now takes the remaining space\n'
     '\n'
-'v0.12.7\n'
-    '· Fix: in the crew card, the cycle start date and its chevron now sit flush right (the pair used to stop mid-row with a wide gap); on landscape and tablet widths the Set as mine chip no longer floats in the middle of the card\n'
-    '· Fix: the next-day / day-before marker on a todo row now only shows when a reminder can actually fire — a paused series or one with no reminder shows none\n'
-    '· Copy: the help and release notes now describe the landing rule accurately: a moment later than the shift start but outside the window lands on the day before (ahead of the shift); earlier moments go to whichever side is nearer\n'
-    '· Accessibility: the two value rows in the crew card are read as buttons again\n'
+'v0.13.23\n'
+    '· Date picking (export range, new alarm, new todo, new shift span) is faster: tap the year-month title to jump straight to a month instead of stepping with the arrows\n'
+    '· The arrows there are now glass step buttons, the same as the Statistics period bar, and no longer turn black in dark mode — they used to be black on a dark sheet, nearly invisible\n'
+    '· Fix: those sheets no longer change height as a month goes from 30 to 31 days — the grid is pinned at six weeks\n'
     '\n'
-'v0.12.6\n'
-    '· Reminders on shift-based repeating todos now follow the shift\'s working hours: a 00:00 reminder on a night shift (20:30 to 08:30 next morning) lands at 00:00 the next day instead of the small hours of the shift\'s starting day; moments later than the shift start but outside the window land on the day before, ahead of the shift; earlier moments go to whichever side is nearer\n'
-    '· The todo row now marks that landing (next-day 00:00 / day-before 23:00), the same wording the alarm list uses\n'
-    '· The By shift hint now says how the landing is decided\n'
-    '· Edit schedule > crew settings: the name field no longer takes most of the row, and the cycle start date row is taller (about 44 dp), so it reads as tappable\n'
+'v0.13.22\n'
+    '· "An alarm did not ring" now shows whose fault it was at a glance: on every launch, before any rescheduling, the app records what the system thinks the next alarm is and what its own list says. Mismatch = the system deleted the record; match (even a time already past) = the broadcast was blocked and never reached the app\n'
+    '· It also records how the previous process died: force-stopped / cleaned up, or killed by the system freezer - the two used to look identical in the log\n'
+    '· Fix: the watchdog (the safety net for dropped alarms) was pushed 6 hours out by every reschedule, so it never actually ran on time; it now only moves earlier, and fires one hour before the next alarm\n'
+    '· OnePlus / OPPO phones get an "Auto-launch" row under My > Permissions that opens the system auto-launch page\n'
+    '· The diagnostics bundle README is rewritten: read the startup snapshot lines first, then the "withdrew N" counter\n'
     '\n'
-'v0.12.5\n'
-    '· Fix: value rows in dialogs (todo time and reminder, alarm time and date) now put the value and arrow flush right; at 200 dp the label and value stack into two lines instead of the label being clipped\n'
-    '· Fix: the collapsed crew subtitle falls back to "N crews · tap to rename" when eight long custom names do not fit, instead of clipping; an emptied name no longer leaves a stray separator\n'
-    '· Fix: in a small window at the largest text size, the info card no longer cuts the shift name to "D…" on an adjusted day\n'
-    '· Accessibility: value rows in dialogs are announced as buttons again\n'
+'v0.13.21\n'
+    '· Fix: "Next alarm" on the alarm page did not move on when you switched a day off - it ignored the per-day switches. It now skips to the next one\n'
+    '· Fix: with no custom alarms, that section finally sits at the bottom (the previous build split the leftover space with the shift list, leaving the hint mid-screen)\n'
+    '· The "Night shift" switch in the schedule editor now explains itself: it only counts towards night days in Statistics, and no longer crowds the linked-alarm row\n'
     '\n'
-'v0.12.4\n'
-    '· Crew names now look editable: each crew in the editor is a labelled input field, where it used to be a bare text box that read like a fixed list. The Crews section also lists the current crew names while collapsed, with "tap to rename"\n'
-    '· One rule now tells you what can be tapped: a pencil opens an editor (todos, custom alarms, my templates); an arrow opens a picker, a page or a dialog (times and dates in dialogs, the shift row on the calendar info card, each schedule in Schedule management, the entries on Me, and template cards on narrow screens)\n'
-    '· The calendar info card and the small-window card both gained the arrow; the time in the small-window card now shrinks to fit instead of being cut off with an ellipsis\n'
-    '· Crew cycle start and segment start now use arrows; so do "from day N of each month" and "my crew starts this cycle on", leaving the pencil to mean "opens an editor" only\n'
-    '· Fix: on narrow screens the crew cycle-start row overflowed once it had an arrow; the label and date now shrink together\n'
+'v0.13.20\n'
+    '· The alarm page gains a "Next alarm" line: the date and time, which shift alarm it is, and how long to go\n'
+    '· With no custom alarms, that section no longer takes half the screen - the hint sits at the bottom and the 30-day shift alarms get the whole area\n'
+    '· The little arrow under the year / month title on Statistics is gone\n'
+    '· "Adjust shift" now takes a note: a swap or a day off, one line, shown on the calendar info card (this update adds one table)\n'
+    '· "View log" is now a full page: per-day logs (rotated daily, 7 days kept), search, and a one-tap diagnostics bundle (logs + device permissions + the scheduled alarm list + the next 7 days of plan)\n'
+    '· Reporting "it did not ring": send the bundle - it lists what the app thinks should ring, so it is obvious whether it was never scheduled or dropped by the system\n'
     '\n'
-'v0.12.3\n'
-    '· Repeating todos gain a "By shift" rule: pick shifts from your schedule (night, late and so on) and the todo shows up on those days. Matching is by shift name, so switching schedules keeps it working as long as the new one has the same name; when it does not, the Repeating panel says so\n'
-    '· Monthly repeats can now pick several days at once, for example the 1st and the 15th; in shorter months those days fall on the last day, and never twice in one day\n'
-    '· The weekday row in "Weekly" now fits seven equal cells on one line instead of wrapping to two\n'
-    '· Removed the small pencil at the end of each Repeating panel row — tapping the row was already the edit button\n'
-    '· Fix: a repeating todo created on the todo page now gets its reminder scheduled immediately instead of waiting for the next app launch\n'
+'v0.13.19\n'
+    '· Statistics, year view: tap the year to open a year picker - no more ten arrow taps to cross a decade\n'
+    '· Month / year switching, Today, and tapping a month in the year view each tick once; tapping Today while already there stays silent\n'
+    '· The three glass buttons on the period bar are a notch brighter; the arrow colour is fixed too - in dark mode they were drawn black, which is the "looks dim" you saw\n'
+    '· Statistics now leads with icons: the month / year segment, the four metric tiles, every card header and the four highlight rows all carry a semantic-coloured icon\n'
+    '· Charts refined: the donut gains a track, round segment caps and real gaps (a one-day segment no longer vanishes); the composition bar has gaps between segments; monthly hours become track + rounded gradient bars + a dashed average line (months with hours only) + current-month highlight, growing from the baseline when the year changes\n'
+    '· Leave by type gains a share bar per row; "How it is calculated" explains that the monthly average line only counts months with hours > 0\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
+/// 折叠态下先画几版，剩下的点「展开更早的」再看。
+///
+/// **为什么不把十条一次全画**：这个弹窗是全 app 中文最密的一面（十条、每条一两行
+/// 长句，一次要光栅化上千个不同字形）。2026-11-25 一位用户反馈「反复点开、关掉
+/// 这个弹窗三四次之后，弹窗里的字变成错位的碎片，接着整页上下翻转」—— 查下来是
+/// 字形图集被压满后采样错位（Impeller 在老机型驱动上的老问题，Flutter 上游
+/// #195594 / #190519 同款），不是我们的逻辑。首屏压到三版，把这一次的字形量砍掉
+/// 七成；顺带这个面板也更好读了。数据仍是十条，只是分批呈现。
+const int kChangelogPreviewCount = 3;
+
+/// 把更新日志切成一条条，每条从 `vX.Y.Z` 那一行开始。
+///
+/// 条目之间靠空行分隔，末尾的空行归到上一条里一并 trim 掉。
+/// `app/test/changelog_window_test.dart` 也用它数条数。
+List<String> splitChangelogVersions(String text) {
+  final out = <String>[];
+  final buf = StringBuffer();
+  final head = RegExp(r'^v\d+\.\d+\.\d+$');
+  for (final line in text.split('\n')) {
+    if (head.hasMatch(line.trim()) && buf.length > 0) {
+      out.add(buf.toString().trimRight());
+      buf.clear();
+    }
+    buf.writeln(line);
+  }
+  final tail = buf.toString().trimRight();
+  if (tail.isNotEmpty) out.add(tail);
+  return out;
+}
+
 void showChangelogDialog(BuildContext context) {
-  showAppInfoDialog(context, title: L10n.changelog, content: appChangelog);
+  showAppInfoDialog(context, title: L10n.changelog, body: const _ChangelogBody());
+}
+
+/// 更新日志正文：先给最近 [kChangelogPreviewCount] 版，其余的收在一颗胶囊后面。
+class _ChangelogBody extends StatefulWidget {
+  const _ChangelogBody();
+
+  @override
+  State<_ChangelogBody> createState() => _ChangelogBodyState();
+}
+
+class _ChangelogBodyState extends State<_ChangelogBody> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final versions = splitChangelogVersions(appChangelog);
+    final shown =
+        _expanded ? versions : versions.take(kChangelogPreviewCount).toList();
+    final hidden = versions.length - shown.length;
+    final primary = Theme.of(context).colorScheme.primary;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          shown.join('\n\n'),
+          style: AppTokens.rowSecondary.copyWith(height: 1.55),
+        ),
+        if (hidden > 0 || _expanded) ...[
+          const SizedBox(height: AppTokens.spaceMd),
+          // 三层，缺一层就出毛病（都真踩过）：
+          //   · `GlassPill` 的 `Container` 带 `alignment`，等于里面垫了一层
+          //     `Align` —— 它会吃满可用宽度，胶囊就**铺成整行**（真机截图确认）；
+          //     所以必须在外层套 `IntrinsicWidth`，把宽度收到「文字 + 图标」的
+          //     内在宽（挤不下时收到可用宽）。
+          //   · `Align` 那层给的是松约束，右/中轴对齐才有意义。
+          //   · 里面的 `Flexible` 不能删：Row 给非 flex 孩子的是**无界主轴约束**，
+          //     文字按整行内在宽铺开，200dp 小窗 + 标准字号下横向溢出 29px
+          //     （`text_fit_guard_test` 报的就是它）。
+          // 合起来的效果：常态下胶囊缩到文字，挤不下时先截文字、图标留在原位。
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IntrinsicWidth(
+              child: GlassPill(
+                onTap: () {
+                  Haptics.select();
+                  setState(() => _expanded = !_expanded);
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _expanded
+                            ? L10n.t('收起', 'Collapse')
+                            : L10n.t('展开更早的 $hidden 版',
+                                'Show $hidden earlier versions'),
+                        style: AppTokens.labelStrong.copyWith(color: primary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: AppTokens.spaceXs),
+                    Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: AppTokens.iconSm,
+                      color: primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 /// 检查更新结果弹窗：展示正式版与测试版两个通道，各自可下载（仅当比当前新）。
@@ -213,7 +315,7 @@ void showUpdateDialog(BuildContext context, UpdateCheckResult result) {
   );
 }
 
-/// 检查更新失败的提示：说清「连不上 GitHub、国内要开代理」。
+/// 检查更新失败的提示：三条通道（官网清单 / 仓库清单 / GitHub API）都失败才会出现。
 ///
 /// 走弹窗而不是 snack —— snack 只停 2 秒，这条提示却要用户读完再去做一件事。
 void showUpdateFailedDialog(BuildContext context) {

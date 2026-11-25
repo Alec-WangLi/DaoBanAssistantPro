@@ -73,6 +73,9 @@ class ShiftClassProto {
         startMinute: startMinute,
         endMinute: endMinute,
         isRest: isRest,
+        // 角色就是结构的一部分：内置模板里「夜班」这个角色天然算夜班，
+        // 不必在每条配方上再手写一遍。
+        isNight: role == ShiftRole.night,
         color: color,
         alarmEnabled: alarmEnabled,
         alarms: alarms,

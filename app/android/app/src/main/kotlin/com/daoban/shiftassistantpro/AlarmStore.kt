@@ -28,6 +28,27 @@ object AlarmStore {
     private const val KEY = "entries"
     private const val KEY_QUIET = "quiets"
 
+    /**
+     * 「一次性历史清扫跑过了吗」的标记。
+     *
+     * **放在原生这份 prefs 里，不放 Flutter 那份**（`FlutterSharedPreferences`）：
+     * 出厂重置会 `sp.clear()` 把 Flutter 那份整份清掉，而重置之后**不需要**再盲扫
+     * 一次 —— 重置走的是空库重排，差集已经把所有旧 id 精确撤掉了。放在那边的话，
+     * 「重置后 SharedPreferences 必须是空的」这条护栏会被这个内部标记顶红。
+     */
+    private const val KEY_SWEPT = "legacy_swept_v2"
+
+    fun legacySwept(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SWEPT, false)
+
+    fun markLegacySwept(context: Context) {
+        try {
+            prefs(context).edit().putBoolean(KEY_SWEPT, true).apply()
+        } catch (ex: Exception) {
+            AlarmLog.error(context, "AlarmStore.markLegacySwept 失败: ${ex.message}")
+        }
+    }
+
     /** 一条已排定闹钟的全部参数，够 `AlarmScheduler.schedule` 原样再排一次。 */
     data class Entry(
         val id: Int,
@@ -168,6 +189,109 @@ object AlarmStore {
         } catch (ex: Exception) {
             AlarmLog.error(context, "AlarmStore.clear 失败: ${ex.message}")
         }
+    }
+
+    /**
+     * **整份替换**（一次落盘）。
+     *
+     * 给「一批排定」用：一次重排几十上百条，逐条 [put] 的话每条都要把整份 JSON
+     * 重新序列化一遍 —— O(n²) 的字符串构建，而且全在主线程上（`reschedule` 从前
+     * 就是一条一条跨端排的）。批量路径攒齐之后走这里，只写一次。
+     *
+     * 与 [clear] 一样是**全量语义**：调用方递进来的就是「此后应当存在的那一批」。
+     */
+    @Synchronized
+    fun replaceAll(context: Context, entries: List<Entry>) {
+        try {
+            write(context, entries)
+        } catch (ex: Exception) {
+            AlarmLog.error(context, "AlarmStore.replaceAll 失败: ${ex.message}")
+        }
+    }
+
+    @Synchronized
+    fun replaceQuiets(context: Context, quiets: List<Quiet>) {
+        try {
+            writeQuiets(context, quiets)
+        } catch (ex: Exception) {
+            AlarmLog.error(context, "AlarmStore.replaceQuiets 失败: ${ex.message}")
+        }
+    }
+
+    /** `[from, to)` 闭开区间。 */
+    private fun inRanges(id: Int, ranges: List<IntArray>): Boolean =
+        ranges.any { id >= it[0] && id < it[1] }
+
+    /**
+     * **合并式**整批替换：只替换落在 [ranges] 里的那一段，段外原样保留。
+     *
+     * 这是 `reconcileNativeAlarms` 的落盘语义：一次重排只拥有自己那段号段
+     * （整链 = 班次 + 自定义 + 待办 + 贪睡；只改待办 = 2xxxx/4xxxx）。没有它，
+     * 改一条待办会把班次闹钟从清单里抹掉 —— 系统里还在，清单里没了，重启后
+     * 就再也排不回来。
+     */
+    @Synchronized
+    fun replaceInRanges(context: Context, entries: List<Entry>, ranges: List<IntArray>) {
+        try {
+            write(context, all(context).filterNot { inRanges(it.id, ranges) } + entries)
+        } catch (ex: Exception) {
+            AlarmLog.error(context, "AlarmStore.replaceInRanges 失败: ${ex.message}")
+        }
+    }
+
+    @Synchronized
+    fun replaceQuietsInRanges(context: Context, quiets: List<Quiet>, ranges: List<IntArray>) {
+        try {
+            writeQuiets(
+                context,
+                allQuiets(context).filterNot { inRanges(it.id, ranges) } + quiets
+            )
+        } catch (ex: Exception) {
+            AlarmLog.error(context, "AlarmStore.replaceQuietsInRanges 失败: ${ex.message}")
+        }
+    }
+
+    /** 两份清单里记着的全部 id（重排前算差集用）。 */
+    @Synchronized
+    fun allIds(context: Context): List<Int> {
+        val out = ArrayList<Int>()
+        for (e in all(context)) out.add(e.id)
+        for (q in allQuiets(context)) out.add(q.id)
+        return out
+    }
+
+    /**
+     * 诊断包用：把落盘清单原样导成可 JSON 化的结构。
+     *
+     * 这份清单是「App 认为系统里应该躺着哪些闹钟」的唯一记录 —— 用户报「没响」时，
+     * 有它才分得清「App 根本没排」还是「排了、被系统丢了」。
+     */
+    @Synchronized
+    fun dump(context: Context): List<Map<String, Any?>> {
+        val out = ArrayList<Map<String, Any?>>()
+        for (e in all(context)) {
+            out.add(
+                mapOf(
+                    "id" to e.id,
+                    "millis" to e.millis,
+                    "label" to e.label,
+                    "repeatType" to e.repeatType,
+                    "quiet" to false,
+                )
+            )
+        }
+        for (q in allQuiets(context)) {
+            out.add(
+                mapOf(
+                    "id" to q.id,
+                    "millis" to q.millis,
+                    "label" to q.title,
+                    "repeatType" to 0,
+                    "quiet" to true,
+                )
+            )
+        }
+        return out
     }
 
     /**

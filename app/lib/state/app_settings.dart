@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +49,7 @@ class AppSettings {
     this.liquidGlass = false,
     this.hapticsEnabled = true,
     this.fontSize = AppFontSize.standard,
+    this.customLeaveTypes = const <String>[],
   });
 
   final AppThemeMode themeMode;
@@ -70,6 +73,14 @@ class AppSettings {
   /// 字号档位（见 [AppFontSize]）。**系统字号不参与换算。**
   final AppFontSize fontSize;
 
+  /// 用户自己起的请假类型名（按添加顺序）。内置五类不在这里，见
+  /// `domain/day_extra.dart` 的 `kBuiltInLeaveKindKeys`。
+  ///
+  /// 存 SharedPreferences 而不是新开一张表：它只是「选择条上有哪些名字」，
+  /// 每条请假记录里已经带着当时的名字（`custom:<名字>`），删掉这里的一条**不会**
+  /// 动历史记录。备份里 prefs.json 本来就会带上它。
+  final List<String> customLeaveTypes;
+
   Color get accentColor => AppColors.accentPalette[accentIndex];
 
   AppSettings copyWith({
@@ -79,6 +90,7 @@ class AppSettings {
     bool? liquidGlass,
     bool? hapticsEnabled,
     AppFontSize? fontSize,
+    List<String>? customLeaveTypes,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -87,7 +99,29 @@ class AppSettings {
       liquidGlass: liquidGlass ?? this.liquidGlass,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       fontSize: fontSize ?? this.fontSize,
+      customLeaveTypes: customLeaveTypes ?? this.customLeaveTypes,
     );
+  }
+}
+
+/// 解析 prefs 里的自定义请假类型。脏数据 / 空串一律丢掉（一条读不懂的记录
+/// 不该让整个弹层打不开）。
+List<String> parseCustomLeaveTypes(String? raw) {
+  if (raw == null || raw.isEmpty) return const <String>[];
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) return const <String>[];
+    final seen = <String>{};
+    final out = <String>[];
+    for (final v in decoded) {
+      if (v is! String) continue;
+      final name = v.trim();
+      if (name.isEmpty || !seen.add(name)) continue;
+      out.add(name);
+    }
+    return List<String>.unmodifiable(out);
+  } catch (_) {
+    return const <String>[];
   }
 }
 
@@ -110,6 +144,8 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       final liquidGlass = sp.getBool('liquidGlass') ?? false;
       final hapticsEnabled = sp.getBool('hapticsEnabled') ?? true;
       final fontSizeName = sp.getString('fontSize');
+      final customLeaveTypes =
+          parseCustomLeaveTypes(sp.getString('customLeaveTypes'));
       L10n.locale = language;
       liquidGlassEnabled.value = liquidGlass;
       hapticsDisabled = !hapticsEnabled;
@@ -127,6 +163,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
           (f) => f.name == fontSizeName,
           orElse: () => AppFontSize.standard,
         ),
+        customLeaveTypes: customLeaveTypes,
       );
     } catch (_) {
       // 忽略读取失败，使用默认值
@@ -180,6 +217,23 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     state = state.copyWith(fontSize: size);
     final sp = await SharedPreferences.getInstance();
     await sp.setString('fontSize', size.name);
+  }
+
+  /// 覆盖「自定义请假类型」列表。调用方负责去重与长度限制；这里再洗一遍，
+  /// 是因为脏数据不该跟着写回 prefs。
+  Future<void> setCustomLeaveTypes(List<String> names) async {
+    final seen = <String>{};
+    final cleaned = <String>[];
+    for (final raw in names) {
+      final name = raw.trim();
+      if (name.isEmpty || !seen.add(name)) continue;
+      cleaned.add(name);
+    }
+    state = state.copyWith(
+      customLeaveTypes: List<String>.unmodifiable(cleaned),
+    );
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString('customLeaveTypes', jsonEncode(cleaned));
   }
 
   /// 把外观这一组**在内存里**拨回默认（跟随系统 / 首个主色调 / 中文 / 液态玻璃关 /

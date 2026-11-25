@@ -3,15 +3,16 @@ import 'package:flutter/material.dart';
 import '../design_tokens.dart';
 import 'glass_title_row.dart';
 
-/// **底部弹层的统一头部** —— 拖拽把手 + 标题行 + 分隔线。
+/// **底部弹层的统一头部** —— 标题行 + 分隔线。
 ///
-/// 它替代的是五个弹层里各写各的那份头部（`shift_override_picker` /
-/// `profile_screen` 的铃声 / `glass_pickers` 的选项 / `shift_color_picker` /
-/// `calendar_screen` 的时段总览）。此前五处都只画一行标题，**没有弹窗那份主色
-/// 竖条** —— 用户 2026-10-13 一眼看出问题：「它那个标题怎么就左对齐了？……看着
-/// 很容易以为是下面的内容」。标题行本身由 [GlassTitleRow] 统一（与弹窗同源），
-/// 这一件只管弹层专属的两样：**把手**（下拉关闭的抓手）与**分隔线**（把标题与
-/// 列表内容切开）。
+/// **把手不在这一件里**（2026-11-25 起）：它搬进了 `GlassSheetPanel`，因为
+/// 「有没有把手」不该取决于这一屏有没有标题 —— 时间 / 日期 / 月份 / 年份四个
+/// 选择器没有标题头，原来就漏了把手（用户：「有的有，有的没有」）。现在把手
+/// 由外壳统一给，这一件只剩标题行与分隔线。
+///
+/// 标题行本身由 [GlassTitleRow] 统一（与弹窗同源）。此前五个弹层里各写各的
+/// 那份头部只画一行标题，**没有弹窗那份主色竖条** —— 用户 2026-10-13 一眼看出
+/// 问题：「它那个标题怎么就左对齐了？……看着很容易以为是下面的内容」。
 ///
 /// ## 三件事写死在这里
 ///
@@ -33,40 +34,15 @@ class GlassSheetHeader extends StatelessWidget {
   /// 非空时排在标题下面，用 [AppTokens.labelSecondary] + [AppTokens.inkMuted]。
   final String? subtitle;
 
-  /// 把手的宽与高。
-  ///
-  /// 36 是**字面量**而不是令牌 —— `AppTokens` 的刻度里没有这一档，而 36 落在
-  /// 4px 栅格上、`design_tokens_test` 也不扫 `Container(width:)`；这是有据可查的
-  /// 决定（与 `_ClassDot` 的 12dp、信息卡色点同一回事）。高度走 [AppTokens.spaceXs]。
-  static const double _handleW = 36;
-
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       // **必须 stretch。** 弹层自己的 `Column` 有的用 `stretch`、有的用 `start`
-      //（时段总览那处是 `start`）—— 靠外层对齐的话，把手那层 `Center` 会随父层
-      // 收缩到内容宽度、于是把手跑到左边去。自带 `stretch` 与父层怎么对齐无关。
+      //（时段总览那处是 `start`）—— 靠外层对齐的话，标题会被父层按内容宽度
+      // 居中、分隔线也会跟着缩短。自带 `stretch` 与父层怎么对齐无关。
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 拖拽把手：36×4 的圆角条，居中。
-        Padding(
-          padding: const EdgeInsets.only(
-              top: AppTokens.spaceSm, bottom: AppTokens.gapHair),
-          child: Center(
-            child: Container(
-              width: _handleW,
-              height: AppTokens.spaceXs,
-              decoration: BoxDecoration(
-                // **用令牌推进来的颜色、不写死** —— 把手是中性灰条，两档主题
-                // 下都从 `onSurface` 派生；写死 `Color(0x…)` 会被令牌守门打红，
-                // 且深浅两档下必然有一档读不出来。
-                color: AppTokens.inkMuted(context).withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(AppTokens.gapHair),
-              ),
-            ),
-          ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(AppTokens.spaceLg, AppTokens.spaceSm,
               AppTokens.spaceLg, AppTokens.spaceSm),

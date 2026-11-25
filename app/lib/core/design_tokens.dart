@@ -21,6 +21,32 @@ class AppTokens {
   static const Color success = Color(0xFF4ADE80);
   static const Color holiday = Color(0xFFE53935);
 
+  // ── 统计图表（v0.13.17，v0.13.19 精修） ──
+  //
+  // 「上班」用主题主色、「休息」用 `inkMuted`，跟着主题走；这四颗是只在图表里
+  // 出现的语义色：加班（紫）、请假（暖）、无班次（中性深）、未排班（中性浅）。
+  // 写进令牌而不是在 `features/stats` 里内联 `Color(0x…)`（D1）。
+  static const Color chartOvertime = Color(0xFF7B6CF6);
+  static const Color chartLeave = Color(0xFFF2A93B);
+  static const Color chartBlank = Color(0xFF8A8FA3);
+  static const Color chartUnscheduled = Color(0xFFB9BDCC);
+
+  /// 环形图的环宽。与 132 的外径配着看（内径约 100，中间足够放两行字）。
+  static const double chartRing = 16;
+
+  /// 环形图段与段之间**肉眼可见**的缝隙（逻辑 px）。
+  ///
+  /// 圆头描边各自向端点外长半个环宽，所以角间隙要按 `(chartRing + 它) ÷ 半径`
+  /// 算，少了这一项两个圆头正好相切、「呼吸」实际是 0（2026-11-23 评审抓出）。
+  static const double chartSegmentGap = 4;
+
+  /// 图表底轨 / 网格线：派生收在这一处，界面层不必写 `onSurface.withValues`（D2）。
+  static Color chartTrack(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08);
+
+  /// 数字等宽：指标值、图例百分比、月工时在翻月 / 翻年时不会左右跳位。
+  static const List<FontFeature> tabularFigures = [FontFeature.tabularFigures()];
+
   // ── 圆角 ──
   static const double radiusS = 12;
   static const double radiusM = 16;
@@ -452,6 +478,23 @@ class AppTokens {
 
   static Color glassBorder(bool isDark) =>
       Colors.white.withValues(alpha: isDark ? 0.16 : 0.90);
+
+  /// `GlassPill` 的**强调档**（`emphasis: true`）：期间条上那三颗可点的玻璃钮。
+  ///
+  /// 默认档在深色下是 0.22 → 0.06，压在近黑页面上读作一块暗灰；这一档抬到
+  /// 0.30 → 0.12。**只给统计页期间条用**，默认档一个像素不动。
+  static List<Color> glassTintEmphasis(bool isDark) => isDark
+      ? [
+          Colors.white.withValues(alpha: 0.30),
+          Colors.white.withValues(alpha: 0.12),
+        ]
+      : [
+          Colors.white.withValues(alpha: 0.98),
+          Colors.white.withValues(alpha: 0.66),
+        ];
+
+  static Color glassBorderEmphasis(bool isDark) =>
+      Colors.white.withValues(alpha: isDark ? 0.34 : 0.95);
 
   /// **探针专用**：方向性边缘光的配色（顶部高光 → 底部收边）。
   ///

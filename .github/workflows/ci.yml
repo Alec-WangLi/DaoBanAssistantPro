@@ -11,6 +11,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限：只读仓库内容。这个 workflow 只做 checkout / analyze / test，
+# 不需要写任何东西；不声明就走仓库默认的 GITHUB_TOKEN 权限（可能是读写）。
+permissions:
+  contents: read
+
 env:
   # 卡死版本：视觉断言与字号是按这一版量的。改这里必须同时改 BUILD.md 与 AGENTS.md。
   FLUTTER_VERSION: '3.47.2'
@@ -19,7 +24,10 @@ env:
   # 哪天有人把视觉用例挪进 `app/test/`，这个数要跟着跳一次。
   # 2026-11-06：0.12.9 / 0.12.10 两轮把条数从 1220 推到 1236（+2 格高容差、+3 液态升程下限、+2 快照推送、+1 彩边、+1 重试、…），
   # 而这里停在 1228 —— 于是 beta 上连续两次红，红的是守卫本身、不是被测代码。
-  EXPECTED_TESTS: '1257'
+  # 2026-11-25：v0.13.26 滑块跟手新增 1 条；同时删掉 v0.13.25 那 2 条（该行为已恢复原样）→ 1427。
+  # 2026-11-25：v0.13.27 更新日志折叠（切分 + 折叠/展开）新增 2 条 → 1429。
+  # 2026-11-25：v0.14.0 备份导入 4 条（.bak 放回 / 残渣清理 / pending 丢失仍放回 / WAL 成组搬迁）→ 1433。
+  EXPECTED_TESTS: '1433'
   # 字体**不再靠环境变量把关**：三份字体已经进仓库（app/test/fonts/），
   # `ensureVisualFonts()` 缺一个就无条件抛错 —— 比一个「本地不设就不生效」的开关更严。
   # 2026-11-05 第一次 CI 红了 8 条，报错是 `Found 0 widgets with key
@@ -72,6 +80,11 @@ jobs:
             git --no-pager diff --stat -- lib/data/app_database.g.dart
             exit 1
           fi
+
+      # 文档断链：图片必须全通，相对链接同时认「相对文件」与「相对仓库根」。
+      # 纯 stdlib，不需要额外装依赖。
+      - name: 文档断链
+        run: python3 scripts/link_check.py
 
   test:
     name: flutter test（用例数守卫）

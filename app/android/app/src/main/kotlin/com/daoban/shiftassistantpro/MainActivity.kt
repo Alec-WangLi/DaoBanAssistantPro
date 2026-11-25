@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -83,6 +84,8 @@ class MainActivity : FlutterActivity() {
 
         /** 自选铃声请求码 —— 与插件占用的请求码区分开。 */
         private const val REQ_PICK_RINGTONE = 40071
+        private const val REQ_SAVE_BACKUP = 40072
+        private const val REQ_PICK_BACKUP = 40073
 
         /** 自选铃声在私有目录里的子目录名（`filesDir/ringtone/`）。 */
         const val RINGTONE_DIR = "ringtone"
@@ -92,9 +95,16 @@ class MainActivity : FlutterActivity() {
          * 的整轨音频会白白占掉存储、还拖慢那次选择；给个上限并在界面上说清楚。
          */
         private const val MAX_RINGTONE_BYTES = 32L * 1024 * 1024
+        private const val MAX_BACKUP_BYTES = 200L * 1024 * 1024
     }
 
     private val settingsChannel = "com.daoban.shiftassistantpro/settings"
+
+    /**
+     * 触觉专用通道。与 settings 分开，是因为它有自己的原生实现
+     * （`Haptics.kt`）与一条测试侧的回落链（见 `lib/core/haptics.dart`）。
+     */
+    private val hapticsChannel = "com.daoban.shiftassistantpro/haptics"
     private var flutterChannel: MethodChannel? = null
     private var playingRingtone: android.media.Ringtone? = null
     private var alarmPlayer: MediaPlayer? = null
@@ -102,6 +112,9 @@ class MainActivity : FlutterActivity() {
 
     /** 等文件选择器回来的那个 Flutter 回调（同一时刻只允许一个）。 */
     private var pendingRingtoneResult: MethodChannel.Result? = null
+    private var pendingSaveBackupResult: MethodChannel.Result? = null
+    private var pendingSaveBackupSource: String? = null
+    private var pendingPickBackupResult: MethodChannel.Result? = null
 
     /**
      * App 活着时收系统深浅色切换。
@@ -146,10 +159,26 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // **取证必须排在所有重排之前**（v0.13.22）：Dart 那边一起来就会
+        // `reschedule`，把清单里已经过期的那一条当成陈旧记录撤掉 —— 实测进程起来
+        // 约 180ms 就发生。之后系统里到底有没有那条闹钟，就再也看不出来了。
+        // 两行都只读、只落盘，不影响任何功能。
+        val bootAt = System.currentTimeMillis()
+        runCatching { AlarmLog.diagnostic(this, AlarmScheduler.startupSnapshot(this, bootAt)) }
+        runCatching { AlarmLog.diagnostic(this, AlarmScheduler.lastExitDigest(this)) }
         // 关键：必须在 setContentView（super.onCreate 内部）之前设置，锁屏冷启动才能点亮屏幕并显示
         applyShowWhenLocked(intent)
         super.onCreate(savedInstanceState)
         instance = this
+        // **进程启动一行**：用户贴日志时，这一行给出「哪个版本、什么机型、几项权限
+        // 开没开」。设备那串每进程只带一次（与 `AlarmReceiver` 共用同一个 key）——
+        // 否则闹钟先响、Activity 后起，同一份日志里就有两条 200 字设备信息
+        // （2026-11-22 反馈：4 行日志 3 行是设备信息）。
+        val state = AlarmLog.deviceStateOnce(this, "device-state")
+        AlarmLog.diagnostic(
+            this,
+            "进程启动：v${versionName()}" + (if (state.isEmpty()) "" else " $state"),
+        )
         handleAlarmIntent(intent)
         handleWidgetIntent(intent)
         registerThemeReceiver()
@@ -228,6 +257,77 @@ class MainActivity : FlutterActivity() {
         false
     }
 
+    /**
+     * 三星「设备维护 → 电池 → 后台使用限制」那一页。
+     *
+     * 它管着「睡眠应用 / 深度休眠应用」两份名单：进了名单的 App，**系统会把它
+     * 已排好的闹钟一起取消**，表现是「几天偶尔漏响一次」。One UI 8.5 / Android 16
+     * 上仍然没有公开的查询接口，只能把用户送过去。
+     *
+     * 两个包名都试：新机型是 `com.samsung.android.lool`，老机型（One UI 早期）
+     * 是 `com.samsung.android.sm`，两个都解析不到就不是三星，界面不显示这一行。
+     */
+    private fun samsungBatteryPage(): Intent? = resolveFirst(
+        listOf(
+            "com.samsung.android.lool" to "com.samsung.android.sm.ui.battery.BatteryActivity",
+            "com.samsung.android.sm" to "com.samsung.android.sm.ui.battery.BatteryActivity"
+        )
+    )
+
+    /**
+     * 一加 / OPPO（ColorOS / OxygenOS）的「自启动管理」页。
+     *
+     * **为什么要有这一行**：2026-11-25 一位一加 PLK110（Android 16）用户连着两天
+     * 「某条班次闹钟没响」。日志能证明闹钟在 08:00:03 与 08:18:46 各排了一次、
+     * 0 失败，落盘清单里活到 10:06，而那一刻 `AlarmReceiver.onReceive` 一个字都
+     * 没有 —— 进程在整个时间窗里一次都没起来。这一档在 ColorOS 上对应「自启动 /
+     * 应用速冻 / 睡眠待机优化」，进程起不来时**广播照样不投递**，症状与本包一致。
+     *
+     * 组件名换过好几轮（ColorOS 7 → 12 → OxygenOS 16），逐个试；都解析不到就返回
+     * null：界面不显示这一行，调用方落回系统「应用信息」页。
+     */
+    private fun colorOsStartupPage(): Intent? = resolveFirst(
+        listOf(
+            "com.coloros.safecenter" to
+                "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+            "com.coloros.safecenter" to
+                "com.coloros.safecenter.startupapp.StartupAppListActivity",
+            "com.oplus.safecenter" to
+                "com.oplus.safecenter.permission.startup.StartupAppListActivity",
+            "com.oplus.safecenter" to
+                "com.oplus.safecenter.startupapp.StartupAppListActivity",
+            // 自启动页在个别版本上并入「耗电管理」，退一步也能到那儿。
+            "com.coloros.oppoguardelf" to
+                "com.coloros.powermanager.fuelgaue.PowerUsageModelActivity",
+            "com.oplus.battery" to
+                "com.oplus.powermanager.fuelgaue.PowerUsageModelActivity"
+        )
+    )
+
+    /** 逐个试 `包名 + 组件名`，第一个解析得到的返回；都不会返回 null。 */
+    private fun resolveFirst(candidates: List<Pair<String, String>>): Intent? {
+        for ((pkg, cls) in candidates) {
+            val i = Intent().apply {
+                component = ComponentName(pkg, cls)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val found = try {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    packageManager.resolveActivity(
+                        i, PackageManager.ResolveInfoFlags.of(0L)
+                    ) != null
+                } else {
+                    @Suppress("DEPRECATION")
+                    (packageManager.resolveActivity(i, 0) != null)
+                }
+            } catch (_: Exception) {
+                false
+            }
+            if (found) return i
+        }
+        return null
+    }
+
     private fun handleAlarmIntent(intent: Intent?) {
         val label = intent?.getStringExtra("alarm_label")
         val detail = intent?.getStringExtra("alarm_detail")
@@ -288,6 +388,30 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, settingsChannel)
         flutterChannel = channel
+
+        // 触觉：Dart 侧 `core/haptics.dart` 的三档语义 → 设备自己调好的
+        // 预定义效果（CLICK / HEAVY_CLICK）。为什么不用 Flutter 自带的
+        // `HapticFeedback.*`，见 Haptics.kt 的文件头。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            hapticsChannel,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "play" -> {
+                    val decor = window?.decorView
+                    if (decor != null) {
+                        Haptics.play(decor, call.arguments as? String ?: Haptics.SELECT)
+                    }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 把振动能力写进「查看日志」：认不认预定义效果 / 有没有原语 / 走哪一档。
+        // 换品牌排查「为什么不震 / 手感不对」时，这一行就是答案。
+        Haptics.logCapabilities(this)
+
         channel
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -317,6 +441,50 @@ class MainActivity : FlutterActivity() {
                             AlarmLog.error(
                                 this,
                                 "打开小米权限页失败: ${e.javaClass.name}: ${e.message}"
+                            )
+                            result.success(false)
+                        }
+                    }
+                    "checkSamsungBatteryPage" -> {
+                        result.success(samsungBatteryPage() != null)
+                    }
+                    "openSamsungBatteryPage" -> {
+                        try {
+                            val i = samsungBatteryPage()
+                            if (i == null) {
+                                result.success(false)
+                            } else {
+                                startActivity(i)
+                                result.success(true)
+                            }
+                        } catch (e: Exception) {
+                            AlarmLog.error(
+                                this,
+                                "打开三星电池页失败: ${e.javaClass.name}: ${e.message}"
+                            )
+                            result.success(false)
+                        }
+                    }
+                    // 一加 / OPPO（ColorOS / OxygenOS）的「自启动管理」页。
+                    // 与小米那两项同一个理由：厂商私有页面、没有公开查询接口。
+                    // 2026-11-25 一加 PLK110 用户两次「某条闹钟没响」，进程在整个
+                    // 时间窗里一次都没起来 —— 最像的就是这一档（自启动 / 后台运行）。
+                    "checkColorOsStartupPage" -> {
+                        result.success(colorOsStartupPage() != null)
+                    }
+                    "openColorOsStartupPage" -> {
+                        try {
+                            val i = colorOsStartupPage()
+                            if (i == null) {
+                                result.success(false)
+                            } else {
+                                startActivity(i)
+                                result.success(true)
+                            }
+                        } catch (e: Exception) {
+                            AlarmLog.error(
+                                this,
+                                "打开一加自启动页失败: ${e.javaClass.name}: ${e.message}"
                             )
                             result.success(false)
                         }
@@ -437,6 +605,21 @@ class MainActivity : FlutterActivity() {
                         clearLog()
                         result.success(null)
                     }
+                    // 按天分段的日志（v0.13.20）：清单 + 读某一份。
+                    "listLogFiles" -> {
+                        try {
+                            result.success(AlarmLog.listFiles(this))
+                        } catch (e: Exception) {
+                            result.error("LIST_LOG_FAILED", e.message, null)
+                        }
+                    }
+                    "readLogFile" -> {
+                        val name = call.argument<String>("name") ?: ""
+                        result.success(AlarmLog.readFile(this, name))
+                    }
+                    // 诊断包：设备 / 权限快照与原生落盘清单。
+                    "deviceReport" -> result.success(AlarmLog.deviceReport(this))
+                    "nativeAlarmStore" -> result.success(AlarmStore.dump(this))
                     "listRingtones" -> {
                         try {
                             // 用 applicationContext 走 RingtoneManager(Context) 构造：
@@ -473,15 +656,23 @@ class MainActivity : FlutterActivity() {
                         // 重启或系统清理后被回收，闹钟到点会读不到 —— 而失败发生
                         // 在响铃那一刻，用户听不到任何错误提示。复制进私有目录就
                         // 没有这个问题，也不需要申请任何存储权限。
+                        //
+                        // **用 ACTION_GET_CONTENT 而不是 ACTION_OPEN_DOCUMENT**
+                        // （2026-11-15 改）：我们要的是「导入一份副本」，不是长期
+                        // 持有一个文档 —— 持久授权用不上，而 GET_CONTENT 是各厂商
+                        // 文件管理器实现得最全的那一个。OPEN_DOCUMENT 在个别 OEM
+                        // 选择器上回传协议不完整（只填 clipData 不填 data），表现
+                        // 就是「选完返回，App 一声不响」。
                         if (pendingRingtoneResult != null) {
                             result.error("PICK_IN_PROGRESS", "已有选择器在等待", null)
                         } else {
                             pendingRingtoneResult = result
                             try {
                                 startActivityForResult(
-                                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                    Intent(Intent.ACTION_GET_CONTENT).apply {
                                         addCategory(Intent.CATEGORY_OPENABLE)
                                         type = "audio/*"
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     },
                                     REQ_PICK_RINGTONE
                                 )
@@ -491,12 +682,121 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     }
+                    "importRingtone" -> {
+                        // 把**已有的**一个音源 URI 复制进应用私有目录（2026-11-16）。
+                        //
+                        // 用处：「系统铃声」那一栏列出来的是 `RingtoneManager` 给的
+                        // `content://media/...` URI，旧代码直接把它存进 prefs —— 而
+                        // 这种 URI 在响铃那一刻（后台服务、没有媒体读取权限）可能
+                        // 打不开，表现是「设了铃声，闹钟响的还是内置那声」。改成
+                        // 选中就复制一份 `file://`，与「从文件中选择」同一条路。
+                        val raw = call.argument<String>("uri") ?: ""
+                        if (raw.isEmpty()) {
+                            result.error("RINGTONE_UNREADABLE", "缺少 uri", null)
+                        } else {
+                            Thread {
+                                var tooLarge = false
+                                val copied = try {
+                                    copyRingtoneIntoPrivateDir(Uri.parse(raw))
+                                } catch (e: RingtoneTooLargeException) {
+                                    tooLarge = true
+                                    null
+                                }
+                                runOnUiThread {
+                                    when {
+                                        tooLarge -> result.error(
+                                            "RINGTONE_TOO_LARGE", "铃声文件太大", null
+                                        )
+                                        copied == null -> result.error(
+                                            "RINGTONE_UNREADABLE", "读不到这条铃声", null
+                                        )
+                                        else -> result.success(
+                                            mapOf("name" to copied.first, "uri" to copied.second)
+                                        )
+                                    }
+                                }
+                            }.start()
+                        }
+                    }
                     "clearRingtoneFile" -> {
                         try {
                             File(filesDir, RINGTONE_DIR).listFiles()?.forEach { it.delete() }
                             result.success(null)
                         } catch (e: Exception) {
                             result.error("CLEAR_RINGTONE_FAILED", e.message, null)
+                        }
+                    }
+                    "saveBackupFile" -> {
+                        // Dart 侧先把文件写到缓存目录，这里只负责让用户选保存位置
+                        // 并把文件复制过去 —— 大块字节不走 MethodChannel。
+                        //
+                        // 统计导出（CSV）复用这条通道，只多带一个 `mime` 参数：
+                        // 用 text/csv 让文件管理器和 Excel 认得出来。
+                        val name = call.argument<String>("name")
+                            ?: "shiftassistant-backup.dshbackup"
+                        val source = call.argument<String>("sourcePath") ?: ""
+                        val mime = call.argument<String>("mime")
+                            ?: "application/octet-stream"
+                        if (pendingSaveBackupResult != null || pendingPickBackupResult != null) {
+                            result.error("BACKUP_PICKER_BUSY", "已有文件选择器在等待", null)
+                        } else if (source.isEmpty() || !File(source).exists()) {
+                            result.error("BACKUP_SOURCE_MISSING", "备份文件不存在", null)
+                        } else {
+                            pendingSaveBackupResult = result
+                            pendingSaveBackupSource = source
+                            try {
+                                startActivityForResult(
+                                    Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        type = mime
+                                        putExtra(Intent.EXTRA_TITLE, name)
+                                    },
+                                    REQ_SAVE_BACKUP
+                                )
+                            } catch (e: Exception) {
+                                pendingSaveBackupResult = null
+                                pendingSaveBackupSource = null
+                                result.error("SAVE_BACKUP_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                    "pickBackupFile" -> {
+                        if (pendingSaveBackupResult != null || pendingPickBackupResult != null) {
+                            result.error("BACKUP_PICKER_BUSY", "已有文件选择器在等待", null)
+                        } else {
+                            pendingPickBackupResult = result
+                            try {
+                                startActivityForResult(
+                                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        // 自定义扩展名没有标准 MIME，用 */* 让文件管理器
+                                        // 能选到它；格式校验在 Dart 侧做。
+                                        type = "*/*"
+                                    },
+                                    REQ_PICK_BACKUP
+                                )
+                            } catch (e: Exception) {
+                                pendingPickBackupResult = null
+                                result.error("PICK_BACKUP_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                    "restartApp" -> {
+                        result.success(null)
+                        val launch = packageManager.getLaunchIntentForPackage(packageName)
+                        if (launch != null) {
+                            // **不要杀进程**：Android 14+ 会把「进程已死 + PendingIntent
+                            // 拉起 Activity」判成后台启动并 BAL_BLOCK（真机日志
+                            // `Background activity launch blocked`），App 直接消失。
+                            // 正确做法是清空任务栈、从当前前台 Activity 启一个新任务：
+                            // 旧 Activity 被销毁 → 旧 FlutterEngine 释放 → 新 Activity
+                            // 建新引擎 → Dart main() 再跑一遍，导入的库在打开数据库
+                            // 之前完成替换。整个过程都在前台，不受 BAL 限制。
+                            launch.addFlags(
+                                Intent.FLAG_ACTIVITY_NEW_TASK or
+                                    Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            )
+                            startActivity(launch)
                         }
                     }
                     "getVolumeLevels" -> {
@@ -614,9 +914,13 @@ class MainActivity : FlutterActivity() {
                                 repeatType, hour, minute, weekdays, detail,
                                 longArrayArg(call, "repeatTimes")
                             )
-                            AlarmLog.info(
+                            // 单条排定（贪睡 / 测试闹钟）也要落盘：用户报「没响」时
+                            // 日志里得看得见它什么时候该响、排在了哪个 id 上。
+                            AlarmLog.diagnostic(
                                 this,
-                                "scheduleNativeAlarm 成功: id=$id, millis=$millis, label=$label, repeatType=$repeatType, ${AlarmLog.deviceState(this)}"
+                                "scheduleNativeAlarm: id=$id label=$label " +
+                                    "触发 ${AlarmScheduler.formatAt(millis)} " +
+                                    "repeatType=$repeatType"
                             )
                             result.success(null)
                         } catch (e: Exception) {
@@ -635,7 +939,59 @@ class MainActivity : FlutterActivity() {
                             result.error("CANCEL_ALARM_FAILED", e.message, null)
                         }
                     }
+                    // 一整批重排：**先排、后撤**，一次跨端、一次落盘。
+                    // 放后台线程：几百条 `setAlarmClock` + 一次清单写入，主线程上会
+                    // 把正播着的响铃界面卡住（冷启动那次就是闹钟刚响的时刻）。
+                    "reconcileNativeAlarms" -> {
+                        Thread {
+                            try {
+                                AlarmScheduler.reconcile(
+                                    this,
+                                    alarmSpecs(call.argument<List<*>>("alarms")),
+                                    quietSpecs(call.argument<List<*>>("quiets")),
+                                    intArrayArg(call, "cancelIds"),
+                                    rangesArg(call.argument<List<*>>("ranges")),
+                                )
+                                result.success(null)
+                            } catch (e: Exception) {
+                                AlarmLog.error(
+                                    this,
+                                    "reconcileNativeAlarms 失败: ${e.javaClass.name}: ${e.message}"
+                                )
+                                result.error("RECONCILE_FAILED", e.message, null)
+                            }
+                        }.start()
+                    }
+                    // 落盘清单里当前记着的全部 id —— Dart 侧据此算差集。读失败回空，
+                    // 调用方据此一条都不撤（不知道系统里有什么的时候，盲撤更危险）。
+                    "nativeAlarmStoreIds" -> {
+                        try {
+                            result.success(AlarmStore.allIds(this))
+                        } catch (e: Exception) {
+                            AlarmLog.error(this, "nativeAlarmStoreIds 失败: ${e.message}")
+                            result.success(emptyList<Int>())
+                        }
+                    }
+                    "appendDiagnostic" -> {
+                        try {
+                            AlarmLog.diagnostic(this, call.argument<String>("msg") ?: "")
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("APPEND_DIAG_FAILED", e.message, null)
+                        }
+                    }
+                    // 一次性历史清扫的标记。留在原生这份 prefs 里：出厂重置会清空
+                    // Flutter 那份，而重置之后不需要再盲扫（空库重排的差集已经撤干净）。
+                    "legacySweepDone" -> result.success(AlarmStore.legacySwept(this))
+                    "markLegacySweepDone" -> {
+                        AlarmStore.markLegacySwept(this)
+                        result.success(null)
+                    }
                     "cancelAllNativeAlarms" -> {
+                        // `keepStore`：升级后的一次性清扫用 —— 只撤系统里的，
+                        // **不动落盘清单**。清单留给随后那次整批重排改写：清扫与重排
+                        // 之间进程若被杀，清单里还留着旧的一批，开机重排能排回去。
+                        val keepStore = call.argument<Boolean>("keepStore") ?: false
                         // 后台线程执行，避免 ~1600 次 cancel 卡住主线程（重排时开关动画会卡顿）
                         Thread {
                             try {
@@ -645,7 +1001,7 @@ class MainActivity : FlutterActivity() {
                                 for (id in 99990..100000) am.cancel(nativePendingIntent(id))
                                 // 清单一起清空：随后 Dart 会把要留的重新排一遍，
                                 // 两份清单因此始终一致。
-                                AlarmStore.clear(this)
+                                if (!keepStore) AlarmStore.clear(this)
                                 result.success(null)
                             } catch (e: Exception) {
                                 result.error("CANCEL_ALL_ALARM_FAILED", e.message, null)
@@ -734,9 +1090,11 @@ class MainActivity : FlutterActivity() {
                         // 放后台：现在它按落盘清单逐个撤（几百到几千次 PendingIntent
                         // 操作），再加上一小段旧号段的盲扫兜底 —— 在主线程上会把
                         // 重排时正播着的开关动画卡住。
+                        // `keepStore` 同上：一次性清扫只撤系统里的，清单留给重排改写。
+                        val keepStore = call.argument<Boolean>("keepStore") ?: false
                         Thread {
                             try {
-                                AlarmScheduler.cancelTodoReminders(this)
+                                AlarmScheduler.cancelTodoReminders(this, keepStore)
                                 result.success(null)
                             } catch (e: Exception) {
                                 result.error("CANCEL_TODO_FAILED", e.message, null)
@@ -783,15 +1141,43 @@ class MainActivity : FlutterActivity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_SAVE_BACKUP) {
+            handleSaveBackupResult(resultCode, data)
+            return
+        }
+        if (requestCode == REQ_PICK_BACKUP) {
+            handlePickBackupResult(resultCode, data)
+            return
+        }
         if (requestCode != REQ_PICK_RINGTONE) return
         val result = pendingRingtoneResult
         pendingRingtoneResult = null
-        val uri = data?.data
-        if (resultCode != RESULT_OK || uri == null) {
-            // 用户按返回取消了：不是错误，回 null 让界面什么都不做。
+        // 「用户按返回取消了」与「选了但没给 URI」**必须分开**（2026-11-15）。
+        // 以前两者都走 `success(null)` → Dart 静默返回，界面上**一声不响** ——
+        // 真机反馈就是「选完返回，铃声没出现」，日志里也什么都没有。
+        if (resultCode != RESULT_OK) {
+            AlarmLog.diagnostic(this, "ringtone pick: 用户取消（code=$resultCode）")
             result?.success(null)
             return
         }
+        val uri = resolvePickedUri(data)
+        if (uri == null) {
+            // 各家文件管理器的回传方式不一致：标准是 data.data，多选语义的选择器
+            // （真机视频里那台就是「已选择 1 项 / 选择」）常见只填 clipData。
+            AlarmLog.error(
+                this,
+                "ringtone pick: 拿到 RESULT_OK 但没有 URI（${describePickIntent(data)}）"
+            )
+            result?.error("PICK_NO_URI", "选择器没有返回文件", null)
+            return
+        }
+        // **必须落盘**（`diagnostic` 而不是 `info`）：报障时用户能给的只有
+        // 「查看日志」里那一份，`info` 只进 Logcat —— 2026-11-15 那次就是因为
+        // 这一行没落盘，用户贴来的日志里看不到任何 pick 记录，无从判断。
+        AlarmLog.diagnostic(
+            this,
+            "ringtone pick: ${uri.scheme}://${uri.authority}（${describePickIntent(data)}）"
+        )
         // 复制是磁盘 I/O（一个音频文件可能十几 MB），放后台线程，拷完回主线程。
         Thread {
             var tooLarge = false
@@ -819,13 +1205,86 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
+    private fun handleSaveBackupResult(resultCode: Int, data: Intent?) {
+        val result = pendingSaveBackupResult
+        val sourcePath = pendingSaveBackupSource
+        pendingSaveBackupResult = null
+        pendingSaveBackupSource = null
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null || sourcePath == null) {
+            result?.success(null)
+            return
+        }
+        Thread {
+            val ok = try {
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    File(sourcePath).inputStream().use { input -> input.copyTo(out) }
+                } != null
+            } catch (e: Exception) {
+                AlarmLog.error(this, "backup: 写入失败 ${e.javaClass.name}: ${e.message}")
+                false
+            }
+            runOnUiThread {
+                if (ok) {
+                    result?.success(mapOf("uri" to uri.toString()))
+                } else {
+                    result?.error("SAVE_BACKUP_FAILED", "写入备份文件失败", null)
+                }
+            }
+        }.start()
+    }
+
+    private fun handlePickBackupResult(resultCode: Int, data: Intent?) {
+        val result = pendingPickBackupResult
+        pendingPickBackupResult = null
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) {
+            result?.success(null)
+            return
+        }
+        Thread {
+            var tooLarge = false
+            val dest = File(cacheDir, "backup_import.dshbackup")
+            val ok = try {
+                val size = queryFileSize(uri)
+                if (size != null && size > MAX_BACKUP_BYTES) {
+                    tooLarge = true
+                    false
+                } else {
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        dest.outputStream().use { out -> input.copyTo(out) }
+                    } != null
+                }
+            } catch (e: Exception) {
+                AlarmLog.error(this, "backup: 读取失败 ${e.javaClass.name}: ${e.message}")
+                false
+            }
+            runOnUiThread {
+                when {
+                    tooLarge -> result?.error("BACKUP_TOO_LARGE", "备份文件太大", null)
+                    !ok -> result?.error("READ_BACKUP_FAILED", "读取备份文件失败", null)
+                    else -> result?.success(mapOf("path" to dest.absolutePath))
+                }
+            }
+        }.start()
+    }
+
     /**
      * 把 [uri] 指向的音频复制到 `filesDir/ringtone/`，返回 (显示名, file:// URI)。
      * 失败返回 null；文件超过 [MAX_RINGTONE_BYTES] 抛 [RingtoneTooLargeException]。
      */
     private fun copyRingtoneIntoPrivateDir(uri: Uri): Pair<String, String>? {
         return try {
-            val name = queryDisplayName(uri) ?: "ringtone"
+            // 没有扩展名就按 MIME 补一个：MediaPlayer 认格式靠容器 + 扩展名两条
+            // 线索，个别机型上缺扩展名的文件会起不来 —— 那时闹钟照常震动、却
+            // 一声不响，是最难查的一类。
+            val rawName = queryDisplayName(uri) ?: "ringtone"
+            val name = if (rawName.contains('.')) {
+                rawName
+            } else {
+                val ext = mimeToExtension(contentResolver.getType(uri))
+                if (ext == null) rawName else "$rawName.$ext"
+            }
             val size = queryFileSize(uri)
             if (size != null && size > MAX_RINGTONE_BYTES) {
                 throw RingtoneTooLargeException(size)
@@ -839,15 +1298,64 @@ class MainActivity : FlutterActivity() {
                 if (input == null) return null
                 dest.outputStream().use { out -> input.copyTo(out) }
             }
-            AlarmLog.info(this, "ringtone: 已复制 $name（$size 字节）到 $dest")
+            AlarmLog.diagnostic(this, "ringtone: 已复制 $name（$size 字节）到 $dest")
             name to Uri.fromFile(dest).toString()
         } catch (e: RingtoneTooLargeException) {
             AlarmLog.error(this, "ringtone: 文件太大，拒绝复制 ${e.bytes} 字节")
             throw e
+        } catch (e: SecurityException) {
+            // 选择器没把读权限带给我们就返回了 —— 单独记一条，
+            // 与「文件坏了」区分得开（日志里一眼能看出来）。
+            AlarmLog.error(
+                this,
+                "ringtone: 没有读取权限 ${uri.scheme}://${uri.authority}"
+            )
+            null
         } catch (e: Exception) {
             AlarmLog.error(this, "ringtone: 复制失败 ${e.javaClass.name}: ${e.message}")
             null
         }
+    }
+
+    /**
+     * 从选择器的返回意图里取 URI，**三种回传方式都认**：
+     * `data` → `clipData` 第一项 → `EXTRA_STREAM`。
+     *
+     * 只认 `data` 是不够的：部分 OEM 文件管理器（尤其多选语义的选择器）把结果
+     * 放在 clipData 里，`data` 为 null。那时旧代码会把它当成「用户取消」，
+     * 界面上一声不响 —— 2026-11-15 的真机反馈就是这种。
+     */
+    @Suppress("DEPRECATION")
+    private fun resolvePickedUri(data: Intent?): Uri? {
+        if (data == null) return null
+        data.data?.let { return it }
+        val clip = data.clipData
+        if (clip != null && clip.itemCount > 0) {
+            clip.getItemAt(0)?.uri?.let { return it }
+        }
+        (data.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri)?.let { return it }
+        return null
+    }
+
+    /** 日志里那半截现场：意图里到底带了什么（不写文件名，够定位就行）。 */
+    private fun describePickIntent(data: Intent?): String {
+        if (data == null) return "intent=null"
+        val u = data.data
+        val clip = data.clipData?.itemCount ?: 0
+        return "data=${u?.scheme}://${u?.authority} clip=$clip"
+    }
+
+    /** 音频 MIME → 扩展名。只列选择器实际会给的那几种。 */
+    private fun mimeToExtension(mime: String?): String? = when (mime) {
+        "audio/mpeg", "audio/mp3", "audio/x-mp3" -> "mp3"
+        "audio/mp4", "audio/m4a", "audio/x-m4a" -> "m4a"
+        "audio/aac", "audio/x-aac" -> "aac"
+        "audio/ogg", "application/ogg" -> "ogg"
+        "audio/flac", "audio/x-flac" -> "flac"
+        "audio/wav", "audio/x-wav", "audio/wave" -> "wav"
+        "audio/amr", "audio/3gpp" -> "amr"
+        "audio/midi", "audio/x-midi" -> "mid"
+        else -> null
     }
 
     /** 文件选择器里那一项的显示名（`OpenableColumns.DISPLAY_NAME`）。 */
@@ -875,6 +1383,13 @@ class MainActivity : FlutterActivity() {
     private fun logInfo(msg: String) = AlarmLog.info(this, msg)
 
     private fun readLog(): String = AlarmLog.read(this)
+
+    /** 版本号（日志里那行「进程启动」用）。读不到就给个占位，绝不让它影响启动。 */
+    private fun versionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+    } catch (_: Exception) {
+        "?"
+    }
 
     private fun clearLog() = AlarmLog.clear(this)
 
@@ -933,4 +1448,63 @@ private fun longArrayArg(call: MethodCall, key: String): LongArray {
     val raw = call.argument<List<*>>(key) ?: return LongArray(0)
     return raw.mapNotNull { (it as? Number)?.toLong() }.toLongArray()
 }
+
+/** Dart 侧 `[from, to, ...]` 的 int 列表 → `IntArray`（空 / 错类型一律给空）。 */
+private fun intArrayArg(call: MethodCall, key: String): IntArray {
+    val raw = call.argument<List<*>>(key) ?: return IntArray(0)
+    return raw.mapNotNull { (it as? Number)?.toInt() }.toIntArray()
+}
+
+/**
+ * Dart 侧 `NativeAlarm` 的 Map → [AlarmScheduler.AlarmSpec]。
+ *
+ * 缺 `id` / `millis` 的条目直接跳过：这两样缺了没法排，排一个 id=0 的闹钟出去
+ * 反而会顶掉别人的槽位。
+ */
+private fun alarmSpecs(raw: List<*>?): List<AlarmScheduler.AlarmSpec> =
+    (raw ?: emptyList<Any>()).mapNotNull { item ->
+        val m = item as? Map<*, *> ?: return@mapNotNull null
+        val id = (m["id"] as? Number)?.toInt() ?: return@mapNotNull null
+        val millis = (m["millis"] as? Number)?.toLong() ?: return@mapNotNull null
+        AlarmScheduler.AlarmSpec(
+            id = id,
+            millis = millis,
+            label = m["label"] as? String ?: "闹钟",
+            repeatType = (m["repeatType"] as? Number)?.toInt() ?: 0,
+            hour = (m["hour"] as? Number)?.toInt() ?: 0,
+            minute = (m["minute"] as? Number)?.toInt() ?: 0,
+            weekdays = (m["weekdays"] as? Number)?.toInt() ?: 0,
+            detail = m["detail"] as? String,
+            repeatTimes = (m["repeatTimes"] as? List<*>)
+                ?.mapNotNull { (it as? Number)?.toLong() }
+                ?.toLongArray() ?: LongArray(0),
+        )
+    }
+
+/** Dart 侧 `NativeQuiet` 的 Map → [AlarmScheduler.QuietSpec]（缺参同样跳过）。 */
+private fun quietSpecs(raw: List<*>?): List<AlarmScheduler.QuietSpec> =
+    (raw ?: emptyList<Any>()).mapNotNull { item ->
+        val m = item as? Map<*, *> ?: return@mapNotNull null
+        val id = (m["id"] as? Number)?.toInt() ?: return@mapNotNull null
+        val millis = (m["millis"] as? Number)?.toLong() ?: return@mapNotNull null
+        AlarmScheduler.QuietSpec(
+            id = id,
+            millis = millis,
+            title = m["title"] as? String ?: "",
+            body = m["body"] as? String ?: "",
+            repeatTimes = (m["repeatTimes"] as? List<*>)
+                ?.mapNotNull { (it as? Number)?.toLong() }
+                ?.toLongArray() ?: LongArray(0),
+        )
+    }
+
+/** Dart 侧 `[[from, to], ...]` → 号段列表。格式不对的整条丢掉（宁可少一段）。 */
+private fun rangesArg(raw: List<*>?): List<IntArray> =
+    (raw ?: emptyList<Any>()).mapNotNull { item ->
+        val pair = item as? List<*> ?: return@mapNotNull null
+        if (pair.size < 2) return@mapNotNull null
+        val from = (pair[0] as? Number)?.toInt() ?: return@mapNotNull null
+        val to = (pair[1] as? Number)?.toInt() ?: return@mapNotNull null
+        intArrayOf(from, to)
+    }
 

@@ -1,9 +1,9 @@
 // app/test/help_center_test.dart
 //
 // 第一级《使用帮助》（整页）。三件事要钉：
-//   1. 简介与九条功能简介都在（九条是从弹窗搬过来的，搬丢了没人会报错）；
+//   1. 简介与十一条功能简介都在（十一条是从弹窗搬过来的，搬丢了没人会报错）；
 //   2. 那颗入口真的能进第二层；
-//   3. **九条里的数字与实现一致** —— 这一版的起因之一就是文案漂了：
+//   3. **十一条里的数字与实现一致** —— 这一版的起因之一就是文案漂了：
 //      帮助里写着「一个班次最多挂 6 条闹钟」，而 v0.11.1 早就放到 10 条了。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +29,8 @@ List<String> get _guideTitles => [
       L10n.guideSchedTitle,
       L10n.guideAlarmTitle,
       L10n.guideTodoTitle,
+      L10n.guideStatsTitle,
+      L10n.guideBackupTitle,
       L10n.guideWidgetTitle,
       L10n.guideAppearanceTitle,
       L10n.guideLayoutTitle,
@@ -37,12 +39,12 @@ List<String> get _guideTitles => [
     ];
 
 void main() {
-  testWidgets('简介与九条功能简介都在', (tester) async {
+  testWidgets('简介与十一条功能简介都在', (tester) async {
     L10n.locale = 'zh';
     await _pump(tester);
     expect(find.text(L10n.helpIntro), findsOneWidget);
     for (final t in _guideTitles) {
-      expect(find.text(t), findsOneWidget, reason: '九条里少了「$t」');
+      expect(find.text(t), findsOneWidget, reason: '十一条里少了「$t」');
     }
   });
 
@@ -64,7 +66,7 @@ void main() {
     L10n.locale = 'zh';
   });
 
-  test('九条功能简介里不许出现 markdown 标记', () {
+  test('十一条功能简介里不许出现 markdown 标记', () {
     final bad = RegExp(r'\*\*|`|^#|\[[^\]]+\]\([^)]+\)', multiLine: true);
     for (final locale in const ['zh', 'en']) {
       L10n.locale = locale;
@@ -73,6 +75,8 @@ void main() {
         ...L10n.guideSchedDesc,
         ...L10n.guideAlarmDesc,
         ...L10n.guideTodoDesc,
+        ...L10n.guideStatsDesc,
+        ...L10n.guideBackupDesc,
         ...L10n.guideWidgetDesc,
         ...L10n.guideAppearanceDesc,
         ...L10n.guideLayoutDesc,

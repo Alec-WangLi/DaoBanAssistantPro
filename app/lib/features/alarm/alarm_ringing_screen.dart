@@ -8,6 +8,7 @@ import '../../core/design_tokens.dart';
 import '../../core/glass/glass.dart';
 import '../../core/glass/liquid_lens.dart';
 import '../../core/glass/liquid_lens_metrics.dart';
+import '../../core/haptics.dart';
 import '../../core/l10n.dart';
 import '../../core/layout.dart';
 import '../../core/theme/animated_background.dart';
@@ -131,12 +132,17 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   }
 
   void _finish() {
+    // 「关掉这个闹钟」是词汇表里点名的 commit 语义（动作落实、不可逆）。
+    // 上滑越过阈值与滑块推到底两条路都汇到这里，所以只挂一处。
+    Haptics.commit();
     AlarmService.stopAlarmSound();
     AlarmService.ringingAlarm.value = null;
     Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   void _snooze() {
+    // 与 `_finish` 同一档：「再睡一会」也是一次不可逆的动作落实。
+    Haptics.commit();
     AlarmService.stopAlarmSound();
     // 说明也要跟着续排，否则再睡一会之后那一次就只剩标题了。
     AlarmService.snoozeAlarm(AlarmRing(widget.label, widget.detail));

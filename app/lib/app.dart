@@ -28,7 +28,7 @@ class ShiftAssistantApp extends ConsumerWidget {
         )));
     L10n.locale = settings.language;
     return MaterialApp(
-      title: '倒班助手Pro',
+      title: L10n.appName,
       debugShowCheckedModeBanner: false,
       // 系统栏内边距先过一道体检再用：小米小窗会把 viewPadding.top 报成整个
       // 窗口的高度，SafeArea 会因此把整页吃掉（见 sanitizeSystemInsets）。

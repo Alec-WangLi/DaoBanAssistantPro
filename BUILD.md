@@ -30,7 +30,7 @@
 ```bash
 cd app
 flutter pub get
-flutter test          # 1242 条
+flutter test          # 全套用例（条数以 ci.yml 的 EXPECTED_TESTS 为准）
 flutter analyze       # 必须 No issues found
 ```
 
@@ -63,7 +63,7 @@ PUB_CACHE=$PWD/../toolchain/pub-cache TMP=$PWD/../work/tmp TEMP=$PWD/../work/tmp
 
 ```bash
 cd app
-flutter test tool/visual/     # 1284 条
+flutter test tool/visual/     # 上千条（认尾行 +N）
 ```
 
 它把每个界面按屏单渲成 PNG 到 `app/build/visual/`，**只看不出图、不比对基线**；唯一的断言是

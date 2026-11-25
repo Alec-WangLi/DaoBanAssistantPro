@@ -40,7 +40,14 @@ Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
 /// 真的跑掉（否则框架报「A Timer is still pending」）。
 Future<void> _dispose(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
-  await tester.pump(const Duration(milliseconds: 20));
+  // **逐段推进假时钟**：插件通道桩可以带 300ms 延迟（「连点」「抢跑」两条故意
+  // 把保存链路撑开），而保存链路关窗之后还要往下走几步 —— 每步都会起一个新的
+  // 300ms 定时器。定时器没收干净，框架会在用例收尾断言
+  // "A Timer is still pending even after the widget tree was disposed"。
+  // 只在收尾排空，不影响用例中途的帧数与断言。
+  for (var i = 0; i < 12; i++) {
+    await tester.pump(const Duration(milliseconds: 200));
+  }
 }
 
 Future<AppDatabase> _pumpTodos(WidgetTester tester,

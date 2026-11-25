@@ -70,12 +70,20 @@ for path in sorted(SCAN_FILES):
             continue
         if is_img:
             img_total += 1
-        resolved = os.path.normpath(os.path.join(base, rel))
-        if os.path.exists(resolved):
-            continue
-        # 「路径:行号」是引用写法，不是文件链接 —— 去掉尾部的 :123 再试一次
+        # 两种写法都要认：
+        #   ① 相对链接所在文件目录（普通文档）；
+        #   ② 相对仓库根（docs/superpowers 里的 spec/plan 习惯写 `app/lib/...`）。
+        # 只按 ① 解析时，后者会整批误报成断链（2026-11-10 实测 34 条全是假阳性）。
+        # 带 `:行号` 的再各试一次去尾版本 —— 那是引用写法，不是文件链接。
+        candidates = [rel]
         stripped = re.sub(r':\d+$', '', rel)
-        if stripped != rel and os.path.exists(os.path.normpath(os.path.join(base, stripped))):
+        if stripped != rel and stripped:
+            candidates.append(stripped)
+        if any(
+            os.path.exists(os.path.normpath(os.path.join(base, c)))
+            or os.path.exists(os.path.normpath(os.path.join(ROOT, c)))
+            for c in candidates
+        ):
             continue
         (img_broken if is_img else link_broken).append(
             (os.path.relpath(path, ROOT), target))

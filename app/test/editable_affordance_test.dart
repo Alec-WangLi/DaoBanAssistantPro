@@ -207,19 +207,25 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('闹钟行：铅笔在删除钮之前，且点铅笔也能开编辑弹窗', (tester) async {
+  testWidgets('闹钟行没有编辑笔，点行本身仍开编辑弹窗', (tester) async {
+    // 2026-11-15 用户定：自定义闹钟行那颗铅笔也去掉，理由与待办那次一模一样 ——
+    // 整行本来就可点、点了就开编辑弹窗，铅笔只是把「可点」又说了一遍。
+    // 这条用例钉两头：**不许再补回来**，而**行的点击不能跟着一起丢**。
     await _pump(tester, const AlarmScreen(), seed: (db) async {
       await AppRepository(db).addCustomAlarm(hour: 7, minute: 30, repeatType: 1);
     });
 
-    final hint = find.byKey(const Key('alarm-edit-hint'));
-    expect(hint, findsOneWidget);
-    expect(tester.getTopLeft(hint).dx,
-        lessThan(tester.getTopLeft(find.byType(GlassDeleteButton)).dx));
+    expect(find.byKey(const Key('alarm-edit-hint')), findsNothing,
+        reason: '编辑笔被补回来了 —— 用户明确否掉过它');
+    expect(find.byIcon(Icons.edit_outlined), findsNothing,
+        reason: '别换个图标再补回来');
+    // 删除钮还在（行尾那个入口是另一件事，没被动过）。
+    expect(find.byType(GlassDeleteButton), findsOneWidget);
 
-    await tester.tap(hint);
+    await tester.tap(find.text('07:30'));
     await _settle(tester);
-    expect(find.text(L10n.editAlarm), findsOneWidget);
+    expect(find.text(L10n.editAlarm), findsOneWidget,
+        reason: '删了铅笔之后整行还得能点开编辑 —— 那才是这条入口');
 
     await _dispose(tester);
   });
@@ -298,16 +304,6 @@ void main() {
     ]) {
       expect(find.byKey(Key(key)), findsOneWidget, reason: '$key 不在');
     }
-
-    await _dispose(tester);
-  });
-
-  testWidgets('时段弹层：「管理排班时段」有箭头', (tester) async {
-    await _pumpVisual(tester, const CalendarScreen());
-    await tester.tap(find.byIcon(Icons.timeline));
-    await _settle(tester);
-
-    expect(find.byKey(const Key('manage-timeline-chevron')), findsOneWidget);
 
     await _dispose(tester);
   });

@@ -8,18 +8,19 @@
 1. **读本文件**（一屏，≤35KB）。
 2. **一条命令拿现场**：`git log --oneline -8 && git tag | tail -5 && git status --short`，再读 `app/pubspec.yaml` 顶部的 `version:`（唯一版本号来源，与 `app/lib/core/app_info.dart` 同步）。
 3. **报技能**（§技能纪律），一句话说清这次用哪几个、为什么。
-4. **读规范层**：写任何代码读 `docs/standards/dev-standards.md`；动 UI / 视觉 / 玻璃 / 触觉再读 `docs/standards/design-principles.md`。**再按任务挑一个 topic 文件**（下表），只读那一个；需要判重时才 `grep` 版本号进 `docs/changelog/`。
+4. **读规范层**：先读 `docs/standards/README.md`（三层分工、守门矩阵、哪条是自守、裁决顺序），写任何代码读 `docs/standards/dev-standards.md`（E1–E17）；动 UI / 视觉 / 玻璃 / 触觉再读 `docs/standards/design-principles.md`（D1–D16）。**再按任务挑一个 topic 文件**（下表），只读那一个；需要判重时才 `grep` 版本号进 `docs/changelog/`。
 5. 之后再开始改代码。
 
 | 你要动的东西 | 读这一个 |
 |---|---|
 | Drift 表 / 迁移 / Riverpod / 查询 | `docs/decisions/data.md` |
-| 排班模型 / 时段 / 覆盖 / 空白表 / 解析 | `docs/decisions/schedule.md` |
+| 排班模型 / 时段 / 覆盖 / 空白表 / 解析 / 法定节假日数据 | `docs/decisions/schedule.md` |
 | 闹钟 / 响铃 / 原生侧 | `docs/decisions/alarm.md` |
 | 待办 / 重复待办 / 归档 | `docs/decisions/todo.md` |
 | 液态玻璃 / 着色器 / 共享玻璃件 | `docs/decisions/glass.md` |
 | 桌面小组件 / RemoteViews | `docs/decisions/widget.md` |
 | 颜色 / 布局 / 弹窗 / 触觉 / 字号 / 视觉工装 | `docs/decisions/ui-rules.md` |
+| 性能测量 / 装测试包 / 动包名 | `docs/decisions/perf-testing.md` |
 
 ## 技能纪律（2026-11-06 用户拍板；此前多次「该用没用」，靠记忆汇报）
 
@@ -32,6 +33,14 @@
 **规矩三：新类型的活先扫一眼能力库。** 遇到没见过的工作类型，先看 `~/.dsh/skills/`（约 29 个；`implement` `to-tickets` `test-driven-development` `systematic-debugging` `verification-before-completion` `code-review` `writing-for-agents` `wait-what` `grilling` `stop-slop` 与本项目最相关），再判断要不要用 `learn` / `find-skills` 去外面搜。**搜到有用的报给用户，不擅自安装。**
 
 **规矩四：不许用 `capability-router` 插件。** 用户 2026-11-06 明确：「这个插件已经落伍了，所以我才不启用它」—— 能力匹配靠规则一，不靠那个插件。
+
+## 方案闸门（2026-11-10 用户拍板：说「先列一下」≠ 授权动手）
+
+> 触发事实：用户说「你先给我列一下，然后我看一下合不合理」，AI 一边列任务清单一边把代码、用例、版本号、构建、提交、发版一路做完。用户原话：「我不想这样啊。」
+
+- **触发词**：先列一下 / 给我看看 / 出个方案 / 先说方案 / 有哪些 / 合不合理 / 你觉得呢。听到任何一个，**本轮只输出方案**（改哪些文件、怎么改、风险、备选），**不改文件、不跑构建和测试、不升版本、不提交、不发版**，末尾问一句「按这个做吗？」。
+- **任务清单不是提案**：`update_plan` 列出来就等于开工了，别拿它当「给用户看方案」。
+- **授权只有一种**：用户明确说「开做 / 可以 / 按这个来 / 全按推荐」。**例外**：用户同一句里说「直接做 / 不用问了」。
 
 ## 一句话
 倒班助手Pro —— Flutter 本地离线排班助手，包名 `com.daoban.shiftassistantpro`。自研排班引擎，轮转规则（四班两倒等）按倒班行业通用轮转规则独立实现。设计语言：**简洁 + 液态玻璃（磨砂模糊）+ Q弹动画**。
@@ -58,16 +67,16 @@
   （手动补之前先确认没有 git.exe 在跑，并把残留的 `.git/AUTO_MERGE.lock` / `.git/packed-refs.lock` 删掉，否则会报「Another git process seems to be running」。）
   不这么做的话，App 读到的主通道清单会停在旧版本，表现是「明明有更新的测试版，却说已是最新」。**v0.9.4 起这条清单是首选通道**（以前只是 GitHub API 的兜底），所以这一步比过去更要紧。
 
-  **⚠️ 这段（脚本里现标作第 8b 步，从前叫 7b）原先写的是 `git checkout <分支> -- latest.json` —— 把当前分支的整份清单搬到 main，那是错的，2026-10-13 已改成「切到 main 后读 main 自己那份，只写本次发布那个通道的字段」。** 根因：**正式版在 main 上发、测试版在 beta 上发**，而 beta 那份的 `stable` 永远停在它自己上次见到的旧值 —— 于是**每在 beta 发一次测试版，就把 main 上正确的 `stable` 覆盖回去一次**。v0.11.0 就是这么丢的：`8d25b78`（在 main 上）把 stable 写成 0.11.0，紧接着的 `972192f`（v0.11.1 同步 beta）整份搬过来，stable 退回 **0.10.0** 并一直卡在那里 —— Releases 页上 v0.11.0 明明标着 Latest、资产也在，只有 `latest.json` 的 stable 是错的（2026-10-13 由用户发现）。判据记牢：**Release 标得对不对看 Releases 页，`latest.json` 对不对只能 curl 那一份 —— 两者会各自独立地错。** 修完 main 与 beta 两份都补成了 stable=0.11.0。
+  **⚠️ 那段（现标作第 8b 步）曾经是 `git checkout <分支> -- latest.json`** —— 把当前分支的整份清单搬到 main。**错的**，2026-10-13 已改成「切到 main 后读 main 自己那份、只写本次发布那个通道的字段」。根因：正式版在 main 发、测试版在 beta 发，beta 那份的 `stable` 永远停在旧值 —— 每在 beta 发一次测试版就把 main 打回一次（v0.11.0 被打回 0.10.0）。判据：**Release 标得对不对看 Releases 页，`latest.json` 对不对只能 curl 那一份，两者会各自独立地错。**
+
 - 历史注记：**0.9.1 / 0.9.2 / 0.9.3 三个测试版是直接在 main 上发的**（那时还没定这条规矩）；从这之后的测试版走 beta。
 
-### ⚠️ main 的 CI 现在是红的，这是已知状态，不是新 bug（2026-11-06 记录）
+### main 的 CI：已随 v0.13.0 收敛（2026-11-10 复核，旧结论作废）
 
-main 上最近四次 CI **全红**（`7d6653b` `7c71d17` `9b61a3a` `6c3bab2`），红法都一样：`+1081 -15`，15 条全是「文字放不下 / 找不到 `header-single-row`」这一类。**根因在代码差异，不在数据：** beta 版 `app/tool/visual/visual_harness.dart` 有 `ensureVisualFonts()`，从 `app/test/fonts/` 读仓库内字体、缺了当场抛；**main 那份还是老逻辑**（找不到 `bin/cache/artifacts/material_fonts` 就退到方块继续跑，只打一行 `[visual] 字体缺 …`）。两版差 **148 行**。所以 main 上量字宽类用例量的全是方块，必红。
+2026-11-06 记过「main 连续四次红、根因是比 beta 少 148 行 `ensureVisualFonts()`」。**这条已经不成立：** v0.13.0 把 beta 整体合进了 main，`app/tool/visual/visual_harness.dart` 在 main 与 beta 逐字节相同（`git diff --stat origin/main origin/beta -- app/tool/visual/visual_harness.dart` 空输出），main 的 CI 已是 success。**以后看到 main 的 CI 红，按真 bug 查，别再往这条旧结论上靠。**
 
-- **处置：不动它，等下次发正式版把 beta 整体合进 main 时自动收敛回 1242 条全绿。** 在那之前看到 main 的 CI 红，先想到这一条，别去找代码 bug。
-- **`ci.yml` 的 `EXPECTED_TESTS` 是分支相关项，不是常量**：beta 填 beta 的（当前 1242），main 填 main 的（当前 1096）。同一个文件在两个分支上跑，填错就红，且**红的是守卫本身**——2026-11-06 我按「1242 − 113」推算成 1129，实测 1096，推算值不能当基线。**基线只认 CI 日志里那行「用例数 N」。**
-- 顺带：**`visual.yml`（每日视觉巡场）已于 2026-11-06 手动禁用**（`gh workflow disable visual.yml` → `disabled_manually`）。原因是它 `continue-on-error: true`，字体校验失败也显示 success，前两次跑出 **0 张图**都判绿，等于一个每天绿着骗人的看门狗。字体和许可已经补进 main（`9b61a3a`），**恢复时只需 `gh workflow enable visual.yml`**，但恢复前必须先解决上面那条 148 行的差距，否则它照样只有方块。
+- **`ci.yml` 的 `EXPECTED_TESTS` 仍然是分支相关项，不是常量**：2026-11-10 时 beta **1284**、main **1257**（v0.13.0 之后 beta 加了用例），改一边要记得另一边。**基线只认 CI 日志里那行「用例数 N」**，推算值不能当基线（2026-11-06 按「1242 − 113」推成 1129，实测 1096）。
+- **`visual.yml`（每日视觉巡场）已于 2026-11-10 恢复**（`gh workflow enable visual.yml` + 手动 dispatch 一次，run `42652960542`）：**1284 条断言全过、写出 337 张图、artifact 89.9 MB**，不是当初那种 0 张图的假绿。判绿**不能只看结论** —— `continue-on-error: true` 是设计取舍，结论永远是 success。**数图不用下载 89 MB 的 artifact**：`gh run view <id> --log | grep -aoE 'build/visual/[^ ]+\.png' | sort -u | wc -l`，出图那一步逐张打了路径。
 
 
 ## 目录架构地图（app/lib）
@@ -80,7 +89,7 @@ features/home/glass_nav_bar.dart  底栏；**两条档位各一棵树**（`_buil
 core/l10n.dart               L10n 静态 i18n（locale 'zh'/'en'，t(zh,en)，isEn，日期格式 helper）
 core/app_info.dart           const appVersion（与 pubspec 同步，由 test/app_info_test.dart 把关）
 core/design_tokens.dart      设计语言唯一来源：按**角色**命名的排版 / 明度 / 间距 / 图标 / 圆角 / 时长令牌（界面层只写角色名，不写字面量；由 test/design_tokens_test.dart 守门）
-core/haptics.dart            触觉词汇表：三档 `Haptics.select()/commit()/modeEnter()` + 模块级 `hapticsDisabled`（与 `liquidGlassEnabled` 同路，一处赋值全 app 生效）；挂动作不挂按压；除本文件外不许调 `HapticFeedback.*`，由 test/haptics_guard_test.dart 守门
+core/haptics.dart            触觉词汇表：三档 `Haptics.select()/commit()/modeEnter()` + 模块级 `hapticsDisabled`（与 `liquidGlassEnabled` 同路，一处赋值全 app 生效）；挂动作不挂按压；除本文件外不许调 `HapticFeedback.*`，由 test/haptics_guard_test.dart 守门；Android 上它只管路由，出声的是 `android/.../Haptics.kt`（预定义 click，见 `docs/decisions/ui-rules.md`）
 core/widgets/                共享玻璃组件（见下）
 domain/shift_rotation.dart   轮换引擎（纯 Dart 可单测）+ dayNumber()/dateOnly()
 domain/lunar_info.dart       农历（lunar_plus）
@@ -120,6 +129,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 10. **扫文档/源码的正则或链接校验，必须先剥掉围栏代码块与行内代码** —— 否则「举例说明」会被当成真问题（2026-11-06 一次误报 6 条：`docs/changelog` 2 条、`docs/superpowers` 4 条，全是 `[文字](链接)` 这种被人故意写出来讲解 markdown 的写法）。工具见 `scripts/link_check.py`。
 11. **同一台机器上不许同时跑两份 `flutter test`** —— 两个进程抢同一个 `app/build/test_cache/`，表现**不是报错，而是某几条用例莫名其妙地红**（2026-11-06：一份全套从 38 秒变成 10 分 4 秒、`calendar_day_cell_test.dart` 两条挂掉，单跑又全绿）。跑之前先数进程（`dart.exe` / `dartvm` / `flutter_tester` 应为 0）；**任何 `job_kill`、超时、异常中断之后都要再数一次** —— 父进程没了，它派生的 `dart.exe` / `dartaotruntime.exe` 可能还挂着缓存，`job_output` 里看不出来。**一条红的用例，先排除「当时是不是有人在并发跑」才值得去查。**
 12. **清点用例条数不许用 `grep -c '^  testWidgets('`** —— 缩进是 2 格还是 4 格（`group()` 里）不一，会数出 0 或漏一半（2026-11-06 我按 2 格缩进数 `calendar_liquid_test.dart` 得到 0，实际 18）。要么用 `^ +(testWidgets|test)\(`，要么直接看 `flutter test` 尾行的 `+N`。
+13. **测性能装包前先保住用户数据** —— `flutter drive` 收尾按 **manifest 包名（namespace）** 卸载，不是 `applicationId`。只改 `applicationId` 做「独立测量包」会把手机上正式安装的包连同 `/data/data` 一起卸掉（2026-11-10 真机事故，数据永久丢失）。改包名必须 `namespace` + `applicationId` 一起改或用独立工程；装前确认备份，装完立刻核对正式包还在。详见 `docs/decisions/perf-testing.md`。
 
 ## 症状索引（用户报的现象 → 该读哪一条）
 
@@ -143,21 +153,33 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 | 「点那个系列就崩」 | `docs/decisions/todo.md`（`live.single` → `live.last`） |
 | 「拖完再点日期会抽一下」 | `docs/decisions/glass.md`（陈旧速度灌回） |
 | 「一装就报 Conflicting app signatures」 | 本文「构建 / 测试 / 发布」（签名校验） |
+| 「下载 APK 很慢 / github.com 打不开」 | 本文「官网与下载镜像」 |
+| 「检查更新转圈很久，最后说失败」 | 本文「检查更新」+「官网与下载镜像」（三条通道、两处域名要一致） |
 
 ## 构建 / 测试 / 发布
 - 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
 - 改表后：`dart run build_runner build`。⚠️ **别再带 `--delete-conflicting-outputs`** —— build_runner 2.15.1 起这个参数已被移除，传了会被静默忽略（日志里只有一句 `These options have been removed and were ignored`），删除冲突输出现在是默认行为。
-- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（当前 **1242** 条，只增不减；CI 的 `EXPECTED_TESTS` 必须同步改）。⚠️ **日历页的「今天」走 `core/clock.dart` 的 `appNow()`**（不要直接写 `DateTime.now()`）：用例用 `test/support/fixed_clock.dart` 的 `useFixedNow()` 把它钉在 2026-10-15，**期望值也一律用 `appNow()` 算** —— 否则用例会随真实月份漂移（2026-11-05 一次红了 10 条）。视觉工装另算：`flutter test tool/visual/`（当前 **1284** 条）。
+- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（条数见 `.github/workflows/ci.yml` 的 `EXPECTED_TESTS`，只增不减、必须同步改；别在文档里另抄一个数）。**Kotlin 侧的 API 等级由 `android-lint.yml` 守着**（Android Lint 的 `NewApi`；本地等价命令 `cd app/android && ./gradlew :app:lintDebug`，注意 `local.properties` 的 Windows 路径要转义成 `C\:\\...`，否则 lint 自己报 `PropertyEscape`）—— v0.13.10 那次 HarmonyOS 冷启动闪退，`flutter analyze` / `flutter test` 全绿也照样漏了。⚠️ **日历页的「今天」走 `core/clock.dart` 的 `appNow()`**（不要直接写 `DateTime.now()`）：用例用 `test/support/fixed_clock.dart` 的 `useFixedNow()` 把它钉在 2026-10-15，**期望值也一律用 `appNow()` 算** —— 否则用例会随真实月份漂移（2026-11-05 一次红了 10 条）。视觉工装另算：`flutter test tool/visual/`（数量随屏单增长，认尾行 `+N`，别写死）。
 - 构建：`flutter build apk --release --target-platform android-arm64` → `app/build/app/outputs/flutter-apk/app-release.apk`（**切 arm64 单 ABI**，APK 从 ~60MB 降到 ~21MB；仅 64 位设备）。
 - 分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，用 `aapt2 dump badging` 校验 versionName/versionCode 与包名。
 - 一键发布（GitHub Releases）：`scripts/release.ps1`。
 - **正式签名**：release 用独立 keystore `app/android/keystore/release.jks`，口令在 `app/android/key.properties`（storeFile/storePassword/keyAlias/keyPassword），二者均 gitignore 不入库、**务必本地备份**（丢了无法再发可覆盖升级的包）。`key.properties` 缺失时 `build.gradle.kts` 自动回退 debug 证书便于本机调试。
   ⚠️ **那条「自动回退」的代价是「静默」—— 2026-10-13 真踩过一次。** v0.11.16 的 APK 是在一个 **git worktree** 里构建的，而 worktree 是一次干净 checkout、**既没有 key.properties 也没有 release.jks**（两者都 gitignore），于是它被 **debug 证书**签了名。包照常发了出去，版本号 / 资产 / `latest.json` / 清单**全对**，用户一装就报 `Couldn't install (-7)` — **Conflicting app signatures**，只能卸载重装。**一句话：要发的 APK 只能在主 checkout 里构建**（`dist/`、`tools/`、`toolchain/` 也都只在那儿）。
   现在 `release.ps1` 的一致性校验里多一条**签名校验**：① `app/android/key.properties` 必须存在；② 用 `apksigner verify --print-certs` 取 APK 的证书 SHA-256，与 `keytool -list -v -keystore release.jks` 那一枚**逐位比**（不拿 DN 比 —— DN 是人填的、可以重名；实测 release 那枚是 `265d09b2…ce893`）。⚠️ **2026-11-05 起默认硬拦（v0.12.10）**：工具不全 / 吐不出摘要 → 默认 `throw`，要跳过必须显式 `-SkipSignCheck`；摘要对不上**任何情况都不放行**（无口子）。这一节还搬出了 `if (-not $SkipVerify)` —— 以前加 `-SkipVerify` 会把签名校验整段静默关掉。**别再把这条当「保险」**：v0.12.9 那次 418B 占位稿就是被「只是保险、不必需」的旧说法放过去的。**两条路径都验过**：拿 worktree 里那份 debug 签名的 APK 当反例，脚本退出码 1 并把两枚摘要一起打出来。
-- **检查更新（公开仓库）**：`UpdateChecker` 无鉴权，**先读仓库根目录 `latest.json`**（`raw.githubusercontent.com` 静态文件，不限次数，由 `release.ps1` 每次发版自动同步到 main），失败才回退 GitHub API `/releases`。**API 不当主通道**：未认证限 60 次/小时/IP，共享出口很容易耗尽（实测常年 403），拿它优先等于大部分时间都在走回退。两条**在不同域名**上，只被墙了一个的网络也兜得住。按语义版本自行计算「最新正式版 + 最新测试版」双通道展示；`downloadApk` 直接经 `browser_download_url` 下载安装。连不上时的提示直说「国内需要开代理或加速器」（`showUpdateFailedDialog`，走弹窗不走 2 秒的 snack）。
+- **检查更新（公开仓库）**：`UpdateChecker` 无鉴权，三条通道依次回退：**官网清单**（`siteBase/latest.json`）→ 仓库根目录 `latest.json` → GitHub API `/releases`。官网排第一是因为它才是国内用户的快通道，以前 GitHub 那条先试，国内往往要等满 8 秒超时才回退。**API 不当主通道**：未认证限 60 次/小时/IP，共享出口很容易耗尽（实测常年 403），拿它优先等于大部分时间都在走回退。两条**在不同域名**上，只被墙了一个的网络也兜得住。按语义版本自行计算「最新正式版 + 最新测试版」双通道展示；`downloadApk` 直接经 `browser_download_url` 下载安装。连不上时的提示直说「国内需要开代理或加速器」（`showUpdateFailedDialog`，走弹窗不走 2 秒的 snack）。
+- **官网与下载镜像（2026-11-10 用户选 A 档）**：`site/` 是一页静态官网，和 APK 放在同一个域上 —— `https://daoban-shift.pages.dev`（Cloudflare Pages，项目名 `daoban-shift`）。**APK 不进仓库**（`dist/` 本来就 gitignore），部署时由 `scripts/build_site.py` 从 `dist/` 取一份放进 `_site/download/`。
+  - **部署走本机，不走 CI**：`scripts/release.ps1` 第 9 步跑 `build_site.py --base <siteBase> --channel <stable|prerelease>` + `npx wrangler pages deploy _site`。凭据是 `npx wrangler login` 一次之后的 OAuth token（存在 `%APPDATA%\xdg.config\.wrangler\config\default.toml`），**不需要 GitHub secrets**。换机器发版要重新 login。
+  - ⚠️ **`build-env.ps1` 把 `APPDATA` 重定向到 `toolchain\`，而 wrangler 的登录态在真实的 `%APPDATA%\xdg.config\.wrangler`**。不指回去就报 "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN" 直接失败 —— 2026-11-10 发 v0.13.1 时踩到：发布本身成功，站点没更新。`release.ps1` 第 9 步现在临时把 `APPDATA` 指回真实目录，与 gh 的 `GH_CONFIG_DIR` 是同一类修法。
+  - **两个通道的 APK 都要镜像**：清单里点到名的版本，`dist/` 有就都放进 `_site/download/`（正式版 + 测试版，约 46MB）。只带正式版是不够的 —— 发测试版时 `prerelease` 那条会因为没有文件而退回 GitHub，国内用户又得开代理，正是这套东西要解决的问题。`--channel` 决定哪一端以工作区刚写好的清单为准，另一端取 `origin/main` 的权威值。落盘用清单里的 `asset` 名（ASCII），不是 `dist/` 里的中文文件名。
+  - **域名只有一处出处**：`UpdateChecker.siteBase`。`release.ps1` 用正则从那个文件读，`build_site.py --base` 负责把清单里的相对地址拼成绝对地址。改域名 = 改这一个常量 + 在 Pages 里绑好新域名。
+  - **页面是纯静态 HTML/CSS**，不引任何框架、外部字体或 CDN（国内打开要快，也不给别人当依赖）。深色 / 浅色两套跟随系统，**只换 `:root` 里的语义变量，版式、字号、间距一个不动**；新加颜色必须走变量，写死 `rgba()` 就会在另一套主题里露馅。动效只有一个 `IntersectionObserver` 做一次性入场 + 首屏三台机器的轻微视差，两者都尊重 `prefers-reduced-motion`。改版时先 `python scripts/build_site.py` 再 `.claude/launch.json` 里的 `site` 预览，逐段截图核对。**`build_site.py` 的 `PNGS` / `SHOTS` 列表必须与 `index.html` 同步** —— 少一张图就是线上裂图，多一张就是白传。
+  - ⚠️ **Cloudflare 2026 年已把新建 Pages 项目并进 Workers**：`npx wrangler pages project create` 现在建出来的是 **Worker**（域名 `*.workers.dev`），`wrangler pages deploy` 会报 "project does not exist"。本项目那个经典 Pages 项目是用 API 建的（`POST /accounts/<id>/pages/projects`）。**别用 `pages project create` 重建**，会又得到一个 Worker。
+  - ⚠️ **Pages 单文件上限 25 MiB，当前 APK 22.05 MiB** —— 再涨约 3 MiB 就超。`build_site.py` 里有 `25 * 1024 * 1024` 的硬闸，超了直接退出并提示改放 Cloudflare R2（免费 10GB 存储 + 零出口费）。
+  - 免备案的代价是走国际线路：比 GitHub 快得多，但不是国内 CDN 那种秒开。要秒开只能备案 + 国内 CDN（B 档，约 ¥200/年，审批 2~3 周）。
 - `dist/`、`*.apk`、`*.aab` 均 gitignore，不进仓库。
 
 ## 工作流
+- **辅助信息随版本走（测试版也一样，不要等用户提醒）**：每次升版本或改 UI，同一次提交里同步 `site/index.html` 的更新日志、README 的版本与功能文案、`PRODUCT_SPEC.md` 抬头与能力、帮助页；`BUILD.md` / 规范文档不写死用例数（统一指向 `ci.yml` 的 `EXPECTED_TESTS`）。改 UI 后重跑 promo 图（至少正式版必须）。`app/test/site_copy_test.dart` 检查 site / README / SPEC 是否含当前版本号，漏了 CI 直接红。
 - **正式版（末位 `Z=0`）发布前必须过一遍「仓库门面」** —— 用户提过两次，别再漏：
   1. `README.md` 的**文案**：版本号、功能清单逐条对着当前实现核（每次都会过时几处，例：0.8.0 那轮核出「月视图仍写按颜色区分」「铃声仍写只有内置与系统」「schemaVersion 还停在 6」）。
   2. `README.md` 的**配图**：`docs/images/` 里的 `hero.png` 与 `shot-*.png` 全是生成物，**改了 UI 就得重跑** `toolchain/flutter/bin/flutter test tool/promo/render_promo_test.dart` → `python scripts/make_promo_images.py`。只改文字不换图 = README 上挂的还是几个版本前的界面（0.8.0 那轮就漏了，图停在 v0.7.0）。
@@ -171,10 +193,10 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
-- **v0.12.8(+183) 测试版**：液态玻璃真折射（底栏胶囊边缘开始把背后内容弯过去）+ 只在部分机型发生的 Skia 崩溃修复；`ImageFilter.shader` uniform 0 那条已落进 `docs/decisions/glass.md`。
-- **v0.12.7(+182) 测试版**：收 v0.12.6 独立审查（值行贴右、落点标记两道闸门、帮助与更新日志补第 ② 档）。
-- **v0.12.6(+181) 测试版**：班组卡排版收口（2:1 分宽 + 44dp 值行）+ 重复待办提醒接入三档落点。
-> 全量：`docs/changelog/v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
+- **v0.14.0(+215) 正式版**：v0.13 二十七个测试版收口。三样新东西 —— **统计页**（月 / 年、自绘环形图 / 构成条 / 月度工时柱、CSV 导出）、**请假 / 加班**（`shift_day_extras`、类型与备注、整天请假压闹钟）、**数据备份**（`.dshbackup` 导出 / 导入，`NEW_TASK|CLEAR_TASK` 重启不杀进程）；一条老命脉 —— **闹钟不丢**（先排后清、6 小时巡检只往前挪、启动快照 + 退出原因取证、日志整页 + 诊断包）。交付物见 `docs/changelog/v0.14.md`；本版代码侧只动了更新日志 / 帮助文案 + 备份导入的回滚顺序，单测基线 1429 → **1433**。**发布需主 checkout 构建 + 用户真机点头后才打 tag。**
+- **v0.13.27(+214) 测试版**：「版本更新」弹窗首屏只画三版（`kChangelogPreviewCount`），更早的收在「展开更早的 N 版」胶囊后。起因是 issue #7 用户反馈反复开关该弹窗三四次后文字碎成错位字形、随后整页翻转 —— 诊断包无 Dart 异常，与 Flutter 上游 `#195594` / `#190519`（Impeller 字形图集采样错位，`e: device-specific`）同型，本机十轮复现不出。**这是缓解不是根治**；数据窗口仍是十条。单测 1427 → 1429。**2026-11-25 用户拍板：保留 Vulkan、不换 Skia，等上游修 —— 别再为这台机型重开这个议题**（诊断包结论与上游链接见 `docs/changelog/v0.13.md` 的 ⑤~⑧）。
+- **v0.13.26(+213) 测试版**：滑块跟手。真根因是 `dragStart` 用「拖动被识别那一刻」的坐标算抓取偏移 —— Flutter 要等手指走过识别阈值（约 18dp）才发 `onHorizontalDragStart`，这段位移被永久吃掉，快速滑动时透镜落后手指 1.11 格。改为 `press()` 按**按下点**算好（`_pressGrabOffset`），`dragStart()` 直接用。**上一版（v0.13.25）「滑动不提起」是误判，已恢复原样**，并删掉那 2 条用例；新增 1 条跟手用例，单测 1428 → 1427。
+> 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）
 - 目标：Windows / iOS / 鸿蒙 多端。Flutter 本身跨端，但**闹钟/通知是 Android 专属**，跨端需按平台重做：
@@ -186,4 +208,4 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 ## 相关文档
 - `README.md`（对外介绍）、`BUILD.md`（构建指南）、`PRODUCT_SPEC.md`（产品规格）、`LICENSE`（MIT）。
 - `docs/changelog/`（版本流水，按大版本）、`docs/decisions/`（逐条决策与坑，按主题）、`docs/release/vX.Y.Z/`（每次发版的酷安稿与配图）。
-- `docs/standards/design-principles.md`（设计理念·规范层）、`docs/standards/dev-standards.md`（开发标准·规范层）。
+- `docs/standards/README.md`（规范层入口·守门矩阵）、`docs/standards/design-principles.md`（设计理念·D1–D16）、`docs/standards/dev-standards.md`（开发标准·E1–E17）。改完规范层跑 `python scripts/standards_check.py`。

@@ -33,6 +33,7 @@ SHOTS = [
     ('02_alarm', 'shot-alarm.png', '班次闹钟'),
     ('03_editor', 'shot-editor.png', '排班编辑器'),
     ('04_todos', 'shot-todos.png', '待办'),
+    ('11_stats', 'shot-stats.png', '统计'),
     ('06_templates', 'shot-templates.png', '倒班方式'),
     ('10_profile_permissions', 'shot-permissions.png', '权限自检'),
     ('05_ringing', 'shot-ringing.png', '响铃界面'),

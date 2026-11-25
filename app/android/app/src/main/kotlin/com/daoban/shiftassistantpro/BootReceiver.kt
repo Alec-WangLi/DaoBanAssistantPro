@@ -9,18 +9,10 @@ import android.content.Intent
  *
  * 没有它的话，「重启后闹钟会丢」—— `AlarmManager` 的记录重启即清空（`setAlarmClock`
  * 与 `setExactAndAllowWhileIdle` 都一样），而重排此前只发生在打开 App 的时候
- * （Dart 侧 `reschedule`）。
+ * （Dart 侧 `reconcileNative`）。
  *
- * 两类东西都从 [AlarmStore] 读，规则也一致：**没到点的排回去，关机期间已经错过的
- * 丢掉、不补**。闹钟分三种情况，别混：
- *
- *  - **每天 / 每周**：按 `nextDaily` / `nextWeekly` 重算下一次 —— 直接把旧时刻排
- *    回去会排出一条已经过期的记录（`setAlarmClock` 对过去的时刻会立即触发）。
- *  - **一次性、还没到点**：原时刻排回去。
- *  - **一次性、关机期间已经错过**：从清单里删掉，**不在开机瞬间补响** —— 半夜的
- *    闹钟在早上开机时突然响，比不响更糟。
- *
- * 安静提醒（待办提醒）都是一次性的，没有重复那一档。
+ * **重排规则本身在 [AlarmRestorer] 里**，与 6 小时一次的巡检（[AlarmWatchdog]）
+ * 共用同一份实现 —— 两处各写一遍必然分岔，而分岔的症状是「某天没响」这种不报错的。
  *
  * 权限：只需要 `RECEIVE_BOOT_COMPLETED`（manifest 里已有，不用新增）。小米机型上
  * 还要用户开「自启动」，否则 MIUI 可能压根不把这个广播发给 App。
@@ -32,103 +24,31 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val now = System.currentTimeMillis()
-        val entries = AlarmStore.all(context)
-        AlarmLog.info(
+        AlarmLog.diagnostic(
             context,
-            "BootReceiver.onReceive: action=${intent.action}，清单 ${entries.size} 条"
+            "BootReceiver.onReceive: action=${intent.action}，" +
+                "清单 ${AlarmStore.all(context).size} 铃 / " +
+                "${AlarmStore.allQuiets(context).size} 静"
         )
-
-        var rescheduled = 0
-        for (e in entries) {
-            // 时刻表驱动（重复待办）：从「本次时刻 + 后续队列」里挑第一个还没过的。
-            // **必须与 `AlarmReceiver` 同一套规则** —— 否则重启一次就退回按星期重算，
-            // 月末特例与多选星期几立刻对不上。
-            if (e.repeatType == 3) {
-                val pending = AlarmScheduler.nextPending(
-                    e.millis, e.repeatTimes.toLongArray(), now
-                )
-                if (pending == null) {
-                    AlarmStore.remove(context, e.id)
-                    continue
-                }
-                try {
-                    AlarmScheduler.schedule(
-                        context, e.id, pending.first, e.label, e.uri,
-                        e.repeatType, e.hour, e.minute, e.weekdays, e.detail,
-                        pending.second
-                    )
-                    rescheduled++
-                } catch (ex: Exception) {
-                    AlarmLog.error(
-                        context,
-                        "BootReceiver: 重排 id=${e.id} 失败: ${ex.javaClass.name}: ${ex.message}"
-                    )
-                }
-                continue
-            }
-            val next = when (e.repeatType) {
-                1 -> AlarmScheduler.nextDaily(now, e.hour, e.minute)
-
-                2 -> {
-                    if (e.weekdays == 0) {
-                        // 没有星期掩码的「每周」是条坏数据，删掉而不是排成明天
-                        AlarmStore.remove(context, e.id)
-                        continue
-                    }
-                    AlarmScheduler.nextWeekly(now, e.weekdays, e.hour, e.minute)
-                }
-
-                else -> {
-                    if (e.millis <= now) {
-                        AlarmStore.remove(context, e.id)
-                        continue
-                    }
-                    e.millis
-                }
-            }
-            try {
-                AlarmScheduler.schedule(
-                    context, e.id, next, e.label, e.uri,
-                    e.repeatType, e.hour, e.minute, e.weekdays, e.detail
-                )
-                rescheduled++
-            } catch (ex: Exception) {
-                AlarmLog.error(
-                    context,
-                    "BootReceiver: 重排 id=${e.id} 失败: ${ex.javaClass.name}: ${ex.message}"
-                )
-            }
-        }
-        AlarmLog.info(context, "BootReceiver: 重排完成，$rescheduled 条")
-
-        // 安静提醒（待办提醒那条链路）：规则与闹钟一致 —— 还没到点的排回去，
-        // 关机期间**已经错过的不补发**。一次重启冒出一串「你几小时前该交体检报告」
-        // 比不提醒更烦。
-        //
-        // 重复待办靠队列续排：从「本次时刻 + 队列」里挑第一个还没过的，所以关机
-        // 期间错过的那几次会自然被跨过去（与「错过的不补」同一条规矩）。
-        var quiets = 0
-        for (q in AlarmStore.allQuiets(context)) {
-            val pending = AlarmScheduler.nextPending(
-                q.millis, q.repeatTimes.toLongArray(), now
+        try {
+            val r = AlarmRestorer.restore(context, now)
+            AlarmLog.diagnostic(
+                context,
+                "BootReceiver: 重排完成，补排 ${r.alarms} 铃 / ${r.quiets} 静，" +
+                    "下一跳 ${AlarmScheduler.nextDigest(context, now)}"
             )
-            if (pending == null) {
-                AlarmStore.removeQuiet(context, q.id)
-                continue
-            }
-            try {
-                AlarmScheduler.scheduleQuiet(
-                    context, q.id, pending.first, q.title, q.body, pending.second
-                )
-                quiets++
-            } catch (ex: Exception) {
-                AlarmLog.error(
-                    context,
-                    "BootReceiver: 重排提醒 id=${q.id} 失败: ${ex.javaClass.name}: ${ex.message}"
-                )
-            }
+        } catch (e: Exception) {
+            AlarmLog.error(
+                context,
+                "BootReceiver: 重排失败 ${e.javaClass.simpleName}: ${e.message}"
+            )
         }
-        AlarmLog.info(context, "BootReceiver: 提醒重排完成，$quiets 条")
+
+        // 巡检也要排上：重启之后它是「系统 / 厂商把闹钟整条丢掉」这条路上唯一的兜底。
+        // **force**：重启把 AlarmManager 清空了，落盘的那个「已排到几点」已经不作数，
+        // 走普通 `ensureScheduled` 会因为「已经有更早的一次」而直接跳过 —— 那正好
+        // 就是重启后巡检再也不跑。
+        AlarmWatchdog.forceScheduled(context)
 
         // 小组件的刷新闹钟也重启即清空，同样要排回去。与上面两条链路的区别是：
         // 它没有「清单」可读 —— 边界时刻就在快照里，`scheduleNextRefreshIfNeeded`

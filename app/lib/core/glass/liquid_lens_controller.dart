@@ -108,6 +108,16 @@ class LiquidLensController extends ChangeNotifier {
   double _fingerInnerX = 0;
   double _grabOffset = 0;
 
+  /// **按下那一刻**算好的抓取偏移（单位「格」）。
+  ///
+  /// ⚠️ **不能等到 `dragStart` 再算。** Flutter 要等手指走过拖动识别阈值才发
+  /// `onHorizontalDragStart`，而那一刻的位置已经不是按下的地方了 —— 拿它算偏移
+  /// 会把阈值内的那一段位移**永久吃掉**：滑得越快、落后越多，表现就是「快速滑动
+  /// 时滑块跟不上手，只有手一直压在滑块上才跟得住」（用户 2026-11-25 真机）。
+  /// 按下时算、拖动开始时用，透镜才和手指 1:1。
+  double _pressGrabOffset = 0;
+  bool _hasPressGrab = false;
+
   /// 每一格多宽（px）。形变要的速度是 px/s，而弹簧的位置以「格」为单位。
   double _itemW = 1;
 
@@ -178,12 +188,21 @@ class LiquidLensController extends ChangeNotifier {
       _slotCentre = i + 0.5;
       _pos.target = _slotCentre;
     }
+    // 抓取偏移按**按下点**算（理由见 [_pressGrabOffset]）：拖动识别前手指可能
+    // 已经走出去一大段，那段不能被吃掉。
+    _pressGrabOffset = localDx / _itemW - _page;
+    _hasPressGrab = true;
     _syncTicker();
     notifyListeners();
   }
 
   void dragStart(double localDx) {
-    _grabOffset = localDx / _itemW - _page;
+    // 抓取偏移优先用**按下时**算好的那个（见 [_pressGrabOffset]）；没有按下
+    // 记录（直接起拖）才退回用拖动起点的位置。
+    _grabOffset = _hasPressGrab
+        ? _pressGrabOffset
+        : localDx / _itemW - _page;
+    _hasPressGrab = false;
     dragUpdate(localDx);
   }
 
@@ -205,6 +224,7 @@ class LiquidLensController extends ChangeNotifier {
   /// （页面归调用点管，这里只管那枚滴）。
   int release() {
     _endHold();
+    _hasPressGrab = false;
     // 目标格取**逻辑页**，不是弹簧的当前位置 —— 见 `_page` 的说明。
     final int target = _nearestIndex(_page);
     // **逻辑页也要吸附过来。** 少了这一行，「拖了一点点、又松在同一格上」时
@@ -229,6 +249,7 @@ class LiquidLensController extends ChangeNotifier {
   bool cancel() {
     if (!_dragging) return false;
     _endHold();
+    _hasPressGrab = false;
     _pressed = false;
     _dragging = false;
     _previewIndex = null;
@@ -266,6 +287,11 @@ class LiquidLensController extends ChangeNotifier {
 
   // ── 内部 ────────────────────────────────────────────────────────────────
 
+  /// 升程目标：按住够久、或正在拖动。
+  ///
+  /// ⚠️ 2026-11-25 曾把 `_dragging` 去掉（理由：契约写着「长按才提起」），
+  /// 但用户当场指出那是**误判** —— 真机反馈的是「滑动时透镜跟不上手」，
+  /// 与提不起提起无关。这里已恢复原样；跟手问题在 [_pressGrabOffset] 修。
   double get _liftTarget => (_dragging || _heldLongEnough) ? 1.0 : 0.0;
 
   /// 按**当前意图**刷新升程弹簧的目标。

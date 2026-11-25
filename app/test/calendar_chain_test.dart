@@ -205,31 +205,6 @@ void main() {
     await _disposeCalendar(tester);
   });
 
-  testWidgets('顶栏那颗按钮点开是**只读**的排班时段总览，今天所在那段打勾', (tester) async {
-    await _pumpChainedCalendar(tester);
-
-    await tester.tap(find.byTooltip(L10n.scheduleTimeline));
-    await tester.pumpAndSettle();
-
-    // 只读：**没有**「点一行就切过去」这件事，只有一句说明 + 一条时间线 + 跳转。
-    final sheet = find.byType(BottomSheet);
-    expect(sheet, findsOneWidget);
-    expect(find.descendant(of: sheet, matching: find.text(L10n.remainingTime)),
-        findsOneWidget);
-    expect(find.descendant(of: sheet, matching: find.byIcon(Icons.check_circle_outlined)),
-        findsOneWidget,
-        reason: '今天所在的那一段要打勾（今天落在 B 那段里）');
-    expect(find.text(L10n.manageTimeline), findsOneWidget);
-
-    // 「管理排班时段」跳到排班管理页。
-    await tester.tap(find.text(L10n.manageTimeline));
-    await tester.pumpAndSettle();
-    expect(find.text(L10n.scheduleTimeline), findsWidgets);
-    expect(find.text(L10n.remainingHint), findsOneWidget);
-
-    await _disposeCalendar(tester);
-  });
-
   testWidgets('其余时间为无 + 没有段 → 网格上有指路，**而且点某天仍然有效**', (tester) async {
     // 这一条的重头戏是后半句：指路那一层必须 `IgnorePointer`，否则它会吃掉网格的
     // 手势（点日期、长按拖选全失灵）—— 而「盖了层透明东西导致交互没了」在 widget

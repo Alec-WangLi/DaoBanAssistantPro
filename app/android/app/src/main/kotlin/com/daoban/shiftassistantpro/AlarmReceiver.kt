@@ -22,14 +22,26 @@ class AlarmReceiver : BroadcastReceiver() {
         val minute = intent.getIntExtra("minute", 0)
         val weekdays = intent.getIntExtra("weekdays", 0)
 
-        AlarmLog.info(
+        // **这一行必须落盘**：用户报「闹钟没响」时，第一件要判断的事就是
+        // 「那一刻系统到底有没有把闹钟递过来」。从前它是 `info`（只进 Logcat），
+        // 于是报障贴来的日志里一个字都没有 —— 2026-11-17 三星用户那条
+        // 「偶发不响」就卡在这里。落盘的三种结果分得开：
+        //   · 没有这条 → 系统把闹钟取消了（休眠 / 电池策略 / 被清理）；
+        //   · 有这条、没有下一条 → 前台服务没起来（后台启动限制）；
+        //   · 有这两条、没有「开始播放」→ 音源问题（见 AlarmSound）。
+        //
+        // 设备能力那串每个进程只带一次：每行都带会把日志撑满，复制出来看不完。
+        val state = AlarmLog.deviceStateOnce(context, "device-state")
+        AlarmLog.diagnostic(
             context,
-            "AlarmReceiver.onReceive: id=$id, label=$label, repeatType=$repeatType, ${AlarmLog.deviceState(context)}"
+            "AlarmReceiver.onReceive: id=$id label=$label repeatType=$repeatType" +
+                (if (state.isEmpty()) "" else " $state")
         )
 
         // 1) 前台服务：响铃 + 震动
         try {
             val serviceIntent = Intent(context, AlarmRingService::class.java).apply {
+                putExtra("id", id)
                 putExtra("label", label)
                 putExtra("detail", detail)
                 putExtra("uri", uri)
@@ -82,6 +94,11 @@ class AlarmReceiver : BroadcastReceiver() {
                     repeatType, hour, minute, weekdays, detail, pending.second
                 )
             }
+            AlarmLog.diagnostic(
+                context,
+                "AlarmReceiver: 续排完成，下一跳 " +
+                    AlarmScheduler.nextDigest(context, System.currentTimeMillis())
+            )
             return
         }
 
@@ -104,5 +121,12 @@ class AlarmReceiver : BroadcastReceiver() {
                 AlarmStore.remove(context, id)
             }
         }
+        // 「App 认为下一条是什么」：这一行和上面那行收着看，就能分清
+        // 「系统丢了某条闹钟」与「App 本来就没排它」——2026-11-22 那次缺的正是这个。
+        AlarmLog.diagnostic(
+            context,
+            "AlarmReceiver: 处理完毕，下一跳 " +
+                AlarmScheduler.nextDigest(context, System.currentTimeMillis())
+        )
     }
 }
