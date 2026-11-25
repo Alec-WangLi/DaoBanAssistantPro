@@ -360,7 +360,10 @@ void main() {
     }
   }
 
-  Future<void> dragOntoCell2(WidgetTester t) => dragToward(t, 0.70);
+  // 终点取 0.61：旧实现里抓取偏移按「拖动被识别时」算，18px 的识别阈值被吃掉，
+  // 0.70 那一拖实际只把滴带到 0.61 的位置。v0.13.26 起滴与手指 1:1，终点要按
+  // 「滴真正要停的地方」给 —— 仍然是第 3 格左缘、标签被挤的那一幕。
+  Future<void> dragOntoCell2(WidgetTester t) => dragToward(t, 0.61);
 
   List<LensWarpedCell> warpedCells(WidgetTester tester) =>
       tester.widgetList<LensWarpedCell>(find.byType(LensWarpedCell)).toList();

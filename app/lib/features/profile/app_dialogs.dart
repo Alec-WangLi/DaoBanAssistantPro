@@ -41,6 +41,10 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.26\n'
+    '· 修：快速滑动底栏滑块时，它总落后手指一截、跟不上 —— 现在透镜与手指的位置 1:1（分段器、开关同样受益）\n'
+    '· 恢复上一版误改的「滑动时不提起」：滑动时仍会像以前一样鼓起来（上一版判断错了，问题在跟手，不在鼓起）\n'
+    '\n'
 'v0.13.25\n'
     '· 修：底栏滑块（分段器、开关也一样）一滑就鼓成一枚球、顶出胶囊 —— 现在只有「按住」才鼓起来，普通滑动只在轨道里跟着走\n'
     '\n'
@@ -97,12 +101,12 @@ const String _changelogZh =
     '· 请假现在能选类型：年假、事假、病假、调休、其他，也能自己加类型；长按自定义类型可删除，已有记录会保留原来的名字\n'
     '· 请假 / 加班都能写备注，日历信息卡上多一行「请假备注：…」；统计页新增「请假构成」，按类型列出时长\n'
     '\n'
-'v0.13.16\n'
-    '· 修：重复待办还在起点之前就出现在列表里 —— 上一版把第一条直接建在「新起点之后的第一次」上，于是「每月 17 号、从 11/21 起」在建好的当下就躺进了列表。现在重复待办要到它那一天才出现，上一版留下的那几条会在打开待办页时自动收走\n'
-    '· 打赏收款码换成经营码：支付宝与微信两张都换了，支付宝的「打开支付宝」也指向新码\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.26\n'
+    '· Fix: when swiping the bottom slider quickly it lagged behind your finger - the lens now sits 1:1 under your finger (same for the segmented control and switches)\n'
+    '· Restored the previous build\'s accidental change: the lens lifts while sliding again, as it always did (that diagnosis was wrong - the problem was tracking, not the lift)\n'
+    '\n'
 'v0.13.25\n'
     '· Fix: the bottom slider (and the segmented control / switches) ballooned out of its track as soon as you swiped - now it only lifts while you press and hold, and a normal slide just travels inside the track\n'
     '\n'
@@ -158,10 +162,6 @@ const String _changelogEn =
     '· New "Export statistics": pick any date range and fields (date / shift / hours / leave type / leave hours / overtime / note, ...), create a CSV that opens directly in Excel\n'
     '· Leave now has a type: annual, personal, sick, time off in lieu, other, plus your own custom types; long-press a custom type to delete it, and existing records keep the old name\n'
     '· Leave and overtime both take a note, shown as an extra line on the calendar info card; Statistics gains "Leave by type" with hours per type\n'
-    '\n'
-'v0.13.16\n'
-    '· Fix: a repeating todo showed up before its start date - the previous build created the first row on "the first occurrence after the new start", so a monthly todo starting 11/21 was already in the list. Repeating todos now appear on their own day, and rows left behind by the previous build are removed when the todo page opens\n'
-    '· Donation QR codes replaced with the new merchant codes (Alipay and WeChat); the "Open Alipay" action points at the new code too\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

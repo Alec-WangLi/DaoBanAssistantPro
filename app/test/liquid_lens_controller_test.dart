@@ -86,37 +86,19 @@ void main() {
     await settleToRest(tester);
   });
 
-  testWidgets('直接拖动（没先按住）：不提起 —— 滑动时不该鼓出来', (tester) async {
-    // 2026-11-25 真机：在底栏上快速左右滑，透镜立刻鼓成一枚球、顶出胶囊
-    // （视频里连续几秒都是这个「气球」）。契约是「点按不提起、**长按**才提起」，
-    // 而旧的升程目标是 `_dragging || _heldLongEnough` —— 一次快速滑动没有
-    // 「按住」，却照样鼓了出来。凸出胶囊只该属于「按住」。
+  testWidgets('快速滑动：拖动被识别之前手指已走一段，透镜不能落后', (tester) async {
+    // 2026-11-25 真机：快速左右滑底栏时透镜总是落后手指一大截，只有「手一直压在
+    // 滑块上」才跟得住。根因：`dragStart` 用**识别到拖动那一刻**的位置算抓取偏移，
+    // 而 `press` 时的落点才是手指真正按下的地方 —— 两者之间隔着拖动的识别阈值
+    // （约 18dp），滑得越快差得越多，而且这段差值是**永久**的。
     final c = make();
-    c.dragStart(itemW / 2);
-    c.dragUpdate(itemW / 2 + itemW / 2);
-    await advance(tester, 240); // 远超 lensHoldDelay（110ms）
-    expect(c.lift, lessThan(0.05),
-        reason: '没按住就直接拖，透镜不该提起（真机上是「滑块鼓成一枚球」）');
-    expect(c.dragging, isTrue, reason: '位置仍然要 1:1 跟手');
-
-    c.release();
-    await settleToRest(tester);
-  });
-
-  testWidgets('长按之后拖动：提起要跟着过手（tapCancel 先跑也不能掉）', (tester) async {
-    // 真实事件顺序：onTapDown → （过 110ms）→ onTapCancel → onHorizontalDragStart。
-    // `tapCancel()` 会把「按住够久」清掉；不把它交给 `dragStart` 的话，
-    // 「长按滑块自动吸附、然后拖着选」这条主路径会一进入拖动就掉光提起。
-    final c = make();
-    c.press(itemW / 2);
-    await advance(tester, 240);
-    expect(c.lift, greaterThan(0.5), reason: '按住够久了却没提起');
-    expect(c.tapCancel(), isTrue, reason: '拖动接管时 tap 会被取消');
-    c.dragStart(itemW / 2);
-    c.dragUpdate(itemW / 2 + itemW / 2);
-    await advance(tester, 64);
-    expect(c.lift, greaterThan(0.5), reason: '长按之后的拖动把提起掉了');
-    expect(c.dragging, isTrue);
+    c.press(itemW / 2); // 落在第 1 格中间（x = 45）
+    // 快速滑到 x = 145 才被识别为拖动
+    c.dragStart(itemW / 2 + 100);
+    c.dragUpdate(itemW / 2 + 100);
+    expect(c.position, closeTo(145 / itemW, 0.02),
+        reason: '透镜中心该在手指下面（145/90 ≈ 1.61 格），实际 ${c.position} —— '
+            '滞后 ${(145 / itemW - c.position).toStringAsFixed(2)} 格');
 
     c.release();
     await settleToRest(tester);

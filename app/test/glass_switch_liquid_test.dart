@@ -347,9 +347,10 @@ void main() {
         for (int i = 0; i < 20; i++) {
           await t.pump(const Duration(milliseconds: 30)); // 过按住闸门
         }
-        // 拖 +32.5px。⚠️ **要扣掉 `kTouchSlop`（18px）** —— 识别器赢下竞技场之前
-        // 那 18px 是空走的，所以有效位移 14.5px = 0.58 格。
-        for (int i = 0; i < 13; i++) {
+        // 拖 20px。**识别阈值那 18px 现在也算数**：v0.13.26 起抓取偏移按按下点算，
+        // 滴与手指 1:1 —— 有效位移就是 20px = 0.8 格（旧实现会扣掉 slop，
+        // 同样一拖只走 0.08 格，那正是「跟不上手」的根因）。
+        for (int i = 0; i < 8; i++) {
           await g.moveBy(const Offset(2.5, 0));
           await t.pump(const Duration(milliseconds: 16));
         }
@@ -360,15 +361,18 @@ void main() {
         reason: '前提错了：这一拖把值翻过去了，这条用例就证明不了「跟着位置走」');
 
     // 采样点都在胶囊里、也都在滴的两侧之外：
-    // 滴心 = 3 + 0.58×25 + 12.5 = 30（全局 102），半宽 13.5 → 占 [88.5, 115.5]；
+    // 滴心 = 3 + 0.8×25 + 12.5 = 35.5（全局 107.5），半宽 13.5 → 占 [94, 121]；
     // 色带的边界在 36.5，过渡带是 [24, 49]（全局 [96, 121]）。
     final int left = blueness(px, 80, 60);
-    final int right = blueness(px, 122, 60);
+    final int right = blueness(px, 125, 60);
     expect(left, greaterThan(20), reason: '滴左边的轨道一点色都没有（蓝度 $left）');
-    expect(left - right, greaterThan(20),
+    // 1:1 之后同样一拖会走到 80%，过渡带的边界已经越过轨道右端 —— 右端仍有
+    // 约六成的色（不是 0），但必须**明显淡于**左端：整条一样蓝就是「整条一起淡」，
+    // 那件事由这一条拦。
+    expect(left - right, greaterThan(5),
         reason: '两端一样蓝（左 $left / 右 $right）—— 那是「整条一起淡」，'
             '不是「跟着滴漫过去」');
-    expect(right, lessThan(12), reason: '滴右边的轨道也被染上了（蓝度 $right）');
+    expect(right, lessThan(40), reason: '滴右边的轨道被染得太满（蓝度 $right）');
 
     await g.up();
     released = true;
