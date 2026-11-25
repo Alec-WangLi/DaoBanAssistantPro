@@ -169,22 +169,10 @@ class BackupService {
     final Directory pending = Directory(p.join(support.path, 'pending_restore'));
     final File pendingDb = File(p.join(pending.path, 'data.sqlite'));
     final File prefsFile = File(p.join(pending.path, 'prefs.json'));
-    // 库和 prefs 缺一不可：缺任何一件都说明暂存不完整，直接丢掉，
-    // **绝对不能**先把库换上去再说。
-    if (!await pendingDb.exists() || !await prefsFile.exists()) {
-      if (await pending.exists()) {
-        await pending.delete(recursive: true);
-      }
-      return false;
-    }
 
     final Directory docs = await docsLoader();
     final String dbPath = p.join(docs.path, kDatabaseFileName);
     final File restored = File('$dbPath.restore');
-    if (await restored.exists()) {
-      await restored.delete();
-    }
-    await pendingDb.copy(restored.path);
 
     // 旧库连同它的 WAL / SHM 一起**改名**成 `.bak`，不删 —— 新库万一没就位，
     // 把这三件原样放回去即可回到导入前的状态。`-wal`/`-shm` 必须跟着走：
@@ -197,19 +185,37 @@ class BackupService {
     final File bakShm = File('$dbPath.bak-shm');
 
     // 上一次替换死在半路时，`.bak` 才是完整的旧库 —— 先放回去再重来。
+    //
+    // ⚠️ **这一段必须排在 pending 完整性检查之前**：那次崩溃之后
+    // `pending_restore/` 也可能一起没了，若等到检查之后再放回，这个函数直接
+    // `return false`、旧库就再也回不来，App 会开一个空库（增量复审 5.3）。
     if (await bak.exists()) {
       if (!await oldDb.exists()) {
         await bak.rename(dbPath);
         if (await bakWal.exists()) await bakWal.rename('$dbPath-wal');
         if (await bakShm.exists()) await bakShm.rename('$dbPath-shm');
       } else {
-        // 旧库还在，说明 `.bak` 是更早一次崩溃留下的残渣：以现存的库为准，
-        // 直接清掉（也免得下一步 rename 在 Windows 上撞上已存在的目标）。
+        // 旧库还在，说明 `.bak` 是更早一次崩溃留下的残渣：以现存的库为准。
+        // （Dart 的 `File.rename` 本来就会覆盖已存在的目标，清掉只是不留垃圾。）
         for (final File stale in <File>[bak, bakWal, bakShm]) {
           if (await stale.exists()) await stale.delete();
         }
       }
     }
+
+    // 库和 prefs 缺一不可：缺任何一件都说明暂存不完整，直接丢掉，
+    // **绝对不能**先把库换上去再说。
+    if (!await pendingDb.exists() || !await prefsFile.exists()) {
+      if (await pending.exists()) {
+        await pending.delete(recursive: true);
+      }
+      return false;
+    }
+
+    if (await restored.exists()) {
+      await restored.delete();
+    }
+    await pendingDb.copy(restored.path);
 
     if (await oldDb.exists()) await oldDb.rename(bak.path);
     if (await oldWal.exists()) await oldWal.rename(bakWal.path);

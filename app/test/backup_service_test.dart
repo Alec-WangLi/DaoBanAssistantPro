@@ -162,4 +162,42 @@ void main() {
     expect(live.existsSync(), true);
     expect(bak.existsSync(), false, reason: '残渣要被清掉，不能挡着下一次 rename');
   });
+
+  test('pending 丢失时，残留的 .bak 也要放回（不能开空库）', () async {
+    await db.close();
+    final File live = File(p.join(docs.path, kDatabaseFileName));
+    final File bak = File('${live.path}.bak');
+    live.renameSync(bak.path);
+
+    final bool restored = await BackupService.applyPendingRestore(
+      documentsDirLoader: () async => docs,
+      supportDirLoader: () async => support,
+    );
+    // 没有暂存 → 不算完成一次导入；但「上次换库死在半路」的现场必须先收拾掉。
+    expect(restored, false, reason: '没有暂存就不算一次导入');
+    expect(live.existsSync(), true, reason: '旧库必须回来，哪怕 pending_restore 已经没了');
+    expect(bak.existsSync(), false);
+  });
+
+  test('旧库的 -wal / -shm 跟着一起搬，成功后不留残渣', () async {
+    final Uint8List bytes = await service().createBackup();
+    await db.close();
+    await service().stageRestore(bytes);
+
+    final File live = File(p.join(docs.path, kDatabaseFileName));
+    File('${live.path}-wal').writeAsBytesSync(const <int>[7, 7, 7]);
+    File('${live.path}-shm').writeAsBytesSync(const <int>[8, 8]);
+
+    final bool restored = await BackupService.applyPendingRestore(
+      documentsDirLoader: () async => docs,
+      supportDirLoader: () async => support,
+    );
+    expect(restored, true);
+    // 组名必须成组消失：留在原名上会被新库当成自己的日志重放。
+    for (final String suffix in const <String>['-wal', '-shm']) {
+      expect(File('${live.path}$suffix').existsSync(), false);
+      expect(File('${live.path}.bak$suffix').existsSync(), false);
+    }
+    expect(File('${live.path}.bak').existsSync(), false);
+  });
 }

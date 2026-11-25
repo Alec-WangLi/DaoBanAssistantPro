@@ -113,3 +113,62 @@ gh repo view --json description,repositoryTopics
 4. 刷 GitHub 仓库描述与 topics；本文件随提交入库（`release` 技能会检查它存在）。
 
 签名：独立审查者（Claude Code 独立 subagent，未参与本版开发）· 2026-11-25
+
+## 5. 增量复审（ef37c92..d754efc）
+
+**范围补充**：阻断修复在 `ef37c92`（`25dce5c..ef37c92`），本轮一并核过；本节主体是 `ef37c92..d754efc`（1 个提交，12 个文件，+135/−22；`d754efc` 工作区干净）。APK 已于 22:23 按新源码重建。
+
+### 5.1 逐项核对
+
+| 修复项 | 位置 | 核对结果 | 结论 |
+|---|---|---|---|
+| 1. README 测试版版本号 | `README.md:170` | 实测已是「正式版 v0.14.0、测试版 v0.13.27」；`latest.json:9` 的 prerelease = 0.13.27；`release.ps1` 对 `Z=0` 只改 stable。全仓 grep 不再有「测试版 v0.14.0」 | ✅ 原阻断解除 |
+| 2. 备份导入回滚顺序 | `backup_service.dart:153-235` | 旧库连同 `-wal`/`-shm` 成组改名 `.bak*` → 新库就位 → 才删 `.bak*`；`restored.rename` 失败时原样放回。原有「删旧库 → rename」空窗已关（细节见 5.2） | ✅ 新顺序成立，无新阻断窗口 |
+| 3. 帮助第一级加「统计」 | `l10n.dart:1535-1545`、`help_center_screen.dart:104-107` | 实测帮助中心 11 个 `HelpEntry`，测试名单 11 条一致；新增三条事实逐条对实现核过：月 / 年视图、实际在岗 / 正常 / 上班 / 休息、请假 / 加班 / 法定节假日上班 / 夜班 / 最长连班连休（`stats_screen.dart:641-647`）、「调整班次」记请假加班、整天请假压闹钟、右上角导出 CSV、跨午夜 `（次日）`；英文已改为实际输出的 ` (+1d)` | ✅ 事实一致 |
+| 4. 测试补充 | `backup_service_test.dart:126-164`、`stats_export_test.dart:118-130`、`changelog_dialog_test.dart:25`、`help_center_test.dart:29-42` | 备份 +2 条（残留 `.bak` 先放回 / 旧库在时清残渣）；CSV 中英后缀都钉住；更新日志过滤改正则；帮助名单补「数据备份」并升到 11 条。本机 29 条定向用例全过 | ✅ |
+| 5. 站点导航与窄屏 | `site/index.html:24-30`、`site/styles.css:670/705-706` | 导航实测 6 个 `<a>`：1 排班 / 2 统计 / 3 闹钟 / 4 待办 / 5 更新 / 6 GitHub。≤900 藏第 4 项（待办）；≤620 藏第 3 项（闹钟）+ 第 6 项（GitHub）→ 留「排班 / 统计 / 更新」，与注释一致；GitHub 在首屏下载区与页脚仍有入口。CSS 花括号 130/130 配平 | ✅ 下标对得上 |
+| 6. 文档 / 基线 | `PRODUCT_SPEC.md:63`、`docs/changelog/v0.14.md:8/20-21`、`AGENTS.md:196`、`ci.yml:30` | 日志条已改成整页 / 7 天 / 搜索 / 诊断包；「七个测试版」已改「二十七个」；⑪ 记录的处置与本次实际改动对得上；基线 1429 → 1431 | ✅ |
+| 7. 重建的 APK | `dist/倒班助手Pro-v0.14.0.apk` | SHA256 = `B7BAD5E6…1210F`，与 `tools/gh/release-notes-v0.14.0.md:54` 一致；与 `app/build/app/outputs/flutter-apk/app-release.apk` 同哈希（22:21:57）；证书仍是 `265d09b2…ce893`；versionName 0.14.0 / versionCode 215 / minSdk 26 / arm64-v8a；`libapp.so` 以 UTF-16LE 命中新文案（「也能手动刷一次」「统计页右上角」「往下还有请假」）；`app/lib`、`app/test`、`app/android/app/src` 无文件晚于 APK | ✅ 确为新源码构建 |
+
+### 5.2 备份回滚的失败窗口分析（重点）
+
+- **新顺序**：pending 完整性校验 → 复制出 `.restore` →（若 `.bak` 存在且旧库不在就先放回；旧库在则清掉残渣）→ 旧库 + `-wal` + `-shm` 成组改名 `.bak*` → `.restore` rename 就位 → 才删 `.bak*`；`restored.rename` 抛异常时把 `.bak*` 原样放回再 rethrow。
+- **原空窗已关闭**：在「新库就位」之前，旧库始终以 `.bak` 形式留在盘上，最坏也只是下次启动走「`.bak` 放回 + 重试」。旧的「删旧库 → rename」中间失败会丢库的窗口不存在了。
+- **rename 目标已存在**：Dart `File.rename` 的文档语义是「若 newPath 是已存在的文件 / 链接，先移除它」（`toolchain/flutter/bin/cache/dart-sdk/lib/io/file.dart:281-283`），不会因目标存在而失败。因此「撞上已存在目标」不是实际风险；代码里的 stale 清理仍是对的卫生动作，但不是避免失败的必要条件。
+- **WAL 归属**：旧库与它的 `-wal`/`-shm` 同名成组搬迁、成组回滚；新库是 `VACUUM INTO` 出来的无 WAL 副本，就位时原位置没有旧 WAL 可被误重放。走读未发现新的归属错误。
+- **残余（均非阻断）**：
+  1. `.bak` 的自动放回排在 pending 完整性检查**之后**（`backup_service.dart:174-179` 先 `return false`）。若进程被杀后 `pending_restore/` 又恰好丢失，`.bak` 不会被自动放回，App 会开一个新空库。概率极低；把放回块提到 pending 检查之前即可彻底关掉。
+  2. 新增的两条用例只造了 `.bak`，没有造 `-wal`/`-shm`；WAL 成组搬迁目前只有代码审查，没有机械证据。
+  3. `backup_service.dart:207` 的注释把「rename 在 Windows 上撞上已存在的目标」当成理由，与 Dart 的覆盖语义不符（清理本身无害）。
+- **判定：没有引入新的阻断级失败窗口。**
+
+### 5.3 新增发现
+
+| 级别 | 位置 | 问题 | 处置 |
+|---|---|---|---|
+| 记录 | `backup_service.dart:207` | 注释把「rename 目标已存在会失败」当理由；Dart `File.rename` 实际是覆盖。清理动作本身无害，只是理由写错 | 转下个版本改注释 |
+| 记录 | `backup_service.dart:174-179` | `.bak` 放回在 pending 校验之后；pending 丢失时旧库不会自动回来（需外部删除 / 清理才会触发） | 转 `docs/decisions/` 或下个版本（建议把放回块提前） |
+| 记录 | `backup_service_test.dart:126-164` | 没造 `-wal`/`-shm` 文件，WAL 成组搬迁无测试 | 下个版本补一条 |
+| 记录 | `l10n.dart:1452`、`help_center_screen.dart:13/17`、`help_center_test.dart:4/6` | 帮助升到 11 条后，仍有 5 处注释写「九条」（只影响读代码的人，不影响界面） | 下个版本顺手改 |
+
+### 5.4 上一轮遗留项状态
+
+- **已修**：阻断（README）、`v0.14.md`「七个」笔误、SPEC 日志条、英文 `(+1d)`、备份原子性、CSV 后缀断言、更新日志过滤、9 条归纳缺项、release-notes 的 SHA（已同步 `B7BAD5…`）。
+- **仍未处置（沿用上一轮级别：记录 / 发版当天动作）**：README 四张 `v0130-*.gif` 未重出；`docs/changelog/README.md` 字节列（`v0.14.md` 现 6,707 / 表 5,080，`releases.md` 记 3,910 / 实 5,192，`version-history.md` 记 61,830 / 实 69,817）；promo 统计图底部切在「出勤亮点」半行；`AGENTS.md` 现 37,716 B（仍 > 35KB）；GitHub 仓库描述 / topics 未刷新；APK 23.45 MiB 距 Pages 25 MiB 余量约 1.55 MiB。这些都不是阻断。
+
+### 5.5 门禁（本轮回执）
+
+- `flutter analyze`（`d754efc`）→ `No issues found! (ran in 6.6s)`。
+- 本机定向用例 29 条全过（`backup_service` / `stats_export` / `changelog_dialog` / `help_center` / `help_content` / `app_info` / `site_copy` / `changelog_window`）。**全量 1431 为开发方本机实跑**；本审查环境上次全量重跑卡在 frontend_server，本轮未再重跑全量；`d754efc` 尚未推送，CI 还没在它上面跑（CI 的 1429 停在 661349f）。
+- 视觉工装：`app/build/visual` 实测 430 张 PNG，时间 22:17（晚于本次代码改动），含 help_center 各尺寸；1623 条断言为开发方实跑。
+- APK：见 5.1 第 7 行；重建后的源码 / 签名 / 哈希 / 内容四项互相印证。
+
+### 5.6 结论
+
+- [ ] 有新的阻断项
+- [x] 无新的阻断项，原阻断已解除
+
+建议按正式版流程继续：推 beta → 合并 `beta → main --no-ff` → **在 main 主 checkout 重建 APK**（合并刷新 mtime 后 `release.ps1` 第 4 步会拦 beta 上这份）→ 重建后同步 `tools/gh/release-notes-v0.14.0.md` 的 SHA / 大小 → 刷仓库描述 / topics → 发版。上一轮 6 条建议里 4 条已修、2 条（GIF / 仓库描述）属于发版当天动作；8 条记录里 4 条已修，余 4 条转为下个版本。
+
+签名：独立审查者（Claude Code 独立 subagent，未参与本版开发）· 2026-11-25（增量）
+

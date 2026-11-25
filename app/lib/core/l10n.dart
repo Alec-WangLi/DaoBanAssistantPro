@@ -1449,7 +1449,7 @@ class L10n {
 
   // 使用帮助 · 第一级（整页：简介 + 十一条功能简介 + 进第二层的入口）
   //
-  // **简介只讲「这是什么、由哪几块组成」**，不是目录 —— 目录是下面那九条的事。
+  // **简介只讲「这是什么、由哪几块组成」**，不是目录 —— 目录是下面那十一条的事。
   static String get helpIntro => t(
       '倒班助手Pro 是一个纯离线的排班助手：班表设一次，它替你算好每天什么班、什么时候响闹钟，还能放到手机桌面上随时看。底部四个页面各管一件事——日历看班、闹钟管响铃、待办记事情、我的做设置。',
       'Shift Assistant Pro is an offline scheduling helper. Set your shift pattern once and it works out every day for you, rings when it should, and keeps a card on your home screen. The four tabs each do one job — Calendar for shifts, Alarm for ringing, Todo for notes, Me for settings.');
