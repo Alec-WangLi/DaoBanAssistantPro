@@ -193,7 +193,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
-- **v0.13.27(+214) 测试版**：「版本更新」弹窗首屏只画三版（`kChangelogPreviewCount`），更早的收在「展开更早的 N 版」胶囊后。起因是 issue #7 用户反馈反复开关该弹窗三四次后文字碎成错位字形、随后整页翻转 —— 诊断包无 Dart 异常，与 Flutter 上游 `#195594` / `#190519`（Impeller 字形图集采样错位，`e: device-specific`）同型，本机十轮复现不出。**这是缓解不是根治**；数据窗口仍是十条。单测 1427 → 1429。
+- **v0.13.27(+214) 测试版**：「版本更新」弹窗首屏只画三版（`kChangelogPreviewCount`），更早的收在「展开更早的 N 版」胶囊后。起因是 issue #7 用户反馈反复开关该弹窗三四次后文字碎成错位字形、随后整页翻转 —— 诊断包无 Dart 异常，与 Flutter 上游 `#195594` / `#190519`（Impeller 字形图集采样错位，`e: device-specific`）同型，本机十轮复现不出。**这是缓解不是根治**；数据窗口仍是十条。单测 1427 → 1429。**2026-11-25 用户拍板：保留 Vulkan、不换 Skia，等上游修 —— 别再为这台机型重开这个议题**（诊断包结论与上游链接见 `docs/changelog/v0.13.md` 的 ⑤~⑧）。
 - **v0.13.26(+213) 测试版**：滑块跟手。真根因是 `dragStart` 用「拖动被识别那一刻」的坐标算抓取偏移 —— Flutter 要等手指走过识别阈值（约 18dp）才发 `onHorizontalDragStart`，这段位移被永久吃掉，快速滑动时透镜落后手指 1.11 格。改为 `press()` 按**按下点**算好（`_pressGrabOffset`），`dragStart()` 直接用。**上一版（v0.13.25）「滑动不提起」是误判，已恢复原样**，并删掉那 2 条用例；新增 1 条跟手用例，单测 1428 → 1427。
 - **v0.13.25(+212) 测试版**：滑块「提起」只属于按住（**已作废，v0.13.26 恢复原样**）。`LiquidLensController._liftTarget` 从 `_dragging || _heldLongEnough` 改为只看 `_heldLongEnough` —— 快速滑动不再让底栏 / 分段器 / 开关的透镜鼓出胶囊（真机录屏里连续 8.5s 都是这个气球）；长按后再拖由 `_heldAcrossCancel` 交接位接住（`onTapCancel` 先于 `onHorizontalDragStart`）。新增 2 条用例；单测 1426 → 1428。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
