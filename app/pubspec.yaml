@@ -32,7 +32,7 @@ dependencies:
   lunar_plus: ^1.7.1
   shared_preferences: ^2.3.3
 
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^2.0.0
   archive: ^4.6.0
 
 dev_dependencies:
