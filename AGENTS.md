@@ -193,9 +193,9 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 最近改动（只留最近 3 版；完整流水见 `docs/changelog/`）
 
+- **v0.13.27(+214) 测试版**：「版本更新」弹窗首屏只画三版（`kChangelogPreviewCount`），更早的收在「展开更早的 N 版」胶囊后。起因是 issue #7 用户反馈反复开关该弹窗三四次后文字碎成错位字形、随后整页翻转 —— 诊断包无 Dart 异常，与 Flutter 上游 `#195594` / `#190519`（Impeller 字形图集采样错位，`e: device-specific`）同型，本机十轮复现不出。**这是缓解不是根治**；数据窗口仍是十条。单测 1427 → 1429。
 - **v0.13.26(+213) 测试版**：滑块跟手。真根因是 `dragStart` 用「拖动被识别那一刻」的坐标算抓取偏移 —— Flutter 要等手指走过识别阈值（约 18dp）才发 `onHorizontalDragStart`，这段位移被永久吃掉，快速滑动时透镜落后手指 1.11 格。改为 `press()` 按**按下点**算好（`_pressGrabOffset`），`dragStart()` 直接用。**上一版（v0.13.25）「滑动不提起」是误判，已恢复原样**，并删掉那 2 条用例；新增 1 条跟手用例，单测 1428 → 1427。
 - **v0.13.25(+212) 测试版**：滑块「提起」只属于按住（**已作废，v0.13.26 恢复原样**）。`LiquidLensController._liftTarget` 从 `_dragging || _heldLongEnough` 改为只看 `_heldLongEnough` —— 快速滑动不再让底栏 / 分段器 / 开关的透镜鼓出胶囊（真机录屏里连续 8.5s 都是这个气球）；长按后再拖由 `_heldAcrossCancel` 交接位接住（`onTapCancel` 先于 `onHorizontalDragStart`）。新增 2 条用例；单测 1426 → 1428。
-- **v0.13.24(+211) 测试版**：弹层把手统一 + 图标兜底色收到主题。①新增 `core/widgets/glass_sheet_panel.dart`（solid 面板 + 36×4 把手 + `Flexible` 内容槽），**11 个底部弹层全部改用它** —— 把手原先长在 `GlassSheetHeader` 里，时间 / 日期 / 月份 / 年份四个选择器因此没有；`glass_sheet_handle_guard_test` 按「每文件调用次数 = 外壳次数」守门。②两档 `iconTheme` 补 `color: onSurface`，修掉全库 115 处裸图标落回 `fallback()` 纯黑（「关于」页被用户抓到）；`theme_icon_ink_test` 守着。③时间 / 年份滚轮高度改 `Flexible + ConstrainedBox(maxHeight: 180)`，修小窗 3px 溢出。单测 1419 → 1426。
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）

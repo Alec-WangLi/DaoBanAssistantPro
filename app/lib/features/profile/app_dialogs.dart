@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_info.dart';
 import '../../core/design_tokens.dart';
+import '../../core/haptics.dart';
 import '../../core/l10n.dart';
 import '../../core/update_checker.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_loading.dart';
+import '../../core/widgets/glass_pill.dart';
 import '../alarm/alarm_service.dart';
 import 'help_entry.dart';
 
@@ -14,8 +16,10 @@ import 'help_entry.dart';
 void showAppInfoDialog(
   BuildContext context, {
   required String title,
-  required String content,
+  String? content,
+  Widget? body,
 }) {
+  assert(content != null || body != null, '正文总得给一份');
   showGlassDialog<void>(
     context: context,
     builder: (dialogContext) => GlassDialog(
@@ -25,10 +29,14 @@ void showAppInfoDialog(
       // 第二个、更小的视口，正文仍然在它自己的底边被切断（而且切在按钮上方一点点，
       // 看着还是像有块板子）。`GlassDialog` 现在自己就是「整块面板高的滚动区 +
       // 浮在上面的动作行」，交给它就行。
-      content: Text(
-        content,
-        style: AppTokens.rowSecondary.copyWith(height: 1.55),
-      ),
+      //
+      // `body` 给需要自己管状态/排版的正文（更新日志的「展开更早的」）；
+      // 其余调用点还是传字符串，样式在这里统一。
+      content: body ??
+          Text(
+            content!,
+            style: AppTokens.rowSecondary.copyWith(height: 1.55),
+          ),
       actions: [
         GlassActionButton(
           variant: GlassActionVariant.primary,
@@ -41,6 +49,9 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.27\n'
+    '· 「版本更新」这个弹窗现在先给最近三版，更早的点下面的「展开更早的」再看 —— 十条长文一次画出来，对老机型是实打实的压力：有用户反复开关三四次之后，弹窗里的字碎成一片、接着整页上下翻转（重启就恢复）。收起来之后，这一屏也读得清爽些\n'
+    '\n'
 'v0.13.26\n'
     '· 修：快速滑动底栏滑块时，它总落后手指一截、跟不上 —— 现在透镜与手指的位置 1:1（分段器、开关同样受益）\n'
     '· 恢复上一版误改的「滑动时不提起」：滑动时仍会像以前一样鼓起来（上一版判断错了，问题在跟手，不在鼓起）\n'
@@ -93,16 +104,11 @@ const String _changelogZh =
     '· 日志现在能一眼定位：进程启动只写一次设备与权限，之后每条都短；每条「收到闹钟」后面跟一行「下一跳是几月几日几点、哪个 id」——报障时把日志复制过来，就能分清是系统没递过来、还是 App 根本没排它。铃声那一行也不再打出让人误解的「file://」\n'
     '· 重排本身也快了：一次只走一次原生调用、只落一次盘（原来是每条闹钟各来一次），冷启动不再卡\n'
     '\n'
-'v0.13.17\n'
-    '· 统计页更好看也更好用了：班次分布换成环形图，新增「出勤构成」分段条与年视图的月度工时柱状图；底部多了一张「统计口径」，点开就能看到每个数字是怎么算的\n'
-    '· 统计页去掉了「排班时段」入口；要看时段总览仍可从「我的 → 排班管理」进\n'
-    '· 统计入口的图标换成饼图，不再和翻月箭头长得像；顶栏排成两行时，它与「今天」在同一侧\n'
-    '· 新增「导出统计数据」：任选起止日期、勾选要的字段（日期 / 班次 / 工时 / 请假类型 / 请假时长 / 加班 / 备注等），生成 CSV，Excel 直接能打开\n'
-    '· 请假现在能选类型：年假、事假、病假、调休、其他，也能自己加类型；长按自定义类型可删除，已有记录会保留原来的名字\n'
-    '· 请假 / 加班都能写备注，日历信息卡上多一行「请假备注：…」；统计页新增「请假构成」，按类型列出时长\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.27\n'
+    '· The update log now opens with the latest three versions; tap "Show earlier versions" underneath for the rest. Drawing ten long entries at once is real pressure on older phones - one user saw the text break into fragments and then the whole page flip, three or four opens in a row (a restart clears it). It also reads more clearly this way\n'
+    '\n'
 'v0.13.26\n'
     '· Fix: when swiping the bottom slider quickly it lagged behind your finger - the lens now sits 1:1 under your finger (same for the segmented control and switches)\n'
     '· Restored the previous build\'s accidental change: the lens lifts while sliding again, as it always did (that diagnosis was wrong - the problem was tracking, not the lift)\n'
@@ -155,19 +161,118 @@ const String _changelogEn =
     '· The log now pinpoints the problem at a glance: device and permissions are written once per process and later lines are short; every "alarm received" line is followed by "next up: date, time, id" - paste the log and it is clear whether the system never delivered it or the app never scheduled it. The ringtone line no longer prints a misleading "file://"\n'
     '· Re-planning is faster too: one native call and one disk write per batch instead of one per alarm, so cold starts no longer stall\n'
     '\n'
-'v0.13.17\n'
-    '· The Statistics page looks and reads better: by-shift is now a donut chart, day composition is a segmented bar, and the year view gains monthly hour bars; a new "How it is calculated" card at the bottom spells out every number\n'
-    '· The schedule-timeline entry is gone from Statistics; the overview still lives under Me > Schedule management\n'
-    '· The Statistics icon is now a pie chart, no longer confusable with the month arrows; in the two-row header it sits next to Today\n'
-    '· New "Export statistics": pick any date range and fields (date / shift / hours / leave type / leave hours / overtime / note, ...), create a CSV that opens directly in Excel\n'
-    '· Leave now has a type: annual, personal, sick, time off in lieu, other, plus your own custom types; long-press a custom type to delete it, and existing records keep the old name\n'
-    '· Leave and overtime both take a note, shown as an extra line on the calendar info card; Statistics gains "Leave by type" with hours per type\n'
-    '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
 
+/// 折叠态下先画几版，剩下的点「展开更早的」再看。
+///
+/// **为什么不把十条一次全画**：这个弹窗是全 app 中文最密的一面（十条、每条一两行
+/// 长句，一次要光栅化上千个不同字形）。2026-11-25 一位用户反馈「反复点开、关掉
+/// 这个弹窗三四次之后，弹窗里的字变成错位的碎片，接着整页上下翻转」—— 查下来是
+/// 字形图集被压满后采样错位（Impeller 在老机型驱动上的老问题，Flutter 上游
+/// #195594 / #190519 同款），不是我们的逻辑。首屏压到三版，把这一次的字形量砍掉
+/// 七成；顺带这个面板也更好读了。数据仍是十条，只是分批呈现。
+const int kChangelogPreviewCount = 3;
+
+/// 把更新日志切成一条条，每条从 `vX.Y.Z` 那一行开始。
+///
+/// 条目之间靠空行分隔，末尾的空行归到上一条里一并 trim 掉。
+/// `app/test/changelog_window_test.dart` 也用它数条数。
+List<String> splitChangelogVersions(String text) {
+  final out = <String>[];
+  final buf = StringBuffer();
+  final head = RegExp(r'^v\d+\.\d+\.\d+$');
+  for (final line in text.split('\n')) {
+    if (head.hasMatch(line.trim()) && buf.length > 0) {
+      out.add(buf.toString().trimRight());
+      buf.clear();
+    }
+    buf.writeln(line);
+  }
+  final tail = buf.toString().trimRight();
+  if (tail.isNotEmpty) out.add(tail);
+  return out;
+}
+
 void showChangelogDialog(BuildContext context) {
-  showAppInfoDialog(context, title: L10n.changelog, content: appChangelog);
+  showAppInfoDialog(context, title: L10n.changelog, body: const _ChangelogBody());
+}
+
+/// 更新日志正文：先给最近 [kChangelogPreviewCount] 版，其余的收在一颗胶囊后面。
+class _ChangelogBody extends StatefulWidget {
+  const _ChangelogBody();
+
+  @override
+  State<_ChangelogBody> createState() => _ChangelogBodyState();
+}
+
+class _ChangelogBodyState extends State<_ChangelogBody> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final versions = splitChangelogVersions(appChangelog);
+    final shown =
+        _expanded ? versions : versions.take(kChangelogPreviewCount).toList();
+    final hidden = versions.length - shown.length;
+    final primary = Theme.of(context).colorScheme.primary;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          shown.join('\n\n'),
+          style: AppTokens.rowSecondary.copyWith(height: 1.55),
+        ),
+        if (hidden > 0 || _expanded) ...[
+          const SizedBox(height: AppTokens.spaceMd),
+          // 三层，缺一层就出毛病（都真踩过）：
+          //   · `GlassPill` 的 `Container` 带 `alignment`，等于里面垫了一层
+          //     `Align` —— 它会吃满可用宽度，胶囊就**铺成整行**（真机截图确认）；
+          //     所以必须在外层套 `IntrinsicWidth`，把宽度收到「文字 + 图标」的
+          //     内在宽（挤不下时收到可用宽）。
+          //   · `Align` 那层给的是松约束，右/中轴对齐才有意义。
+          //   · 里面的 `Flexible` 不能删：Row 给非 flex 孩子的是**无界主轴约束**，
+          //     文字按整行内在宽铺开，200dp 小窗 + 标准字号下横向溢出 29px
+          //     （`text_fit_guard_test` 报的就是它）。
+          // 合起来的效果：常态下胶囊缩到文字，挤不下时先截文字、图标留在原位。
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IntrinsicWidth(
+              child: GlassPill(
+                onTap: () {
+                  Haptics.select();
+                  setState(() => _expanded = !_expanded);
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _expanded
+                            ? L10n.t('收起', 'Collapse')
+                            : L10n.t('展开更早的 $hidden 版',
+                                'Show $hidden earlier versions'),
+                        style: AppTokens.labelStrong.copyWith(color: primary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: AppTokens.spaceXs),
+                    Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: AppTokens.iconSm,
+                      color: primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 /// 检查更新结果弹窗：展示正式版与测试版两个通道，各自可下载（仅当比当前新）。
