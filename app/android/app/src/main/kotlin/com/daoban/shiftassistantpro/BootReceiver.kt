@@ -45,7 +45,10 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         // 巡检也要排上：重启之后它是「系统 / 厂商把闹钟整条丢掉」这条路上唯一的兜底。
-        AlarmWatchdog.ensureScheduled(context)
+        // **force**：重启把 AlarmManager 清空了，落盘的那个「已排到几点」已经不作数，
+        // 走普通 `ensureScheduled` 会因为「已经有更早的一次」而直接跳过 —— 那正好
+        // 就是重启后巡检再也不跑。
+        AlarmWatchdog.forceScheduled(context)
 
         // 小组件的刷新闹钟也重启即清空，同样要排回去。与上面两条链路的区别是：
         // 它没有「清单」可读 —— 边界时刻就在快照里，`scheduleNextRefreshIfNeeded`

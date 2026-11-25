@@ -1,6 +1,8 @@
 package com.daoban.shiftassistantpro
 
+import android.app.ActivityManager
 import android.app.AlarmManager
+import android.app.ApplicationExitInfo
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -396,6 +398,109 @@ object AlarmScheduler {
     /** 毫秒时刻 → 日志里的 `MM-dd HH:mm`。 */
     fun formatAt(millis: Long): String =
         Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(fmt)
+
+    // -----------------------------------------------------------------------
+    // 启动取证（v0.13.22）
+    // -----------------------------------------------------------------------
+
+    /**
+     * 进程启动那一刻的「系统 vs 自己的清单」快照。**必须在 Dart 重排之前调用。**
+     *
+     * **为什么要抢在重排之前**：`reschedule` 一跑就会把「清单里有、新计划里没有」
+     * 的条目（包括已经过期的那一条）撤掉，实测进程起来约 **180ms** 之后就会发生。
+     * 之后导出的诊断包、`nextDigest`、`alarms.json` 全是**改过之后**的状态 ——
+     * 于是「系统把闹钟删了」和「系统没把广播递过来」这两件事永远分不开。
+     *
+     * **怎么读这一行**（诊断包 README 里也写着）：
+     *  - `系统下一跳` 与 `清单最早` **是同一个时刻**（哪怕它已经过期）→ 那条记录
+     *    还在 `AlarmManager` 里，是**投递**被拦（进程起不来 / 被冻结）；
+     *  - `系统下一跳` **更晚或为「无」**，而清单里那条已经过期 → 记录**已经被删**
+     *    （被清理 / 被强行停止 / 权限被撤）。
+     *
+     * `AlarmManager.getNextAlarmClock()` 是**全系统**的下一枚闹钟（可能来自别的
+     * App），所以只有「它比我们那条更晚」这一侧是确定的判据 —— 反过来不成立。
+     */
+    fun startupSnapshot(context: Context, now: Long): String {
+        val sys = try {
+            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            am.nextAlarmClock?.triggerTime
+        } catch (_: Throwable) {
+            null
+        }
+        val e = AlarmStore.all(context).minByOrNull { it.millis }
+        val q = AlarmStore.allQuiets(context).minByOrNull { it.millis }
+        val storeAt: Long?
+        val storeId: Int?
+        if (e != null && (q == null || e.millis <= q.millis)) {
+            storeAt = e.millis
+            storeId = e.id
+        } else {
+            storeAt = q?.millis
+            storeId = q?.id
+        }
+        val sysText = if (sys == null) "无" else formatAt(sys)
+        val storeText = if (storeAt == null) {
+            "无"
+        } else {
+            "${formatAt(storeAt)} id=$storeId" + (if (storeAt <= now) "（已过期）" else "")
+        }
+        return "启动快照（重排前）：系统下一跳 $sysText / 清单最早 $storeText"
+    }
+
+    /**
+     * 上一次进程是怎么没的 —— 分清「被强行停止 / 一键清理」与「被系统冻结」。
+     *
+     * 这两件事在日志里长得一模一样（都没有 onReceive、清单都在），只有这里能分开：
+     *  - `REASON_USER_REQUESTED(10)`：用户或清理工具强行停止（force-stop / 最近任务
+     *    划掉 / 一键清理）—— **会把这个包已排的闹钟全部撤掉**；
+     *  - `REASON_FREEZER(14)`：被系统的应用冻结器（cached app freezer）杀掉的；
+     *  - **「无记录」本身也是证据**：正常情况下历史里至少有上一次的退出原因。
+     *
+     * 只取最近一条；读不到不影响任何功能（纯取证）。
+     */
+    fun lastExitDigest(context: Context): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return "上次退出原因：Android 11 以下没有这个接口"
+        }
+        return try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val info = am.getHistoricalProcessExitReasons(context.packageName, 0, 1)
+                .firstOrNull()
+            if (info == null) {
+                "上次退出原因：无记录"
+            } else {
+                "上次退出原因：${exitReasonName(info.reason)}" +
+                    "（${formatAt(info.timestamp)}，status=${info.status}）"
+            }
+        } catch (e: Throwable) {
+            "上次退出原因：读不到（${e.javaClass.simpleName}: ${e.message}）"
+        }
+    }
+
+    /**
+     * [ApplicationExitInfo.reason] → 人话。
+     *
+     * **常量值写死、不引用 `ApplicationExitInfo.REASON_*`**：其中好几个（FREEZER /
+     * USER_STOPPED / PACKAGE_UPDATED…）是 API 31 才加的字段，引用它们会被 Android
+     * Lint 的 `NewApi` 拦下（`android-lint.yml` 守着），而我们这里只是比大小。
+     * 这些数字在系统里是固定的，注释里挂着常量名，改不动。
+     */
+    private fun exitReasonName(reason: Int): String = when (reason) {
+        10 -> "中途被要求结束(10=REASON_USER_REQUESTED，含强行停止/一键清理)"
+        11 -> "被用户停止(11=REASON_USER_STOPPED)"
+        14 -> "被系统冻结器杀掉(14=REASON_FREEZER)"
+        3 -> "低内存(3=REASON_LOW_MEMORY)"
+        4 -> "崩溃(4=REASON_CRASH)"
+        5 -> "原生崩溃(5=REASON_CRASH_NATIVE)"
+        6 -> "无响应(6=REASON_ANR)"
+        2 -> "被信号杀死(2=REASON_SIGNALED)"
+        9 -> "资源超限(9=REASON_EXCESSIVE_RESOURCE_USAGE)"
+        8 -> "权限变更(8=REASON_PERMISSION_CHANGE)"
+        12 -> "依赖进程死亡(12=REASON_DEPENDENCY_DIED)"
+        15 -> "包状态变更(15=REASON_PACKAGE_STATE_CHANGE)"
+        16 -> "包被更新(16=REASON_PACKAGE_UPDATED)"
+        else -> "其他($reason)"
+    }
 
     private fun pendingIntent(context: Context, id: Int, target: Class<*>): PendingIntent =
         PendingIntent.getBroadcast(

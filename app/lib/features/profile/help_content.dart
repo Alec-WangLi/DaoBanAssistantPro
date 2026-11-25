@@ -308,16 +308,20 @@ const List<HelpFaqGroup> helpFaqGroups = [
             answer: L10nText(
               '多半是厂商的省电策略把 App 的闹钟取消了，不是 App 自己漏排。'
                   '三星：设置 → 电池 → 后台使用限制，把「倒班助手Pro」从「睡眠应用」和「深度休眠应用」里去掉；'
-                  '小米：我的 → 权限 → 自启动，并把「电池优化」设为不限制。'
-                  '还是漏的话，去「我的 → 查看日志」看漏响那一刻有没有「AlarmReceiver.onReceive」这一行：'
-                  '没有就是系统没把闹钟递过来；有的话再看紧跟着的「AlarmRingService」与「AlarmSound」两行，'
-                  '就能分出是响铃界面被拦还是音源出问题。'
+                  '小米：我的 → 权限 → 自启动，并把「电池优化」设为不限制；'
+                  '一加 / OPPO：我的 → 权限 → 自启动 / 后台运行，把「允许自启动」和「允许后台运行」都打开。'
+                  '还是漏的话，去「我的 → 查看日志」看漏响那一刻：先找那次启动的「启动快照（重排前）」——'
+                  '「系统下一跳」和「清单最早」对得上（哪怕是个已经过期的时间）就是广播被拦了下来，'
+                  '对不上就是系统把那条记录删了；紧跟着的「上次退出原因」会写明是被强行停止 / 一键清理，'
+                  '还是被系统的冻结器杀掉。'
                   '日志页底部可以一键「导出诊断包」—— 日志、设备与权限、已排闹钟清单、未来 7 天计划打个包，发给作者最快。',
               'Usually the vendor power-saving policy cancels the app\'s alarms — not the app skipping them. '
                   'Samsung: Settings → Battery → Background usage limits, remove the app from "Sleeping apps" and "Deep sleeping apps". '
                   'Xiaomi: Me → Permissions → Auto-start, and set Battery optimization to Unrestricted. '
-                  'If it still happens, open Me → View log and look for an "AlarmReceiver.onReceive" line at that time: '
-                  'no line means the system never delivered the alarm; if there is one, the "AlarmRingService" and "AlarmSound" lines right after it tell you whether the screen was blocked or the sound failed. '
+                  'OnePlus / OPPO: Me → Permissions → Auto-launch, and turn on both "Allow auto-launch" and "Allow background activity". '
+                  'If it still happens, open Me → View log at that time and find the "startup snapshot (before rescheduling)" line: '
+                  'if the system\'s next alarm and the earliest entry in our list are the same moment (even one already past), the broadcast was blocked; '
+                  'if they differ, the system deleted the record. The "last exit reason" line right after it says whether the app was force-stopped / cleaned up or killed by the system freezer. '
                   'The button at the bottom of the log page exports a diagnostics bundle — logs, device and permissions, the scheduled alarm list and the next 7 days of plan, zipped up for the author.',
             ),
           ),

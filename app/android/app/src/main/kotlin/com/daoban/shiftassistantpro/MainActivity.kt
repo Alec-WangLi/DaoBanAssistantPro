@@ -159,6 +159,13 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // **取证必须排在所有重排之前**（v0.13.22）：Dart 那边一起来就会
+        // `reschedule`，把清单里已经过期的那一条当成陈旧记录撤掉 —— 实测进程起来
+        // 约 180ms 就发生。之后系统里到底有没有那条闹钟，就再也看不出来了。
+        // 两行都只读、只落盘，不影响任何功能。
+        val bootAt = System.currentTimeMillis()
+        runCatching { AlarmLog.diagnostic(this, AlarmScheduler.startupSnapshot(this, bootAt)) }
+        runCatching { AlarmLog.diagnostic(this, AlarmScheduler.lastExitDigest(this)) }
         // 关键：必须在 setContentView（super.onCreate 内部）之前设置，锁屏冷启动才能点亮屏幕并显示
         applyShowWhenLocked(intent)
         super.onCreate(savedInstanceState)
@@ -260,11 +267,45 @@ class MainActivity : FlutterActivity() {
      * 两个包名都试：新机型是 `com.samsung.android.lool`，老机型（One UI 早期）
      * 是 `com.samsung.android.sm`，两个都解析不到就不是三星，界面不显示这一行。
      */
-    private fun samsungBatteryPage(): Intent? {
-        val candidates = listOf(
+    private fun samsungBatteryPage(): Intent? = resolveFirst(
+        listOf(
             "com.samsung.android.lool" to "com.samsung.android.sm.ui.battery.BatteryActivity",
             "com.samsung.android.sm" to "com.samsung.android.sm.ui.battery.BatteryActivity"
         )
+    )
+
+    /**
+     * 一加 / OPPO（ColorOS / OxygenOS）的「自启动管理」页。
+     *
+     * **为什么要有这一行**：2026-11-25 一位一加 PLK110（Android 16）用户连着两天
+     * 「某条班次闹钟没响」。日志能证明闹钟在 08:00:03 与 08:18:46 各排了一次、
+     * 0 失败，落盘清单里活到 10:06，而那一刻 `AlarmReceiver.onReceive` 一个字都
+     * 没有 —— 进程在整个时间窗里一次都没起来。这一档在 ColorOS 上对应「自启动 /
+     * 应用速冻 / 睡眠待机优化」，进程起不来时**广播照样不投递**，症状与本包一致。
+     *
+     * 组件名换过好几轮（ColorOS 7 → 12 → OxygenOS 16），逐个试；都解析不到就返回
+     * null：界面不显示这一行，调用方落回系统「应用信息」页。
+     */
+    private fun colorOsStartupPage(): Intent? = resolveFirst(
+        listOf(
+            "com.coloros.safecenter" to
+                "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+            "com.coloros.safecenter" to
+                "com.coloros.safecenter.startupapp.StartupAppListActivity",
+            "com.oplus.safecenter" to
+                "com.oplus.safecenter.permission.startup.StartupAppListActivity",
+            "com.oplus.safecenter" to
+                "com.oplus.safecenter.startupapp.StartupAppListActivity",
+            // 自启动页在个别版本上并入「耗电管理」，退一步也能到那儿。
+            "com.coloros.oppoguardelf" to
+                "com.coloros.powermanager.fuelgaue.PowerUsageModelActivity",
+            "com.oplus.battery" to
+                "com.oplus.powermanager.fuelgaue.PowerUsageModelActivity"
+        )
+    )
+
+    /** 逐个试 `包名 + 组件名`，第一个解析得到的返回；都不会返回 null。 */
+    private fun resolveFirst(candidates: List<Pair<String, String>>): Intent? {
         for ((pkg, cls) in candidates) {
             val i = Intent().apply {
                 component = ComponentName(pkg, cls)
@@ -420,6 +461,30 @@ class MainActivity : FlutterActivity() {
                             AlarmLog.error(
                                 this,
                                 "打开三星电池页失败: ${e.javaClass.name}: ${e.message}"
+                            )
+                            result.success(false)
+                        }
+                    }
+                    // 一加 / OPPO（ColorOS / OxygenOS）的「自启动管理」页。
+                    // 与小米那两项同一个理由：厂商私有页面、没有公开查询接口。
+                    // 2026-11-25 一加 PLK110 用户两次「某条闹钟没响」，进程在整个
+                    // 时间窗里一次都没起来 —— 最像的就是这一档（自启动 / 后台运行）。
+                    "checkColorOsStartupPage" -> {
+                        result.success(colorOsStartupPage() != null)
+                    }
+                    "openColorOsStartupPage" -> {
+                        try {
+                            val i = colorOsStartupPage()
+                            if (i == null) {
+                                result.success(false)
+                            } else {
+                                startActivity(i)
+                                result.success(true)
+                            }
+                        } catch (e: Exception) {
+                            AlarmLog.error(
+                                this,
+                                "打开一加自启动页失败: ${e.javaClass.name}: ${e.message}"
                             )
                             result.success(false)
                         }

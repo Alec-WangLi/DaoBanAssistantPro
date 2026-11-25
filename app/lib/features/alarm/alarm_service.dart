@@ -764,6 +764,31 @@ class AlarmService {
     }
   }
 
+  /// 这台机器上有没有一加 / OPPO 的「自启动管理」页（非 ColorOS 解析不到）。
+  ///
+  /// 与小米、三星那几项同一条理由：厂商私有页面，没有公开 API，只能把用户送过去。
+  /// 这一档管的是「自启动 / 应用速冻 / 睡眠待机优化」—— 进程起不来时，**系统连
+  /// 闹钟广播都不投递**，症状正是「某条闹钟没响、日志里连 onReceive 都没有」
+  /// （2026-11-25 一加 PLK110 用户，连着两天两次）。
+  static Future<bool> checkColorOsStartupPage() async {
+    try {
+      return await _settingsChannel.invokeMethod('checkColorOsStartupPage') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 打开一加 / OPPO 的「自启动管理」页；打不开返回 false，由调用方落回「应用信息」。
+  static Future<bool> openColorOsStartupPage() async {
+    try {
+      return await _settingsChannel.invokeMethod('openColorOsStartupPage') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 本应用是否已被忽略电池优化（后台闹钟可靠运行的关键）。
   static Future<bool> checkBatteryOptimization() async {
     try {

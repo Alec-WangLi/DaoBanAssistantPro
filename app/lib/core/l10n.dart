@@ -148,6 +148,14 @@ class L10n {
   static String get permSamsungSleepHint => t(
       '电池 → 后台使用限制：把本 App 从「睡眠应用」和「深度休眠应用」里去掉，否则闹钟会被系统取消',
       'Battery → Background usage limits: remove this app from "Sleeping apps" and "Deep sleeping apps", or the system cancels its alarms');
+  // 一加 / OPPO（ColorOS / OxygenOS）的「自启动」关掉时，进程起不来 —— 系统
+  // 连闹钟广播都不投递，症状是「某条闹钟没响、日志里连 onReceive 都没有」
+  // （2026-11-25 一加 PLK110 用户）。同样没有查询接口，所以也是「去查看」。
+  static String get permColorOsStartup =>
+      t('自启动 / 后台运行（一加 · OPPO）', 'Auto-launch (OnePlus / OPPO)');
+  static String get permColorOsStartupHint => t(
+      '把本 App 的「允许自启动」「允许后台运行」都打开；关掉时系统可能压根不把闹钟广播递过来',
+      'Turn on both "Allow auto-launch" and "Allow background activity"; otherwise the system may never deliver the alarm broadcast');
   static String get enabled => t('已开启', 'Enabled');
   static String get goEnable => t('去开启', 'Enable');
   static String get goSettings => t('去设置', 'Settings');

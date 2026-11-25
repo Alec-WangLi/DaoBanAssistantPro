@@ -41,6 +41,13 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.22\n'
+    '· 「某条闹钟没响」现在能一眼看出是谁丢的：每次启动都会在重排之前记下「系统认为下一次闹钟是几点」和「我们清单里最早那条」。两边对不上＝记录被系统删了；对得上（哪怕是已经过期的时间）＝广播被拦了下来，闹钟根本没能进来\n'
+    '· 同时记下上一次进程是怎么没的：被强行停止 / 一键清理，还是被系统的冻结器杀掉 —— 这两种在日志里原本一模一样\n'
+    '· 修：巡检（给被丢掉的闹钟兜底的那条闹钟）会被每次重排往后推 6 小时，等于一直没按时跑过；现在只往前挪，并且提前到最早那条闹钟前 1 小时\n'
+    '· 一加 / OPPO 机型在「我的 → 权限」里多了一行「自启动 / 后台运行」，可以直接跳到系统的自启动管理页\n'
+    '· 诊断包里的说明重写了：先看「启动快照」那两行，再看「重排完成 … 撤 N 条」\n'
+    '\n'
 'v0.13.21\n'
     '· 修：闹钟页「下一次响铃」关掉某一天的闹钟后不跟着跳 —— 它没看「按天开关」。现在关掉哪条就跳到下一条\n'
     '· 修：没有自定义闹钟时，那一块终于真的贴到底部（上一版它和上面的班次列表平分剩余空间，提示停在屏幕中间）\n'
@@ -98,14 +105,15 @@ const String _changelogZh =
     '· 之前存过的旧设置会在启动时自动修一次：能读的复制进来，读不到的退回内置铃声（日志里写明原因）\n'
     '· 铃声选择和响铃失败的原因现在都会写进「我的 → 查看日志」，报障时能直接看到是哪一步出了问题\n'
     '\n'
-'v0.13.12\n'
-    '· 法定节假日数据会自己更新了：每次冷启动在后台拉一次（一天最多一次），国务院发布新一年的放假安排后不用等发版；离线或被墙时照旧用 App 内置的那份\n'
-    '· 「我的 → 关于」多了一行「更新法定节假日数据」，副标题写着已覆盖到哪一年，点一下立刻重拉\n'
-    '· 自定义闹钟那一行的编辑笔去掉了：整行点开就是编辑，与待办一致\n'
-    '· 修：用某些文件管理器（比如安卓原生那个）选铃声时，选完返回什么都没有；现在几种回传方式都认，真失败也会说清原因\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.22\n'
+    '· "An alarm did not ring" now shows whose fault it was at a glance: on every launch, before any rescheduling, the app records what the system thinks the next alarm is and what its own list says. Mismatch = the system deleted the record; match (even a time already past) = the broadcast was blocked and never reached the app\n'
+    '· It also records how the previous process died: force-stopped / cleaned up, or killed by the system freezer - the two used to look identical in the log\n'
+    '· Fix: the watchdog (the safety net for dropped alarms) was pushed 6 hours out by every reschedule, so it never actually ran on time; it now only moves earlier, and fires one hour before the next alarm\n'
+    '· OnePlus / OPPO phones get an "Auto-launch" row under My > Permissions that opens the system auto-launch page\n'
+    '· The diagnostics bundle README is rewritten: read the startup snapshot lines first, then the "withdrew N" counter\n'
+    '\n'
 'v0.13.21\n'
     '· Fix: "Next alarm" on the alarm page did not move on when you switched a day off - it ignored the per-day switches. It now skips to the next one\n'
     '· Fix: with no custom alarms, that section finally sits at the bottom (the previous build split the leftover space with the shift list, leaving the hint mid-screen)\n'
@@ -162,12 +170,6 @@ const String _changelogEn =
     '· Fix: after choosing one of your own ringtones from the system ringtone list (a song you had set as a system ringtone, say), the alarm still played the built-in sound — the pick is now copied into the app instead of relying on system media permissions\n'
     '· Settings saved by older versions repair themselves once at launch: readable ones get copied in, unreadable ones fall back to the built-in ringtone (with the reason in the log)\n'
     '· Ringtone pick and playback failures now land in My > View log, so a report shows exactly which step failed\n'
-    '\n'
-'v0.13.12\n'
-    '· Public holiday data now updates itself: a background fetch on each cold start (at most once a day), so a new year\'s arrangement no longer waits for an app release; offline or blocked networks keep using the built-in table\n'
-    '· About gains an "Update public holiday data" row whose subtitle says which year the data covers; tap it to fetch immediately\n'
-    '· The pencil on custom alarm rows is gone: tapping the row opens the editor, same as todos\n'
-    '· Fix: picking a ringtone through some file managers (the stock Android one, for instance) returned to the app with nothing happening; all common result shapes are handled now, and a real failure says why\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

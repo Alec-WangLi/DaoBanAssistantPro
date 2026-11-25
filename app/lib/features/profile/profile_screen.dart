@@ -808,6 +808,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
   bool? _battery;
   bool? _miui;
   bool? _samsung;
+  bool? _colorOs;
 
   @override
   void initState() {
@@ -835,6 +836,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
     final battery = await AlarmService.checkBatteryOptimization();
     final miui = await AlarmService.checkMiuiPermissionPage();
     final samsung = await AlarmService.checkSamsungBatteryPage();
+    final colorOs = await AlarmService.checkColorOsStartupPage();
     if (!mounted) return;
     setState(() {
       _notif = notif;
@@ -844,6 +846,7 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
       _battery = battery;
       _miui = miui;
       _samsung = samsung;
+      _colorOs = colorOs;
     });
   }
 
@@ -872,6 +875,12 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
   /// 系统「应用信息」页，用户至少能自己翻到电池那一栏。
   Future<void> _openSamsungBattery() async {
     final ok = await AlarmService.openSamsungBatteryPage();
+    if (!ok) await AlarmService.openAppSettings();
+  }
+
+  /// 一加 / OPPO 的「自启动管理」同理：解析得到不等于打得开，失败落回应用信息页。
+  Future<void> _openColorOsStartup() async {
+    final ok = await AlarmService.openColorOsStartupPage();
     if (!ok) await AlarmService.openAppSettings();
   }
 
@@ -1007,6 +1016,21 @@ class _PermissionCheckState extends ConsumerState<_PermissionCheck>
                     subtitle: L10n.permSamsungSleepHint,
                     enabled: null,
                     onOpen: _openSamsungBattery,
+                    actionLabel: L10n.goCheck,
+                  ),
+                ],
+                // 一加 / OPPO 那一行（同三星：厂商私有页面，别家没有）。
+                // 这一档关掉时**系统连闹钟广播都不投递** —— 2026-11-25 一加用户
+                // 两次「某条闹钟没响」，日志里连 onReceive 都没有、进程在整段时间
+                // 里一次没起来，正是这一档的指纹。
+                if (_colorOs == true) ...[
+                  const Divider(height: 1),
+                  _permTile(
+                    icon: Icons.rocket_launch_outlined,
+                    title: L10n.permColorOsStartup,
+                    subtitle: L10n.permColorOsStartupHint,
+                    enabled: null,
+                    onOpen: _openColorOsStartup,
                     actionLabel: L10n.goCheck,
                   ),
                 ],
