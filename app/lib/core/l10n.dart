@@ -1447,7 +1447,7 @@ class L10n {
   static String get gettingStartedMore => t('完整说明在「我的 → 使用帮助」，随时能看',
       'The full guide lives under Me → Usage guide, whenever you need it');
 
-  // 使用帮助 · 第一级（整页：简介 + 九条功能简介 + 进第二层的入口）
+  // 使用帮助 · 第一级（整页：简介 + 十一条功能简介 + 进第二层的入口）
   //
   // **简介只讲「这是什么、由哪几块组成」**，不是目录 —— 目录是下面那九条的事。
   static String get helpIntro => t(
@@ -1531,6 +1531,15 @@ class L10n {
             'Completed items drop into a "completed" section at the bottom, leaving only the open ones in the list'),
         t('选中的那天有待办时，日历底栏信息卡会显示「N 项待办」',
             'When the selected day has todos, the calendar\'s info card shows "N todos"'),
+      ];
+  static String get guideStatsTitle => t('统计', 'Statistics');
+  static List<String> get guideStatsDesc => [
+        t('日历右上角的按钮打开统计页：月 / 年两种视图，实际在岗、正常工时、上班与休息天数一眼看全',
+            'The button at the top right of the calendar opens Statistics: month and year views show hours actually worked, regular hours and work / rest days at a glance'),
+        t('往下还有请假、加班、法定节假日上班、夜班天数与最长连班 / 连休；请假与加班在「调整班次」里记，整天请假会自动取消那天的班次闹钟',
+            'Below that: leave, overtime, holiday work, night shifts and the longest work / rest streak. Leave and overtime are recorded under "Adjust shift"; a full-day leave also cancels that day\'s shift alarm'),
+        t('右上角「导出」把出勤表存成 CSV，Excel 直接打开；跨午夜的班次会标「次日」',
+            'Export at the top right writes the attendance table to CSV for Excel; shifts that cross midnight are marked " (+1d)"'),
       ];
   static String get guideBackupTitle => t('数据备份', 'Data backup');
   static List<String> get guideBackupDesc => [

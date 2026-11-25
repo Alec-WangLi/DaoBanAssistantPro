@@ -122,4 +122,44 @@ void main() {
     expect(restored, false);
     expect(File(p.join(docs.path, kDatabaseFileName)).existsSync(), true);
   });
+
+  test('上次替换死在半路：残留的 .bak 先放回去，再被新暂存覆盖', () async {
+    final Uint8List bytes = await service().createBackup();
+    await db.close();
+    await service().stageRestore(bytes);
+
+    // 模拟「旧库已改名成 .bak、新库还没就位」那一刻的现场（旧实现里这一步
+    // 是「旧库已删」，只能靠 pending_restore 下次启动重试；新实现能把 .bak 拾回来）。
+    final File live = File(p.join(docs.path, kDatabaseFileName));
+    final File bak = File('${live.path}.bak');
+    expect(live.existsSync(), true);
+    live.renameSync(bak.path);
+    expect(live.existsSync(), false);
+
+    final bool restored = await BackupService.applyPendingRestore(
+      documentsDirLoader: () async => docs,
+      supportDirLoader: () async => support,
+    );
+    expect(restored, true);
+    expect(live.existsSync(), true, reason: '新库应当就位');
+    expect(bak.existsSync(), false, reason: '换成了就该清场，别留 .bak');
+  });
+
+  test('旧库还在时，残留的 .bak 视为更早崩溃的残渣，以现存库为准', () async {
+    final Uint8List bytes = await service().createBackup();
+    await db.close();
+    await service().stageRestore(bytes);
+
+    final File live = File(p.join(docs.path, kDatabaseFileName));
+    final File bak = File('${live.path}.bak');
+    bak.writeAsBytesSync(const <int>[1, 2, 3]);
+
+    final bool restored = await BackupService.applyPendingRestore(
+      documentsDirLoader: () async => docs,
+      supportDirLoader: () async => support,
+    );
+    expect(restored, true);
+    expect(live.existsSync(), true);
+    expect(bak.existsSync(), false, reason: '残渣要被清掉，不能挡着下一次 rename');
+  });
 }

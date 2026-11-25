@@ -151,8 +151,11 @@ class BackupService {
 
   /// 在 App 启动、任何数据库打开之前调用。
   ///
-  /// 返回 true 表示这次启动完成了一次导入。替换顺序刻意做成「先写好新库、
-  /// 再删旧库与 WAL、最后 rename」——中途失败时旧库仍在，下次还能重试。
+  /// 返回 true 表示这次启动完成了一次导入。替换顺序刻意做成「先把旧库连同
+  /// `-wal`/`-shm` 改名成 `.bak`、新库就位、成功后才删 `.bak`」——
+  /// **任何一步失败旧库都还在**（改名而不是删除），下次启动还能重试。
+  /// 早期版本写的是「删旧库 → rename」，两者之间失败会留下「旧库已删、新库
+  /// 没就位」的空档（独立审查 v0.14.0 抓到的），注释声称的「旧库仍在」并不成立。
   static Future<bool> applyPendingRestore({
     Future<Directory> Function()? documentsDirLoader,
     Future<Directory> Function()? supportDirLoader,
@@ -183,18 +186,48 @@ class BackupService {
     }
     await pendingDb.copy(restored.path);
 
-    // 旧库的 WAL / SHM 必须先删，否则它们会被当成新库的日志重放。
-    for (final String suffix in const <String>['-wal', '-shm']) {
-      final File sidecar = File('$dbPath$suffix');
-      if (await sidecar.exists()) {
-        await sidecar.delete();
+    // 旧库连同它的 WAL / SHM 一起**改名**成 `.bak`，不删 —— 新库万一没就位，
+    // 把这三件原样放回去即可回到导入前的状态。`-wal`/`-shm` 必须跟着走：
+    // 留在原名上会被新库当成自己的日志重放。
+    final File oldDb = File(dbPath);
+    final File oldWal = File('$dbPath-wal');
+    final File oldShm = File('$dbPath-shm');
+    final File bak = File('$dbPath.bak');
+    final File bakWal = File('$dbPath.bak-wal');
+    final File bakShm = File('$dbPath.bak-shm');
+
+    // 上一次替换死在半路时，`.bak` 才是完整的旧库 —— 先放回去再重来。
+    if (await bak.exists()) {
+      if (!await oldDb.exists()) {
+        await bak.rename(dbPath);
+        if (await bakWal.exists()) await bakWal.rename('$dbPath-wal');
+        if (await bakShm.exists()) await bakShm.rename('$dbPath-shm');
+      } else {
+        // 旧库还在，说明 `.bak` 是更早一次崩溃留下的残渣：以现存的库为准，
+        // 直接清掉（也免得下一步 rename 在 Windows 上撞上已存在的目标）。
+        for (final File stale in <File>[bak, bakWal, bakShm]) {
+          if (await stale.exists()) await stale.delete();
+        }
       }
     }
-    final File oldDb = File(dbPath);
-    if (await oldDb.exists()) {
-      await oldDb.delete();
+
+    if (await oldDb.exists()) await oldDb.rename(bak.path);
+    if (await oldWal.exists()) await oldWal.rename(bakWal.path);
+    if (await oldShm.exists()) await oldShm.rename(bakShm.path);
+    try {
+      await restored.rename(dbPath);
+    } catch (_) {
+      // 新库没能就位：旧库原样放回，本次导入作废（`pending_restore/` 还在，
+      // 下次启动会再试一次）。
+      if (await bak.exists()) await bak.rename(dbPath);
+      if (await bakWal.exists()) await bakWal.rename('$dbPath-wal');
+      if (await bakShm.exists()) await bakShm.rename('$dbPath-shm');
+      rethrow;
     }
-    await restored.rename(dbPath);
+    // 新库已经就位，旧库才真正退场。
+    for (final File stale in <File>[bak, bakWal, bakShm]) {
+      if (await stale.exists()) await stale.delete();
+    }
 
     final Map<String, dynamic> prefs =
         jsonDecode(await prefsFile.readAsString()) as Map<String, dynamic>;

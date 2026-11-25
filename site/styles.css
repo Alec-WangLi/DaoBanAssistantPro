@@ -666,7 +666,8 @@ a { color: inherit; }
 
 @media (max-width: 900px) {
   .nav-links { gap: 18px; }
-  .nav-links a:nth-child(3) { display: none; }
+  /* 第 4 项是「待办」：窄屏先舍它（页面里还有一整章，滚下去就看得到）。 */
+  .nav-links a:nth-child(4) { display: none; }
 
   .split { grid-template-columns: 1fr; gap: 46px; }
 
@@ -699,7 +700,10 @@ a { color: inherit; }
 @media (max-width: 620px) {
   .nav-inner { padding: 0 18px; gap: 12px; }
   .nav-links { gap: 14px; }
-  .nav-links a:nth-child(2) { display: none; }
+  /* 手机宽度只留「排班 / 统计 / 更新」：第 3 项是「闹钟」，第 6 项是 GitHub
+     （页脚和首屏都有入口），再留着会被右边那颗「下载」挤到裁切。 */
+  .nav-links a:nth-child(3) { display: none; }
+  .nav-links a:nth-child(6) { display: none; }
 
   .hero { padding-top: 108px; }
   .hero-lede br { display: none; }

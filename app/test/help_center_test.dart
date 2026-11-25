@@ -29,6 +29,8 @@ List<String> get _guideTitles => [
       L10n.guideSchedTitle,
       L10n.guideAlarmTitle,
       L10n.guideTodoTitle,
+      L10n.guideStatsTitle,
+      L10n.guideBackupTitle,
       L10n.guideWidgetTitle,
       L10n.guideAppearanceTitle,
       L10n.guideLayoutTitle,
@@ -37,12 +39,12 @@ List<String> get _guideTitles => [
     ];
 
 void main() {
-  testWidgets('简介与九条功能简介都在', (tester) async {
+  testWidgets('简介与十一条功能简介都在', (tester) async {
     L10n.locale = 'zh';
     await _pump(tester);
     expect(find.text(L10n.helpIntro), findsOneWidget);
     for (final t in _guideTitles) {
-      expect(find.text(t), findsOneWidget, reason: '九条里少了「$t」');
+      expect(find.text(t), findsOneWidget, reason: '十一条里少了「$t」');
     }
   });
 
@@ -64,7 +66,7 @@ void main() {
     L10n.locale = 'zh';
   });
 
-  test('九条功能简介里不许出现 markdown 标记', () {
+  test('十一条功能简介里不许出现 markdown 标记', () {
     final bad = RegExp(r'\*\*|`|^#|\[[^\]]+\]\([^)]+\)', multiLine: true);
     for (final locale in const ['zh', 'en']) {
       L10n.locale = locale;
@@ -73,6 +75,8 @@ void main() {
         ...L10n.guideSchedDesc,
         ...L10n.guideAlarmDesc,
         ...L10n.guideTodoDesc,
+        ...L10n.guideStatsDesc,
+        ...L10n.guideBackupDesc,
         ...L10n.guideWidgetDesc,
         ...L10n.guideAppearanceDesc,
         ...L10n.guideLayoutDesc,

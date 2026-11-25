@@ -22,7 +22,7 @@ String _visibleLog(WidgetTester tester) {
   final parts = tester
       .widgetList<Text>(find.byType(Text))
       .map((t) => t.data ?? '')
-      .where((s) => s.contains('v0.1'));
+      .where((s) => RegExp(r'v\d+\.\d+\.\d+').hasMatch(s));
   return parts.join('\n');
 }
 

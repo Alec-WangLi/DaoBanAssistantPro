@@ -115,6 +115,22 @@ void main() {
     expect(r.fileName, 'shift-stats-2026-11-01_2026-11-01.csv');
     final row = r.csv.substring(1).trim().split('\r\n')[1];
     expect(row, contains('20:30–08:30'));
+    // 后缀本身也要钉住：只断言时间范围的话，把「（次日）」改坏这条用例照样绿
+    // （独立审查 v0.14.0 抓到的）。
+    expect(row, contains('（次日）'));
     expect(row, contains('12'));
+
+    // 英文档用的是另一套标记（` (+1d)`），同样钉住 —— 帮助页里写的就是它。
+    L10n.locale = 'en';
+    addTearDown(() => L10n.locale = 'zh');
+    final rEn = buildStatsCsv(
+      chain: ScheduleChain(fallback: night),
+      extras: const {},
+      from: _d(1),
+      to: _d(1),
+      fields: {StatsExportField.times, StatsExportField.hours},
+    );
+    final rowEn = rEn.csv.substring(1).trim().split('\r\n')[1];
+    expect(rowEn, contains('20:30–08:30 (+1d)'));
   });
 }
