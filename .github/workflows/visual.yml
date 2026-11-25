@@ -37,7 +37,7 @@ jobs:
     # 失败信息看 job 页与 artifact，不看这个勾。
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: subosito/flutter-action@v2
         with:
@@ -46,7 +46,7 @@ jobs:
           cache: true
 
       - name: pub 缓存
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.pub-cache
           # 与 ci.yml 同一个键 —— 两边命中同一份缓存，不各存一份。
@@ -129,7 +129,7 @@ jobs:
       # 失败也要把图捞出来 —— 恰恰是失败那天最需要看图。
       - name: 上传出图
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-${{ github.run_number }}
           path: app/build/visual/
