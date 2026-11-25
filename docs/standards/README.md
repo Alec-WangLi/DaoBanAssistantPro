@@ -51,7 +51,7 @@
 | 编号 | 规则一句话 | 护栏 | 强度 |
 |---|---|---|---|
 | D1 | 令牌唯一来源，界面层不写字面量 | `test/design_tokens_test.dart` | 半机器（4 目录 / 89 文件中 62 个；EdgeInsetsDirectional、`Duration(seconds:)`、条件表达式 fontWeight 不扫） |
-| D2 | 层级只靠字号/字重/明度 | `design_tokens_test`（禁 alpha 字面量）+ 角色令牌 | 半机器（`navInactiveForeground` 在扫描网外） |
+| D2 | 层级只靠字号/字重/明度；图标兜底色 = onSurface | `design_tokens_test`（禁 alpha 字面量）+ 角色令牌 + `theme_icon_ink_test`（两档 iconTheme 与裸 Icon 解析） | 半机器（`navInactiveForeground` 在扫描网外；图标用例只钉主题与「关于」页） |
 | D3 | 白字压实心主色按需压到刚过 AA | `design_tokens_test`（4.5 判）+ `glass_segment_ink_test`（渲真件读字色） | 半机器（只测纯函数、不查调用点；`recurring_fields.dart:432-453` 是已知硬违规） |
 | D4 | 玻璃两档；省电档结构/交互一字不变 | `glass_tier_test` | 半机器（结构+反方向像素；**没有"两档逐像素相同"的断言**；另有第四套手抄配方待收） |
 | D5 | 液态档判据只许定义处 + 6 个文件 | `liquid_scope_guard_test` | 半机器（needle 只有 `liquidGlassActive`；开关真源不匹配；实测 12 处读取） |

@@ -7,11 +7,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
-import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/layout.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_sheet_panel.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_sheet_header.dart';
@@ -193,11 +193,7 @@ class _ShiftOverrideSheetState extends State<_ShiftOverrideSheet> {
     // `day_extra_sheet.dart` 的说明与 AGENTS.md 第 6 条）。不弹时这里是 0 高。
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: GlassPanel(
-        solid: true,
-        margin: const EdgeInsets.all(12),
-        borderRadius:
-            const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+      child: GlassSheetPanel(
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,

@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
-import '../glass/glass.dart';
 import '../haptics.dart';
 import '../layout.dart';
 import '../l10n.dart';
@@ -12,6 +11,7 @@ import 'glass_dialog.dart';
 import 'glass_pill.dart';
 import 'glass_pressable.dart';
 import 'glass_sheet_header.dart';
+import 'glass_sheet_panel.dart';
 import 'glass_step_button.dart';
 
 /// 玻璃时间选择器：底部玻璃弹层 + 时/分滚轮 + Q弹按钮。
@@ -85,10 +85,7 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return GlassPanel(
-      solid: true,
-      margin: const EdgeInsets.all(12),
-      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+    return GlassSheetPanel(
       child: SafeArea(
         // 用弹层**自己的**预算：外层的 margin 与 SafeArea 已经被
         // LayoutBuilder 扣掉了，再照 MediaQuery 自己算一遍容易漏项。
@@ -103,29 +100,32 @@ class _GlassTimePickerSheetState extends State<_GlassTimePickerSheet> {
                   style: AppTokens.titleStrong,
                 ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  // 106 = 内边距 28 + 标题 22 + 间距 12 + 按钮行 44；
-                  // 余下的都给滚轮，但不超过今天的 180，也不低于能滚的 96。
-                  // 高屏上必然取到 180，所以竖屏与既有测试结果不变。
-                  height: (constraints.maxHeight - 106).clamp(96.0, 180.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _wheel(
-                          itemCount: 24,
-                          initialItem: _hour,
-                          onChanged: (i) => _hour = i,
+                // 滚轮吃掉「扣掉固定件之后」的全部高度，封顶 180。
+                // **不要再按 `maxHeight` 减常数**：那个常数把标题行高按 22 算，
+                // 实际字体下是 25，360×360 小窗差 3px 直接溢出（2026-11-25
+                // 加把手后由 Flexible 的有界约束把它暴露出来）。
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _wheel(
+                            itemCount: 24,
+                            initialItem: _hour,
+                            onChanged: (i) => _hour = i,
+                          ),
                         ),
-                      ),
-                      const Text(':', style: AppTokens.bigNumber),
-                      Expanded(
-                        child: _wheel(
-                          itemCount: 60,
-                          initialItem: _minute,
-                          onChanged: (i) => _minute = i,
+                        const Text(':', style: AppTokens.bigNumber),
+                        Expanded(
+                          child: _wheel(
+                            itemCount: 60,
+                            initialItem: _minute,
+                            onChanged: (i) => _minute = i,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -302,10 +302,7 @@ class _GlassDatePickerSheetState extends State<_GlassDatePickerSheet> {
       rows.add(Row(children: List.generate(7, (_) => emptyCell())));
     }
 
-    return GlassPanel(
-      solid: true,
-      margin: const EdgeInsets.all(12),
-      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+    return GlassSheetPanel(
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -466,10 +463,7 @@ class _GlassMonthPickerSheetState extends State<_GlassMonthPickerSheet> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentMonth = widget.initialMonth.month;
 
-    return GlassPanel(
-      solid: true,
-      margin: const EdgeInsets.all(12),
-      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+    return GlassSheetPanel(
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -635,10 +629,7 @@ class _GlassYearPickerSheetState extends State<_GlassYearPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
-    return GlassPanel(
-      solid: true,
-      margin: const EdgeInsets.all(12),
-      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+    return GlassSheetPanel(
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) => Padding(
@@ -648,34 +639,36 @@ class _GlassYearPickerSheetState extends State<_GlassYearPickerSheet> {
               children: [
                 Text(L10n.jumpToYear, style: AppTokens.titleStrong),
                 const SizedBox(height: 8),
-                SizedBox(
-                  // 预算与时间选择器同一份：内边距 28 + 标题 22 + 间距 12 + 按钮行 44。
-                  height: (constraints.maxHeight - 106).clamp(96.0, 180.0),
-                  child: _wheelWithAppFont(
-                    context,
-                    CupertinoPicker(
-                      scrollController: FixedExtentScrollController(
-                          initialItem: _year - _pickerMinYear),
-                      itemExtent: 40,
-                      onSelectedItemChanged: (i) {
-                        // 换了一年才震，滚动过程不震（与上面那个年份滚轮同口径）。
-                        Haptics.select();
-                        setState(() => _year = _pickerMinYear + i);
-                      },
-                      selectionOverlay: Container(
-                        decoration: BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(AppTokens.radiusM),
-                          border: Border.all(
-                              color: accent.withValues(alpha: 0.25)),
+                // 与时间选择器同一份兜底：吃掉剩余高度、封顶 180（理由见那一处）。
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: _wheelWithAppFont(
+                      context,
+                      CupertinoPicker(
+                        scrollController: FixedExtentScrollController(
+                            initialItem: _year - _pickerMinYear),
+                        itemExtent: 40,
+                        onSelectedItemChanged: (i) {
+                          // 换了一年才震，滚动过程不震（与上面那个年份滚轮同口径）。
+                          Haptics.select();
+                          setState(() => _year = _pickerMinYear + i);
+                        },
+                        selectionOverlay: Container(
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                BorderRadius.circular(AppTokens.radiusM),
+                            border: Border.all(
+                                color: accent.withValues(alpha: 0.25)),
+                          ),
                         ),
-                      ),
-                      children: List.generate(
-                        _pickerMaxYear - _pickerMinYear + 1,
-                        (i) => Center(
-                          child: Text(
-                            '${_pickerMinYear + i}',
-                            style: AppTokens.dialogTitle,
+                        children: List.generate(
+                          _pickerMaxYear - _pickerMinYear + 1,
+                          (i) => Center(
+                            child: Text(
+                              '${_pickerMinYear + i}',
+                              style: AppTokens.dialogTitle,
+                            ),
                           ),
                         ),
                       ),
@@ -733,10 +726,7 @@ Future<T?> showGlassOptionPicker<T>(
 }) {
   return showGlassSheet<T>(
     context: context,
-    builder: (sheetContext) => GlassPanel(
-      solid: true,
-      margin: const EdgeInsets.all(12),
-      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+    builder: (sheetContext) => GlassSheetPanel(
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -15,12 +15,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
-import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_sheet_panel.dart';
 import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pill.dart';
@@ -261,11 +261,7 @@ class _DayExtraSheetState extends State<_DayExtraSheet> {
     // 与加备注之前逐像素相同。
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: GlassPanel(
-        solid: true,
-        margin: const EdgeInsets.all(12),
-        borderRadius:
-            const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+      child: GlassSheetPanel(
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,

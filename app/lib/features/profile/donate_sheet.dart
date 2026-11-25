@@ -15,10 +15,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/design_tokens.dart';
-import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_sheet_panel.dart';
 import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_pill.dart';
@@ -47,9 +47,7 @@ const List<int> donatePresetAmounts = [5, 10, 20];
 Future<bool?> showDonateSheet(BuildContext context) {
   return showGlassSheet<bool>(
     context: context,
-    builder: (_) => const GlassPanel(
-      solid: true,
-      margin: EdgeInsets.all(AppTokens.spaceMd),
+    builder: (_) => const GlassSheetPanel(
       child: SafeArea(top: false, child: DonateSheet()),
     ),
   );

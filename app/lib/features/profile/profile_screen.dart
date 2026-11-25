@@ -15,6 +15,7 @@ import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_pressable.dart';
 import '../../core/widgets/glass_segment.dart';
 import '../../core/widgets/glass_sheet_header.dart';
+import '../../core/widgets/glass_sheet_panel.dart';
 import '../../core/widgets/glass_snackbar.dart';
 import '../../core/widgets/glass_switch.dart';
 import '../../core/widgets/section_heading.dart';
@@ -390,10 +391,7 @@ class ProfileScreen extends ConsumerWidget {
 
     final selection = await showGlassSheet<String>(
       context: context,
-      builder: (sheetContext) => GlassPanel(
-        solid: true,
-        margin: const EdgeInsets.all(12),
-        borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+      builder: (sheetContext) => GlassSheetPanel(
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,

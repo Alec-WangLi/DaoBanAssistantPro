@@ -27,10 +27,10 @@ import '../../core/l10n.dart';
 import '../../core/shift_palette.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_sheet_panel.dart';
 import '../../core/widgets/glass_input.dart';
 import '../../core/widgets/glass_field.dart';
 import '../../core/widgets/glass_sheet_header.dart';
-import '../../core/glass/glass.dart';
 
 /// 打开班次配色层。
 ///
@@ -144,11 +144,7 @@ class _ShiftColorPickerBodyState extends State<ShiftColorPickerBody> {
     // 键盘不弹时这里是 0 高度，与本条修复之前逐像素相同。
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: GlassPanel(
-        solid: true,
-        margin: const EdgeInsets.all(AppTokens.spaceMd),
-        borderRadius:
-            const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+      child: GlassSheetPanel(
         child: SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: maxH),

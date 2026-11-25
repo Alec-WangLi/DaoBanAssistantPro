@@ -1,15 +1,18 @@
-// GlassSheetHeader —— 底部弹层统一头部（把手 + 主色竖条 + 标题 + 分隔线）。
+// GlassSheetHeader —— 底部弹层统一头部（主色竖条 + 标题 + 分隔线）。
 //
 // 抽出来的理由：五个弹层各自内联写头部，而且**都没有**弹窗那根主色竖条 ——
 // 于是弹层标题读起来像内容列表的第一行。这一件把弹窗那份标题行
-//（`GlassTitleRow`）搬进弹层，再补上弹层专属的把手与分隔线。
+//（`GlassTitleRow`）搬进弹层，再补上分隔线。
+//
+// 把守在 2026-11-25 搬走了：它属于弹层外壳（`GlassSheetPanel`），而不再取决
+// 于这一屏有没有标题 —— 四个没有标题头的选择器当初就是因此漏了把手。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shiftassistantpro/core/design_tokens.dart';
 import 'package:shiftassistantpro/core/widgets/glass_sheet_header.dart';
 
 void main() {
-  testWidgets('把手、标题、分隔线都在；标题走 titleStrong（不是弹窗那档 20）',
+  testWidgets('标题与分隔线都在；标题走 titleStrong（不是弹窗那档 20）',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
         home: Scaffold(body: GlassSheetHeader(title: '调整班次', subtitle: '10月13日'))));

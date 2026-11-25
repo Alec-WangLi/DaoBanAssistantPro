@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.24\n'
+    '· 每个从下面滑上来的弹层，顶上都有那只「往下拖」的小短横了 —— 时间 / 日期 / 月份 / 年份选择器以前漏了它，和别的弹层对不上\n'
+    '· 修：深色模式下还有些图标是黑的 —— 根因是主题没给图标兜底色，没单独取色的图标一律被画成纯黑；现在跟随正文（深色下近白），「关于」页、我的页那些列表图标都恢复可见\n'
+    '· 修：时间 / 年份选择器在小窗里会差几个像素溢出；滚轮高度改成按剩余空间自适应\n'
+    '\n'
 'v0.13.23\n'
     '· 日期选择（统计导出的起止日期、新建闹钟、添加待办、添加时段）翻月快了：点中间的年月标题直接弹出月份选择，不用再一下一下点箭头\n'
     '· 同一处的左右箭头换成了玻璃圆钮，与统计页顶栏一套；深色下不再发黑 —— 原来是黑箭头压在深底上，几乎看不见\n'
@@ -99,14 +104,13 @@ const String _changelogZh =
     '· 闹钟链路的关键步骤现在都写进「我的 → 查看日志」：收到闹钟、响铃服务起来、声音真的开始放。漏响时看有没有「AlarmReceiver.onReceive」那一行，就能分出是系统没递过来、还是响铃界面被拦、还是音源的问题\n'
     '· 日志瘦身：冷启动不再每次往日志里塞一行振动能力探针（没有振动器这类真问题照旧记）\n'
     '\n'
-'v0.13.14\n'
-    '· 新增「统计」页：日历右上角那颗按钮点开就是它，可以按月 / 按年看实际上班工时、正常工时、平均每班、上班与休息天数\n'
-    '· 统计里还有请假、加班、法定节假日上班、夜班天数、最长连班 / 最长连休；年视图列出 12 个月，点一行就跳到那个月\n'
-    '· 「调整班次」弹层新增「请假」「加班」：时长可以选整天 / 半天或按小时记；整天请假会自动取消那天的班次闹钟，日历格子和信息卡上会标「假 / 加」\n'
-    '· 班次编辑里新增「夜班」开关，统计的夜班天数只认这个标记；内置模板的夜班已自动标好\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.24\n'
+    '· Every sheet that slides up from the bottom now has the little drag handle at the top — the time / date / month / year pickers were missing it and looked different from the rest\n'
+    '· Fix: some icons were still black in dark mode — the theme never set a fallback icon colour, so every icon without an explicit colour was drawn pure black; icons now follow the body ink (near white in dark), bringing back the row icons on About, My and elsewhere\n'
+    '· Fix: the time / year pickers could overflow by a few pixels in small windows; the wheel now takes the remaining space\n'
+    '\n'
 'v0.13.23\n'
     '· Date picking (export range, new alarm, new todo, new shift span) is faster: tap the year-month title to jump straight to a month instead of stepping with the arrows\n'
     '· The arrows there are now glass step buttons, the same as the Statistics period bar, and no longer turn black in dark mode — they used to be black on a dark sheet, nearly invisible\n'
@@ -164,12 +168,6 @@ const String _changelogEn =
     '· Me > Permissions gains "Sleeping apps (Samsung)": remove the app from Sleeping / Deep sleeping apps under Battery > Background usage limits. Apps on those lists have their alarms cancelled by the system, which shows up as an alarm missing every few days\n'
     '· The alarm chain now logs each key step to Me > View log: alarm received, ring service started, sound actually playing. When one goes missing, look for the "AlarmReceiver.onReceive" line to tell "the system never delivered it" from "the screen was blocked" and "the sound failed"\n'
     '· Less log noise: the cold-start vibration capability probe no longer writes a line every launch (a real "no vibrator" finding still does)\n'
-    '\n'
-'v0.13.14\n'
-    '· New Statistics page: the calendar top-right button opens it, with month / year views of actual hours worked, regular hours, average per shift, and work / rest days\n'
-    '· It also covers leave, overtime, holiday work, night shifts and the longest work / rest streaks; the year view lists all 12 months and a tap jumps to that month\n'
-    '· The Adjust shift sheet gains Leave and Overtime: record a full day, half day or any number of hours; a full-day leave also cancels that day\'s shift alarm, and the calendar cell and info card show a leave / overtime mark\n'
-    '· The shift editor gains a Night shift switch — the night-shift count uses only this marker; built-in templates already set it\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

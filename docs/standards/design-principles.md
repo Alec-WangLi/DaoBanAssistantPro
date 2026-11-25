@@ -40,14 +40,17 @@
 - **反模式**：为「差一点」新起 off-grid 常量、或内联数字（12.5/13.5/14.5/15/22 就是这么冒出来的）。
 
 ### D2. 层级只靠字号、字重、明度
-- **原则**：内容的强弱只用这三样表达，不靠颜色堆叠。
+- **原则**：内容的强弱只用这三样表达，不靠颜色堆叠。**图标默认墨色与正文同源**（`iconTheme.color`
+  = `onSurface`；实心主色面上仍显式写白，D3）。
 - **落到哪**：`AppTokens` 角色令牌 + 明度两档 `inkMuted`(0.62) / `inkFaint`(0.35)，以及
-  `AppTokens.inkMuted(context)` 这类 context 形态。
+  `AppTokens.inkMuted(context)` 这类 context 形态；图标兜底色在 `core/theme/app_theme.dart` 两档 `iconTheme`。
 - **谁守门**：`design_tokens_test`——字号/字重归 D1 那 7 条规则；**alpha 字面量同样被禁**
-  （`onSurface.withValues(alpha:)`），所以明度是**半机器**，不是自守。
+  （`onSurface.withValues(alpha:)`）——**半机器**。`theme_icon_ink_test` 钉两档 `iconTheme.color`、
+  深色下裸 `Icon` 不落回 fallback 纯黑、与「关于」页。
 - **例外与豁免**：`navInactiveForeground`（0.72 / 0.55）与 `design_tokens.dart` 内定义的 alpha 在扫描网外，
   改动时靠人守；新增明度档必须先加进 `AppTokens` 再引用。
-- **反模式**：给次要文字另调一个 0.45/0.5/0.55 的 alpha（历史上一角色被调出四种，收敛成 0.62）。
+- **反模式**：给次要文字另调一个 0.45/0.5/0.55 的 alpha（历史上一角色被调出四种，收敛成 0.62）；
+  只给 `iconTheme` 写 size —— 深色下没显式取色的图标一起变黑（v0.13.23 前全库 115 处）。
 
 ### D3. 白字压实心主色面，按需压深到「刚好过 AA」
 - **原则**：白字/白图标压实心主色时，只把不够的主色压到刚过 WCAG AA，本来就够的一个像素不动。

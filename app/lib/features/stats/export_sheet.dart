@@ -8,11 +8,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/design_tokens.dart';
-import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_sheet_panel.dart';
 import '../../core/widgets/glass_pickers.dart';
 import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_sheet_header.dart';
@@ -123,10 +123,7 @@ class _StatsExportSheetState extends State<_StatsExportSheet> {
     final primary = Theme.of(context).colorScheme.primary;
     final allOn = _fields.length == StatsExportField.values.length;
 
-    return GlassPanel(
-      solid: true,
-      margin: const EdgeInsets.all(12),
-      borderRadius: const BorderRadius.all(Radius.circular(AppTokens.radiusXL)),
+    return GlassSheetPanel(
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
