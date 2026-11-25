@@ -208,12 +208,17 @@ class NextAlarmInfo {  const NextAlarmInfo({required this.fireAt, required this.
 /// 一份必然分岔，症状是摘要说 15:00、系统里排的却是别的时间：不报错，比不显示
 /// 更糟。
 ///
+/// [overrides] 是**按天关闹钟**（`shift_alarm_overrides`）：用户在闹钟页把某天的
+/// 开关关掉时，那条就真的不会响，摘要也得跳过它 —— 不传的话摘要在关了之后还
+/// 停在原处（2026-11-25 用户实测报的）。
+///
 /// 取 31 天而不是一两天：连休、空白表、只在上班日才有闹钟的排法，下一条完全
 /// 可能在好几天以后。
 NextAlarmInfo? nextAlarmInfo(
   ShiftSource source,
   List<CustomAlarm> alarms, {
   required DateTime now,
+  Map<int, bool> overrides = const <int, bool>{},
 }) {
   NextAlarmInfo? best;
   void consider(DateTime fireAt, String label) {
@@ -223,7 +228,8 @@ NextAlarmInfo? nextAlarmInfo(
     }
   }
 
-  for (final p in planShiftAlarms(source, from: now, days: 31)) {
+  for (final p in planShiftAlarms(source,
+      from: now, days: 31, overrides: overrides)) {
     consider(p.fireAt, L10n.shiftAlarmTitle(p.shift.name, p.alarm.label));
   }
   for (final a in AlarmService._customAlarmRequests(alarms, now: now)) {

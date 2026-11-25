@@ -93,6 +93,26 @@ void main() {
               now: DateTime(2026, 10, 15, 6, 0)),
           isNull);
     });
+
+    test('某天被「按天开关」关掉：跳到下一条（2026-11-25 用户实测）', () {
+      // 闹钟页那一行的开关写的就是这张表；不传进来摘要会停在关掉的那条上。
+      final off = <int, bool>{dayNumber(DateTime(2026, 10, 15)): false};
+      final info = nextAlarmInfo(_schedule(), const <CustomAlarm>[],
+          now: DateTime(2026, 10, 15, 6, 0), overrides: off);
+      expect(info!.fireAt, DateTime(2026, 10, 17, 8, 0));
+    });
+
+    test('那天的班次闹钟被关掉、还有自定义闹钟：取自定义那条', () {
+      final off = <int, bool>{dayNumber(DateTime(2026, 10, 15)): false};
+      final info = nextAlarmInfo(
+        _schedule(),
+        <CustomAlarm>[_daily(9, 0)],
+        now: DateTime(2026, 10, 15, 6, 0),
+        overrides: off,
+      );
+      expect(info!.fireAt, DateTime(2026, 10, 15, 9, 0));
+      expect(info.label, L10n.customAlarmTitle);
+    });
   });
 
   group('倒计时文案', () {

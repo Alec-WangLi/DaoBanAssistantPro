@@ -41,6 +41,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.21\n'
+    '· 修：闹钟页「下一次响铃」关掉某一天的闹钟后不跟着跳 —— 它没看「按天开关」。现在关掉哪条就跳到下一条\n'
+    '· 修：没有自定义闹钟时，那一块终于真的贴到底部（上一版它和上面的班次列表平分剩余空间，提示停在屏幕中间）\n'
+    '· 编辑排班里的「夜班」开关下面加了一行说明：它只算进统计页的「夜班天数」，不影响轮转与闹钟；与「联动闹钟」之间也拉开了\n'
+    '\n'
 'v0.13.20\n'
     '· 闹钟页顶部多了一行「下一次响铃」：几月几日几点、哪条班次闹钟，还有几小时几分\n'
     '· 没有自定义闹钟时那一块不再占半个屏幕：提示贴到底部，未来 30 天的班次闹钟回到整块空间\n'
@@ -99,12 +104,13 @@ const String _changelogZh =
     '· 自定义闹钟那一行的编辑笔去掉了：整行点开就是编辑，与待办一致\n'
     '· 修：用某些文件管理器（比如安卓原生那个）选铃声时，选完返回什么都没有；现在几种回传方式都认，真失败也会说清原因\n'
     '\n'
-'v0.13.11\n'
-    '· 修：Android 8~10 的手机（荣耀 10、畅享 20 Pro 这类 HarmonyOS 3 机型）装上上一版后一开就闪退；振动能力自查收紧了系统版本判断，老系统上不再调用它没有的接口\n'
-    '· 顺带：Android 8 / 9 上点按的触觉改用 20ms 单次波形，不再落到最弱的兜底档\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.21\n'
+    '· Fix: "Next alarm" on the alarm page did not move on when you switched a day off - it ignored the per-day switches. It now skips to the next one\n'
+    '· Fix: with no custom alarms, that section finally sits at the bottom (the previous build split the leftover space with the shift list, leaving the hint mid-screen)\n'
+    '· The "Night shift" switch in the schedule editor now explains itself: it only counts towards night days in Statistics, and no longer crowds the linked-alarm row\n'
+    '\n'
 'v0.13.20\n'
     '· The alarm page gains a "Next alarm" line: the date and time, which shift alarm it is, and how long to go\n'
     '· With no custom alarms, that section no longer takes half the screen - the hint sits at the bottom and the 30-day shift alarms get the whole area\n'
@@ -162,10 +168,6 @@ const String _changelogEn =
     '· About gains an "Update public holiday data" row whose subtitle says which year the data covers; tap it to fetch immediately\n'
     '· The pencil on custom alarm rows is gone: tapping the row opens the editor, same as todos\n'
     '· Fix: picking a ringtone through some file managers (the stock Android one, for instance) returned to the app with nothing happening; all common result shapes are handled now, and a real failure says why\n'
-    '\n'
-'v0.13.11\n'
-    '· Fix: phones on Android 8-10 (Honor 10, Changxiang 20 Pro and other HarmonyOS 3 devices) crashed on launch with the previous build; the vibration capability check now respects the system version and no longer calls APIs those systems lack\n'
-    '· Android 8 / 9 now use a 20 ms one-shot for taps instead of the weakest fallback\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

@@ -101,10 +101,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
         shiftAlarms.add(_ShiftAlarmEntry(date, t, overrides[dayNumber(date)] ?? true));
       }
     }
-    // 下一次响铃：班次联动 + 自定义里最近的一条。空白表 / 一条都没配时为 null，
-    // 那一行不画（不给空表白占一行高度）。
-    final NextAlarmInfo? nextAlarm =
-        chain == null ? null : nextAlarmInfo(chain, alarms, now: now);
+    // 下一次响铃：班次联动 + 自定义里最近的一条。**必须把按天开关一起传进去**，
+    // 否则用户关掉某一天的闹钟后，摘要还停在原处（2026-11-25 实测报的）。
+    // 空白表 / 一条都没配时为 null，那一行不画。
+    final NextAlarmInfo? nextAlarm = chain == null
+        ? null
+        : nextAlarmInfo(chain, alarms, now: now, overrides: overrides);
 
     return Scaffold(
       body: SafeArea(
@@ -138,27 +140,35 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             // 用 `Flexible(loose)` 而不是裸的 `Padding`：极矮的窗（900×420、
             // 200×400）里这几块加起来会撑破 Column，loose 让它按剩余空间收缩。
             // 贴底就得给悬浮按钮条让位，否则那句提示正好被压住（老坑）。
+            // 没有自定义闹钟时**不占 Expanded**：标题 + 空态压到最下面，把中间的
+            // 空间全给上面的班次列表（50/50 平分时空态白占半个屏）。
+            //
+            // **默认走非 flex 的 `Padding`** —— 非 flex 子件先按自然高度排完，
+            // 上面那个 `Expanded` 的列表就会吃掉全部剩余空间，这块于是真的贴着
+            // 底部（v0.13.20 用 `Flexible` 时它和列表平分剩余空间，提示停在屏幕
+            // 中间，2026-11-25 用户实测报的就是这个）。
+            //
+            // **只在矮窗（高 < 480）退回可压缩的版本**：200×400 那种小窗里固定
+            // 内容比屏幕还高，非 flex 会直接把 Column 撑破（视觉工装量到过）。
+            // 贴底就得给悬浮按钮条让位，否则那句提示正好被压住（老坑）。
             if (alarms.isEmpty)
-              Flexible(
-                // 与班次列表平分剩余空间，但**内容压在底边**（`Align` 的
-                // bottomCenter）：空间够时提示紧贴按钮条；极矮的窗里这块能被
-                // 压缩，不会把 Column 撑破。
-                //
-                // 反过来写（非 flex 的 Padding）在 200×400 + 特大字号上会溢出；
-                // 不包 Flexible 又会剩一大块空白留在最底下、提示飘在半空
-                // —— 两种都在出图里见过，这个写法两头都占。
-                fit: FlexFit.loose,
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    // 少留 `spaceLg`：空态自己还有一圈 16 的内边距，两段相加
-                    // 才是悬浮按钮条的净高度。
-                    padding: const EdgeInsets.only(
-                        bottom: kFloatingActionInset - AppTokens.spaceLg),
-                    child: _customAlarmSection(context, alarms),
-                  ),
-                ),
-              )
+              AppLayout.of(context).isShort
+                  ? Flexible(
+                      fit: FlexFit.loose,
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                              bottom: kFloatingActionInset - AppTokens.spaceLg),
+                          child: _customAlarmSection(context, alarms),
+                        ),
+                      ),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.only(
+                          bottom: kFloatingActionInset - AppTokens.spaceLg),
+                      child: _customAlarmSection(context, alarms),
+                    )
             else
               Expanded(child: _customAlarmSection(context, alarms)),
             // 从前这里在小窗/横屏补一块 156 的留白，专为空态兜底。现在空态自己

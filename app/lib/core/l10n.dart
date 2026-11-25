@@ -829,6 +829,11 @@ class L10n {
 
   /// 班次编辑器里的「夜班」标记 —— 统计页的夜班天数只认它。
   static String get nightShift => t('夜班', 'Night shift');
+
+  /// 「夜班」开关下面那行说明。**它只影响统计** —— 不参与轮转、不影响闹钟。
+  static String get nightShiftHint => t(
+      '只算进统计页的「夜班天数」，不影响轮转与闹钟',
+      'Counts towards night days in Statistics only — no effect on rotation or alarms');
   static String get alarmTime => t('响铃', 'Alarm');
 
   static String get addAlarm => t('添加闹钟', 'Add alarm');
