@@ -22,7 +22,7 @@ String _visibleLog(WidgetTester tester) {
   final parts = tester
       .widgetList<Text>(find.byType(Text))
       .map((t) => t.data ?? '')
-      .where((s) => s.contains('v0.13.'));
+      .where((s) => s.contains('v0.1'));
   return parts.join('\n');
 }
 
@@ -46,7 +46,7 @@ void main() {
   test('切分：条数等于窗口条数，首条是当前版本', () {
     final versions = splitChangelogVersions(appChangelog);
     expect(versions.length, 10, reason: '更新日志窗口固定十条，切分不能多也不能少');
-    expect(versions.first.startsWith('v0.13.27'), isTrue);
+    expect(versions.first.startsWith('v0.14.0'), isTrue);
     // 每一条都必须正好以一条版本头开头，且不含下一条的头。
     for (final block in versions) {
       expect(RegExp(r'^v\d+\.\d+\.\d+\n').hasMatch(block), isTrue,
@@ -62,10 +62,10 @@ void main() {
     await tester.pumpAndSettle();
 
     final collapsed = _visibleLog(tester);
+    expect(collapsed, contains('v0.14.0'));
     expect(collapsed, contains('v0.13.27'));
     expect(collapsed, contains('v0.13.26'));
-    expect(collapsed, contains('v0.13.25'));
-    expect(collapsed, isNot(contains('v0.13.24')),
+    expect(collapsed, isNot(contains('v0.13.25')),
         reason: '折叠态下第四版就不该画出来 —— 画了等于没折叠');
 
     final more = find.text('展开更早的 7 版');
@@ -77,7 +77,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final expanded = _visibleLog(tester);
-    for (final v in ['v0.13.27', 'v0.13.20', 'v0.13.18']) {
+    for (final v in ['v0.14.0', 'v0.13.22', 'v0.13.19']) {
       expect(expanded, contains(v), reason: '展开后 $v 应当出现');
     }
     expect(find.text('收起'), findsOneWidget);

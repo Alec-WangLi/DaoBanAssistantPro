@@ -135,6 +135,14 @@ const List<HelpFaqGroup> helpFaqGroups = [
               'Night shift is a marker on the shift rather than something guessed from its name. Open the schedule under Me → Schedule management and turn on the "Night shift" switch on that shift card; the statistics will follow.',
             ),
           ),
+          (
+            question: L10nText('想把出勤表拿去算工资',
+                'I want to take the attendance table to payroll'),
+            answer: L10nText(
+              '统计页右上角「导出」：选起止日期，勾上要的字段（日期、班次、工时、请假类型、请假时长、加班、备注等），生成一份 CSV，Excel 直接打开。跨午夜的班次会标「次日」。',
+              'Tap Export at the top right of Statistics: pick the date range, tick the columns you want (date, shift, hours, leave type, leave hours, overtime, note and more) and it writes a CSV that Excel opens directly. Shifts that cross midnight are marked "next day".',
+            ),
+          ),
         ],
       ),
       (
@@ -273,8 +281,8 @@ const List<HelpFaqGroup> helpFaqGroups = [
             question: L10nText('换了手机，怎么把排班搬过去',
                 'I got a new phone — how do I move my schedule over'),
             answer: L10nText(
-              '目前不支持。数据只存在这台手机上，没有云同步也没有导出，换手机要重新排一遍。',
-              'Not supported yet. Everything lives on this phone only — there is no cloud sync and no export — so a new phone means setting it up again.',
+              '「我的 → 数据备份 → 导出」，存成一个 .dshbackup 文件（可以放到网盘或电脑）。在新手机上装好 App，同一条路径选「导入」，选那个文件、确认覆盖，App 会自己重启一次，排班、待办、模板、闹钟、外观设置和你保存的铃声都回来了。',
+              'Open Me → Backup → Export and save the .dshbackup file somewhere (a cloud drive or your computer). Install the app on the new phone, pick Import on the same screen, choose that file and confirm; the app restarts itself and your schedules, todos, templates, alarms, appearance settings and saved ringtones are all back.',
             ),
           ),
         ],

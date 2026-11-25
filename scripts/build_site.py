@@ -41,6 +41,7 @@ IMAGES = ROOT / "docs" / "images"
 PNGS = ["hero.png"]          # 只给 og:image，不渲染在页面上
 SHOTS = [                     # 首屏三台 + 各章各一张
     "shot-calendar.png",
+    "shot-stats.png",
     "shot-alarm.png",
     "shot-ringing.png",
     "shot-todos.png",

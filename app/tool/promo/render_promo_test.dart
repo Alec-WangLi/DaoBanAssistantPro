@@ -23,6 +23,7 @@ import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:shiftassistantpro/features/calendar/shift_template_picker_screen.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
+import 'package:shiftassistantpro/features/stats/stats_screen.dart';
 
 import '../visual/visual_harness.dart';
 
@@ -229,6 +230,16 @@ final List<_Shot> _shots = [
       await settleVisual(t);
       await _scrollDown(t, 640);
     },
+  ),
+  (
+    // v0.14.0 的门面：统计页。它是这轮最大的新功能，宣传图里不能没有。
+    // 画布比别的屏高一档（1000）：默认 900 会把环图下面的图例切掉半行。
+    slug: '11_stats',
+    title: '统计',
+    build: (db) async => const StatsScreen(),
+    brightness: Brightness.light,
+    size: const Size(420, 1000),
+    beforeCapture: null,
   ),
 ];
 
