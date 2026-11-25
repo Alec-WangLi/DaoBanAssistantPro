@@ -101,6 +101,14 @@ class LiquidLensController extends ChangeNotifier {
   bool _pressed = false;
   bool _dragging = false;
   bool _heldLongEnough = false;
+
+  /// 「按住够久」在 `tapCancel` 与 `dragStart` 之间的交接位。
+  ///
+  /// 真实事件顺序是 `onTapDown → (过 110ms) → onTapCancel → onHorizontalDragStart`：
+  /// 取消已经把 `_heldLongEnough` 清掉了，而「长按之后拖着选」必须继续提起。
+  /// 少了这个交接位，那条主路径会一进入拖动就把提起掉光（2026-11-25 补）。
+  bool _heldAcrossCancel = false;
+
   Timer? _holdTimer;
   int? _previewIndex;
 
@@ -170,6 +178,7 @@ class LiquidLensController extends ChangeNotifier {
   void press(double localDx, {bool moveToSlot = true}) {
     final int i = _indexFor(localDx);
     _fingerInnerX = localDx;
+    _heldAcrossCancel = false; // 新手势：上一条手势的交接位作废
     _armHoldTimer();
     _pressed = true;
     _previewIndex = i;
@@ -183,6 +192,13 @@ class LiquidLensController extends ChangeNotifier {
   }
 
   void dragStart(double localDx) {
+    // **先把「按住够久」接过来。** 事件顺序是 `onTapCancel` 先、`dragStart` 后
+    // （见 [_heldAcrossCancel]）—— 不接的话「长按再拖」一进拖动就掉光提起。
+    if (_heldAcrossCancel) {
+      _heldAcrossCancel = false;
+      _heldLongEnough = true;
+      _syncTicker();
+    }
     _grabOffset = localDx / _itemW - _page;
     dragUpdate(localDx);
   }
@@ -205,6 +221,7 @@ class LiquidLensController extends ChangeNotifier {
   /// （页面归调用点管，这里只管那枚滴）。
   int release() {
     _endHold();
+    _heldAcrossCancel = false;
     // 目标格取**逻辑页**，不是弹簧的当前位置 —— 见 `_page` 的说明。
     final int target = _nearestIndex(_page);
     // **逻辑页也要吸附过来。** 少了这一行，「拖了一点点、又松在同一格上」时
@@ -229,6 +246,7 @@ class LiquidLensController extends ChangeNotifier {
   bool cancel() {
     if (!_dragging) return false;
     _endHold();
+    _heldAcrossCancel = false;
     _pressed = false;
     _dragging = false;
     _previewIndex = null;
@@ -250,12 +268,16 @@ class LiquidLensController extends ChangeNotifier {
   /// true —— 标准档下只是容器一直大 6%，液态档下就是透镜永远提着。
   bool tapCancel() {
     final bool wasActive = _pressed || _dragging;
+    final bool wasHeld = _heldLongEnough;
     _endHold();
     if (!_dragging) {
       _pressed = false;
       // ⚠️ **preview 也要清。** 不清的话分段器的内容高亮会停在手指按下那一格
       // （`selectedIdx = previewIndex ?? committed`），而选中项根本没有变。
       _previewIndex = null;
+      // 这条取消多半是「拖动接管」跑在前面的那一步（事件顺序见
+      // [_heldAcrossCancel]）—— 把按住够久交出去，`dragStart` 会接住。
+      _heldAcrossCancel = wasHeld;
       notifyListeners();
     } else {
       cancel();
@@ -266,7 +288,13 @@ class LiquidLensController extends ChangeNotifier {
 
   // ── 内部 ────────────────────────────────────────────────────────────────
 
-  double get _liftTarget => (_dragging || _heldLongEnough) ? 1.0 : 0.0;
+  /// 升程目标**只看「按住够久」**，不看「在拖动」。
+  ///
+  /// ⚠️ **别把 `_dragging` 加回来。** 契约是「点一下滑块自动过来、**长按**才提起」
+  /// （用户 2026-10-01），而 `_dragging` 会让一次快速滑动也立刻鼓出胶囊 ——
+  /// 2026-11-25 真机上就是「底部滑块一滑就变成一只气球」。长按之后再拖要保留
+  /// 提起，靠的是 [_heldAcrossCancel] 那个交接位，不是这个目标值。
+  double get _liftTarget => _heldLongEnough ? 1.0 : 0.0;
 
   /// 按**当前意图**刷新升程弹簧的目标。
   ///

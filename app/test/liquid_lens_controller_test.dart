@@ -86,6 +86,42 @@ void main() {
     await settleToRest(tester);
   });
 
+  testWidgets('直接拖动（没先按住）：不提起 —— 滑动时不该鼓出来', (tester) async {
+    // 2026-11-25 真机：在底栏上快速左右滑，透镜立刻鼓成一枚球、顶出胶囊
+    // （视频里连续几秒都是这个「气球」）。契约是「点按不提起、**长按**才提起」，
+    // 而旧的升程目标是 `_dragging || _heldLongEnough` —— 一次快速滑动没有
+    // 「按住」，却照样鼓了出来。凸出胶囊只该属于「按住」。
+    final c = make();
+    c.dragStart(itemW / 2);
+    c.dragUpdate(itemW / 2 + itemW / 2);
+    await advance(tester, 240); // 远超 lensHoldDelay（110ms）
+    expect(c.lift, lessThan(0.05),
+        reason: '没按住就直接拖，透镜不该提起（真机上是「滑块鼓成一枚球」）');
+    expect(c.dragging, isTrue, reason: '位置仍然要 1:1 跟手');
+
+    c.release();
+    await settleToRest(tester);
+  });
+
+  testWidgets('长按之后拖动：提起要跟着过手（tapCancel 先跑也不能掉）', (tester) async {
+    // 真实事件顺序：onTapDown → （过 110ms）→ onTapCancel → onHorizontalDragStart。
+    // `tapCancel()` 会把「按住够久」清掉；不把它交给 `dragStart` 的话，
+    // 「长按滑块自动吸附、然后拖着选」这条主路径会一进入拖动就掉光提起。
+    final c = make();
+    c.press(itemW / 2);
+    await advance(tester, 240);
+    expect(c.lift, greaterThan(0.5), reason: '按住够久了却没提起');
+    expect(c.tapCancel(), isTrue, reason: '拖动接管时 tap 会被取消');
+    c.dragStart(itemW / 2);
+    c.dragUpdate(itemW / 2 + itemW / 2);
+    await advance(tester, 64);
+    expect(c.lift, greaterThan(0.5), reason: '长按之后的拖动把提起掉了');
+    expect(c.dragging, isTrue);
+
+    c.release();
+    await settleToRest(tester);
+  });
+
   testWidgets('帧率无关：同一段位移在 8.33ms 与 16.67ms 下速度一致', (tester) async {
     // 60Hz 每帧 5px ≡ 120Hz 每帧 2.5px ≡ **300px/s**。两路必须给出同一个速度。
     // 坏了它的是分母上那个 `max(dt, 16ms)` 的地板（16ms 正好是一帧 60Hz）。

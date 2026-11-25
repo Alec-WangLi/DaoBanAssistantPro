@@ -41,6 +41,9 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.13.25\n'
+    '· 修：底栏滑块（分段器、开关也一样）一滑就鼓成一枚球、顶出胶囊 —— 现在只有「按住」才鼓起来，普通滑动只在轨道里跟着走\n'
+    '\n'
 'v0.13.24\n'
     '· 每个从下面滑上来的弹层，顶上都有那只「往下拖」的小短横了 —— 时间 / 日期 / 月份 / 年份选择器以前漏了它，和别的弹层对不上\n'
     '· 修：深色模式下还有些图标是黑的 —— 根因是主题没给图标兜底色，没单独取色的图标一律被画成纯黑；现在跟随正文（深色下近白），「关于」页、我的页那些列表图标都恢复可见\n'
@@ -98,14 +101,11 @@ const String _changelogZh =
     '· 修：重复待办还在起点之前就出现在列表里 —— 上一版把第一条直接建在「新起点之后的第一次」上，于是「每月 17 号、从 11/21 起」在建好的当下就躺进了列表。现在重复待办要到它那一天才出现，上一版留下的那几条会在打开待办页时自动收走\n'
     '· 打赏收款码换成经营码：支付宝与微信两张都换了，支付宝的「打开支付宝」也指向新码\n'
     '\n'
-'v0.13.15\n'
-    '· 修：编辑重复待办时把「从这天起」改到别的日子，它当天照样提醒 —— 那一行只挪了当前这一条，系列的起点没跟着走（提醒正是按起点算的）\n'
-    '· 「我的 → 权限」新增「休眠应用（三星）」：电池 → 后台使用限制里把本 App 从「睡眠应用 / 深度休眠应用」去掉。进了名单的 App，系统会连闹钟一起取消，症状就是几天偶尔漏响一次\n'
-    '· 闹钟链路的关键步骤现在都写进「我的 → 查看日志」：收到闹钟、响铃服务起来、声音真的开始放。漏响时看有没有「AlarmReceiver.onReceive」那一行，就能分出是系统没递过来、还是响铃界面被拦、还是音源的问题\n'
-    '· 日志瘦身：冷启动不再每次往日志里塞一行振动能力探针（没有振动器这类真问题照旧记）\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.13.25\n'
+    '· Fix: the bottom slider (and the segmented control / switches) ballooned out of its track as soon as you swiped - now it only lifts while you press and hold, and a normal slide just travels inside the track\n'
+    '\n'
 'v0.13.24\n'
     '· Every sheet that slides up from the bottom now has the little drag handle at the top — the time / date / month / year pickers were missing it and looked different from the rest\n'
     '· Fix: some icons were still black in dark mode — the theme never set a fallback icon colour, so every icon without an explicit colour was drawn pure black; icons now follow the body ink (near white in dark), bringing back the row icons on About, My and elsewhere\n'
@@ -162,12 +162,6 @@ const String _changelogEn =
 'v0.13.16\n'
     '· Fix: a repeating todo showed up before its start date - the previous build created the first row on "the first occurrence after the new start", so a monthly todo starting 11/21 was already in the list. Repeating todos now appear on their own day, and rows left behind by the previous build are removed when the todo page opens\n'
     '· Donation QR codes replaced with the new merchant codes (Alipay and WeChat); the "Open Alipay" action points at the new code too\n'
-    '\n'
-'v0.13.15\n'
-    '· Fix: editing a repeating todo and moving "Starts on" to another day still reminded you on the old day - only the current row moved, the series start (which drives reminders) did not\n'
-    '· Me > Permissions gains "Sleeping apps (Samsung)": remove the app from Sleeping / Deep sleeping apps under Battery > Background usage limits. Apps on those lists have their alarms cancelled by the system, which shows up as an alarm missing every few days\n'
-    '· The alarm chain now logs each key step to Me > View log: alarm received, ring service started, sound actually playing. When one goes missing, look for the "AlarmReceiver.onReceive" line to tell "the system never delivered it" from "the screen was blocked" and "the sound failed"\n'
-    '· Less log noise: the cold-start vibration capability probe no longer writes a line every launch (a real "no vibrator" finding still does)\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;
