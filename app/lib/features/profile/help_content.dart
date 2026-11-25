@@ -140,7 +140,7 @@ const List<HelpFaqGroup> helpFaqGroups = [
                 'I want to take the attendance table to payroll'),
             answer: L10nText(
               '统计页右上角「导出」：选起止日期，勾上要的字段（日期、班次、工时、请假类型、请假时长、加班、备注等），生成一份 CSV，Excel 直接打开。跨午夜的班次会标「次日」。',
-              'Tap Export at the top right of Statistics: pick the date range, tick the columns you want (date, shift, hours, leave type, leave hours, overtime, note and more) and it writes a CSV that Excel opens directly. Shifts that cross midnight are marked "next day".',
+              'Tap Export at the top right of Statistics: pick the date range, tick the columns you want (date, shift, hours, leave type, leave hours, overtime, note and more) and it writes a CSV that Excel opens directly. Shifts that cross midnight get a " (+1d)" suffix on the time range.',
             ),
           ),
         ],
