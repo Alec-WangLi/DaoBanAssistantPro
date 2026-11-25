@@ -49,6 +49,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--prefix", required=True, help="帧文件名前缀，如 drag_rim_")
     ap.add_argument("--out", required=True, help="输出的 .gif 路径")
+    ap.add_argument(
+        "--dir",
+        default=None,
+        help="帧目录（默认 app/build/visual/frames；宣传动图在 app/build/promo-gif/frames）",
+    )
     ap.add_argument("--crop", default=None, help="裁剪框 left,top,right,bottom（可选）")
     ap.add_argument("--width", type=int, default=640, help="输出宽度（等比缩放）")
     ap.add_argument("--fps", type=int, default=14, help="播放帧率")
@@ -62,11 +67,12 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    files = sorted(glob.glob(os.path.join(FRAMES_DIR, f"{args.prefix}*.png")))
+    frames_dir = args.dir or FRAMES_DIR
+    files = sorted(glob.glob(os.path.join(frames_dir, f"{args.prefix}*.png")))
     if args.every > 1:
         files = files[::args.every]
     if not files:
-        print(f"没有帧：{FRAMES_DIR}/{args.prefix}*.png", file=sys.stderr)
+        print(f"没有帧：{frames_dir}/{args.prefix}*.png", file=sys.stderr)
         return 1
 
     crop = parse_crop(args.crop)

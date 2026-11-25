@@ -12,9 +12,9 @@
 
 | | |
 |:---:|:---:|
-| ![自定义班次颜色](docs/images/v0130-color.gif) | ![按月排班](docs/images/v0130-monthly.gif) |
+| ![自定义班次颜色](docs/images/v0140-color.gif) | ![按月排班](docs/images/v0140-monthly.gif) |
 | **自定义班次颜色**：16 颗现成色，也可以拖色相条、方盘或直接填十六进制，两颗日历小样当场变色 | **按月排班**：每月 1 号重新开始的一套切法，按段指定「每月第 N 天起上什么班」 |
-| ![待办自动归档](docs/images/v0130-archive.gif) | ![字号四档](docs/images/v0130-font.gif) |
+| ![待办自动归档](docs/images/v0130-archive.gif) | ![字号四档](docs/images/v0140-font.gif) |
 | **待办自动归档**：勾完收进「已完成 N 条」，展开能看见，点回勾就回到主列表 | **字号四档**：App 自己管，切到「特大」日历顶栏与信息卡当场重排，不省略 |
 
 ---
