@@ -54,6 +54,59 @@ SCENES = [
 ]
 
 
+# 字幕：时间**相对本场开头**（秒）。一条别超 14 个字 —— 52px 两行以内看得完，
+# 再长观众就不看了。改文案只动这里，不用重渲帧。
+SCENE_CAPTIONS = {
+    's1_calendar': [
+        (0.3, 2.4, '这个月怎么倒，一眼看完'),
+        (2.6, 4.8, '点哪天，底栏信息卡跟着换'),
+    ],
+    's8_templates': [
+        (0.2, 3.5, '20 种倒班方式，挑一个最像的'),
+    ],
+    's2_stats': [
+        (0.3, 2.2, '上了多少小时，它自己算'),
+        (2.4, 4.3, '请假、加班、夜班分开统计'),
+    ],
+    's3_stats_year': [
+        (0.2, 1.7, '年视图：哪个月最累'),
+        (1.9, 3.3, '出勤表能导成 CSV'),
+    ],
+    's4_alarm': [
+        (0.2, 1.9, '闹钟跟着排班自己走'),
+        (2.1, 3.8, '一个班次能挂十条'),
+    ],
+    's5_ringing': [
+        (0.2, 2.8, '锁屏、后台都会顶上来'),
+    ],
+    's6_todos': [
+        (0.3, 2.2, '按班次重复，到点提醒'),
+        (2.4, 4.5, '勾完自动归档'),
+    ],
+    's7_override': [
+        (0.4, 2.4, '长按拖选一段日子'),
+        (2.6, 4.8, '换班 / 请假 / 加班，只动这几天'),
+    ],
+    's9_font': [
+        (0.3, 2.4, '字号四档，App 自己管'),
+        (2.6, 5.3, '切到特大，日历当场重排'),
+    ],
+}
+
+# 场次名（整场常驻在字幕上方那一行）。圆形序号让人一眼知道看到第几项。
+SCENE_TITLES = {
+    's1_calendar': '① 排班日历',
+    's8_templates': '② 20 种倒班方式',
+    's2_stats': '③ 统计 · 月度',
+    's3_stats_year': '④ 统计 · 年度',
+    's4_alarm': '⑤ 班次闹钟',
+    's5_ringing': '⑥ 全屏响铃',
+    's6_todos': '⑦ 待办日程',
+    's7_override': '⑧ 换班 / 请假',
+    's9_font': '⑨ 外观与字号',
+}
+
+
 def _font(name, size):
     try:
         return ImageFont.truetype(f'C:/Windows/Fonts/{name}', size)
@@ -104,9 +157,9 @@ def outro_card():
     return img
 
 
-def _ffmpeg(*args):
+def _ffmpeg(*args, cwd=None):
     cmd = ['ffmpeg', '-y', '-hide_banner', '-loglevel', 'error', *args]
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, cwd=cwd)
 
 
 def _encode_image(path, seconds, out):
@@ -117,15 +170,82 @@ def _encode_image(path, seconds, out):
             '-r', str(FPS), str(out))
 
 
-def _encode_frames(scene, out):
+def _ass_ts(sec):
+    cs = int(round(sec * 100))
+    return f'{cs // 360000}:{(cs // 6000) % 60:02d}:{(cs // 100) % 60:02d}.{cs % 100:02d}'
+
+
+def _ass_escape(text):
+    return text.replace('\\', '\\\\').replace('{', '(').replace('}', ')')
+
+
+def write_ass(scene, caps, duration):
+    """一场戏一份 .ass，时间相对本场开头 —— 拼片是按场切的，全局时间码不用管。
+
+    两行：上面一行是场次名（整场常驻，观众知道现在看的是什么），
+    下面一行是随动作变化的说明。都不用方框底 —— 白字加黑描边在任何画面上都读得清，
+    方框会把下面那条本来就窄的带子塞满。
+    """
+    head = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Kicker,Microsoft YaHei,34,&H00FF6C5B,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,108,100,2,0,1,5,0,2,80,80,232,1
+Style: Cap,Microsoft YaHei,52,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,6,2,2,80,80,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    lines = [head]
+    title = SCENE_TITLES.get(scene)
+    if title:
+        lines.append(f'Dialogue: 0,{_ass_ts(0.15)},{_ass_ts(duration - 0.1)},Kicker,,'
+                     f'0,0,0,,{_ass_escape(title)}\n')
+    for t0, t1, text in caps:
+        lines.append(f'Dialogue: 0,{_ass_ts(t0)},{_ass_ts(t1)},Cap,,0,0,0,,'
+                     f'{_ass_escape(text)}\n')
+    path = WORK / 'captions' / f'{scene}.ass'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(''.join(lines), encoding='utf-8')
+    return f'captions/{scene}.ass'
+
+
+def _encode_frames(scene, out, captions=True):
     first = FRAMES / f'{scene}_0000.png'
     if not first.exists():
         sys.exit(f'缺少 {scene} 的帧：先跑 flutter test '
                  f'tool/promo/render_promo_video_test.dart --plain-name {scene}')
-    _ffmpeg('-framerate', str(FPS), '-i', str(FRAMES / f'{scene}_%04d.png'),
-            '-vf', 'format=yuv420p',
+
+    if not captions:
+        _ffmpeg('-framerate', str(FPS), '-i', f'frames/{scene}_%04d.png',
+                '-vf', 'format=yuv420p',
+                '-c:v', 'libx264', '-preset', 'slow', '-crf', '19',
+                '-r', str(FPS), str(out), cwd=WORK)
+        return
+
+    # 画中画：模糊放大的自己当底，中间放清晰的画面，底下一条字幕带。
+    # 为什么不直接满屏烧字幕：抖音 / 小红书自带的 UI 压在下 250px，
+    # 满屏字幕不是被盖住，就是压住 App 自己的信息卡 —— 两条都不好看。
+    chain = ('[0:v]scale=1080:1920:force_original_aspect_ratio=increase,'
+             'crop=1080:1920,gblur=sigma=48,eq=brightness=-0.24:saturation=0.85[bg];'
+             '[0:v]scale=842:1496[app];'
+             '[bg][app]overlay=119:64[v0]')
+    if captions and SCENE_CAPTIONS.get(scene):
+        ass = write_ass(scene, SCENE_CAPTIONS[scene], _frame_count(scene) / FPS)
+        chain += f';[v0]ass={ass}[v]'
+        label = '[v]'
+    else:
+        label = '[v0]'
+
+    _ffmpeg('-framerate', str(FPS), '-i', f'frames/{scene}_%04d.png',
+            '-filter_complex', chain, '-map', label,
             '-c:v', 'libx264', '-preset', 'slow', '-crf', '19',
-            '-r', str(FPS), str(out))
+            '-r', str(FPS), '-pix_fmt', 'yuv420p', str(out), cwd=WORK)
 
 
 def _frame_count(scene):
@@ -139,6 +259,8 @@ def main():
     ap.add_argument('--intro', type=float, default=2.0, help='片头秒数')
     ap.add_argument('--outro', type=float, default=3.0, help='片尾秒数')
     ap.add_argument('--no-cards', action='store_true', help='不拼片头片尾')
+    ap.add_argument('--no-captions', action='store_true',
+                    help='不烧字幕、也不做画中画（满屏原画，调试用）')
     args = ap.parse_args()
 
     if not shutil.which('ffmpeg'):
@@ -162,7 +284,7 @@ def main():
     total = args.intro if not args.no_cards else 0.0
     for idx, (scene, title) in enumerate(SCENES, start=1):
         out = SEGMENTS / f'{idx:02d}_{scene}.mp4'
-        _encode_frames(scene, out)
+        _encode_frames(scene, out, captions=not args.no_captions)
         parts.append(out)
         n = _frame_count(scene)
         secs = n / FPS
