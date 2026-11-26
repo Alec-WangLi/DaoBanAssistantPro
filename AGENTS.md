@@ -21,6 +21,7 @@
 | 桌面小组件 / RemoteViews | `docs/decisions/widget.md` |
 | 颜色 / 布局 / 弹窗 / 触觉 / 字号 / 视觉工装 | `docs/decisions/ui-rules.md` |
 | 性能测量 / 装测试包 / 动包名 | `docs/decisions/perf-testing.md` |
+| 发版 / 分支 / 签名 / 官网部署 | `docs/decisions/release.md` |
 
 ## 技能纪律（2026-11-06 用户拍板；此前多次「该用没用」，靠记忆汇报）
 
@@ -52,32 +53,18 @@
 - 打完版本本地 `git tag vX.Y.Z`。
 - **完整版本史不在本文件**：版本号链见 `docs/changelog/version-history.md`，每版改了什么见 `docs/changelog/v0.X.md`。判重时 `grep` 版本号即可，**不要通读**。
 
-## 分支与发布（2026-09-21 用户定，从 0.9.4 起照此办）
+## 分支与发布（2026-09-21 用户定；事故复盘见 `docs/decisions/release.md`）
 
-- **测试版（末位 `Z ≠ 0`）一律在 `beta` 分支上做、提交、发布**：`git checkout beta` → 提交 → `git push origin beta` → `git tag vX.Y.Z && git push origin vX.Y.Z` → `scripts/release.ps1 -SkipConfirm`。**tag 打在 beta 的提交上没问题**（预发布本来就不占 Releases 页的 Latest）。
-- **`main` 只在发正式版（`Z = 0`）时收一次合并**：`beta` → `main` 用 `--no-ff`（留一条合并记录），正式版的 tag 打在 **main** 上。
-- **`latest.json` 必须留在 `main` 上**：App 的**主**更新通道读的是 `raw.githubusercontent.com/<owner>/<repo>/main/latest.json`（`update_checker.dart`），而 `release.ps1` 第 7 步是把它提交到**当前分支**的。**这一步从 2026-09-21 起由脚本自动做**（第 7b 步：当前分支不是 main 时，切到 main、取这份清单、提交、推送、再切回来；失败只告警 + 打出手动命令，不让已成功的发布变成「失败」）。**7b 步曾经必然失败，2026-09-23 已修。** v0.9.4 与 v0.9.5 两次发布两次都挂在这一行、两次都是手动补的 main。根因既不是锁文件也不是网络：脚本顶部的 `$ErrorActionPreference = 'Stop'` 下，`git checkout … 2>&1 | Out-Null` 会把 git 写在 **stderr** 上的常规提示（「Switched to branch 'main'」）包成 `NativeCommandError` **抛出来** —— git 明明成功了也照抛，所以只要分支切成功就必挂。2026-09-23 实测（PowerShell 5.1）：带 `2>&1` 必抛、不带不抛、`2>$null` 也抛。修法是那一段临时放宽成 `Continue`（成败仍看本来就逐个查的 `$LASTEXITCODE`），`finally` 里还原。**`git` / `gh` 这类原生命令的 stderr 上写的都是常规输出，别用 `2>&1` 去接** —— 第 7 步（发布验证）也中过同一条，已一并改掉（那里还多一层：`ConvertFrom-Json` 更不该吃 stderr，gh 真失败时那串错误文本会被喂进 JSON 解析，报出的是「解析失败」而不是「gh 失败」）。当时看到的两个 0 字节残留锁 `.git/AUTO_MERGE.lock` / `.git/packed-refs.lock` 是脚本中途抛异常留下的**症状**，不是病因。
-
-  **发完仍要 curl 一次 main 上的 `latest.json` 核对版本号** —— 脚本打印的「发布成功」只覆盖 Release 上传那一步。万一这一步又失败（它只告警、不影响发布本身），手动补 —— ⚠️ **只改本次发布那个通道那一个节点（+ `updatedAt`），别整份覆盖**：
-  ```bash
-  git checkout main \
-    && git commit -am "chore(release): 更新发布清单至 vX.Y.Z（同步 beta）" \
-    && git push origin main && git checkout beta
-  ```
-  （手动补之前先确认没有 git.exe 在跑，并把残留的 `.git/AUTO_MERGE.lock` / `.git/packed-refs.lock` 删掉，否则会报「Another git process seems to be running」。）
-  不这么做的话，App 读到的主通道清单会停在旧版本，表现是「明明有更新的测试版，却说已是最新」。**v0.9.4 起这条清单是首选通道**（以前只是 GitHub API 的兜底），所以这一步比过去更要紧。
-
-  **⚠️ 那段（现标作第 8b 步）曾经是 `git checkout <分支> -- latest.json`** —— 把当前分支的整份清单搬到 main。**错的**，2026-10-13 已改成「切到 main 后读 main 自己那份、只写本次发布那个通道的字段」。根因：正式版在 main 发、测试版在 beta 发，beta 那份的 `stable` 永远停在旧值 —— 每在 beta 发一次测试版就把 main 打回一次（v0.11.0 被打回 0.10.0）。判据：**Release 标得对不对看 Releases 页，`latest.json` 对不对只能 curl 那一份，两者会各自独立地错。**
-
-- 历史注记：**0.9.1 / 0.9.2 / 0.9.3 三个测试版是直接在 main 上发的**（那时还没定这条规矩）；从这之后的测试版走 beta。
-
-### main 的 CI：已随 v0.13.0 收敛（2026-11-10 复核，旧结论作废）
-
-2026-11-06 记过「main 连续四次红、根因是比 beta 少 148 行 `ensureVisualFonts()`」。**这条已经不成立：** v0.13.0 把 beta 整体合进了 main，`app/tool/visual/visual_harness.dart` 在 main 与 beta 逐字节相同（`git diff --stat origin/main origin/beta -- app/tool/visual/visual_harness.dart` 空输出），main 的 CI 已是 success。**以后看到 main 的 CI 红，按真 bug 查，别再往这条旧结论上靠。**
-
-- **`ci.yml` 的 `EXPECTED_TESTS` 仍然是分支相关项，不是常量**：2026-11-10 时 beta **1284**、main **1257**（v0.13.0 之后 beta 加了用例），改一边要记得另一边。**基线只认 CI 日志里那行「用例数 N」**，推算值不能当基线（2026-11-06 按「1242 − 113」推成 1129，实测 1096）。
-- **`visual.yml`（每日视觉巡场）已于 2026-11-10 恢复**（`gh workflow enable visual.yml` + 手动 dispatch 一次，run `42652960542`）：**1284 条断言全过、写出 337 张图、artifact 89.9 MB**，不是当初那种 0 张图的假绿。判绿**不能只看结论** —— `continue-on-error: true` 是设计取舍，结论永远是 success。**数图不用下载 89 MB 的 artifact**：`gh run view <id> --log | grep -aoE 'build/visual/[^ ]+\.png' | sort -u | wc -l`，出图那一步逐张打了路径。
-
+- **测试版（`Z ≠ 0`）在 `beta` 上做、提交、发布**：commit → `git push origin beta` →
+  `git tag vX.Y.Z && git push origin vX.Y.Z` → `pwsh -File tools/_run-release.ps1`
+  （它已设好 `GH_CONFIG_DIR`；hand-roll 命令必撞 gh 未认证 —— `build-env.ps1` 把 `APPDATA` 重定向了）。
+- **`main` 只在发正式版（`Z = 0`）时收一次合并**（`--no-ff`），正式版 tag 打在 main 上。
+- **`latest.json` 的 `stable` 只认 main 上那份**：beta 那份停在旧值是正常的。脚本 8b 步会切到 main、
+  **只改本次发布那个通道的字段**再推回 —— **别整份覆盖**（会把 stable 打回旧版，v0.11.0 就是这么丢的）。
+- **发完必须 curl 一次 main 的 `latest.json`** 核对版本号：脚本打印的「发布成功」只覆盖 Release 上传那一步。
+- `ci.yml` 的 `EXPECTED_TESTS` 是**分支相关项**（beta 与 main 两个数），改一边记得另一边；
+  **基线只认 CI 日志里那行「用例数 N」**，推算值不算。
+- main 的 CI 已随 v0.13.0 收敛，红了按真 bug 查（旧的「比 beta 少 148 行」结论已作废）。
 
 ## 目录架构地图（app/lib）
 ```
@@ -115,7 +102,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 
 ## 关键决策与坑（索引）
 
-> 全部 ~90 条已按主题搬进 `docs/decisions/`（7 个文件，原文一字未改）。这里只留**动手前必看**的 12 条 —— 每一条都对应一次真实事故。
+> 已按主题搬进 `docs/decisions/`（原文一字未改）。这里只留**动手前必看**的那几条 —— 每一条都对应一次真实事故。
 
 1. **改 Drift 表后必须重生成**：`dart run build_runner build`（表定义与迁移都改了才算）。
 2. **`saveSchedule` 必须按 id 增量更新，不能删光重建** —— 删光重建会让每次保存都换掉全部班次 id，按天改班（覆盖表）立刻指飞，而且**不报错**。
@@ -157,26 +144,30 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 | 「检查更新转圈很久，最后说失败」 | 本文「检查更新」+「官网与下载镜像」（三条通道、两处域名要一致） |
 
 ## 构建 / 测试 / 发布
-- 本沙箱：每次 pwsh 先 `. C:\...\shiftassistant\tools\build-env.ps1`（设 JAVA_HOME/ANDROID_HOME/PUB_CACHE 等到 `toolchain/`）。注意 `tools/` 与 `toolchain/` 已 gitignore，**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装 Flutter/JDK/SDK。
-- 改表后：`dart run build_runner build`。⚠️ **别再带 `--delete-conflicting-outputs`** —— build_runner 2.15.1 起这个参数已被移除，传了会被静默忽略（日志里只有一句 `These options have been removed and were ignored`），删除冲突输出现在是默认行为。
-- 验收标准：`flutter analyze` 0 error / 0 warning（约 4 条 info 提示可容忍）；`flutter test` 全绿（条数见 `.github/workflows/ci.yml` 的 `EXPECTED_TESTS`，只增不减、必须同步改；别在文档里另抄一个数）。**Kotlin 侧的 API 等级由 `android-lint.yml` 守着**（Android Lint 的 `NewApi`；本地等价命令 `cd app/android && ./gradlew :app:lintDebug`，注意 `local.properties` 的 Windows 路径要转义成 `C\:\\...`，否则 lint 自己报 `PropertyEscape`）—— v0.13.10 那次 HarmonyOS 冷启动闪退，`flutter analyze` / `flutter test` 全绿也照样漏了。⚠️ **日历页的「今天」走 `core/clock.dart` 的 `appNow()`**（不要直接写 `DateTime.now()`）：用例用 `test/support/fixed_clock.dart` 的 `useFixedNow()` 把它钉在 2026-10-15，**期望值也一律用 `appNow()` 算** —— 否则用例会随真实月份漂移（2026-11-05 一次红了 10 条）。视觉工装另算：`flutter test tool/visual/`（数量随屏单增长，认尾行 `+N`，别写死）。
-- 构建：`flutter build apk --release --target-platform android-arm64` → `app/build/app/outputs/flutter-apk/app-release.apk`（**切 arm64 单 ABI**，APK 从 ~60MB 降到 ~21MB；仅 64 位设备）。
-- 分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，用 `aapt2 dump badging` 校验 versionName/versionCode 与包名。
-- 一键发布（GitHub Releases）：`scripts/release.ps1`。
-- **正式签名**：release 用独立 keystore `app/android/keystore/release.jks`，口令在 `app/android/key.properties`（storeFile/storePassword/keyAlias/keyPassword），二者均 gitignore 不入库、**务必本地备份**（丢了无法再发可覆盖升级的包）。`key.properties` 缺失时 `build.gradle.kts` 自动回退 debug 证书便于本机调试。
-  ⚠️ **那条「自动回退」的代价是「静默」—— 2026-10-13 真踩过一次。** v0.11.16 的 APK 是在一个 **git worktree** 里构建的，而 worktree 是一次干净 checkout、**既没有 key.properties 也没有 release.jks**（两者都 gitignore），于是它被 **debug 证书**签了名。包照常发了出去，版本号 / 资产 / `latest.json` / 清单**全对**，用户一装就报 `Couldn't install (-7)` — **Conflicting app signatures**，只能卸载重装。**一句话：要发的 APK 只能在主 checkout 里构建**（`dist/`、`tools/`、`toolchain/` 也都只在那儿）。
-  现在 `release.ps1` 的一致性校验里多一条**签名校验**：① `app/android/key.properties` 必须存在；② 用 `apksigner verify --print-certs` 取 APK 的证书 SHA-256，与 `keytool -list -v -keystore release.jks` 那一枚**逐位比**（不拿 DN 比 —— DN 是人填的、可以重名；实测 release 那枚是 `265d09b2…ce893`）。⚠️ **2026-11-05 起默认硬拦（v0.12.10）**：工具不全 / 吐不出摘要 → 默认 `throw`，要跳过必须显式 `-SkipSignCheck`；摘要对不上**任何情况都不放行**（无口子）。这一节还搬出了 `if (-not $SkipVerify)` —— 以前加 `-SkipVerify` 会把签名校验整段静默关掉。**别再把这条当「保险」**：v0.12.9 那次 418B 占位稿就是被「只是保险、不必需」的旧说法放过去的。**两条路径都验过**：拿 worktree 里那份 debug 签名的 APK 当反例，脚本退出码 1 并把两枚摘要一起打出来。
-- **检查更新（公开仓库）**：`UpdateChecker` 无鉴权，三条通道依次回退：**官网清单**（`siteBase/latest.json`）→ 仓库根目录 `latest.json` → GitHub API `/releases`。官网排第一是因为它才是国内用户的快通道，以前 GitHub 那条先试，国内往往要等满 8 秒超时才回退。**API 不当主通道**：未认证限 60 次/小时/IP，共享出口很容易耗尽（实测常年 403），拿它优先等于大部分时间都在走回退。两条**在不同域名**上，只被墙了一个的网络也兜得住。按语义版本自行计算「最新正式版 + 最新测试版」双通道展示；`downloadApk` 直接经 `browser_download_url` 下载安装。连不上时的提示直说「国内需要开代理或加速器」（`showUpdateFailedDialog`，走弹窗不走 2 秒的 snack）。
-- **官网与下载镜像（2026-11-10 用户选 A 档）**：`site/` 是一页静态官网，和 APK 放在同一个域上 —— `https://daoban-shift.pages.dev`（Cloudflare Pages，项目名 `daoban-shift`）。**APK 不进仓库**（`dist/` 本来就 gitignore），部署时由 `scripts/build_site.py` 从 `dist/` 取一份放进 `_site/download/`。
-  - **部署走本机，不走 CI**：`scripts/release.ps1` 第 9 步跑 `build_site.py --base <siteBase> --channel <stable|prerelease>` + `npx wrangler pages deploy _site`。凭据是 `npx wrangler login` 一次之后的 OAuth token（存在 `%APPDATA%\xdg.config\.wrangler\config\default.toml`），**不需要 GitHub secrets**。换机器发版要重新 login。
-  - ⚠️ **`build-env.ps1` 把 `APPDATA` 重定向到 `toolchain\`，而 wrangler 的登录态在真实的 `%APPDATA%\xdg.config\.wrangler`**。不指回去就报 "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN" 直接失败 —— 2026-11-10 发 v0.13.1 时踩到：发布本身成功，站点没更新。`release.ps1` 第 9 步现在临时把 `APPDATA` 指回真实目录，与 gh 的 `GH_CONFIG_DIR` 是同一类修法。
-  - **两个通道的 APK 都要镜像**：清单里点到名的版本，`dist/` 有就都放进 `_site/download/`（正式版 + 测试版，约 46MB）。只带正式版是不够的 —— 发测试版时 `prerelease` 那条会因为没有文件而退回 GitHub，国内用户又得开代理，正是这套东西要解决的问题。`--channel` 决定哪一端以工作区刚写好的清单为准，另一端取 `origin/main` 的权威值。落盘用清单里的 `asset` 名（ASCII），不是 `dist/` 里的中文文件名。
-  - **域名只有一处出处**：`UpdateChecker.siteBase`。`release.ps1` 用正则从那个文件读，`build_site.py --base` 负责把清单里的相对地址拼成绝对地址。改域名 = 改这一个常量 + 在 Pages 里绑好新域名。
-  - **页面是纯静态 HTML/CSS**，不引任何框架、外部字体或 CDN（国内打开要快，也不给别人当依赖）。深色 / 浅色两套跟随系统，**只换 `:root` 里的语义变量，版式、字号、间距一个不动**；新加颜色必须走变量，写死 `rgba()` 就会在另一套主题里露馅。动效只有一个 `IntersectionObserver` 做一次性入场 + 首屏三台机器的轻微视差，两者都尊重 `prefers-reduced-motion`。改版时先 `python scripts/build_site.py` 再 `.claude/launch.json` 里的 `site` 预览，逐段截图核对。**`build_site.py` 的 `PNGS` / `SHOTS` 列表必须与 `index.html` 同步** —— 少一张图就是线上裂图，多一张就是白传。
-  - ⚠️ **Cloudflare 2026 年已把新建 Pages 项目并进 Workers**：`npx wrangler pages project create` 现在建出来的是 **Worker**（域名 `*.workers.dev`），`wrangler pages deploy` 会报 "project does not exist"。本项目那个经典 Pages 项目是用 API 建的（`POST /accounts/<id>/pages/projects`）。**别用 `pages project create` 重建**，会又得到一个 Worker。
-  - ⚠️ **Pages 单文件上限 25 MiB，当前 APK 22.05 MiB** —— 再涨约 3 MiB 就超。`build_site.py` 里有 `25 * 1024 * 1024` 的硬闸，超了直接退出并提示改放 Cloudflare R2（免费 10GB 存储 + 零出口费）。
-  - 免备案的代价是走国际线路：比 GitHub 快得多，但不是国内 CDN 那种秒开。要秒开只能备案 + 国内 CDN（B 档，约 ¥200/年，审批 2~3 周）。
-- `dist/`、`*.apk`、`*.aab` 均 gitignore，不进仓库。
+
+- 本沙箱：pwsh 先 `. tools\build-env.ps1`（JAVA_HOME / ANDROID_HOME / PUB_CACHE 等指到 `toolchain/`）；
+  bash 里跑测试用 `bash tools/flutter-test.sh`（它另把 `APPDATA` 指进库内，否则遥测日志写真实目录会被拒）。
+  `tools/` 与 `toolchain/` 已 gitignore、**不在 GitHub 仓库内**；他人克隆后按 `BUILD.md` 自装。
+- 改表后 `dart run build_runner build`。⚠️ **别再带 `--delete-conflicting-outputs`**（2.15.1 起已移除，传了会被静默忽略）。
+- 验收：`flutter analyze` 0 error / 0 warning；`flutter test` 全绿（条数认 `ci.yml` 的 `EXPECTED_TESTS`，只增不减）；
+  动 UI 另跑 `flutter test tool/visual/`（条数认尾行 `+N`，别写死）。**Kotlin 侧的 API 等级由 `android-lint.yml`
+  守着**（`NewApi`；本地等价 `cd app/android && ./gradlew :app:lintDebug`）—— v0.13.10 那次 HarmonyOS 冷启动闪退，
+  `analyze` / `test` 全绿也照样漏了。
+- 构建：`flutter build apk --release --target-platform android-arm64` →
+  `app/build/app/outputs/flutter-apk/app-release.apk`（arm64 单 ABI，约 23MB，仅 64 位设备）。
+  分发：复制到 `dist/倒班助手Pro-vX.Y.Z.apk`，`aapt2 dump badging` 核对 versionName / versionCode / 包名。
+- **正式签名**：`app/android/keystore/release.jks` + `app/android/key.properties`（都 gitignore，**务必本地备份**）。
+  缺了会**静默**回退 debug 证书，用户一装就报 `Conflicting app signatures` —— **要发的 APK 只能在主 checkout 构建**。
+  `release.ps1` 有硬闸：证书 SHA-256 必须等于 `265d09b2…ce893`，对不上任何情况都不放行；工具不全默认 `throw`，
+  要跳过必须显式 `-SkipSignCheck`。
+- **检查更新**：三条通道依次回退 —— 官网清单（`siteBase/latest.json`）→ 仓库根 `latest.json` → GitHub API。
+  官网排第一是因为它是国内快通道；API 未认证限流严重（60 次/小时/IP），不当主通道。**域名只有一处出处**：
+  `UpdateChecker.siteBase`。
+- **官网**：`site/` 静态页 → `scripts/build_site.py` 从 `dist/` 取 APK 组装 `_site/` → `release.ps1` 第 9 步
+  `npx wrangler pages deploy` 发到 `daoban-shift.pages.dev`。**APK 不进仓库**。改版时先 build 再
+  `.claude/launch.json` 的 `site` 预览、逐段截图核对。wrangler 登录态 / Pages 25 MiB 上限 /
+  Cloudflare 已把新 Pages 并入 Workers 等坑见 `docs/decisions/release.md`。
+- `dist/`、`*.apk`、`*.aab` 均 gitignore。
 
 ## 工作流
 - **辅助信息随版本走（测试版也一样，不要等用户提醒）**：每次升版本或改 UI，同一次提交里同步 `site/index.html` 的更新日志、README 的版本与功能文案、`PRODUCT_SPEC.md` 抬头与能力、帮助页；`BUILD.md` / 规范文档不写死用例数（统一指向 `ci.yml` 的 `EXPECTED_TESTS`）。改 UI 后重跑 promo 图（至少正式版必须）。`app/test/site_copy_test.dart` 检查 site / README / SPEC 是否含当前版本号，漏了 CI 直接红。
@@ -199,11 +190,10 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 > 全量：`docs/changelog/v0.13.md` 与 `v0.12.md`（另有 v0.2~v0.11 七个文件、`releases.md` 正式版归纳、`version-history.md` 版本号链）。
 
 ## 跨端规划备忘（未来，勿与当前 Android 版混谈）
-- 目标：Windows / iOS / 鸿蒙 多端。Flutter 本身跨端，但**闹钟/通知是 Android 专属**，跨端需按平台重做：
-  - **iOS**：flutter_local_notifications 可用；无前台服务/全屏 intent，锁屏响铃体验弱（Critical Alert 能力受限）；无精确闹钟。
-  - **Windows**：flutter_local_notifications 通知支持有限，无闹钟前台服务；`MainActivity` 的 MethodChannel（openAppSettings/openUrl/installApk/playRingtone/startAlarm 等）需按 Windows 实现。
-  - **鸿蒙**：HarmonyOS NEXT（纯鸿蒙）需用 OpenHarmony 的 Flutter 分支（flutter_ohos）重建；`flutter_local_notifications` / `drift`(sqlite3) / `path_provider` / MethodChannel / FileProvider 都要找 OHOS 对应物或重写。
-- 本轮（v0.4.1）改动全部是纯 Dart 或 Android 清单级，**不给跨端留坑**。启动跨端时单独 `/grill-me` 一轮评估。
+- 2026-09-15 用户砍掉 iOS / 鸿蒙（成本与精力），**优先 Windows 版**；两个平台的成本门槛已澄清过，别再重开。
+- 闹钟 / 通知是 Android 专属，换平台要重做：Windows 没有闹钟前台服务，`MainActivity` 的 MethodChannel
+  （openAppSettings / openUrl / installApk / playRingtone / startAlarm 等）要按平台实现。
+- 本仓的改动一直是纯 Dart 或 Android 清单级，**不给跨端留坑**。
 
 ## 相关文档
 - `README.md`（对外介绍）、`BUILD.md`（构建指南）、`PRODUCT_SPEC.md`（产品规格）、`LICENSE`（MIT）。
