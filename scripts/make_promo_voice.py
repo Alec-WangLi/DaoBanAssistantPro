@@ -1,6 +1,7 @@
 # 给功能演示视频配 AI 口播（Microsoft Edge 的在线 TTS，中文音色，不要 key）。
 #
-#   python scripts/make_promo_voice.py                 # 默认云希，出 3 条音色
+#   python scripts/make_promo_voice.py                 # 默认云希（v0.14.0 定的）
+#   python scripts/make_promo_voice.py --all           # 三个音色都出，够对比
 #   python scripts/make_promo_voice.py --voice zh-CN-YunjianNeural
 #   python scripts/make_promo_voice.py --list          # 看有哪些中文音色
 #
@@ -155,7 +156,11 @@ def main():
 
     _, total = timeline()
 
-    picks = VOICES
+    # 默认只出**定稿那一个音色**（v0.14.0 用户选了云希）。早先默认出全部三条，
+    # 结果每次重跑都顺手把已经删掉的两条又生成回来。要看全部加 --all。
+    picks = {'yunxi': VOICES['yunxi']}
+    if '--all' in sys.argv:
+        picks = VOICES
     if '--voice' in sys.argv:
         key = sys.argv[sys.argv.index('--voice') + 1]
         if key not in VOICES:
