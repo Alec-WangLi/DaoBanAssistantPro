@@ -1,7 +1,7 @@
 version: 2
 
 # 依赖更新机器人。
-# 只开两个生态：Dart 包（在 app/）与 GitHub Actions。
+# 开三个生态：Dart 包（在 app/）、Gradle/Android（在 app/android/）与 GitHub Actions。
 # 频率按月 —— 这个项目对依赖版本敏感（闹钟/通知时序踩过坑），
 # 每周一次的 PR 洪流只会让人无脑点合并，反而更危险。
 updates:
@@ -15,6 +15,19 @@ updates:
     # minor / patch 合成一个 PR，减少合并次数；major 单独开，必须逐个看。
     groups:
       pub-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "gradle"
+    directory: "/app/android"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    # 与 pub 同一纪律：minor / patch 合并，major 单独开 PR 逐个看。
+    groups:
+      gradle-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
