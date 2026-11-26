@@ -29,6 +29,7 @@ import 'package:shiftassistantpro/domain/schedule_chain.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:shiftassistantpro/core/clock.dart';
 
 /// 记录一次 saveSchedule 调用，便于断言「落库的到底是什么形状」。
 class _Saved {
@@ -308,7 +309,7 @@ List<String> _cellDates(WidgetTester tester) => _stripTexts(tester)
 /// 用真引擎算出的「未来 14 天简称」，作为预览条断言的参照（而不是在测试里
 /// 重算一遍 mod 周期）。
 List<String> _expectedLabels(ShiftSchedule d) {
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
   return [
     for (var i = 0; i < 14; i++)
       d.shiftOn(today.add(Duration(days: i)))?.shortLabel ?? '—',
@@ -779,7 +780,7 @@ void main() {
 
     expect(find.text(L10n.previewNext14), findsOneWidget);
 
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     final expectedDates = List.generate(14, (i) {
       final d = today.add(Duration(days: i));
       return '${d.month}/${d.day}';
@@ -1336,7 +1337,7 @@ void main() {
   });
 
   testWidgets('预览不叠按天覆盖，并在有覆盖时给出提示', (tester) async {
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     final domain = _domain(
       classes: const [
         ShiftClass(name: '甲班', abbr: '甲', color: 0xFF4C8DFF),

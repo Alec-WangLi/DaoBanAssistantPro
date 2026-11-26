@@ -49,6 +49,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.14.2\n'
+    '· 这一版没有你能看到的变化 —— 全是内部的护栏：把三处「文档说机器会拦、其实没拦」的检查补成真的（真实时钟、实心主色的调用点、省电档的像素），并把顶部栏胶囊和日历那颗圆形钮重复的一份玻璃配方收进同一处\n'
+    '· 重复规则、时间与提醒这两个选择器进了看图工装 —— 它们此前不在出图清单里，等于没人真正看过\n'
+    '· 43 处测试与工装里的「当前时间」改走可注入的入口，这类用例以后不会再随真实日期漂\n'
+    '\n'
 'v0.14.1\n'
     '· 这一版只做「统一」，没有新功能。修掉一处真问题：「重复待办 → 每月」选中的那一天，白字压在实心主色上 —— 默认那颗蓝看得清，换成青或橙之后只剩 2.6:1，糊成一片。现在按设计规范压深到刚好过线\n'
     '· 「运行日志」与「数据备份」两屏补进了看图工装：它们上线时漏登记，等于一直没人真正看过\n'
@@ -98,16 +103,13 @@ const String _changelogZh =
     '· 修：没有自定义闹钟时，那一块终于真的贴到底部（上一版它和上面的班次列表平分剩余空间，提示停在屏幕中间）\n'
     '· 编辑排班里的「夜班」开关下面加了一行说明：它只算进统计页的「夜班天数」，不影响轮转与闹钟；与「联动闹钟」之间也拉开了\n'
     '\n'
-'v0.13.20\n'
-    '· 闹钟页顶部多了一行「下一次响铃」：几月几日几点、哪条班次闹钟，还有几小时几分\n'
-    '· 没有自定义闹钟时那一块不再占半个屏幕：提示贴到底部，未来 30 天的班次闹钟回到整块空间\n'
-    '· 统计页年月份下面那颗小箭头去掉了\n'
-    '· 「调整班次」弹层加了备注：换班、调休写一句，日历信息卡里看得见（本次升级会新建一张表）\n'
-    '· 「查看日志」从弹窗改成整页：按天翻（日志现在按天归档、保留 7 天）、能搜索、能一键导出诊断包（日志 + 设备权限 + 已排闹钟清单 + 未来 7 天计划）\n'
-    '· 报「偶尔没响」时把诊断包发来：里面有 App 认为该响的清单，一眼分得清是没排、还是被系统丢了\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.14.2\n'
+    '· Nothing you can see this time - it is all internal guard rails: three checks that the standards claimed were automated but were not (the real clock, the solid-accent call sites, the power-save tier pixels) are now real, and one duplicated glass recipe in the top-bar pill and the calendar round button is folded into a single place\n'
+    '· The recurring-rule and time/reminder pickers are now in the screenshot harness - they were missing from it, so nobody had actually looked at them\n'
+    '· 43 places in the tests and the harness now read the current time through the injectable clock, so those cases will not drift with the real date any more\n'
+    '\n'
 'v0.14.1\n'
     '· This one is about consistency, not features. One real fix: in Recurring to-do > Monthly, the selected day put white text on the solid accent - fine on the default blue, but teal or orange left it at 2.6:1 and it smeared. It now darkens just enough to pass\n'
     '· The Log and Backup screens are now in the screenshot harness: they shipped without being registered, so nobody had actually looked at them\n'
@@ -156,14 +158,6 @@ const String _changelogEn =
     '· Fix: "Next alarm" on the alarm page did not move on when you switched a day off - it ignored the per-day switches. It now skips to the next one\n'
     '· Fix: with no custom alarms, that section finally sits at the bottom (the previous build split the leftover space with the shift list, leaving the hint mid-screen)\n'
     '· The "Night shift" switch in the schedule editor now explains itself: it only counts towards night days in Statistics, and no longer crowds the linked-alarm row\n'
-    '\n'
-'v0.13.20\n'
-    '· The alarm page gains a "Next alarm" line: the date and time, which shift alarm it is, and how long to go\n'
-    '· With no custom alarms, that section no longer takes half the screen - the hint sits at the bottom and the 30-day shift alarms get the whole area\n'
-    '· The little arrow under the year / month title on Statistics is gone\n'
-    '· "Adjust shift" now takes a note: a swap or a day off, one line, shown on the calendar info card (this update adds one table)\n'
-    '· "View log" is now a full page: per-day logs (rotated daily, 7 days kept), search, and a one-tap diagnostics bundle (logs + device permissions + the scheduled alarm list + the next 7 days of plan)\n'
-    '· Reporting "it did not ring": send the bundle - it lists what the app thinks should ring, so it is obvious whether it was never scheduled or dropped by the system\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

@@ -26,6 +26,7 @@ import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/stats/stats_screen.dart';
 
 import '../visual/visual_harness.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 /// 一屏宣传图。`beforeCapture` 用来在装配完、抓图前做交互（切 tab 等）。
 typedef _Shot = ({
@@ -72,7 +73,7 @@ Future<void> _scrollDown(WidgetTester tester, double dy) async {
 Future<AppDatabase> promoDatabase() async {
   final db = await makeVisualDatabase();
   final repo = AppRepository(db);
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
 
   // 换成四班两倒，且让「今天」落在白班：当天信息卡才会显示「闹钟 07:00」，
   // 否则默认那套四班三倒的今天在中班（无联动闹钟），卡片上写着「未开启」。

@@ -20,6 +20,7 @@ import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import 'support/migration_fixtures.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 /// v10 形态的 `schedule_events`（DDL 与 v10 生成代码逐列一致）。
 /// drift 默认把 `DateTime` 存成 **unix 秒**，所以时间列都是整数。
@@ -132,7 +133,7 @@ void main() {
             weekdays: const Value(1 << 2),
             timeMinute: const Value(9 * 60),
             advanceRemindMinutes: const Value(0),
-            createdAt: DateTime.now(),
+            createdAt: appNow(),
           ),
         );
     final series = await db.select(db.recurringSeriesRows).getSingle();

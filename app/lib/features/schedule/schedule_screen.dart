@@ -154,7 +154,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
                             L10n.recurring,
                             // 压在实心主色胶囊上的白字，「前景色已定」，不归明度两档。
                             style: AppTokens.labelStrong.copyWith(
-                              color: Colors.white.withValues(alpha: 0.98),
+                              color: AppTokens.glassChipInk,
                             ),
                           ),
                         ],

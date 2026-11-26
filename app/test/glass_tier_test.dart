@@ -521,6 +521,61 @@ void main() {
         reason: '开了液态玻璃却一个像素都没变 —— 这一档没有真的生效');
   });
 
+  testWidgets('省电档是**纯降级**：中性纯色底上 blurOn=false 与 true 逐像素相同',
+      (tester) async {
+    // §6 待补的第 6 条。D4 写着省电档「结构、布局、交互一字不变，只允许模糊与
+    // 折射不画」，但此前只有结构断言（不挂 `BackdropFilter`），**没人验证过
+    // 「除了那层滤镜，画面真的没被动手脚」**。
+    //
+    // 两个前提，缺一条这条就变成恒红：
+    //   · 垫**纯色**底：模糊对纯色是恒等变换；
+    //   · 纯色必须是**中性灰**：`GlassBlur` 的滤镜是「模糊 + 饱和度 ×1.2」的复合，
+    //     中性色的饱和度是 0，乘多少还是 0，于是饱和度那一半也是恒等的。
+    // 两条都满足之后，「两档输出逐字节相同」才真的等价于「省电档只少画了滤镜」。
+    // 任何「省电档顺手少画一层边 / 多补一层实色」的改动都会在这里现形。
+    Future<List<int>> shot({required bool lowEnd}) async {
+      lowEndDevice = lowEnd;
+      recomputeGlassTiers();
+      final GlobalKey key = GlobalKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RepaintBoundary(
+            key: key,
+            child: const ColoredBox(
+              color: Color(0xFF808080),
+              child: Center(
+                child: SizedBox(
+                  width: 240,
+                  height: 120,
+                  child: GlassBlur(sigma: 8, child: SizedBox.expand()),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return rasterize(tester, key);
+    }
+
+    addTearDown(() {
+      lowEndDevice = false;
+      recomputeGlassTiers();
+    });
+
+    final List<int> off = await shot(lowEnd: true);
+    final List<int> on = await shot(lowEnd: false);
+
+    expect(off.length, on.length);
+    int differing = 0;
+    for (int i = 0; i < off.length; i++) {
+      if (off[i] != on[i]) differing++;
+    }
+    expect(differing, 0,
+        reason: '省电档与标准档在中性纯色底上差了 $differing 个通道值 —— '
+            '省电档多画或少画了东西，不只是「模糊没画」');
+  });
+
   /// 主壳光栅化图里某个像素的红通道（[shotShell] 是 420×900、DPR 1.0）。
   ///
   /// 只取红通道：参与比较的几个值都是中性灰（白 / 黑 / 底色），三通道一起看是噪音。

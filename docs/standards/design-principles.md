@@ -70,12 +70,13 @@
   只允许"模糊与折射不画"这一个差异。
 - **落到哪**：`AppTokens.glassTint` / `glassSurface` / `glassBorder`（**定义在 `design_tokens.dart`，不在 `glass.dart`**）
   + `core/glass/glass.dart` 的 `GlassPanel`/`GlassTile`。
-- **谁守门**：`glass_tier_test`——**半机器**：省电档只做结构断言（`GlassBlur` 不挂 `BackdropFilter`），
-  像素断言只有反方向一条（液态关/开必须不同，`differing>0`）。**没有"两档逐像素相同"的断言**，
-  别以为它守着那条 —— 那是待补的第 6 条（见 `README.md` §6）。
-- **已知违规（待收）**：`core/widgets/glass_pill.dart:71-96` 与 `calendar_screen.dart:1117-1142` 的 `_circleIcon`
-  逐字复制了**第四套配方**（`0.95/0.55` + border `0.95/0.28` + black `0.35/0.10`），不是 `glassTint`(0.80/0.45)；
-  另有 6 处近似变体。收法：`_circleIcon` 改复用 `glass_pill`，配方回令牌（**配方只许一份**）。
+- **谁守门**：`glass_tier_test`——机器拦：省电档的结构断言（`GlassBlur` 不挂 `BackdropFilter`）、
+  反方向的像素断言（液态关/开必须不同），以及**中性纯色底上两档逐像素相同**（模糊与饱和度
+  对中性色都是恒等变换，于是「除了那层滤镜，画面没被动手脚」可以被逐字节验证）。
+  盲区：只验 `GlassBlur` 那一层 —— `GlassPanel` 自己的配方差异仍归 D1 的令牌管。
+- **已收（v0.14.2）**：`glass_pill.dart` 与 `calendar_screen.dart` 的 `_circleIcon` 曾逐字复制
+  **第四套配方**（`0.95/0.55` + border `0.95/0.28` + black `0.35/0.10`）；现两份都改引
+  `AppTokens.glassChipTint/Border/Shadow`，**配方只许一份**。改前改后 440 张出图逐像素相同。
 - **例外与豁免**：底栏是唯一 `refract:true` 处（见 D10）；省电档不许用"多画一层实色"去补观感。
 - **反模式**：动 `glassTint`/`glassSurface` 的 alpha 去"救"饱和度（实测否掉：底近中性救不回来，
   还破坏省电档观感）。

@@ -167,7 +167,7 @@ flutter build apk --release
 
 ## 📦 下载
 
-最新 **正式版 v0.14.0**、**测试版 v0.14.1**，都见 [GitHub Releases](https://github.com/Alec-WangLi/DaoBanAssistantPro/releases)。
+最新 **正式版 v0.14.0**、**测试版 v0.14.2**，都见 [GitHub Releases](https://github.com/Alec-WangLi/DaoBanAssistantPro/releases)。
 
 **国内推荐走官网**：[daoban-shift.pages.dev](https://daoban-shift.pages.dev) —— APK 与页面同域，直连就能下，不用翻墙；页面上也有更新日志和全部历史版本。
 

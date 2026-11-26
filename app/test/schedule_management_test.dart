@@ -21,6 +21,7 @@ import 'package:shiftassistantpro/domain/recurring_todo.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_management_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:shiftassistantpro/core/clock.dart';
 
 /// 按月方案那套的基准日：**故意选一个与真实排班无关的日子** —— 它只证明
 /// 「这一行没有把它印出来」。
@@ -304,7 +305,7 @@ void main() {
       // 加一套「每天都是夜班」的方案，并建一条「每次夜班带工牌」的待办。
       await repo.saveSchedule(
         name: '每天夜班',
-        anchorDate: dateOnly(DateTime.now()),
+        anchorDate: dateOnly(appNow()),
         classes: const [ShiftClass(name: '夜班', abbr: '夜')],
         cycle: const [0],
         makeCurrent: false,
@@ -315,11 +316,11 @@ void main() {
       final sid = await repo.addRecurringTodo(
         title: '带工牌',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(appNow()),
         shiftNames: const ['夜班'],
       );
       // 当前是「四班两倒」（每天白班）→ 夜班规则今天没有发生日。
-      await repo.advanceRecurringTodos(today: dateOnly(DateTime.now()));
+      await repo.advanceRecurringTodos(today: dateOnly(appNow()));
       expect((await repo.listEvents()).where((e) => e.seriesId == sid),
           isEmpty);
       await tester.pumpAndSettle();

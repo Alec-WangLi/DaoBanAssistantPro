@@ -32,39 +32,61 @@ import 'support/source_scan.dart';
 /// 唯一允许读系统时钟的位置。
 const String _allowed = 'lib/core/clock.dart';
 
+/// 扫这三个目录（v0.14.2 起 `test/` 与 `tool/` 也纳入 —— 此前只扫 `lib/`，
+/// 于是「用例拿真实日期算期望值」这一半从来没被守过，而那正是 2026-11-05 那次
+/// 十条一起红的另一半原因）。
+const List<String> _roots = <String>['lib', 'test', 'tool'];
+
 /// 在**剥壳之后**的源码里找这个串。
 const String _needle = 'DateTime.now';
 
-/// 走一遍 `lib/`，返回剥壳后仍含 [_needle] 的文件（已排序，失败信息确定）。
+/// 把默认时钟换回来 —— **正确写法**，不是违规。
 ///
-/// 同时把「扫到几个文件」带出来：扫错工作目录时 `lib/` 不存在会直接抛，
+/// `tearDown(() => appNow = DateTime.now)` 是 tear-off（没有括号），
+/// 作用就是还原接缝；它出现在每个钉过时钟的用例里。先整条抹掉再找 needle，
+/// 否则这条守门会逼着所有人把正确写法改成错的。
+final RegExp _restorePattern =
+    RegExp(r'appNow\s*=\s*DateTime\s*\.\s*now');
+
+/// 走一遍 [_roots]，返回剥壳后仍含 [_needle] 的文件（已排序，失败信息确定）。
+///
+/// 同时把「扫到几个文件」带出来：扫错工作目录时目录不存在会直接抛，
 /// 但扫到一个空目录则会**静默恒绿** —— 用文件数兜住。
 ({List<String> offenders, int scanned}) _scan() {
-  final dir = Directory('lib');
-  if (!dir.existsSync()) {
-    fail('找不到 lib/ —— 用例必须在 app/ 下跑（flutter test 的 cwd 就是 app/）');
-  }
   final offenders = <String>[];
   var scanned = 0;
-  for (final entity in dir.listSync(recursive: true)) {
-    if (entity is! File || !entity.path.endsWith('.dart')) continue;
-    scanned++;
-    final path = entity.path.replaceAll(r'\', '/');
-    if (path == _allowed) continue;
-    if (blankNonCode(entity.readAsStringSync()).contains(_needle)) {
-      offenders.add(path);
+  var roots = 0;
+  for (final root in _roots) {
+    final dir = Directory(root);
+    if (!dir.existsSync()) {
+      fail('找不到 $root/ —— 用例必须在 app/ 下跑（flutter test 的 cwd 就是 app/）');
     }
+    roots++;
+    for (final entity in dir.listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      scanned++;
+      final path = entity.path.replaceAll(r'\', '/');
+      if (path == _allowed) continue;
+      final code =
+          blankNonCode(entity.readAsStringSync()).replaceAll(_restorePattern, '');
+      if (code.contains(_needle)) {
+        offenders.add(path);
+      }
+    }
+  }
+  if (roots != _roots.length) {
+    fail('只找到 $roots/${_roots.length} 个扫描根');
   }
   offenders.sort();
   return (offenders: offenders, scanned: scanned);
 }
 
 void main() {
-  test('lib/ 里除 core/clock.dart 之外没人直接读系统时钟', () {
+  test('lib/ · test/ · tool/ 里除 core/clock.dart 之外没人直接读系统时钟', () {
     final result = _scan();
     expect(result.offenders, isEmpty,
         reason: '请改用 core/clock.dart 的 appNow()（生产行为不变，用例才钉得住）');
-    // 扫到的文件数：lib/ 目前一百多个 dart 文件；少于 50 说明扫错了地方。
+    // 扫到的文件数：三个目录合起来接近两百个 dart 文件；少于 50 说明扫错了地方。
     expect(result.scanned, greaterThan(50),
         reason: '只扫到 ${result.scanned} 个文件，多半是扫错了目录');
   });

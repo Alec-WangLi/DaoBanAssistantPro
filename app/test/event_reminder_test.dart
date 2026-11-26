@@ -11,6 +11,7 @@ import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_service.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 /// 造一条待办。[date] 按库里的存法传 `dateOnly(...)`（UTC 纯日期）。
 ScheduleEvent _event({
@@ -20,7 +21,7 @@ ScheduleEvent _event({
   bool completed = false,
   bool alarm = false,
 }) {
-  final d = date ?? DateTime.now();
+  final d = date ?? appNow();
   return ScheduleEvent(
     id: 1,
     title: '交体检报告',
@@ -29,7 +30,7 @@ ScheduleEvent _event({
     advanceRemindMinutes: advance,
     isCompleted: completed,
     alarmEnabled: alarm,
-    createdAt: DateTime.now(),
+    createdAt: appNow(),
   );
 }
 

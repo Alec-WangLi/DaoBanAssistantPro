@@ -1151,7 +1151,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     L10n.today,
                     // 压在实心主色胶囊上的白字，「前景色已定」，不归明度两档。
                     style: AppTokens.labelStrong.copyWith(
-                      color: Colors.white.withValues(alpha: 0.98),
+                      color: AppTokens.glassChipInk,
                     ),
                   ),
                 ],
@@ -1186,22 +1186,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: isDark
-                    ? [
-                        Colors.white.withValues(alpha: 0.22),
-                        Colors.white.withValues(alpha: 0.06),
-                      ]
-                    : [
-                        Colors.white.withValues(alpha: 0.95),
-                        Colors.white.withValues(alpha: 0.55),
-                      ],
+                colors: AppTokens.glassChipTint(isDark),
               ),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: isDark ? 0.28 : 0.95),
-              ),
+              border: Border.all(color: AppTokens.glassChipBorder(isDark)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.10),
+                  color: AppTokens.glassChipShadow(isDark),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -2542,6 +2532,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                         width: 4,
                         height: 18,
                         decoration: BoxDecoration(
+                          // design-tokens-ignore: 4×18 装饰竖条，上面不垫任何文字
                           color: accent,
                           borderRadius:
                               BorderRadius.circular(AppTokens.radiusS),
@@ -3058,6 +3049,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 child: DecoratedBox(
                   key: const Key('info-card-accent-bar'),
                   decoration: BoxDecoration(
+                    // design-tokens-ignore: 6dp 宽的装饰色条，上面不垫任何文字
                     color: accent,
                     // 6dp 宽的细长条就是胶囊：圆角取高度的一半。
                     borderRadius: AppTokens.pillOf(6),

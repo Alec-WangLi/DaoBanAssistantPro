@@ -24,6 +24,7 @@ import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:shiftassistantpro/core/clock.dart';
 
 /// 有界推进若干帧。
 ///
@@ -126,7 +127,7 @@ void main() {
     final db = await _pumpTodos(tester);
     await AppRepository(db).addEvent(
       title: '交体检报告',
-      date: dateOnly(DateTime.now()),
+      date: dateOnly(appNow()),
       timeMinute: 14 * 60,
       advanceRemindMinutes: 15,
     );
@@ -180,7 +181,7 @@ void main() {
 
     await AppRepository(db).addEvent(
       title: '交体检报告',
-      date: dateOnly(DateTime.now()),
+      date: dateOnly(appNow()),
       timeMinute: 14 * 60,
     );
     await _settle(tester);
@@ -206,7 +207,7 @@ void main() {
     final db = await _pumpTodos(tester);
     await AppRepository(db).addEvent(
       title: '交体检报告',
-      date: dateOnly(DateTime.now()),
+      date: dateOnly(appNow()),
       timeMinute: 14 * 60,
     );
     await _settle(tester);
@@ -252,7 +253,7 @@ void main() {
     final db = await _pumpTodos(tester, height: 560);
     await AppRepository(db).addEvent(
       title: '旧标题',
-      date: dateOnly(DateTime.now()),
+      date: dateOnly(appNow()),
       timeMinute: 14 * 60,
     );
     await _settle(tester);
@@ -358,7 +359,7 @@ void main() {
     final db = await _pumpTodos(tester);
     await AppRepository(db).addEvent(
       title: '交体检报告',
-      date: dateOnly(DateTime.now()),
+      date: dateOnly(appNow()),
       timeMinute: 14 * 60,
     );
     await _settle(tester);

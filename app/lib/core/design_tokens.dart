@@ -496,6 +496,37 @@ class AppTokens {
   static Color glassBorderEmphasis(bool isDark) =>
       Colors.white.withValues(alpha: isDark ? 0.34 : 0.95);
 
+  /// **紧凑芯片**档：顶部栏胶囊（`GlassPill` 默认档）与日历页那颗圆形图标钮
+  /// （`calendar_screen.dart` 的 `_circleIcon`）。
+  ///
+  /// 与 `glassTint` 是**两套**，不是笔误：这两处面积小（40dp 级），白度要更高
+  /// 才读得出「玻璃」；`glassTint` 那套是给整条胶囊 / 主按钮的。
+  ///
+  /// 此前这两个调用点各自手抄了一遍**完全相同**的数值（D4 记的「第四套配方」），
+  /// 抄两遍的代价是一处改了另一处不动 —— 现在收敛到这里，改配方只改这一处。
+  static List<Color> glassChipTint(bool isDark) => isDark
+      ? [
+          Colors.white.withValues(alpha: 0.22),
+          Colors.white.withValues(alpha: 0.06),
+        ]
+      : [
+          Colors.white.withValues(alpha: 0.95),
+          Colors.white.withValues(alpha: 0.55),
+        ];
+
+  static Color glassChipBorder(bool isDark) =>
+      Colors.white.withValues(alpha: isDark ? 0.28 : 0.95);
+
+  static Color glassChipShadow(bool isDark) =>
+      Colors.black.withValues(alpha: isDark ? 0.35 : 0.10);
+
+  /// 压在**实心主色**芯片上的前景色（文字 / 图标）。
+  ///
+  /// 不是 `onSolid`：那个按底色自动选黑 / 白，用于「什么底都可能」的场合；
+  /// 这里底永远是 `solidAccent`，前景永远是白（D3 的配方）。0.98 是这一档
+  /// 一直在用的值，收进来只是为了让两处调用点不再各写一遍。
+  static Color get glassChipInk => Colors.white.withValues(alpha: 0.98);
+
   /// **探针专用**：方向性边缘光的配色（顶部高光 → 底部收边）。
   ///
   /// 与 `CapsuleRimPainter` 配套，**不是产品代码**。

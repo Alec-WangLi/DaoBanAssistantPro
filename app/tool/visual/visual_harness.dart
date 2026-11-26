@@ -370,7 +370,7 @@ Future<int> seedVisualDatabase(AppDatabase db) async {
   await db.into(db.scheduleEvents).insert(ScheduleEventsCompanion.insert(
         title: '领劳保用品',
         date: today,
-        createdAt: DateTime.now(),
+        createdAt: appNow(),
         isCompleted: const Value(true),
       ));
 
@@ -414,13 +414,13 @@ Future<void> seedTodayOverride(AppDatabase db) async {
   if (schedule == null || schedule.classes.isEmpty) return;
   final classId = schedule.classes.first.id;
   if (classId == null) return;
-  await repo.setDayOverrides([dateOnly(DateTime.now())], classId: classId);
+  await repo.setDayOverrides([dateOnly(appNow())], classId: classId);
 }
 
 /// 给「今天」记一条请假 + 一条加班 —— 统计页与日历标记的出图样本。
 Future<void> seedTodayDayExtra(AppDatabase db) async {
   final repo = AppRepository(db);
-  final today = dayNumber(dateOnly(DateTime.now()));
+  final today = dayNumber(dateOnly(appNow()));
   await repo.setDayExtra(today, DayExtraKind.leave, 240,
       leaveKind: 'annual', note: '上午去医院');
   await repo.setDayExtra(today, DayExtraKind.overtime, 120,
@@ -438,7 +438,7 @@ Future<void> seedTodayDayExtra(AppDatabase db) async {
 /// 那一行有东西可看。锚点跟着 `today` 算，换一天跑照样落在同一格。
 Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
   final repo = AppRepository(db);
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
   await repo.saveSchedule(
     name: '三班倒 · 零点班',
     anchorDate: today.subtract(const Duration(days: 2)),
@@ -478,7 +478,7 @@ Future<void> makeMidnightShiftCurrent(AppDatabase db) async {
 /// 色相、深浅各半，而且**不留休班** —— 每天都有胶囊才看得出排在一起的观感。
 Future<void> makeNewPaletteShiftCurrent(AppDatabase db) async {
   final repo = AppRepository(db);
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
   await repo.saveSchedule(
     name: '新配色 · 四班',
     anchorDate: today.subtract(const Duration(days: 3)),
@@ -517,7 +517,7 @@ Future<void> makeAlarmShowcase(
   required int count,
   bool nightShift = false,
 }) async {
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
   await AppRepository(db).saveSchedule(
     name: nightShift ? '零点班 · 两条闹钟' : '白班 · 多条闹钟',
     anchorDate: today,
@@ -567,7 +567,7 @@ Future<void> makeAlarmShowcase(
 /// 会不会把那一行挤掉）。编辑页会把方案里每个班次都画出来，所以一套方案装三个
 /// 班次就够。
 Future<void> makeTriTierAlarmShowcase(AppDatabase db) async {
-  final today = dateOnly(DateTime.now());
+  final today = dateOnly(appNow());
   await AppRepository(db).saveSchedule(
     name: '三档落点',
     anchorDate: today,
@@ -614,7 +614,7 @@ Future<void> makeCrewClashCurrent(AppDatabase db) async {
   final repo = AppRepository(db);
   await repo.saveSchedule(
     name: '五班三倒 · 10 天一轮',
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(appNow()),
     classes: const [
       ShiftClass(
           name: '白班',
@@ -665,7 +665,7 @@ Future<void> makeMonthlyScheduleCurrent(AppDatabase db) async {
   await repo.saveSchedule(
     name: '按月三班倒',
     // 按月不读基准日（每月 1 号恒等于第一段），给今天就行。
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(appNow()),
     classes: const [
       ShiftClass(
           name: '中班',
@@ -759,7 +759,7 @@ Future<void> seedMyTemplates(AppDatabase db) async {
 /// 同一天的待办，看着像坏了。
 Future<void> seedRecurringTodo(AppDatabase db) async {
   final repo = AppRepository(db);
-  final t = DateTime.now();
+  final t = appNow();
   final yesterday = DateTime(t.year, t.month, t.day - 1);
   final id = await repo.addRecurringTodo(
     title: '每天交班',
@@ -840,7 +840,7 @@ Future<void> seedScheduleChain(AppDatabase db) async {
   final repo = AppRepository(db);
   final rows = await repo.listSchedules();
   if (rows.length < 2) return;
-  final t = DateTime.now();
+  final t = appNow();
 
   // 第三套：让时间线上出现**三种不同的日期说法**（其余时间 / 「～ 止」/「起 ～」）。
   // 只给这一屏加，不动共享的 `seedVisualDatabase`（那会让别的屏的图都变）。
@@ -909,7 +909,7 @@ Future<void> seedBlankSchedule(AppDatabase db) async {
   }
   await repo.saveSchedule(
     name: L10n.holidayScheduleName,
-    anchorDate: dateOnly(DateTime.now()),
+    anchorDate: dateOnly(appNow()),
     classes: const [],
     cycle: const [],
     makeCurrent: true,

@@ -34,6 +34,7 @@ import 'package:shiftassistantpro/features/profile/help_faq_screen.dart';
 import 'package:shiftassistantpro/features/profile/log_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/profile/supporter_screen.dart';
+import 'package:shiftassistantpro/features/schedule/recurring_fields.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_series_editor.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
@@ -41,6 +42,7 @@ import 'package:shiftassistantpro/features/stats/export_sheet.dart';
 import 'package:shiftassistantpro/features/stats/stats_screen.dart';
 
 import 'visual_harness.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 /// 一屏的渲染参数。`build` 是异步的，因为编辑器要先把 id 从库里查出来。
 typedef VisualScreen = ({
@@ -147,7 +149,7 @@ final List<VisualScreen> visualScreens = [
       await repo.addRecurringTodo(
         title: '夜班带工牌',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(appNow()),
         shiftNames: const ['夜班'],
         timeMinute: 19 * 60,
         advanceRemindMinutes: 60,
@@ -155,7 +157,7 @@ final List<VisualScreen> visualScreens = [
       await repo.addRecurringTodo(
         title: '旧班次巡检',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(appNow()),
         shiftNames: const ['旧夜班'],
         timeMinute: 9 * 60,
         advanceRemindMinutes: 0,
@@ -216,7 +218,7 @@ final List<VisualScreen> visualScreens = [
       if (schedule == null) {
         throw StateError('工装种子库里没有当前方案，「调整班次」弹层无从渲染。');
       }
-      final today = dateOnly(DateTime.now());
+      final today = dateOnly(appNow());
       // 判据照抄 `calendar_screen.dart` 的 `adjustDays`（单日区间那一支）：
       // 这一天被覆盖过 → 命中的那行打勾，底部多一条「恢复轮转」。
       final hasOverride =
@@ -580,7 +582,7 @@ final List<VisualScreen> visualScreens = [
       await repo.addRecurringTodo(
         title: '夜班带工牌',
         repeat: RecurRepeat.shift,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(appNow()),
         shiftNames: const ['夜班', '中班'],
         timeMinute: 19 * 60,
         advanceRemindMinutes: 60,
@@ -598,7 +600,7 @@ final List<VisualScreen> visualScreens = [
       await repo.addRecurringTodo(
         title: '灭火器检查',
         repeat: RecurRepeat.monthly,
-        startDate: dateOnly(DateTime.now()),
+        startDate: dateOnly(appNow()),
         monthDays: (1 << 0) | (1 << 14),
         timeMinute: 9 * 60,
         advanceRemindMinutes: 0,
@@ -750,12 +752,84 @@ final List<VisualScreen> visualScreens = [
     build: (db) async => const LogScreen(),
     needsOnboardingPrefs: false,
   ),
+  (
+    // 重复规则：那 31 格月网格（1 / 14 / 28 选中）。它不是 `*_screen.dart`，
+    // `visual_coverage_test` 管不到，只出图能看见 —— 而它正是 v0.14.1 修 AA
+    // 违规那一处（见 `recurring_month_grid_ink_test`）。
+    slug: '84_recurring_rule',
+    title: '待办 · 重复规则',
+    build: (db) async => const _RecurringRuleHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 时间 / 提醒 / 联动闹钟三行：提醒设了才出「联动闹钟」那一行。
+    slug: '85_event_timing',
+    title: '待办 · 时间与提醒',
+    build: (db) async => const _EventTimingHost(),
+    needsOnboardingPrefs: false,
+  ),
 ];
 
 /// 「请假 / 加班时长」弹层的宿主 —— **只为工装存在，不进 `lib/`**。
 ///
 /// 与 `_OverridePickerHost` 同一套路：`showDayExtraSheet` 是命令式的，首帧后
 /// 把它弹出来，`build` 只交一个空 `Scaffold`。
+/// 重复规则（每月档）的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// `RecurringRulePicker` 不是 `*_screen.dart`，`visual_coverage_test` 管不到它；
+/// 它又只在待办弹窗里出现，出图清单里一直没有它 —— 于是「每月那 31 格」的观感
+/// 从上线起没人看过，v0.14.1 修的 AA 违规就长在那里。
+class _RecurringRuleHost extends StatelessWidget {
+  const _RecurringRuleHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppTokens.spaceLg),
+          child: RecurringRulePicker(
+            // 1 号 / 14 号 / 28 号选中 —— 三个位置各取一格，看得出是「多选」。
+            value: const RecurRuleValue(
+              repeat: RecurRepeat.monthly,
+              monthDays: (1 << 0) | (1 << 13) | (1 << 27),
+            ),
+            shiftChoices: const <ShiftClass>[],
+            fallbackDay: DateTime(2026, 11, 26),
+            fallbackShiftName: null,
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 时间 / 提醒 / 联动闹钟三行的宿主 —— **只为工装存在，不进 `lib/`**。
+///
+/// 三行里「联动闹钟」只在提醒不是「不设」时才出现，静态读代码看不出那一行
+/// 会不会把卡片撑开；给它一个「提醒已设 + 闹钟开着」的取值，出图就看得到。
+class _EventTimingHost extends StatelessWidget {
+  const _EventTimingHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppTokens.spaceLg),
+          child: EventTimingPicker(
+            timeMinute: 8 * 60,
+            advance: 10,
+            alarm: true,
+            onChanged: (_, __, ___) {},
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DayExtraSheetHost extends StatefulWidget {
   const _DayExtraSheetHost();
 
@@ -769,7 +843,7 @@ class _DayExtraSheetHostState extends State<_DayExtraSheetHost> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final today = dateOnly(DateTime.now());
+      final today = dateOnly(appNow());
       showDayExtraSheet(
         context,
         kind: DayExtraKind.leave,
@@ -802,7 +876,7 @@ class _StatsExportHostState extends State<_StatsExportHost> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final today = dateOnly(DateTime.now());
+      final today = dateOnly(appNow());
       showStatsExportSheet(
         context,
         chain: null,
@@ -830,7 +904,7 @@ class _StatsYearPickerHostState extends State<_StatsYearPickerHost> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      showGlassYearPicker(context, initialYear: DateTime.now().year);
+      showGlassYearPicker(context, initialYear: appNow().year);
     });
   }
 

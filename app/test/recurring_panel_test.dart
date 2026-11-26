@@ -20,6 +20,7 @@ import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 import 'support/fixed_clock.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 Future<void> _settle(WidgetTester tester, {int frames = 24}) async {
   for (var i = 0; i < frames; i++) {
@@ -164,7 +165,7 @@ void main() {
           title: live.title,
           date: live.date,
           timeMinute: drift.Value(live.timeMinute),
-          createdAt: DateTime.now(),
+          createdAt: appNow(),
           seriesId: drift.Value(sid),
         ));
     expect(

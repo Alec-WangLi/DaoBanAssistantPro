@@ -110,6 +110,7 @@ class GlassTitleRow extends StatelessWidget {
       width: 4,
       height: 18,
       decoration: BoxDecoration(
+        // design-tokens-ignore: 4×18 装饰竖条，上面不垫任何文字
         color: accent,
         borderRadius: BorderRadius.circular(AppTokens.radiusS),
       ),

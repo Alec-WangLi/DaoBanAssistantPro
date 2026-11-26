@@ -52,8 +52,8 @@
 |---|---|---|---|
 | D1 | 令牌唯一来源，界面层不写字面量 | `test/design_tokens_test.dart` | 半机器（4 目录 / 89 文件中 62 个；EdgeInsetsDirectional、`Duration(seconds:)`、条件表达式 fontWeight 不扫） |
 | D2 | 层级只靠字号/字重/明度；图标兜底色 = onSurface | `design_tokens_test`（禁 alpha 字面量）+ 角色令牌 + `theme_icon_ink_test`（两档 iconTheme 与裸 Icon 解析） | 半机器（`navInactiveForeground` 在扫描网外；图标用例只钉主题与「关于」页） |
-| D3 | 白字压实心主色按需压到刚过 AA | `design_tokens_test`（4.5 判）+ `glass_segment_ink_test`（渲真件读字色） | 半机器（只测纯函数、不查调用点；`recurring_fields.dart:432-453` 是已知硬违规） |
-| D4 | 玻璃两档；省电档结构/交互一字不变 | `glass_tier_test` | 半机器（结构+反方向像素；**没有"两档逐像素相同"的断言**；另有第四套手抄配方待收） |
+| D3 | 白字压实心主色按需压到刚过 AA | `design_tokens_test`（4.5 判）+ `glass_segment_ink_test` / `recurring_month_grid_ink_test`（渲真件读字色）+ `solid_accent_guard_test`（调用点扫描） | 半机器（盲区：填色存在局部变量里、`LinearGradient` 的停靠点；`TextStyle.color` 不在此列） |
+| D4 | 玻璃两档；省电档结构/交互一字不变 | `glass_tier_test`（结构 + 反方向像素 + **中性纯色底两档逐像素相同**） | 机器拦（盲区：只验 `GlassBlur` 那一层，`GlassPanel` 的配方差异仍靠 D1 的令牌守） |
 | D5 | 液态档判据只许定义处 + 6 个文件；另三个档位标志各有各的范围 | `liquid_scope_guard_test` | 机器拦（四个标志各一张范围表 + 常驻证据；改动必须同时改表与证据） |
 | D6 | 触觉三档、不重复震 | `haptics_guard_test` + `haptics_commit_points_test` | 机器拦 |
 | D7 | 可编辑暗示只用三种视觉语言 | `editable_affordance_test`（按页钉） | 半机器（新页面不在名单内） |
@@ -70,7 +70,7 @@
 | E2 | 改"今天归哪套"必须重排闹钟 | `day_override_repository_test`（间接） | 自守 |
 | E3 | saveSchedule 按 id 增量 upsert | 无 | 自守 |
 | E4 | 改 Drift 表后必须重生成 | `ci.yml` 禁旧参数 | 半机器（漏生成能否被 CI 抓住取决于编译） |
-| E5 | 日期/时钟走 `appNow()` + `kAnchor` | `clock_guard_test` + `time_of_day_guard_test` | 半机器（只扫 `lib`） |
+| E5 | 日期/时钟走 `appNow()` + `kAnchor` | `clock_guard_test` + `time_of_day_guard_test` | 机器拦（扫 `lib` / `test` / `tool`；放行 `appNow = DateTime.now` 这条还原写法。盲区：字符串插值里的调用被剥壳器一起清掉） |
 | E6 | 开工报技能；收尾过 verification | `scripts/verify-done.sh` | 半机器（"报技能"自守） |
 | E7 | 扫源码/扫文档先剥注释与围栏 | `test/support/source_scan.dart` | 机器拦（模板可复用） |
 | E8 | 改 UI 后跑视觉工装出图 | 无 | 自守 |
@@ -110,13 +110,6 @@
 
 证据：`docs/decisions/evidence/2026-11-26-standards-audit/README.md`。
 
-v0.14.1 补掉 2026-11-08 那 10 条里的 6 条（i18n 守门、屏单对照、三个档位标志、`appBuild`、
-月网格 AA、`visual_coverage_test`），矩阵强度已同步升级、盲区已删。
-
-仍开着：
-
-1. `clock_guard_test` 只扫 `lib/`，未扩到 `test/` 与 `tool/`。
-2. 第四套玻璃配方未收（`glass_pill.dart` / `calendar_screen.dart` 手写 alpha；配方无归口）。
-3. `solidAccent` 调用点只能一页一条渲染用例，静态扫不出来。
-4. `RecurringRulePicker` / `EventTimingPicker` 不在屏单里（非 `*_screen.dart`，覆盖测试管不到）。
-5. `glass_tier_test` 缺「像素差 = 0」断言。
+2026-11-08 登记的那批待补护栏已全部补完（v0.14.1 + v0.14.2 两轮），§4 强度已同步，
+**暂无待补**。三类新护栏（`solid_accent_guard` / `clock_guard` / `glass_tier`）各自的盲区
+写在 §4 对应那一行，**别当成「全守住了」**。下次审计直接从 §4 的强度标记查起。

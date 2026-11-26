@@ -22,6 +22,7 @@ import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/home/home_shell.dart';
 import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+import 'package:shiftassistantpro/core/clock.dart';
 
 Future<void> _settle(WidgetTester tester, {int frames = 20}) async {
   for (var i = 0; i < frames; i++) {
@@ -221,7 +222,7 @@ void main() {
   });
 
   testWidgets('归档里的重复待办历史行：不许出现勾选框', (tester) async {
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     final sid = await repo.addRecurringTodo(
         title: '每天交班', repeat: RecurRepeat.daily, startDate: today);
     await repo.advanceRecurringTodos(today: today);
@@ -261,7 +262,7 @@ void main() {
   testWidgets('折叠区展开后滑到底：最后一行那颗删除键不被「新建」按钮挡住', (tester) async {
     // 条数要**真的撑破视口**（420×1200，一行约 74 → 十几条根本滚不动，那种断言
     // 会变成一句永远为真的空话）。主列表与归档各 16 条，且归档要展开。
-    final day = dateOnly(DateTime.now());
+    final day = dateOnly(appNow());
     for (var i = 0; i < 16; i++) {
       await repo.addEvent(title: '没做的 $i', date: day);
       await repo.addEvent(title: '做完的 $i', date: day);
@@ -299,7 +300,7 @@ void main() {
   testWidgets('小窗 200×400：两种历史行同框，标题与勾选框都不溢出', (tester) async {
     // 一次性的一条 + 重复待办的一条历史行，同时摆在展开的归档里 ——
     // 「有勾的」与「没勾的」两种形态一眼看得完，小窗排版也就一次验到。
-    final today = dateOnly(DateTime.now());
+    final today = dateOnly(appNow());
     await add('做完的一次性', today, done: true);
     final sid = await repo.addRecurringTodo(
         title: '每天交班', repeat: RecurRepeat.daily, startDate: today);

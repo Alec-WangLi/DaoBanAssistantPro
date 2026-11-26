@@ -29,6 +29,7 @@ import 'package:shiftassistantpro/features/schedule/schedule_screen.dart';
 
 import 'visual_harness.dart';
 import 'visual_screens.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 /// 渲染用例统一带超时：工装里一旦有东西卡住（比如取像没切到真实异步区），
 /// 要看到一条明确的失败，而不是一个永远不结束的进程。
@@ -240,7 +241,7 @@ void main() {
           // 起点取今天那一格（选中块默认落在今天）；不能找 `calendar-selection-block`
           // 的**位置**去按 —— 那枚块在拖动中会跟着走，而起点得是格子。
           final TestGesture g = await t.startGesture(t.getCenter(
-              find.byKey(ValueKey('day-card-${DateTime.now().day}'))));
+              find.byKey(ValueKey('day-card-${appNow().day}'))));
           for (int i = 0; i < 20; i++) {
             await t.pump(const Duration(milliseconds: 16)); // 过按住闸门
           }
@@ -265,7 +266,7 @@ void main() {
     failOnOverflow(tester);
     final db = await freshDb();
     useLiquidGlassTier();
-    final int today = DateTime.now().day;
+    final int today = appNow().day;
     final int other = today >= 15 ? today - 10 : today + 10; // 一定在 1..25 里
     await renderScreen(
       tester,
@@ -332,7 +333,7 @@ void main() {
       overrides: <Override>[databaseProvider.overrideWithValue(db)],
       beforeCapture: (t) async {
         // 选一个「非今天」的日子，日详情卡才会展开出班次与时间。
-        final day = DateTime.now().add(const Duration(days: 2));
+        final day = appNow().add(const Duration(days: 2));
         await t.tap(find.text('${day.day}').first);
       },
     );

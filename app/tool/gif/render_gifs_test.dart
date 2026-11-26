@@ -35,6 +35,7 @@ import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
 import 'package:shiftassistantpro/state/app_settings.dart';
 
 import '../visual/visual_harness.dart';
+import 'package:shiftassistantpro/core/clock.dart';
 
 const List<({String suffix, Brightness brightness})> _modes =
     <({String suffix, Brightness brightness})>[
@@ -452,7 +453,7 @@ void main() {
   for (final v in _modes) {
     testWidgets('日历 · 点「今天」飞回去 · ${v.suffix}', (WidgetTester tester) async {
       final db = await freshDb();
-      final int today = DateTime.now().day;
+      final int today = appNow().day;
       final int other = today >= 15 ? today - 10 : today + 10; // 一定在 1..25 里
       await renderFrames(
         tester,

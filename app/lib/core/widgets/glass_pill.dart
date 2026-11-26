@@ -87,24 +87,16 @@ class GlassPill extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: emphasis
                   ? AppTokens.glassTintEmphasis(isDark)
-                  : isDark
-                      ? [
-                          Colors.white.withValues(alpha: 0.22),
-                          Colors.white.withValues(alpha: 0.06),
-                        ]
-                      : [
-                          Colors.white.withValues(alpha: 0.95),
-                          Colors.white.withValues(alpha: 0.55),
-                        ],
+                  : AppTokens.glassChipTint(isDark),
             ),
             border: Border.all(
               color: emphasis
                   ? AppTokens.glassBorderEmphasis(isDark)
-                  : Colors.white.withValues(alpha: isDark ? 0.28 : 0.95),
+                  : AppTokens.glassChipBorder(isDark),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.10),
+                color: AppTokens.glassChipShadow(isDark),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),

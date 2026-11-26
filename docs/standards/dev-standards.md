@@ -58,15 +58,11 @@
 ### E5. 日期/时钟走 appNow() + kAnchor
 - **原则**：一切"现在几点/今天几号"走 `core/clock.dart` 的 `appNow()`；用例里再叠
   `test/support/fixed_clock.dart` 的 `kAnchor`（`2026-10-15`），不直接 `DateTime.now()` / `TimeOfDay.now()`。
-- **落到哪**：`core/clock.dart:24`（`appNow`，lib 内 45 次 / 14 文件）+
-  `test/support/fixed_clock.dart:29`（`kAnchor`）。
-- **谁守门**：`clock_guard_test`（`:63` lib 除 `clock.dart` 无 `DateTime.now`、`:72` 剥壳自证、`:82` 接缝仍在）+
-  `time_of_day_guard_test`（`:63`/`:74`/`:84`）——**半机器：两个都只扫 `lib/`**。
-- **例外与豁免**：`features/alarm/alarm_ringing_screen.dart:196` 的 `TimeOfDay.now()` 是刻意豁免
-  （响铃页时钟必须真实时间，`time_of_day_guard_test` 守）；`lib` 里 `DateTime.now` 的 4 处全是注释。
+- **落到哪**：`core/clock.dart`（`appNow`）+ `test/support/fixed_clock.dart`（`kAnchor` / `useFixedNow`）。
+- **谁守门**：`clock_guard_test`（扫 `lib` + `test` + `tool`；放行 `appNow = DateTime.now` 这条还原写法）
+  + `time_of_day_guard_test`（只管 `lib`）——机器拦。盲区：字符串插值里的调用会被剥壳器一起清掉。
+- **例外与豁免**：`alarm_ringing_screen.dart` 的 `TimeOfDay.now()` 是刻意豁免（响铃页时钟必须真实时间）。
 - **反模式**：直接 `DateTime.now()`——用例随真实月份漂移（2026-11-05 一次红 10 条）。
-  **现状风险**：扫描网外实测 `app/test` **22 处 / 10 文件**、`app/tool/visual` **21 处 / 5 文件**真实时钟
-（复核：`work/verify_numbers.py`；见 `README.md` §6 待办 1）。
 
 ### E6. 开工先报技能；收尾过 verification-before-completion
 - **原则**：动第一行代码前说「这次用 X、Y，因为……」；说「好了/全绿」前必须有**本回合原始输出**作证据
