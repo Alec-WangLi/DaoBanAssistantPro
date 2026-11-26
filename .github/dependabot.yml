@@ -7,6 +7,7 @@ version: 2
 updates:
   - package-ecosystem: "pub"
     directory: "/app"
+    target-branch: beta
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
@@ -20,6 +21,7 @@ updates:
 
   - package-ecosystem: "gradle"
     directory: "/app/android"
+    target-branch: beta
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
@@ -33,6 +35,7 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: beta
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
