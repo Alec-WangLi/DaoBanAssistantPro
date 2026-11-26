@@ -24,6 +24,7 @@ import '../../core/glass/glass.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/app_icon.dart';
 import '../../core/widgets/centered_content.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/glass_action_button.dart';
 import '../../core/widgets/glass_choice_chip.dart';
 import '../../core/widgets/glass_dialog.dart';
@@ -184,6 +185,13 @@ class _LogScreenState extends ConsumerState<LogScreen> {
                   solid: true,
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
+                      // 整页没有日志时走共享空态（`EmptyState` 是「全 app 唯一实现」）。
+                      // 这里曾是第五份手写的空态：在 SelectableText 里塞一句小字，
+                      // 渲出来是贴在巨大面板左上角的一行，既不像空态、留白也和别处不同
+                      // （v0.14.1 把这一屏补进视觉工装之后才看见 —— D8 的护栏就是为这个）。
+                      // 搜不到行的情况另算：那时正文还在，只是没有命中，保持原样。
+                      : _text.isEmpty
+                      ? EmptyState(L10n.noLog, alignment: Alignment.center)
                       : SingleChildScrollView(
                           controller: _scrollCtrl,
                           padding: const EdgeInsets.all(AppTokens.spaceMd),

@@ -16,6 +16,7 @@ import 'package:shiftassistantpro/domain/day_extra.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_ringing_screen.dart';
 import 'package:shiftassistantpro/features/alarm/alarm_screen.dart';
+import 'package:shiftassistantpro/features/backup/backup_screen.dart';
 import 'package:shiftassistantpro/features/calendar/calendar_screen.dart';
 import 'package:shiftassistantpro/features/calendar/day_extra_sheet.dart';
 import 'package:shiftassistantpro/features/calendar/schedule_editor_screen.dart';
@@ -30,6 +31,7 @@ import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
 import 'package:shiftassistantpro/features/profile/donate_sheet.dart';
 import 'package:shiftassistantpro/features/profile/help_center_screen.dart';
 import 'package:shiftassistantpro/features/profile/help_faq_screen.dart';
+import 'package:shiftassistantpro/features/profile/log_screen.dart';
 import 'package:shiftassistantpro/features/profile/profile_screen.dart';
 import 'package:shiftassistantpro/features/profile/supporter_screen.dart';
 import 'package:shiftassistantpro/features/schedule/recurring_panel.dart';
@@ -730,6 +732,22 @@ final List<VisualScreen> visualScreens = [
     slug: '81_date_picker',
     title: '日期 · 选择器',
     build: (db) async => const _DatePickerHost(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 数据备份（v0.14.0）：导出 / 导入两枚动作卡 + 说明。这一页属于「不敢误触」
+    // 的那类 —— 动作卡的层级、说明文字的密度、窄窗里的折行，只有出图看得见。
+    slug: '82_backup',
+    title: '数据备份',
+    build: (db) async => const BackupScreen(),
+    needsOnboardingPrefs: false,
+  ),
+  (
+    // 运行日志（v0.14.0）：筛选条 + 等宽日志行 + 复制诊断包。长列表在窄窗与
+    // 放大字号下的换行行为，单测量不出来。
+    slug: '83_log',
+    title: '运行日志',
+    build: (db) async => const LogScreen(),
     needsOnboardingPrefs: false,
   ),
 ];

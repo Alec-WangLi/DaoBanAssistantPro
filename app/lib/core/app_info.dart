@@ -7,4 +7,12 @@
 /// 错的，会给已经装上的版本再挂一个「下载」按钮。
 ///
 /// 现在由 `test/app_info_test.dart` 盯着两处一致，改漏了会直接把测试打红。
-const String appVersion = '0.14.0';
+const String appVersion = '0.14.1';
+
+/// 构建号（`pubspec.yaml` 里版本号 `+` 后面那一段）。
+///
+/// **为什么单独钉**：`appVersion` 只比到 `X.Y.Z`，`+build` 只在 Android 的
+/// `versionCode` 里起作用 —— 两处不同步时**什么都不报错**，直到某次覆盖安装被
+/// 系统当成「同版本」拒掉（或者调试时 `adb` 分不清新旧包）。此前这个数没有守门，
+/// 见 `docs/standards` §6 待办 5。
+const int appBuild = 216;

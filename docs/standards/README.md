@@ -54,10 +54,10 @@
 | D2 | 层级只靠字号/字重/明度；图标兜底色 = onSurface | `design_tokens_test`（禁 alpha 字面量）+ 角色令牌 + `theme_icon_ink_test`（两档 iconTheme 与裸 Icon 解析） | 半机器（`navInactiveForeground` 在扫描网外；图标用例只钉主题与「关于」页） |
 | D3 | 白字压实心主色按需压到刚过 AA | `design_tokens_test`（4.5 判）+ `glass_segment_ink_test`（渲真件读字色） | 半机器（只测纯函数、不查调用点；`recurring_fields.dart:432-453` 是已知硬违规） |
 | D4 | 玻璃两档；省电档结构/交互一字不变 | `glass_tier_test` | 半机器（结构+反方向像素；**没有"两档逐像素相同"的断言**；另有第四套手抄配方待收） |
-| D5 | 液态档判据只许定义处 + 6 个文件 | `liquid_scope_guard_test` | 半机器（needle 只有 `liquidGlassActive`；开关真源不匹配；实测 12 处读取） |
+| D5 | 液态档判据只许定义处 + 6 个文件；另三个档位标志各有各的范围 | `liquid_scope_guard_test` | 机器拦（四个标志各一张范围表 + 常驻证据；改动必须同时改表与证据） |
 | D6 | 触觉三档、不重复震 | `haptics_guard_test` + `haptics_commit_points_test` | 机器拦 |
 | D7 | 可编辑暗示只用三种视觉语言 | `editable_affordance_test`（按页钉） | 半机器（新页面不在名单内） |
-| D8 | 新界面必须进视觉工装屏单 | 无 | 自守 |
+| D8 | 新界面必须进视觉工装屏单 | `visual_coverage_test`（每个 `*_screen.dart` 的类名必须出现在屏单源码的**代码**里） | 半机器（盲区：只认以 `Screen` 结尾的顶层类；弹层宿主与命令式弹层不在其列） |
 | D9 | 弹簧两条方向分开、离散格式扫数 | `liquid_lens_test` | 半机器（只钉 Lift/Drop 不对称；Lit/Unlit 未钉） |
 | D10 | 玻璃不采样玻璃；uniform 0 不是你的 | `glass_refraction_test` | 机器拦 |
 | D11 | 班次色可读性 = 描边对比度 ≥1.3501 | `shift_palette_test`（16 颗 × 4 卡底） | 机器拦 |
@@ -66,7 +66,7 @@
 | D14 | 24 小时制写死，1440 显示 `24:00` | `shift_rotation` 相关用例 | 半机器 |
 | D15 | 命中区 44dp，视觉尺寸与命中区分离 | `press_feedback_guard_test` 等 | 半机器 |
 | D16 | 豁免必须具名可查 | `design_tokens_test` 的豁免解析 + 评审 | 半机器 |
-| E1 | 版本号 X.Y 用户定，AI 只改 Z | `app_info_test` | 半机器（`+build` 无守门） |
+| E1 | 版本号 X.Y 用户定，AI 只改 Z | `app_info_test` | 机器拦（`appVersion` 与 `appBuild` 都对齐 pubspec） |
 | E2 | 改"今天归哪套"必须重排闹钟 | `day_override_repository_test`（间接） | 自守 |
 | E3 | saveSchedule 按 id 增量 upsert | 无 | 自守 |
 | E4 | 改 Drift 表后必须重生成 | `ci.yml` 禁旧参数 | 半机器（漏生成能否被 CI 抓住取决于编译） |
@@ -77,7 +77,7 @@
 | E9 | 发布分支纪律；latest.json 只同步本次通道 | `scripts/release.ps1` 第 8b 步 | 机器拦（发完核对自守） |
 | E10 | 不跑 dart format；不并发跑 flutter test | 无 | 自守 |
 | E11 | 测试条数只增不减，EXPECTED_TESTS 同步 | `.github/workflows/ci.yml` | 机器拦 |
-| E12 | 用户可见文案走 L10n | 无（`blankNonCode` 基建现成） | 自守 |
+| E12 | 用户可见文案走 L10n | `i18n_guard_test`（`Text(` 第一个位置参数不许是裸中文字面量） | 半机器（盲区：具名参数位、拼接文案、`tool/` 与 `test/` 不扫） |
 | E13 | await 后必检 mounted；catch 不许空吞 | 无 | 自守 |
 | E14 | 单文件 ≤800 行（非生成物） | 无（台账在条目内） | 自守 |
 | E15 | 注释中文、写"为什么"、文件头写全路径 | 无 | 自守 |
@@ -87,7 +87,7 @@
 | E18 | 新代码先答落点四问 | 无 | 自守 |
 | E19 | 抽件不改行为；同一算式只许一处 | 无 | 自守 |
 
-**自守条目共 14 条**（D8、D13、E2、E3、E8、E10、E12、E13、E14、E15、E16、E17、E18、E19），
+**自守条目共 12 条**（D13、E2、E3、E8、E10、E13、E14、E15、E16、E17、E18、E19），
 按"每条上线前必须人工过一遍"处理；任何一条想要护栏，先补护栏，再把它从这里删掉 —— **矩阵是台账，
 不是奖状**。
 
@@ -106,21 +106,17 @@
 6. **护栏自检**：`python scripts/standards_check.py`——断言三份文件里引用的每个路径都真实存在、
    §4 矩阵的行数与条目数一致（D/E 编号不缺不重）。改完规范层跑一次，红了就是写了不存在的东西。
 
-## 6. 现状与待办（2026-11-08 审计结论）
+## 6. 现状与待办（2026-11-26 复核）
 
-审计证据：`docs/decisions/evidence/2026-11-08-standards-audit/README.md`。当场做了什么、还剩什么：
+证据：`docs/decisions/evidence/2026-11-26-standards-audit/README.md`。
 
-- 做了：11+11 条重写为统一五段式；补 D12–D16、E12–E17 六条已成事实但未成文的约定；
-  修掉 4 处"文档说得比护栏强"的低报/高报（D2、D4、D6、D7）与 3 处过期数字（E8、E9、E10）。
-- 待补护栏（按收益排序，**补完把矩阵强度升级并删掉对应盲区**）：
-  1. `clock_guard_test` 扫描根扩到 `test/` 与 `tool/`（实测 `test` 侧 22 处 / 10 文件、`tool` 侧 21 处 / 5 文件）。
-  2. i18n 守门（`blankNonCode` 现成）+ 把 `app.dart:31` 的品牌名补进 `l10n`（旧口径"4 处真漏"已复核收敛）。
-  3. 屏单对照（扫 `lib/features/**/*_screen.dart` 与 `visual_screens.dart`）。
-  4. `liquid_scope_guard_test` 补 `liquidGlassEnabled` / `glassBlurDisabled` / `liquidRefractionEnabled` 三个 needle。
-  5. `app_info` 加 `const appBuild`，让 `+build` 有守门。
-  6. `glass_tier_test` 补"`blurOn=false` vs `true` 整帧像素差 = 0"。
-  7. `recurring_fields.dart:432-453` 的选中方块改走 `solidAccent` + `onSolid`（D3 的 AA 硬违规）。
-  8. 收掉第四套玻璃配方：`glass_pill.dart:71-96` 与 `calendar_screen.dart:1117-1142` 回令牌。
-  9. `visual_coverage_test`：`lib/features/**/*_screen.dart` 必须在屏单里，并补 `RecurringRulePicker` /
-     `EventTimingPicker` 两条 slug。
-  10. `solidAccent` 调用点扫描（D3 的盲区就是"只测纯函数"）。
+v0.14.1 补掉 2026-11-08 那 10 条里的 6 条（i18n 守门、屏单对照、三个档位标志、`appBuild`、
+月网格 AA、`visual_coverage_test`），矩阵强度已同步升级、盲区已删。
+
+仍开着：
+
+1. `clock_guard_test` 只扫 `lib/`，未扩到 `test/` 与 `tool/`。
+2. 第四套玻璃配方未收（`glass_pill.dart` / `calendar_screen.dart` 手写 alpha；配方无归口）。
+3. `solidAccent` 调用点只能一页一条渲染用例，静态扫不出来。
+4. `RecurringRulePicker` / `EventTimingPicker` 不在屏单里（非 `*_screen.dart`，覆盖测试管不到）。
+5. `glass_tier_test` 缺「像素差 = 0」断言。

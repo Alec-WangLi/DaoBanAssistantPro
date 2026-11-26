@@ -14,8 +14,20 @@
 //   3. 点开之后十条全在，并且胶囊变成「收起」。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shiftassistantpro/core/app_info.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/features/profile/app_dialogs.dart';
+
+/// 每一段的版本头（`vX.Y.Z` 那一行）。
+///
+/// **不再把版本号写死在用例里**（v0.14.1 改）：原来这里钉的是 `v0.14.0` /
+/// `v0.13.26` / `v0.13.19` 三个字符串，每发一版就要手改一次，忘改就红 ——
+/// 而这个红说的是「用例过期了」，不是「代码坏了」。改成从 [appChangelog] 自己
+/// 推导：用例守的是**折叠行为**，不是某几个具体版本。
+List<String> _headLines(String changelog) => <String>[
+      for (final String block in splitChangelogVersions(changelog))
+        block.split('\n').first.trim(),
+    ];
 
 /// 弹窗正文里所有含版本头的 `Text`，拼成一段，便于断言「在 / 不在」。
 String _visibleLog(WidgetTester tester) {
@@ -46,7 +58,8 @@ void main() {
   test('切分：条数等于窗口条数，首条是当前版本', () {
     final versions = splitChangelogVersions(appChangelog);
     expect(versions.length, 10, reason: '更新日志窗口固定十条，切分不能多也不能少');
-    expect(versions.first.startsWith('v0.14.0'), isTrue);
+    expect(versions.first.startsWith('v$appVersion'), isTrue,
+        reason: '首条必须是当前版本（app_info 的 appVersion）');
     // 每一条都必须正好以一条版本头开头，且不含下一条的头。
     for (final block in versions) {
       expect(RegExp(r'^v\d+\.\d+\.\d+\n').hasMatch(block), isTrue,
@@ -61,14 +74,17 @@ void main() {
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
 
-    final collapsed = _visibleLog(tester);
-    expect(collapsed, contains('v0.14.0'));
-    expect(collapsed, contains('v0.13.27'));
-    expect(collapsed, contains('v0.13.26'));
-    expect(collapsed, isNot(contains('v0.13.25')),
-        reason: '折叠态下第四版就不该画出来 —— 画了等于没折叠');
+    final heads = _headLines(appChangelog);
+    expect(heads, hasLength(10), reason: '更新日志窗口固定十条');
 
-    final more = find.text('展开更早的 7 版');
+    final collapsed = _visibleLog(tester);
+    for (final v in heads.take(kChangelogPreviewCount)) {
+      expect(collapsed, contains(v), reason: '首屏该画出 $v');
+    }
+    expect(collapsed, isNot(contains(heads[kChangelogPreviewCount])),
+        reason: '折叠态下第四版（${heads[kChangelogPreviewCount]}）就不该画出来 —— 画了等于没折叠');
+
+    final more = find.text('展开更早的 ${heads.length - kChangelogPreviewCount} 版');
     expect(more, findsOneWidget, reason: '十条里先给三条，剩下七条要有个入口');
 
     await tester.ensureVisible(more);
@@ -77,10 +93,10 @@ void main() {
     await tester.pumpAndSettle();
 
     final expanded = _visibleLog(tester);
-    for (final v in ['v0.14.0', 'v0.13.22', 'v0.13.19']) {
+    for (final v in heads) {
       expect(expanded, contains(v), reason: '展开后 $v 应当出现');
     }
     expect(find.text('收起'), findsOneWidget);
-    expect(find.text('展开更早的 7 版'), findsNothing);
+    expect(find.text('展开更早的 ${heads.length - kChangelogPreviewCount} 版'), findsNothing);
   });
 }

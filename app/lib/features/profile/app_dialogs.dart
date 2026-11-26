@@ -49,6 +49,12 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.14.1\n'
+    '· 这一版只做「统一」，没有新功能。修掉一处真问题：「重复待办 → 每月」选中的那一天，白字压在实心主色上 —— 默认那颗蓝看得清，换成青或橙之后只剩 2.6:1，糊成一片。现在按设计规范压深到刚好过线\n'
+    '· 「运行日志」与「数据备份」两屏补进了看图工装：它们上线时漏登记，等于一直没人真正看过\n'
+    '· 日志页没有内容时改用统一的空态样式 —— 以前是贴在面板左上角的一行小字\n'
+    '· 内部补了四条护栏（界面文案、屏单覆盖、档位标志、构建号），这几类问题以后会被测试直接拦住\n'
+    '\n'
 'v0.14.0\n'
     '· 统计页（新）：月 / 年两种视图，实际在岗、正常工时、上班 / 休息天数、请假、加班、夜班、最长连班 / 连休都算好了；环形图、出勤构成条、月度工时柱；点年月标题直接跳\n'
     '· 请假与加班：日历上任意一天记时长、类型（也能自己起名）和备注；整天请假会自动压掉那天的班次闹钟。出勤表可以导出 CSV，拿去算工资或交班\n'
@@ -100,16 +106,14 @@ const String _changelogZh =
     '· 「查看日志」从弹窗改成整页：按天翻（日志现在按天归档、保留 7 天）、能搜索、能一键导出诊断包（日志 + 设备权限 + 已排闹钟清单 + 未来 7 天计划）\n'
     '· 报「偶尔没响」时把诊断包发来：里面有 App 认为该响的清单，一眼分得清是没排、还是被系统丢了\n'
     '\n'
-'v0.13.19\n'
-    '· 统计页年视图：点年份直接弹出年份选择器，跨十年不用再点十下箭头\n'
-    '· 翻月 / 翻年 / 「今天」，以及年视图点某个月，都会震一记；已经停在本月 / 今年时不震\n'
-    '· 期间条那三颗玻璃钮亮了一档；左右箭头的颜色也修了 —— 深色下它们原本被画成黑色，你看到的「有点暗」就是它\n'
-    '· 统计页统一「图标在前」：月 / 年分段、四格指标、每张卡片的分节标题、出勤亮点的四行，都带上了语义色图标\n'
-    '· 图表精修：环图加了底轨、圆头分段与真实缝隙（只有一天的小段也不会消失）；出勤构成条分段留缝；月度工时柱改成底轨 + 顶圆角渐变柱 + 均值虚线（只统计有工时的月份）+ 当月高亮，切年时从基线长出来\n'
-    '· 请假构成每个类型多了一条占比细条；统计口径补了一条「月度均值线只统计工时 > 0 的月份」\n'
-    '\n'
     ;
 const String _changelogEn =
+'v0.14.1\n'
+    '· This one is about consistency, not features. One real fix: in Recurring to-do > Monthly, the selected day put white text on the solid accent - fine on the default blue, but teal or orange left it at 2.6:1 and it smeared. It now darkens just enough to pass\n'
+    '· The Log and Backup screens are now in the screenshot harness: they shipped without being registered, so nobody had actually looked at them\n'
+    '· The log page uses the shared empty state instead of one small line pinned to the top-left of the panel\n'
+    '· Four new guards behind the scenes (UI copy, screen coverage, glass tiers, build number), so this class of drift fails the build instead of the eye\n'
+    '\n'
 'v0.14.0\n'
     '· Statistics (new): monthly and yearly views for hours on duty, normal hours, work / rest days, leave, overtime, night shifts and the longest work / rest streak, with a donut, an attendance bar and monthly hour columns; tap the year-month title to jump\n'
     '· Leave and overtime: record hours, a type (you can name your own) and a note on any calendar day; a full-day leave also cancels that day shift alarm. The attendance table exports to CSV for payroll or handover\n'
@@ -160,14 +164,6 @@ const String _changelogEn =
     '· "Adjust shift" now takes a note: a swap or a day off, one line, shown on the calendar info card (this update adds one table)\n'
     '· "View log" is now a full page: per-day logs (rotated daily, 7 days kept), search, and a one-tap diagnostics bundle (logs + device permissions + the scheduled alarm list + the next 7 days of plan)\n'
     '· Reporting "it did not ring": send the bundle - it lists what the app thinks should ring, so it is obvious whether it was never scheduled or dropped by the system\n'
-    '\n'
-'v0.13.19\n'
-    '· Statistics, year view: tap the year to open a year picker - no more ten arrow taps to cross a decade\n'
-    '· Month / year switching, Today, and tapping a month in the year view each tick once; tapping Today while already there stays silent\n'
-    '· The three glass buttons on the period bar are a notch brighter; the arrow colour is fixed too - in dark mode they were drawn black, which is the "looks dim" you saw\n'
-    '· Statistics now leads with icons: the month / year segment, the four metric tiles, every card header and the four highlight rows all carry a semantic-coloured icon\n'
-    '· Charts refined: the donut gains a track, round segment caps and real gaps (a one-day segment no longer vanishes); the composition bar has gaps between segments; monthly hours become track + rounded gradient bars + a dashed average line (months with hours only) + current-month highlight, growing from the baseline when the year changes\n'
-    '· Leave by type gains a share bar per row; "How it is calculated" explains that the monthly average line only counts months with hours > 0\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

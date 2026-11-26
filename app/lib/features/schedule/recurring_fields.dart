@@ -403,6 +403,12 @@ class _MonthDayGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
+    // 选中块是一块**实心主色面**，白字压在上面 —— 走 D3 的配方：
+    // `solidAccent` 只压到刚过 AA 就停，`onSolid` 再按那块底挑黑/白字。
+    // 直接用 `primary` + 写死白字，默认那颗蓝（5.26:1）看不出来，
+    // 选 teal / orange 时只有 2.63 / 2.55，白字糊在块上。
+    final solid = AppTokens.solidAccent(primary);
+    final ink = AppTokens.onSolid(solid);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -430,13 +436,13 @@ class _MonthDayGrid extends StatelessWidget {
                             borderRadius:
                                 BorderRadius.circular(AppTokens.radiusS),
                             color: selected
-                                ? primary
+                                ? solid
                                 : (isDark
                                     ? Colors.white.withValues(alpha: 0.08)
                                     : Colors.white.withValues(alpha: 0.72)),
                             border: Border.all(
                               color: selected
-                                  ? primary
+                                  ? solid
                                   : Colors.white
                                       .withValues(alpha: isDark ? 0.16 : 0.65),
                             ),
@@ -450,7 +456,7 @@ class _MonthDayGrid extends StatelessWidget {
                                     ? FontWeight.w700
                                     : FontWeight.w500,
                                 color: selected
-                                    ? Colors.white
+                                    ? ink
                                     : Theme.of(context).colorScheme.onSurface,
                               ),
                             ),

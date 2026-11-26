@@ -173,17 +173,22 @@
   "为什么先不拆 + 拆法"。**台账只减不增**：新增超限文件必须在同一个提交里说明理由，否则评审驳回。
 - **落到哪**：`app/lib`（生成物 `data/app_database.g.dart` 不受限，它跟表定义走）。
 - **谁守门**：**自守**（没有行数护栏；`wc -l` 一眼可见，评审时点名）。
-- **例外与豁免（既存台账，2026-11-08 实测 **8 件**，只减不增）**：
-  | 文件 | 行数 | 已知拆法 |
+- **例外与豁免（既存台账，8 件，只减不增）**：
+  | 文件 | 行数（2026-11-26 实测） | 已知拆法 |
   |---|---|---|
-  | `features/calendar/calendar_screen.dart` | 3196 | ①`_infoCard`（`:2398-2930`，单方法 532 行）抽 `info_card_view.dart` ②`_syncBlockFlight/_onFlightTick/_stopFlight`（`:670-760`）抽 `block_flight.dart` ③网格/日格抽 `calendar_grid.dart` |
-  | `features/calendar/schedule_editor_screen.dart` | 2532 | 按卡拆：`_classesCard` / `_cycleCard`+`_monthlyBody` / `_crewCard`+`_followHolidayCard`，控制器留壳 |
-  | `data/app_repository.dart` | 1468 | 按聚合拆（schedule / todo / alarm / override） |
+  | `features/calendar/calendar_screen.dart` | 3342 | ①`_infoCard`（单方法 500+ 行）抽 `info_card_view.dart` ②`_syncBlockFlight/_onFlightTick/_stopFlight` 抽 `block_flight.dart` ③网格/日格抽 `calendar_grid.dart` |
+  | `features/calendar/schedule_editor_screen.dart` | 2545 | 按卡拆：`_classesCard` / `_cycleCard`+`_monthlyBody` / `_crewCard`+`_followHolidayCard`，控制器留壳 |
+  | `data/app_repository.dart` | 1717 | 按聚合拆（schedule / todo / alarm / override） |
+  | `features/alarm/alarm_service.dart` | 1776 | 调度决策与原生通道分家 |
+  | `core/l10n.dart` | 1688 | 纯静态表：按族拆文件（`l10n_perm.dart` / `l10n_widget.dart` / `l10n_help.dart`），零风险 |
   | `core/glass/liquid_lens.dart` | 1390 | 已按绘制/物理分层，暂不动 |
-  | `features/alarm/alarm_service.dart` | 1200 | 调度决策与原生通道分家 |
-  | `core/l10n.dart` | 1147 | 纯静态表：按族拆文件（`l10n_perm.dart` / `l10n_widget.dart` / `l10n_help.dart`），零风险 |
-  | `features/profile/profile_screen.dart` | 1096 | 许可证/帮助页外链内容抽 `*_content.dart` |
-  | `features/schedule/schedule_screen.dart` | 986 | 编辑器与列表分离 |
+  | `features/profile/profile_screen.dart` | 1088 | 许可证/帮助页外链内容抽 `*_content.dart` |
+  | `features/schedule/schedule_screen.dart` | 1051 | 编辑器与列表分离 |
+
+  **行数是实测快照，不是契约**（§5.2）。判据只有两条：「是否 >800」与「台账件数只减不增」。
+  2026-11-08 → 2026-11-26 期间件数没变，但 `alarm_service`（1200→1776）、`l10n`（1147→1688）、
+  `app_repository`（1468→1717）三件涨了 30%~48% —— 说明「登记完就没人回来看」。
+  下次动工时先做 `l10n` 拆族（零风险），再处理另外两件。
 - **反模式**：往已经 3000 行的文件里再塞一个特性（`calendar_screen.dart` 已有两条 banner 在往里加）。
 
 > `core/design_tokens.dart` 757 行（非空 683）**未超线**，故不在台账里；但 `:431-669` 那 238 行是底栏胶囊边光的

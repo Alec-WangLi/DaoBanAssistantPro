@@ -32,6 +32,10 @@ void main() {
         reason: 'pubspec.yaml 是 $pubspecVersion，app_info.dart 是 $appVersion —— '
             '两处必须同步；否则「我的」页显示的版本号、升级后的更新弹窗、'
             '以及「检查更新」里的当前版本全是错的');
+    expect(appBuild, build,
+        reason: 'pubspec.yaml 的 +build 是 $build，app_info.dart 的 appBuild 是 '
+            '$appBuild —— 两处必须同步；不同步时不会报错，只会让 versionCode '
+            '原地踏步，覆盖安装会被系统拒掉');
     expect(build, greaterThan(0),
         reason: 'versionCode 要跟着版本一起涨，不能是 0');
   });
