@@ -85,7 +85,7 @@ void main() {
     raw.execute('PRAGMA user_version = 7');
   });
 
-  tearDown(() => raw.dispose());
+  tearDown(() => raw.close());
 
   test('v7 → v8：建出 shift_day_overrides，老排班原样保留', () async {
     final db = AppDatabase.forTesting(NativeDatabase.opened(raw));

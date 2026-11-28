@@ -136,7 +136,7 @@ void main() {
     raw.execute('PRAGMA user_version = 5');
   });
 
-  tearDown(() => raw.dispose());
+  tearDown(() => raw.close());
 
   test('v5 → v6 迁移后逐日等价，且重复班次合并成一个定义', () async {
     final db = AppDatabase.forTesting(NativeDatabase.opened(raw));

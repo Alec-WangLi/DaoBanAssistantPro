@@ -15,7 +15,9 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.daoban.shiftassistantpro"
-    compileSdk = flutter.compileSdkVersion
+    // 37 = flutter_local_notifications 23 要求的最低 compileSdk（flutter.compileSdkVersion
+    // 目前是 36，等 Flutter 默认值追上后可以改回去）。
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

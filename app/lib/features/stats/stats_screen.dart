@@ -242,11 +242,19 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
   ///
   /// 弹层只拼 CSV；落盘与系统「保存到」在这里做（`BackupIo` 走的是备份那条
   /// SAF 通道）。生成的是临时文件 —— 用户选完位置后系统会复制过去。
+  ///
+  /// **默认区间不越过今天**（issue #13，2026-11-28）：看当月时这一段本来就是
+  /// 「到月底」，而月底是未来 —— 导出的是已经发生的事，未来那几天既没数据，
+  /// 用户也说「计划赶不上变化，不准」。区间整个落在未来（翻到了下个月）时两头
+  /// 一起夹到今天，别让 `from > to`。
   Future<void> _openExport() async {
-    final from = _yearMode ? DateTime(_year, 1, 1) : _month;
-    final to = _yearMode
+    final periodFrom = _yearMode ? DateTime(_year, 1, 1) : _month;
+    final periodTo = _yearMode
         ? DateTime(_year, 12, 31)
         : DateTime(_month.year, _month.month + 1, 0);
+    final today = dateOnly(appNow());
+    final to = periodTo.isAfter(today) ? today : periodTo;
+    final from = periodFrom.isAfter(to) ? to : periodFrom;
     final result = await showStatsExportSheet(
       context,
       chain: ref.read(activeScheduleProvider).valueOrNull?.chain,

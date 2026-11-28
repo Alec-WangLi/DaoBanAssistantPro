@@ -49,6 +49,11 @@ void showAppInfoDialog(
 }
 
 const String _changelogZh =
+'v0.14.4\n'
+    '· 闹钟可以渐响了：响铃时音量在 20 秒内从无声慢慢升到你设定的音量，不再一上来就那么大声。开关在「我的 → 渐响」，默认关闭\n'
+    '· 统计导出的结束日期不再默认落在月底：默认到今天，日期选择器里未来的日子会置灰、点不动 —— 那几天还没有发生\n'
+    '· 这一版的底层同时做了一次大修：通知引擎（flutter_local_notifications 17 → 23）与数据库引擎（drift / SQLite）升到当前维护主线，Android 构建链同步跟上；班次闹钟与待办提醒的行为保持原样\n'
+    '\n'
 'v0.14.2\n'
     '· 这一版没有你能看到的变化 —— 全是内部的护栏：把三处「文档说机器会拦、其实没拦」的检查补成真的（真实时钟、实心主色的调用点、省电档的像素），并把顶部栏胶囊和日历那颗圆形钮重复的一份玻璃配方收进同一处\n'
     '· 重复规则、时间与提醒这两个选择器进了看图工装 —— 它们此前不在出图清单里，等于没人真正看过\n'
@@ -98,13 +103,14 @@ const String _changelogZh =
     '· 一加 / OPPO 机型在「我的 → 权限」里多了一行「自启动 / 后台运行」，可以直接跳到系统的自启动管理页\n'
     '· 诊断包里的说明重写了：先看「启动快照」那两行，再看「重排完成 … 撤 N 条」\n'
     '\n'
-'v0.13.21\n'
-    '· 修：闹钟页「下一次响铃」关掉某一天的闹钟后不跟着跳 —— 它没看「按天开关」。现在关掉哪条就跳到下一条\n'
-    '· 修：没有自定义闹钟时，那一块终于真的贴到底部（上一版它和上面的班次列表平分剩余空间，提示停在屏幕中间）\n'
-    '· 编辑排班里的「夜班」开关下面加了一行说明：它只算进统计页的「夜班天数」，不影响轮转与闹钟；与「联动闹钟」之间也拉开了\n'
-    '\n'
     ;
+
 const String _changelogEn =
+'v0.14.4\n'
+    '· Alarms can now fade in: the ringtone rises from silence to your set volume over 20 seconds instead of starting at full blast. The switch lives in Me > Fade in and is off by default\n'
+    '· The statistics export no longer defaults its end date to the end of the month: it defaults to today, and future days are greyed out and cannot be picked - they have not happened yet\n'
+    '· This release also does an under-the-hood overhaul: the notification engine (flutter_local_notifications 17 -> 23) and the database engine (drift / SQLite) move to the current maintained mainline, with the Android build chain following. Shift alarms and todo reminders behave exactly as before\n'
+    '\n'
 'v0.14.2\n'
     '· Nothing you can see this time - it is all internal guard rails: three checks that the standards claimed were automated but were not (the real clock, the solid-accent call sites, the power-save tier pixels) are now real, and one duplicated glass recipe in the top-bar pill and the calendar round button is folded into a single place\n'
     '· The recurring-rule and time/reminder pickers are now in the screenshot harness - they were missing from it, so nobody had actually looked at them\n'
@@ -153,11 +159,6 @@ const String _changelogEn =
     '· Fix: the watchdog (the safety net for dropped alarms) was pushed 6 hours out by every reschedule, so it never actually ran on time; it now only moves earlier, and fires one hour before the next alarm\n'
     '· OnePlus / OPPO phones get an "Auto-launch" row under My > Permissions that opens the system auto-launch page\n'
     '· The diagnostics bundle README is rewritten: read the startup snapshot lines first, then the "withdrew N" counter\n'
-    '\n'
-'v0.13.21\n'
-    '· Fix: "Next alarm" on the alarm page did not move on when you switched a day off - it ignored the per-day switches. It now skips to the next one\n'
-    '· Fix: with no custom alarms, that section finally sits at the bottom (the previous build split the leftover space with the shift list, leaving the hint mid-screen)\n'
-    '· The "Night shift" switch in the schedule editor now explains itself: it only counts towards night days in Statistics, and no longer crowds the linked-alarm row\n'
     '\n'
     ;
 String get appChangelog => L10n.isEn ? _changelogEn : _changelogZh;

@@ -16,6 +16,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiftassistantpro/core/l10n.dart';
 import 'package:shiftassistantpro/core/widgets/glass_segment.dart';
+import 'package:shiftassistantpro/core/widgets/glass_sheet_panel.dart';
 import 'package:shiftassistantpro/data/app_repository.dart';
 import 'package:shiftassistantpro/domain/day_extra.dart';
 import 'package:shiftassistantpro/domain/shift_rotation.dart';
@@ -247,6 +248,45 @@ void main() {
     expect(find.text(L10n.exportGenerate), findsOneWidget);
 
     // 关掉弹层（取消），别让后面清树时还有一层路由。
+    await tester.tap(find.text(L10n.cancel));
+    await tester.pumpAndSettle();
+
+    await _dispose(tester);
+  });
+
+  testWidgets('导出默认区间不越过今天；未来日期在选择器里点不动（issue #13）',
+      (tester) async {
+    final db = await _seed(tester);
+    await _pump(tester, db);
+
+    await tester.tap(find.text(L10n.statsExport));
+    await tester.pumpAndSettle();
+
+    // kAnchor = 2026-10-15。默认区间是「本月 1 日 → 今天」，不是月底：
+    // 导出的是已经发生的事，未来那几天既没数据也不准（issue #13 第一条）。
+    expect(find.text('2026-10-01 – 2026-10-15'), findsOneWidget,
+        reason: '结束日期默认落到月底（未来）正是 issue #13 报的那一条');
+
+    // 打开结束日期选择器：16 号在「今天」之后，应当点不动。
+    await tester.tap(find.text('${L10n.exportEnd} 2026-10-15'));
+    await tester.pumpAndSettle();
+
+    final future = find.descendant(
+        of: find.byType(GlassSheetPanel), matching: find.text('16'));
+    expect(future, findsOneWidget,
+        reason: '选择器应当停在 10 月，16 号那一格就在屏幕上');
+    await tester.tap(future);
+    await tester.pumpAndSettle();
+    expect(find.text('31'), findsOneWidget,
+        reason: '点了未来日期，选择器不该关 —— 那些格子是禁用的（issue #13 第二条）');
+
+    // 今天本身要点得动：选 15 号后选择器关闭。
+    await tester.tap(find.descendant(
+        of: find.byType(GlassSheetPanel), matching: find.text('15')));
+    await tester.pumpAndSettle();
+    expect(find.text('31'), findsNothing, reason: '选了合法日期，选择器应当关闭');
+    expect(find.text('2026-10-01 – 2026-10-15'), findsOneWidget);
+
     await tester.tap(find.text(L10n.cancel));
     await tester.pumpAndSettle();
 

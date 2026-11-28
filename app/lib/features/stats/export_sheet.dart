@@ -7,6 +7,7 @@
 // 也不碰平台通道。
 import 'package:flutter/material.dart';
 
+import '../../core/clock.dart';
 import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../core/widgets/glass_action_button.dart';
@@ -18,6 +19,7 @@ import '../../core/widgets/glass_pill.dart';
 import '../../core/widgets/glass_sheet_header.dart';
 import '../../domain/day_extra.dart';
 import '../../domain/schedule_chain.dart';
+import '../../domain/shift_rotation.dart';
 import '../../domain/stats_export.dart';
 
 /// 弹出导出设置层。用户确认返回 [StatsCsvResult]；取消返回 null。
@@ -63,19 +65,29 @@ class _StatsExportSheetState extends State<_StatsExportSheet> {
   late DateTime _to;
   late Set<StatsExportField> _fields;
 
+  /// 两个日期选择器的上界：**今天**（issue #13）。
+  ///
+  /// 导出的是已经发生的事，未来日期没有数据。以前 `_pickTo` 干脆没传
+  /// `lastDate`，选择器回落到 2100 —— 未来那几天和其他日期长得一模一样，
+  /// 用户以为能选、选了导出一堆空行。上界交给选择器后它自己会置灰禁点
+  /// （`glass_pickers.dart` 的 `enabled` 判据），不用在这里另写一套。
+  late final DateTime _maxDate;
+
   @override
   void initState() {
     super.initState();
     _from = widget.from;
     _to = widget.to;
     _fields = {...StatsExportField.values};
+    _maxDate = dateOnly(appNow());
   }
 
   Future<void> _pickFrom() async {
     final picked = await showGlassDatePicker(
       context,
       initialDate: _from,
-      lastDate: _to,
+      // 开始日期不能晚于结束日期；结束日期的上界已经夹到今天了。
+      lastDate: _to.isAfter(_maxDate) ? _maxDate : _to,
     );
     if (picked == null || !mounted) return;
     setState(() => _from = picked);
@@ -86,6 +98,7 @@ class _StatsExportSheetState extends State<_StatsExportSheet> {
       context,
       initialDate: _to,
       firstDate: _from,
+      lastDate: _maxDate,
     );
     if (picked == null || !mounted) return;
     setState(() => _to = picked);

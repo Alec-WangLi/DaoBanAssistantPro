@@ -576,7 +576,7 @@ class AlarmService {
     const android = AndroidInitializationSettings('ic_notification');
     const ios = DarwinInitializationSettings();
     await _plugin.initialize(
-      const InitializationSettings(android: android, iOS: ios),
+      settings: const InitializationSettings(android: android, iOS: ios),
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
     // 注意：这里不能清缓存——清了之后 cancelAll 就找不到已排定的 AlarmManager 闹钟，
@@ -657,28 +657,42 @@ class AlarmService {
     await requestFullScreenIntentPermission();
   }
 
+  /// 取 Android 实现。
+  ///
+  /// **v23 起这一步会抛异常**：`flutter_local_notifications` 23 的平台接口把
+  /// `instance` 改成了延迟初始化，只有在插件初始化过之后才有值。widget 测试里
+  /// 没有原生实现，`resolvePlatformSpecificImplementation` 直接抛
+  /// `LateInitializationError` —— 它不是「返回 null」，而是把挂载
+  /// `ProfileScreen` / 底栏的用例整条打红（2026-11-28 全套 39 条）。
+  ///
+  /// 拿不到就当「这个平台没有实现」，返回 null；调用点本来就用 `?.`，语义不变。
+  static AndroidFlutterLocalNotificationsPlugin? _androidImpl() {
+    try {
+      return _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<void> requestNotificationsPermission() async {
-    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _androidImpl();
     await androidImpl?.requestNotificationsPermission();
   }
 
   static Future<void> requestExactAlarmsPermission() async {
-    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _androidImpl();
     await androidImpl?.requestExactAlarmsPermission();
   }
 
   static Future<void> requestFullScreenIntentPermission() async {
-    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _androidImpl();
     await androidImpl?.requestFullScreenIntentPermission();
   }
 
   /// 返回 (通知权限, 精确闹钟权限) 是否开启。
   static Future<(bool, bool)> checkPermissions() async {
-    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _androidImpl();
     bool notif = false, exact = false;
     try {
       notif = await androidImpl?.areNotificationsEnabled() ?? false;
@@ -691,6 +705,23 @@ class AlarmService {
 
   static const _settingsChannel = MethodChannel(
       'com.daoban.shiftassistantpro/settings');
+
+  /// 撤掉通知插件自己排的全部通知。
+  ///
+  /// 返回 null = 撤干净（或**根本没有平台实现**，没有通知可撤）；非 null = 真异常，
+  /// 调用方据此决定要不要「清缓存再试」。
+  static Future<Object?> _cancelAllNotifications() async {
+    try {
+      await _plugin.cancelAll();
+      return null;
+    } catch (e) {
+      // v23 在没有原生实现的环境（widget 测试）里抛 `LateInitializationError`，
+      // 它是 `Error` 而不是 `Exception`：环境/编程错误，清缓存重试没有意义
+      // （第二次照样抛，只会多两次跨端）。真实平台异常仍是 `Exception`，照旧重试。
+      if (e is Error) return null;
+      return e;
+    }
+  }
 
   /// 打开本应用的系统设置详情页（国产 ROM 上通常含「自启动」开关）。
   static Future<void> openAppSettings() async {
@@ -1101,7 +1132,7 @@ class AlarmService {
         'notification=${vol['notification']}/${vol['notificationMax']}, '
         'music=${vol['music']}/${vol['musicMax']}');
     try {
-      await _plugin.cancel(testId);
+      await _plugin.cancel(id: testId);
     } catch (e) {
       await appendLog('testAlarm: cancel 异常: $e');
     }
@@ -1295,6 +1326,32 @@ class AlarmService {
     } catch (_) {}
   }
 
+  /// 渐响开关在 SharedPreferences 里的键。
+  ///
+  /// **原生侧读的是同一个设置的带前缀名字**：`AlarmSound.kt` 的 `FADE_IN_KEY`
+  /// 是 `flutter.fadeInRingtone`（`shared_preferences` 插件会给 Dart 的键加
+  /// `flutter.` 前缀）。两边写歪一个的后果是**静默的** —— 开关拨了、界面也变了，
+  /// 响铃还是原来的硬起播；由 `alarm_fade_in_test.dart` 扫源码盯着。
+  static const String fadeInRingtoneKey = 'fadeInRingtone';
+
+  /// 是否渐响。默认关：大多数人要的是「一响就吵醒我」，渐进是给少数人的选项，
+  /// 不能替所有人把闹钟的第一声调小。
+  static Future<bool> fadeInRingtone() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      return sp.getBool(fadeInRingtoneKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> setFadeInRingtone(bool enabled) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setBool(fadeInRingtoneKey, enabled);
+    } catch (_) {}
+  }
+
   /// 再睡一会：按设置里的时长重新响铃（原生闹钟），标题与说明原样带过去。
   static Future<void> snoozeAlarm(AlarmRing ring) async {
     try {
@@ -1478,15 +1535,19 @@ class AlarmService {
     final Stopwatch sw = Stopwatch()..start();
     // 通知插件自己的缓存先清掉（它排过的 TZ 型通知与本链路无关，但顺手清干净；
     // 缓存损坏时 cancelAll 会抛 Missing type parameter）。
-    try {
-      await _plugin.cancelAll();
-    } catch (e) {
-      await appendLog('reschedule: cancelAll 异常，清缓存重试: $e');
+    //
+    // **没有平台实现时不算「缓存损坏」**：`flutter_local_notifications` 23 在没有
+    // 原生实现的环境（widget 测试）里抛 `LateInitializationError`，走下面那条
+    // 「清缓存再试」会第二次照样抛 —— 凭空多两次跨端，直接撞穿重排预算
+    // （`alarm_reschedule_budget_test` 的 12 次）。那种情况下根本没有通知可撤，
+    // 当作成功、不重试。
+    final Object? cancelError = await _cancelAllNotifications();
+    if (cancelError != null) {
+      await appendLog('reschedule: cancelAll 异常，清缓存重试: $cancelError');
       await clearNotificationCache();
-      try {
-        await _plugin.cancelAll();
-      } catch (e2) {
-        await appendLog('reschedule: cancelAll 二次仍异常: $e2');
+      final Object? retryError = await _cancelAllNotifications();
+      if (retryError != null) {
+        await appendLog('reschedule: cancelAll 二次仍异常: $retryError');
       }
     }
     // 升级上来的机器可能残留「系统里有、落盘清单里没有」的孤儿 id —— 差集撤不到

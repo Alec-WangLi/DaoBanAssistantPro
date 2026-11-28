@@ -5426,7 +5426,12 @@ class $$ShiftScheduleRowsTableTableManager extends RootTableManager<
             teamSegOffsets: teamSegOffsets,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ShiftScheduleRowsTable, ShiftScheduleRow>(
+                        table),
+                    BaseReferences<_$AppDatabase, $ShiftScheduleRowsTable,
+                        ShiftScheduleRow>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -5579,7 +5584,11 @@ class $$ScheduleSpanRowsTableTableManager extends RootTableManager<
             endDate: endDate,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ScheduleSpanRowsTable, ScheduleSpanRow>(table),
+                    BaseReferences<_$AppDatabase, $ScheduleSpanRowsTable,
+                        ScheduleSpanRow>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -5838,7 +5847,11 @@ class $$ShiftClassRowsTableTableManager extends RootTableManager<
             alarmEnabled: alarmEnabled,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ShiftClassRowsTable, ShiftClassRow>(table),
+                    BaseReferences<_$AppDatabase, $ShiftClassRowsTable,
+                        ShiftClassRow>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -5991,7 +6004,11 @@ class $$ShiftCycleRowsTableTableManager extends RootTableManager<
             classId: classId,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ShiftCycleRowsTable, ShiftCycleRow>(table),
+                    BaseReferences<_$AppDatabase, $ShiftCycleRowsTable,
+                        ShiftCycleRow>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -6163,7 +6180,14 @@ class $$ScheduleMonthSegmentRowsTableTableManager extends RootTableManager<
             classId: classId,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ScheduleMonthSegmentRowsTable,
+                        ScheduleMonthSegmentRow>(table),
+                    BaseReferences<
+                        _$AppDatabase,
+                        $ScheduleMonthSegmentRowsTable,
+                        ScheduleMonthSegmentRow>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -6324,7 +6348,11 @@ class $$ShiftClassAlarmsTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ShiftClassAlarmsTable, ShiftClassAlarm>(table),
+                    BaseReferences<_$AppDatabase, $ShiftClassAlarmsTable,
+                        ShiftClassAlarm>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -6555,7 +6583,11 @@ class $$ScheduleEventsTableTableManager extends RootTableManager<
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ScheduleEventsTable, ScheduleEvent>(table),
+                    BaseReferences<_$AppDatabase, $ScheduleEventsTable,
+                        ScheduleEvent>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -6752,7 +6784,11 @@ class $$CustomAlarmsTableTableManager extends RootTableManager<
             enabled: enabled,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$CustomAlarmsTable, CustomAlarm>(table),
+                    BaseReferences<_$AppDatabase, $CustomAlarmsTable,
+                        CustomAlarm>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -6878,7 +6914,12 @@ class $$ShiftAlarmOverridesTableTableManager extends RootTableManager<
             enabled: enabled,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ShiftAlarmOverridesTable, ShiftAlarmOverride>(
+                        table),
+                    BaseReferences<_$AppDatabase, $ShiftAlarmOverridesTable,
+                        ShiftAlarmOverride>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -7024,7 +7065,12 @@ class $$ShiftDayOverridesTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ShiftDayOverridesTable, ShiftDayOverride>(
+                        table),
+                    BaseReferences<_$AppDatabase, $ShiftDayOverridesTable,
+                        ShiftDayOverride>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -7198,7 +7244,11 @@ class $$ShiftDayExtrasTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ShiftDayExtrasTable, ShiftDayExtra>(table),
+                    BaseReferences<_$AppDatabase, $ShiftDayExtrasTable,
+                        ShiftDayExtra>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -7320,7 +7370,11 @@ class $$ShiftDayNotesTableTableManager extends RootTableManager<
             note: note,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$ShiftDayNotesTable, ShiftDayNote>(table),
+                    BaseReferences<_$AppDatabase, $ShiftDayNotesTable,
+                        ShiftDayNote>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -7566,7 +7620,11 @@ class $$CustomTemplatesTableTableManager extends RootTableManager<
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$CustomTemplatesTable, CustomTemplate>(table),
+                    BaseReferences<_$AppDatabase, $CustomTemplatesTable,
+                        CustomTemplate>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));
@@ -7860,7 +7918,12 @@ class $$RecurringSeriesRowsTableTableManager extends RootTableManager<
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable<$RecurringSeriesRowsTable, RecurringSeriesRow>(
+                        table),
+                    BaseReferences<_$AppDatabase, $RecurringSeriesRowsTable,
+                        RecurringSeriesRow>(db, table, e)
+                  ))
               .toList(),
           prefetchHooksCallback: null,
         ));

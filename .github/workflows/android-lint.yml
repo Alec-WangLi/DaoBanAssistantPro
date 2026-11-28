@@ -50,7 +50,7 @@ jobs:
           [ -x "$SM" ] || SM="$(command -v sdkmanager)"
           echo "sdkmanager: $SM"
           yes | "$SM" --licenses > /dev/null || true
-          "$SM" "platforms;android-36" "build-tools;36.0.0"
+          "$SM" "platforms;android-37.0" "build-tools;36.0.0"
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:

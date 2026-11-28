@@ -194,6 +194,14 @@ const List<HelpFaqGroup> helpFaqGroups = [
             ),
           ),
           (
+            question: L10nText('闹钟一响太大声，想让它慢慢变响',
+                'The alarm starts too loud — I want it to build up'),
+            answer: L10nText(
+              '「我的 → 闹钟 → 渐响」打开它，响铃时音量会在 20 秒内从无声升到你设定的音量。它不会超过系统的闹钟音量 —— 想更响就把手机侧边的闹钟音量调高。',
+              'Turn on "Me → Alarm → Fade in" and the ringtone rises from silence to your set volume over 20 seconds. It never exceeds the system alarm volume — raise that with the side buttons if you want it louder.',
+            ),
+          ),
+          (
             question: L10nText('睡前想确认明天几点响', 'I want to check tonight what time it rings tomorrow'),
             answer: L10nText(
               '闹钟页最上面那份「未来 30 天」的列表，按天列着。',

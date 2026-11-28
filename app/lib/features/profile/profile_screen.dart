@@ -275,6 +275,8 @@ class ProfileScreen extends ConsumerWidget {
                 children: [
                   _RingtoneRow(onPick: () => _showRingtonePicker(context, ref)),
                   const Divider(height: 1),
+                  const _FadeInRow(),
+                  const Divider(height: 1),
                   const _SnoozeRow(),
                 ],
               ),
@@ -734,6 +736,53 @@ class _RingtoneRowState extends ConsumerState<_RingtoneRow> {
 /// 为什么不进 `appSettings`：响铃界面要读它，而那个界面是原生 intent 拉起来的、
 /// **不 watch** 任何 provider（见 `AlarmService.snoozeMinutes` 的注释）。prefs 是
 /// 两边的共同真源，铃声也是这么办的。
+/// 渐响开关：响铃时音量从 0 升到设定音量（原生 `AlarmSound.kt` 每 100ms 一档，
+/// 20 秒到位）。
+///
+/// 默认**关**。它和「贪睡时长」同一张卡：都是「响了之后怎么响」。
+/// 开关只管「响铃」——「我的 → 铃声」里的试听是另一条播放链路（`MainActivity`
+/// 的 `playingRingtone`），试听要的就是立刻听到，不该渐。
+class _FadeInRow extends StatefulWidget {
+  const _FadeInRow();
+
+  @override
+  State<_FadeInRow> createState() => _FadeInRowState();
+}
+
+class _FadeInRowState extends State<_FadeInRow> {
+  /// 还没读出来时按「关」显示 —— 读 prefs 要过一次异步，首帧必然没有值。
+  bool _enabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final v = await AlarmService.fadeInRingtone();
+    if (!mounted) return;
+    setState(() => _enabled = v);
+  }
+
+  Future<void> _toggle(bool v) async {
+    // 先改界面再落盘：开关要跟手；写失败最多下次打开时回退，不静默无反应。
+    setState(() => _enabled = v);
+    await AlarmService.setFadeInRingtone(v);
+  }
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+        leading: const Icon(Icons.volume_up_outlined),
+        title: Text(L10n.fadeInRingtone),
+        subtitle: Text(L10n.fadeInRingtoneSubtitle,
+            maxLines: 2, overflow: TextOverflow.ellipsis),
+        // 整行可点：开关小、手指粗；与「高级材质」那种行同一套。
+        onTap: () => _toggle(!_enabled),
+        trailing: GlassSwitch(value: _enabled, onChanged: _toggle),
+      );
+}
+
 class _SnoozeRow extends StatefulWidget {
   const _SnoozeRow();
 

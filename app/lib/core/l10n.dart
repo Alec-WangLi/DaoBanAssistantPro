@@ -338,6 +338,10 @@ class L10n {
   static String get vibrateOnlyRingtone => t('仅震动', 'Vibrate only');
   static String get vibrateOnlyRingtoneSubtitle =>
       t('只震动，不发出声音', 'Vibrates without making a sound');
+  static String get fadeInRingtone => t('渐响', 'Fade in');
+  static String get fadeInRingtoneSubtitle => t(
+      '20 秒内从无声慢慢升到设定音量',
+      'Ramps from silent up to your volume over 20 seconds');
   static String get setVibrateOnlyRingtone =>
       t('已设为「仅震动」，下次响铃生效', 'Set to "Vibrate only", takes effect next alarm');
   static String get preview => t('试听', 'Preview');

@@ -144,7 +144,7 @@ void main() {
     raw.execute('PRAGMA user_version = 9');
   });
 
-  tearDown(() => raw.dispose());
+  tearDown(() => raw.close());
 
   test('v9 → v10：闹钟搬进新表、老排班的周期与按天覆盖仍指得对', () async {
     final db = AppDatabase.forTesting(NativeDatabase.opened(raw));

@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.MediaPlayer
 import android.os.IBinder
 import android.os.Handler
 import android.os.Looper
@@ -22,7 +21,7 @@ import android.os.Vibrator
  * 是国产 ROM 上闹钟能稳定响铃的关键。
  */
 class AlarmRingService : Service() {
-    private var player: MediaPlayer? = null
+    private var playback: AlarmSound.Playback? = null
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -93,8 +92,14 @@ class AlarmRingService : Service() {
     }
 
     private fun startSound(uriStr: String?) {
+        // **先把上一轮停干净**：`onStartCommand` 会因为「再睡一会」（重新排定后
+        // 又响）与重复的 startService 再进来。从前这里直接覆盖 `player` ——
+        // 上一次的播放器没人 release，会一直响下去（加了渐响之后还会多一条
+        // 对着旧播放器跑的 ramp）。先停旧的，新的才是唯一在响的那一个。
+        playback?.stop()
+        playback = null
         // 音源挑选与「自选铃声坏了回落内置」都在 AlarmSound 里（两条响铃链路共用）。
-        player = AlarmSound.start(this, uriStr)
+        playback = AlarmSound.start(this, uriStr)
         try {
             val v = getSystemService(VIBRATOR_SERVICE) as Vibrator
             vibrator = v
@@ -182,12 +187,9 @@ class AlarmRingService : Service() {
         // 先把定时器摘掉：服务已经被用户关掉之后再触发一次自停，会去动一个已经
         // 停掉的响铃（轻则多一条日志，重则把用户刚打开的那层界面收掉）。
         autoStopHandler.removeCallbacks(autoStopRunnable)
-        try {
-            player?.stop()
-            player?.release()
-        } catch (_: Exception) {
-        }
-        player = null
+        // 走 Playback.stop：它会先摘掉渐响计时器再释放播放器。
+        playback?.stop()
+        playback = null
         try {
             vibrator?.cancel()
         } catch (_: Exception) {

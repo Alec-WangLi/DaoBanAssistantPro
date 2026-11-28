@@ -82,7 +82,7 @@ void main() {
     raw.execute('PRAGMA user_version = 6');
   });
 
-  tearDown(() => raw.dispose());
+  tearDown(() => raw.close());
 
   test('v6 → v7：补出 alarm_enabled，老待办保留且默认「关」', () async {
     final db = AppDatabase.forTesting(NativeDatabase.opened(raw));

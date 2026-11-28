@@ -11,7 +11,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioManager
-import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
@@ -107,7 +106,7 @@ class MainActivity : FlutterActivity() {
     private val hapticsChannel = "com.daoban.shiftassistantpro/haptics"
     private var flutterChannel: MethodChannel? = null
     private var playingRingtone: android.media.Ringtone? = null
-    private var alarmPlayer: MediaPlayer? = null
+    private var alarmPlayer: AlarmSound.Playback? = null
     private var alarmVibrator: Vibrator? = null
 
     /** 等文件选择器回来的那个 Flutter 回调（同一时刻只允许一个）。 */
@@ -1394,11 +1393,9 @@ class MainActivity : FlutterActivity() {
     private fun clearLog() = AlarmLog.clear(this)
 
     private fun stopAlarmInternal() {
-        try {
-            alarmPlayer?.stop()
-            alarmPlayer?.release()
-        } catch (_: Exception) {
-        }
+        // Playback.stop 会先摘掉渐响计时器再释放播放器；直接 stop/release 会让
+        // 还在跑的 ramp 对着已释放的 MediaPlayer 调 setVolume。
+        alarmPlayer?.stop()
         alarmPlayer = null
         try {
             alarmVibrator?.cancel()

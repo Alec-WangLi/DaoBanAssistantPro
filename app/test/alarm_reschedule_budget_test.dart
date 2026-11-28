@@ -88,7 +88,7 @@ void main() {
         reason: '重排必须是一整批：逐条跨端既慢，又把「先排后清」拆成了可中断的窗口');
     final int total = calls.values.fold<int>(0, (a, b) => a + b);
     expect(total, lessThanOrEqualTo(12),
-        reason: '一次重排只该有「几条汇总 + 一次快照 + 一次重排」。实测本次：$total');
+        reason: '一次重排只该有「几条汇总 + 一次快照 + 一次重排」。实测本次：$calls');
     expect(calls['scheduleNativeAlarm'] ?? 0, 0,
         reason: '逐条排定只留给贪睡 / 测试闹钟，重排不该再走它');
 

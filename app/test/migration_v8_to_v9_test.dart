@@ -105,7 +105,7 @@ void main() {
     raw.execute('PRAGMA user_version = 8');
   });
 
-  tearDown(() => raw.dispose());
+  tearDown(() => raw.close());
 
   test('v8 → v9：建出 custom_templates，老排班原样保留', () async {
     final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
