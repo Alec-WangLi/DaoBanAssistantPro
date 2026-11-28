@@ -179,6 +179,7 @@ features/widget/            桌面小组件的快照生成与投递（原生侧�
 - 已升级为 **Superpowers 技能驱动**：新功能/改 UI → `brainstorming` 先磨需求；报 Bug → `systematic-debugging` 先根因后修复；写码 → `test-driven-development`；收尾 → `verification-before-completion` + `requesting-code-review`；多步/架构级 → `writing-plans` → `executing-plans`。
 - 旧的 `/grill-me` 已被 `brainstorming` 取代，仅作轻量备胎。
 - 用户偏好「全按推荐」、少磨叽；但涉及方案选型仍要给带推荐答案的方向、确认后再动手。
+- **对外回复一律用「您」（2026-11-28 用户拍板）**：GitHub issue / PR 评论、酷安回帖、任何给用户看的文案都用尊称，态度端正 —— 发出去的话代表的是作者本人，反馈者是花时间来报问题的。写完先在草稿里搜一遍「你」（含「你们」「你俩」）全部换掉。代码注释与给作者看的技术说明不受此限。回 issue 还要顺手说清「改在哪一版、怎么装」。
 - 发布收尾：commit + `git tag vX.Y.Z` + `git push`（分支 + tag）之后，再跑 `scripts\release.ps1 -SkipConfirm` 把 APK 挂到 GitHub Release；发布说明先写到 `tools\gh\release-notes-vX.Y.Z.md`（脚本会自动复用），末位非 0 自动标为「预发布测试版」。
 - ⚠️ **并行跑独立审查 / 开 worktree 时，`git checkout` 会把未提交改动一起冲掉**（2026-10-31 实踩：另起一路跑审查，它一 `checkout`，主工作区那批未提交的液态玻璃改动全没了）。要并行就先 `cp` 一份到 `work/notes/`，或先提交到临时分支。
 
