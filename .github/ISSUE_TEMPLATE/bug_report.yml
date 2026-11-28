@@ -1,0 +1,98 @@
+name: 🐞 问题反馈
+description: App 用着不对 —— 崩了、闪了、闹钟响错了、显示错了
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这里只收 **App 的使用问题**。安全漏洞请不要开 Issue，
+        走 [私密上报通道](../security/advisories/new)（说明见 [SECURITY.md](../blob/main/SECURITY.md)）。
+
+  - type: checkboxes
+    id: precheck
+    attributes:
+      label: 先确认这两件事
+      options:
+        - label: 我先升到最新版本复现过（「我的」页有「检查更新」；旧版问题一律先升级再谈）
+          required: true
+        - label: 我搜过 Issues，没有重复的
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本号
+      description: 「我的」页底部那一行，形如 v0.14.0(214)
+      placeholder: v0.14.0(214)
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 手机型号与系统版本
+      placeholder: 小米 14 / HyperOS 2.0.6（Android 15）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及哪一块
+      options:
+        - 排班日历 / 编辑排班
+        - 闹钟（不响 / 响错时间 / 响铃界面）
+        - 待办 / 日程
+        - 统计与导出
+        - 数据备份与导入
+        - 桌面小组件
+        - 外观（液态玻璃 / 字号 / 配色）
+        - 其它
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 你期待看到什么，实际看到什么。涉及排班的请写具体日期、时刻、班次 —— 「昨天那个班」这类说法没法复现。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开…
+        2. 点…
+        3. 看到…
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: 截图或录屏
+      description: 直接把文件拖进这个框。截图里有真实姓名、单位这类信息的先打个码。
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断包（闹钟问题必填）
+      description: |
+        「我的 → 查看日志 → 导出诊断包」，把导出的文件拖进这个框。
+        里面有日志、设备与权限快照、已排闹钟清单、未来 7 天计划 —— 全部在本机生成，不会上传到任何服务器。
+        没有它，闹钟类问题基本只能靠猜。
+
+  - type: checkboxes
+    id: alarm-permission
+    attributes:
+      label: 闹钟相关问题额外确认
+      description: |
+        MIUI / HyperOS 不开「后台弹出界面」时，系统会静默拒绝 App 从后台拉起响铃界面 —— 表现就是「只响不弹」，
+        看起来像 App 的 bug，其实是权限。
+      options:
+        - label: 「后台弹出界面」「锁屏显示」「自启动」三项都已打开（或已确认系统没有这类开关）
+        - label: 这条不是闹钟问题，可忽略

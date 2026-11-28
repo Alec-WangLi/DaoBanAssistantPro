@@ -1,0 +1,49 @@
+name: 💡 功能建议
+description: 想要一个现在没有的能力，或者觉得现在这样做不对劲
+title: "[建议] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先说你**解决不了的麻烦**，再说你想**怎么做**。
+        只写后者的话，往往会被一句「其实换个入口就能做到」挡回去 —— 而这个 App 已经能做到的事，
+        大多只是入口不好找。
+
+        另外它有两条硬边界，提议前值得知道：**无账号、无后端、纯本地离线**。
+        任何依赖服务器的想法（云同步、多人协作、在线模板市场）都不是「加个开关」的量级。
+
+  - type: textarea
+    id: pain
+    attributes:
+      label: 你遇到的实际麻烦
+      description: 具体一点。什么场景、多久一次、现在只能怎么绕。
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 现在是怎么将就的
+      description: 手记在备忘录里？用别的 App 补？这一步能看出需求到底有多硬。
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的样子
+      description: 界面长什么样、放在哪一页、点一下发生什么。有参考的截图或别的 App 的做法更好。
+
+  - type: textarea
+    id: audience
+    attributes:
+      label: 大概有多少人需要
+      description: 只有你这样倒班的人需要，还是四班两倒、长白班这些常见班型都用得上？（不强求，能说就说说）
+
+  - type: checkboxes
+    id: understand
+    attributes:
+      label: 我知道
+      options:
+        - label: 这是一个个人维护的项目，不保证实现、也不保证什么时候实现
+          required: true
+        - label: 我明白「加个功能」可能牵扯到闹钟时序与数据迁移，不是改个按钮的事

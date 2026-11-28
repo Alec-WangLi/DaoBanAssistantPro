@@ -1,0 +1,18 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: 🔐 报告安全漏洞
+    url: https://github.com/Alec-WangLi/DaoBanAssistantPro/security/advisories/new
+    about: 走私密通道，别开 Issue —— Issue 是公开的。
+
+  - name: 📖 先看看功能清单
+    url: https://github.com/Alec-WangLi/DaoBanAssistantPro#-功能特性
+    about: 很多「想要的功能」其实已经有，只是入口不好找。
+
+  - name: 🛠 自己动手改
+    url: https://github.com/Alec-WangLi/DaoBanAssistantPro/blob/main/CONTRIBUTING.md
+    about: 分支纪律、跑测试、提交前要过的检查，都在这里。
+
+  - name: ⬇️ 下载与历史版本
+    url: https://daoban-shift.pages.dev
+    about: 国内直连的官网，APK 与更新日志都在上面。

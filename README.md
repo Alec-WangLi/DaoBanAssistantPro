@@ -1,5 +1,10 @@
 # 倒班助手Pro
 
+[![CI](https://github.com/Alec-WangLi/DaoBanAssistantPro/actions/workflows/ci.yml/badge.svg?branch=beta)](https://github.com/Alec-WangLi/DaoBanAssistantPro/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Alec-WangLi/DaoBanAssistantPro?label=release&color=6366f1)](https://github.com/Alec-WangLi/DaoBanAssistantPro/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Android-8.0%2B-3ddc84.svg)](BUILD.md)
+
 自研的排班助手 App —— 从 0 到 1 用 **Flutter 构建**的完全自有代码（`com.daoban.shiftassistantpro`）。
 
 **排班日历 · 班次闹钟 · 待办日程**：为倒班人群打造，一套 App 搞定倒班生活的日常。
