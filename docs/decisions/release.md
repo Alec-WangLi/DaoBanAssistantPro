@@ -128,3 +128,29 @@ Pages 单文件上限 25 MiB，当前 APK 约 23 MiB —— 再涨约 2 MiB 就�
 
 免备案的代价是走国际线路：比 GitHub 快得多，但不是国内 CDN 那种秒开。要秒开只能备案 + 国内 CDN（B 档，
 约 ¥200/年，审批 2~3 周）。
+
+## 6. main 上的「同步 beta」提交：保留，不清理（2026-11-28 体检定）
+
+**现象**：`origin/main` 比 `origin/beta` 多出约 35 条提交，其中约 30 条是 `chore(release): 更新发布清单至 vX.Y.Z（同步 beta）`。
+`git log origin/main -- latest.json` 有 216 条，beta 有 215 条。有人想「清理」这段历史。
+
+**结论：保留现状。** 这些提交不是多余的，有两个读者依赖 main 上那份文件：
+
+1. **兜底更新通道**：App 的第二通道写死读 `raw.githubusercontent.com/…/main/latest.json`
+   （`app/lib/core/update_checker.dart`，`repoRaw('latest.json')`）。已经装在用户手机上的旧版本只认这个地址，
+   它停更，这些用户就收不到新版通知。地址写在已发出的 APK 里，改不了。
+2. **官网底稿**：`scripts/build_site.py` 生成官网 `latest.json` 时，取 `origin/main:latest.json` 作底稿。
+
+**为什么不改成别的地方读**：要换地址就得先发一个新版本，而旧版本仍然读 main，所以 main 上的文件无论如何都要保留更新。
+唯一能真正消掉这串提交的办法是让 App 不再依赖 main，那是「先发新版、等旧版基本淘汰」之后才能做的排期事项，
+不在这次清理的范围内。
+
+**代价**：只是历史里多了这些提交，`git log` 比较吵；功能与发布流程都不受影响。合并 `main` 时这些提交的内容与 beta 等价，
+不会产生冲突。
+
+**GIF 瘦身不做（同日定）**：仓库体积主要在历史里的 blob，把 `docs/images/*.gif` 从 HEAD 移走，`.git` 一个字节都不会少；
+只有改写历史（force-push 到受保护分支）才能瘦身，代价不值。另外 GIF 被 README、官网、各版本更新日志与 `scripts/make_gif.py`
+引用，直接删会在线上留下断图。
+
+**什么时候重新评估**：当 App 的兜底通道已经不再读 main（例如某个版本起改读别处），且旧版本已基本淘汰，
+这一节就可以推翻重写。
