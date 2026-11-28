@@ -61,3 +61,10 @@ __pycache__/
 !.dev.vars.example
 .env*
 !.env.example
+
+# ---- 本地一次性探针脚本 / 从机器上抓下来的数据（不入库）----
+# 命名约定一律 `work-*`，放在哪一层都不入库。2026-11-28 体检时发现根目录与
+# `app/android/` 各躺着一份（改 local.properties / 改 SDK package.xml 的补丁脚本、
+# 一份 435KB 的 maven 仓库元数据），都没被忽略，`git add -A` 会一起提交。
+work-*.py
+work-*.xml
